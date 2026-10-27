@@ -11,7 +11,7 @@ const axes = [
 ];
 
 const snapshot = (annotationId: string, termId: string, actor: string) => ({
-  schema_version: "ontocurator-annotation/v3", version: `${annotationId}-v1`, document_id: "doc-1", text_sha256: "text",
+  schema_version: "ontotator-annotation/v3", version: `${annotationId}-v1`, document_id: "doc-1", text_sha256: "text",
   ontology_sha256: "ontology", layer_config_sha256: "layer",
   annotation: { annotation_id: annotationId, document_id: "doc-1", layer_id: "phenotype", type_id: "default", term_id: termId,
     axes_values: { assertion: "present" }, evidence_refs: [],

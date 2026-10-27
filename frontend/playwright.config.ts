@@ -3,7 +3,7 @@ import { defineConfig } from "@playwright/test";
 
 // Labels the PostgreSQL container of this run's fixture server (inherited by
 // the webServer process), so the global teardown removes exactly that one.
-process.env.ONTOCURATOR_E2E_RUN ??= randomUUID();
+process.env.ONTOTATOR_E2E_RUN ??= randomUUID();
 
 const port = process.env.HPO_E2E_PORT ?? "18765";
 const python = process.env.E2E_PYTHON ?? (process.platform === "win32"

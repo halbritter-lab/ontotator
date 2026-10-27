@@ -16,8 +16,8 @@ from pathlib import Path
 
 import pytest
 
-from ontocurator.domain import agreement as agreement_module
-from ontocurator.domain.agreement import (
+from ontotator.domain import agreement as agreement_module
+from ontotator.domain.agreement import (
     Agreement,
     Finding,
     Pair,

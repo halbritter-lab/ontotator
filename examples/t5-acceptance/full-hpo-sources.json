@@ -1,5 +1,5 @@
 {
-  "schema": "ontocurator-full-hpo-sources/v1",
+  "schema": "ontotator-full-hpo-sources/v1",
   "release": "2026-09-01",
   "release_url": "https://github.com/obophenotype/human-phenotype-ontology/releases/tag/v2026-09-01",
   "source_commit": "920d4eb3608b50a2c19ddb10290224ab35a759c5",

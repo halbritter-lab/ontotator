@@ -3,8 +3,8 @@
 import pytest
 from pydantic import ValidationError
 
-from ontocurator.domain.errors import DomainError
-from ontocurator.exchange.variant_overrides import (
+from ontotator.domain.errors import DomainError
+from ontotator.exchange.variant_overrides import (
     StatusOverride,
     normalize_overrides,
     parse_overrides,
@@ -62,7 +62,7 @@ def test_cli_invalid_override_is_reported_before_database_open(
 ):
     from typer.testing import CliRunner
 
-    import ontocurator.cli as module
+    import ontotator.cli as module
 
     path = tmp_path / "unit.json"
     path.write_text("{}")

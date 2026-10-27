@@ -32,8 +32,8 @@ def options(parser):
     )
     parser.add_argument(
         "--load-password",
-        default=os.environ.get("ONTOCURATOR_LOAD_PASSWORD"),
-        help="Synthetic credentials; prefer ONTOCURATOR_LOAD_PASSWORD",
+        default=os.environ.get("ONTOTATOR_LOAD_PASSWORD"),
+        help="Synthetic credentials; prefer ONTOTATOR_LOAD_PASSWORD",
     )
 
 
@@ -45,7 +45,7 @@ def initialize(environment, **_kwargs):
             "Use one local Locust process so each of the 30 accounts is assigned once"
         )
     if not opts.load_password:
-        raise ValueError("Set ONTOCURATOR_LOAD_PASSWORD or --load-password")
+        raise ValueError("Set ONTOTATOR_LOAD_PASSWORD or --load-password")
     manifest = json.loads(Path(opts.load_manifest).read_text(encoding="utf-8"))
     if (
         len(manifest["users"]) != 30

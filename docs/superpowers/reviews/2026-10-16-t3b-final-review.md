@@ -19,7 +19,7 @@ review; those accepted banks were preserved rather than re-audited at this gate.
 
 Root ran the actual complete local gate, including containers, at unchanged clean
 `ba02ebd` using `CHECK_CONTAINERS=1`,
-`CHECK_IMAGE=ontocurator:t3b-final-retry` and `CHECK_VITEST_WORKERS=1`.
+`CHECK_IMAGE=ontotator:t3b-final-retry` and `CHECK_VITEST_WORKERS=1`.
 The native Git Bash command was `scripts/check.sh`. Controller session 14690
 closed with **exit 0**; the log ended with **All local checks passed.**
 Execution: 2026-10-16 **09:07:52.127021–09:28:52.476793 UTC**, 1260.36 seconds
@@ -50,7 +50,7 @@ There was no continuation, skipped gate stage or substituted mocked backend.
 
 ## Exact-source packaged image
 
-Image `ontocurator:t3b-final-retry`:
+Image `ontotator:t3b-final-retry`:
 `sha256:3a295eac6242bb1c614fa7b803bf7616200883dd50ba965127740900ef068fad`.
 Revision label equals the complete accepted source above. Build session 27604
 closed exit0 after 43.73 seconds, 09:06:45–09:07:29 UTC. The ephemeral BuildKit

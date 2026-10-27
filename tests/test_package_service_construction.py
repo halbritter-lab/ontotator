@@ -9,10 +9,10 @@ from typing import Any
 import pytest
 from layered_fixtures import make_layered_package
 
-from ontocurator.domain.documents import OntologyRef
-from ontocurator.ontology import registry as registry_module
-from ontocurator.ontology.registry import OntologyRegistry
-from ontocurator.ontology.service import OntologyService
+from ontotator.domain.documents import OntologyRef
+from ontotator.ontology import registry as registry_module
+from ontotator.ontology.registry import OntologyRegistry
+from ontotator.ontology.service import OntologyService
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -113,7 +113,7 @@ def test_exact_resources_share_fitted_data_without_mutating_base(
     translated: bool, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     repo, registry, base = _environment(translated)
-    from ontocurator.vendor.hpo_span_annotator.lexical import LexicalIndex
+    from ontotator.vendor.hpo_span_annotator.lexical import LexicalIndex
 
     def unexpected_fit(self: LexicalIndex) -> None:
         pytest.fail("equal resources must reuse the fitted index")
@@ -154,8 +154,8 @@ def test_cold_edit_service_build_runs_before_mutation_transaction(
 ) -> None:
     from test_editing import _setup_test_env
 
-    from ontocurator.application.editing import EditingService
-    from ontocurator.domain.workspace import MutationEnvelope, WorkspaceKey
+    from ontotator.application.editing import EditingService
+    from ontotator.domain.workspace import MutationEnvelope, WorkspaceKey
 
     repo, base, workspaces, initial_editor, _ = _setup_test_env(tmp_path)
     key = workspaces.open(
@@ -222,7 +222,7 @@ def test_cold_edit_service_build_runs_before_mutation_transaction(
 
     monkeypatch.setattr(registry, "_pinned_service", unavailable)
     assert editor.apply(key, envelope) == draft
-    from ontocurator.domain.errors import RevisionConflict
+    from ontotator.domain.errors import RevisionConflict
 
     with pytest.raises(RevisionConflict):
         editor.apply(
@@ -245,8 +245,8 @@ def test_cold_edit_service_build_runs_before_mutation_transaction(
 
 
 def _historical_condition(base: OntologyService, label: str) -> Any:
-    from ontocurator.domain.canonical import canonical_hash
-    from ontocurator.ontology.conditions import SearchCondition
+    from ontotator.domain.canonical import canonical_hash
+    from ontotator.ontology.conditions import SearchCondition
 
     payload = base.capture_condition().model_dump(exclude={"condition_id"})
     payload["runtime"]["python"] = label
@@ -311,7 +311,7 @@ def test_changed_resource_bytes_are_checked_even_when_metadata_matches() -> None
             0
         ].resource_path: b"subject_id\ttranslation_value\nHP:0001252\tChanged\n"
     }
-    from ontocurator.domain.errors import DomainError
+    from ontotator.domain.errors import DomainError
 
     with pytest.raises(DomainError, match="INVALID_SEARCH_CONDITION"):
         registry.for_package_layer(repo, "package", "hpo-layer")
@@ -324,8 +324,8 @@ def test_blocked_cold_edit_releases_connection_for_unrelated_draft(
 ) -> None:
     from test_editing import _setup_test_env
 
-    from ontocurator.application.editing import EditingService
-    from ontocurator.domain.workspace import MutationEnvelope, WorkspaceKey
+    from ontotator.application.editing import EditingService
+    from ontotator.domain.workspace import MutationEnvelope, WorkspaceKey
 
     repo, base, workspaces, initial_editor, _ = _setup_test_env(tmp_path)
     key = workspaces.open(

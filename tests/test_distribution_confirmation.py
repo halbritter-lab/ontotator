@@ -3,12 +3,12 @@
 import pytest
 from test_distribution_context import stored as stored
 
-from ontocurator.assignments.confirmations import (
+from ontotator.assignments.confirmations import (
     ConfirmationRow,
     DistributionConfirmationService,
 )
-from ontocurator.auth.audit import Actor
-from ontocurator.domain.errors import DomainError
+from ontotator.auth.audit import Actor
+from ontotator.domain.errors import DomainError
 
 
 @pytest.mark.parametrize(
@@ -23,7 +23,7 @@ from ontocurator.domain.errors import DomainError
 def test_per_row_refusals_preserve_other_creates(stored, refusal, code):
     from sqlalchemy import insert, update
 
-    from ontocurator.storage.tables import (
+    from ontotator.storage.tables import (
         AssignmentRow,
         ProjectRow,
         UserLanguageRow,
@@ -76,8 +76,8 @@ def test_per_row_refusals_preserve_other_creates(stored, refusal, code):
 def test_row_savepoint_rolls_back_a_create_before_domain_refusal(stored, monkeypatch):
     from sqlalchemy import select
 
-    from ontocurator.assignments.service import AssignmentService
-    from ontocurator.storage.tables import AssignmentRow, AuditEventRow
+    from ontotator.assignments.service import AssignmentService
+    from ontotator.storage.tables import AssignmentRow, AuditEventRow
 
     db, proposals, _project, users = stored
     original = proposals.propose(
@@ -117,7 +117,7 @@ def test_row_savepoint_rolls_back_a_create_before_domain_refusal(stored, monkeyp
 def test_human_language_override_is_audited(stored):
     from sqlalchemy import select, update
 
-    from ontocurator.storage.tables import AuditEventRow, UserLanguageRow
+    from ontotator.storage.tables import AuditEventRow, UserLanguageRow
 
     db, proposals, _project, users = stored
     with db.transaction() as conn:
@@ -160,8 +160,8 @@ def test_contextual_idempotent_row_returns_existing_without_another_create_audit
 ):
     from sqlalchemy import select
 
-    from ontocurator.assignments.service import AssignmentService
-    from ontocurator.storage.tables import AuditEventRow
+    from ontotator.assignments.service import AssignmentService
+    from ontotator.storage.tables import AuditEventRow
 
     db, proposals, _project, _users = stored
     existing = AssignmentService(db).assign(
@@ -202,8 +202,8 @@ def test_confirmation_revalidates_inputs_after_wait_and_stale_writes_nothing(
 
     from sqlalchemy import delete, event, func, insert, select, update
 
-    from ontocurator.storage.repository import _lock_id
-    from ontocurator.storage.tables import (
+    from ontotator.storage.repository import _lock_id
+    from ontotator.storage.tables import (
         AssignmentRow,
         AuditEventRow,
         DocumentRow,
@@ -311,7 +311,7 @@ def test_confirmation_first_user_lock_is_one_ordered_final_mode_batch_including_
 ):
     from sqlalchemy import event, insert
 
-    from ontocurator.storage.tables import ProjectMembershipRow
+    from ontotator.storage.tables import ProjectMembershipRow
 
     db, proposals, project, users = stored
     with db.transaction() as conn:
@@ -359,8 +359,8 @@ def test_waiting_confirmation_rechecks_current_manager(stored, change, code):
 
     from sqlalchemy import delete, event, func, select, update
 
-    from ontocurator.storage.repository import _lock_id
-    from ontocurator.storage.tables import (
+    from ontotator.storage.repository import _lock_id
+    from ontotator.storage.tables import (
         AssignmentRow,
         AuditEventRow,
         ProjectMembershipRow,
@@ -444,7 +444,7 @@ def test_reciprocal_admin_confirmations_in_separate_projects_finish_without_dead
 
     from sqlalchemy import insert, update
 
-    from ontocurator.storage.tables import (
+    from ontotator.storage.tables import (
         DocumentRow,
         ProjectMembershipRow,
         ProjectRow,

@@ -5,7 +5,7 @@ from auth_harness import AutoLoginClient
 from fastapi.testclient import TestClient
 from typer.testing import CliRunner
 
-from ontocurator.cli import app
+from ontotator.cli import app
 
 runner = CliRunner()
 HP_FIXTURE = Path(__file__).parent / "fixtures" / "hp.json"
@@ -14,12 +14,12 @@ HP_FIXTURE = Path(__file__).parent / "fixtures" / "hp.json"
 def test_version_comes_from_package_metadata() -> None:
     from importlib.metadata import version
 
-    from ontocurator.cli import get_version
+    from ontotator.cli import get_version
 
-    assert get_version() == version("ontocurator")
+    assert get_version() == version("ontotator")
     result = runner.invoke(app, ["version"])
     assert result.exit_code == 0
-    assert result.output.strip() == version("ontocurator")
+    assert result.output.strip() == version("ontotator")
 
 
 def test_help_lists_the_commands() -> None:
@@ -49,7 +49,7 @@ def test_help_lists_the_commands() -> None:
 
 
 def test_serve_refuses_a_missing_ontology(tmp_path: Path) -> None:
-    with patch("ontocurator.cli.uvicorn.run") as run:
+    with patch("ontotator.cli.uvicorn.run") as run:
         result = runner.invoke(
             app,
             [
@@ -67,7 +67,7 @@ def test_serve_refuses_a_missing_ontology(tmp_path: Path) -> None:
 
 
 def test_serve_refuses_a_public_origin_with_a_path(tmp_path: Path) -> None:
-    with patch("ontocurator.cli.uvicorn.run") as run:
+    with patch("ontotator.cli.uvicorn.run") as run:
         result = runner.invoke(
             app,
             [
@@ -87,7 +87,7 @@ def test_serve_refuses_a_public_origin_with_a_path(tmp_path: Path) -> None:
 def test_serve_starts_the_app_on_the_given_address(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
 
-    with patch("ontocurator.cli.uvicorn.run") as run:
+    with patch("ontotator.cli.uvicorn.run") as run:
         result = runner.invoke(
             app,
             [
@@ -123,7 +123,7 @@ def test_serve_starts_the_app_on_the_given_address(tmp_path: Path) -> None:
 
 
 def test_serve_trusts_only_the_host_of_the_public_origin(tmp_path: Path) -> None:
-    with patch("ontocurator.cli.uvicorn.run") as run:
+    with patch("ontotator.cli.uvicorn.run") as run:
         result = runner.invoke(
             app,
             [
@@ -144,7 +144,7 @@ def test_serve_trusts_only_the_host_of_the_public_origin(tmp_path: Path) -> None
 
 
 def test_serve_on_a_public_address_needs_a_public_origin(tmp_path: Path) -> None:
-    with patch("ontocurator.cli.uvicorn.run") as run:
+    with patch("ontotator.cli.uvicorn.run") as run:
         result = runner.invoke(
             app,
             ["serve", "--data-dir", str(tmp_path / "data"), "--host", "0.0.0.0"],
@@ -158,7 +158,7 @@ def test_serve_on_a_public_address_needs_a_public_origin(tmp_path: Path) -> None
 def test_serve_on_another_loopback_address_trusts_that_address(
     tmp_path: Path,
 ) -> None:
-    with patch("ontocurator.cli.uvicorn.run") as run:
+    with patch("ontotator.cli.uvicorn.run") as run:
         result = runner.invoke(
             app,
             ["serve", "--data-dir", str(tmp_path / "data"), "--host", "127.0.0.2"],
@@ -172,7 +172,7 @@ def test_serve_on_another_loopback_address_trusts_that_address(
 def test_serve_trusts_forwarded_addresses_only_from_the_given_proxies(
     tmp_path: Path,
 ) -> None:
-    with patch("ontocurator.cli.uvicorn.run") as run:
+    with patch("ontotator.cli.uvicorn.run") as run:
         result = runner.invoke(
             app,
             [
@@ -192,11 +192,11 @@ def test_serve_trusts_forwarded_addresses_only_from_the_given_proxies(
 def test_serve_reads_the_forwarded_proxies_from_the_environment(
     tmp_path: Path,
 ) -> None:
-    with patch("ontocurator.cli.uvicorn.run") as run:
+    with patch("ontotator.cli.uvicorn.run") as run:
         result = runner.invoke(
             app,
             ["serve", "--data-dir", str(tmp_path / "data")],
-            env={"ONTOCURATOR_FORWARDED_ALLOW_IPS": "10.0.0.5,10.0.0.6"},
+            env={"ONTOTATOR_FORWARDED_ALLOW_IPS": "10.0.0.5,10.0.0.6"},
         )
 
     assert result.exit_code == 0, result.output
@@ -206,7 +206,7 @@ def test_serve_reads_the_forwarded_proxies_from_the_environment(
 def test_serve_keeps_uvicorns_forwarded_default_without_the_option(
     tmp_path: Path,
 ) -> None:
-    with patch("ontocurator.cli.uvicorn.run") as run:
+    with patch("ontotator.cli.uvicorn.run") as run:
         result = runner.invoke(app, ["serve", "--data-dir", str(tmp_path / "data")])
 
     assert result.exit_code == 0, result.output

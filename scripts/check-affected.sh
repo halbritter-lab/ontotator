@@ -125,7 +125,7 @@ for raw in "${paths[@]}"; do
             add_backend_test "${found[@]}"
             [ "${#found[@]}" -gt 0 ] || unmapped+=("$path")
             ;;
-        src/ontocurator/*.py)
+        src/ontotator/*.py)
             module="${path#src/}"
             module="${module%.py}"
             module="${module//\//.}"
@@ -163,12 +163,12 @@ for raw in "${paths[@]}"; do
 done
 
 needs_docker=0
-if [ "${#backend_tests[@]}" -gt 0 ] && [ -z "${ONTOCURATOR_TEST_PG_URL:-}" ]; then
+if [ "${#backend_tests[@]}" -gt 0 ] && [ -z "${ONTOTATOR_TEST_PG_URL:-}" ]; then
     needs_docker=1
 fi
 if [ "$needs_docker" = 1 ]; then
     command -v docker >/dev/null 2>&1 \
-        || fail "docker is not on PATH. Start Docker or set ONTOCURATOR_TEST_PG_URL for PostgreSQL checks."
+        || fail "docker is not on PATH. Start Docker or set ONTOTATOR_TEST_PG_URL for PostgreSQL checks."
     docker info >/dev/null 2>&1 \
         || fail "Docker is not reachable. Start Docker Desktop or the Docker daemon."
 fi

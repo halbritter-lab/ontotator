@@ -17,12 +17,12 @@ from test_auth_api import _app
 from test_uploads_api import BASE, _ready, _run
 from typer.testing import CliRunner
 
-from ontocurator.cli import app as cli
-from ontocurator.exchange.jobs import HANDLERS
-from ontocurator.exchange.t1 import ImportedDocument, document_from_unit
-from ontocurator.jobs.queue import JobQueue
-from ontocurator.storage.repository import Repository
-from ontocurator.storage.tables import (
+from ontotator.cli import app as cli
+from ontotator.exchange.jobs import HANDLERS
+from ontotator.exchange.t1 import ImportedDocument, document_from_unit
+from ontotator.jobs.queue import JobQueue
+from ontotator.storage.repository import Repository
+from ontotator.storage.tables import (
     AuditEventRow,
     DocumentRow,
     JobRow,
@@ -378,7 +378,7 @@ def test_cli_no_wait_persists_the_same_typed_override_payload(staged, tmp_path):
             "--accept-translation",
             "case:de:1=Reviewed = accepted",
         ],
-        env={"ONTOCURATOR_DATA_DIR": str(db.data_dir)},
+        env={"ONTOTATOR_DATA_DIR": str(db.data_dir)},
     )
     assert result.exit_code == 0, result.output
     with db.transaction() as conn:
@@ -459,8 +459,8 @@ def test_unchanged_stored_translation_can_be_explicitly_accepted(staged, tmp_pat
 def test_invalid_persisted_worker_override_rolls_back_the_complete_import(
     staged, tmp_path
 ):
-    from ontocurator.auth.audit import Actor
-    from ontocurator.exchange.jobs import store_file
+    from ontotator.auth.audit import Actor
+    from ontotator.exchange.jobs import store_file
 
     application, _, _ = staged
     path = bundle(tmp_path, list(units()))
@@ -493,7 +493,7 @@ def test_internal_snapshot_mapping_persists_original_payload_and_defaulted_basis
 ):
     from t1_fixtures import TEXT, unit
 
-    from ontocurator.storage.tables import ProposalSetRow
+    from ontotator.storage.tables import ProposalSetRow
 
     application, admin, _ = staged
     source, _ = units()

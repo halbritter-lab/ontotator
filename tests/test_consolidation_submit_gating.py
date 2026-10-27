@@ -21,7 +21,7 @@ from test_consolidation_resolve_api import (
 )
 from work_plan_support import assign, doc
 
-from ontocurator.application.work_rounds import WorkRoundService
+from ontotator.application.work_rounds import WorkRoundService
 
 
 @pytest.fixture
@@ -168,7 +168,7 @@ def test_ordinary_rounds_are_not_gated(cons):
     anno = logged_in(env.app, "anno", assignments=[])
     opened = anno.post(f"/api/v1/rounds/{created.round_id}/open")
     assert opened.status_code == 200, opened.text
-    from ontocurator.api.routes import encode_workspace_id
+    from ontotator.api.routes import encode_workspace_id
 
     response = submit_acknowledged(anno, encode_workspace_id(created.workspace_key), 0)
     assert response.status_code == 200, response.text

@@ -58,7 +58,7 @@ function ExportFailure({ result, error }: { result: Record<string, unknown> | nu
 
 export function ExportPage({ projectKey, currentUser }: ExportPageProps): JSX.Element {
   return <section><h1>Export</h1><FinalExportPanel projectKey={projectKey} username={currentUser.username} /><h2>Research and individual exports</h2>{definitions.map((definition) => {
-    const storageKey = `ontocurator:export:${JSON.stringify([currentUser.username, projectKey, definition.kind])}`;
+    const storageKey = `ontotator:export:${JSON.stringify([currentUser.username, projectKey, definition.kind])}`;
     return <ExportCard key={storageKey} projectKey={projectKey} storageKey={storageKey} lead={false} {...definition} />;
   })}</section>;
 }

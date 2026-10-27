@@ -8,8 +8,8 @@ from proposal_check_support import assign, client, proposal_env
 from work_plan_support import assign as assign_task
 from work_plan_support import doc, plan_env
 
-from ontocurator.domain.work_plans import PlanFlags, RowKey
-from ontocurator.storage import work_plan_store as store
+from ontotator.domain.work_plans import PlanFlags, RowKey
+from ontotator.storage import work_plan_store as store
 
 
 def tasks(test_client: Any) -> dict[str, dict[str, Any]]:

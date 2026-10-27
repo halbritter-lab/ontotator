@@ -142,7 +142,7 @@ Group authorized VariantSummary data by case/language, preserving separate trans
 
 ## Task 1: Repair T1 export provenance and prove a downloadable result
 
-**Findings:** F30. **Files:** modify `src/ontocurator/exchange/t1.py`, `frontend/src/admin/ExportPage.tsx`, only if necessary `src/ontocurator/storage/repository.py` and `src/ontocurator/exchange/jobs.py`; tests `tests/test_t1_mapping.py`, `tests/test_t1_export.py`, `tests/test_reanchor_resolution_api.py`, `tests/test_reanchor_resolution_roundtrip.py`, `tests/test_progress_export_api.py`, `frontend/tests/exportPage.test.tsx`.
+**Findings:** F30. **Files:** modify `src/ontotator/exchange/t1.py`, `frontend/src/admin/ExportPage.tsx`, only if necessary `src/ontotator/storage/repository.py` and `src/ontotator/exchange/jobs.py`; tests `tests/test_t1_mapping.py`, `tests/test_t1_export.py`, `tests/test_reanchor_resolution_api.py`, `tests/test_reanchor_resolution_roundtrip.py`, `tests/test_progress_export_api.py`, `frontend/tests/exportPage.test.tsx`.
 
 **Interfaces:** consumes `submission_to_unit`'s existing exact proposal snapshot inventory and frozen submission annotations. Produces valid T1 provenance through the existing export job/download interface; internal `annotation_id:version` references remain unchanged in storage and reanchor checks. This package covers existing proposal/adoption sources only. Tasks 10/12 own the later human-input resolver and set-aware export references; they must not reuse `_proposal_ref` for human submission sources.
 
@@ -231,7 +231,7 @@ Group authorized VariantSummary data by case/language, preserving separate trans
 
 ## Task 8: Project creation defaults and submission policy
 
-**Findings:** F03/F25/F29. **Files:** `src/ontocurator/domain/project_rules.py`, `application/editing.py`, `application/submissions.py`, project-settings persistence/API owners; `frontend/src/admin/ProjectSettingsPage.tsx`, `editor/AnnotationPanel.tsx`, `app/CaseScreen.tsx`; existing project-rule/settings/axis tests.
+**Findings:** F03/F25/F29. **Files:** `src/ontotator/domain/project_rules.py`, `application/editing.py`, `application/submissions.py`, project-settings persistence/API owners; `frontend/src/admin/ProjectSettingsPage.tsx`, `editor/AnnotationPanel.tsx`, `app/CaseScreen.tsx`; existing project-rule/settings/axis tests.
 
 **Interfaces:** project defaults keyed by layer/type/axis and warning/required policy; retain axes_defaulted provenance. Reuse require_chosen_axes where consistent instead of introducing conflicting flags. Warning is the default; migration must not silently downgrade existing strict projects.
 
@@ -246,7 +246,7 @@ Group authorized VariantSummary data by case/language, preserving separate trans
 
 ## Task 9: Persistent personal multilingual search preferences
 
-**Finding:** F02. **Files:** `src/ontocurator/application/preferences.py`, `auth/preferences.py`, existing preferences API; `frontend/src/editor/searchLanguages.ts`, `SearchPanel.tsx`, `frontend/src/me/ProfilePage.tsx`, CaseScreen language binding. Tests: `tests/test_preferences_api.py`, `frontend/tests/searchLanguages.test.tsx`, `searchPanel.test.tsx`, `profilePage.test.tsx`.
+**Finding:** F02. **Files:** `src/ontotator/application/preferences.py`, `auth/preferences.py`, existing preferences API; `frontend/src/editor/searchLanguages.ts`, `SearchPanel.tsx`, `frontend/src/me/ProfilePage.tsx`, CaseScreen language binding. Tests: `tests/test_preferences_api.py`, `frontend/tests/searchLanguages.test.tsx`, `searchPanel.test.tsx`, `profilePage.test.tsx`.
 
 **Interfaces:** durable user multilingual enablement/preferred languages/document-language automation, separate from temporary per-text overrides. Canonical English remains available; translated search uses actually loaded compatible translations.
 
@@ -257,7 +257,7 @@ Group authorized VariantSummary data by case/language, preserving separate trans
 
 ## Task 10: Exact-input work rounds, carry-forward and consolidation
 
-**Scope:** scenario requirements extending F07/F26. **Files:** proposed `src/ontocurator/domain/work_rounds.py`, `application/work_rounds.py`, `api/work_round_routes.py`; existing workspaces/submissions/reviews, `exchange/reanchor_job.py`, `application/translation_reviews.py`, `assignments/eligibility.py`, storage tables/repository/migrations and generated clients. New `tests/test_work_rounds.py`, `tests/test_work_rounds_api.py`; existing reanchor/translation/scientific-review suites.
+**Scope:** scenario requirements extending F07/F26. **Files:** proposed `src/ontotator/domain/work_rounds.py`, `application/work_rounds.py`, `api/work_round_routes.py`; existing workspaces/submissions/reviews, `exchange/reanchor_job.py`, `application/translation_reviews.py`, `assignments/eligibility.py`, storage tables/repository/migrations and generated clients. New `tests/test_work_rounds.py`, `tests/test_work_rounds_api.py`; existing reanchor/translation/scientific-review suites.
 
 **Interfaces:** exact immutable input submissions and source/target texts → distinct authorized WorkRound, frozen review inputs/provenance and immutable output. Ordinary proposal review and explicit consolidation remain distinguishable.
 
@@ -273,7 +273,7 @@ Group authorized VariantSummary data by case/language, preserving separate trans
 
 ## Task 11: Problem reports, whole-task hold and clean restart
 
-**Findings:** F06/F10 plus scenarios. **Files:** proposed `src/ontocurator/domain/problem_reports.py`, `application/problem_reports.py`, `api/problem_report_routes.py`; Task 10 round service, assignments/authorization/storage; new `frontend/src/tasks/ProblemReportForm.tsx`, existing editable/read-only task entry points. New `tests/test_problem_reports.py`, `tests/test_problem_reports_api.py`, `frontend/tests/problemReports.test.tsx`.
+**Findings:** F06/F10 plus scenarios. **Files:** proposed `src/ontotator/domain/problem_reports.py`, `application/problem_reports.py`, `api/problem_report_routes.py`; Task 10 round service, assignments/authorization/storage; new `frontend/src/tasks/ProblemReportForm.tsx`, existing editable/read-only task entry points. New `tests/test_problem_reports.py`, `tests/test_problem_reports_api.py`, `frontend/tests/problemReports.test.tsx`.
 
 **Interfaces:** exact task/round/document and optional submitted result → report/hold with preserved work. Lead-agreed restart produces an empty new round, not destructive reset. These states feed Task 12 warnings.
 
@@ -289,7 +289,7 @@ Group authorized VariantSummary data by case/language, preserving separate trans
 
 ## Task 12: Final selection, dashboard warnings and deliberate export
 
-**Scope:** per-language final selection/dashboard, extending F06/F07/F30. **Files:** proposed `src/ontocurator/domain/final_results.py`, `application/final_results.py`, `application/workflow_warnings.py`, `api/final_result_routes.py`; storage/migrations, `exchange/jobs.py`/mapping; new `frontend/src/admin/ProjectDashboardPage.tsx`, selection UI in tree/detail, `admin/ExportPage.tsx`. New `tests/test_final_results.py`, `tests/test_workflow_warnings.py`, `tests/test_final_export.py`, `frontend/tests/projectDashboard.test.tsx`, `finalSelection.test.tsx`.
+**Scope:** per-language final selection/dashboard, extending F06/F07/F30. **Files:** proposed `src/ontotator/domain/final_results.py`, `application/final_results.py`, `application/workflow_warnings.py`, `api/final_result_routes.py`; storage/migrations, `exchange/jobs.py`/mapping; new `frontend/src/admin/ProjectDashboardPage.tsx`, selection UI in tree/detail, `admin/ExportPage.tsx`. New `tests/test_final_results.py`, `tests/test_workflow_warnings.py`, `tests/test_final_export.py`, `frontend/tests/projectDashboard.test.tsx`, `finalSelection.test.tsx`.
 
 **Interfaces:** FinalSelection pins exact document/submission per project/case/language. One server warning projection feeds both dashboard/export. ExportSelectionSnapshot freezes the acknowledged selection/warning/omission state.
 

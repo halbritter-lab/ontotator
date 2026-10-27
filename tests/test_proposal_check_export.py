@@ -5,12 +5,12 @@ from types import SimpleNamespace
 
 from test_final_export_guide import _sub, payload
 
-from ontocurator.domain.annotations import AnnotationRef
-from ontocurator.domain.review import ReviewDecision, ReviewTargetSet
-from ontocurator.domain.workspace import Submission
-from ontocurator.exchange.final_export_guide import build_readme
-from ontocurator.exchange.proposal_checks import proposal_check_record
-from ontocurator.storage.proposal_queries import ProposalSetRef
+from ontotator.domain.annotations import AnnotationRef
+from ontotator.domain.review import ReviewDecision, ReviewTargetSet
+from ontotator.domain.workspace import Submission
+from ontotator.exchange.final_export_guide import build_readme
+from ontotator.exchange.proposal_checks import proposal_check_record
+from ontotator.storage.proposal_queries import ProposalSetRef
 
 
 def _ref(annotation_id: str) -> AnnotationRef:

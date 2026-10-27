@@ -14,12 +14,12 @@ import pytest
 from pg_harness import unmigrated_database_url
 from sqlalchemy import Connection, Engine, create_engine, text
 
-from ontocurator.storage.schema import upgrade
+from ontotator.storage.schema import upgrade
 
 # Renumbering (plan Global rule 12) only touches these two constants.
 REVISION = "0020"
 PREVIOUS = "0019"
-S = "ontocurator"
+S = "ontotator"
 KEEP = {"consolidation": {"action": "keep"}}
 KEEP_BOTH = {"consolidation": {"action": "keep_both"}}
 
@@ -326,7 +326,7 @@ def _seed(conn: Connection) -> dict[str, int]:
 
 @pytest.fixture
 def migrated(tmp_path, caplog) -> Iterator[tuple[str, Engine, dict[str, int]]]:
-    caplog.set_level(logging.WARNING, logger="ontocurator.migrations")
+    caplog.set_level(logging.WARNING, logger="ontotator.migrations")
     url = unmigrated_database_url(tmp_path / "legacy-removal-migration.db")
     upgrade(url, PREVIOUS)
     engine = create_engine(url)

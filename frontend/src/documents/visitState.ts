@@ -30,7 +30,7 @@ interface VisitRecord {
   decided: string[];
 }
 
-const PREFIX = "ontocurator:documents-visit:";
+const PREFIX = "ontotator:documents-visit:";
 /** The server accepts at most this many `retain` keys. */
 export const MAX_RETAIN = 200;
 

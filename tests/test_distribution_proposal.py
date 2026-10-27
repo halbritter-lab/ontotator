@@ -3,7 +3,7 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from ontocurator.assignments.distribution import (
+from ontotator.assignments.distribution import (
     Candidate,
     DistributionProposal,
     DocumentItem,

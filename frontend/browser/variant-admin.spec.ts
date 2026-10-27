@@ -211,7 +211,7 @@ test('ordinary lead downloads real review JSONL bytes and a later current-role r
     const bytes = Buffer.concat(chunks); expect(sha(bytes)).toBe(job.result?.sha256); expect(bytes.toString('utf8').endsWith('\n')).toBe(true);
     const rows = bytes.toString('utf8').trimEnd().split('\n').map(line => JSON.parse(line) as { [key: string]: unknown }); expect(rows).toHaveLength(1);
     expect(Object.keys(rows[0]).sort()).toEqual(['format', 'review_id', 'project', 'case_id', 'reviewed_variant', 'source_variant', 'reviewer', 'decision', 'clinical_change', 'categories', 'rationale', 'machine_text_sha256', 'proposed_text', 'proposed_text_sha256', 'created_variant', 'status_before', 'status_after', 'review_policy', 'reviewed_at', 'guideline_version', 'guideline_ref', 'guideline_withdrawn'].sort());
-    expect(rows[0]).toEqual({ format: 'ontocurator-translation-review/v1', review_id: record.id, project: s.project, case_id: s.case_id,
+    expect(rows[0]).toEqual({ format: 'ontotator-translation-review/v1', review_id: record.id, project: s.project, case_id: s.case_id,
       reviewed_variant: { document_id: s.external_id, language: 'de', version: reviewed.version, origin: reviewed.origin, text_sha256: reviewed.text_sha256, translation: reviewed.translation },
       source_variant: { document_id: source.external_id, language: 'en', version: source.version, text_sha256: source.text_sha256 },
       reviewer: { pseudonym: record.reviewer_pseudonym, qualification: record.reviewer_qualification, languages: record.reviewer_languages },
@@ -241,7 +241,7 @@ test('ordinary lead downloads real review JSONL bytes and a later current-role r
     const refusing = page.waitForResponse(r => r.request().method() === 'GET' && r.url().endsWith(`/jobs/${jobId}/download`));
     await card.getByRole('button', { name: 'Download', exact: true }).click(); const denied = await refusing; expect(denied.status()).toBe(403);
     await expect(card).toContainText('You do not have access to this page.'); await expect(card.getByRole('button', { name: 'Download', exact: true })).toHaveCount(0);
-    const key = `ontocurator:export:${JSON.stringify([s.users.lead, s.project, 'translation_reviews'])}`;
+    const key = `ontotator:export:${JSON.stringify([s.users.lead, s.project, 'translation_reviews'])}`;
     expect(await page.evaluate(key => sessionStorage.getItem(key), key)).toBeNull();
     await attach('real-review-jsonl-current-permission', { project: s.project, record, job, bytes_sha256: sha(bytes), forbidden_member_status: 403, revoked_download_status: denied.status() });
   } finally { await Promise.all([reviewer.close(), manager.close(), other.close()]); }

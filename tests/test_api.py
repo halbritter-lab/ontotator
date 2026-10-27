@@ -8,9 +8,9 @@ from auth_harness import AutoLoginClient, upload_package
 from pg_harness import database_url_for
 from support.v2_writer import PackageWriter
 
-from ontocurator.api.app import create_app
-from ontocurator.config import AppConfig
-from ontocurator.domain.documents import (
+from ontotator.api.app import create_app
+from ontotator.config import AppConfig
+from ontotator.domain.documents import (
     OntologyRef,
 )
 
@@ -774,7 +774,7 @@ def test_document_list_flags_review_inputs_only_in_review_mode(app_client):
 
 
 def test_auto_search_records_the_route_of_each_candidate(app_client):
-    from ontocurator.domain.workspace import WorkspaceKey
+    from ontotator.domain.workspace import WorkspaceKey
 
     client, _ = app_client
     files = {
@@ -857,7 +857,7 @@ def test_auto_search_records_the_route_of_each_candidate(app_client):
 
 
 def test_selection_from_the_similar_block_records_its_positions(app_client):
-    from ontocurator.domain.workspace import WorkspaceKey
+    from ontotator.domain.workspace import WorkspaceKey
 
     client, _ = app_client
     files = {
@@ -932,8 +932,8 @@ def test_selection_from_the_similar_block_records_its_positions(app_client):
 def test_a_failing_start_closes_the_database(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from ontocurator.ontology.store import OntologyStore
-    from ontocurator.storage.database import Database
+    from ontotator.ontology.store import OntologyStore
+    from ontotator.storage.database import Database
 
     closed: list[Database] = []
     original_close = Database.close
@@ -961,8 +961,8 @@ def test_a_failing_start_closes_the_database(
 def test_a_failing_close_does_not_hide_why_the_start_failed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from ontocurator.ontology.store import OntologyStore
-    from ontocurator.storage.database import Database
+    from ontotator.ontology.store import OntologyStore
+    from ontotator.storage.database import Database
 
     original_close = Database.close
     failures: list[Database] = []
@@ -993,9 +993,9 @@ def test_an_unmigrated_database_is_refused_at_start(
 ) -> None:
     from pg_harness import unmigrated_database_url
 
-    from ontocurator.domain.errors import DomainError
-    from ontocurator.storage.database import Database
-    from ontocurator.storage.schema import head_revision
+    from ontotator.domain.errors import DomainError
+    from ontotator.storage.database import Database
+    from ontotator.storage.schema import head_revision
 
     closed: list[Database] = []
     original_close = Database.close

@@ -38,7 +38,7 @@ async function openT5(page: Page): Promise<CarryScenario> {
 const separator = (page: Page) => page.getByRole("separator", { name: "Resize findings column", exact: true });
 const sidebar = (page: Page) => page.locator("#findings-column");
 const widthOf = (locator: Locator) => locator.evaluate(element => element.getBoundingClientRect().width);
-const storageKey = (username: string) => `ontocurator.editor.sidebarWidth.v1:${username}`;
+const storageKey = (username: string) => `ontotator.editor.sidebarWidth.v1:${username}`;
 const stored = (page: Page, username: string) => page.evaluate(key => localStorage.getItem(key), storageKey(username));
 const paneTab = (page: Page, name: RegExp) => page.getByRole("navigation", { name: "Select view" }).getByRole("button", { name });
 

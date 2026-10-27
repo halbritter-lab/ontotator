@@ -10,15 +10,15 @@ import pytest
 from pg_harness import database_for
 from sqlalchemy import delete, event, func, insert, select, update
 
-from ontocurator.assignments.service import (
+from ontotator.assignments.service import (
     TASK_FOR_MODE,
     AssignmentService,
 )
-from ontocurator.auth.audit import Actor
-from ontocurator.domain.errors import DomainError
-from ontocurator.storage.database import Database
-from ontocurator.storage.repository import _lock_id
-from ontocurator.storage.tables import (
+from ontotator.auth.audit import Actor
+from ontotator.domain.errors import DomainError
+from ontotator.storage.database import Database
+from ontotator.storage.repository import _lock_id
+from ontotator.storage.tables import (
     AssignmentRow,
     AuditEventRow,
     DocumentRow,

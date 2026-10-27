@@ -23,17 +23,17 @@
 - The branch `feat/term-search` already exists and holds the spec. Work on it.
 - Commit messages follow the repo style (`feat(search): …`, `feat(frontend): …`, `test: …`, `build: …`). Do **not** add any `Co-Authored-By` or "Generated with" lines.
 - Before every commit that touches Python files, run `uv run ruff format <those files>`; CI runs `ruff format --check .` over tests as well, and the test code below is not guaranteed to be wrapped the way ruff wants it.
-- Do not edit files under `src/ontocurator/vendor/`. All new logic goes into `src/ontocurator/ontology/service.py`.
+- Do not edit files under `src/ontotator/vendor/`. All new logic goes into `src/ontotator/ontology/service.py`.
 - Test ontology `tests/fixtures/hp.json` holds: `HP:0001250` Seizure (synonyms Seizures, Epileptic seizure, Convulsion), `HP:0002133` Status epilepticus (Prolonged seizures), `HP:0011146` Dialeptic seizure (Absence seizure), `HP:0001252` Hypotonia (Low muscle tone, Muscle hypotonia, Hypotonic), `HP:0001284` Areflexia, `HP:0000365` Hearing impairment (Hearing loss, Hipoacusia, Deafness), `HP:0000407` Sensorineural hearing impairment, and the obsolete `HP:0000123`.
 
 ## File structure
 
 | File | Action | Responsibility |
 |---|---|---|
-| `src/ontocurator/ontology/provenance.py` | modify | `route: "auto"` on the request (new default); `route` and `match_language` on the candidate |
-| `src/ontocurator/packages/models.py` | modify | `candidate_routes` on `SearchEventRecord` |
-| `src/ontocurator/ontology/service.py` | modify | `looks_like_code`, the `auto` branch, one helper that builds a candidate |
-| `src/ontocurator/api/routes.py` | modify | Store `candidate_routes` in the search event |
+| `src/ontotator/ontology/provenance.py` | modify | `route: "auto"` on the request (new default); `route` and `match_language` on the candidate |
+| `src/ontotator/packages/models.py` | modify | `candidate_routes` on `SearchEventRecord` |
+| `src/ontotator/ontology/service.py` | modify | `looks_like_code`, the `auto` branch, one helper that builds a candidate |
+| `src/ontotator/api/routes.py` | modify | Store `candidate_routes` in the search event |
 | `tests/test_search_auto.py` | create | Service and model tests for the `auto` route |
 | `tests/test_api.py` | modify | API test: event of an `auto` search and of the selection made from it |
 | `contracts/openapi.json` | regenerate | API contract |
@@ -42,7 +42,7 @@
 | `frontend/src/editor/SearchPanel.tsx` | modify | No selector, always `auto`, match line with kind and language |
 | `frontend/tests/searchState.test.ts` | modify | Default route |
 | `frontend/tests/searchPanel.test.tsx` | create | Panel tests |
-| `src/ontocurator/web/` | regenerate | Embedded SPA build (git-tracked) |
+| `src/ontotator/web/` | regenerate | Embedded SPA build (git-tracked) |
 
 ---
 
@@ -74,8 +74,8 @@ Expected: everything passes. If something fails before any change, stop and repo
 ### Task 1: Models — `auto` route, candidate route and language, `candidate_routes`
 
 **Files:**
-- Modify: `src/ontocurator/ontology/provenance.py` (`SearchRequest`, `SearchCandidate`)
-- Modify: `src/ontocurator/packages/models.py` (`SearchEventRecord`)
+- Modify: `src/ontotator/ontology/provenance.py` (`SearchRequest`, `SearchCandidate`)
+- Modify: `src/ontotator/packages/models.py` (`SearchEventRecord`)
 - Test: `tests/test_search_auto.py` (create)
 
 - [ ] **Step 1: Write the failing tests**
@@ -89,11 +89,11 @@ import hashlib
 import json
 from pathlib import Path
 
-from ontocurator.domain.documents import OntologyRef
-from ontocurator.domain.workspace import WorkspaceKey
-from ontocurator.ontology.provenance import SearchCandidate, SearchRequest
-from ontocurator.ontology.service import OntologyService
-from ontocurator.packages.models import SearchEventRecord
+from ontotator.domain.documents import OntologyRef
+from ontotator.domain.workspace import WorkspaceKey
+from ontotator.ontology.provenance import SearchCandidate, SearchRequest
+from ontotator.ontology.service import OntologyService
+from ontotator.packages.models import SearchEventRecord
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "hp.json"
 
@@ -170,7 +170,7 @@ Expected: 3 failures — `route` is `"lexical"` instead of `"auto"`; `SearchCand
 
 - [ ] **Step 3: Extend the request and the candidate**
 
-In `src/ontocurator/ontology/provenance.py`, in `SearchRequest`, replace
+In `src/ontotator/ontology/provenance.py`, in `SearchRequest`, replace
 
 ```python
     route: Literal["lexical", "exact", "id", "browse"] = "lexical"
@@ -197,7 +197,7 @@ In `SearchCandidate`, after the line `obsolete: bool = False`, add
 
 - [ ] **Step 4: Extend the search event**
 
-In `src/ontocurator/packages/models.py`, in `SearchEventRecord`, after the line `candidate_scores: dict[str, float] = Field(default_factory=dict)`, add
+In `src/ontotator/packages/models.py`, in `SearchEventRecord`, after the line `candidate_scores: dict[str, float] = Field(default_factory=dict)`, add
 
 ```python
     # Term id -> route that surfaced it. Empty on events written before the
@@ -218,7 +218,7 @@ Expected: all pass except `scripts/export_openapi.py`-based drift tests, if any 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/ontocurator/ontology/provenance.py src/ontocurator/packages/models.py tests/test_search_auto.py
+git add src/ontotator/ontology/provenance.py src/ontotator/packages/models.py tests/test_search_auto.py
 git commit -m "feat(search): add the auto route and per-candidate route fields to the models"
 ```
 
@@ -227,7 +227,7 @@ git commit -m "feat(search): add the auto route and per-candidate route fields t
 ### Task 2: Service — code queries
 
 **Files:**
-- Modify: `src/ontocurator/ontology/service.py`
+- Modify: `src/ontotator/ontology/service.py`
 - Test: `tests/test_search_auto.py`
 
 - [ ] **Step 1: Write the failing tests**
@@ -237,7 +237,7 @@ Append to `tests/test_search_auto.py`:
 ```python
 import pytest
 
-from ontocurator.ontology.service import looks_like_code
+from ontotator.ontology.service import looks_like_code
 
 
 @pytest.mark.parametrize(
@@ -303,11 +303,11 @@ Move the two new `import` lines to the import block at the top of the file (ruff
 - [ ] **Step 2: Run the tests to verify they fail**
 
 Run: `uv run pytest tests/test_search_auto.py -v`
-Expected: collection error — `cannot import name 'looks_like_code' from 'ontocurator.ontology.service'`.
+Expected: collection error — `cannot import name 'looks_like_code' from 'ontotator.ontology.service'`.
 
 - [ ] **Step 3: Implement the code branch**
 
-In `src/ontocurator/ontology/service.py`:
+In `src/ontotator/ontology/service.py`:
 
 Change the imports at the top. Replace
 
@@ -439,12 +439,12 @@ Expected: all pass.
 - [ ] **Step 5: Lint and types**
 
 Run: `uv run ruff check . && uv run ruff format --check . && uv run mypy src`
-Expected: no findings. If `ruff format --check` reports the new files, run `uv run ruff format src/ontocurator/ontology/service.py tests/test_search_auto.py` and re-check.
+Expected: no findings. If `ruff format --check` reports the new files, run `uv run ruff format src/ontotator/ontology/service.py tests/test_search_auto.py` and re-check.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/ontocurator/ontology/service.py tests/test_search_auto.py
+git add src/ontotator/ontology/service.py tests/test_search_auto.py
 git commit -m "feat(search): answer identifier-like queries on the auto route with that term alone"
 ```
 
@@ -453,7 +453,7 @@ git commit -m "feat(search): answer identifier-like queries on the auto route wi
 ### Task 3: Service — keyword queries
 
 **Files:**
-- Modify: `src/ontocurator/ontology/service.py` (`_auto_hits`, imports)
+- Modify: `src/ontotator/ontology/service.py` (`_auto_hits`, imports)
 - Test: `tests/test_search_auto.py`
 
 - [ ] **Step 1: Write the failing tests**
@@ -587,10 +587,10 @@ Expected: the five new tests fail (empty candidate lists); the earlier tests sti
 
 - [ ] **Step 3: Implement the keyword branch**
 
-In `src/ontocurator/ontology/service.py`, extend the import from the vendored search module. Replace
+In `src/ontotator/ontology/service.py`, extend the import from the vendored search module. Replace
 
 ```python
-from ontocurator.vendor.hpo_span_annotator.search import (
+from ontotator.vendor.hpo_span_annotator.search import (
     SCORED_PATHS,
     SearchEngine,
     shuffle_seed,
@@ -600,7 +600,7 @@ from ontocurator.vendor.hpo_span_annotator.search import (
 with
 
 ```python
-from ontocurator.vendor.hpo_span_annotator.search import (
+from ontotator.vendor.hpo_span_annotator.search import (
     SCORED_PATHS,
     SearchEngine,
     shuffle_seed,
@@ -662,7 +662,7 @@ Expected: all pass (a contract-drift test, if one exists, may still fail until T
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/ontocurator/ontology/service.py tests/test_search_auto.py
+git add src/ontotator/ontology/service.py tests/test_search_auto.py
 git commit -m "feat(search): list exact matches first and shuffled similar terms after them"
 ```
 
@@ -671,7 +671,7 @@ git commit -m "feat(search): list exact matches first and shuffled similar terms
 ### Task 4: API — record the route of each candidate
 
 **Files:**
-- Modify: `src/ontocurator/api/routes.py` (`search_ontology`, around line 526)
+- Modify: `src/ontotator/api/routes.py` (`search_ontology`, around line 526)
 - Test: `tests/test_api.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -680,7 +680,7 @@ Append to `tests/test_api.py`:
 
 ```python
 def test_auto_search_records_the_route_of_each_candidate(app_client):
-    from ontocurator.domain.workspace import WorkspaceKey
+    from ontotator.domain.workspace import WorkspaceKey
 
     client, _ = app_client
     files = {
@@ -769,7 +769,7 @@ Expected: FAIL at `assert event.candidate_routes == {...}` — the stored event 
 
 - [ ] **Step 3: Store the routes**
 
-In `src/ontocurator/api/routes.py`, in `search_ontology`, in the `SearchEventRecord(...)` call, after
+In `src/ontotator/api/routes.py`, in `search_ontology`, in the `SearchEventRecord(...)` call, after
 
 ```python
 candidate_scores = (
@@ -791,7 +791,7 @@ Expected: all pass.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/ontocurator/api/routes.py tests/test_api.py
+git add src/ontotator/api/routes.py tests/test_api.py
 git commit -m "feat(search): store the route of every candidate in the search event"
 ```
 
@@ -1197,7 +1197,7 @@ Check that the panel is not left with an odd gap where the selector was.
 
 ```bash
 uv run python -c "import sys; sys.path.insert(0, 'scripts'); from build_common import build_frontend, sync_embedded_web_assets; sync_embedded_web_assets(build_frontend(npm_ci=False))"
-git add src/ontocurator/web
+git add src/ontotator/web
 git commit -m "build: rebuild embedded web assets"
 ```
 
@@ -1209,7 +1209,7 @@ Branch and commits, the actual numbers from Step 1, every deviation from this pl
 
 ## Notes for the implementer
 
-- **Why exact matches are not shuffled but similar ones are:** see the module docstring of `src/ontocurator/vendor/hpo_span_annotator/search.py`. An order that comes from a similarity score anchors the reader; an exact name match is a fact.
+- **Why exact matches are not shuffled but similar ones are:** see the module docstring of `src/ontotator/vendor/hpo_span_annotator/search.py`. An order that comes from a similarity score anchors the reader; an exact name match is a fact.
 - **Seed:** unchanged from the lexical route — annotator, annotation, normalised query, `k`. Part 2 adds the language selection to it.
 - **`match_language`:** in this part only lexical hits carry a language, and without translation files it is always `"en"`. Part 2 makes exact matches on translated names report theirs.
 - **Old application versions:** `SearchEventRecord` forbids unknown fields, so a version of the app from before this change cannot read a package that contains events with `candidate_routes`. Reading old packages with the new version works (covered by Task 1 and the existing fixture tests).

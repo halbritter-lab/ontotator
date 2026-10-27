@@ -1,7 +1,7 @@
 """Pure carrier contract; storage/authority tests require the later PG grant."""
 
-from ontocurator.api.upload_routes import ProposalSetView
-from ontocurator.application.workspaces import WorkspaceView
+from ontotator.api.upload_routes import ProposalSetView
+from ontotator.application.workspaces import WorkspaceView
 
 
 def test_workspace_metadata_is_defaulted_and_reuses_the_public_typed_projection():

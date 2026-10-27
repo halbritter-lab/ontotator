@@ -14,10 +14,10 @@ import pytest
 from sqlalchemy import create_engine as real_create_engine
 from typer.testing import CliRunner
 
-from ontocurator.cli import app
-from ontocurator.storage import database as database_module
-from ontocurator.storage import schema as schema_module
-from ontocurator.storage.database import CONNECT_TIMEOUT_SECONDS, Database
+from ontotator.cli import app
+from ontotator.storage import database as database_module
+from ontotator.storage import schema as schema_module
+from ontotator.storage.database import CONNECT_TIMEOUT_SECONDS, Database
 
 UNREACHABLE = "postgresql://u:p@192.0.2.1:5432/x"
 
@@ -93,10 +93,10 @@ def test_cli_unreachable_database_fails_fast(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setattr(database_module, "CONNECT_TIMEOUT_SECONDS", 2)
-    monkeypatch.setenv("ONTOCURATOR_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("ONTOTATOR_DATA_DIR", str(tmp_path))
     for name in (
-        "ONTOCURATOR_DATABASE_PASSWORD",
-        "ONTOCURATOR_DATABASE_PASSWORD_FILE",
+        "ONTOTATOR_DATABASE_PASSWORD",
+        "ONTOTATOR_DATABASE_PASSWORD_FILE",
     ):
         monkeypatch.delenv(name, raising=False)
 

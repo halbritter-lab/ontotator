@@ -15,7 +15,7 @@ Source file: `frontend/src/translation/labels.ts`
 |---|---|---|---|---|
 | `units_added` | Units added in translation | The translation run's check found a unit of measurement in the translation that it did not find in the source. | draft | |
 | `numbers_changed` | Numbers changed in translation | The translation run's check found numbers in the translation that differ from those in the source. | draft | |
-| unknown code (fallback) | The code turned into words, for example `glossary_miss` becomes "Glossary miss" | The translation run reported this check as failed. Ontocurator has no description for it; ask the project lead what it checks. | draft | |
+| unknown code (fallback) | The code turned into words, for example `glossary_miss` becomes "Glossary miss" | The translation run reported this check as failed. Ontotator has no description for it; ask the project lead what it checks. | draft | |
 
 ## Shared sentences (shown for every failed check)
 
@@ -26,6 +26,6 @@ Source file: `frontend/src/translation/labels.ts`
 
 ## Search for further codes
 
-Ontocurator does not run translation checks itself; it reads `translation.checks[].code` from the imported translation metadata (`src/ontocurator/exchange/variant_plan.py`, `failed_checks`). Searching `src/`, `tests/` and `examples/` (`grep -rn "units_added" src/ tests/ examples/`, plus all `"code"` values next to `"passed"`) found only `units_added` and `numbers_changed` in fixtures. No other code is emitted by Ontocurator, so there is no "new draft" entry. Codes used only in frontend test fixtures (`negation_changed`, `negation-flip_detected`, `numbers`) are synthetic and are covered by the fallback.
+Ontotator does not run translation checks itself; it reads `translation.checks[].code` from the imported translation metadata (`src/ontotator/exchange/variant_plan.py`, `failed_checks`). Searching `src/`, `tests/` and `examples/` (`grep -rn "units_added" src/ tests/ examples/`, plus all `"code"` values next to `"passed"`) found only `units_added` and `numbers_changed` in fixtures. No other code is emitted by Ontotator, so there is no "new draft" entry. Codes used only in frontend test fixtures (`negation_changed`, `negation-flip_detected`, `numbers`) are synthetic and are covered by the fallback.
 
 If the translation pipeline owners name further codes, add them to `checkLabels` and `checkExplanations` and to the table above.

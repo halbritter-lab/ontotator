@@ -59,7 +59,7 @@ def gate(tmp_path):
             "CHECK_VITEST_WORKERS",
             "CHECK_PYTEST_WORKERS",
             "CHECK_PLAYWRIGHT_WORKERS",
-            "ONTOCURATOR_TEST_PG_URL",
+            "ONTOTATOR_TEST_PG_URL",
             "CHECK_TEST_FAIL",
         ]:
             env.pop(name, None)
@@ -183,14 +183,14 @@ def test_worker_override_requires_positive_integer_before_tools(gate, workers):
 
 
 def test_external_postgres_does_not_require_docker_for_backend(gate):
-    result, calls = gate("--only", "backend", ONTOCURATOR_TEST_PG_URL="test-only")
+    result, calls = gate("--only", "backend", ONTOTATOR_TEST_PG_URL="test-only")
     assert result.returncode == 0, result.stderr
     assert not any(call.startswith("docker") for call in calls)
 
 
 def test_backend_does_not_require_frontend_dependencies(gate):
     (gate.workspace / "frontend/node_modules").rmdir()
-    result, calls = gate("--only", "backend", ONTOCURATOR_TEST_PG_URL="test-only")
+    result, calls = gate("--only", "backend", ONTOTATOR_TEST_PG_URL="test-only")
     assert result.returncode == 0, result.stderr
     assert calls == ["uv run pytest -q -n 4 --durations=20"]
     result, calls = gate("--only", "frontend")
@@ -220,7 +220,7 @@ def test_backend_worker_override_runs_serially_at_one_or_less(gate, workers, exp
     result, calls = gate(
         "--only",
         "backend",
-        ONTOCURATOR_TEST_PG_URL="test-only",
+        ONTOTATOR_TEST_PG_URL="test-only",
         CHECK_PYTEST_WORKERS=workers,
     )
     assert result.returncode == 0, result.stderr

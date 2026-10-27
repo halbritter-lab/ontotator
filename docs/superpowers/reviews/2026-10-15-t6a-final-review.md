@@ -86,7 +86,7 @@ partial runs do not establish final browser/container success.
 ## Final integrated gate
 
 At `a17fb6a4bad16af6656916091fff51fddb0ecc59`, the complete command
-`CHECK_CONTAINERS=1 CHECK_IMAGE=ontocurator:t6a-final scripts/check.sh` passed
+`CHECK_CONTAINERS=1 CHECK_IMAGE=ontotator:t6a-final scripts/check.sh` passed
 with exit 0 in 787 seconds. The tested image, built from that same source, is
 `sha256:eb0dcc146d5952026ae9ce64b5b46a95bab4eccf096879d0d3abc177cf7483ed`.
 

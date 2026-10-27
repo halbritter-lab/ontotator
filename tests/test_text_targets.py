@@ -22,18 +22,18 @@ from pg_harness import database_url_for
 from sqlalchemy import insert, select
 from test_text_change_service import _env
 
-from ontocurator.api.app import create_app
-from ontocurator.application.text_changes import TextChangeService
-from ontocurator.application.text_targets import (
+from ontotator.api.app import create_app
+from ontotator.application.text_changes import TextChangeService
+from ontotator.application.text_targets import (
     TextRow,
     text_documents,
     text_row,
     text_target_document,
 )
-from ontocurator.config import AppConfig
-from ontocurator.storage.plan_tables import DiscardedVariantRow
-from ontocurator.storage.repository import Repository
-from ontocurator.storage.tables import ProjectRow
+from ontotator.config import AppConfig
+from ontotator.storage.plan_tables import DiscardedVariantRow
+from ontotator.storage.repository import Repository
+from ontotator.storage.tables import ProjectRow
 
 CASE = "case-0007"
 

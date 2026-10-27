@@ -31,7 +31,7 @@ const snapshot = (
   termId: string,
   provenance: { actor: { actor_id: string; kind: "tool" | "human" }; method: string; source_refs?: string[] },
 ) => ({
-  schema_version: "ontocurator-annotation/v3" as const,
+  schema_version: "ontotator-annotation/v3" as const,
   annotation: {
     annotation_id: annotationId,
     document_id: "doc",

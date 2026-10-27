@@ -1,14 +1,14 @@
-# Work Package Format v2 (`ontocurator-work-package/v2`)
+# Work Package Format v2 (`ontotator-work-package/v2`)
 
 ## Overview
 
-The work package (`ontocurator-work-package/v2`) is an unencrypted, strictly validated ZIP archive for lossless roundtripping of multi-layered ontology annotation and review tasks between Ontocurator instances. It encapsulates immutable document texts, pinned task profiles, ontology references, snapshots, review submissions, and search provenance.
+The work package (`ontotator-work-package/v2`) is an unencrypted, strictly validated ZIP archive for lossless roundtripping of multi-layered ontology annotation and review tasks between Ontotator instances. It encapsulates immutable document texts, pinned task profiles, ontology references, snapshots, review submissions, and search provenance.
 
 ## Key Changes from v1
 
-- **Format Version**: `ontocurator-work-package/v2` (legacy v1 packages are cleanly rejected at import).
+- **Format Version**: `ontotator-work-package/v2` (legacy v1 packages are cleanly rejected at import).
 - **TaskProfile**: Mandatory profile declaring multi-ontology bindings, configured layers (`editable` vs `reference`), annotation types, contextual axes, and evidence policies.
-- **AnnotationSnapshot V3**: Uses format `ontocurator-annotation/v3` with compound identity `(annotation_id, version)` binding `layer_id`, `type_id`, `term_id`, `axes_values`, `evidence_refs`, `layer_config_sha256`, and `ontology_sha256`.
+- **AnnotationSnapshot V3**: Uses format `ontotator-annotation/v3` with compound identity `(annotation_id, version)` binding `layer_id`, `type_id`, `term_id`, `axes_values`, `evidence_refs`, `layer_config_sha256`, and `ontology_sha256`.
 - **TaskScope**: Deterministic workspace scope computed from task profile and mode (`independent`, `assisted`, `review`), determining layer editability, reference layers, and mandatory checkmark obligations.
 - **Embedded vs External Ontologies**: Declared ontologies may be bundled inside the archive (e.g. `ontologies/hp.json`) or resolved externally via `--ontology` CLI flag. Missing ontologies are reported together.
 
@@ -17,7 +17,7 @@ The work package (`ontocurator-work-package/v2`) is an unencrypted, strictly val
 A valid v2 work package ZIP archive contains:
 
 1. `manifest.json`: Root package manifest:
-   - `format_version`: `"ontocurator-work-package/v2"`
+   - `format_version`: `"ontotator-work-package/v2"`
    - `package_id`: Unique identifier of the work package
    - `document_order`: Canonical ordered list of document IDs (`[doc1, doc2, ...]`) preserving case sequence
    - `task_profile`: Full inline `TaskProfile` object
@@ -36,7 +36,7 @@ A valid v2 work package ZIP archive contains:
 ## Captured Search Conditions
 
 `search_conditions`, when present, covers the profile's ontology digests. Each
-`ontocurator-search-condition/v1` record contains a canonical `condition_id`
+`ontotator-search-condition/v1` record contains a canonical `condition_id`
 digest, `ontology_sha256`, `translations`, `index` configuration and captured
 `runtime`. Translation declarations retain their filename, digest, archive path
 and languages; their bytes are included and validated during import. The
@@ -75,7 +75,7 @@ Two export flavours produce v2 packages with `origin_package_id` / `origin_manif
 3. Keep people, modes, scopes and review rounds separate. For each group, retain the snapshots in the requested editable layer. Reimported continuation retains its original logical origin and revision sequence. Revisions cannot rank unrelated groups: multiple qualifying origins remain explicitly ambiguous, and separate rounds require a study-defined choice before aggregation.
 
 ```python
-from ontocurator.domain.results import latest_submissions
+from ontotator.domain.results import latest_submissions
 
 # Input: validated Submission models, not raw archive JSON.
 current = latest_submissions(submissions)
@@ -90,7 +90,7 @@ logical origin and scope identity, including after an independent export project
 reference layers out of the local profile; completion is validated against the
 current local permissions.
 
-Use `ontocurator analyze PACKAGE --annotator ID --output results.json` for versioned current-result rows, explicit missing/checked-negative/uncertain states, full evidence and round ambiguity. See [the scientific workflow](scientific-workflow.md) for the two-annotator technical pilot and interpretation rules.
+Use `ontotator analyze PACKAGE --annotator ID --output results.json` for versioned current-result rows, explicit missing/checked-negative/uncertain states, full evidence and round ambiguity. See [the scientific workflow](scientific-workflow.md) for the two-annotator technical pilot and interpretation rules.
 
 ## TaskProfile Schema
 

@@ -7,7 +7,7 @@ const snapshot = (refs: number) => ({
   annotation: { annotation_id: "a", document_id: "d", layer_id: "l", type_id: "t", term_id: "HP:0001250",
     axes_values: {}, evidence_refs: Array.from({ length: refs }, (_, i) => ({ evidence_id: `e${i}`, version: "v" })),
     provenance: { actor: { actor_id: "u", kind: "human" }, method: "manual" } },
-  schema_version: "ontocurator-annotation/v3", evidence: [], document_id: "d", version: "v",
+  schema_version: "ontotator-annotation/v3", evidence: [], document_id: "d", version: "v",
   text_sha256: "t", ontology_sha256: "o", layer_config_sha256: "l",
 }) as any;
 

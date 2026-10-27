@@ -20,16 +20,16 @@ it("invalidates acknowledgement when the selection changes and ignores an older 
   let resolve!: (value: typeof preflight) => void;
   const read = vi.spyOn(api, "finalExportPreflight").mockImplementationOnce(() => new Promise(r => { resolve = r; })).mockResolvedValue({ ...preflight, warnings: [] });
   render(<FinalExportPanel projectKey="p" username="lead" />);
-  act(() => { window.dispatchEvent(new CustomEvent("ontocurator:final-selection-changed", { detail: { projectKey: "p" } })); });
+  act(() => { window.dispatchEvent(new CustomEvent("ontotator:final-selection-changed", { detail: { projectKey: "p" } })); });
   await waitFor(() => expect(read).toHaveBeenCalledTimes(2));
   await act(async () => { resolve(preflight); });
   expect(screen.queryByText("Wording under review")).toBeNull();
   await waitFor(() => expect(screen.getByRole("button", { name: "Create final export" }).getAttribute("aria-disabled")).toBeNull());
 
   read.mockResolvedValue(preflight);
-  act(() => { window.dispatchEvent(new CustomEvent("ontocurator:final-selection-changed", { detail: { projectKey: "p" } })); });
+  act(() => { window.dispatchEvent(new CustomEvent("ontotator:final-selection-changed", { detail: { projectKey: "p" } })); });
   fireEvent.click(await screen.findByLabelText("Export these selected results with the listed warnings and omissions"));
-  act(() => { window.dispatchEvent(new CustomEvent("ontocurator:final-selection-changed", { detail: { projectKey: "p" } })); });
+  act(() => { window.dispatchEvent(new CustomEvent("ontotator:final-selection-changed", { detail: { projectKey: "p" } })); });
   expect((await screen.findByLabelText("Export these selected results with the listed warnings and omissions") as HTMLInputElement).checked).toBe(false);
 });
 it("blocks empty exports and offers Check again instead of a link back", async () => {
@@ -154,7 +154,7 @@ it("says so and checks again when final selections change while the preflight is
   const read = vi.spyOn(api, "finalExportPreflight").mockResolvedValue(preflight);
   render(<FinalExportPanel projectKey="p" username="lead" />);
   await screen.findByRole("heading", { name: "Export preflight" });
-  act(() => { window.dispatchEvent(new CustomEvent("ontocurator:final-selection-changed", { detail: { projectKey: "p" } })); });
+  act(() => { window.dispatchEvent(new CustomEvent("ontotator:final-selection-changed", { detail: { projectKey: "p" } })); });
   expect(screen.getByText("Final selections changed. The check was run again.")).toBeDefined();
   expect(screen.queryByRole("region", { name: "Export preflight" })).toBeNull();
   await screen.findByRole("heading", { name: "Export preflight" });
@@ -169,7 +169,7 @@ it("keeps a finished export when final selections change afterwards and says so"
   await screen.findByRole("region", { name: "Export preflight" });
   fireEvent.click(screen.getByRole("button", { name: "Create final export" }));
   await screen.findByText("Final export 8: succeeded");
-  act(() => { window.dispatchEvent(new CustomEvent("ontocurator:final-selection-changed", { detail: { projectKey: "p" } })); });
+  act(() => { window.dispatchEvent(new CustomEvent("ontotator:final-selection-changed", { detail: { projectKey: "p" } })); });
   expect(screen.getByText("Final selections changed after this export was created.")).toBeDefined();
   expect(screen.getByRole("button", { name: "Download final export" })).toBeDefined();
   expect(read).toHaveBeenCalledTimes(1);

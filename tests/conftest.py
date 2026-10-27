@@ -3,15 +3,15 @@ from pathlib import Path
 
 import pytest
 
-_SHARED_URL = "ontocurator_test_pg_url"
-_SHARED_ERROR = "ontocurator_test_pg_error"
+_SHARED_URL = "ontotator_test_pg_url"
+_SHARED_ERROR = "ontotator_test_pg_error"
 
 
 class _SharedServer:
     """xdist controller: one PostgreSQL server for every worker (pg_harness).
 
     Started when the first worker is set up, so serial runs and runs with an
-    explicit ``ONTOCURATOR_TEST_PG_URL`` never start it. A start failure is
+    explicit ``ONTOTATOR_TEST_PG_URL`` never start it. A start failure is
     handed on as well: only the tests that need PostgreSQL fail, with its cause.
     """
 
@@ -19,7 +19,7 @@ class _SharedServer:
         self.started: tuple[str | None, str | None] | None = None
 
     def pytest_configure_node(self, node) -> None:  # type: ignore[no-untyped-def]
-        if os.environ.get("ONTOCURATOR_TEST_PG_URL"):
+        if os.environ.get("ONTOTATOR_TEST_PG_URL"):
             return
         if self.started is None:
             import pg_harness
@@ -41,13 +41,13 @@ def pytest_configure(config: pytest.Config) -> None:
                 workerinput[_SHARED_URL], workerinput[_SHARED_ERROR]
             )
     elif config.pluginmanager.hasplugin("xdist"):
-        config.pluginmanager.register(_SharedServer(), "ontocurator-shared-pg")
+        config.pluginmanager.register(_SharedServer(), "ontotator-shared-pg")
 
 
 @pytest.fixture(autouse=True)
 def restore_service_source():  # type: ignore[no-untyped-def]
     """A registry built in one test must not serve another test's ontology lookups."""
-    from ontocurator.ontology import modifiers
+    from ontotator.ontology import modifiers
 
     previous = modifiers._source
     yield
@@ -63,8 +63,8 @@ def database_per_workspace(monkeypatch: pytest.MonkeyPatch):  # type: ignore[no-
     """
     import pg_harness
 
-    from ontocurator import settings
-    from ontocurator.storage.database import Database
+    from ontotator import settings
+    from ontotator.storage.database import Database
 
     monkeypatch.setattr(
         settings,
@@ -99,7 +99,7 @@ _CHEAP_ARGON2: dict[str, object] = {}
 
 
 def _cheap_argon2_values() -> dict[str, object]:
-    """Low-cost stand-ins for the hasher state in ``ontocurator.auth.passwords``.
+    """Low-cost stand-ins for the hasher state in ``ontotator.auth.passwords``.
 
     The parameters (t=1, m=8 MiB, p=1) exist only here, in the test suite;
     the production module has no switch that could select them.
@@ -114,7 +114,7 @@ def _cheap_argon2_values() -> dict[str, object]:
             parallelism=parallelism,
             type=Type.ID,
         )
-        dummy = hasher.hash(b"ontocurator timing equaliser")
+        dummy = hasher.hash(b"ontotator timing equaliser")
         _CHEAP_ARGON2.update(
             _HASHER=hasher,
             _DUMMY_HASH=dummy,
@@ -137,7 +137,7 @@ def cheap_argon2(
     """
     if request.path.name.startswith(_PRODUCTION_ARGON2_PREFIXES):
         return
-    from ontocurator.auth import passwords
+    from ontotator.auth import passwords
 
     for name, value in _cheap_argon2_values().items():
         monkeypatch.setattr(passwords, name, value)

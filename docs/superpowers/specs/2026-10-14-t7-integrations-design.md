@@ -2,7 +2,7 @@
 
 Date: 2026-10-14 · Status: **design agreed** · Part of the roadmap `2026-10-14-roadmap-web-service-analysis.md` (E4, E5, E6, E7, E8) · Builds on T1 (`ontospan`), T2 (D5, D6), T3 (A1, A5), T4 (W1, W2, W4, W7), T5 (V4, format 1.1)
 
-T7 defines Ontocurator's generic interfaces to other tools. Ontocurator is a standalone annotation tool, and every external system is just a consumer or a producer of files. All exchange uses **ontospan bundles** (T1). There is no live coupling to any tool (E5) and no shared database.
+T7 defines Ontotator's generic interfaces to other tools. Ontotator is a standalone annotation tool, and every external system is just a consumer or a producer of files. All exchange uses **ontospan bundles** (T1). There is no live coupling to any tool (E5) and no shared database.
 
 There are four interfaces:
 - **document import**, including translations and text versions;
@@ -12,8 +12,8 @@ There are four interfaces:
 
 ## Starting point
 
-**Ontocurator after T2–T5**
-- T2 D5: documents and proposals are imported in the T1 format through `ontocurator admin …`. Submitted results are exported in the T1 format.
+**Ontotator after T2–T5**
+- T2 D5: documents and proposals are imported in the T1 format through `ontotator admin …`. Submitted results are exported in the T1 format.
 - T3 A1: upload of T1 bundles and plain text with a preview.
   - Contained annotation sets become proposals.
   - Ontology pins and `allowed_roots` must match the project.
@@ -47,8 +47,8 @@ There are four interfaces:
 - Converters for specific external formats or projects, e.g. the benchmark or Phentrieve. They live with their owners (appendix).
 - Live APIs or webhooks for external tools. Programmatic API tokens are not part of T7 either.
 - Phentrieve suggestions (E5).
-- Translating, or calling LLMs, from Ontocurator (T5).
-- Import of `ontocurator-work-package/v2` (E6).
+- Translating, or calling LLMs, from Ontotator (T5).
+- Import of `ontotator-work-package/v2` (E6).
 - Scoring, projections onto other vocabularies, and publication metrics (E7: in the consumers).
 - CI pipelines. GitHub Actions are not available, so every check runs locally (I10).
 
@@ -58,9 +58,9 @@ There are four interfaces:
 
 | Interface | Direction | Entry points | Bundle content |
 |---|---|---|---|
-| Document import | in | `ontocurator admin import` (T2), upload page (T3) | units whose annotation set is empty (I2) |
+| Document import | in | `ontotator admin import` (T2), upload page (T3) | units whose annotation set is empty (I2) |
 | Proposal import | in | same | units with `set_kind: tool_output` (I3) |
-| Release export | out | release page download (T4), `ontocurator admin export-release` | final plus lineage sets (I5) |
+| Release export | out | release page download (T4), `ontotator admin export-release` | final plus lineage sets (I5) |
 
 - Documents and proposals may arrive in one bundle or in separate bundles. The import preview (T3 A1) lists both.
 - Plain-text import (T3 A1) stays as it is. T7 adds nothing there.
@@ -69,11 +69,11 @@ There are four interfaces:
 ### I2: Document import, including translations and versions
 
 - **A document-only unit** carries an empty annotation set. This is needed because the format requires exactly one set per unit.
-  - Ontocurator creates the document and **no** proposal set (O2).
+  - Ontotator creates the document and **no** proposal set (O2).
   - The set's actor is recorded as the importing tool in the audit entry.
-- **Canonical text is required.** Ontocurator rejects non-canonical text, as the ontospan validation does (`text_not_canonical`). Converters with pre-existing offsets use `ontospan.offsets` (I6).
+- **Canonical text is required.** Ontotator rejects non-canonical text, as the ontospan validation does (`text_not_canonical`). Converters with pre-existing offsets use `ontospan.offsets` (I6).
 - **Translations and versions** use the T5 format 1.1 fields: `case_id`, `variant` (`version`, `origin`, `derived_from` as text hash) and `translation` (provider, model, recipe/run ID, checks).
-  - A source text and its translation may arrive in one bundle. Ontocurator builds the case from `case_id` and resolves `derived_from` by text hash. A `derived_from` that matches no variant in the bundle or in the project is an error.
+  - A source text and its translation may arrive in one bundle. Ontotator builds the case from `case_id` and resolves `derived_from` by text hash. A `derived_from` that matches no variant in the bundle or in the project is an error.
   - **Translation status on import:**
     - `automatic_check_failed` if any imported check failed;
     - otherwise `ready_for_review`.
@@ -123,7 +123,7 @@ A proposal set is a unit with `set_kind: tool_output` whose actors are of kind `
   - Each outcome is recorded with `method` `adopted` or `edited` and `source_refs` to the proposal. A deletion is recorded in the edit log (T2 D6).
   - Blinding against proposals is the existing T4 W4 toggle and stage policy. It can be configured for later rounds.
 
-### I4: Requirements on Ontocurator (fed into the T2–T5 plans)
+### I4: Requirements on Ontotator (fed into the T2–T5 plans)
 
 | # | Requirement | Spec |
 |---|---|---|
@@ -153,11 +153,11 @@ The sets are linked by identical `text_sha256` (T1 F3) and by `source_refs` (O3)
 
 **Access**
 - All project members can see and download releases (E8). Downloading needs the export right (E3).
-- `ontocurator admin export-release <project> <release>` writes the identical bytes for operators.
+- `ontotator admin export-release <project> <release>` writes the identical bytes for operators.
 
 ### I6: Offset mapping helper (`ontospan.offsets`)
 
-The helper is for converters that bring offsets measured on a non-canonical or UTF-16 text. Ontocurator itself only accepts canonical bundles.
+The helper is for converters that bring offsets measured on a non-canonical or UTF-16 text. Ontotator itself only accepts canonical bundles.
 
 ```python
 canonical, offset_map = canonicalize_with_offsets(raw)  # raw: str
@@ -191,7 +191,7 @@ The manifest gains an optional `release` object:
 
 `release_name` stays for compatibility and must equal `release.name` when both are set.
 - **Versioning:** this ships together with T5's 1.1 if 1.1 is not yet released, otherwise as 1.2. It contains new optional fields only (T1 F3).
-- **Where it is filled:** Ontocurator fills it for releases (O6). Import bundles may fill `producer`.
+- **Where it is filled:** Ontotator fills it for releases (O6). Import bundles may fill `producer`.
 
 ### I8: ontospan stays private for now
 
@@ -213,7 +213,7 @@ GitHub Actions are not available. Every repository runs `uv run pytest` locally,
   - Unit and conformance tests for `ontospan.offsets`: CRLF, lone CR, BOM, combining sequences, Hangul jamo, astral characters and surrogate pairs, offsets inside a changed run, snippet mismatch.
   - Schema tests for the `release` block, with the frozen 1.0 schemas unchanged.
   - A fixture set `conformance/integration/`: a document-and-proposal bundle with variants, and a matching release bundle with lineage.
-- **Ontocurator**
+- **Ontotator**
   - Import tests on the fixtures:
     - O1 (IDs kept), O2 (empty sets);
     - missing tool provenance refused;
@@ -239,19 +239,19 @@ _(none at the moment)_
 
 ## Appendix: consumer notes (non-normative)
 
-These notes record where external adapters would live and what they need from Ontocurator. They make no decisions about the adapters' behaviour, which belongs to their repositories.
+These notes record where external adapters would live and what they need from Ontotator. They make no decisions about the adapters' behaviour, which belongs to their repositories.
 
 ### phentrieve-benchmark
 
 **Where adapters would live**
-- In the benchmark repository, e.g. a subpackage `phentrieve_benchmark.ontocurator`, depending on `ontospan` (I8).
+- In the benchmark repository, e.g. a subpackage `phentrieve_benchmark.ontotator`, depending on `ontospan` (I8).
 - An exporter writing document and proposal bundles would replace `scripts/build_editor_packages.py` (E6).
 - An importer would turn releases into the benchmark's own gold models (`curated-annotation-set`, review decisions, the planned handoff files of its pipeline spec §14).
 
 **What it relies on**
 - Verbatim `document_id`s.
 - `text_sha256` equal to its `document_sha256`. Both are canonical, but the benchmark keeps a leading BOM and ontospan strips it.
-- An ontology pin matching the Ontocurator project. The project pins the OBO Graph JSON file; the benchmark pins `hp.obo`.
+- An ontology pin matching the Ontotator project. The project pins the OBO Graph JSON file; the benchmark pins `hp.obo`.
 - Tool provenance fields for its LLM runs (`model`, `run_id`, notes).
 - Preserved IDs (O1), lineage (O3, I5) and release metadata (I7).
 - Its guideline rules R3 and R4 map onto the project options O4.

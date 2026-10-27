@@ -10,10 +10,10 @@ from test_case_api import BASE, CASE, CORRECTED, TARGET
 from test_case_api import case_env as case_env
 from test_translation_review_task import assigned
 
-from ontocurator.domain.work_plans import PlanFlags, RowKey
-from ontocurator.storage import work_plan_store
-from ontocurator.storage.repository import Repository
-from ontocurator.storage.tables import ProjectRow
+from ontotator.domain.work_plans import PlanFlags, RowKey
+from ontotator.storage import work_plan_store
+from ontotator.storage.repository import Repository
+from ontotator.storage.tables import ProjectRow
 
 CASE_PATH = quote(CASE, safe="")
 

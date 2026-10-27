@@ -6,10 +6,10 @@ import pytest
 from modifier_fixtures import MOD_DE, MOD_PATH, MOD_PIN
 from t1_fixtures import FIXTURES, HP_PATH, HP_SHA
 
-from ontocurator.domain.documents import OntologyRef
-from ontocurator.domain.workspace import WorkspaceKey
-from ontocurator.ontology.provenance import SearchRequest
-from ontocurator.ontology.service import OntologyService
+from ontotator.domain.documents import OntologyRef
+from ontotator.domain.workspace import WorkspaceKey
+from ontotator.ontology.provenance import SearchRequest
+from ontotator.ontology.service import OntologyService
 
 KEY = WorkspaceKey(
     project_key="pkg-1",
@@ -70,7 +70,7 @@ ROOTS = ["HP:0012823", "HP:0040279"]
 
 
 def _subtree_terms(service: OntologyService) -> set[str]:
-    from ontocurator.ontology.modifiers import subtree
+    from ontotator.ontology.modifiers import subtree
 
     return set().union(*(subtree(service, root) for root in ROOTS))
 
@@ -143,8 +143,8 @@ def api(tmp_path):  # type: ignore[no-untyped-def]
     from pg_harness import database_url_for
     from test_browser_review_flow_fixture import Session
 
-    from ontocurator.api.app import create_app
-    from ontocurator.config import AppConfig
+    from ontotator.api.app import create_app
+    from ontotator.config import AppConfig
 
     app = create_app(
         AppConfig(
@@ -194,7 +194,7 @@ def test_search_api_roles_and_stored_within(api) -> None:  # type: ignore[no-unt
 def test_search_api_role_is_finding_on_a_generic_pin(api) -> None:  # type: ignore[no-untyped-def]
     from sqlalchemy import update
 
-    from ontocurator.storage.tables import ProjectOntologyRow
+    from ontotator.storage.tables import ProjectOntologyRow
 
     app, session, _, key = api
     with app.state.repo.db.transaction() as conn:

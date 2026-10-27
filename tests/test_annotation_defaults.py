@@ -6,11 +6,11 @@ import pytest
 from test_project_rules import annotation_snapshot
 from test_project_rules_integration import draft_for
 
-from ontocurator.application.editing import CreateAnnotationCommand, EditingService
-from ontocurator.application.submissions import SubmissionService, SubmitCommand
-from ontocurator.domain.errors import DomainError
-from ontocurator.domain.project_rules import ProjectRules
-from ontocurator.domain.scopes import build_scope
+from ontotator.application.editing import CreateAnnotationCommand, EditingService
+from ontotator.application.submissions import SubmissionService, SubmitCommand
+from ontotator.domain.errors import DomainError
+from ontotator.domain.project_rules import ProjectRules
+from ontotator.domain.scopes import build_scope
 
 pytest_plugins = ("test_project_rules",)
 
@@ -94,7 +94,7 @@ def test_warning_acknowledgement_binds_draft_and_policy_without_confirming(
     ],
 )
 def test_creation_defaults_reject_invalid_or_hidden_values(profile, defaults):
-    from ontocurator.projects import service
+    from ontotator.projects import service
 
     with pytest.raises(DomainError) as error:
         service.validate_creation_defaults(
@@ -133,9 +133,9 @@ def test_legacy_supplied_nonpreset_values_preserve_explicit_creation_semantics(
 def test_reanchor_never_fills_missing_source_axis_from_creation_presets(
     profile, document
 ):
-    from ontocurator.application.editing import RecreateReanchorCommand
-    from ontocurator.domain.annotations import AnnotationRef, snapshot
-    from ontocurator.domain.reanchor_resolution import PendingReanchorRef
+    from ontotator.application.editing import RecreateReanchorCommand
+    from ontotator.domain.annotations import AnnotationRef, snapshot
+    from ontotator.domain.reanchor_resolution import PendingReanchorRef
 
     original = annotation_snapshot(profile, document)
     source = snapshot(

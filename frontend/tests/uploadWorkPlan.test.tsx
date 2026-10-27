@@ -95,7 +95,7 @@ describe("UploadWorkPlan", () => {
   it("asks for the acceptance only while the rule is on", () => {
     renderPlan(workPlan(), { ruleOn: false });
     fireEvent.click(screen.getByRole("button", { name: "Translation review, fr" }));
-    expect(screen.queryByRole("checkbox", { name: /reviewed outside Ontocurator/ })).toBeNull();
+    expect(screen.queryByRole("checkbox", { name: /reviewed outside Ontotator/ })).toBeNull();
   });
 });
 
@@ -125,7 +125,7 @@ describe("UploadPanel with a work plan", () => {
     expect(reason.textContent).toContain("fr");
     fireEvent.click(importButton);
     expect(api.commitUpload).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("checkbox", { name: "These translations were reviewed outside Ontocurator — accept them as they are" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "These translations were reviewed outside Ontotator — accept them as they are" }));
     fireEvent.change(screen.getByLabelText(/^Reason/), { target: { value: "Vendor batch" } });
     expect(importButton.getAttribute("aria-disabled")).toBeNull();
     fireEvent.click(importButton);

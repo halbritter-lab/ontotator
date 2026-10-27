@@ -2475,10 +2475,10 @@ export interface components {
         AnnotationSnapshot: {
             /**
              * Schema Version
-             * @default ontocurator-annotation/v3
+             * @default ontotator-annotation/v3
              * @constant
              */
-            schema_version: "ontocurator-annotation/v3";
+            schema_version: "ontotator-annotation/v3";
             annotation: components["schemas"]["Annotation"];
             /** Evidence */
             evidence: components["schemas"]["EvidenceSnapshot"][];
@@ -4030,10 +4030,10 @@ export interface components {
         EditorProposal: {
             /**
              * Schema Version
-             * @default ontocurator-annotation/v3
+             * @default ontotator-annotation/v3
              * @constant
              */
-            schema_version: "ontocurator-annotation/v3";
+            schema_version: "ontotator-annotation/v3";
             annotation: components["schemas"]["Annotation"];
             /** Evidence */
             evidence: components["schemas"]["EvidenceSnapshot"][];
@@ -4465,7 +4465,7 @@ export interface components {
         };
         /**
          * ImportAcceptance
-         * @description Translations of these languages were reviewed outside Ontocurator.
+         * @description Translations of these languages were reviewed outside Ontotator.
          */
         ImportAcceptance: {
             /** Languages */
@@ -6962,7 +6962,7 @@ export interface components {
         Submission: {
             /**
              * Format Version
-             * @default ontocurator-submission/v2
+             * @default ontotator-submission/v2
              */
             format_version: string;
             /** Input Manifest Sha256 */
@@ -7071,10 +7071,10 @@ export interface components {
         TaskProfile: {
             /**
              * Schema
-             * @default ontocurator-task-profile/v1
+             * @default ontotator-task-profile/v1
              * @constant
              */
-            schema: "ontocurator-task-profile/v1";
+            schema: "ontotator-task-profile/v1";
             /** Profile Id */
             profile_id: string;
             /** Version */
@@ -7987,7 +7987,7 @@ export interface components {
             /** Target Set Id */
             target_set_id: string;
             /** Format Version */
-            format_version?: "ontocurator-workspace-key/v3" | null;
+            format_version?: "ontotator-workspace-key/v3" | null;
             /** Round Id */
             round_id?: string | null;
         };

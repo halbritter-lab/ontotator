@@ -14,19 +14,19 @@ from test_auth_api import _app
 from test_uploads_api import BASE, _run
 from test_variant_import import audit_rows, commit, override, preview, units
 
-from ontocurator.auth.audit import Actor
-from ontocurator.domain.errors import DomainError
-from ontocurator.domain.work_plans import PlanFlags, RowKey
-from ontocurator.exchange.t1 import ImportedDocument, document_from_unit
-from ontocurator.exchange.uploads import PlanChoice, UploadService, _require_override
-from ontocurator.exchange.variant_plan import package_review
-from ontocurator.storage import work_plan_store as store
-from ontocurator.storage.plan_tables import (
+from ontotator.auth.audit import Actor
+from ontotator.domain.errors import DomainError
+from ontotator.domain.work_plans import PlanFlags, RowKey
+from ontotator.exchange.t1 import ImportedDocument, document_from_unit
+from ontotator.exchange.uploads import PlanChoice, UploadService, _require_override
+from ontotator.exchange.variant_plan import package_review
+from ontotator.storage import work_plan_store as store
+from ontotator.storage.plan_tables import (
     DiscardedVariantRow,
     TranslationAcceptanceRow,
 )
-from ontocurator.storage.repository import Repository
-from ontocurator.storage.tables import JobRow, ProjectRow, UserRow
+from ontotator.storage.repository import Repository
+from ontotator.storage.tables import JobRow, ProjectRow, UserRow
 
 
 @pytest.fixture

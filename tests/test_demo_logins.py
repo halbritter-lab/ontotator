@@ -1,4 +1,4 @@
-"""Opt-in one-click demo logins (ONTOCURATOR_DEMO_LOGINS_FILE)."""
+"""Opt-in one-click demo logins (ONTOTATOR_DEMO_LOGINS_FILE)."""
 
 from __future__ import annotations
 
@@ -14,9 +14,9 @@ from fastapi.testclient import TestClient
 from pg_harness import database_url_for
 from test_api import FIXTURE_PATH
 
-from ontocurator import settings
-from ontocurator.api.app import create_app
-from ontocurator.config import AppConfig
+from ontotator import settings
+from ontotator.api.app import create_app
+from ontotator.config import AppConfig
 
 ENV = settings.DEMO_LOGINS_ENV
 LOCAL = "http://127.0.0.1:18210"
@@ -65,7 +65,7 @@ def test_reads_the_accounts(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     ("env", "origin", "bind", "message"),
     [
-        ({"ONTOCURATOR_ENV": "production"}, LOCAL, None, "production"),
+        ({"ONTOTATOR_ENV": "production"}, LOCAL, None, "production"),
         ({}, "https://editor.example.org", None, "loopback public origin"),
         ({}, None, "0.0.0.0", "loopback address to bind"),
     ],

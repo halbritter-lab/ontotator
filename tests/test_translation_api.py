@@ -15,11 +15,11 @@ from layered_fixtures import make_layered_package
 from pg_harness import database_url_for
 from support.v2_writer import PackageWriter
 
-from ontocurator.api.app import create_app
-from ontocurator.api.routes import _ontology_info
-from ontocurator.config import AppConfig
-from ontocurator.domain.errors import DomainError
-from ontocurator.ontology.service import OntologyService
+from ontotator.api.app import create_app
+from ontotator.api.routes import _ontology_info
+from ontotator.config import AppConfig
+from ontotator.domain.errors import DomainError
+from ontotator.ontology.service import OntologyService
 
 FIXTURES = Path(__file__).parent / "fixtures"
 HP = FIXTURES / "hp.json"
@@ -155,7 +155,7 @@ def test_broken_and_stray_files_do_not_block_the_start(
         "subject_id\ttranslation_value\nXX:1\tEtwas\n", encoding="utf-8"
     )
 
-    with caplog.at_level(logging.WARNING, logger="ontocurator"):
+    with caplog.at_level(logging.WARNING, logger="ontotator"):
         client = _client(tmp_path, ontology_paths=[HP])
 
     listed = _listed(client)

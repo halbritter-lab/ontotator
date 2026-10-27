@@ -7,12 +7,12 @@ from pathlib import Path
 
 import pytest
 
-from ontocurator.domain.canonical import canonical_hash
-from ontocurator.domain.documents import OntologyRef
-from ontocurator.domain.workspace import WorkspaceKey
-from ontocurator.ontology.provenance import SearchRequest, SearchResult
-from ontocurator.ontology.service import OntologyService
-from ontocurator.packages.models import SearchEventRecord
+from ontotator.domain.canonical import canonical_hash
+from ontotator.domain.documents import OntologyRef
+from ontotator.domain.workspace import WorkspaceKey
+from ontotator.ontology.provenance import SearchRequest, SearchResult
+from ontotator.ontology.service import OntologyService
+from ontotator.packages.models import SearchEventRecord
 
 FIXTURES = Path(__file__).parent / "fixtures"
 HP = FIXTURES / "hp.json"
@@ -103,7 +103,7 @@ def test_unusable_files_are_logged_and_do_not_stop_the_load(
         encoding="utf-8",
     )
 
-    with caplog.at_level(logging.WARNING, logger="ontocurator.ontology.service"):
+    with caplog.at_level(logging.WARNING, logger="ontotator.ontology.service"):
         service = _service(no_header, DE, no_rows)
 
     assert service.languages == ["de"]

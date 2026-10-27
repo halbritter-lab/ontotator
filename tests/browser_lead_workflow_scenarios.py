@@ -36,8 +36,8 @@ from browser_documents_scenarios_rows import report, review_translation
 from fastapi import FastAPI, HTTPException, Query
 from sqlalchemy import update
 
-from ontocurator.auth.audit import Actor
-from ontocurator.storage.tables import ProjectRow
+from ontotator.auth.audit import Actor
+from ontotator.storage.tables import ProjectRow
 
 LANGUAGES = ("en", "de", "fr")
 PEOPLE = {
@@ -189,8 +189,8 @@ def plan(
     languages: dict[str, dict[str, str]],
 ) -> None:
     """Save a bulk plan as the lead (``{"de": {"review": "on", ...}}``)."""
-    from ontocurator.api.work_plan_routes import BulkPlanRequest
-    from ontocurator.application.work_plans import WorkPlanService
+    from ontotator.api.work_plan_routes import BulkPlanRequest
+    from ontotator.application.work_plans import WorkPlanService
 
     access, actor = identity(scenario, "lead")
     WorkPlanService(scenario.db, actor, access).bulk_save(
@@ -209,7 +209,7 @@ def batch_assign(
     names: Sequence[str],
 ) -> list[Any]:
     """Preview and commit a batch assignment as the lead."""
-    from ontocurator.assignments.batch import BatchAssignmentService, BatchSpec
+    from ontotator.assignments.batch import BatchAssignmentService, BatchSpec
 
     access, actor = identity(scenario, "lead")
     service = BatchAssignmentService(scenario.db, actor, access)
@@ -226,7 +226,7 @@ def batch_assign(
 
 def accept_review(scenario: Scenario, assignment_id: int, name: str) -> None:
     """``name`` submits ``accepted_unchanged`` on its open translation review."""
-    from ontocurator.application.translation_reviews import TranslationReviewService
+    from ontotator.application.translation_reviews import TranslationReviewService
 
     access, _actor = identity(scenario, name)
     review = TranslationReviewService(scenario.db, scenario.app.state.jobs)

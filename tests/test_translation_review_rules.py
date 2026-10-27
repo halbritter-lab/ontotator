@@ -8,7 +8,7 @@ from typing import get_args
 import pytest
 from pydantic import ValidationError
 
-from ontocurator.domain.translation_review import (
+from ontotator.domain.translation_review import (
     REVIEW_POLICY,
     ClinicalCategory,
     ReviewDecisionCode,
@@ -91,7 +91,7 @@ def test_next_status_follows_the_table(decision, expected):
 
 
 def test_policy_and_choices_are_the_agreed_english_contract():
-    assert REVIEW_POLICY == "ontocurator-translation-review/v1"
+    assert REVIEW_POLICY == "ontotator-translation-review/v1"
     assert get_args(ReviewDecisionCode) == (
         "accepted_unchanged",
         "accepted_corrected",

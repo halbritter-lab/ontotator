@@ -12,13 +12,13 @@ from pathlib import Path
 
 from t1_fixtures import ADMIN_ACCESS, OPERATOR, hpo_profile
 
-from ontocurator.authz.scoped import ScopedRepository
-from ontocurator.domain.profiles import TaskProfile
-from ontocurator.exchange.t1 import Pin
-from ontocurator.ontology.modifiers import install_service_source
-from ontocurator.ontology.registry import OntologyRegistry
-from ontocurator.ontology.store import OntologyStore
-from ontocurator.storage.database import Database
+from ontotator.authz.scoped import ScopedRepository
+from ontotator.domain.profiles import TaskProfile
+from ontotator.exchange.t1 import Pin
+from ontotator.ontology.modifiers import install_service_source
+from ontotator.ontology.registry import OntologyRegistry
+from ontotator.ontology.store import OntologyStore
+from ontotator.storage.database import Database
 
 MOD_DIR = Path(__file__).parent / "fixtures" / "modifiers"
 MOD_PATH = MOD_DIR / "hp-modifiers.json"

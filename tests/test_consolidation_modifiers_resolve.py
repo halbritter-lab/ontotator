@@ -38,7 +38,7 @@ from test_consolidation_resolve_api import (
     view,
 )
 
-from ontocurator.application.consolidation import open_group_count
+from ontotator.application.consolidation import open_group_count
 
 
 def mod(term_id: str, words: str | None = None) -> dict[str, Any]:

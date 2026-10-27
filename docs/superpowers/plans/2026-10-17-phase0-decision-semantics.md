@@ -48,8 +48,8 @@ Independent review approved the complete amendment through `1de4616` with no act
 
 Verified against the repository on 2026-10-17:
 
-- `src/ontocurator/domain/annotations.py`: no annotation note exists; `annotation_content()` explicitly builds hashed content. Empty `axes_defaulted` is omitted for backward compatibility. `src/ontocurator/domain/serialization.py` decodes and verifies v3 only; changing a nested default without conditional serialization would break historical hashes.
-- `src/ontocurator/domain/review.py` already has `ReviewDecision.note`; it must remain optional in the read model. `application/reviews.py` accepts optional command notes and stores stable decision IDs keyed by workspace and exact target. Required-note validation belongs in write services, not the historical model validator.
+- `src/ontotator/domain/annotations.py`: no annotation note exists; `annotation_content()` explicitly builds hashed content. Empty `axes_defaulted` is omitted for backward compatibility. `src/ontotator/domain/serialization.py` decodes and verifies v3 only; changing a nested default without conditional serialization would break historical hashes.
+- `src/ontotator/domain/review.py` already has `ReviewDecision.note`; it must remain optional in the read model. `application/reviews.py` accepts optional command notes and stores stable decision IDs keyed by workspace and exact target. Required-note validation belongs in write services, not the historical model validator.
 - T1 proposal notes live separately in `ImportedProposals.notes` and `ProposalAnnotationRow.notes`; they are not annotation snapshot content. `exchange/t1.py::submission_to_unit()` currently excludes and counts reviewer uncertainty. `application/submissions.py` also leaves these targets out of `Submission.snapshots`.
 - `frontend/src/editor/ReviewActions.tsx` and `frontend/src/app/CaseScreen.tsx` both toggle decisions. Review note changes debounce and flush on unmount. `editor/LayerControls.tsx` renders verification controls; removing only the submit-dialog wording would leave a second completion concept.
 - `application/submissions.py::validate_completion()` currently requires every editable layer in `checked_layer_ids`. `SubmitCommand.document_checked` defaults to true, so missing confirmation is currently accepted by the API. Draft `document_checked` is a compatibility property derived from checked layers; do not reuse it for the new explicit submit confirmation.
@@ -91,7 +91,7 @@ Existing drafts retain their current enforcement behavior provisionally until P0
 
 **Files:**
 - Create: `frontend/src/editor/decisionSemantics.ts`, `frontend/tests/decisionSemantics.test.ts`, `frontend/browser/decision-semantics.spec.ts`.
-- Modify: `frontend/src/app/CaseScreen.tsx`, `frontend/src/editor/ReviewActions.tsx`, `frontend/src/editor/LayerControls.tsx`, `src/ontocurator/application/submissions.py`.
+- Modify: `frontend/src/app/CaseScreen.tsx`, `frontend/src/editor/ReviewActions.tsx`, `frontend/src/editor/LayerControls.tsx`, `src/ontotator/application/submissions.py`.
 - Test: `frontend/tests/caseScreen.test.tsx`, `frontend/tests/reviewActions.test.tsx`, `frontend/tests/layerControls.test.tsx`, `tests/test_submission_scope_integrity.py`, `tests/test_api.py`, `tests/browser_server.py`, `frontend/browser/helpers.ts`, `frontend/browser/layers.spec.ts`.
 
 **Interfaces:**
@@ -113,9 +113,9 @@ Existing drafts retain their current enforcement behavior provisionally until P0
 ### Task 2: D3 justified spanless findings and project setting
 
 **Files:**
-- Modify: `src/ontocurator/domain/annotations.py`, `src/ontocurator/domain/project_rules.py`, `src/ontocurator/application/editing.py`, `src/ontocurator/application/submissions.py`, `src/ontocurator/projects/service.py`, `src/ontocurator/storage/tables.py`, `src/ontocurator/storage/repository.py`, `src/ontocurator/application/workspaces.py`, `src/ontocurator/exchange/t1.py`, `src/ontocurator/exchange/jobs.py`.
-- Create: `src/ontocurator/storage/migrations/versions/0007_spanless_rules.py`.
-- Modify: `src/ontocurator/domain/workspace.py` for the server-owned draft policy marker; extend workspace projection and migration tests for old/new draft classification.
+- Modify: `src/ontotator/domain/annotations.py`, `src/ontotator/domain/project_rules.py`, `src/ontotator/application/editing.py`, `src/ontotator/application/submissions.py`, `src/ontotator/projects/service.py`, `src/ontotator/storage/tables.py`, `src/ontotator/storage/repository.py`, `src/ontotator/application/workspaces.py`, `src/ontotator/exchange/t1.py`, `src/ontotator/exchange/jobs.py`.
+- Create: `src/ontotator/storage/migrations/versions/0007_spanless_rules.py`.
+- Modify: `src/ontotator/domain/workspace.py` for the server-owned draft policy marker; extend workspace projection and migration tests for old/new draft classification.
 - Modify: `frontend/src/admin/ProjectSettingsPage.tsx`, `frontend/src/editor/AnnotationPanel.tsx`, `frontend/src/app/CaseScreen.tsx`, `frontend/src/api/client.ts`, `contracts/openapi.json`, `frontend/src/api/generated.ts`.
 - Test: `tests/test_annotation_versions.py`, `tests/test_schema.py`, `tests/test_editing.py`, `tests/test_project_rules.py`, `tests/test_project_rules_integration.py`, `tests/test_project_rules_postgres.py`, `tests/test_projects_api.py`, `tests/test_t1_mapping.py`, `frontend/tests/projectSettings.test.tsx`, `frontend/tests/caseScreen.test.tsx`, `frontend/browser/decision-semantics.spec.ts`.
 
@@ -138,7 +138,7 @@ Existing drafts retain their current enforcement behavior provisionally until P0
 ### Task 3: D2 note-required reviewer uncertainty with honest interim export copy
 
 **Files:**
-- Modify: `src/ontocurator/application/reviews.py`, `src/ontocurator/application/submissions.py`, `frontend/src/editor/ReviewActions.tsx`, `frontend/src/app/CaseScreen.tsx`, `frontend/src/admin/ExportPage.tsx`.
+- Modify: `src/ontotator/application/reviews.py`, `src/ontotator/application/submissions.py`, `frontend/src/editor/ReviewActions.tsx`, `frontend/src/app/CaseScreen.tsx`, `frontend/src/admin/ExportPage.tsx`.
 - Test: `tests/test_reviews.py`, `tests/test_review_validation_regressions.py`, `tests/test_api.py`, `frontend/tests/reviewActions.test.tsx`, `frontend/tests/caseScreen.test.tsx`, `frontend/tests/exportPage.test.tsx`, `frontend/browser/decision-semantics.spec.ts`.
 
 **Interfaces:**
@@ -158,7 +158,7 @@ Existing drafts retain their current enforcement behavior provisionally until P0
 **Prerequisites:** Task 3 and the reviewed ontospan 1.2 deliverable described above; consult P0-U before enabling invalid-target submission semantics. Never edit the sibling repository as an incidental unreviewed dependency fix.
 
 **Files:**
-- Modify: `pyproject.toml`, `uv.lock`, `src/ontocurator/exchange/t1.py`, `src/ontocurator/exchange/jobs.py`, `src/ontocurator/application/submissions.py`, `frontend/src/editor/ReviewActions.tsx`, `frontend/src/admin/ExportPage.tsx`.
+- Modify: `pyproject.toml`, `uv.lock`, `src/ontotator/exchange/t1.py`, `src/ontotator/exchange/jobs.py`, `src/ontotator/application/submissions.py`, `frontend/src/editor/ReviewActions.tsx`, `frontend/src/admin/ExportPage.tsx`.
 - Test: `tests/test_t1_mapping.py`, `tests/test_t1_export.py`, `tests/test_t1_import.py`, `tests/test_review_roundtrip_regressions.py`, `tests/test_project_rules_integration.py`, `tests/test_progress_export_api.py`, `frontend/tests/exportPage.test.tsx`, `frontend/browser/decision-semantics.spec.ts`.
 
 **Interfaces:**
@@ -168,7 +168,7 @@ Existing drafts retain their current enforcement behavior provisionally until P0
 - `proposals_from_unit()` must refuse a unit containing `review_resolution` as a whole with `DomainError("UNSUPPORTED_REVIEW_RESOLUTION", {"annotation_id": item.annotation_id})` before constructing snapshots. Current proposal storage has only string notes, not a structured resolution block; silently importing it would lose the flag and risk later promotion. A preserved structured re-import path is separate work requiring its own storage/projection design. Document this precise supported-format limitation in Export copy and test the explicit refusal. No extra migration is needed in this task.
 
 - [ ] After pinning the actual reviewed upstream commit, add failing mapping/bundle/API tests: uncertain target with assertion present stays present and flagged; confirmed target with assertion uncertain is unflagged; note and reviewer survive serialization; no adopted/edited method is assigned; rejected remains absent; counts identify included flags; duplicate refs export once. Validate the ZIP through `ontospan.read_bundle`/validation against pinned ontology and declared 1.2 schemas. Historical valid note-less unresolved decisions export with absent note and `result["warnings"]` entries shaped `{code: "LEGACY_UNRESOLVED_NOTE_MISSING", annotation_id: str, version: str}` from the export job, never an invented note; this historical-export warning does not depend on another approval.
-- [ ] Add ontospan serialization round-trip tests for the complete block and source notes, including source provenance and defaulted basis; add Ontocurator import tests for explicit flagged-unit refusal and unchanged ordinary-unit acceptance. Preserve original legacy payloads and assert old snapshot hashes unchanged. Cover flagged unknown/obsolete/profile-incomplete targets according to the recorded P0-U answer; failure must return a useful code and produce no success artifact. No ontology-validator exception may be silently swallowed.
+- [ ] Add ontospan serialization round-trip tests for the complete block and source notes, including source provenance and defaulted basis; add Ontotator import tests for explicit flagged-unit refusal and unchanged ordinary-unit acceptance. Preserve original legacy payloads and assert old snapshot hashes unchanged. Cover flagged unknown/obsolete/profile-incomplete targets according to the recorded P0-U answer; failure must return a useful code and produce no success artifact. No ontology-validator exception may be silently swallowed.
 - [ ] Run `uv run pytest tests/test_t1_mapping.py tests/test_t1_export.py tests/test_t1_import.py tests/test_review_roundtrip_regressions.py tests/test_project_rules_integration.py tests/test_progress_export_api.py -q` and observe intended failures. Implement materialization/export/import preservation and consistent job count semantics. Update docs/copy only once supported output is real: “Unresolved proposals are included in exports with a separate reviewer flag and note. Clinical axis values are unchanged.”
 - [ ] Run those backend tests again; `npm --prefix frontend test -- tests/exportPage.test.tsx tests/reviewActions.test.tsx --maxWorkers=4 --minWorkers=1`; `npm --prefix frontend run test:e2e -- browser/decision-semantics.spec.ts`. Browser proof uses a synthetic review, note, reload, submit, lead-created export and downloaded ZIP inspection; asserts the exact flag/note and unchanged clinical axis, not just a success toast. Expected all pass.
 - [ ] Run contract/type checks: `uv run python scripts/export_openapi.py --check`, `npm --prefix frontend run api:check`, `npm --prefix frontend run typecheck`. Review and commit: `feat: export unresolved proposals with review flags` (no trailers).

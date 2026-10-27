@@ -5,17 +5,17 @@ from types import SimpleNamespace
 import pytest
 from test_project_rules import annotation_snapshot
 
-from ontocurator.application.editing import (
+from ontotator.application.editing import (
     CreateAnnotationCommand,
     EditingService,
     SetAxesCommand,
 )
-from ontocurator.application.submissions import SubmissionService, SubmitCommand
-from ontocurator.domain.errors import DomainError
-from ontocurator.domain.project_rules import ProjectRules
-from ontocurator.domain.review import ReviewDecision, ReviewTargetSet
-from ontocurator.domain.scopes import build_scope
-from ontocurator.domain.workspace import Draft, WorkspaceKey
+from ontotator.application.submissions import SubmissionService, SubmitCommand
+from ontotator.domain.errors import DomainError
+from ontotator.domain.project_rules import ProjectRules
+from ontotator.domain.review import ReviewDecision, ReviewTargetSet
+from ontotator.domain.scopes import build_scope
+from ontotator.domain.workspace import Draft, WorkspaceKey
 
 pytest_plugins = ("test_project_rules",)
 
@@ -79,7 +79,7 @@ def test_confirmation_requires_known_nonempty_axis(profile, document, axis, valu
 )
 def test_submission_checks_materialized_result(profile, document, branch):
     item = annotation_snapshot(profile, document, defaulted=["presence"])
-    from ontocurator.domain.annotations import AnnotationRef
+    from ontotator.domain.annotations import AnnotationRef
 
     ref = AnnotationRef(annotation_id="ann", version=item.version)
     decisions = (
@@ -215,7 +215,7 @@ def test_copy_requires_verified_exact_source(profile, document, change):
 
 
 def test_editor_projection_filters_every_type_and_legacy_axes_without_mutation(profile):
-    from ontocurator.domain.axis_visibility import editor_profile, legacy_axes_config
+    from ontotator.domain.axis_visibility import editor_profile, legacy_axes_config
 
     original = profile.model_dump()
     rules = ProjectRules(
@@ -259,7 +259,7 @@ def test_materialized_result_resolves_distinct_versions_of_same_evidence_id(
     target = annotation_snapshot(
         profile, document, annotation_id="target", refs=[discontinuous]
     )
-    from ontocurator.domain.annotations import AnnotationRef
+    from ontotator.domain.annotations import AnnotationRef
 
     ref = AnnotationRef(annotation_id="target", version=target.version)
     draft = draft_for(
@@ -305,7 +305,7 @@ def test_materialized_result_resolves_distinct_versions_of_same_evidence_id(
 def test_new_draft_submission_validates_spanless_materialized_results(
     profile, document, branch, marker
 ):
-    from ontocurator.domain.annotations import AnnotationRef
+    from ontotator.domain.annotations import AnnotationRef
 
     item = annotation_snapshot(profile, document)
     ref = AnnotationRef(annotation_id="ann", version=item.version)
@@ -344,8 +344,8 @@ def test_new_draft_submission_validates_spanless_materialized_results(
 
 
 def test_spanless_note_cannot_override_required_profile_evidence(profile, document):
-    from ontocurator.application.submissions import validate_annotation_completion
-    from ontocurator.domain.annotations import snapshot
+    from ontotator.application.submissions import validate_annotation_completion
+    from ontotator.domain.annotations import snapshot
 
     profile.layers[1].annotation_types[1].evidence_policy = "required_on_complete"
     item = annotation_snapshot(profile, document)
@@ -358,8 +358,8 @@ def test_spanless_note_cannot_override_required_profile_evidence(profile, docume
 
 
 def test_note_edit_invalidates_approved_exact_replacement_version(profile, document):
-    from ontocurator.application.editing import SetAnnotationNoteCommand
-    from ontocurator.domain.annotations import AnnotationRef
+    from ontotator.application.editing import SetAnnotationNoteCommand
+    from ontotator.domain.annotations import AnnotationRef
 
     item = annotation_snapshot(profile, document)
     ref = AnnotationRef(annotation_id="ann", version=item.version)
@@ -391,8 +391,8 @@ def test_note_edit_invalidates_approved_exact_replacement_version(profile, docum
 
 @pytest.mark.parametrize("resolved", [False, True])
 def test_submission_requires_each_frozen_reanchor_resolution(profile, resolved):
-    from ontocurator.domain.annotations import AnnotationRef
-    from ontocurator.domain.reanchor_resolution import (
+    from ontotator.domain.annotations import AnnotationRef
+    from ontotator.domain.reanchor_resolution import (
         PendingReanchorRef,
         ReanchorResolution,
     )
@@ -438,7 +438,7 @@ def test_submission_requires_each_frozen_reanchor_resolution(profile, resolved):
 def test_unresolved_submission_validates_immutable_target_term(
     profile, document, status
 ):
-    from ontocurator.domain.annotations import AnnotationRef
+    from ontotator.domain.annotations import AnnotationRef
 
     item = annotation_snapshot(profile, document)
     ref = AnnotationRef(annotation_id="ann", version=item.version)

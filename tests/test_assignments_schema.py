@@ -8,8 +8,8 @@ from psycopg import Error as PsycopgError
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
-from ontocurator.storage.database import Database
-from ontocurator.storage.tables import SCHEMA
+from ontotator.storage.database import Database
+from ontotator.storage.tables import SCHEMA
 
 
 @pytest.fixture

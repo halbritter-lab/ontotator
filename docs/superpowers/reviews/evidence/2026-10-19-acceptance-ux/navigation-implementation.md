@@ -39,7 +39,7 @@ Tasks 6–7 implementation complete for this owner. No commits and no demo/runti
 
 ## Task12 frontend integration addendum
 
-- Shared authorized projection hook uses the project-scoped `ontocurator:final-selection-changed` event. Successful explicit selection invalidates mounted Documents/viewer/dashboard projections. Root owns export-panel invalidation.
+- Shared authorized projection hook uses the project-scoped `ontotator:final-selection-changed` event. Successful explicit selection invalidates mounted Documents/viewer/dashboard projections. Root owns export-panel invalidation.
 - The tree decorates only the exact selected document/submission and discloses a selected text outside the active filters. Version detail shows the pinned submission and links to another selected text without automatically changing the reader's current text or annotation snapshot.
 - The selector never chooses the newest timestamp. It verifies the selected row remains in this document's authorized history, sends exact immutable IDs and the current slot's CAS revision, and requires an explicit reload plus fresh choice after a stale/error response. In-flight guards prevent duplicate writes; replaced component identities discard stale results.
 - Dashboard tests cover server-projected text/language/reason, exact issue destination, explicit missing-selection omission, empty/error recovery and project replacement. Both dashboard and export continue consuming the same server warning schema.

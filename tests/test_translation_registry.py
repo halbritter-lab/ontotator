@@ -13,10 +13,10 @@ from layered_fixtures import make_layered_package
 from support.ontology_upload import OntologyUploadService
 from support.v2_import import PackageImportService
 
-from ontocurator.application.uploads import TranslationUploadService
-from ontocurator.domain.profiles import OntologyDefinition
-from ontocurator.ontology.registry import OntologyRegistry
-from ontocurator.ontology.service import OntologyService
+from ontotator.application.uploads import TranslationUploadService
+from ontotator.domain.profiles import OntologyDefinition
+from ontotator.ontology.registry import OntologyRegistry
+from ontotator.ontology.service import OntologyService
 
 FIXTURES = Path(__file__).parent / "fixtures"
 HP = FIXTURES / "hp.json"

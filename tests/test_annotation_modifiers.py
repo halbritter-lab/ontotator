@@ -11,7 +11,7 @@ import hashlib
 
 import pytest
 
-from ontocurator.domain.annotations import (
+from ontotator.domain.annotations import (
     ActorRef,
     Annotation,
     AnnotationSnapshot,
@@ -20,30 +20,30 @@ from ontocurator.domain.annotations import (
     annotation_content,
     snapshot,
 )
-from ontocurator.domain.axes import AxisDefinition
-from ontocurator.domain.canonical import canonical_hash
-from ontocurator.domain.documents import (
+from ontotator.domain.axes import AxisDefinition
+from ontotator.domain.canonical import canonical_hash
+from ontotator.domain.documents import (
     Document,
     EvidenceMention,
     EvidenceRef,
     EvidenceSnapshot,
     Segment,
 )
-from ontocurator.domain.errors import InvalidAnnotation
-from ontocurator.domain.profiles import (
+from ontotator.domain.errors import InvalidAnnotation
+from ontotator.domain.profiles import (
     AnnotationTypeDefinition,
     LayerDefinition,
     OntologyDefinition,
     TaskProfile,
 )
-from ontocurator.domain.review import ReviewTargetSet
-from ontocurator.domain.scopes import build_scope
-from ontocurator.domain.serialization import (
+from ontotator.domain.review import ReviewTargetSet
+from ontotator.domain.scopes import build_scope
+from ontotator.domain.serialization import (
     decode_snapshot,
     encode_snapshot,
     verify_snapshot,
 )
-from ontocurator.domain.workspace import WorkspaceKey
+from ontotator.domain.workspace import WorkspaceKey
 
 TEXT = "Seit 2 Wochen wiederholt schwere Krampfanfälle und eine Muskelhypotonie."
 DOCUMENT = Document(

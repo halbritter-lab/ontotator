@@ -16,7 +16,7 @@ from proposal_check_support import (
 )
 from sqlalchemy import select, update
 
-from ontocurator.storage.tables import (
+from ontotator.storage.tables import (
     DocumentRow,
     JobRow,
     ProjectMembershipRow,
@@ -196,8 +196,8 @@ def test_self_assign_needs_the_lead(env):
 
 
 def _may_read_proposals(env, username):
-    from ontocurator.authz.policy import Access
-    from ontocurator.authz.versions import may_read_proposals
+    from ontotator.authz.policy import Access
+    from ontotator.authz.versions import may_read_proposals
 
     user = env.app.state.accounts.get_by_username(username)
     with env.db.transaction() as conn:
@@ -230,7 +230,7 @@ def _correction_of_c1(env: Any) -> str:
     from t1_builders import bundle, correction_unit
     from t1_fixtures import TEXT, run_import
 
-    from ontocurator.auth.audit import Actor
+    from ontotator.auth.audit import Actor
 
     child = correction_unit(env.c1_unit, "Prefix " + TEXT)
     (env.tmp_path / "v2").mkdir()
@@ -254,8 +254,8 @@ def _correction_of_c1(env: Any) -> str:
 
 
 def _run_reanchor_jobs(env: Any) -> None:
-    from ontocurator.exchange.jobs import HANDLERS
-    from ontocurator.jobs.queue import JobQueue
+    from ontotator.exchange.jobs import HANDLERS
+    from ontotator.jobs.queue import JobQueue
 
     queue = JobQueue(env.db, HANDLERS)
     with env.db.transaction() as conn:
@@ -291,7 +291,7 @@ def test_new_version_without_proposals_is_refused_while_locked_from_proposals(en
 def test_batch_skips_a_locked_text_without_proposals_and_assigns_the_rest(env):
     """Plan point (7): the batch planner foresees NO_PROPOSALS_ON_VERSION, so a
     mixed batch save is never rolled back by it."""
-    from ontocurator.storage.tables import AssignmentRow
+    from ontotator.storage.tables import AssignmentRow
 
     assign(env, env.c2, "anno")
     with env.db.transaction() as conn:  # c2 locked "from proposals", none on it

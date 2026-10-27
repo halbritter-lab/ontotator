@@ -39,8 +39,8 @@ Shared primitives are owned by Documents (U1 `Button` busy state, `InlineConfirm
 | `frontend/src/styles/components.css` | Q-WP-F → D-U1 → Q-WP-C → E-F1 (incl. CR-2 sheet) → Q-WP-D → Q-WP-E |
 | `frontend/src/App.tsx` | D-U3 → D-D6 → D-E2 → D-E3 → P-WP7b |
 | `frontend/src/tasks/ProblemReportDetail.tsx`, `frontend/tests/problemReportRoute.test.tsx` | D-E2 → P-WP7 → P-WP7b (test only) |
-| `src/ontocurator/application/final_results.py` | D-B3 → D-B4 → Q-WP-A (`freeze()` only) |
-| `src/ontocurator/api/app.py` | D-B4 → D-B9 → E-B2 → E-B3 |
+| `src/ontotator/application/final_results.py` | D-B3 → D-B4 → Q-WP-A (`freeze()` only) |
+| `src/ontotator/api/app.py` | D-B4 → D-B9 → E-B2 → E-B3 |
 | contracts / `generated.ts` / `client.ts` | D-B9 → E-B4 → P-WP4 → P-WP8 |
 | Documents row backend files, `documents/ExpandedRow.tsx` | D-B6/B7/B9, D-DX → P-WP8 (not while D-E4 runs) |
 | `frontend/src/styles/screens/editor.css` | Q-WP-F → E-F4a → E-F4b |

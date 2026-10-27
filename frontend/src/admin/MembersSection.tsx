@@ -125,7 +125,7 @@ function MemberEditor({ projectKey, isSystemAdmin }: MembersSectionProps): JSX.E
     <ConfirmDialog open={removal !== null} tone="danger" busy={busy}
       title={removal ? (removal.roles.length ? `Remove the ${labelFor(roleLabels, removal.removed)} role from ${removal.name}?` : `Remove ${removal.name} from the project?`) : ""}
       confirmLabel={removal?.roles.length ? "Remove role" : "Remove from project"}
-      message={removal && <><p>{removal.roles.length ? `${removal.name} keeps the other roles in this project.` : `${removal.name} loses access to this project.`} This logs {removal.name} out of Ontocurator on all devices; they can log in again right away.</p></>}
+      message={removal && <><p>{removal.roles.length ? `${removal.name} keeps the other roles in this project.` : `${removal.name} loses access to this project.`} This logs {removal.name} out of Ontotator on all devices; they can log in again right away.</p></>}
       onCancel={() => { if (!writing.current) { setRemoval(null); setError(undefined); } }}
       onConfirm={() => { if (removal) void change(removal.username, removal.roles, false); }} />
     <ConfirmDialog open={pending !== null} title="Revoke affected assignments?" busy={busy} confirmLabel="Remove and revoke their open assignments"

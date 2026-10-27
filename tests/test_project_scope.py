@@ -14,24 +14,24 @@ from layered_fixtures import make_layered_package
 from pg_harness import database_for, database_url_for
 from sqlalchemy import Connection, select
 
-from ontocurator.api.app import create_app
-from ontocurator.auth.accounts import AccountService
-from ontocurator.auth.audit import Actor
-from ontocurator.auth.sessions import SessionService
-from ontocurator.authz.memberships import MembershipService
-from ontocurator.authz.policy import Access
-from ontocurator.authz.scoped import PROJECT_FREE, ScopedRepository
-from ontocurator.config import AppConfig
-from ontocurator.domain.annotations import AnnotationRef
-from ontocurator.domain.documents import OntologyRef
-from ontocurator.domain.errors import AccessDenied, DomainError
-from ontocurator.domain.reanchor_resolution import PendingReanchorRef
-from ontocurator.domain.review import ReviewTargetSet
-from ontocurator.domain.workspace import Draft, MutationEnvelope, WorkspaceKey
-from ontocurator.packages.models import SearchEventRecord, ValidatedPackage
-from ontocurator.storage.database import Database
-from ontocurator.storage.repository import Repository
-from ontocurator.storage.tables import AuditEventRow, ProjectRow
+from ontotator.api.app import create_app
+from ontotator.auth.accounts import AccountService
+from ontotator.auth.audit import Actor
+from ontotator.auth.sessions import SessionService
+from ontotator.authz.memberships import MembershipService
+from ontotator.authz.policy import Access
+from ontotator.authz.scoped import PROJECT_FREE, ScopedRepository
+from ontotator.config import AppConfig
+from ontotator.domain.annotations import AnnotationRef
+from ontotator.domain.documents import OntologyRef
+from ontotator.domain.errors import AccessDenied, DomainError
+from ontotator.domain.reanchor_resolution import PendingReanchorRef
+from ontotator.domain.review import ReviewTargetSet
+from ontotator.domain.workspace import Draft, MutationEnvelope, WorkspaceKey
+from ontotator.packages.models import SearchEventRecord, ValidatedPackage
+from ontotator.storage.database import Database
+from ontotator.storage.repository import Repository
+from ontotator.storage.tables import AuditEventRow, ProjectRow
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "hp.json"
 ADMIN = Actor(None, "test:admin")
@@ -87,7 +87,7 @@ def db(tmp_path: Path) -> Database:
 
 
 def test_a_member_sees_only_their_projects(db: Database) -> None:
-    from ontocurator.assignments.service import AssignmentService
+    from ontotator.assignments.service import AssignmentService
 
     accounts = AccountService(db)
     user = accounts.create_user(ADMIN, "scope-alice", "Alice").user

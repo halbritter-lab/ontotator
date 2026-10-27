@@ -6,9 +6,9 @@ from datetime import UTC, datetime
 from auth_harness import logged_in
 from test_projects_api import create_project
 
-from ontocurator.domain.profile_templates import PROFILE_TEMPLATES
-from ontocurator.domain.profiles import TaskProfile
-from ontocurator.ontology.store import OntologyFile
+from ontotator.domain.profile_templates import PROFILE_TEMPLATES
+from ontotator.domain.profiles import TaskProfile
+from ontotator.ontology.store import OntologyFile
 
 pytest_plugins = ("test_projects_api",)
 
@@ -31,7 +31,7 @@ def without_axis(profile: TaskProfile, axis_id: str) -> TaskProfile:
 
 
 def test_standard_profile_gets_the_clinical_defaults_per_editable_type():
-    from ontocurator.projects.service import clinical_creation_defaults
+    from ontotator.projects.service import clinical_creation_defaults
 
     assert clinical_creation_defaults(template(), {}) == {
         "hpo-layer": {"phenotype": CLINICAL}
@@ -39,7 +39,7 @@ def test_standard_profile_gets_the_clinical_defaults_per_editable_type():
 
 
 def test_a_type_without_temporality_gets_only_the_other_two():
-    from ontocurator.projects.service import clinical_creation_defaults
+    from ontotator.projects.service import clinical_creation_defaults
 
     assert clinical_creation_defaults(without_axis(template(), "temporality"), {}) == {
         "hpo-layer": {"phenotype": {"assertion": "present", "experiencer": "patient"}}
@@ -47,7 +47,7 @@ def test_a_type_without_temporality_gets_only_the_other_two():
 
 
 def test_hidden_or_unknown_values_and_reference_layers_are_skipped():
-    from ontocurator.projects.service import clinical_creation_defaults
+    from ontotator.projects.service import clinical_creation_defaults
 
     data = template().model_dump(mode="json")
     axes = data["layers"][0]["annotation_types"][0]["axes"]
@@ -63,7 +63,7 @@ def test_hidden_or_unknown_values_and_reference_layers_are_skipped():
 
 
 def test_prune_keeps_valid_entries_and_drops_empty_types_and_layers():
-    from ontocurator.projects.service import prune_creation_defaults
+    from ontotator.projects.service import prune_creation_defaults
 
     defaults = {
         "hpo-layer": {

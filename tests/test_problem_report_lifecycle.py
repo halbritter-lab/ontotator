@@ -3,7 +3,7 @@
 from problem_report_team import act, held, report
 from sqlalchemy import select
 
-from ontocurator.storage.workflow_tables import TaskHoldRow, TaskHoldStateRow
+from ontotator.storage.workflow_tables import TaskHoldRow, TaskHoldStateRow
 
 pytest_plugins = ("test_assignment_round_open_api", "problem_report_team")
 

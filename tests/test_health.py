@@ -16,12 +16,12 @@ from pg_harness import database_for, database_url_for, unmigrated_database_url
 from sqlalchemy import create_engine, event, insert, select
 from t1_fixtures import HP_PATH, HP_SHA, create_project
 
-from ontocurator.api.app import create_app
-from ontocurator.config import AppConfig
-from ontocurator.jobs.queue import Worker
-from ontocurator.storage.database import Database
-from ontocurator.storage.schema import alembic_config
-from ontocurator.storage.tables import (
+from ontotator.api.app import create_app
+from ontotator.config import AppConfig
+from ontotator.jobs.queue import Worker
+from ontotator.storage.database import Database
+from ontotator.storage.schema import alembic_config
+from ontotator.storage.tables import (
     OntologyFileRow,
     ProjectOntologyRow,
     ProjectRow,
@@ -99,7 +99,7 @@ def test_startup_readiness_requires_usable_persisted_pin(
 def test_readiness_loads_cli_hot_added_pin_and_recovers(
     app: FastAPI, initially_missing: bool
 ) -> None:
-    from ontocurator.ontology.service import OntologyService
+    from ontotator.ontology.service import OntologyService
 
     # A CLI process has a separate registry; it does not warm this worker.
     create_project(app.state.repo.db)
@@ -126,8 +126,8 @@ def test_readiness_loads_cli_hot_added_pin_and_recovers(
 def test_cold_pin_load_releases_health_connection_and_shares_deadline(
     app: FastAPI,
 ) -> None:
-    from ontocurator.api import health
-    from ontocurator.ontology.service import OntologyService
+    from ontotator.api import health
+    from ontotator.ontology.service import OntologyService
 
     create_project(app.state.repo.db)
     started = threading.Event()
@@ -236,7 +236,7 @@ def test_readyz_fails_without_a_database(app: FastAPI, tmp_path: Path) -> None:
 
 
 def test_readyz_is_cached(app: FastAPI) -> None:
-    from ontocurator.api import health
+    from ontotator.api import health
 
     with (
         patch.object(health, "check_readiness", wraps=health.check_readiness) as spy,
@@ -252,7 +252,7 @@ def test_readyz_is_cached(app: FastAPI) -> None:
 
 
 def test_concurrent_probes_share_one_evaluation(app: FastAPI) -> None:
-    from ontocurator.api import health
+    from ontotator.api import health
 
     original = health.check_readiness
     started = threading.Event()
@@ -280,7 +280,7 @@ def test_concurrent_probes_share_one_evaluation(app: FastAPI) -> None:
 def test_slow_readiness_is_bounded_cached_and_does_not_block_liveness(
     app: FastAPI,
 ) -> None:
-    from ontocurator.api import health
+    from ontotator.api import health
 
     original = health.check_readiness
     started = threading.Event()

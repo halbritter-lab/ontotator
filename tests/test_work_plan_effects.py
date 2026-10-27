@@ -19,14 +19,14 @@ from work_plan_support import (
     write,
 )
 
-from ontocurator.api.work_plan_routes import AcceptExternalReview, PlanRowPatch
-from ontocurator.assignments.proposals import DistributionService
-from ontocurator.assignments.service import AssignmentService
-from ontocurator.auth.audit import Actor
-from ontocurator.domain.document_rows import AssignmentFact, missing_final_counts
-from ontocurator.domain.errors import DomainError
-from ontocurator.domain.work_plans import PlanFlags, RowKey
-from ontocurator.storage.final_tables import ExportSelectionSnapshotRow
+from ontotator.api.work_plan_routes import AcceptExternalReview, PlanRowPatch
+from ontotator.assignments.proposals import DistributionService
+from ontotator.assignments.service import AssignmentService
+from ontotator.auth.audit import Actor
+from ontotator.domain.document_rows import AssignmentFact, missing_final_counts
+from ontotator.domain.errors import DomainError
+from ontotator.domain.work_plans import PlanFlags, RowKey
+from ontotator.storage.final_tables import ExportSelectionSnapshotRow
 
 
 @pytest.fixture

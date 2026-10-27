@@ -82,7 +82,7 @@ describe("E2E Release Flow - Origin-Neutral Review & Submission", () => {
       revision: 0,
       annotations: [
         {
-          schema_version: "ontocurator-annotation/v3",
+          schema_version: "ontotator-annotation/v3",
           annotation: {
             annotation_id: "prop-human",
             document_id: "doc-e2e-1",
@@ -119,7 +119,7 @@ describe("E2E Release Flow - Origin-Neutral Review & Submission", () => {
           version: "v-human-1",
         },
         {
-          schema_version: "ontocurator-annotation/v3",
+          schema_version: "ontotator-annotation/v3",
           annotation: {
             annotation_id: "prop-tool",
             document_id: "doc-e2e-1",
@@ -211,7 +211,7 @@ describe("E2E Release Flow - Origin-Neutral Review & Submission", () => {
       });
 
     const submitSpy = vi.spyOn(api, "submitWorkspace").mockResolvedValue({
-      format_version: "ontocurator-work-package/v2",
+      format_version: "ontotator-work-package/v2",
       submission_id: "sub-e2e-final-1",
       origin_key: e2eView.key,
       scope: e2eView.scope,

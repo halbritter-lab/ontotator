@@ -21,8 +21,8 @@ from typing import Any
 import pytest
 from modifier_fixtures import modifier_profile
 
-from ontocurator.application.consolidation import consolidated_content_sha256
-from ontocurator.domain.annotations import (
+from ontotator.application.consolidation import consolidated_content_sha256
+from ontotator.domain.annotations import (
     ActorRef,
     Annotation,
     AnnotationSnapshot,
@@ -30,25 +30,25 @@ from ontocurator.domain.annotations import (
     Provenance,
     snapshot,
 )
-from ontocurator.domain.documents import (
+from ontotator.domain.documents import (
     Document,
     EvidenceMention,
     EvidenceRef,
     Segment,
     snapshot_evidence,
 )
-from ontocurator.domain.review import ReviewTargetSet
-from ontocurator.domain.serialization import decode_snapshot
-from ontocurator.domain.workspace import (
+from ontotator.domain.review import ReviewTargetSet
+from ontotator.domain.serialization import decode_snapshot
+from ontotator.domain.workspace import (
     Draft,
     MutationEnvelope,
     Submission,
     WorkspaceKey,
 )
-from ontocurator.exchange.final_content import freeze_content, thaw_content
-from ontocurator.exchange.proposal_checks import proposal_check_record
-from ontocurator.exchange.t1 import ImportedDocument
-from ontocurator.storage.repository import ProjectExport
+from ontotator.exchange.final_content import freeze_content, thaw_content
+from ontotator.exchange.proposal_checks import proposal_check_record
+from ontotator.exchange.t1 import ImportedDocument
+from ontotator.storage.repository import ProjectExport
 
 TEXT = "Seit 2 Wochen wiederholt schwere Krampfanfälle und eine Muskelhypotonie."
 DOCUMENT = Document(

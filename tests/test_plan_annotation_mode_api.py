@@ -5,7 +5,7 @@ from proposal_check_support import BASE, assign, client, proposal_env
 from sqlalchemy import select
 from work_plan_support import revision_of
 
-from ontocurator.storage.tables import AuditEventRow
+from ontotator.storage.tables import AuditEventRow
 
 
 def patch(env, mode, case="c1", user=None, **flags):

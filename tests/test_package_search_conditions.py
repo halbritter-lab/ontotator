@@ -24,9 +24,9 @@ from test_translation_api import (
     _upload,
 )
 
-from ontocurator.domain.canonical import canonical_hash
-from ontocurator.domain.errors import InvalidPackage
-from ontocurator.domain.workspace import WorkspaceKey
+from ontotator.domain.canonical import canonical_hash
+from ontotator.domain.errors import InvalidPackage
+from ontotator.domain.workspace import WorkspaceKey
 
 
 def _export(client: Any, key: Any) -> bytes:
@@ -237,7 +237,7 @@ def test_import_preserves_historical_runtime_and_records_current_execution(
 def test_capture_supports_unused_ontology_declarations_and_digest_aliases(
     tmp_path: Path, alias: bool
 ) -> None:
-    from ontocurator.domain.profiles import OntologyDefinition
+    from ontotator.domain.profiles import OntologyDefinition
 
     package = make_layered_package("single")
     assert package.manifest.task_profile is not None

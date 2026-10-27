@@ -22,9 +22,9 @@ from t1_fixtures import (
 )
 from typer.testing import CliRunner
 
-from ontocurator.auth.accounts import AccountService
-from ontocurator.cli import app
-from ontocurator.domain.annotations import (
+from ontotator.auth.accounts import AccountService
+from ontotator.cli import app
+from ontotator.domain.annotations import (
     ActorRef,
     Annotation,
     AnnotationRef,
@@ -32,21 +32,21 @@ from ontocurator.domain.annotations import (
     Provenance,
     snapshot,
 )
-from ontocurator.domain.documents import (
+from ontotator.domain.documents import (
     Document,
     EvidenceMention,
     EvidenceRef,
     Segment,
     snapshot_evidence,
 )
-from ontocurator.domain.profiles import AxisDefinition
-from ontocurator.domain.review import ReviewDecision, ReviewTargetSet
-from ontocurator.domain.workspace import MutationEnvelope, Submission, WorkspaceKey
-from ontocurator.exchange.jobs import HANDLERS
-from ontocurator.jobs.queue import Job, JobQueue
-from ontocurator.storage.database import Database
-from ontocurator.storage.repository import Repository
-from ontocurator.storage.tables import AuditEventRow, UserRow
+from ontotator.domain.profiles import AxisDefinition
+from ontotator.domain.review import ReviewDecision, ReviewTargetSet
+from ontotator.domain.workspace import MutationEnvelope, Submission, WorkspaceKey
+from ontotator.exchange.jobs import HANDLERS
+from ontotator.jobs.queue import Job, JobQueue
+from ontotator.storage.database import Database
+from ontotator.storage.repository import Repository
+from ontotator.storage.tables import AuditEventRow, UserRow
 
 runner = CliRunner()
 DOC = "EN100017"
@@ -459,7 +459,7 @@ def test_exports_are_audited(db: Database) -> None:
 def test_the_cli_refuses_to_overwrite(
     db: Database, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("ONTOCURATOR_DATA_DIR", str(db.data_dir))
+    monkeypatch.setenv("ONTOTATOR_DATA_DIR", str(db.data_dir))
     url = database_url_for(tmp_path / "editor.db")
     full = {"assertion": "present", "experiencer": "patient", "temporality": "current"}
     _submit(
@@ -494,9 +494,9 @@ def test_the_cli_refuses_to_overwrite(
 
 
 def test_only_leads_and_admins_export(db: Database) -> None:
-    from ontocurator.authz.policy import Access
-    from ontocurator.authz.scoped import ScopedRepository
-    from ontocurator.domain.errors import AccessDenied
+    from ontotator.authz.policy import Access
+    from ontotator.authz.scoped import ScopedRepository
+    from ontotator.domain.errors import AccessDenied
 
     annotator = ScopedRepository(
         db, Access(5, "ann-0005", False, roles={"proj": frozenset({"annotator"})})
@@ -566,7 +566,7 @@ def test_unresolved_bundle_includes_flag_and_historical_warning(db, note):
 def test_historical_unresolved_invalid_target_fails_without_artifact(
     db, invalid, cause_code
 ):
-    from ontocurator.authz.scoped import ScopedRepository
+    from ontotator.authz.scoped import ScopedRepository
 
     target = _proposals(db)[1]
     ref = AnnotationRef(

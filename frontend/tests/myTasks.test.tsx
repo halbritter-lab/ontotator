@@ -98,7 +98,7 @@ describe("My tasks component", () => {
     await screen.findAllByTestId("task-row");
     expect(onNavigate).not.toHaveBeenCalled();
     fireEvent.change(screen.getByRole("combobox", { name: "Filter my tasks by project" }), { target: { value: "q" } });
-    expect(window.localStorage.getItem("ontocurator.myTasks.project.v1:ana")).toBe("q");
+    expect(window.localStorage.getItem("ontotator.myTasks.project.v1:ana")).toBe("q");
     view.unmount();
     onNavigate.mockClear();
     // Next visit: the project list arrives after the first render.
@@ -110,7 +110,7 @@ describe("My tasks component", () => {
     // Another user and an explicit All are not redirected.
     onNavigate.mockClear();
     render(<MyTasks projects={projects} onNavigate={onNavigate} username="ben" />).unmount();
-    window.localStorage.setItem("ontocurator.myTasks.project.v1:ana", "");
+    window.localStorage.setItem("ontotator.myTasks.project.v1:ana", "");
     render(<MyTasks projects={projects} onNavigate={onNavigate} username="ana" />).unmount();
     expect(onNavigate).not.toHaveBeenCalled();
     window.localStorage.clear();

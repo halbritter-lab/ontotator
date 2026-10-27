@@ -292,7 +292,7 @@ target of the card's links ("View proposals", "Compare with source", a person's 
 - Documents page: the document itself is about 3990 px tall while the app shell is 900 px;
   scrolling the page instead of the main column shows an empty page. Fix the overflow.
 - The two flaky spans-resize pending-mark drag browser tests are fixed or stabilised.
-- Native test server: `ontocurator-local/config.ps1` readiness wait longer than 5 minutes
+- Native test server: `ontotator-local/config.ps1` readiness wait longer than 5 minutes
   (first start takes longer).
 
 ## Testing

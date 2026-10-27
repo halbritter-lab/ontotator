@@ -4,7 +4,7 @@ import csv
 import io
 from datetime import UTC, datetime
 
-from ontocurator.exchange.final_export_guide import (
+from ontotator.exchange.final_export_guide import (
     INDEX_COLUMNS,
     build_index_csv,
     build_readme,
@@ -202,7 +202,7 @@ def test_readme_lists_everything_in_plain_text():
         provenance_ids=["earlier"],
     ).decode("utf-8")
     assert "\r" not in text and not text.startswith("\ufeff")
-    assert text.startswith("Ontocurator final export\n========================\n")
+    assert text.startswith("Ontotator final export\n========================\n")
     for line in [
         "Project:          T5 acceptance (t5)",
         "Snapshot ID:      snap-1",

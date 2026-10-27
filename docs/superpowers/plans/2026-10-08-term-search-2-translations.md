@@ -30,7 +30,7 @@
 - Before every commit that touches Python files, run `uv run ruff format <those files>`. The code below was formatted with the repo's ruff and is expected to come out unchanged.
 - Code blocks are exact file text, indentation included. "Replace A with B" means: A occurs exactly once in that file; if you cannot find it, stop and report instead of guessing. Some files in a Windows working tree have CRLF line endings; that does not matter for matching.
 - The steps check formatting with `uv run ruff format --check src tests scripts`. Over the whole repo, `ruff format --check .` also reports `docs/work-package-v2.md`; that file fails before this plan and is left alone.
-- Do not edit files under `src/ontocurator/vendor/`. That rule from Part 1 holds here without exception: `load_translations` is called as it is, the exact-match index of the translated names and the language filter of the lexical index live in `src/ontocurator/ontology/translations.py`.
+- Do not edit files under `src/ontotator/vendor/`. That rule from Part 1 holds here without exception: `load_translations` is called as it is, the exact-match index of the translated names and the language filter of the lexical index live in `src/ontotator/ontology/translations.py`.
 - Language codes are two lower-case letters. `OntologyService.languages` lists the loaded **translation** languages and never contains `"en"`; the `languages` of a search result and of a search event list what was searched and start with `"en"`.
 - From Task 4 to Task 9 `uv run python scripts/export_openapi.py --check` reports drift. Task 9 regenerates the contract.
 - Test ontology `tests/fixtures/hp.json` holds: `HP:0001250` Seizure (synonyms Seizures, Epileptic seizure, Convulsion), `HP:0002133` Status epilepticus (Prolonged seizures), `HP:0011146` Dialeptic seizure (Absence seizure), `HP:0001252` Hypotonia (Low muscle tone, Muscle hypotonia, Hypotonic), `HP:0001284` Areflexia (Absent reflexes), `HP:0000365` Hearing impairment (Hearing loss, Hipoacusia, Deafness), `HP:0000407` Sensorineural hearing impairment (Sensorineural hearing loss), the obsolete `HP:0000123`, and the three upper terms `HP:0000001` All, `HP:0000118`, `HP:0000707`. Its dominant prefix is `HP`, its release `2026-06-23`. `tests/fixtures/mondo.json` has the prefix `MONDO`.
@@ -41,15 +41,15 @@
 | File | Action | Responsibility |
 |---|---|---|
 | `tests/fixtures/hp-de.babelon.tsv`, `tests/fixtures/hp-es.babelon.tsv` | create | Two small babelon files matching `hp.json` |
-| `src/ontocurator/ontology/translations.py` | create | File names, discovery, applying files to an ontology, exact index of translated names, lexical index with a language filter |
-| `src/ontocurator/ontology/service.py` | modify | Build with translations, identity, rebuild, active languages, seed, both search blocks |
-| `src/ontocurator/ontology/provenance.py` | modify | `languages` on the search request and the search result |
-| `src/ontocurator/packages/models.py` | modify | `languages` on `SearchEventRecord` |
-| `src/ontocurator/ontology/registry.py` | modify | Knows the folders, passes the files, rebuilds and publishes services |
-| `src/ontocurator/config.py`, `src/ontocurator/api/app.py`, `src/ontocurator/cli.py` | modify | The folders at start; notices for stray files |
-| `src/ontocurator/application/uploads.py` | modify | `TranslationUploadService` |
-| `src/ontocurator/api/routes.py` | modify | `translations` in `GET /ontologies`, `.tsv` in `POST /ontologies`, languages in the search event |
-| `src/ontocurator/application/preferences.py` | modify | `search_languages_by_annotator` |
+| `src/ontotator/ontology/translations.py` | create | File names, discovery, applying files to an ontology, exact index of translated names, lexical index with a language filter |
+| `src/ontotator/ontology/service.py` | modify | Build with translations, identity, rebuild, active languages, seed, both search blocks |
+| `src/ontotator/ontology/provenance.py` | modify | `languages` on the search request and the search result |
+| `src/ontotator/packages/models.py` | modify | `languages` on `SearchEventRecord` |
+| `src/ontotator/ontology/registry.py` | modify | Knows the folders, passes the files, rebuilds and publishes services |
+| `src/ontotator/config.py`, `src/ontotator/api/app.py`, `src/ontotator/cli.py` | modify | The folders at start; notices for stray files |
+| `src/ontotator/application/uploads.py` | modify | `TranslationUploadService` |
+| `src/ontotator/api/routes.py` | modify | `translations` in `GET /ontologies`, `.tsv` in `POST /ontologies`, languages in the search event |
+| `src/ontotator/application/preferences.py` | modify | `search_languages_by_annotator` |
 | `tests/test_translation_files.py`, `tests/test_search_translations.py`, `tests/test_translation_registry.py`, `tests/test_translation_api.py` | create | Backend tests |
 | `tests/test_preferences_api.py`, `tests/test_distribution.py`, `tests/test_bundle_preload.py`, `tests/test_followup_findings.py` | modify | Backend tests |
 | `contracts/openapi.json`, `frontend/src/api/generated.ts` | regenerate | API contract and types |
@@ -61,7 +61,7 @@
 | `frontend/tests/searchState.test.ts`, `searchPanel.test.tsx`, `caseScreen.test.tsx`, `dashboard.test.tsx`, `ontologyUpload.test.tsx` | modify | Frontend tests |
 | `scripts/build_common.py`, `scripts/build_standalone.py`, `scripts/provision_bundle.py`, `README.md` | modify | `--translation TSV` |
 | `frontend/browser/translations.spec.ts` | create | Browser test |
-| `src/ontocurator/web/` | regenerate | Embedded SPA build (git-tracked) |
+| `src/ontotator/web/` | regenerate | Embedded SPA build (git-tracked) |
 
 ---
 
@@ -94,7 +94,7 @@ Expected: everything passes (when this plan was written: 394 pytest tests, 236 V
 
 **Files:**
 - Create: `tests/fixtures/hp-de.babelon.tsv`, `tests/fixtures/hp-es.babelon.tsv`
-- Create: `src/ontocurator/ontology/translations.py`
+- Create: `src/ontotator/ontology/translations.py`
 - Test: `tests/test_translation_files.py` (create)
 
 - [ ] **Step 1: Create the two fixture files**
@@ -184,14 +184,14 @@ from pathlib import Path
 
 import pytest
 
-from ontocurator.ontology.translations import (
+from ontotator.ontology.translations import (
     apply_translations,
     babelon_problem,
     discover_translation_files,
     parse_translation_name,
     translation_counts,
 )
-from ontocurator.vendor.hpo_span_annotator.hpo import load as load_ontology
+from ontotator.vendor.hpo_span_annotator.hpo import load as load_ontology
 
 FIXTURES = Path(__file__).parent / "fixtures"
 HP = FIXTURES / "hp.json"
@@ -312,11 +312,11 @@ def test_unusable_files_are_reported_not_raised(tmp_path: Path) -> None:
 - [ ] **Step 3: Run the tests to verify they fail**
 
 Run: `uv run pytest tests/test_translation_files.py -v`
-Expected: collection error — `ModuleNotFoundError: No module named 'ontocurator.ontology.translations'`.
+Expected: collection error — `ModuleNotFoundError: No module named 'ontotator.ontology.translations'`.
 
 - [ ] **Step 4: Implement the module**
 
-Create `src/ontocurator/ontology/translations.py`:
+Create `src/ontotator/ontology/translations.py`:
 
 ```python
 """Translated term names: the files they come from and how they are searched.
@@ -336,7 +336,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
-from ontocurator.vendor.hpo_span_annotator.hpo import (
+from ontotator.vendor.hpo_span_annotator.hpo import (
     Ontology,
     OntologyError,
     load_translations,
@@ -462,7 +462,7 @@ Expected: no findings. (`ruff format --check .` over the whole repo also reports
 - [ ] **Step 7: Commit**
 
 ```bash
-git add tests/fixtures/hp-de.babelon.tsv tests/fixtures/hp-es.babelon.tsv src/ontocurator/ontology/translations.py tests/test_translation_files.py
+git add tests/fixtures/hp-de.babelon.tsv tests/fixtures/hp-es.babelon.tsv src/ontotator/ontology/translations.py tests/test_translation_files.py
 git commit -m "feat(search): find translation files and apply them to their ontology"
 ```
 
@@ -471,7 +471,7 @@ git commit -m "feat(search): find translation files and apply them to their onto
 ### Task 2: Service — index the translated names, identity, rebuild
 
 **Files:**
-- Modify: `src/ontocurator/ontology/service.py` (imports, `__init__`, `load`, new `_build` and `with_translations`)
+- Modify: `src/ontotator/ontology/service.py` (imports, `__init__`, `load`, new `_build` and `with_translations`)
 - Test: `tests/test_search_translations.py` (create)
 
 - [ ] **Step 1: Write the failing tests**
@@ -487,11 +487,11 @@ from pathlib import Path
 
 import pytest
 
-from ontocurator.domain.canonical import canonical_hash
-from ontocurator.domain.documents import OntologyRef
-from ontocurator.domain.workspace import WorkspaceKey
-from ontocurator.ontology.provenance import SearchRequest, SearchResult
-from ontocurator.ontology.service import OntologyService
+from ontotator.domain.canonical import canonical_hash
+from ontotator.domain.documents import OntologyRef
+from ontotator.domain.workspace import WorkspaceKey
+from ontotator.ontology.provenance import SearchRequest, SearchResult
+from ontotator.ontology.service import OntologyService
 
 FIXTURES = Path(__file__).parent / "fixtures"
 HP = FIXTURES / "hp.json"
@@ -582,7 +582,7 @@ def test_unusable_files_are_logged_and_do_not_stop_the_load(
         encoding="utf-8",
     )
 
-    with caplog.at_level(logging.WARNING, logger="ontocurator.ontology.service"):
+    with caplog.at_level(logging.WARNING, logger="ontotator.ontology.service"):
         service = _service(no_header, DE, no_rows)
 
     assert service.languages == ["de"]
@@ -691,7 +691,7 @@ Expected: 5 failed, 1 passed. `OntologyService` has no `languages` and no `with_
 
 - [ ] **Step 3: Imports**
 
-In `src/ontocurator/ontology/service.py`, replace
+In `src/ontotator/ontology/service.py`, replace
 
 ```python
 import hashlib
@@ -716,11 +716,11 @@ from typing import Any, Literal
 In the same file, replace
 
 ```python
-from ontocurator.vendor.hpo_span_annotator.hpo import (
+from ontotator.vendor.hpo_span_annotator.hpo import (
     Ontology,
     load_translations,
 )
-from ontocurator.vendor.hpo_span_annotator.hpo import (
+from ontotator.vendor.hpo_span_annotator.hpo import (
     load as load_ontology,
 )
 ```
@@ -728,14 +728,14 @@ from ontocurator.vendor.hpo_span_annotator.hpo import (
 with
 
 ```python
-from ontocurator.ontology.translations import (
+from ontotator.ontology.translations import (
     LoadedTranslation,
     SkippedTranslation,
     apply_translations,
     translation_counts,
 )
-from ontocurator.vendor.hpo_span_annotator.hpo import Ontology
-from ontocurator.vendor.hpo_span_annotator.hpo import (
+from ontotator.vendor.hpo_span_annotator.hpo import Ontology
+from ontotator.vendor.hpo_span_annotator.hpo import (
     load as load_ontology,
 )
 ```
@@ -756,7 +756,7 @@ logger = logging.getLogger(__name__)
 
 - [ ] **Step 4: Let the service know its translations and put them into the identity**
 
-In `src/ontocurator/ontology/service.py`, in `OntologyService.__init__`, replace
+In `src/ontotator/ontology/service.py`, in `OntologyService.__init__`, replace
 
 ```python
         ref: OntologyRef,
@@ -894,7 +894,7 @@ Expected: all pass.
 - [ ] **Step 8: Commit**
 
 ```bash
-git add src/ontocurator/ontology/service.py tests/test_search_translations.py
+git add src/ontotator/ontology/service.py tests/test_search_translations.py
 git commit -m "feat(search): index translated names and include their files in the index identity"
 ```
 
@@ -903,8 +903,8 @@ git commit -m "feat(search): index translated names and include their files in t
 ### Task 3: Service — exact matches on translated names
 
 **Files:**
-- Modify: `src/ontocurator/ontology/translations.py` (new class `TranslatedNames`)
-- Modify: `src/ontocurator/ontology/service.py` (`__init__`, `_auto_hits`)
+- Modify: `src/ontotator/ontology/translations.py` (new class `TranslatedNames`)
+- Modify: `src/ontotator/ontology/service.py` (`__init__`, `_auto_hits`)
 - Test: `tests/test_search_translations.py`
 
 - [ ] **Step 1: Write the failing tests**
@@ -1002,14 +1002,14 @@ Expected: 3 failed, 6 passed. The first candidate for `Muskelhypotonie` comes fr
 
 The vendored `Ontology._exact` holds labels and synonyms only, and vendored files are not edited. The translated names get their own index with the same normalisation.
 
-In `src/ontocurator/ontology/translations.py`, replace
+In `src/ontotator/ontology/translations.py`, replace
 
 ```python
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
-from ontocurator.vendor.hpo_span_annotator.hpo import (
+from ontotator.vendor.hpo_span_annotator.hpo import (
     Ontology,
     OntologyError,
     load_translations,
@@ -1024,7 +1024,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from ontocurator.vendor.hpo_span_annotator.hpo import (
+from ontotator.vendor.hpo_span_annotator.hpo import (
     Ontology,
     OntologyError,
     load_translations,
@@ -1081,10 +1081,10 @@ class TranslatedNames:
 
 - [ ] **Step 4: Use it in the exact block of the single search**
 
-In `src/ontocurator/ontology/service.py`, replace
+In `src/ontotator/ontology/service.py`, replace
 
 ```python
-from ontocurator.ontology.translations import (
+from ontotator.ontology.translations import (
     LoadedTranslation,
     SkippedTranslation,
     apply_translations,
@@ -1095,7 +1095,7 @@ from ontocurator.ontology.translations import (
 with
 
 ```python
-from ontocurator.ontology.translations import (
+from ontotator.ontology.translations import (
     LoadedTranslation,
     SkippedTranslation,
     TranslatedNames,
@@ -1169,7 +1169,7 @@ Expected: all pass.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/ontocurator/ontology/translations.py src/ontocurator/ontology/service.py tests/test_search_translations.py
+git add src/ontotator/ontology/translations.py src/ontotator/ontology/service.py tests/test_search_translations.py
 git commit -m "feat(search): count exact matches on translated names"
 ```
 
@@ -1178,10 +1178,10 @@ git commit -m "feat(search): count exact matches on translated names"
 ### Task 4: Service — the language selection of a request
 
 **Files:**
-- Modify: `src/ontocurator/ontology/provenance.py` (`SearchRequest.languages`, `SearchResult.languages`)
-- Modify: `src/ontocurator/packages/models.py` (`SearchEventRecord.languages`)
-- Modify: `src/ontocurator/ontology/translations.py` (new class `LanguageLexicalIndex`)
-- Modify: `src/ontocurator/ontology/service.py` (`_build`, `search`, `_route_hits`, `_auto_hits`; new `active_languages`, `_seed`, `_similar`)
+- Modify: `src/ontotator/ontology/provenance.py` (`SearchRequest.languages`, `SearchResult.languages`)
+- Modify: `src/ontotator/packages/models.py` (`SearchEventRecord.languages`)
+- Modify: `src/ontotator/ontology/translations.py` (new class `LanguageLexicalIndex`)
+- Modify: `src/ontotator/ontology/service.py` (`_build`, `search`, `_route_hits`, `_auto_hits`; new `active_languages`, `_seed`, `_similar`)
 - Test: `tests/test_search_translations.py`
 
 - [ ] **Step 1: Write the failing tests**
@@ -1206,14 +1206,14 @@ from pathlib import Path
 and replace
 
 ```python
-from ontocurator.ontology.service import OntologyService
+from ontotator.ontology.service import OntologyService
 ```
 
 with
 
 ```python
-from ontocurator.ontology.service import OntologyService
-from ontocurator.packages.models import SearchEventRecord
+from ontotator.ontology.service import OntologyService
+from ontotator.packages.models import SearchEventRecord
 ```
 
 Append to the file:
@@ -1386,7 +1386,7 @@ Expected: 8 failed, 9 passed. `SearchRequest` rejects `languages` (extra forbidd
 
 - [ ] **Step 3: Models**
 
-In `src/ontocurator/ontology/provenance.py`, in `SearchRequest`, directly after
+In `src/ontotator/ontology/provenance.py`, in `SearchRequest`, directly after
 
 ```python
     k: int = Field(default=10, ge=1, le=100)
@@ -1420,7 +1420,7 @@ with
 class HierarchyWarning
 ```
 
-In `src/ontocurator/packages/models.py`, in `SearchEventRecord`, directly after
+In `src/ontotator/packages/models.py`, in `SearchEventRecord`, directly after
 
 ```python
     candidate_routes: dict[str, str] = Field(default_factory=dict)
@@ -1440,7 +1440,7 @@ add
 
 `LexicalIndex.search` has no language parameter and vendored files are not edited, so the filter is a subclass in our own module. It must zero the rows of the other languages **before** the best name per term is chosen; the loop after that is the parent's, copied, because the parent offers no hook between scoring and ranking.
 
-In `src/ontocurator/ontology/translations.py`, replace
+In `src/ontotator/ontology/translations.py`, replace
 
 ```python
     load_translations,
@@ -1454,7 +1454,7 @@ with
     load_translations,
     normalise,
 )
-from ontocurator.vendor.hpo_span_annotator.lexical import (
+from ontotator.vendor.hpo_span_annotator.lexical import (
     LexicalIndex,
     LexicalIndexError,
 )
@@ -1528,27 +1528,27 @@ class LanguageLexicalIndex(LexicalIndex):
 
 - [ ] **Step 5: Service: build that index, resolve the active languages, seed, both blocks**
 
-In `src/ontocurator/ontology/service.py`, replace
+In `src/ontotator/ontology/service.py`, replace
 
 ```python
-from ontocurator.ontology.translations import (
+from ontotator.ontology.translations import (
     LoadedTranslation,
     SkippedTranslation,
     TranslatedNames,
     apply_translations,
     translation_counts,
 )
-from ontocurator.vendor.hpo_span_annotator.hpo import Ontology
-from ontocurator.vendor.hpo_span_annotator.hpo import (
+from ontotator.vendor.hpo_span_annotator.hpo import Ontology
+from ontotator.vendor.hpo_span_annotator.hpo import (
     load as load_ontology,
 )
-from ontocurator.vendor.hpo_span_annotator.lexical import LexicalIndex
+from ontotator.vendor.hpo_span_annotator.lexical import LexicalIndex
 ```
 
 with
 
 ```python
-from ontocurator.ontology.translations import (
+from ontotator.ontology.translations import (
     LanguageLexicalIndex,
     LoadedTranslation,
     SkippedTranslation,
@@ -1556,8 +1556,8 @@ from ontocurator.ontology.translations import (
     apply_translations,
     translation_counts,
 )
-from ontocurator.vendor.hpo_span_annotator.hpo import Ontology
-from ontocurator.vendor.hpo_span_annotator.hpo import (
+from ontotator.vendor.hpo_span_annotator.hpo import Ontology
+from ontotator.vendor.hpo_span_annotator.hpo import (
     load as load_ontology,
 )
 ```
@@ -1786,7 +1786,7 @@ Expected: all pass. `uv run python scripts/export_openapi.py --check` reports dr
 - [ ] **Step 8: Commit**
 
 ```bash
-git add src/ontocurator/ontology/provenance.py src/ontocurator/packages/models.py src/ontocurator/ontology/translations.py src/ontocurator/ontology/service.py tests/test_search_translations.py
+git add src/ontotator/ontology/provenance.py src/ontotator/packages/models.py src/ontotator/ontology/translations.py src/ontotator/ontology/service.py tests/test_search_translations.py
 git commit -m "feat(search): search only the languages a request names, English always"
 ```
 
@@ -1795,7 +1795,7 @@ git commit -m "feat(search): search only the languages a request names, English 
 ### Task 5: Registry — hand every ontology the translation files of its prefix
 
 **Files:**
-- Modify: `src/ontocurator/ontology/registry.py`
+- Modify: `src/ontotator/ontology/registry.py`
 - Modify: `tests/test_followup_findings.py` (a test stub that replaces `OntologyService.load`)
 - Test: `tests/test_translation_registry.py` (create)
 
@@ -1812,8 +1812,8 @@ from pathlib import Path
 
 from layered_fixtures import make_layered_package
 
-from ontocurator.domain.profiles import OntologyDefinition
-from ontocurator.ontology.registry import OntologyRegistry
+from ontotator.domain.profiles import OntologyDefinition
+from ontotator.ontology.registry import OntologyRegistry
 
 FIXTURES = Path(__file__).parent / "fixtures"
 HP = FIXTURES / "hp.json"
@@ -1922,7 +1922,7 @@ Expected: 4 failures — `OntologyRegistry.__init__() got an unexpected keyword 
 
 The spec has the registry pass "the matching files". The prefix of an ontology is only known after it is parsed, so the registry passes every translation file it finds and `OntologyService` keeps the ones whose name carries its prefix (Task 1, `apply_translations`).
 
-In `src/ontocurator/ontology/registry.py`, replace
+In `src/ontotator/ontology/registry.py`, replace
 
 ```python
 import threading
@@ -1940,19 +1940,19 @@ from dataclasses import dataclass
 Replace
 
 ```python
-from ontocurator.ontology.service import OntologyService
-from ontocurator.vendor.hpo_span_annotator.hpo import OntologyError
+from ontotator.ontology.service import OntologyService
+from ontotator.vendor.hpo_span_annotator.hpo import OntologyError
 ```
 
 with
 
 ```python
-from ontocurator.ontology.service import OntologyService
-from ontocurator.ontology.translations import (
+from ontotator.ontology.service import OntologyService
+from ontotator.ontology.translations import (
     discover_translation_files,
     parse_translation_name,
 )
-from ontocurator.vendor.hpo_span_annotator.hpo import OntologyError
+from ontotator.vendor.hpo_span_annotator.hpo import OntologyError
 ```
 
 Replace
@@ -2117,7 +2117,7 @@ Expected: all pass.
 - [ ] **Step 8: Commit**
 
 ```bash
-git add src/ontocurator/ontology/registry.py tests/test_followup_findings.py tests/test_translation_registry.py
+git add src/ontotator/ontology/registry.py tests/test_followup_findings.py tests/test_translation_registry.py
 git commit -m "feat(search): let the ontology registry pass translation files to the ontologies it loads"
 ```
 
@@ -2126,10 +2126,10 @@ git commit -m "feat(search): let the ontology registry pass translation files to
 ### Task 6: Start-up, `GET /ontologies` and the search event
 
 **Files:**
-- Modify: `src/ontocurator/config.py` (`AppConfig.translation_dirs`)
-- Modify: `src/ontocurator/api/app.py` (`create_app`)
-- Modify: `src/ontocurator/cli.py` (`serve`)
-- Modify: `src/ontocurator/api/routes.py` (`OntologyTranslation`, `OntologyInfo.translations`, `_ontology_info`, search event)
+- Modify: `src/ontotator/config.py` (`AppConfig.translation_dirs`)
+- Modify: `src/ontotator/api/app.py` (`create_app`)
+- Modify: `src/ontotator/cli.py` (`serve`)
+- Modify: `src/ontotator/api/routes.py` (`OntologyTranslation`, `OntologyInfo.translations`, `_ontology_info`, search event)
 - Test: `tests/test_translation_api.py` (create), `tests/test_distribution.py`
 
 - [ ] **Step 1: Write the failing tests**
@@ -2149,9 +2149,9 @@ import pytest
 from fastapi.testclient import TestClient
 from layered_fixtures import make_layered_package
 
-from ontocurator.api.app import create_app
-from ontocurator.config import AppConfig
-from ontocurator.packages.writer import PackageWriter
+from ontotator.api.app import create_app
+from ontotator.config import AppConfig
+from ontotator.packages.writer import PackageWriter
 
 FIXTURES = Path(__file__).parent / "fixtures"
 HP = FIXTURES / "hp.json"
@@ -2285,7 +2285,7 @@ def test_broken_and_stray_files_do_not_block_the_start(
         "subject_id\ttranslation_value\nXX:1\tEtwas\n", encoding="utf-8"
     )
 
-    with caplog.at_level(logging.WARNING, logger="ontocurator"):
+    with caplog.at_level(logging.WARNING, logger="ontotator"):
         client = _client(tmp_path, ontology_paths=[HP])
 
     listed = _listed(client)
@@ -2390,7 +2390,7 @@ Expected: the new tests fail — `AppConfig` rejects `translation_dirs` (extra f
 
 - [ ] **Step 3: Configuration and application start**
 
-In `src/ontocurator/config.py`, directly after
+In `src/ontotator/config.py`, directly after
 
 ```python
     ontology_paths: list[Path] = []
@@ -2404,7 +2404,7 @@ add
     translation_dirs: list[Path] = []
 ```
 
-In `src/ontocurator/api/app.py`, replace
+In `src/ontotator/api/app.py`, replace
 
 ```python
         registry = OntologyRegistry(base_dir=config.workspace_dir)
@@ -2465,7 +2465,7 @@ with
 
 Both notices go through `logging`. The CLI configures no handler, so Python's last-resort handler prints warnings to the console window (stderr); that is where "Could not load ontology …" appears today.
 
-In `src/ontocurator/cli.py`, in the `AppConfig(...)` call of `serve`, replace
+In `src/ontotator/cli.py`, in the `AppConfig(...)` call of `serve`, replace
 
 ```python
             ontology_paths=ontology_list,
@@ -2487,7 +2487,7 @@ with
 
 - [ ] **Step 4: List the translations and record the languages of a search**
 
-In `src/ontocurator/api/routes.py`, replace
+In `src/ontotator/api/routes.py`, replace
 
 ```python
 class OntologyInfo(BaseModel):
@@ -2581,7 +2581,7 @@ Expected: all pass.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/ontocurator/config.py src/ontocurator/api/app.py src/ontocurator/cli.py src/ontocurator/api/routes.py tests/test_translation_api.py tests/test_distribution.py
+git add src/ontotator/config.py src/ontotator/api/app.py src/ontotator/cli.py src/ontotator/api/routes.py tests/test_translation_api.py tests/test_distribution.py
 git commit -m "feat(search): load translations at start, list them per ontology and record the languages of a search"
 ```
 
@@ -2590,9 +2590,9 @@ git commit -m "feat(search): load translations at start, list them per ontology 
 ### Task 7: Upload — `POST /ontologies` accepts a translation file
 
 **Files:**
-- Modify: `src/ontocurator/ontology/registry.py` (`rebuild_for_prefix`, `publish`)
-- Modify: `src/ontocurator/application/uploads.py` (`TranslationUploadService`; ontology uploads pick up stored translations)
-- Modify: `src/ontocurator/api/routes.py` (`TranslationUploadInfo`, `upload_ontology`)
+- Modify: `src/ontotator/ontology/registry.py` (`rebuild_for_prefix`, `publish`)
+- Modify: `src/ontotator/application/uploads.py` (`TranslationUploadService`; ontology uploads pick up stored translations)
+- Modify: `src/ontotator/api/routes.py` (`TranslationUploadInfo`, `upload_ontology`)
 - Test: `tests/test_translation_api.py`
 
 - [ ] **Step 1: Write the failing tests**
@@ -2600,16 +2600,16 @@ git commit -m "feat(search): load translations at start, list them per ontology 
 In `tests/test_translation_api.py`, extend the imports. Replace
 
 ```python
-from ontocurator.config import AppConfig
-from ontocurator.packages.writer import PackageWriter
+from ontotator.config import AppConfig
+from ontotator.packages.writer import PackageWriter
 ```
 
 with
 
 ```python
-from ontocurator.config import AppConfig
-from ontocurator.ontology.service import OntologyService
-from ontocurator.packages.writer import PackageWriter
+from ontotator.config import AppConfig
+from ontotator.ontology.service import OntologyService
+from ontotator.packages.writer import PackageWriter
 ```
 
 Append to the file:
@@ -2795,7 +2795,7 @@ Expected: 9 of the 10 new tests fail — a `.tsv` upload is parsed as an ontolog
 
 - [ ] **Step 3: Registry: rebuild without publishing, then publish**
 
-In `src/ontocurator/ontology/registry.py`, directly after the end of `unassigned_translations`, i.e. after
+In `src/ontotator/ontology/registry.py`, directly after the end of `unassigned_translations`, i.e. after
 
 ```python
             if parsed is not None and parsed[0] not in loaded:
@@ -2829,7 +2829,7 @@ add
 
 - [ ] **Step 4: The upload service**
 
-In `src/ontocurator/application/uploads.py`, replace
+In `src/ontotator/application/uploads.py`, replace
 
 ```python
 import hashlib
@@ -2849,16 +2849,16 @@ import tempfile
 Replace
 
 ```python
-from ontocurator.ontology.service import OntologyService
-from ontocurator.packages.models import PackageManifest, ValidatedPackage
+from ontotator.ontology.service import OntologyService
+from ontotator.packages.models import PackageManifest, ValidatedPackage
 ```
 
 with
 
 ```python
-from ontocurator.ontology.service import OntologyService
-from ontocurator.ontology.translations import babelon_problem, parse_translation_name
-from ontocurator.packages.models import PackageManifest, ValidatedPackage
+from ontotator.ontology.service import OntologyService
+from ontotator.ontology.translations import babelon_problem, parse_translation_name
+from ontotator.packages.models import PackageManifest, ValidatedPackage
 ```
 
 Replace
@@ -3002,10 +3002,10 @@ How the error cases of the spec map onto this:
 
 - [ ] **Step 5: The endpoint**
 
-In `src/ontocurator/api/routes.py`, replace
+In `src/ontotator/api/routes.py`, replace
 
 ```python
-from ontocurator.application.uploads import (
+from ontotator.application.uploads import (
     OntologyUploadService,
     PackageImportService,
 )
@@ -3014,7 +3014,7 @@ from ontocurator.application.uploads import (
 with
 
 ```python
-from ontocurator.application.uploads import (
+from ontotator.application.uploads import (
     OntologyUploadService,
     PackageImportService,
     TranslationUploadService,
@@ -3141,7 +3141,7 @@ Expected: all pass.
 - [ ] **Step 8: Commit**
 
 ```bash
-git add src/ontocurator/ontology/registry.py src/ontocurator/application/uploads.py src/ontocurator/api/routes.py tests/test_translation_api.py
+git add src/ontotator/ontology/registry.py src/ontotator/application/uploads.py src/ontotator/api/routes.py tests/test_translation_api.py
 git commit -m "feat(search): accept translation files in the ontology upload and reload the ontology"
 ```
 
@@ -3150,7 +3150,7 @@ git commit -m "feat(search): accept translation files in the ontology upload and
 ### Task 8: Preferences — the search languages of each annotator
 
 **Files:**
-- Modify: `src/ontocurator/application/preferences.py`
+- Modify: `src/ontotator/application/preferences.py`
 - Test: `tests/test_preferences_api.py`
 
 - [ ] **Step 1: Adapt the existing assertions and write the failing tests**
@@ -3268,7 +3268,7 @@ def test_search_languages_are_stored_per_annotator(app_client):
     assert stored["search_languages_by_annotator"] == {"JPL": ["fr"], "AB": []}
 
     # A second store on the same file reads the same selections (restart).
-    from ontocurator.application.preferences import PreferencesStore
+    from ontotator.application.preferences import PreferencesStore
 
     again = PreferencesStore(config.workspace_dir / "preferences.json").load()
     assert again.search_languages_by_annotator == {"JPL": ["fr"], "AB": []}
@@ -3324,7 +3324,7 @@ Expected: 5 failed, 18 passed. The three adapted tests fail (the response has no
 
 - [ ] **Step 3: Implement**
 
-In `src/ontocurator/application/preferences.py`, replace
+In `src/ontotator/application/preferences.py`, replace
 
 ```python
 PreferenceMode = Literal["independent", "review", "assisted"]
@@ -3472,7 +3472,7 @@ Expected: all pass.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/ontocurator/application/preferences.py tests/test_preferences_api.py
+git add src/ontotator/application/preferences.py tests/test_preferences_api.py
 git commit -m "feat(search): store the search languages of each annotator in the workspace preferences"
 ```
 
@@ -5165,8 +5165,8 @@ with
 In `validate_preload`, replace
 
 ```python
-    from ontocurator.ontology.service import OntologyService
-    from ontocurator.packages.reader import PackageReader
+    from ontotator.ontology.service import OntologyService
+    from ontotator.packages.reader import PackageReader
 
     warnings: list[str] = []
     _check_unique_names(preload.packages, "work package")
@@ -5176,12 +5176,12 @@ In `validate_preload`, replace
 with
 
 ```python
-    from ontocurator.ontology.service import OntologyService
-    from ontocurator.ontology.translations import (
+    from ontotator.ontology.service import OntologyService
+    from ontotator.ontology.translations import (
         babelon_problem,
         parse_translation_name,
     )
-    from ontocurator.packages.reader import PackageReader
+    from ontotator.packages.reader import PackageReader
 
     warnings: list[str] = []
     _check_unique_names(preload.packages, "work package")
@@ -5251,7 +5251,7 @@ In `apply_preload`, replace
 
 ```python
     Produces exactly the layout of the manual steps (unzip, drop files into
-    packages/ and ontologies/, add ontocurator-settings.json, zip again).
+    packages/ and ontologies/, add ontotator-settings.json, zip again).
 ```
 
 with
@@ -5259,7 +5259,7 @@ with
 ```python
     Produces exactly the layout of the manual steps (unzip, drop files into
     packages/ and ontologies/ (ontologies and their translation files), add
-    ontocurator-settings.json, zip again).
+    ontotator-settings.json, zip again).
 ```
 
 and directly after
@@ -5351,7 +5351,7 @@ In the module docstring, replace
 ```python
    Optional preloads (``--package``, ``--ontology``, ``--settings``) are
    validated before the build and copied into packages/, ontologies/ and
-   ontocurator-settings.json; ``--bundle-name NAME`` names the ZIP and its
+   ontotator-settings.json; ``--bundle-name NAME`` names the ZIP and its
 ```
 
 with
@@ -5359,7 +5359,7 @@ with
 ```python
    Optional preloads (``--package``, ``--ontology``, ``--translation``,
    ``--settings``) are validated before the build and copied into packages/,
-   ontologies/ and ontocurator-settings.json; ``--bundle-name NAME`` names the ZIP and its
+   ontologies/ and ontotator-settings.json; ``--bundle-name NAME`` names the ZIP and its
 ```
 
 In the README text of the bundle, replace
@@ -5428,7 +5428,7 @@ with
 In the module docstring, replace
 
 ```python
-Adds work packages, ontologies and an optional ontocurator-settings.json to a
+Adds work packages, ontologies and an optional ontotator-settings.json to a
 copy of a portable bundle,
 ```
 
@@ -5436,7 +5436,7 @@ with
 
 ```python
 Adds work packages, ontologies, translation files and an optional
-ontocurator-settings.json to a copy of a portable bundle,
+ontotator-settings.json to a copy of a portable bundle,
 ```
 
 and
@@ -5521,7 +5521,7 @@ git commit -m "build: ship translation files in portable bundles with --translat
 
 **Files:**
 - Create: `frontend/browser/translations.spec.ts`
-- Regenerate: `src/ontocurator/web/` (git-tracked)
+- Regenerate: `src/ontotator/web/` (git-tracked)
 
 - [ ] **Step 1: A browser test of the whole path**
 
@@ -5662,11 +5662,11 @@ git commit -m "test: search in German, switch the language off and find the sele
 
 ```bash
 uv run python -c "import sys; sys.path.insert(0, 'scripts'); from build_common import build_frontend, sync_embedded_web_assets; sync_embedded_web_assets(build_frontend(npm_ci=False))"
-git add src/ontocurator/web
+git add src/ontotator/web
 git commit -m "build: rebuild embedded web assets"
 ```
 
-Expected: `src/ontocurator/web/assets/` holds one new `.js` and one new `.css` file and no `.svg` file (the flags are inlined).
+Expected: `src/ontotator/web/assets/` holds one new `.js` and one new `.css` file and no `.svg` file (the flags are inlined).
 
 - [ ] **Step 6: Report**
 

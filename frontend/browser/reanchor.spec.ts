@@ -287,7 +287,7 @@ for(const width of [1280,1024,600])test(`real pending contexts preserve producer
     await expect(source).toContainText(`Carried over from version ${s.metadata.source_version}`);
     const actor=s.metadata.actors.find(value=>value.actor_id===offered.annotation.provenance.actor.actor_id)!;
     expect(actor).toBeDefined();
-    expect(actor.actor_id).toBe('ontocurator-reanchor');
+    expect(actor.actor_id).toBe('ontotator-reanchor');
     // The panel's one source line names the tool and version; the compact source section keeps model and run.
     for(const value of [actor.name??actor.actor_id,actor.version]) {
       if(typeof value==='string' && value)await expect(page.locator('.review-actions__origin')).toContainText(value);

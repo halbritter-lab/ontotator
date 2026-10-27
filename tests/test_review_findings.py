@@ -15,10 +15,10 @@ from support.v2_exports import package_export_zip
 from support.v2_reader import read_package
 from support.v2_writer import write_package, write_package_to_stream
 
-from ontocurator.domain.documents import Document
-from ontocurator.domain.errors import DomainError, InvalidPackage
-from ontocurator.packages.models import ValidatedPackage
-from ontocurator.storage.repository import Repository
+from ontotator.domain.documents import Document
+from ontotator.domain.errors import DomainError, InvalidPackage
+from ontotator.packages.models import ValidatedPackage
+from ontotator.storage.repository import Repository
 
 FIXTURES = Path(__file__).parent / "fixtures"
 HP_PATH = FIXTURES / "hp.json"
@@ -140,10 +140,10 @@ def _editing_env(tmp_path: Path):  # type: ignore[no-untyped-def]
 
 
 def _submit_independent(repo, ontology, annotator_id: str) -> None:  # type: ignore[no-untyped-def]
-    from ontocurator.application.editing import EditorService
-    from ontocurator.application.submissions import SubmissionService
-    from ontocurator.application.workspaces import WorkspaceService
-    from ontocurator.domain.workspace import MutationEnvelope, WorkspaceKey
+    from ontotator.application.editing import EditorService
+    from ontotator.application.submissions import SubmissionService
+    from ontotator.application.workspaces import WorkspaceService
+    from ontotator.domain.workspace import MutationEnvelope, WorkspaceKey
 
     key = WorkspaceKey(
         project_key="pkg-1",
@@ -190,8 +190,8 @@ def test_document_status_is_exact_per_annotator(tmp_path: Path) -> None:
 def test_workspace_key_encoding_is_unambiguous_and_backward_compatible(
     tmp_path: Path,
 ) -> None:
-    from ontocurator.domain.workspace import Draft, MutationEnvelope, WorkspaceKey
-    from ontocurator.storage.repository import _key_str
+    from ontotator.domain.workspace import Draft, MutationEnvelope, WorkspaceKey
+    from ontotator.storage.repository import _key_str
 
     legacy = WorkspaceKey(
         project_key="p",
@@ -239,10 +239,10 @@ class _Session:
     """Small helper driving EditorService/SubmissionService with revisions."""
 
     def __init__(self, tmp_path: Path, with_source_term: str | None = None) -> None:
-        from ontocurator.application.editing import EditorService
-        from ontocurator.application.submissions import SubmissionService
-        from ontocurator.application.workspaces import WorkspaceService
-        from ontocurator.domain.workspace import WorkspaceKey
+        from ontotator.application.editing import EditorService
+        from ontotator.application.submissions import SubmissionService
+        from ontotator.application.workspaces import WorkspaceService
+        from ontotator.domain.workspace import WorkspaceKey
 
         repo, ontology, _ws, _edit, doc = _editing_env(tmp_path)
         project_key = "pkg-1"
@@ -265,7 +265,7 @@ class _Session:
 
     @staticmethod
     def _import_source_package(repo, doc, term_id: str):  # type: ignore[no-untyped-def]
-        from ontocurator.domain.annotations import (
+        from ontotator.domain.annotations import (
             ActorRef,
             Annotation,
             Provenance,
@@ -295,7 +295,7 @@ class _Session:
         return snap
 
     def apply(self, **payload):  # type: ignore[no-untyped-def]
-        from ontocurator.domain.workspace import MutationEnvelope
+        from ontotator.domain.workspace import MutationEnvelope
 
         self.counter += 1
         draft = self.editor.apply(
@@ -310,7 +310,7 @@ class _Session:
         return draft
 
     def submit(self):  # type: ignore[no-untyped-def]
-        from ontocurator.domain.workspace import MutationEnvelope
+        from ontotator.domain.workspace import MutationEnvelope
 
         self.apply(command="check_layer", layer_id="hpo-layer", checked=True)
         self.counter += 1
@@ -331,7 +331,7 @@ class _Session:
 def test_create_with_unverified_source_still_validates_term(
     tmp_path: Path, term_id: str, code: str
 ) -> None:
-    from ontocurator.domain.errors import DomainError
+    from ontotator.domain.errors import DomainError
 
     session = _Session(tmp_path)
     with pytest.raises(DomainError) as exc:
@@ -346,7 +346,7 @@ def test_create_with_unverified_source_still_validates_term(
 
 
 def test_create_with_source_of_other_term_still_validates(tmp_path: Path) -> None:
-    from ontocurator.domain.errors import DomainError
+    from ontotator.domain.errors import DomainError
 
     session = _Session(tmp_path, with_source_term="HP:0001252")
     with pytest.raises(DomainError) as exc:
@@ -361,7 +361,7 @@ def test_create_with_source_of_other_term_still_validates(tmp_path: Path) -> Non
 
 
 def test_adopted_obsolete_term_is_visible_but_blocks_submit(tmp_path: Path) -> None:
-    from ontocurator.domain.errors import DomainError
+    from ontotator.domain.errors import DomainError
 
     session = _Session(tmp_path, with_source_term="HP:0000123")
     draft = session.apply(
@@ -388,7 +388,7 @@ SEVERE_HYPOTONIA = {"start": 19, "end": 35}
 def test_attach_existing_evidence_id_with_other_segments_is_rejected(
     tmp_path: Path,
 ) -> None:
-    from ontocurator.domain.errors import DomainError
+    from ontotator.domain.errors import DomainError
 
     session = _Session(tmp_path)
     session.apply(
@@ -475,7 +475,7 @@ def test_copy_on_write_evidence_id_never_collides(tmp_path: Path) -> None:
 
 
 def test_editing_shared_evidence_requires_annotation_id(tmp_path: Path) -> None:
-    from ontocurator.domain.errors import DomainError
+    from ontotator.domain.errors import DomainError
 
     session = _shared_evidence_session(tmp_path)
     with pytest.raises(DomainError) as exc:
@@ -492,8 +492,8 @@ def test_editing_shared_evidence_requires_annotation_id(tmp_path: Path) -> None:
 
 def _app(tmp_path: Path, **overrides):  # type: ignore[no-untyped-def]
 
-    from ontocurator.api.app import create_app
-    from ontocurator.config import AppConfig
+    from ontotator.api.app import create_app
+    from ontotator.config import AppConfig
 
     workspace = tmp_path / "workspace"
     config = AppConfig(
@@ -560,7 +560,7 @@ def test_ontology_upload_is_content_addressed_and_never_overwrites(
 def test_registry_for_layer_does_not_mutate_shared_service(tmp_path: Path) -> None:
     from layered_fixtures import make_layered_package
 
-    from ontocurator.ontology.registry import OntologyRegistry
+    from ontotator.ontology.registry import OntologyRegistry
 
     registry = OntologyRegistry()
     sha = registry.register_path(HP_PATH)
@@ -580,7 +580,7 @@ def test_registry_resolves_resource_path_against_workspace(
 ) -> None:
     from layered_fixtures import make_layered_package
 
-    from ontocurator.ontology.registry import OntologyRegistry
+    from ontotator.ontology.registry import OntologyRegistry
 
     workspace = tmp_path / "ws"
     (workspace / "ontologies").mkdir(parents=True)
@@ -597,7 +597,7 @@ def test_registry_resolves_resource_path_against_workspace(
     # Resource paths may not escape the workspace.
     escaping = profile.model_copy(deep=True)
     escaping.ontologies[0].resource_path = "../ws/ontologies/hp.json"
-    from ontocurator.domain.errors import DomainError
+    from ontotator.domain.errors import DomainError
 
     with pytest.raises(DomainError):
         OntologyRegistry(base_dir=workspace / "ontologies").for_layer(
@@ -623,7 +623,7 @@ def test_failed_eager_ontology_load_is_logged_and_listed(
 
 
 def test_routes_use_public_repository_and_registry_api() -> None:
-    from ontocurator.api import routes
+    from ontotator.api import routes
 
     source = Path(routes.__file__).read_text(encoding="utf-8")
     assert "repo.db" not in source
@@ -675,7 +675,7 @@ def _alt_ontology_bytes() -> bytes:
 
 
 def _alt_ontology(tmp_path: Path):  # type: ignore[no-untyped-def]
-    from ontocurator.vendor.hpo_span_annotator.hpo import load
+    from ontotator.vendor.hpo_span_annotator.hpo import load
 
     path = tmp_path / "alt.json"
     path.write_bytes(_alt_ontology_bytes())
@@ -717,8 +717,8 @@ def test_exact_route_returns_each_term_once(tmp_path: Path) -> None:
 
 
 def test_validate_term_reports_alt_and_replacement_metadata(tmp_path: Path) -> None:
-    from ontocurator.domain.documents import OntologyRef
-    from ontocurator.ontology.service import OntologyService
+    from ontotator.domain.documents import OntologyRef
+    from ontotator.ontology.service import OntologyService
 
     path = tmp_path / "alt.json"
     path.write_bytes(_alt_ontology_bytes())
@@ -737,19 +737,19 @@ def test_validate_term_reports_alt_and_replacement_metadata(tmp_path: Path) -> N
 
 
 def test_review_confirms_proposal_recorded_with_alt_id(tmp_path: Path) -> None:
-    from ontocurator.application.reviews import ReviewService
-    from ontocurator.application.workspaces import WorkspaceService
-    from ontocurator.domain.annotations import (
+    from ontotator.application.reviews import ReviewService
+    from ontotator.application.workspaces import WorkspaceService
+    from ontotator.domain.annotations import (
         ActorRef,
         Annotation,
         AnnotationRef,
         Provenance,
         snapshot,
     )
-    from ontocurator.domain.documents import OntologyRef
-    from ontocurator.domain.review import ReviewTargetSet
-    from ontocurator.domain.workspace import MutationEnvelope, WorkspaceKey
-    from ontocurator.ontology.service import OntologyService
+    from ontotator.domain.documents import OntologyRef
+    from ontotator.domain.review import ReviewTargetSet
+    from ontotator.domain.workspace import MutationEnvelope, WorkspaceKey
+    from ontotator.ontology.service import OntologyService
 
     path = tmp_path / "alt.json"
     path.write_bytes(_alt_ontology_bytes())
@@ -760,8 +760,8 @@ def test_review_confirms_proposal_recorded_with_alt_id(tmp_path: Path) -> None:
 
     profile = _create_sample_profile()
     profile.ontologies[0].sha256 = sha
-    from ontocurator.domain.profiles import profile_hash
-    from ontocurator.packages.models import PackageManifest
+    from ontotator.domain.profiles import profile_hash
+    from ontotator.packages.models import PackageManifest
 
     text = "Severe hypotonia."
     doc = Document(
@@ -785,7 +785,7 @@ def test_review_confirms_proposal_recorded_with_alt_id(tmp_path: Path) -> None:
         ValidatedPackage(
             manifest=PackageManifest(
                 package_id="pkg-alt",
-                format_version="ontocurator-work-package/v2",
+                format_version="ontotator-work-package/v2",
                 document_order=["doc-1"],
                 task_profile=profile,
                 task_profile_sha256=profile_hash(profile),
@@ -853,9 +853,9 @@ def test_term_labels_expose_status_and_replacement(tmp_path: Path) -> None:
 def test_lexical_prefix_query_ranks_matching_label_first(tmp_path: Path) -> None:
     """'hypoton' displayed Seizure above Hypotonia only because scored lexical
     results are shuffled for display by design; the recorded rank is correct."""
-    from ontocurator.vendor.hpo_span_annotator.hpo import load
-    from ontocurator.vendor.hpo_span_annotator.lexical import LexicalIndex
-    from ontocurator.vendor.hpo_span_annotator.search import SearchEngine
+    from ontotator.vendor.hpo_span_annotator.hpo import load
+    from ontotator.vendor.hpo_span_annotator.lexical import LexicalIndex
+    from ontotator.vendor.hpo_span_annotator.search import SearchEngine
 
     ontology = load(HP_PATH)
     lexical = LexicalIndex(ontology)
@@ -939,7 +939,7 @@ def test_package_export_contains_all_work_of_one_annotator_and_reimports(
 ) -> None:
     from test_api import _create_sample_package_bytes
 
-    from ontocurator.ontology.registry import OntologyRegistry
+    from ontotator.ontology.registry import OntologyRegistry
 
     client, _ = _app(tmp_path / "a", ontology_paths=[HP_PATH])
     archive = _create_sample_package_bytes("single")

@@ -10,7 +10,7 @@
 
 **Binding inputs:** the spec (decisions U1–U16, review items T1–T17 / X1–X21 referenced there), `DESIGN.md`, `PRODUCT.md`, [lead workflow spec](../specs/2026-10-20-lead-workflow-design.md) (D1 relaxed by U8), [documents overview spec](../specs/2026-10-21-documents-overview-redesign-design.md) (VD16, `panel=` route), mockups in `.superpowers/brainstorm/148565-1792589249/content/` (gitignored, read-only).
 
-**Plan review applied** (`ontocurator-reviews/2026-10-21-acceptance-fixes-plan-claude.md`, items 1–15) to the global rules and waves 2–5. Wave 1 E1a also: `consolidation_groups` takes `conn`; axis defaults like `findings_of`; one `content_sha256` helper (these were sent to the E1a agent directly). Wave 2 additionally relies on `consolidation_group_id(input_ids)` exported from `application/consolidation.py` (for B1's `flagged_group_id`); if E1a did not export it, the E1a review fix adds it before wave 2 starts.
+**Plan review applied** (`ontotator-reviews/2026-10-21-acceptance-fixes-plan-claude.md`, items 1–15) to the global rules and waves 2–5. Wave 1 E1a also: `consolidation_groups` takes `conn`; axis defaults like `findings_of`; one `content_sha256` helper (these were sent to the E1a agent directly). Wave 2 additionally relies on `consolidation_group_id(input_ids)` exported from `application/consolidation.py` (for B1's `flagged_group_id`); if E1a did not export it, the E1a review fix adds it before wave 2 starts.
 
 ---
 
@@ -47,7 +47,7 @@ Worktree `C:/Users/jan-p/Development/ontocurator/.worktrees/acceptance-fixes` (G
 
    Example: `WP=B1 CHECK_PYTEST_WORKERS=4 CHECK_VITEST_WORKERS=3 bash /c/…/build/with-lock.sh backend bash scripts/check.sh --quick <owned paths>`. Run every Playwright call and every call that may wait or exceed 10 min with `run_in_background: true` (you are notified on exit); never foreground `sleep`; never delete another agent's lock. A lock older than 45 min whose owner has reported is removed by the main session only.
 
-8. **Contracts.** `contracts/openapi.json`, `frontend/src/api/generated.ts`, `frontend/src/api/client.ts`, `contracts/admin-error-codes.json`, `src/ontocurator/domain/admin_error_codes.py`, `frontend/src/admin/errors.ts`, `src/ontocurator/api/app.py` have **one owner per wave** (see "Shared-file chains"). Regenerate, never hand-edit: `uv run python scripts/export_openapi.py && npm --prefix frontend run api:generate`, and `uv run python scripts/export_admin_error_codes.py` after a catalog change. API changes are additive; new response fields have defaults. openapi-typescript makes non-null defaulted fields **required** in `generated.ts` (e.g. `guideline_withdrawn: boolean`), so every new field breaks typed test fixtures: the contract owner runs `npm --prefix frontend run typecheck` right after regenerating and fixes `frontend/tests/documents/fixtures.ts` (owned by E1a in wave 1, B1 in wave 2, B2 in wave 3; nobody else, A1 included, edits it). Any other typecheck break outside your Owns: stop and report.
+8. **Contracts.** `contracts/openapi.json`, `frontend/src/api/generated.ts`, `frontend/src/api/client.ts`, `contracts/admin-error-codes.json`, `src/ontotator/domain/admin_error_codes.py`, `frontend/src/admin/errors.ts`, `src/ontotator/api/app.py` have **one owner per wave** (see "Shared-file chains"). Regenerate, never hand-edit: `uv run python scripts/export_openapi.py && npm --prefix frontend run api:generate`, and `uv run python scripts/export_admin_error_codes.py` after a catalog change. API changes are additive; new response fields have defaults. openapi-typescript makes non-null defaulted fields **required** in `generated.ts` (e.g. `guideline_withdrawn: boolean`), so every new field breaks typed test fixtures: the contract owner runs `npm --prefix frontend run typecheck` right after regenerating and fixes `frontend/tests/documents/fixtures.ts` (owned by E1a in wave 1, B1 in wave 2, B2 in wave 3; nobody else, A1 included, edits it). Any other typecheck break outside your Owns: stop and report.
 9. **Frontend rules.** English copy verbatim from the spec; status never by colour alone; unavailable actions use `aria-disabled` + reason (existing `Button`), not `disabled`; icons from `frontend/src/ui/icons.tsx`; no colour literals outside `tokens.css`; shortcuts only through `useShortcut` (`frontend/src/ui/shortcuts.ts:85`).
 10. **Evidence** (screenshots) only under `build/acceptance-fixes/evidence/` in the worktree; delete Playwright scratch output.
 11. **Reviews.** WPs marked "Review: yes" get one read-only `superpowers:code-reviewer` pass after their commit, then one fix agent (effort medium). **Timing:** a WP's review and its fix land (committed) before the next wave is dispatched, because review fixes touch files that the next wave owns (E1a's fix touches B1/E1b files, A1's touches B2's, B1's touches E1b's contracts). If a fix cannot land in time, its open findings go verbatim into the dispatch prompt of the next WP that owns the affected files, and that WP fixes them (with tests) as part of its work. Others: no per-WP review.
@@ -55,7 +55,7 @@ Worktree `C:/Users/jan-p/Development/ontocurator/.worktrees/acceptance-fixes` (G
 
 ## Shared contracts
 
-### Domain (E1a): `src/ontocurator/domain/agreement.py`
+### Domain (E1a): `src/ontotator/domain/agreement.py`
 
 ```python
 @dataclass(frozen=True)
@@ -99,7 +99,7 @@ def groups(
 
 `compare()` and `match()` keep their bucket `(layer_id, term_id)` and results.
 
-### Review mark (E1a): `src/ontocurator/domain/review.py`
+### Review mark (E1a): `src/ontotator/domain/review.py`
 
 ```python
 ConsolidationAction = Literal["auto", "keep", "choose", "keep_both", "leave_out"]
@@ -203,12 +203,12 @@ Start body: `{document_id: str, reviewer: str, source_submission_ids: list[str] 
 
 | File(s)                                                                                                               | Writers (wave)                                                           |
 | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `contracts/openapi.json`, `frontend/src/api/generated.ts`, `frontend/src/api/client.ts`, `src/ontocurator/api/app.py` | E1a (1) → B1 (2) → E1b (3) → E2b (4, removal of `mergeRoundInputs` only) |
-| `src/ontocurator/domain/admin_error_codes.py`, `contracts/admin-error-codes.json`, `frontend/src/admin/errors.ts`     | B1 (2) → E1b (3)                                                         |
+| `contracts/openapi.json`, `frontend/src/api/generated.ts`, `frontend/src/api/client.ts`, `src/ontotator/api/app.py` | E1a (1) → B1 (2) → E1b (3) → E2b (4, removal of `mergeRoundInputs` only) |
+| `src/ontotator/domain/admin_error_codes.py`, `contracts/admin-error-codes.json`, `frontend/src/admin/errors.ts`     | B1 (2) → E1b (3)                                                         |
 | `DESIGN.md`                                                                                                           | C2 (1) → A1 (2) → B2 (3) → E2a (4)                                       |
 | `frontend/src/app/router.ts`, `frontend/src/App.tsx`                                                                  | A1 (2) → B2 (3) → E2a (4)                                                |
-| `src/ontocurator/application/document_row_panel.py`, `src/ontocurator/api/document_row_routes.py`                     | E1a (1) → B1 (2)                                                         |
-| `src/ontocurator/application/consolidation.py`, `src/ontocurator/api/consolidation_routes.py`                         | E1a (1) → E1b (3)                                                        |
+| `src/ontotator/application/document_row_panel.py`, `src/ontotator/api/document_row_routes.py`                     | E1a (1) → B1 (2)                                                         |
+| `src/ontotator/application/consolidation.py`, `src/ontotator/api/consolidation_routes.py`                         | E1a (1) → E1b (3)                                                        |
 | `frontend/src/documents/FinalPanel.tsx`, `finalPanelText.ts`, `RowCells.tsx`, `tests/documents/finalPanel.test.tsx`   | A1 (2) → B2 (3)                                                          |
 | `frontend/src/app/CaseScreen.tsx`, `frontend/src/styles/screens/editor.css`, `frontend/tests/caseScreen.test.tsx`     | C2 (1) → E2b (4)                                                         |
 | `frontend/tests/documents/fixtures.ts`                                                                                | E1a (1) → B1 (2) → B2 (3)                                                |
@@ -260,7 +260,7 @@ Playwright specs and result; commit SHA(s); deviations and risks.
 
 **Goal:** pure grouping, the decision mark, `GET /rounds/{id}/consolidation` with the U8/U9 visibility, and `all_match` on the final panel. Spec: "WP-E Grouping", "Backend" (Persistence, People, Read), "WP-B Full agreement". **Size L. Review: yes (contract + authorization).**
 
-**Owns:** `src/ontocurator/domain/agreement.py`, `src/ontocurator/domain/review.py`, `src/ontocurator/application/consolidation.py` (new), `src/ontocurator/api/consolidation_routes.py` (new), `src/ontocurator/api/app.py`, `src/ontocurator/application/document_row_panel.py`, `src/ontocurator/api/document_row_routes.py`, contracts trio (`openapi.json`, `generated.ts`, `client.ts`), `tests/test_agreement_groups.py` (new), `tests/test_review_consolidation_mark.py` (new), `tests/test_consolidation_read_api.py` (new), `tests/test_agreement_domain.py`, `tests/test_final_panel_api.py` (W1 cases), `frontend/tests/documents/fixtures.ts` (`all_match` breaks `finalPanel()` typing).
+**Owns:** `src/ontotator/domain/agreement.py`, `src/ontotator/domain/review.py`, `src/ontotator/application/consolidation.py` (new), `src/ontotator/api/consolidation_routes.py` (new), `src/ontotator/api/app.py`, `src/ontotator/application/document_row_panel.py`, `src/ontotator/api/document_row_routes.py`, contracts trio (`openapi.json`, `generated.ts`, `client.ts`), `tests/test_agreement_groups.py` (new), `tests/test_review_consolidation_mark.py` (new), `tests/test_consolidation_read_api.py` (new), `tests/test_agreement_domain.py`, `tests/test_final_panel_api.py` (W1 cases), `frontend/tests/documents/fixtures.ts` (`all_match` breaks `finalPanel()` typing).
 
 **Tests to add:**
 
@@ -313,7 +313,7 @@ Playwright specs and result; commit SHA(s); deviations and risks.
 
 **Goal:** spec "WP-C" items 3 and 5 (U5, U15, T11, T12). **Size M. Review: no.**
 
-**Owns:** `src/ontocurator/projects/service.py`, `src/ontocurator/ontology/registry.py`, `src/ontocurator/application/workspace_opening.py`, `scripts/seed_t5_acceptance.py`, `tests/test_project_creation_defaults.py` (new), `tests/test_search_warmup.py` (new), `tests/test_seed_t5_acceptance.py`, `tests/test_project_settings_validation.py`.
+**Owns:** `src/ontotator/projects/service.py`, `src/ontotator/ontology/registry.py`, `src/ontotator/application/workspace_opening.py`, `scripts/seed_t5_acceptance.py`, `tests/test_project_creation_defaults.py` (new), `tests/test_search_warmup.py` (new), `tests/test_seed_t5_acceptance.py`, `tests/test_project_settings_validation.py`.
 
 **Tests to add:**
 
@@ -353,7 +353,7 @@ Playwright specs and result; commit SHA(s); deviations and risks.
 
 **Goal:** spec "WP-B" start command (T3, T17, U4), "After consolidation" label and "Flags" data (X4, X5). **Size L. Review: yes (authorization, contract).**
 
-**Owns:** `src/ontocurator/application/consolidation_start.py` (new), `src/ontocurator/api/consolidation_start_routes.py` (new), `src/ontocurator/api/app.py`, `src/ontocurator/application/document_row_submissions.py`, `src/ontocurator/application/document_row_facets.py`, `src/ontocurator/application/document_row_page.py`, `src/ontocurator/application/document_row_panel.py`, `src/ontocurator/api/document_row_routes.py`, `src/ontocurator/domain/admin_error_codes.py`, `contracts/*`, `frontend/src/api/generated.ts`, `frontend/src/api/client.ts`, `frontend/src/admin/errors.ts`, `frontend/tests/documents/fixtures.ts` (`flagged_unclear` and the other new defaulted fields break `row()` typing), `tests/test_consolidation_start_api.py` (new), `tests/test_document_rows_submissions.py`, `tests/test_document_rows_facets.py` (the `GROUPS` tuple gains `flags`), `tests/test_document_row_flags.py` (new).
+**Owns:** `src/ontotator/application/consolidation_start.py` (new), `src/ontotator/api/consolidation_start_routes.py` (new), `src/ontotator/api/app.py`, `src/ontotator/application/document_row_submissions.py`, `src/ontotator/application/document_row_facets.py`, `src/ontotator/application/document_row_page.py`, `src/ontotator/application/document_row_panel.py`, `src/ontotator/api/document_row_routes.py`, `src/ontotator/domain/admin_error_codes.py`, `contracts/*`, `frontend/src/api/generated.ts`, `frontend/src/api/client.ts`, `frontend/src/admin/errors.ts`, `frontend/tests/documents/fixtures.ts` (`flagged_unclear` and the other new defaulted fields break `row()` typing), `tests/test_consolidation_start_api.py` (new), `tests/test_document_rows_submissions.py`, `tests/test_document_rows_facets.py` (the `GROUPS` tuple gains `flags`), `tests/test_document_row_flags.py` (new).
 
 **Tests:** `test_consolidation_start_api.py`:
 
@@ -414,7 +414,7 @@ A1 does **not** edit `frontend/tests/documents/fixtures.ts` (B1 owns it in wave 
 
 **Goal:** spec "WP-E Backend" (Resolve, Annotate, Reopen, Automatic take-over, Submit), T8–T10, U14, U16. **Size L. Review: yes (authorization, contract, submission integrity).**
 
-**Owns:** `src/ontocurator/application/consolidation.py`, `src/ontocurator/application/consolidation_resolve.py` (new), `src/ontocurator/api/consolidation_routes.py`, `src/ontocurator/api/app.py`, `src/ontocurator/application/work_rounds.py`, `src/ontocurator/application/submissions.py`, `src/ontocurator/domain/admin_error_codes.py`, contracts trio, `contracts/admin-error-codes.json`, `frontend/src/admin/errors.ts`, `tests/test_consolidation_resolve_api.py` (new), `tests/test_consolidation_resolve_validation.py` (new), `tests/test_consolidation_auto_take_over.py` (new), `tests/test_consolidation_submit_gating.py` (new), `tests/test_work_rounds.py` (only merge-inputs regressions), `tests/test_final_human_export.py` (only if provenance assertions change).
+**Owns:** `src/ontotator/application/consolidation.py`, `src/ontotator/application/consolidation_resolve.py` (new), `src/ontotator/api/consolidation_routes.py`, `src/ontotator/api/app.py`, `src/ontotator/application/work_rounds.py`, `src/ontotator/application/submissions.py`, `src/ontotator/domain/admin_error_codes.py`, contracts trio, `contracts/admin-error-codes.json`, `frontend/src/admin/errors.ts`, `tests/test_consolidation_resolve_api.py` (new), `tests/test_consolidation_resolve_validation.py` (new), `tests/test_consolidation_auto_take_over.py` (new), `tests/test_consolidation_submit_gating.py` (new), `tests/test_work_rounds.py` (only merge-inputs regressions), `tests/test_final_human_export.py` (only if provenance assertions change).
 
 **Tests:**
 
@@ -505,12 +505,12 @@ A1 does **not** edit `frontend/tests/documents/fixtures.ts` (B1 owns it in wave 
 - [ ] One `superpowers:code-reviewer` pass over `git diff main...fix/acceptance-20261021` against the spec (focus: authorization of the new endpoints, U8 scope, deterministic ids, submit gating, a11y of the row panel and the consolidation view, contract additivity). Findings to `C:/Users/jan-p/Development/ontocurator-reviews/2026-10-21-acceptance-fixes-branch-claude.md`.
 - [ ] One fix agent (effort medium) applies the findings, TDD, commits.
 - [ ] Full gate alone on the machine: `CHECK_PYTEST_WORKERS=4 CHECK_VITEST_WORKERS=3 HPO_E2E_PORT=18777 bash scripts/check.sh` (no `CHECK_CONTAINERS`; container checks need `GITHUB_TOKEN_FILE` and are skipped). Fix failures through the fix agent.
-- [ ] Rebuild the embedded bundle: `npm --prefix frontend run build`; replace `src/ontocurator/web/index.html` and the `index-*.js`/`index-*.css` in `src/ontocurator/web/assets/` with `frontend/dist/` (remove the superseded `index-*` files; keep fonts unless dist changed them); `uv run python scripts/check_wheel.py` (or `bash scripts/check.sh --only static`); commit `build: update embedded frontend bundle`.
+- [ ] Rebuild the embedded bundle: `npm --prefix frontend run build`; replace `src/ontotator/web/index.html` and the `index-*.js`/`index-*.css` in `src/ontotator/web/assets/` with `frontend/dist/` (remove the superseded `index-*` files; keep fonts unless dist changed them); `uv run python scripts/check_wheel.py` (or `bash scripts/check.sh --only static`); commit `build: update embedded frontend bundle`.
 - [ ] Fast-forward main: `git -C C:/Users/jan-p/Development/ontocurator merge --ff-only fix/acceptance-20261021` from the main checkout (on `main`, clean). No push.
-- [ ] Rebuild the :18210 stack (compose project `ontocurator-t5-acceptance-manual-20261021`, keep volumes; prep dir `C:/Users/jan-p/Development/ontocurator/.worktrees/manual-20261021/build/t5-acceptance/manual-test-20261021`; all paths absolute):
+- [ ] Rebuild the :18210 stack (compose project `ontotator-t5-acceptance-manual-20261021`, keep volumes; prep dir `C:/Users/jan-p/Development/ontocurator/.worktrees/manual-20261021/build/t5-acceptance/manual-test-20261021`; all paths absolute):
   1. `git -C C:/Users/jan-p/Development/ontocurator/.worktrees/manual-20261021 checkout --detach main`;
-  2. check the secret first: `: "${GITHUB_TOKEN_FILE:?GITHUB_TOKEN_FILE is not set}" && test -r "$GITHUB_TOKEN_FILE"` (stop and ask the user if it fails); then build the image from that worktree (`cd` into its absolute path in the same command) with the BuildKit secret as before: `docker build --secret id=github_token,src="$GITHUB_TOKEN_FILE" -t ontocurator-manual:20261021-fixes .`;
-  3. write the new image id (`docker image inspect -f '{{.Id}}' ontocurator-manual:20261021-fixes`) into `runtime/image.override.json` for `app` and `migrate`;
+  2. check the secret first: `: "${GITHUB_TOKEN_FILE:?GITHUB_TOKEN_FILE is not set}" && test -r "$GITHUB_TOKEN_FILE"` (stop and ask the user if it fails); then build the image from that worktree (`cd` into its absolute path in the same command) with the BuildKit secret as before: `docker build --secret id=github_token,src="$GITHUB_TOKEN_FILE" -t ontotator-manual:20261021-fixes .`;
+  3. write the new image id (`docker image inspect -f '{{.Id}}' ontotator-manual:20261021-fixes`) into `runtime/image.override.json` for `app` and `migrate`;
   4. `oc stop`, `oc start` (commands in `runtime/commands.json`; `up -d --no-build --wait` runs migrations, volumes stay); never `down --volumes`, never reseed;
   5. creation defaults for the existing project: add `seed_creation_defaults.py` to the prep dir (same style as `seed_extra.py`: `base.load_prepared(RUNTIME)`, `base.Stack(cfg)`, log in as `demo-lead`, PATCH the project settings with the U5 defaults, idempotent) and run it with `uv run python`;
   6. smoke: log in as `demo-lead`, Documents shows the row panel, Settings → Creation defaults shows the values; update `TESTPROTOKOLL.md` header (revision, image) and add checklist items for findings 1–11 and W1.

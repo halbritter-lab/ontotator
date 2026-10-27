@@ -7,8 +7,8 @@
 **Goal:**
 - Converter authors get one tested mapping from offsets on a raw text to offsets on its canonical text (`ontospan.offsets`, I6), plus conformance fixtures for import bundles, release bundles and offsets.
 - Any consumer reads a release with one shared reader (`ontospan.release`) or with the JSON Schemas alone, and resolves its lineage inside the bundle (I5, I8).
-- Ontocurator closes the gaps that remain between the T7 spec and the T2–T4 plans. These are: which sets an import may carry, the producer block of import bundles, proposal sets for finished documents, and a contract test between the two implementations.
-- Adapters in consumer repositories (Phentrieve, phentrieve-benchmark) are listed as separate tasks. They are not Ontocurator work.
+- Ontotator closes the gaps that remain between the T7 spec and the T2–T4 plans. These are: which sets an import may carry, the producer block of import bundles, proposal sets for finished documents, and a contract test between the two implementations.
+- Adapters in consumer repositories (Phentrieve, phentrieve-benchmark) are listed as separate tasks. They are not Ontotator work.
 
 **What this plan does not repeat.** Most T7 requirements are already tasks in the T2–T4 plans (T3/T5/T4 index, "T7 alignment"):
 
@@ -27,7 +27,7 @@ T7b (CLI import of documents and proposals) has nothing left. It is the T2d Task
 
 **Architecture:**
 - **Part A, ontospan (T7a):** two new modules, `offsets.py` and `release.py`, and the fixture set `conformance/integration/`. The schema is unchanged (`SCHEMA_VERSION` stays `1.1.0`); the package becomes `1.2.0` (Q36).
-- **Part B, Ontocurator (T7c–T7e):** small additions to the import planner (T3a), the import of bundles with a `release` block (T5), proposal sets for finished documents (T4a), the release job's read-back (T4b), and a contract test against vendored ontospan fixtures. It ends with a guide for tool authors.
+- **Part B, Ontotator (T7c–T7e):** small additions to the import planner (T3a), the import of bundles with a `release` block (T5), proposal sets for finished documents (T4a), the release job's read-back (T4b), and a contract test against vendored ontospan fixtures. It ends with a guide for tool authors.
 - **Part C, consumer repositories:** a release reader in Phentrieve, and the exporter and importer in phentrieve-benchmark. Each is planned in detail in its own repository.
 
 **Spec:** `docs/superpowers/specs/2026-10-14-t7-integrations-design.md` (I1–I10, O1–O7; binding). Roadmap E4–E8: `…-roadmap-web-service-analysis.md`. Indexes: `2026-10-14-t2-index.md` (R1, R2, Q1–Q14, D-a…D-n) and `2026-10-14-t3-t5-t4-index.md` (shared contracts, U1–U5, D-o…D-ab, Q15–Q32). Format: `janpower/ontospan` `main` at `4105ec1` (format 1.1).
@@ -37,12 +37,12 @@ T7b (CLI import of documents and proposals) has nothing left. It is the T2d Task
 | Task | Needs | Repository and branch |
 |---|---|---|
 | 1–5 (Part A) | T1 only (ontospan `main` `4105ec1`). It can start now, in parallel to T2. | ontospan, `feat/offsets-integration` from `main`, worktree `../ontospan/.worktrees/offsets-integration` |
-| 6 | T3a Task 6 (`read_t1_upload`, `plan_import`) | Ontocurator, `feat/t3a-admin-backend`, right after T3a Task 6 |
-| 7 | T5 Task 3 (ontospan 1.1 pin, variant import) | Ontocurator, `feat/t5-variants-review`, right after T5 Task 3 |
-| 8 | T4a Tasks 8 and 9 (late sets, `reopen_to`) | Ontocurator, `feat/t4a-workflows`, right after T4a Task 9 |
-| 9–10 | T4b (release job, Task 14 round trip) and Part A merged on ontospan `main` | Ontocurator, `feat/t7-integration-contract` from `feat/t4b-adjudication-releases`, worktree `.worktrees/t7-integration-contract` |
+| 6 | T3a Task 6 (`read_t1_upload`, `plan_import`) | Ontotator, `feat/t3a-admin-backend`, right after T3a Task 6 |
+| 7 | T5 Task 3 (ontospan 1.1 pin, variant import) | Ontotator, `feat/t5-variants-review`, right after T5 Task 3 |
+| 8 | T4a Tasks 8 and 9 (late sets, `reopen_to`) | Ontotator, `feat/t4a-workflows`, right after T4a Task 9 |
+| 9–10 | T4b (release job, Task 14 round trip) and Part A merged on ontospan `main` | Ontotator, `feat/t7-integration-contract` from `feat/t4b-adjudication-releases`, worktree `.worktrees/t7-integration-contract` |
 | 11 | Part A merged; a release from Task 9 as a sample | Phentrieve (separate repository) |
-| 12–13 | Part A merged; Ontocurator after T3a (import) and T4b (releases) | phentrieve-benchmark (separate repository) |
+| 12–13 | Part A merged; Ontotator after T3a (import) and T4b (releases) | phentrieve-benchmark (separate repository) |
 
 - **T1:** Part A extends ontospan and changes no format rule. Parts B and C depend on Part A only from Task 9 on.
 - **T2:** T2d's import (Task 4 patch) is the base for Tasks 6 and 7. T2e's dev compose stack runs the round-trip script (Task 10).
@@ -52,7 +52,7 @@ T7b (CLI import of documents and proposals) has nothing left. It is the T2d Task
 
 **Commit rules:**
 - ontospan, per task: `uv run ruff check . && uv run ruff format --check . && uv run mypy src && uv run pytest -q`, then one conventional commit.
-- Ontocurator, per task: `uv run ruff check --fix src tests && uv run ruff format src tests && uv run mypy src`, then one conventional commit. After API changes: `uv run python scripts/export_openapi.py && npm --prefix frontend run api:generate`.
+- Ontotator, per task: `uv run ruff check --fix src tests && uv run ruff format src tests && uv run mypy src`, then one conventional commit. After API changes: `uv run python scripts/export_openapi.py && npm --prefix frontend run api:generate`.
 - No AI attribution and no `Co-Authored-By` trailers anywhere. Nothing is pushed or merged without the user's confirmation.
 
 ## Technical decisions (with rationale)
@@ -63,7 +63,7 @@ T7b (CLI import of documents and proposals) has nothing left. It is the T2d Task
 | D-ad | `OffsetError` subclasses `ontospan.FormatError` and carries exactly one `Issue` (code, path `raw[start:end]`, message). | Converters already handle `FormatError`. They report offset problems with codes just like validation issues. |
 | D-ae | Fixtures are **directory bundles** (`manifest.json`, `documents/*.json`). `tests/integration_cases.py` writes them, and a test compares them byte for byte, as `tests/conformance_cases.py` does. | They are diffable in review, and line endings are protected by ontospan's `*.json text eol=lf`. |
 | D-af | The release reader resolves a reference by `(annotation_set_id, annotation_id)` among the units with the same `document_id` and `text_sha256`. The bundle component of the URN is ignored. | This is the rule of T4b's builder ("Lineage check"). Set ids are unique within a bundle (`duplicate_annotation_set`), and T1 F3 links the sets of a release by identical `text_sha256`. |
-| D-ag | Ontocurator's release job reads its bundle back with `ontospan.read_release`, in addition to the builder's own `RELEASE_LINEAGE_BROKEN` check. | The format's lineage rules then have one implementation that every consumer also runs (E7 principle "one definition"). |
+| D-ag | Ontotator's release job reads its bundle back with `ontospan.read_release`, in addition to the builder's own `RELEASE_LINEAGE_BROKEN` check. | The format's lineage rules then have one implementation that every consumer also runs (E7 principle "one definition"). |
 | D-ah | Tasks 6–8 land on the T3a, T5 and T4a branches. | These plans have not started yet. Each change is small and touches files those plans create. Doing it later would mean a second pass over the same code. |
 
 ---
@@ -191,7 +191,7 @@ The map stores the run boundaries as two sorted tuples (raw and canonical starts
 
 ### Task 3: Release reader (`ontospan.release`)
 
-> **Open question Q37 (technical):** should ontospan offer a public release reader, or only document the recipe in the README? Default: a small public module. Phentrieve, the benchmark and Ontocurator's release job need exactly the same lineage rules (E7 "one definition"), and the README recipe would still need a tested reference.
+> **Open question Q37 (technical):** should ontospan offer a public release reader, or only document the recipe in the README? Default: a small public module. Phentrieve, the benchmark and Ontotator's release job need exactly the same lineage rules (E7 "one definition"), and the README recipe would still need a tested reference.
 
 **Create** `src/ontospan/release.py`, `tests/test_release.py`. **Modify** `src/ontospan/__init__.py` (export `ReleaseView`, `read_release`, `check_lineage`), `tests/test_package.py`.
 
@@ -271,7 +271,7 @@ Issue paths name the file and annotation, e.g. `documents/00003.json:a7`.
 
 **Create** `tests/integration_cases.py` (generator and expectations, as `tests/conformance_cases.py`), `tests/test_integration_fixtures.py`, and the generated files below. **Modify** `tests/builders.py` only if a helper is missing.
 
-**Generated content** (`uv run python tests/integration_cases.py`; fixed `created_at`; the texts are `SOURCE_TEXT`, its German translation `TEXT`, and a second English text). The fixtures use no modifiers, so every current consumer can import them (Ontocurator refuses modifiers, T2 Q11).
+**Generated content** (`uv run python tests/integration_cases.py`; fixed `created_at`; the texts are `SOURCE_TEXT`, its German translation `TEXT`, and a second English text). The fixtures use no modifiers, so every current consumer can import them (Ontotator refuses modifiers, T2 Q11).
 
 | Path | Content |
 |---|---|
@@ -322,13 +322,13 @@ uv build && uv run --isolated --with dist/ontospan-1.2.0-py3-none-any.whl python
 
 ---
 
-## Part B: Ontocurator (Tasks 6–10)
+## Part B: Ontotator (Tasks 6–10)
 
-Ontocurator stays generic (U1): no names, defaults or formats of a particular producer or consumer. Test fixtures use the fictitious `example-tool` and `example-curator`.
+Ontotator stays generic (U1): no names, defaults or formats of a particular producer or consumer. Test fixtures use the fictitious `example-tool` and `example-curator`.
 
 ### Task 6: Only tool proposal sets are imported (T7c; on `feat/t3a-admin-backend`)
 
-> **Open question Q33:** which annotation sets may an import carry? Default: an import may carry empty sets of any kind (they create documents only, O2) and non-empty sets of kind `tool_output` whose actors are all tools (I3). A non-empty set of any other kind (`individual`, `stage_result`, `adjudicated` or `release`, e.g. human annotations from another tool, or an Ontocurator release) refuses the whole import, and the refusal lists the affected units. To bring human annotations from another tool in for review, its converter delivers them as `tool_output` of that tool (with name and version). Reasons: T4b's release builder treats imported sets as `tool_output` when it collects imported origins (O3); and foreign human actor ids are not project pseudonyms (T1 F10).
+> **Open question Q33:** which annotation sets may an import carry? Default: an import may carry empty sets of any kind (they create documents only, O2) and non-empty sets of kind `tool_output` whose actors are all tools (I3). A non-empty set of any other kind (`individual`, `stage_result`, `adjudicated` or `release`, e.g. human annotations from another tool, or an Ontotator release) refuses the whole import, and the refusal lists the affected units. To bring human annotations from another tool in for review, its converter delivers them as `tool_output` of that tool (with name and version). Reasons: T4b's release builder treats imported sets as `tool_output` when it collects imported origins (O3); and foreign human actor ids are not project pseudonyms (T1 F10).
 
 **Modify** `exchange/uploads.py` (T3a's `read_t1_upload`; extend whichever file T3a gave it), the T3a error-code table, `tests/test_import_plan.py`, `tests/test_uploads_api.py`.
 
@@ -347,7 +347,7 @@ Ontocurator stays generic (U1): no names, defaults or formats of a particular pr
 
 ### Task 7: The producer block of import bundles (T7d; on `feat/t5-variants-review`)
 
-An import bundle may fill the manifest `release` block, typically `producer` (I7). Ontocurator shows and records it. It never acts on it: `supersedes` in an import bundle replaces nothing, because imported sets stay immutable and a newer set never replaces an older one (I3).
+An import bundle may fill the manifest `release` block, typically `producer` (I7). Ontotator shows and records it. It never acts on it: `supersedes` in an import bundle replaces nothing, because imported sets stay immutable and a newer set never replaces an older one (I3).
 
 **Modify** `exchange/uploads.py` (`IncomingUnit` gains `manifest_release: ontospan.ReleaseInfo | None`), `exchange/plan.py` (`ImportPlan.bundles: [{bundle_id, manifest_sha256, release_name, producer: {name, version} | null, supersedes: [{bundle_id, manifest_sha256}]}]`), `exchange/jobs.py` (audit), the T3b upload preview component (`frontend/src/admin/…UploadPreview…`; extend the file T3b created), `tests/test_import_plan.py`, `tests/test_uploads_api.py`, the T3b preview Vitest file.
 
@@ -387,11 +387,11 @@ An import bundle may fill the manifest `release` block, typically `producer` (I7
 
 Set up: `git worktree add .worktrees/t7-integration-contract -b feat/t7-integration-contract feat/t4b-adjudication-releases`, `uv sync`, `npm --prefix frontend ci`. Baseline: `scripts/check.sh`. Needs Part A merged on ontospan `main`.
 
-> **Open question Q38 (technical):** how does Ontocurator get the ontospan integration fixtures? Default: a vendored copy in `tests/fixtures/ontospan-integration/`, written by `scripts/sync_ontospan_fixtures.py`, with a `SOURCE.json` that records the ontospan version, the commit and the SHA-256 of every file. The wheel does not ship `conformance/`, and a copy is what I8 foresees for consumers.
+> **Open question Q38 (technical):** how does Ontotator get the ontospan integration fixtures? Default: a vendored copy in `tests/fixtures/ontospan-integration/`, written by `scripts/sync_ontospan_fixtures.py`, with a `SOURCE.json` that records the ontospan version, the commit and the SHA-256 of every file. The wheel does not ship `conformance/`, and a copy is what I8 foresees for consumers.
 
 **Re-pin:** `uv add "ontospan @ git+https://github.com/janpower/ontospan.git@<full 40-character merge hash>"` (index D-n pattern; `git -C ../ontospan rev-parse origin/main`). `uv run python -c "import ontospan; assert ontospan.__version__ == '1.2.0'"`.
 
-**Create** `scripts/sync_ontospan_fixtures.py [--src ../ontospan] [--check]` (it takes the pinned commit from `pyproject.toml`, so the checkout's current branch does not matter; it reads `conformance/integration/{import,release}/` with `git -C SRC ls-tree`/`git show <commit>:<path>`, writes the copies and `SOURCE.json`, and with `--check` it compares without writing), `tests/fixtures/ontospan-integration/` (generated), `tests/fixtures/ontospan_integration_profile.json` (a `TaskProfile` with layer `hpo`, ontology `hp` release `2026-06-23` and the `hpo-phenotype` axis values, pinned to `tests/fixtures/hp.json`), `tests/test_t7_contract.py`. **Modify** `.gitattributes` (`tests/fixtures/ontospan-integration/**/*.json text eol=lf`), `src/ontocurator/release/jobs.py`.
+**Create** `scripts/sync_ontospan_fixtures.py [--src ../ontospan] [--check]` (it takes the pinned commit from `pyproject.toml`, so the checkout's current branch does not matter; it reads `conformance/integration/{import,release}/` with `git -C SRC ls-tree`/`git show <commit>:<path>`, writes the copies and `SOURCE.json`, and with `--check` it compares without writing), `tests/fixtures/ontospan-integration/` (generated), `tests/fixtures/ontospan_integration_profile.json` (a `TaskProfile` with layer `hpo`, ontology `hp` release `2026-06-23` and the `hpo-phenotype` axis values, pinned to `tests/fixtures/hp.json`), `tests/test_t7_contract.py`. **Modify** `.gitattributes` (`tests/fixtures/ontospan-integration/**/*.json text eol=lf`), `src/ontotator/release/jobs.py`.
 
 **Release job (D-ag):** the read-back after `write_bundle` uses `ontospan.read_release(target, ontologies, report=…)` instead of `read_bundle`. A `FormatError` fails the job with `RELEASE_FORMAT: {"codes": [...], "issues": [...]}`, and no `releases` row is written. Add `RELEASE_FORMAT` to T4b's error-code table.
 
@@ -403,8 +403,8 @@ Set up: `git worktree add .worktrees/t7-integration-contract -b feat/t7-integrat
   - The proposal-set API returns tool name, version, model, run id and notes (I3).
   - The audit has `manifest_producer == {name: "example-tool", version: "2.0"}` (I7, Task 7).
 - `test_the_ontospan_release_bundle_is_refused_as_input`: `T1_SET_KIND` (Q33, Task 6).
-- `test_an_ontocurator_release_reads_with_the_shared_reader`: build a release with T4b's `tests/release_factory.py` and the release job. `ontospan.read_release` passes; `finals()` has one unit per selected document; every release annotation's `origins(set_kind="tool_output")` equals the imported origins in its `source_refs` (O3).
-- `test_an_ontocurator_release_validates_against_the_json_schemas_alone`: the same check as ontospan Task 4, on the release ZIP's entries, with schema files from `importlib.resources.files("ontospan") / "schema"`.
+- `test_an_ontotator_release_reads_with_the_shared_reader`: build a release with T4b's `tests/release_factory.py` and the release job. `ontospan.read_release` passes; `finals()` has one unit per selected document; every release annotation's `origins(set_kind="tool_output")` equals the imported origins in its `source_refs` (O3).
+- `test_an_ontotator_release_validates_against_the_json_schemas_alone`: the same check as ontospan Task 4, on the release ZIP's entries, with schema files from `importlib.resources.files("ontospan") / "schema"`.
 - `test_the_release_job_fails_on_a_shared_reader_error`: `build_release` is monkeypatched to emit a second `release` set for one document. The job fails with `RELEASE_FORMAT` naming `release_final_duplicate`, and the `releases` table is unchanged.
 
 **Steps:**
@@ -431,14 +431,14 @@ Set up: `git worktree add .worktrees/t7-integration-contract -b feat/t7-integrat
    - Canonical text is required; `ontospan.offsets` maps pre-existing offsets (I6).
    - The bundle must match the project: ontology pins, `allowed_roots`, `contiguous_mentions_only` and hidden axis values (O4).
    - Re-imports are idempotent; late sets and sets for finished documents behave as in O7 and Q34.
-   - Entry points: `ontocurator admin import` and the upload page. Every import is audited with the bundle id and the manifest SHA-256.
+   - Entry points: `ontotator admin import` and the upload page. Every import is audited with the bundle id and the manifest SHA-256.
 2. **Consuming releases:**
    - The bundle content (I5) and the `release` block (I7).
    - `ontospan.read_release`, or the JSON Schemas alone.
    - Lineage, pseudonyms and consent; variants; supersedes.
-   - How to get a release: the download, or `ontocurator admin export-release`.
+   - How to get a release: the download, or `ontotator admin export-release`.
    - How to verify it: the manifest hash in the release list and in the audit log.
-3. **What Ontocurator never does:** live APIs, webhooks, suggestions from external services (E5), and translation or LLM calls.
+3. **What Ontotator never does:** live APIs, webhooks, suggestions from external services (E5), and translation or LLM calls.
 
 **Round-trip script:** after the existing step 8 checks, add two steps:
 - "shared reader": `ontospan.read_release` passes on the downloaded release;
@@ -447,7 +447,7 @@ Set up: `git worktree add .worktrees/t7-integration-contract -b feat/t7-integrat
 Both print `PASS`/`FAIL` like the other steps.
 
 **Tests (`tests/test_integration_guide.py`):**
-- `test_the_integration_guide_names_existing_cli_commands`: every `ontocurator admin …` command in a code block of the guide runs `--help` with exit code 0 (`CliRunner`).
+- `test_the_integration_guide_names_existing_cli_commands`: every `ontotator admin …` command in a code block of the guide runs `--help` with exit code 0 (`CliRunner`).
 - `test_the_integration_guide_names_existing_error_codes`: every `T1_…`, `UPLOAD_…`, `VARIANT_…` and `RELEASE_…` code in the guide occurs in `src/`.
 
 **Final gate:**
@@ -458,9 +458,9 @@ Both print `PASS`/`FAIL` like the other steps.
 
 ---
 
-## Part C: Consumer repositories (not Ontocurator; Tasks 11–13)
+## Part C: Consumer repositories (not Ontotator; Tasks 11–13)
 
-These tasks change other repositories. The T7 spec leaves the adapters' behaviour to their owners (T7 appendix), so each task is planned in detail in its own repository before it starts. The work there starts only after the user confirms. Commands follow each repository's own conventions. Nothing here adds code, names or defaults to Ontocurator (U1).
+These tasks change other repositories. The T7 spec leaves the adapters' behaviour to their owners (T7 appendix), so each task is planned in detail in its own repository before it starts. The work there starts only after the user confirms. Commands follow each repository's own conventions. Nothing here adds code, names or defaults to Ontotator (U1).
 
 ### Task 11: Phentrieve reads releases as benchmark gold
 
@@ -478,13 +478,13 @@ These tasks change other repositories. The T7 spec leaves the adapters' behaviou
 
 ### Task 12: phentrieve-benchmark writes import bundles
 
-- **Scope:** a subpackage `phentrieve_benchmark.ontocurator`, with an `export` command that replaces `scripts/build_editor_packages.py` (E6; the v2 work package is gone).
+- **Scope:** a subpackage `phentrieve_benchmark.ontotator`, with an `export` command that replaces `scripts/build_editor_packages.py` (E6; the v2 work package is gone).
   - Documents and translations are written as units with empty sets and the format 1.1 variant fields.
   - LLM proposals become `tool_output` sets. The tool actor carries `name`, `version`, `model` and `run_id`, and the run provenance goes into `provenance.notes`.
   - Offsets are mapped with `ontospan.offsets`, because the benchmark keeps a leading BOM that ontospan strips. Spans that cannot be mapped are reported, never snapped.
   - The manifest `release.producer` names the benchmark.
 - **Dependency:** `ontospan` through the local overlay pattern the script uses today (`uv run --with ../ontospan`), since the package is private (I8).
-- **Acceptance:** for every written bundle, `ontospan.read_bundle` with the project's ontology passes, and `ontocurator admin import` on the dev stack imports it. The import's `T1_*` and `PIN_MISMATCH` lists are empty.
+- **Acceptance:** for every written bundle, `ontospan.read_bundle` with the project's ontology passes, and `ontotator admin import` on the dev stack imports it. The import's `T1_*` and `PIN_MISMATCH` lists are empty.
 
 ### Task 13: phentrieve-benchmark reads releases
 
@@ -511,14 +511,14 @@ These tasks change other repositories. The T7 spec leaves the adapters' behaviou
 | I8: ontospan private; schemas and fixtures as the contract | 4, 5, 9 (Q38), 11 (Q40) |
 | I9: hash-linked chain from producer to consumer | T2d, T4b; here 7, 9, 13 |
 | I10 ontospan tests: offsets cases, release block schema tests, `conformance/integration/` | 1, 2, 4 (release block schema tests exist since 1.1) |
-| I10 Ontocurator tests and `scripts/check_integration_roundtrip.py` | T3a, T5, T4a, T4b Task 14; here 9, 10 |
+| I10 Ontotator tests and `scripts/check_integration_roundtrip.py` | T3a, T5, T4a, T4b Task 14; here 9, 10 |
 | Appendix: consumer notes | 11, 12, 13 |
 
 ## Open questions
 
 Each is marked in its task as `> **Open question Qn:**` with the default the task implements.
 
-**User flow and domain (Ontocurator):**
+**User flow and domain (Ontotator):**
 
 | # | Question | Proposed default | Task |
 |---|---|---|---|
@@ -532,10 +532,10 @@ Each is marked in its task as `> **Open question Qn:**` with the default the tas
 |---|---|---|---|
 | Q36 | ontospan package version for the additions | `1.2.0`; `SCHEMA_VERSION` stays `1.1.0` | 5 |
 | Q37 | A public release reader in ontospan, or a README recipe only? | Public `ontospan.release` (`read_release`, `check_lineage`, `ReleaseView`) | 3 |
-| Q38 | How Ontocurator gets the integration fixtures | A vendored copy with `SOURCE.json` hashes and a sync script with `--check` | 9 |
+| Q38 | How Ontotator gets the integration fixtures | A vendored copy with `SOURCE.json` hashes and a sync script with `--check` | 9 |
 | Q39 | Which offsets inside a run are refused: only inside runs whose length changed (I6 wording), or inside any changed run? | Any changed run, which also covers equal-length reorderings of combining marks. The quoted text then always matches exactly; no realistic span ends inside such a run. | 1, 2 |
 
-**For the consumer repositories (not Ontocurator; decided when Part C starts):**
+**For the consumer repositories (not Ontotator; decided when Part C starts):**
 
 | # | Question | Proposed default | Task |
 |---|---|---|---|
@@ -548,12 +548,12 @@ Each is marked in its task as `> **Open question Qn:**` with the default the tas
 - **I6 scope:** a public `ontospan.release` reader is added beyond the offset helper (Q37). The format and the schemas are unchanged.
 - **I10 fixtures:** `conformance/integration/` also holds `offsets.json`, so converters in other languages can test the mapping.
 - **T3 A1 / I1 ("contained annotation sets become proposals"):** narrowed to `tool_output` sets (Q33).
-- **I10, Ontocurator import tests:** most are already in T2d–T4b. This plan adds the contract tests against the ontospan fixtures (Task 9) instead of repeating them.
+- **I10, Ontotator import tests:** most are already in T2d–T4b. This plan adds the contract tests against the ontospan fixtures (Task 9) instead of repeating them.
 
 ## Risks
 
 - **Unicode edge cases (Tasks 1–2):** the run rule is subtle around Hangul and combining marks. The two exhaustive tests and the `offset_map_inconsistent` guard catch mistakes in the rule, not in the callers.
 - **ontospan merge gate:** Task 9 and Part C wait for the user to merge the ontospan PR.
-- **Fixture drift:** the vendored copy in Ontocurator can fall behind ontospan. `SOURCE.json` ties it to the pinned version, and `sync_ontospan_fixtures.py --check` is part of the re-pin step.
+- **Fixture drift:** the vendored copy in Ontotator can fall behind ontospan. `SOURCE.json` ties it to the pinned version, and `sync_ontospan_fixtures.py --check` is part of the re-pin step.
 - **Tasks on other branches (6–8):** they can be forgotten when T3a, T5 and T4a run. Task 9 fails if Task 6 is missing (`test_the_ontospan_release_bundle_is_refused_as_input`) or Task 7 is missing (producer audit). Task 8 has no such guard, so the coordinator adds it to the T4a task list.
 - **Public consumer of a private format (Task 11):** copies in Phentrieve make the 1.1 schemas public before I8's publication decision (Q40).

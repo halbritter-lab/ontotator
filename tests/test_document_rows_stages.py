@@ -21,11 +21,11 @@ from tests_support_reviews import insert_review
 from work_plan_support import assign, doc, plan_env, select_final, submit, write
 from work_plan_support import service as plan_service
 
-from ontocurator.application.document_rows import RowQuery
-from ontocurator.domain.work_plans import PlanFlags, RowKey
-from ontocurator.storage import work_plan_store
-from ontocurator.storage.plan_tables import WorkPlanFlagsRow
-from ontocurator.storage.tables import (
+from ontotator.application.document_rows import RowQuery
+from ontotator.domain.work_plans import PlanFlags, RowKey
+from ontotator.storage import work_plan_store
+from ontotator.storage.plan_tables import WorkPlanFlagsRow
+from ontotator.storage.tables import (
     AssignmentRow,
     DocumentRow,
     ProjectRow,
@@ -122,10 +122,10 @@ def undecide(env: Any, *keys: tuple[str, str], import_plan: str = "nothing") -> 
 
 def correct(env: Any, document_id: str, username: str, reason: str) -> Any:
     """A re-review with a reason (correction request, D26)."""
-    from ontocurator.application.translation_workflow import (
+    from ontotator.application.translation_workflow import (
         TranslationWorkflowService,
     )
-    from ontocurator.auth.audit import Actor
+    from ontotator.auth.audit import Actor
 
     lead = env.app.state.accounts.get_by_username("leader")
     variant = env.app.state.repo.get_variant("proj", document_id)
@@ -342,7 +342,7 @@ def test_accepted_in_package_and_outside(env):
                 env.pid,
                 doc(case, "de"),
                 source=source,
-                reason="Reviewed outside Ontocurator",
+                reason="Reviewed outside Ontotator",
                 accepted_by=lead.id,
             )
     for case in ("c1", "c2"):
@@ -412,9 +412,9 @@ def test_parallel_roots_name_the_rejected_root(env, tmp_path):
 def submit_with_findings(env: Any, assignment_id: int, sid: str, count: int) -> None:
     """``submit`` with ``count`` snapshots in the stored payload (submissions
     are append-only, so the row is written once with them)."""
-    from ontocurator.domain.review import ReviewTargetSet
-    from ontocurator.domain.workspace import Submission, WorkspaceKey
-    from ontocurator.storage.repository import _key_str, _submission_payload
+    from ontotator.domain.review import ReviewTargetSet
+    from ontotator.domain.workspace import Submission, WorkspaceKey
+    from ontotator.storage.repository import _key_str, _submission_payload
 
     with env.db.transaction() as conn:
         row = conn.execute(

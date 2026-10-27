@@ -18,7 +18,7 @@ export interface UploadWorkPlanProps {
   workPlan: WorkPlan;
   /** Project rule "annotate accepted translations only"; the acceptance is asked only while it is on. */
   ruleOn?: boolean;
-  /** The caller may accept translations as reviewed outside Ontocurator (lead). */
+  /** The caller may accept translations as reviewed outside Ontotator (lead). */
   canAccept?: boolean;
   /** "{case_id}:{language}" rows accepted by an "Accept without review" override in this upload. */
   acceptedRows?: ReadonlySet<string>;
@@ -72,7 +72,7 @@ export function UploadWorkPlan({ workPlan, ruleOn = true, canAccept = false, acc
   }, [workPlan, languageChoices, caseChoices, ruleOn, acceptedRows]);
   const acceptLanguages = [...needs.keys()].filter(language => canAccept && accept[language]).sort();
   const unresolved = [...needs.keys()].sort().find(language => !(canAccept && accept[language] && reason.trim()));
-  const blockedReason = unresolved ? `Work plan, ${unresolved}: accept the translations as reviewed outside Ontocurator with a reason, or turn Review on.` : null;
+  const blockedReason = unresolved ? `Work plan, ${unresolved}: accept the translations as reviewed outside Ontotator with a reason, or turn Review on.` : null;
 
   const plan: CommitUploadPlan = useMemo(() => ({
     plan_languages: Object.fromEntries(Object.entries(languageChoices).filter(([key, flags]) => {
@@ -125,7 +125,7 @@ export function UploadWorkPlan({ workPlan, ruleOn = true, canAccept = false, acc
       const language = workPlan.languages.find(item => item.key === languageKey);
       return <div key={languageKey} className="work-plan-acceptance" role="group" aria-label={`Acceptance, ${languageKey}`}>
         <p className="work-plan-acceptance-title">{languageKey}: {count} of {language?.rows ?? count} translations are not marked as reviewed in the package. Annotation needs an accepted translation.</p>
-        {canAccept ? <Checkbox id={`${ids}-accept-${languageKey}`} label="These translations were reviewed outside Ontocurator — accept them as they are" checked={!!accept[languageKey]} disabled={disabled} onChange={event => setAccept(current => ({ ...current, [languageKey]: event.target.checked }))} />
+        {canAccept ? <Checkbox id={`${ids}-accept-${languageKey}`} label="These translations were reviewed outside Ontotator — accept them as they are" checked={!!accept[languageKey]} disabled={disabled} onChange={event => setAccept(current => ({ ...current, [languageKey]: event.target.checked }))} />
           : <p>Turn translation review on for {languageKey}, or ask a project lead to accept them.</p>}
         {!!language?.marked_in_package && <p className="field-hint">{language.marked_in_package} already marked as reviewed in the package metadata need nothing.</p>}
         {canAccept && <p className="field-hint">The acceptance is recorded with your name, the reason and the time.</p>}

@@ -7,12 +7,12 @@ from test_reanchor_resolutions import from_proposals
 from test_review_findings import HP_PATH, _app
 from test_reviews import _setup_review_test_env
 
-from ontocurator.application.workspaces import WorkspaceService
-from ontocurator.assignments.service import AssignmentService
-from ontocurator.domain.annotations import AnnotationRef
-from ontocurator.domain.review import ReviewTargetSet
-from ontocurator.domain.workspace import WorkspaceKey
-from ontocurator.storage.tables import ProjectMembershipRow
+from ontotator.application.workspaces import WorkspaceService
+from ontotator.assignments.service import AssignmentService
+from ontotator.domain.annotations import AnnotationRef
+from ontotator.domain.review import ReviewTargetSet
+from ontotator.domain.workspace import WorkspaceKey
+from ontotator.storage.tables import ProjectMembershipRow
 
 PROJECT = "pkg-rev-1"
 # Ported from review (D1); the assignment opens in proposal_check only once P3

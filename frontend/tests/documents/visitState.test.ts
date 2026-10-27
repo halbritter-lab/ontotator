@@ -20,9 +20,9 @@ describe("visit state", () => {
     expect(retainedKeys("p", FILTER)).toEqual(["case-1:en"]);
     expect(retainedKeys("p", OTHER)).toEqual([]);
     expect(retainedKeys("q", FILTER)).toEqual([]);
-    const stored = JSON.parse(sessionStorage.getItem(`ontocurator:documents-visit:p:${FILTER}`)!);
+    const stored = JSON.parse(sessionStorage.getItem(`ontotator:documents-visit:p:${FILTER}`)!);
     expect(stored.shown["case-1:en"]).toEqual({ categories: ["report-or-pause"], work: [{ assignment_id: 7, held: true }], final: null, reports: [] });
-    expect(visitStorageKey("p", FILTER)).toBe(`ontocurator:documents-visit:p:${FILTER}`);
+    expect(visitStorageKey("p", FILTER)).toBe(`ontotator:documents-visit:p:${FILTER}`);
   });
 
   it("keeps the snapshot from when a row last matched", () => {

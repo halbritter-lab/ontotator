@@ -24,23 +24,23 @@ from test_review_export_serialization import record, variants
 from test_translation_review_service import review_env as review_env
 from test_translation_review_service import save
 
-from ontocurator.application.final_results import FinalResultService
-from ontocurator.application.translation_workflow import TranslationWorkflowService
-from ontocurator.auth.audit import Actor
-from ontocurator.domain.errors import DomainError
-from ontocurator.domain.guidelines import guideline_ref
-from ontocurator.domain.review import ReviewTargetSet
-from ontocurator.domain.workspace import Submission, WorkspaceKey
-from ontocurator.exchange.final_export_guide import (
+from ontotator.application.final_results import FinalResultService
+from ontotator.application.translation_workflow import TranslationWorkflowService
+from ontotator.auth.audit import Actor
+from ontotator.domain.errors import DomainError
+from ontotator.domain.guidelines import guideline_ref
+from ontotator.domain.review import ReviewTargetSet
+from ontotator.domain.workspace import Submission, WorkspaceKey
+from ontotator.exchange.final_export_guide import (
     INDEX_COLUMNS,
     build_index_csv,
     build_readme,
 )
-from ontocurator.exchange.review_export import serialize_review_export
-from ontocurator.storage.final_tables import ExportSelectionSnapshotRow
-from ontocurator.storage.guidelines import guideline_facts
-from ontocurator.storage.repository import _key_str
-from ontocurator.storage.tables import ProjectRow
+from ontotator.exchange.review_export import serialize_review_export
+from ontotator.storage.final_tables import ExportSelectionSnapshotRow
+from ontotator.storage.guidelines import guideline_facts
+from ontotator.storage.repository import _key_str
+from ontotator.storage.tables import ProjectRow
 
 FIRST = "GUIDE-BODY-FIRST: mark every finding."
 SECOND = "GUIDE-BODY-SECOND: mark only certain findings."
@@ -132,8 +132,8 @@ def test_t1_annotation_sets_carry_their_own_reference(case_env) -> None:
     first, second = _ref(case_env, 1), _ref(case_env, 2)
     assert content.guideline_refs == {"under-v1": first, "under-v2": second}
     assert first != second
-    assert first.startswith("urn:ontocurator:proj:guidelines:v1#sha256=")
-    assert second.startswith("urn:ontocurator:proj:guidelines:v2#sha256=")
+    assert first.startswith("urn:ontotator:proj:guidelines:v1#sha256=")
+    assert second.startswith("urn:ontotator:proj:guidelines:v2#sha256=")
 
     sets = _t1_export(case_env)
     assert sets["under-v1"]["guideline_ref"] == first
@@ -369,7 +369,7 @@ def test_translation_review_export_rows_carry_guideline_fields(exported_env) -> 
     guidelines.withdraw(1)
     result = run(env, queued(env))
     row = json.loads(env.db.blobs.get(result.result["sha256"]))
-    assert row["format"] == "ontocurator-translation-review/v1"
+    assert row["format"] == "ontotator-translation-review/v1"
     assert list(row)[-3:] == [
         "guideline_version",
         "guideline_ref",

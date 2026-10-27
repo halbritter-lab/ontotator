@@ -18,8 +18,8 @@ from work_plan_support import (
     write,
 )
 
-from ontocurator.domain.work_plans import PlanFlags, RowKey
-from ontocurator.storage.tables import AssignmentRow, DocumentRow
+from ontotator.domain.work_plans import PlanFlags, RowKey
+from ontotator.storage.tables import AssignmentRow, DocumentRow
 
 BOTH = PlanFlags(True, True)
 REVIEW = PlanFlags(True, False)

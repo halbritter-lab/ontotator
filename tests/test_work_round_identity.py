@@ -3,8 +3,8 @@
 import pytest
 from pydantic import ValidationError
 
-from ontocurator.domain.workspace import WorkspaceKey
-from ontocurator.storage.repository import _key_str, _workspace_aliases
+from ontotator.domain.workspace import WorkspaceKey
+from ontotator.storage.repository import _key_str, _workspace_aliases
 
 
 def legacy_key():
@@ -28,7 +28,7 @@ def test_v3_round_key_never_aliases_other_round_or_legacy_targets():
     first = WorkspaceKey.model_validate(
         legacy_key()
         | {
-            "format_version": "ontocurator-workspace-key/v3",
+            "format_version": "ontotator-workspace-key/v3",
             "round_id": "r1",
         }
     )
@@ -45,8 +45,8 @@ def test_v3_round_key_never_aliases_other_round_or_legacy_targets():
     "extra",
     [
         {"round_id": "r1"},
-        {"format_version": "ontocurator-workspace-key/v3"},
-        {"format_version": "ontocurator-workspace-key/v3", "round_id": ""},
+        {"format_version": "ontotator-workspace-key/v3"},
+        {"format_version": "ontotator-workspace-key/v3", "round_id": ""},
     ],
 )
 def test_partial_or_empty_round_identity_is_rejected(extra):

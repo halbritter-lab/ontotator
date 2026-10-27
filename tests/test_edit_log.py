@@ -13,12 +13,12 @@ from pg_harness import database_url_for
 from sqlalchemy import select, text
 from sqlalchemy.exc import DBAPIError
 
-from ontocurator.api.app import create_app
-from ontocurator.api.routes import decode_workspace_id
-from ontocurator.config import AppConfig
-from ontocurator.domain.documents import OntologyRef
-from ontocurator.storage.repository import DraftState
-from ontocurator.storage.tables import SCHEMA, SessionRow, SubmissionRow
+from ontotator.api.app import create_app
+from ontotator.api.routes import decode_workspace_id
+from ontotator.config import AppConfig
+from ontotator.domain.documents import OntologyRef
+from ontotator.storage.repository import DraftState
+from ontotator.storage.tables import SCHEMA, SessionRow, SubmissionRow
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "hp.json"
 PROJECT = "pkg-scenario-a"

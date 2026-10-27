@@ -31,14 +31,14 @@ def prepare_inputs(
 ) -> dict[str, Any]:
     import ontospan
 
-    from ontocurator.domain.profiles import TaskProfile
-    from ontocurator.ontology.translations import apply_translations, translation_counts
-    from ontocurator.vendor.hpo_span_annotator.hpo import load
+    from ontotator.domain.profiles import TaskProfile
+    from ontotator.ontology.translations import apply_translations, translation_counts
+    from ontotator.vendor.hpo_span_annotator.hpo import load
 
     if output.exists():
         raise ValueError("Output exists; choose a new candidate input directory")
     specification = json.loads(source_manifest.read_text(encoding="utf-8"))
-    if specification.get("schema") != "ontocurator-full-hpo-sources/v1":
+    if specification.get("schema") != "ontotator-full-hpo-sources/v1":
         raise ValueError("A separate pinned full-HPO source manifest is required")
     resources = [specification["ontology"], *specification["translations"]]
     names = set()

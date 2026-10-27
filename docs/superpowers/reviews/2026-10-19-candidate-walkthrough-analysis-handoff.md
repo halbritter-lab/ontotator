@@ -37,7 +37,7 @@ Zuletzt wurde der leere Neustart angeleitet: zuerst eine neue Testmeldung als de
 
 F42: ausdrücklich eine Tabelle mit aufklappbaren Children, letzter Änderung mit Datum/Uhrzeit, Versionsstatus, Öffnen-Link/Button sowie verständlichen Status-/Fehlersymbolen. Die Bedeutung der letzten Änderung pro Zeilentyp klären; Symbole mit zugänglichen Beschriftungen versehen.
 
-F43: Der Benutzer findet die aktuelle Meldung als Lead nicht. Tatsächlicher Einstieg ist **Progress → Final results and open issues**, nicht eine separate Dashboard-Seite. Dort werden offene Meldungen nur als “An open problem report needs a lead decision.” / “Review issue” angezeigt, ohne Beschreibung der konkreten Meldung. Mehrere Meldungen desselben Falls sind so kaum unterscheidbar. Die frühere Wegbeschreibung des Assistenten war ungenau. Quellstellen: `frontend/src/admin/ProgressPage.tsx`, `ProjectDashboardPage.tsx`, Warnungsprojektion in `src/ontocurator/storage/repository.py`. Aktuelle Meldungs-ID per gezieltem Read-only-Lookup bestätigt: `report-d9331b626756409ba3b803403ef88e44`. Direkter Lead-Link: <http://127.0.0.1:18190/#/projects/t5-acceptance/problem-reports/report-d9331b626756409ba3b803403ef88e44>. Keine Aktion an der Meldung vorgenommen.
+F43: Der Benutzer findet die aktuelle Meldung als Lead nicht. Tatsächlicher Einstieg ist **Progress → Final results and open issues**, nicht eine separate Dashboard-Seite. Dort werden offene Meldungen nur als “An open problem report needs a lead decision.” / “Review issue” angezeigt, ohne Beschreibung der konkreten Meldung. Mehrere Meldungen desselben Falls sind so kaum unterscheidbar. Die frühere Wegbeschreibung des Assistenten war ungenau. Quellstellen: `frontend/src/admin/ProgressPage.tsx`, `ProjectDashboardPage.tsx`, Warnungsprojektion in `src/ontotator/storage/repository.py`. Aktuelle Meldungs-ID per gezieltem Read-only-Lookup bestätigt: `report-d9331b626756409ba3b803403ef88e44`. Direkter Lead-Link: <http://127.0.0.1:18190/#/projects/t5-acceptance/problem-reports/report-d9331b626756409ba3b803403ef88e44>. Keine Aktion an der Meldung vorgenommen.
 
 ## Bestätigte Abläufe und aktueller Arbeitsstand
 
@@ -54,7 +54,7 @@ Der Rundgang steht jetzt beim angeleiteten Wechsel zur Projektleitung. Projektau
 - `frontend/src/tasks/RoundInputPanel.tsx`, `frontend/src/app/CaseScreen.tsx`: doppelte Übernahme-/Befunddarstellung und Abgabesperre.
 - `frontend/src/tasks/RoundInputEvidenceDialog.tsx`, `frontend/src/ui/Dialog.tsx`: Originalbefund und vorhandener fester Dialog-Footer.
 - `frontend/src/tasks/TaskProblemActions.tsx`, `ProblemReportForm.tsx`, `ReportHistory.tsx`, `ProblemReportDetail.tsx`: Meldungseinstiege, Texte, Eingabe, Aktualisieren, Fortsetzen und Lead-Aktionen.
-- `src/ontocurator/application/problem_reports.py`: Berechtigungen, Pause, Ereignisse und Report-View.
+- `src/ontotator/application/problem_reports.py`: Berechtigungen, Pause, Ereignisse und Report-View.
 - Für F40–F42 zunächst die konkreten My-tasks-/Shell-Selektoren und Dokumentlisten-Komponenten lokalisieren. Noch keine Ursache als bestätigt ausgeben.
 - [Implementierungsübergabe](2026-10-19-acceptance-implementation-handoff.md), [UX-Synthese F01–F33](2026-10-19-acceptance-ux-review.md), [Workflow-Verträge](../specs/2026-10-18-acceptance-workflow-contracts.md), [ursprünglicher Plan](../plans/2026-10-18-acceptance-remediation.md).
 

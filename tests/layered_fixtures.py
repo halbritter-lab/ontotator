@@ -2,21 +2,21 @@ import hashlib
 from pathlib import Path
 from typing import Literal
 
-from ontocurator.domain.annotations import (
+from ontotator.domain.annotations import (
     ActorRef,
     Annotation,
     AnnotationSnapshot,
     Provenance,
     snapshot,
 )
-from ontocurator.domain.documents import (
+from ontotator.domain.documents import (
     Document,
     EvidenceMention,
     EvidenceRef,
     EvidenceSnapshot,
     Segment,
 )
-from ontocurator.domain.profiles import (
+from ontotator.domain.profiles import (
     AnnotationTypeDefinition,
     AxisDefinition,
     LayerDefinition,
@@ -24,7 +24,7 @@ from ontocurator.domain.profiles import (
     TaskProfile,
     profile_hash,
 )
-from ontocurator.packages.models import PackageManifest, ValidatedPackage
+from ontotator.packages.models import PackageManifest, ValidatedPackage
 
 FIXTURES = Path(__file__).parent / "fixtures"
 HP_DIGEST = hashlib.sha256((FIXTURES / "hp.json").read_bytes()).hexdigest()
@@ -110,7 +110,7 @@ def make_layered_package(
 
         manifest = PackageManifest(
             package_id="pkg-scenario-a",
-            format_version="ontocurator-work-package/v2",
+            format_version="ontotator-work-package/v2",
             document_order=document_order,
             task_profile=profile,
             task_profile_sha256=profile_hash(profile),
@@ -238,7 +238,7 @@ def make_layered_package(
 
         manifest = PackageManifest(
             package_id="pkg-scenario-b",
-            format_version="ontocurator-work-package/v2",
+            format_version="ontotator-work-package/v2",
             document_order=document_order,
             task_profile=profile,
             task_profile_sha256=profile_hash(profile),
@@ -325,7 +325,7 @@ def make_layered_package(
 
         manifest = PackageManifest(
             package_id="pkg-scenario-c",
-            format_version="ontocurator-work-package/v2",
+            format_version="ontotator-work-package/v2",
             document_order=document_order,
             task_profile=profile,
             task_profile_sha256=profile_hash(profile),

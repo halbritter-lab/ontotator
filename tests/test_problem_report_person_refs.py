@@ -5,7 +5,7 @@ import json
 from problem_report_team import act, report
 from sqlalchemy import update
 
-from ontocurator.storage.tables import UserRow
+from ontotator.storage.tables import UserRow
 
 pytest_plugins = ("test_assignment_round_open_api", "problem_report_team")
 

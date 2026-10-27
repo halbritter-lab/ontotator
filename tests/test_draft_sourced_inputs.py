@@ -36,10 +36,10 @@ from test_text_change_service import (
     _submitted,
 )
 
-from ontocurator.api.app import create_app
-from ontocurator.config import AppConfig
-from ontocurator.storage.overview_tables import DraftSnapshotRow
-from ontocurator.storage.tables import JobRow
+from ontotator.api.app import create_app
+from ontotator.config import AppConfig
+from ontotator.storage.overview_tables import DraftSnapshotRow
+from ontotator.storage.tables import JobRow
 
 
 @pytest.fixture
@@ -74,9 +74,9 @@ def _snapshot_id(env: Env) -> int:
 
 def _finish(env: Env, name: str, round_view: Any) -> str:
     """Resolve every input of ``round_view`` as ``name`` and submit the round."""
-    from ontocurator.application.submissions import SubmissionService
-    from ontocurator.application.work_rounds import RoundInputResolutionService
-    from ontocurator.domain.workspace import MutationEnvelope
+    from ontotator.application.submissions import SubmissionService
+    from ontotator.application.work_rounds import RoundInputResolutionService
+    from ontotator.domain.workspace import MutationEnvelope
 
     key = round_view.workspace_key
     scoped = _scoped(env, name)
@@ -124,7 +124,7 @@ def _moved(env: Env) -> dict[str, Any]:
 
 
 def _final_export(env: Env, request_id: str) -> zipfile.ZipFile:
-    from ontocurator.application.final_results import FinalResultService
+    from ontotator.application.final_results import FinalResultService
 
     access, actor = env.lead()
     service = FinalResultService(env.db, actor, access)
@@ -167,7 +167,7 @@ def _units(archive: zipfile.ZipFile, name: str) -> list[dict[str, Any]]:
 
 
 def test_text_change_round_reads_like_carry_forward(env):
-    from ontocurator.application.round_reads import enrich_inputs, enrich_rounds
+    from ontotator.application.round_reads import enrich_inputs, enrich_rounds
 
     moved = _moved(env)
     round_view = moved["round"]
@@ -199,8 +199,8 @@ def test_text_change_round_reads_like_carry_forward(env):
 
 
 def test_handover_round_submission_kind_is_carry_forward(env):
-    from ontocurator.domain.submission_labels import submission_kind
-    from ontocurator.exchange import final_export_guide
+    from ontotator.domain.submission_labels import submission_kind
+    from ontotator.exchange import final_export_guide
 
     work = _submitted(env)
     result = _carry(env, work["submission_id"], mode="other", username=env.user("ana"))
@@ -269,7 +269,7 @@ def test_visibility_of_draft_inputs(env, client):
 
 
 def test_final_causes_treat_new_kinds_as_carry(env):
-    from ontocurator.application.final_results import FinalResultService
+    from ontotator.application.final_results import FinalResultService
 
     ana = _submitted(env, "ana")
     select(env.scenario, env.docs[0], ana["submission_id"])
@@ -286,12 +286,12 @@ def test_final_causes_treat_new_kinds_as_carry(env):
 
 
 def test_human_inputs_skip_draft_sources(env):
-    from ontocurator.exchange.human_inputs import human_input_closure
+    from ontotator.exchange.human_inputs import human_input_closure
 
     moved = _moved(env)
     sid = _finish(env, "tom", moved["round"])
     access, actor = env.lead()
-    from ontocurator.authz.scoped import ScopedRepository
+    from ontotator.authz.scoped import ScopedRepository
 
     closure, inputs, kinds = human_input_closure(
         ScopedRepository(env.db, access, actor), env.key, [sid]
@@ -368,9 +368,9 @@ def test_package_export_keeps_draft_sourced_rounds(env):
 def test_t1_export_names_draft_sources_by_draft_ref(env, monkeypatch):
     """The individual T1 export over a text-change submission: every
     draft-sourced input is exported under ``draft_input_ref``."""
-    from ontocurator.exchange import jobs
-    from ontocurator.exchange.jobs import HANDLERS, draft_input_ref
-    from ontocurator.jobs.queue import JobQueue
+    from ontotator.exchange import jobs
+    from ontotator.exchange.jobs import HANDLERS, draft_input_ref
+    from ontotator.jobs.queue import JobQueue
 
     moved = _moved(env)
     sid = _finish(env, "tom", moved["round"])
@@ -414,8 +414,8 @@ def test_package_round_trip_keeps_draft_inputs_without_local_lookup(
     draft snapshot ids are not looked up in the importing database."""
     from pg_harness import database_for
 
-    from ontocurator.application import round_reads
-    from ontocurator.storage.repository import Repository
+    from ontotator.application import round_reads
+    from ontotator.storage.repository import Repository
 
     moved = _moved(env)
     _finish(env, "tom", moved["round"])

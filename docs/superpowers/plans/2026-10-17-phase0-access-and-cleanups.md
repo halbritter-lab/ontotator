@@ -59,8 +59,8 @@ P0-A gates only own-history decisions and their dependent assertions. The decide
 
 Follow `2026-10-17-phase0-priorities.md`: B0.1, then B0.2 Task 1, then this plan's access Tasks 1–2, followed by D3/D2 and re-anchor correctness work; this plan's cosmetic Tasks 3–4 follow at P0.7. Preserve B0.1's `editing` prop and reading-only coupling gate. Rebase shared CaseScreen/ReviewActions/ComparePane edits in that order; do not run separate agents on these files concurrently. Implementation of decided functions is already authorized; do not ask again for routine execution.
 
-- Modify `src/ontocurator/authz/policy.py`, `visibility.py`, `versions.py`, `scoped.py`: browsing permission, bounded assigned text projection and exact version guards.
-- Inspect/modify `src/ontocurator/api/variant_routes.py` only where route-level responses need the policy; preserve existing contracts and task-scoped authorization.
+- Modify `src/ontotator/authz/policy.py`, `visibility.py`, `versions.py`, `scoped.py`: browsing permission, bounded assigned text projection and exact version guards.
+- Inspect/modify `src/ontotator/api/variant_routes.py` only where route-level responses need the policy; preserve existing contracts and task-scoped authorization.
 - Test `tests/test_case_api.py`, `tests/test_annotation_versions.py`, `tests/test_visibility.py`, `tests/test_translation_review_task.py`, `tests/test_translation_review_context.py`.
 - Create `frontend/src/variants/useVersionAccess.ts`; modify `tasks/TaskEditor.tsx`, `app/CaseScreen.tsx`, `variants/CaseViewer.tsx`, `variants/useCaseVersions.ts` for capability-gated fetching/rendering.
 - Modify `frontend/src/editor/ReviewActions.tsx`, `editor/SearchLanguageButton.tsx`, `admin/ProgressPage.tsx`, `admin/HiddenAxisValuesField.tsx`, `styles/screens/editor.css` for cleanups.

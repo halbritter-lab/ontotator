@@ -4,11 +4,11 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
-from ontocurator.domain.profile_templates import PROFILE_TEMPLATES
-from ontocurator.domain.profiles import TaskProfile
-from ontocurator.exchange.t1 import Pin, check_t1_profile
-from ontocurator.ontology.store import OntologyFile
-from ontocurator.projects.service import clinical_creation_defaults
+from ontotator.domain.profile_templates import PROFILE_TEMPLATES
+from ontotator.domain.profiles import TaskProfile
+from ontotator.exchange.t1 import Pin, check_t1_profile
+from ontotator.ontology.store import OntologyFile
+from ontotator.projects.service import clinical_creation_defaults
 
 EXPERIENCER = ["patient", "family_member", "other"]
 T5_PROFILE = Path(__file__).parents[1] / "examples" / "t5-acceptance" / "profile.json"

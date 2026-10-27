@@ -8,14 +8,14 @@ from pg_harness import database_for, owner_engine, unmigrated_database_url
 from sqlalchemy import create_engine, delete, event, insert, select, text, update
 from sqlalchemy.exc import DBAPIError, IntegrityError
 
-from ontocurator.authz.policy import Access
-from ontocurator.authz.scoped import ScopedRepository
-from ontocurator.domain.documents import Document
-from ontocurator.domain.errors import DomainError
-from ontocurator.exchange.t1 import ImportedDocument
-from ontocurator.storage.repository import Repository
-from ontocurator.storage.schema import upgrade
-from ontocurator.storage.tables import (
+from ontotator.authz.policy import Access
+from ontotator.authz.scoped import ScopedRepository
+from ontotator.domain.documents import Document
+from ontotator.domain.errors import DomainError
+from ontotator.exchange.t1 import ImportedDocument
+from ontotator.storage.repository import Repository
+from ontotator.storage.schema import upgrade
+from ontotator.storage.tables import (
     AssignmentRow,
     DocumentRow,
     ProjectMembershipRow,
@@ -113,7 +113,7 @@ def _review(pid, uid, aid):
         proposed_text_sha256="a" * 64,
         status_before="ready_for_review",
         status_after="accepted",
-        review_policy="ontocurator-translation-review/v1",
+        review_policy="ontotator-translation-review/v1",
     )
 
 
@@ -125,28 +125,28 @@ def test_existing_documents_become_native_variants(tmp_path: Path):
         with engine.begin() as conn:
             pid = conn.execute(
                 text(
-                    "INSERT INTO ontocurator.projects (project_key,name,manifest,manifest_sha256,task_profile,task_profile_sha256) VALUES ('p','P','{}','m','{}','t') RETURNING id"
+                    "INSERT INTO ontotator.projects (project_key,name,manifest,manifest_sha256,task_profile,task_profile_sha256) VALUES ('p','P','{}','m','{}','t') RETURNING id"
                 )
             ).scalar_one()
             conn.execute(
                 text(
-                    "INSERT INTO ontocurator.documents (project_id,document_id,language,text,text_sha256,source_text_sha256,position) VALUES (:p,'old','en','Text','sha','raw',23)"
+                    "INSERT INTO ontotator.documents (project_id,document_id,language,text,text_sha256,source_text_sha256,position) VALUES (:p,'old','en','Text','sha','raw',23)"
                 ),
                 {"p": pid},
             )
             uid = conn.execute(
                 text(
-                    "INSERT INTO ontocurator.users (username,display_name,pseudonym) VALUES ('reader','Reader','reader') RETURNING id"
+                    "INSERT INTO ontotator.users (username,display_name,pseudonym) VALUES ('reader','Reader','reader') RETURNING id"
                 )
             ).scalar_one()
             conn.execute(
                 text(
-                    "INSERT INTO ontocurator.stored_files (sha256,size) VALUES ('blob',1)"
+                    "INSERT INTO ontotator.stored_files (sha256,size) VALUES ('blob',1)"
                 )
             )
             conn.execute(
                 text(
-                    "INSERT INTO ontocurator.proposal_sets (project_id,document_id,annotation_set_id,set_kind,actors,payload,source_sha256) VALUES (:p,'old','set','tool_output','[]','{}','blob')"
+                    "INSERT INTO ontotator.proposal_sets (project_id,document_id,annotation_set_id,set_kind,actors,payload,source_sha256) VALUES (:p,'old','set','tool_output','[]','{}','blob')"
                 ),
                 {"p": pid},
             )
@@ -288,9 +288,9 @@ def test_derived_from_cannot_reference_another_project(stored):
 @pytest.mark.parametrize(
     "statement",
     [
-        "UPDATE ontocurator.translation_reviews SET proposed_text='changed'",
-        "DELETE FROM ontocurator.translation_reviews",
-        "TRUNCATE ontocurator.translation_reviews",
+        "UPDATE ontotator.translation_reviews SET proposed_text='changed'",
+        "DELETE FROM ontotator.translation_reviews",
+        "TRUNCATE ontotator.translation_reviews",
     ],
 )
 def test_review_history_is_immutable_to_application_and_owner(stored, owner, statement):

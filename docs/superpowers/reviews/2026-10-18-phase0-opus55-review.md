@@ -8,8 +8,8 @@ Primary reviewer: Claude Code 2.1.296, requested and verified model `claude-opus
 
 - No application code changed, no tests or builds were rerun, and no merge or push was performed for this review. Existing passing test counts are historical evidence, not fresh verification.
 - Read the verdict together with its evidence table: B0.5 is document-reviewed only; legacy draft guidance and historical export failure were not exercised live. The blanket runtime statement in the reviewer verdict does not mean every requirement was independently executed.
-- Independently checked the re-create command (`frontend/src/app/CaseScreen.tsx:1096`, `src/ontocurator/application/editing.py:505`): it passes empty clinical axes instead of copying the verified predecessor. The live pass establishes the null-axis result and missing defaulted marker; an actual absent-predecessor regression was not executed.
-- Additional source verification: `src/ontocurator/exchange/t1.py:478` omits null axes and fills absent HPO axes from `ontospan.default_axes()` at export. Thus a lost original axis can acquire an export default. This downstream risk is source-inferred, not a live export observation.
+- Independently checked the re-create command (`frontend/src/app/CaseScreen.tsx:1096`, `src/ontotator/application/editing.py:505`): it passes empty clinical axes instead of copying the verified predecessor. The live pass establishes the null-axis result and missing defaulted marker; an actual absent-predecessor regression was not executed.
+- Additional source verification: `src/ontotator/exchange/t1.py:478` omits null axes and fills absent HPO axes from `ontospan.default_axes()` at export. Thus a lost original axis can acquire an export default. This downstream risk is source-inferred, not a live export observation.
 - The P0-R browser-test coverage gap was checked against `frontend/browser/reanchor.spec.ts`; the live reviewer did exercise the blocker and focus jump manually.
 - The stray first screenshot has been moved into the evidence directory. References below to its former worktree-root location describe the reviewer session, not the final filesystem state.
 - All live work used disposable synthetic fixtures on port 18765. Ports 18080 and 18081 were not accessed. The owned browser, fixture server and its test containers were closed. Docker Desktop was stopped after checking there were no active containers. Available physical RAM after cleanup was approximately 5.53 GiB of 15.95 GiB; unrelated processes were left running.
@@ -20,7 +20,7 @@ Local evidence is retained under `.superpowers/sdd/2026-10-17-phase0-priorities/
 
 ---
 
-# Ontocurator Phase 0: final independent review (supersedes the initial report)
+# Ontotator Phase 0: final independent review (supersedes the initial report)
 
 **Reviewer:** Claude Opus 5.5 (`claude-opus-5-5`), effort high. **Revision:** candidate `afc41e0` on `feat/phase0-usability`, baseline `4de9aaa`. Source stayed read-only and I ran no tests or builds.
 
@@ -51,7 +51,7 @@ Local evidence is retained under `.superpowers/sdd/2026-10-17-phase0-priorities/
 - **Trigger (browser-observed):** adjudicator in the `/__test_reanchor__` scenario → *Re-create here* on item 1 → select "Ataxia 😀new" → *Save re-created finding*.
 - **What happens:** the saved annotation has `assertion`, `experiencer` and `temporality` all `null` ("Not specified"), `method: "edited"`, and **no `axes_defaulted`** (`live-08-reanchor-recreated-axes-1440.png`). So there is no "Defaulted axes" badge and no submit warning.
 - **What the reviewer can't see:** the pending item payload has no axes field. The adjudicator's `annotation-versions` list for the predecessor text was empty. The original assertion (for example `absent`) is therefore not visible anywhere to the reviewer.
-- **Source:** `frontend/src/app/CaseScreen.tsx:89-92` (`initialAxisValues` sets every axis to `null`), `:1096`; `src/ontocurator/domain/reanchor_resolution.py:50-71` (`ReanchorItem` has no axes); `frontend/src/variants/ReanchorPanel.tsx:129-133`.
+- **Source:** `frontend/src/app/CaseScreen.tsx:89-92` (`initialAxisValues` sets every axis to `null`), `:1096`; `src/ontotator/domain/reanchor_resolution.py:50-71` (`ReanchorItem` has no axes); `frontend/src/variants/ReanchorPanel.tsx:129-133`.
 - **Impact:** a negated or historical finding can be carried to the corrected text with its clinical context erased. Nothing reports this, and nothing would block it unless the project enables "Every axis must be chosen". That conflicts with PRODUCT principle 2 ("nothing is decided silently").
 - **Plan:** B0.3 only required prefilling term and layer, so this is an intent gap, not a missed checkbox. Tests assert term, offsets and provenance but not axes.
 - **Fix direction:** add the verified predecessor's axes to the authorized item and show them in the queue. Prefill them on re-create, or mark them for explicit confirmation. Add an `absent`-predecessor test.
@@ -105,7 +105,7 @@ Local evidence is retained under `.superpowers/sdd/2026-10-17-phase0-priorities/
   - Context windows start or stop mid-word ("al context remains unchanged.").
   - The resolved row prints the raw replacement UUID and hash, which overflow the 320 px sidebar (`ReanchorPanel.tsx:95-97`, `live-08`).
 - **Source-only hygiene:**
-  - stale comment `src/ontocurator/authz/versions.py:128` ("P0-A remains pending");
+  - stale comment `src/ontotator/authz/versions.py:128` ("P0-A remains pending");
   - pair readout uses `aria-label` on a plain `<p>` (`ComparePane.tsx:96`, and the same pattern in TranslationReviewScreen);
   - two primary buttons in the re-create view;
   - the mandatory reviewer note is a single-line TextInput (`ReviewActions.tsx:342`);
@@ -214,4 +214,4 @@ I also ran DOM and API checks for focus, payloads, roles and scroll positions. I
 2. Before merge, fix P1-1 (or record the user's explicit risk acceptance) and P2-1 (a one-line copy change). Also fix the cheap header truncation and the P2-2 focus and label logic.
 3. Schedule P2-3 to P2-6 as near-term follow-ups. They concern guidance and recovery; server-side data integrity is not affected.
 4. Any code fix needs its affected suites rerun, and the final gate once before merge.
-5. No Ontocurator merge or push is authorized yet.
+5. No Ontotator merge or push is authorized yet.

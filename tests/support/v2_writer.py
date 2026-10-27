@@ -6,12 +6,12 @@ import zipfile
 from pathlib import Path
 from typing import Any, BinaryIO
 
-from ontocurator.domain.errors import InvalidPackage
-from ontocurator.domain.profiles import profile_hash
-from ontocurator.domain.serialization import encode_snapshot
-from ontocurator.domain.workspace import Submission
-from ontocurator.ontology.conditions import validate_resources, validate_search_events
-from ontocurator.packages.models import ValidatedPackage
+from ontotator.domain.errors import InvalidPackage
+from ontotator.domain.profiles import profile_hash
+from ontotator.domain.serialization import encode_snapshot
+from ontotator.domain.workspace import Submission
+from ontotator.ontology.conditions import validate_resources, validate_search_events
+from ontotator.packages.models import ValidatedPackage
 
 
 def _prepare_package_payloads(
@@ -102,9 +102,9 @@ def _prepare_package_payloads(
     manifest_updates: dict[str, Any] = {
         "file_hashes": file_hashes,
         "format_version": (
-            "ontocurator-work-package/v3"
-            if package.manifest.format_version == "ontocurator-work-package/v3"
-            else "ontocurator-work-package/v2"
+            "ontotator-work-package/v3"
+            if package.manifest.format_version == "ontotator-work-package/v3"
+            else "ontotator-work-package/v2"
         ),
         "document_order": doc_order,
     }

@@ -27,15 +27,15 @@ from browser_documents_scenarios import (
 from fastapi import FastAPI
 from sqlalchemy import update
 
-from ontocurator.auth.audit import Actor
-from ontocurator.storage.tables import ProjectRow
+from ontotator.auth.audit import Actor
+from ontotator.storage.tables import ProjectRow
 
 # --- Helpers of this module ---------------------------------------------------- #
 
 
 def reopen(scenario: Scenario, assignment_id: int, reason: str) -> None:
     """Reopen a submitted assignment; its active round becomes editable again."""
-    from ontocurator.assignments.service import AssignmentService
+    from ontotator.assignments.service import AssignmentService
 
     AssignmentService(scenario.db).reopen(Actor.cli(), assignment_id, reason)
 

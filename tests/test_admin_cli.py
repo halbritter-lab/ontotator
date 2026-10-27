@@ -1,4 +1,4 @@
-"""``ontocurator admin``: users, codes, password hashes and the offline recovery."""
+"""``ontotator admin``: users, codes, password hashes and the offline recovery."""
 
 from __future__ import annotations
 
@@ -15,12 +15,12 @@ from pg_harness import column_values, database_for, database_url_for
 from sqlalchemy import select
 from typer.testing import CliRunner
 
-from ontocurator.auth.accounts import AccountService
-from ontocurator.auth.passwords import hash_password, verify_password
-from ontocurator.auth.sessions import SessionService
-from ontocurator.cli import app
-from ontocurator.storage.lease import RuntimeLease
-from ontocurator.storage.tables import AuditEventRow
+from ontotator.auth.accounts import AccountService
+from ontotator.auth.passwords import hash_password, verify_password
+from ontotator.auth.sessions import SessionService
+from ontotator.cli import app
+from ontotator.storage.lease import RuntimeLease
+from ontotator.storage.tables import AuditEventRow
 
 runner = CliRunner()
 PASSWORD = "correct horse battery"
@@ -34,7 +34,7 @@ _CODE_BLOCK = re.compile(
 
 @pytest.fixture(autouse=True)
 def _data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("ONTOCURATOR_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("ONTOTATOR_DATA_DIR", str(tmp_path / "data"))
 
 
 def _admin(tmp_path: Path, *args: str, stdin: str | None = None) -> Result:
@@ -210,9 +210,7 @@ def test_recovery_waits_for_the_service_to_stop(tmp_path: Path) -> None:
         lease.release()
 
     assert refused.exit_code == 1
-    assert "Stop the Ontocurator service first; it is still running." in (
-        refused.output
-    )
+    assert "Stop the Ontotator service first; it is still running." in (refused.output)
     assert new_hash not in refused.output
 
     recovered = _admin(tmp_path, "recover-admin", "--input", str(recovery))
@@ -301,7 +299,7 @@ def test_recovery_input_is_checked_without_showing_it(
 def test_an_unreachable_database_is_a_short_error(tmp_path: Path) -> None:
     # On Windows a refused port only fails at libpq's timeout (130 s by default).
     url = (
-        "postgresql://ontocurator_app:pw-not-shown@127.0.0.1:1/ontocurator"
+        "postgresql://ontotator_app:pw-not-shown@127.0.0.1:1/ontotator"
         "?connect_timeout=2"
     )
     result = runner.invoke(app, ["admin", "--database-url", url, "users", "list"])
@@ -358,7 +356,7 @@ def test_recovery_refuses_a_readable_input_file(tmp_path: Path) -> None:
 def test_members_can_be_added_listed_and_removed(tmp_path: Path) -> None:
     from layered_fixtures import make_layered_package
 
-    from ontocurator.storage.repository import Repository
+    from ontotator.storage.repository import Repository
 
     Repository(database_for(tmp_path / "editor.db")).import_package(
         make_layered_package("single")
@@ -456,7 +454,7 @@ def test_ontologies_add_and_list(tmp_path: Path) -> None:
 def test_cli_imports_plain_text(tmp_path: Path) -> None:
     from t1_fixtures import create_project
 
-    from ontocurator.storage.repository import Repository
+    from ontotator.storage.repository import Repository
 
     db = database_for(tmp_path / "editor.db")
     create_project(db)
@@ -502,7 +500,7 @@ def test_consolidator_is_the_role_word_and_the_list_shows_projects(
 ) -> None:
     from layered_fixtures import make_layered_package
 
-    from ontocurator.storage.repository import Repository
+    from ontotator.storage.repository import Repository
 
     Repository(database_for(tmp_path / "editor.db")).import_package(
         make_layered_package("single")

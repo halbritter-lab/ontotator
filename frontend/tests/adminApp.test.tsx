@@ -184,11 +184,11 @@ it("sends actual Users writes with CSRF and keeps its form through the existing 
   expect(options.method).toBe("POST"); expect(options.credentials).toBe("same-origin");
   expect((options.headers as Headers).get("X-CSRF-Token")).toBe("csrf-admin");
   expect(JSON.parse(options.body as string)).toEqual({ username: "bea", display_name: "Bea", email: null, languages: [], system_admin: false, projects: [] });
-  const login = screen.getByRole("dialog", { name: "Log in to Ontocurator" });
+  const login = screen.getByRole("dialog", { name: "Log in to Ontotator" });
   fireEvent.change(within(login).getByLabelText(/^Username/), { target: { value: "root" } });
   fireEvent.change(within(login).getByLabelText(/^Password/), { target: { value: "correct-password" } });
   fireEvent.click(within(login).getByRole("button", { name: "Log in" }));
-  await waitFor(() => expect(screen.queryByRole("dialog", { name: "Log in to Ontocurator" })).toBeNull());
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "Log in to Ontotator" })).toBeNull());
   expect(screen.getByRole("form", { name: "New user" })).toBe(form);
   expect(within(form).getByLabelText("Username (required)")).toHaveProperty("value", "bea");
   expect(api.adminListUsers).toHaveBeenCalledOnce();

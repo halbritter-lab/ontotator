@@ -2,16 +2,16 @@
 
 import pytest
 
-from ontocurator.authz.scoped import ScopedRepository
-from ontocurator.domain.errors import DomainError
-from ontocurator.domain.workspace import MutationEnvelope
+from ontotator.authz.scoped import ScopedRepository
+from ontotator.domain.errors import DomainError
+from ontotator.domain.workspace import MutationEnvelope
 
 pytest_plugins = ("test_work_rounds",)
 
 
 def test_first_report_binds_round_and_advances_one_assignment_revision(rounds):
-    from ontocurator.application.problem_reports import ProblemReportService
-    from ontocurator.assignments.service import AssignmentService
+    from ontotator.application.problem_reports import ProblemReportService
+    from ontotator.assignments.service import AssignmentService
 
     repo, access, actor, assignment, _ = rounds
     service = ProblemReportService(repo.db)
@@ -31,9 +31,9 @@ def test_first_report_binds_round_and_advances_one_assignment_revision(rounds):
 
 
 def test_personal_hold_blocks_new_commands_but_preserves_reads_and_resume(rounds):
-    from ontocurator.application.editing import EditingService
-    from ontocurator.application.problem_reports import ProblemReportService
-    from ontocurator.application.work_rounds import WorkRoundService
+    from ontotator.application.editing import EditingService
+    from ontotator.application.problem_reports import ProblemReportService
+    from ontotator.application.work_rounds import WorkRoundService
 
     repo, access, actor, assignment, ontology = rounds
     current = WorkRoundService(repo.db).create(
@@ -113,11 +113,11 @@ def test_committed_hold_prevents_a_waiting_new_write_and_preserves_receipt(
 
     from sqlalchemy import event, func, select
 
-    from ontocurator.application.editing import EditingService
-    from ontocurator.application.problem_reports import ProblemReportService
-    from ontocurator.application.submissions import SubmissionService
-    from ontocurator.application.work_rounds import WorkRoundService
-    from ontocurator.storage.repository import _lock_id
+    from ontotator.application.editing import EditingService
+    from ontotator.application.problem_reports import ProblemReportService
+    from ontotator.application.submissions import SubmissionService
+    from ontotator.application.work_rounds import WorkRoundService
+    from ontotator.storage.repository import _lock_id
 
     repo, access, actor, assignment, ontology = rounds
     scoped = ScopedRepository(repo.db, access, actor)
@@ -202,8 +202,8 @@ def test_lead_restart_abandons_submitted_round_and_opens_empty_preserved_history
 ):
     from test_work_rounds import create_consolidation_fixture
 
-    from ontocurator.application.problem_reports import ProblemReportService
-    from ontocurator.assignments.service import AssignmentService
+    from ontotator.application.problem_reports import ProblemReportService
+    from ontotator.assignments.service import AssignmentService
 
     repo, _ontology, _reviewer, _consolidation, inputs, lead, actor = (
         create_consolidation_fixture(rounds)

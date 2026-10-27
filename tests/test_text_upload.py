@@ -5,9 +5,9 @@ import zipfile
 import pytest
 from t1_fixtures import hpo_profile
 
-from ontocurator.domain.project_rules import ProjectRules
-from ontocurator.exchange.plan import ProjectImportState, plan_import
-from ontocurator.exchange.text import read_text_upload
+from ontotator.domain.project_rules import ProjectRules
+from ontotator.exchange.plan import ProjectImportState, plan_import
+from ontotator.exchange.text import read_text_upload
 
 
 def archive(entries):
@@ -78,14 +78,14 @@ def test_language_must_be_in_project_allowlist():
 
 
 def test_zip_expansion_is_bounded_before_reading_entries(monkeypatch):
-    monkeypatch.setattr("ontocurator.exchange.text.MAX_TOTAL_BYTES", 4)
+    monkeypatch.setattr("ontotator.exchange.text.MAX_TOTAL_BYTES", 4)
     units, issues = read_text_upload([("a.zip", archive([("a.txt", b"12345")]))], "de")
     assert not units
     assert issues[0].code == "too_large"
 
 
 def test_expansion_limit_applies_across_files(monkeypatch):
-    monkeypatch.setattr("ontocurator.exchange.text.MAX_TOTAL_BYTES", 4)
+    monkeypatch.setattr("ontotator.exchange.text.MAX_TOTAL_BYTES", 4)
     _, issues = read_text_upload(
         [("a.txt", b"123"), ("b.zip", archive([("b.txt", b"45")]))], "de"
     )

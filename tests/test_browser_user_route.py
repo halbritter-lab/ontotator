@@ -8,7 +8,7 @@ from browser_server import TEST_PASSWORD, register_test_user_route
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from ontocurator.authz.policy import ROLES
+from ontotator.authz.policy import ROLES
 
 
 class FixtureAccounts:

@@ -67,7 +67,7 @@ def seed(stack: RunningStack) -> None:
     password = stack.env.get("STACK_SMOKE_PASSWORD", DEV_PASSWORD)
     for username, admin in [("smoke-admin", True), ("smoke-annotator", False)]:
         args = [
-            "ontocurator",
+            "ontotator",
             "admin",
             "users",
             "create",
@@ -104,10 +104,10 @@ def seed(stack: RunningStack) -> None:
 
     for filename in ("hp.json", "smoke-profile.json", "smoke-bundle.zip"):
         copy_fixture(stack, FIXTURES / filename, f"/tmp/{filename}")
-    stack.exec("app", "ontocurator", "admin", "ontologies", "add", "/tmp/hp.json")
+    stack.exec("app", "ontotator", "admin", "ontologies", "add", "/tmp/hp.json")
     stack.exec(
         "app",
-        "ontocurator",
+        "ontotator",
         "admin",
         "projects",
         "create",
@@ -119,7 +119,7 @@ def seed(stack: RunningStack) -> None:
     )
     stack.exec(
         "app",
-        "ontocurator",
+        "ontotator",
         "admin",
         "projects",
         "add-member",
@@ -129,7 +129,7 @@ def seed(stack: RunningStack) -> None:
         "annotator",
     )
     imported = stack.exec(
-        "app", "ontocurator", "admin", "import", "smoke", "/tmp/smoke-bundle.zip"
+        "app", "ontotator", "admin", "import", "smoke", "/tmp/smoke-bundle.zip"
     )
     if (
         "documents_added: 2" not in imported.stdout
@@ -138,7 +138,7 @@ def seed(stack: RunningStack) -> None:
         raise RuntimeError("Smoke import did not create two documents and one proposal")
     stack.exec(
         "app",
-        "ontocurator",
+        "ontotator",
         "admin",
         "assign",
         "smoke",

@@ -37,7 +37,7 @@ const layers = [{
 
 /** A snapshot, usable as a draft annotation, a proposal or a reference. */
 const snapshot = (annotationId: string, termId: string, sourceRefs?: string[]) => ({
-  schema_version: "ontocurator-annotation/v3" as const,
+  schema_version: "ontotator-annotation/v3" as const,
   annotation: {
     annotation_id: annotationId,
     document_id: "doc",

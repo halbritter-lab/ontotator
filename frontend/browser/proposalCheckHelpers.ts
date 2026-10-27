@@ -34,7 +34,7 @@ export async function proposalCheckScenario(page: Page, name: ProposalCheckScena
 /** Log in as scenario person ``name`` through the login form (as ``loginOverviewUser``). */
 export async function loginScenarioUser(page: Page, scenario: Pick<ProposalCheckScenario, "users" | "display_names">, name: ProposalCheckPerson): Promise<void> {
   await openTasksHome(page);
-  const form = page.getByRole("form", { name: "Log in to Ontocurator" });
+  const form = page.getByRole("form", { name: "Log in to Ontotator" });
   await form.getByLabel("Username", { exact: true }).fill(scenario.users[name]);
   await form.getByLabel("Password", { exact: true }).fill(TEST_PASSWORD);
   await form.getByRole("button", { name: "Log in", exact: true }).click();

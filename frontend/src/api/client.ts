@@ -1,5 +1,5 @@
 /**
- * Typed client for the Ontocurator API. The session lives in an HttpOnly cookie;
+ * Typed client for the Ontotator API. The session lives in an HttpOnly cookie;
  * writes carry the session's CSRF token.
  */
 
@@ -828,7 +828,7 @@ export class ApiClient {
   }
 
   /**
-   * DEMO ONLY: one-click accounts of a loopback demo stack (ONTOCURATOR_DEMO_LOGINS_FILE).
+   * DEMO ONLY: one-click accounts of a loopback demo stack (ONTOTATOR_DEMO_LOGINS_FILE).
    * The server answers 404 unless they are configured; that and any other failure give none.
    */
   async demoLogins(): Promise<DemoLogin[]> {

@@ -7,21 +7,21 @@ from sqlalchemy import update
 from test_api import _create_sample_package_bytes
 from test_editing import _setup_test_env
 
-from ontocurator.application.reviews import ReviewService
-from ontocurator.application.submissions import SubmissionService
-from ontocurator.application.workspaces import WorkspaceService
-from ontocurator.domain.annotations import (
+from ontotator.application.reviews import ReviewService
+from ontotator.application.submissions import SubmissionService
+from ontotator.application.workspaces import WorkspaceService
+from ontotator.domain.annotations import (
     ActorRef,
     Annotation,
     AnnotationRef,
     Provenance,
     snapshot,
 )
-from ontocurator.domain.errors import DomainError
-from ontocurator.domain.review import ReviewTargetSet
-from ontocurator.domain.workspace import MutationEnvelope, WorkspaceKey
-from ontocurator.packages.models import ValidatedPackage
-from ontocurator.storage.tables import ProjectRow
+from ontotator.domain.errors import DomainError
+from ontotator.domain.review import ReviewTargetSet
+from ontotator.domain.workspace import MutationEnvelope, WorkspaceKey
+from ontotator.packages.models import ValidatedPackage
+from ontotator.storage.tables import ProjectRow
 
 pytest_plugins = ("test_api",)
 
@@ -347,7 +347,7 @@ def test_real_adopt_edit_confirm_submit_export_preserves_basis_and_blocks_bypass
 def test_new_draft_spanless_writes_are_transactional_and_setting_applies(tmp_path):
     from sqlalchemy import select
 
-    from ontocurator.storage.tables import DraftRow
+    from ontotator.storage.tables import DraftRow
 
     repo, _, ws, editor, _ = _setup_test_env(tmp_path)
     key = ws.open(
@@ -410,7 +410,7 @@ def test_new_draft_spanless_writes_are_transactional_and_setting_applies(tmp_pat
 def test_legacy_draft_keeps_edit_marker_but_submits_under_current_spanless_policy(
     tmp_path,
 ):
-    from ontocurator.storage.tables import DraftRow
+    from ontotator.storage.tables import DraftRow
 
     repo, _, ws, editor, _ = _setup_test_env(tmp_path)
     key = ws.open(
@@ -592,10 +592,10 @@ def test_remove_last_mention_and_clear_spanless_note_are_rejected_without_revisi
 def test_new_draft_restores_historical_snapshot_without_rewriting_then_requires_note(
     tmp_path,
 ):
-    from ontocurator.domain.scopes import build_scope
-    from ontocurator.domain.serialization import encode_snapshot
-    from ontocurator.domain.workspace import Submission
-    from ontocurator.storage.repository import _key_str
+    from ontotator.domain.scopes import build_scope
+    from ontotator.domain.serialization import encode_snapshot
+    from ontotator.domain.workspace import Submission
+    from ontotator.storage.repository import _key_str
 
     repo, _, ws, editor, doc = _setup_test_env(tmp_path)
     profile = repo.get_task_profile("pkg-1")
@@ -681,7 +681,7 @@ def test_export_content_freezes_exact_proposal_notes_without_changing_imported_s
 ):
     from pg_harness import insert_proposal
 
-    from ontocurator.storage.tables import ProposalAnnotationRow
+    from ontotator.storage.tables import ProposalAnnotationRow
 
     repo, _, ws, editor, _ = _setup_test_env(tmp_path)
     key = ws.open(
@@ -723,9 +723,9 @@ def test_historical_receipt_replay_cannot_downgrade_persisted_draft_policy(tmp_p
 
     from sqlalchemy import insert
 
-    from ontocurator.domain.canonical import canonical_hash
-    from ontocurator.storage.repository import _key_str
-    from ontocurator.storage.tables import MutationReceiptRow
+    from ontotator.domain.canonical import canonical_hash
+    from ontotator.storage.repository import _key_str
+    from ontotator.storage.tables import MutationReceiptRow
 
     repo, _, ws, editor, _ = _setup_test_env(tmp_path)
     opened = ws.open(

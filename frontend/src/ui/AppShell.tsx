@@ -50,8 +50,8 @@ export function AppShell({ user, onLogout, breadcrumb, actions, nav, navLabel = 
             if (!onHome || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
             event.preventDefault();
             onHome();
-          }}>Ontocurator</a>
-          : <span className="shell-product">Ontocurator</span>}
+          }}>Ontotator</a>
+          : <span className="shell-product">Ontotator</span>}
         <span className="shell-subtitle">Clinical Curation Workbench</span>
         {!!breadcrumb?.length && <nav aria-label="Breadcrumb"><ol className="shell-breadcrumb">
           {breadcrumb.map((crumb, index) => <li key={index}>

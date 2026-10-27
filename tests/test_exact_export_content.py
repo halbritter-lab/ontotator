@@ -3,9 +3,9 @@
 import pytest
 from test_editing import _setup_test_env
 
-from ontocurator.application.submissions import SubmissionService
-from ontocurator.domain.errors import DomainError
-from ontocurator.domain.workspace import MutationEnvelope, WorkspaceKey
+from ontotator.application.submissions import SubmissionService
+from ontotator.domain.errors import DomainError
+from ontotator.domain.workspace import MutationEnvelope, WorkspaceKey
 
 
 def test_exact_content_keeps_selected_old_submission_and_rejects_missing(tmp_path):

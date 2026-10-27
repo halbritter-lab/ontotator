@@ -8,11 +8,11 @@ from sqlalchemy import insert
 from test_case_api import BASE, CORRECTED, SOURCE, TARGET, path
 from test_case_api import case_env as case_env
 
-from ontocurator.assignments.service import AssignmentService
-from ontocurator.domain.review import ReviewTargetSet
-from ontocurator.domain.workspace import Submission, WorkspaceKey
-from ontocurator.storage.repository import _key_str
-from ontocurator.storage.tables import ProposalSetRow
+from ontotator.assignments.service import AssignmentService
+from ontotator.domain.review import ReviewTargetSet
+from ontotator.domain.workspace import Submission, WorkspaceKey
+from ontotator.storage.repository import _key_str
+from ontotator.storage.tables import ProposalSetRow
 
 
 def refs(client, document=TARGET, **params):
@@ -214,7 +214,7 @@ def test_reanchor_label_uses_actual_predecessor_and_pending_carrier_is_typed(cas
                     {
                         "actor_id": "tool",
                         "kind": "tool",
-                        "name": "ontocurator-reanchor",
+                        "name": "ontotator-reanchor",
                         "version": "1",
                     }
                 ],
@@ -290,9 +290,9 @@ def test_foreign_project_proposal_id_cannot_be_reused(case_env, tmp_path):
 def test_internal_assisted_metadata_stays_exact_while_public_annotate_refs_are_blind(
     case_env,
 ):
-    from ontocurator.authz.policy import Access
-    from ontocurator.authz.scoped import ScopedRepository
-    from ontocurator.domain.errors import DomainError
+    from ontotator.authz.policy import Access
+    from ontotator.authz.scoped import ScopedRepository
+    from ontotator.domain.errors import DomainError
 
     env = case_env
     user = env.app.state.accounts.get_by_username("alice")

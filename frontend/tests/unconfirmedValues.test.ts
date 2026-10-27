@@ -11,7 +11,7 @@ const AXES: UnconfirmedAxisDef[] = [
   { id: "temporality", label: "Temporality", options: ["current", "past"] },
 ];
 const snapshot = (id: string, values: Record<string, string | null>, defaulted: string[], layer = "phenotype"): AnnotationSnapshot => ({
-  schema_version: "ontocurator-annotation/v3", version: "v1", document_id: "d", text_sha256: "t", ontology_sha256: "o", layer_config_sha256: "l",
+  schema_version: "ontotator-annotation/v3", version: "v1", document_id: "d", text_sha256: "t", ontology_sha256: "o", layer_config_sha256: "l",
   annotation: { annotation_id: id, document_id: "d", layer_id: layer, type_id: "default", term_id: `HP:${id}`,
     axes_values: values, axes_defaulted: defaulted, evidence_refs: [],
     provenance: { actor: { actor_id: "u", kind: "human" }, method: "manual" } },

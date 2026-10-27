@@ -1,7 +1,7 @@
 Found three issues worth fixing. This was a read-only review of the 15 commits, the plan, implementation notes, and SQLite implementation on main. I did not run tests.
 
 1. **Important — Export can contain annotations whose evidence is missing.**  
-   Location: [repository.py:1558](C:/Users/jan-p/Development/ontocurator/.worktrees/t2a-postgres-storage/src/ontocurator/storage/repository.py:1558), evidence query at line 1583.
+   Location: [repository.py:1558](C:/Users/jan-p/Development/ontocurator/.worktrees/t2a-postgres-storage/src/ontotator/storage/repository.py:1558), evidence query at line 1583.
 
    `export_package()` reads annotations and evidence in separate statements. The engine’s default READ COMMITTED isolation allows each statement to observe a different committed state.
 
@@ -10,7 +10,7 @@ Found three issues worth fixing. This was a read-only review of the 15 commits, 
    **Suggested fix:** Execute the entire export against one REPEATABLE READ snapshot, including resource metadata, with explicit handling when an ambient transaction already exists. Add a concurrency test that commits an evidence edit between the annotation and evidence reads and then passes the exported package through the writer. Existing export tests are sequential.
 
 2. **Important — A caught failure inside an ambient transaction can commit partial work.**  
-   Location: [database.py:55](C:/Users/jan-p/Development/ontocurator/.worktrees/t2a-postgres-storage/src/ontocurator/storage/database.py:55).
+   Location: [database.py:55](C:/Users/jan-p/Development/ontocurator/.worktrees/t2a-postgres-storage/src/ontotator/storage/database.py:55).
 
    When a transaction already exists, the context manager simply yields its connection. An exception from the nested operation neither rolls back its writes nor marks the outer transaction as failed.
 
@@ -19,7 +19,7 @@ Found three issues worth fixing. This was a read-only review of the 15 commits, 
    **Suggested fix:** Mark joined transactions rollback-only when an exception escapes a nested transaction scope, and refuse to commit the outer scope. Alternatively, use savepoints where failed operations are explicitly intended to be recoverable. Add a test that catches the inner exception *inside* the outer context and verifies that rejected-operation writes cannot commit. Current rollback tests let the exception escape the outer context.
 
 3. **Important — Local search-event creation races with imports, bypassing global identity checks.**  
-   Location: [repository.py:1377](C:/Users/jan-p/Development/ontocurator/.worktrees/t2a-postgres-storage/src/ontocurator/storage/repository.py:1377).
+   Location: [repository.py:1377](C:/Users/jan-p/Development/ontocurator/.worktrees/t2a-postgres-storage/src/ontotator/storage/repository.py:1377).
 
    `save_search_event()` checks global existence without taking the import lock. Imports serialize only against other imports. The database primary key is `(project_id, event_id)`, so it cannot enforce the global invariant described here.
 

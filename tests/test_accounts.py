@@ -14,12 +14,12 @@ import pytest
 from pg_harness import column_values, database_for
 from sqlalchemy import insert, select, text, update
 
-from ontocurator.auth.accounts import CODE_LIFETIME, AccountService
-from ontocurator.auth.audit import Actor
-from ontocurator.auth.passwords import hash_password
-from ontocurator.auth.sessions import SessionService
-from ontocurator.domain.errors import DomainError, LoginFailed
-from ontocurator.storage.tables import (
+from ontotator.auth.accounts import CODE_LIFETIME, AccountService
+from ontotator.auth.audit import Actor
+from ontotator.auth.passwords import hash_password
+from ontotator.auth.sessions import SessionService
+from ontotator.domain.errors import DomainError, LoginFailed
+from ontotator.storage.tables import (
     AnnotationSnapshotRow,
     AuditEventRow,
     DraftRow,
@@ -180,8 +180,8 @@ def test_a_code_is_grouped_without_look_alikes_and_typed_loosely(
 def test_a_code_issued_in_the_former_format_still_redeems(
     services: Services,
 ) -> None:
-    from ontocurator.auth.tokens import token_digest
-    from ontocurator.storage.tables import OneTimeCodeRow
+    from ontotator.auth.tokens import token_digest
+    from ontotator.storage.tables import OneTimeCodeRow
 
     services.accounts.create_user(ADMIN, "alice", "Alice")
     legacy = "aB3_-xYzlO0Il1aB3_-xYzlO0Il1aB3_-xYzlO0Il1q"  # token_urlsafe(32) shape
@@ -192,9 +192,9 @@ def test_a_code_issued_in_the_former_format_still_redeems(
 
 
 def test_a_52_symbol_grouped_code_still_redeems(services: Services) -> None:
-    from ontocurator.auth.accounts import canonical_code
-    from ontocurator.auth.tokens import token_digest
-    from ontocurator.storage.tables import OneTimeCodeRow
+    from ontotator.auth.accounts import canonical_code
+    from ontotator.auth.tokens import token_digest
+    from ontotator.storage.tables import OneTimeCodeRow
 
     services.accounts.create_user(ADMIN, "alice", "Alice")
     longer = "-".join(["7K3Q"] * 13)

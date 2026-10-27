@@ -15,13 +15,13 @@ from test_consolidation_read_api import _access, _insert_decisions, _targets
 from test_consolidation_read_api import cons as cons  # fixture
 from work_plan_support import BASE
 
-from ontocurator.application.consolidation import consolidation_group_id
-from ontocurator.application.submissions import SubmissionService
-from ontocurator.application.workspaces import WorkspaceService
-from ontocurator.authz.scoped import ScopedRepository
-from ontocurator.domain.review import ConsolidationMark, ReviewDecision
-from ontocurator.domain.workspace import MutationEnvelope
-from ontocurator.storage.tables import UserRow
+from ontotator.application.consolidation import consolidation_group_id
+from ontotator.application.submissions import SubmissionService
+from ontotator.application.workspaces import WorkspaceService
+from ontotator.authz.scoped import ScopedRepository
+from ontotator.domain.review import ConsolidationMark, ReviewDecision
+from ontotator.domain.workspace import MutationEnvelope
+from ontotator.storage.tables import UserRow
 
 
 def rows(env: Any, params: list[tuple[str, str]] | None = None) -> dict[str, Any]:
@@ -179,7 +179,7 @@ def test_no_flags_before_and_without_marks(cons):
 def test_exact_flags_only_for_shown_rows(cons, monkeypatch):
     """Facet and filter use the cheap pre-check on the stored decisions; the
     groups are built only for the rows shown after paging."""
-    import ontocurator.application.consolidation as consolidation
+    import ontotator.application.consolidation as consolidation
 
     env = cons.env
     decide_and_submit(

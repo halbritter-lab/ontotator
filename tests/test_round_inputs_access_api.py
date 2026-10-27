@@ -5,7 +5,7 @@ from auth_harness import logged_in
 from test_editing import _setup_test_env
 from test_review_findings import HP_PATH, _app
 
-from ontocurator.assignments.service import AssignmentService
+from ontotator.assignments.service import AssignmentService
 
 PROJECT = "pkg-1"
 

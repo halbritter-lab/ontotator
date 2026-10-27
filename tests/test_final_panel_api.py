@@ -29,29 +29,29 @@ from test_document_rows_submissions import (
 from test_work_rounds import create_consolidation_fixture
 from work_plan_support import BASE, assign, doc, plan_env, select_final, write
 
-from ontocurator.application import document_row_panel
-from ontocurator.application.document_rows import RowQuery
-from ontocurator.assignments.service import AssignmentService
-from ontocurator.auth.audit import Actor
-from ontocurator.domain.annotations import (
+from ontotator.application import document_row_panel
+from ontotator.application.document_rows import RowQuery
+from ontotator.assignments.service import AssignmentService
+from ontotator.auth.audit import Actor
+from ontotator.domain.annotations import (
     ActorRef,
     Annotation,
     Provenance,
     snapshot,
 )
-from ontocurator.domain.documents import (
+from ontotator.domain.documents import (
     EvidenceMention,
     EvidenceRef,
     EvidenceSnapshot,
     Segment,
 )
-from ontocurator.domain.errors import AccessDenied
-from ontocurator.domain.review import ReviewTargetSet
-from ontocurator.domain.work_plans import PlanFlags, RowKey
-from ontocurator.domain.workspace import Submission, WorkspaceKey
-from ontocurator.storage.overview_tables import TextChangeResolutionRow
-from ontocurator.storage.repository import _key_str
-from ontocurator.storage.tables import (
+from ontotator.domain.errors import AccessDenied
+from ontotator.domain.review import ReviewTargetSet
+from ontotator.domain.work_plans import PlanFlags, RowKey
+from ontotator.domain.workspace import Submission, WorkspaceKey
+from ontotator.storage.overview_tables import TextChangeResolutionRow
+from ontotator.storage.repository import _key_str
+from ontotator.storage.tables import (
     AssignmentRow,
     DocumentRow,
     ProjectMembershipRow,
@@ -372,7 +372,7 @@ def test_replace_a_final_on_the_old_text(env):
 
 
 def test_panel_is_lead_only_and_uses_shared_lock(env, monkeypatch):
-    from ontocurator.application import document_rows
+    from ontotator.application import document_rows
 
     submit_findings(env, assign(env, doc("c1", "en"), "anno", "annotate"), "s1", [])
     seen: list[bool] = []
@@ -390,7 +390,7 @@ def test_panel_is_lead_only_and_uses_shared_lock(env, monkeypatch):
 
 
 def test_rows_page_fills_match_for_shown_choose_rows_only(env, monkeypatch):
-    from ontocurator.application import document_row_page
+    from ontotator.application import document_row_page
 
     for case in ("c1", "c2"):
         target = doc(case, "en")
@@ -699,7 +699,7 @@ def test_own_result_not_selectable_flag(rounds):
 
 
 def test_unknown_row_is_case_not_found(env):
-    from ontocurator.domain.errors import DomainError
+    from ontotator.domain.errors import DomainError
 
     with pytest.raises(DomainError) as caught:
         rows_service(env).final_panel("proj", "missing", "de")
@@ -759,7 +759,7 @@ def test_label_rule_consolidation_needs_every_other_submission_as_input():
     an eligible submission, so the rule stays "compare"."""
     from datetime import timedelta
 
-    from ontocurator.application.document_row_panel import Candidate, label_rule
+    from ontotator.application.document_row_panel import Candidate, label_rule
 
     at = datetime(2026, 10, 21, tzinfo=UTC)
     eligible = [
@@ -878,7 +878,7 @@ def test_all_match_in_http_answer(env):
 def test_all_match_hidden_when_a_consolidation_is_compared(env):
     """W1 is not offered after a consolidation (X4), also when it covers only
     part of the compared submissions (label rule "compare")."""
-    from ontocurator.application.document_row_panel import Candidate, _all_match
+    from ontotator.application.document_row_panel import Candidate, _all_match
 
     target = doc("c1", "en")
     seizure = span_of(env, target, "Neonatalzeit")

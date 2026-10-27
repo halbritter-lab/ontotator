@@ -7,24 +7,24 @@ from pg_harness import database_for
 from sqlalchemy import event, func, insert, select, update
 from sqlalchemy.exc import IntegrityError
 
-from ontocurator.domain.work_plans import (
+from ontotator.domain.work_plans import (
     LanguageVersion,
     OpenReport,
     OpenTask,
     PlanFlags,
     RowKey,
 )
-from ontocurator.storage import work_plan_store as store
-from ontocurator.storage.final_tables import FinalSelectionRow
-from ontocurator.storage.plan_tables import DiscardedVariantRow
-from ontocurator.storage.tables import (
+from ontotator.storage import work_plan_store as store
+from ontotator.storage.final_tables import FinalSelectionRow
+from ontotator.storage.plan_tables import DiscardedVariantRow
+from ontotator.storage.tables import (
     AssignmentRow,
     DocumentRow,
     ProjectRow,
     TranslationReviewRow,
     UserRow,
 )
-from ontocurator.storage.workflow_tables import (
+from ontotator.storage.workflow_tables import (
     ProblemReportRow,
     ProblemReportStateRow,
     TaskHoldRow,

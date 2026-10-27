@@ -4,8 +4,8 @@ from datetime import UTC, datetime
 
 import pytest
 
-from ontocurator.domain.errors import DomainError
-from ontocurator.domain.guidelines import (
+from ontotator.domain.errors import DomainError
+from ontotator.domain.guidelines import (
     MAX_GUIDELINE_BYTES,
     NOTICE_LIMIT,
     VersionFact,
@@ -106,7 +106,7 @@ def test_guideline_ref_format() -> None:
     assert digest != body_sha256("# Rules\r\n")
     assert (
         guideline_ref("proj", 3, digest)
-        == f"urn:ontocurator:proj:guidelines:v3#sha256={digest}"
+        == f"urn:ontotator:proj:guidelines:v3#sha256={digest}"
     )
 
 

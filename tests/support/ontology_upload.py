@@ -13,13 +13,13 @@ from pathlib import Path
 from typing import BinaryIO
 from uuid import uuid4
 
-from ontocurator.application.uploads import MAX_ONTOLOGY_UPLOAD_BYTES, copy_limited
-from ontocurator.domain.documents import OntologyRef
-from ontocurator.domain.errors import DomainError
-from ontocurator.ontology.naming import content_addressed_name
-from ontocurator.ontology.registry import OntologyRegistry
-from ontocurator.ontology.service import OntologyService
-from ontocurator.vendor.hpo_span_annotator.hpo import OntologyError
+from ontotator.application.uploads import MAX_ONTOLOGY_UPLOAD_BYTES, copy_limited
+from ontotator.domain.documents import OntologyRef
+from ontotator.domain.errors import DomainError
+from ontotator.ontology.naming import content_addressed_name
+from ontotator.ontology.registry import OntologyRegistry
+from ontotator.ontology.service import OntologyService
+from ontotator.vendor.hpo_span_annotator.hpo import OntologyError
 
 _CHUNK_BYTES = 1024 * 1024
 

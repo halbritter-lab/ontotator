@@ -6,7 +6,7 @@ T3 replaces the T2 command-line administration with browser pages for system adm
 
 ## Starting point after T2
 
-- Accounts, sessions, projects, memberships and roles exist. They are managed by `ontocurator admin …` CLI commands.
+- Accounts, sessions, projects, memberships and roles exist. They are managed by `ontotator admin …` CLI commands.
 - Documents and proposals are imported in the T1 format only.
 - Every project member sees every document of the project. There is no assignment.
 

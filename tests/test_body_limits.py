@@ -4,8 +4,8 @@ from starlette.formparsers import MultiPartParser
 from test_guidelines_api import BASE, publish, versions
 from test_guidelines_api import team as team
 
-from ontocurator.api.body_limits import MULTIPART_ALLOWANCE
-from ontocurator.domain.guidelines import MAX_GUIDELINE_BYTES
+from ontotator.api.body_limits import MULTIPART_ALLOWANCE
+from ontotator.domain.guidelines import MAX_GUIDELINE_BYTES
 
 
 def _parses(monkeypatch) -> list[int]:
@@ -40,7 +40,7 @@ def test_streamed_body_without_length_is_cut_off_at_the_limit() -> None:
     import re
     from types import SimpleNamespace
 
-    from ontocurator.api.body_limits import BodyLimit, BodyLimitMiddleware
+    from ontotator.api.body_limits import BodyLimit, BodyLimitMiddleware
 
     seen: list[int] = []
 
@@ -104,7 +104,7 @@ def test_document_upload_request_is_bounded_by_the_configured_limit(
 
 
 def test_a_bulk_selection_gets_its_own_larger_limit(team) -> None:
-    from ontocurator.api.body_limits import SELECTION_BYTES
+    from ontotator.api.body_limits import SELECTION_BYTES
 
     team.app.state.config.max_request_bytes = 1024
     key = BASE.split("/")[4]

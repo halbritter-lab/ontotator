@@ -12,10 +12,10 @@ from t1_fixtures import TEXT, annotation, create_project, run_import
 from test_auth_api import _app
 from work_plan_support import plan_all
 
-from ontocurator.assignments.service import AssignmentService
-from ontocurator.authz.policy import Access
-from ontocurator.authz.scoped import ScopedRepository
-from ontocurator.storage.tables import (
+from ontotator.assignments.service import AssignmentService
+from ontotator.authz.policy import Access
+from ontotator.authz.scoped import ScopedRepository
+from ontotator.storage.tables import (
     AssignmentRow,
     DraftRow,
     ProjectMembershipRow,
@@ -160,7 +160,7 @@ def test_current_authority_and_retained_submitted_assigned_text(case_env, change
         assert env.alice.get(path(SOURCE, "text")).status_code == 200
         assert env.alice.get(path(SOURCE, "variant")).status_code == 200
     else:
-        from ontocurator.domain.errors import DomainError
+        from ontotator.domain.errors import DomainError
 
         with pytest.raises(DomainError):
             stale.get_variant_text("proj", SOURCE)
@@ -304,7 +304,7 @@ def test_encoded_route_without_optional_raw_path_retains_normal_stack_behavior(
     from fastapi import FastAPI
     from starlette.routing import Match
 
-    from ontocurator.api.encoded_routes import EncodedParameterRoute
+    from ontotator.api.encoded_routes import EncodedParameterRoute
 
     def endpoint(doc: str):
         return doc
@@ -360,7 +360,7 @@ def test_adjudicator_role_alone_has_no_document_grant_and_mixed_roles_are_curren
     # Adding a role keeps the session; the added role grants no document access.
     assert env.alice.get(path("other", "text")).status_code == 404
     env.app.state.memberships.set_roles(HARNESS, "proj", "alice", ["annotator"])
-    from ontocurator.domain.errors import DomainError
+    from ontotator.domain.errors import DomainError
 
     with pytest.raises(DomainError, match="DOCUMENT_NOT_FOUND"):
         stale.get_variant_text("proj", TARGET)

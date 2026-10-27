@@ -5,9 +5,9 @@ from pg_harness import unmigrated_database_url
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import IntegrityError
 
-from ontocurator.storage.schema import upgrade
+from ontotator.storage.schema import upgrade
 
-S = "ontocurator"
+S = "ontotator"
 
 
 def _seed(conn) -> None:

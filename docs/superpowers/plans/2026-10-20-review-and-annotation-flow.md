@@ -6,7 +6,7 @@
 
 **Architecture:** Frontend-first. The translation review gets a pure decision module (`translation/decisionOrigin.ts`: implied clinical change, automatic "Accepted with corrections" and its revert), a one-line check band with a Details disclosure, a pinned rail at ≥1100 px and a pinned bottom bar below, and a "Next task" step fed by `listMyTasks()` and a pure `nextOpenTask()`. The only backend change is a read-only `TaskSummary.failed_check_count` derived at query time. The editor gets pure term-search helpers (`editor/termSearch.ts`), an ARIA 1.2 combobox in `SearchPanel`, a caret helper (`editor/textFocus.ts`), a coalescing hook for axis changes and a Values block whose "Confirm defaults (n)" sends one `set_axes`. Settings sections get their own addresses through the router.
 
-**Tech Stack:** Python 3.12, FastAPI, SQLAlchemy 2 (pytest via Docker testcontainers or `ONTOCURATOR_TEST_PG_URL`); React 18, TypeScript, Vitest + Testing Library, Playwright + axe-core; `openapi-typescript` for `generated.ts`.
+**Tech Stack:** Python 3.12, FastAPI, SQLAlchemy 2 (pytest via Docker testcontainers or `ONTOTATOR_TEST_PG_URL`); React 18, TypeScript, Vitest + Testing Library, Playwright + axe-core; `openapi-typescript` for `generated.ts`.
 
 **Binding inputs:** the spec above; mockups `.superpowers/mockups/review-annotation-20261020/` (`01-translation-review.html`, `02-annotation-term-loop.html`, `03-editor-header-polish.html`; where a mockup and the spec differ, the spec wins); critique screenshots `build/phase0-ux/evidence/critique-20261020/`; `PRODUCT.md`; `DESIGN.md`.
 
@@ -27,7 +27,7 @@ Worktree: `C:/Users/jan-p/Development/ontocurator/.worktrees/review-annotation` 
 5. **Machine limits (16 GB), machine-wide.** The limits count the agents of **both** worktrees: while the lead-workflow plan still runs in `.worktrees/phase0-implementation`, its heavy, light and Playwright agents use the same slots. At most **two heavy** agents at once. Heavy = backend pytest that touches PostgreSQL, a full Vitest run, Playwright, a `scripts/check.sh` stage. Light = single Vitest files, `npm --prefix frontend run typecheck`, ruff/mypy, generator scripts. At most three light agents at once. Lane **L+** = light, but its one full Vitest run at the end waits until the orchestrator confirms a free heavy slot.
 6. **Vitest always** with `--maxWorkers=4 --minWorkers=1`: single file `npm --prefix frontend test -- --maxWorkers=4 --minWorkers=1 tests/<path>`; full suite `npm --prefix frontend test -- --maxWorkers=4 --minWorkers=1`.
 7. **Playwright: one run at a time on the machine** (across both worktrees; the lead plan uses port 18765), always with `HPO_E2E_PORT=18793` for this plan: `HPO_E2E_PORT=18793 npm --prefix frontend run test:e2e -- <spec>` (it rebuilds `frontend/dist`). If the build fails because another agent is mid-edit, rerun after it finishes; never fix its files. The static gate `scripts/check.sh --only static` checks the whole tree, so it may fail on a sibling WP's in-progress files; a WP fixes only failures in its own Owns, reports the others with file names, and the orchestrator reruns it later.
-8. **Backend tests.** Need Docker running or `ONTOCURATOR_TEST_PG_URL`. Run single files serially (no `-n`): `uv run pytest tests/<file>.py -q`. Static: `uv run ruff check . && uv run ruff format --check . && uv run mypy src`. The full backend suite (~25 min) runs only in the final gate.
+8. **Backend tests.** Need Docker running or `ONTOTATOR_TEST_PG_URL`. Run single files serially (no `-n`): `uv run pytest tests/<file>.py -q`. Static: `uv run ruff check . && uv run ruff format --check . && uv run mypy src`. The full backend suite (~25 min) runs only in the final gate.
 9. **Contracts.** `contracts/openapi.json` and `frontend/src/api/generated.ts` are never hand-edited. Regenerate with `uv run python scripts/export_openapi.py && npm --prefix frontend run api:generate`; drift checks `uv run python scripts/export_openapi.py --check` and `npm --prefix frontend run api:check`. The only contracts writer among the WPs is R4a. The response change is additive (`failed_check_count: int | None = None`), so existing frontend code and fixtures keep compiling. No migration. **After every merge of `feat/lead-workflow`** the orchestrator regenerates both files (conflicts in them are resolved by taking either side and regenerating, never by hand) and runs both drift checks before the next wave.
 10. **Straight-swap rule.** When copy or styles change, keep classes, IDs, `data-*` attributes and test hooks (`.candidate-card`, `#search-input`, `data-axis-field`, `data-testid="annotator-identity"`, `data-repair=…`) unless the WP block names the replacement. Tests that assert replaced copy are updated in the WP that changes the copy (they are listed in its Owns).
 11. **English** for all files and UI copy; icons only from `frontend/src/ui/icons.tsx` (no "✓", "↳", "+" glyph icons). Status never by colour alone. Unavailable actions use `aria-disabled` + `aria-describedby` reason (existing `Button`). Every programmatic focus uses `focus({ preventScroll: true })` unless the WP block says otherwise. Shortcuts only through `useShortcut` / `useShortcutHint` in `ui/shortcuts.ts` (read-only for this plan: checkboxes and radios are already not typing targets; single-character bindings already ignore Shift).
@@ -90,7 +90,7 @@ The plans run on different branches in different worktrees at the same time. `fe
 | `frontend/src/translation/ReviewParts.tsx` | L2b | R1 |
 | `frontend/src/ui/AppShell.tsx`, `frontend/tests/ui/appShell.test.tsx`, `frontend/tests/labels.test.ts`, `frontend/tests/translationTaskApp.test.tsx`, `frontend/src/app/labels.ts` | L6 | P1 |
 | `frontend/src/styles/index.css`, `frontend/src/styles/components.css` | L9 | P2 (one `@import`), R4b (one rule) |
-| `src/ontocurator/assignments/service.py` | L0b → L1p | R4a |
+| `src/ontotator/assignments/service.py` | L0b → L1p | R4a |
 | `contracts/openapi.json`, `frontend/src/api/generated.ts` | L0b → L1 → L1p → L1b | R4a |
 | `tests/browser_server.py` | L10a | V0 (one import, one registration line) |
 | existing `frontend/browser/*.spec.ts`, `lead-workflow*.spec.ts` (arrive by merge) | L10b, L10c | V3 |
@@ -107,7 +107,7 @@ T1's files (`pyproject.toml`, `uv.lock`, `scripts/check.sh`, `tests/conftest.py`
 | `frontend/src/translation/ReviewParts.tsx`, `frontend/tests/translationChecks.test.tsx` | R1 only |
 | `frontend/src/translation/decisionOrigin.ts`, `frontend/src/translation/reviewRules.ts`, `frontend/tests/decisionOrigin.test.ts`, `frontend/tests/reviewRules.test.ts` | R2 only |
 | `frontend/src/app/caseOrder.ts`, `frontend/tests/taskOrder.test.ts` | R3 only |
-| `src/ontocurator/assignments/service.py`, `src/ontocurator/application/translation_reviews.py`, `contracts/openapi.json`, `frontend/src/api/generated.ts` | R4a only |
+| `src/ontotator/assignments/service.py`, `src/ontotator/application/translation_reviews.py`, `contracts/openapi.json`, `frontend/src/api/generated.ts` | R4a only |
 | `frontend/src/tasks/MyTasks.tsx`, `frontend/tests/myTasks.test.tsx`, `frontend/src/styles/components.css` | R4b only |
 | `frontend/src/app/CaseScreen.tsx`, `frontend/src/editor/AnnotationPanel.tsx`, `frontend/src/styles/screens/editor.css`, `frontend/tests/caseScreen.test.tsx`, `frontend/tests/review-findings.test.tsx`, `frontend/tests/workflow-regressions.test.tsx` | A1 → A2 → P1 |
 | `frontend/src/editor/SearchPanel.tsx`, `frontend/src/editor/termSearch.ts`, `frontend/src/editor/textFocus.ts`, `frontend/tests/searchPanel.test.tsx`, `frontend/tests/termSearch.test.ts`, `frontend/tests/textFocus.test.ts`, `frontend/tests/assignmentEditor.test.tsx`, `frontend/tests/caseTree.test.tsx` | A1 only (A2 imports `textFocus.ts`) |
@@ -227,7 +227,7 @@ export function nextOpenTask(tasks: readonly TaskSummary[], currentAssignmentId:
 ### Backend (R4a)
 
 ```python
-# src/ontocurator/assignments/service.py
+# src/ontotator/assignments/service.py
 @dataclass(frozen=True)
 class TaskSummary:
     ...
@@ -237,7 +237,7 @@ class TaskSummary:
     failed_check_count: int | None = None
 
 
-# src/ontocurator/application/translation_reviews.py (module level, used by open() and my_tasks())
+# src/ontotator/application/translation_reviews.py (module level, used by open() and my_tasks())
 def failed_translation_checks(
     translation: dict[str, Any] | None,
 ) -> list[TranslationCheck]: ...
@@ -331,7 +331,7 @@ export interface Crumb { label: string; onClick?: () => void; href?: string; tit
 - **Shared contracts:** "Translation review" (`reviewRules.ts`, `decisionOrigin.ts`, `ReviewFormProps`, R2 part of `labels.ts`).
 - **Owns:** `frontend/src/translation/decisionOrigin.ts` (create), `frontend/src/translation/reviewRules.ts`, `frontend/src/translation/ReviewForm.tsx`, `frontend/src/translation/labels.ts` (R2 part), `frontend/src/translation/TranslationReviewScreen.tsx` (decision wiring and keys only), `frontend/src/translation/translation.css` (fact line, Kbd, note, key hint), tests `frontend/tests/decisionOrigin.test.ts` (create), `frontend/tests/reviewForm.test.tsx`, `frontend/tests/reviewRules.test.ts`, `frontend/tests/translationReview.test.tsx`, `frontend/tests/translationLabels.test.ts`.
 - **Size / lane / review:** M / L+ / —.
-- **Code to read:** `translation/ReviewForm.tsx` (whole), `translation/reviewRules.ts`, `translation/labels.ts:1-60`, `translation/TranslationReviewScreen.tsx:28-47` (raw/visual/typed form), `:177-180` (`edit`), `:224` (Ctrl+Enter), `:321-328` (form wiring), `:341-350` (footer), `ui/Kbd.tsx`, `ui/shortcuts.ts` (`useShortcut` options), `src/ontocurator/domain/translation_review.py` (rules; read only), mockup `01-translation-review.html` (rail).
+- **Code to read:** `translation/ReviewForm.tsx` (whole), `translation/reviewRules.ts`, `translation/labels.ts:1-60`, `translation/TranslationReviewScreen.tsx:28-47` (raw/visual/typed form), `:177-180` (`edit`), `:224` (Ctrl+Enter), `:321-328` (form wiring), `:341-350` (footer), `ui/Kbd.tsx`, `ui/shortcuts.ts` (`useShortcut` options), `src/ontotator/domain/translation_review.py` (rules; read only), mockup `01-translation-review.html` (rail).
 - **Prerequisites:** `test ! -e frontend/src/translation/decisionOrigin.ts`; `grep -n "function canonicalText" frontend/src/translation/reviewRules.ts`.
 
 - [ ] **Step 1: Failing pure tests** (`frontend/tests/decisionOrigin.test.ts`):
@@ -573,10 +573,10 @@ describe("nextOpenTask", () => {
 - **Goal:** My tasks can flag a translation review whose run failed automatic checks, without a migration.
 - **Spec:** A.7 (backend), A.1 item 8, resolved question 10.
 - **Shared contracts:** "Backend (R4a)".
-- **Owns:** `src/ontocurator/assignments/service.py` (`TaskSummary`, `my_tasks`), `src/ontocurator/application/translation_reviews.py` (extract `failed_translation_checks`, use it in `open`), `tests/test_my_tasks_failed_checks.py` (create), `contracts/openapi.json`, `frontend/src/api/generated.ts`.
+- **Owns:** `src/ontotator/assignments/service.py` (`TaskSummary`, `my_tasks`), `src/ontotator/application/translation_reviews.py` (extract `failed_translation_checks`, use it in `open`), `tests/test_my_tasks_failed_checks.py` (create), `contracts/openapi.json`, `frontend/src/api/generated.ts`.
 - **Size / lane / review:** S / H / yes (backend).
 - **Code to read:** `assignments/service.py:96-115` (`TaskSummary`), `:645-716` (`my_tasks`: one variant query per project, `resolve_translation_lineage` already returns `(ancestor, original)` and the code discards the ancestor), `application/translation_reviews.py:300-330` (`checks = [TranslationCheck.model_validate(c) …]`, `[c for c in checks if not c.passed]`), `tests/test_translation_review_task.py:1-75` (fixture `case_env`, `assigned`) and `:760-780` (`/api/v1/me/tasks` assertions), `tests/t1_builders.py:34` (`translation_unit(..., checks=…)`), `tests/work_plan_support.py` (`plan_all`).
-- **Prerequisites:** `grep -n "case_id: str | None = None" src/ontocurator/assignments/service.py`; `! grep -n "failed_check_count" src/ontocurator/assignments/service.py`.
+- **Prerequisites:** `grep -n "case_id: str | None = None" src/ontotator/assignments/service.py`; `! grep -n "failed_check_count" src/ontotator/assignments/service.py`.
 
 - [ ] **Step 1: Failing test** (`tests/test_my_tasks_failed_checks.py`, heavy):
 
@@ -732,7 +732,7 @@ it("pluralises the failed-check line", async () => {
 - **Shared contracts:** "Editor" (`termSearch.ts`, `textFocus.ts`, `SearchPanelProps`).
 - **Owns:** `frontend/src/editor/termSearch.ts`, `frontend/src/editor/textFocus.ts` (create), `frontend/src/editor/SearchPanel.tsx`, `frontend/src/app/CaseScreen.tsx` (pending pane, selection handler focus, `cancelPending` focus), `frontend/src/editor/AnnotationPanel.tsx` (only the "Change term" search wiring: `autoFocus`, `onEscape` → close and focus "Change term"), `frontend/src/styles/screens/editor.css` (search and hit rules), tests `frontend/tests/termSearch.test.ts`, `frontend/tests/textFocus.test.ts` (create), `frontend/tests/searchPanel.test.tsx`, `frontend/tests/caseScreen.test.tsx`, `frontend/tests/assignmentEditor.test.tsx`, `frontend/tests/caseTree.test.tsx`, `frontend/tests/review-findings.test.tsx`, `frontend/tests/workflow-regressions.test.tsx` (copy and Enter-path updates).
 - **Size / lane / review:** M / L+ / —.
-- **Code to read:** `editor/SearchPanel.tsx` (whole), `editor/searchState.ts` (`SearchState.query`, `isLoading`, candidates cleared on a new search), `editor/searchLanguages.ts` (`SearchLanguageControl`), `editor/AnnotationPanel.tsx:69-75` (`quoteSegments`), `:105-220` (Change term), `app/CaseScreen.tsx:1466-1500` (new pending annotation, `cancelPending`), `:2821-2864` (pending pane), `:377` (`languagesForOntology`, `view.document.language`), `spans/offsets.ts` (`toUtf16`), `spans/adapter.ts` (`SelectionPayload`), `translation/labels.ts` (`languageName`, read-only import), `ui/Kbd.tsx`, `ui/InlineMessage.tsx`, `ui/shortcuts.ts` (`useShortcutHint`), `styles/screens/editor.css:396-450, 1023-1060` (candidate rules), `tests/caseScreen.test.tsx:810-830` (how a test marks text), `src/ontocurator/vendor/hpo_span_annotator/hpo.py:300,323`, `lexical.py:216`, `search.py:208`, `ontology/translations.py:214` (match kinds).
+- **Code to read:** `editor/SearchPanel.tsx` (whole), `editor/searchState.ts` (`SearchState.query`, `isLoading`, candidates cleared on a new search), `editor/searchLanguages.ts` (`SearchLanguageControl`), `editor/AnnotationPanel.tsx:69-75` (`quoteSegments`), `:105-220` (Change term), `app/CaseScreen.tsx:1466-1500` (new pending annotation, `cancelPending`), `:2821-2864` (pending pane), `:377` (`languagesForOntology`, `view.document.language`), `spans/offsets.ts` (`toUtf16`), `spans/adapter.ts` (`SelectionPayload`), `translation/labels.ts` (`languageName`, read-only import), `ui/Kbd.tsx`, `ui/InlineMessage.tsx`, `ui/shortcuts.ts` (`useShortcutHint`), `styles/screens/editor.css:396-450, 1023-1060` (candidate rules), `tests/caseScreen.test.tsx:810-830` (how a test marks text), `src/ontotator/vendor/hpo_span_annotator/hpo.py:300,323`, `lexical.py:216`, `search.py:208`, `ontology/translations.py:214` (match kinds).
 - **Prerequisites:** `test ! -e frontend/src/editor/termSearch.ts`; `grep -n "Search ontology term" frontend/src/editor/SearchPanel.tsx`.
 
 - [ ] **Step 1: Failing pure tests** (`frontend/tests/termSearch.test.ts`):
@@ -980,8 +980,8 @@ it("has no inline styles or glyph icons in the inspector and the search", () => 
 - **Spec:** A.10, B.9, "Acceptance"; spec "Work packages" note (Playwright against `tests/browser_server.py`).
 - **Owns:** `tests/browser_review_flow_scenarios.py` (create), `tests/test_browser_review_flow_fixture.py` (create), `tests/browser_server.py` (one import and one registration line after `register_lead_workflow_scenario_route(app)`), `frontend/browser/reviewFlowHelpers.ts` (create).
 - **Size / lane / review:** M / H / —.
-- **Code to read:** `tests/browser_lead_workflow_scenarios.py` (`lead_project`, `person`, `import_units`, `plan`, `batch_assign`, `result`, `PEOPLE`, route registration), `tests/test_browser_lead_workflow_fixture.py`, `tests/browser_server.py:747-900` (translation review scenario; `translation_unit(..., checks=…)`), `:1285-1316` (`/__test_translation__`: `app.state.ontology_store.add(Actor.cli(), "hp-de.babelon.tsv", …)`), `tests/t1_fixtures.py:55-100` (profile: layer `hpo`, type `phenotype`, axes `assertion`, `experiencer`, `temporality`), `tests/fixtures/hp-de.babelon.tsv` ("Krampfanfall", "Muskelhypotonie"), `src/ontocurator/storage/tables.py` (`ProjectRow.creation_defaults`), `frontend/browser/leadWorkflowHelpers.ts`.
-- **Prerequisites:** `grep -n "register_lead_workflow_scenario_route(app)" tests/browser_server.py`; `grep -n "failed_check_count" src/ontocurator/assignments/service.py` (R4a committed).
+- **Code to read:** `tests/browser_lead_workflow_scenarios.py` (`lead_project`, `person`, `import_units`, `plan`, `batch_assign`, `result`, `PEOPLE`, route registration), `tests/test_browser_lead_workflow_fixture.py`, `tests/browser_server.py:747-900` (translation review scenario; `translation_unit(..., checks=…)`), `:1285-1316` (`/__test_translation__`: `app.state.ontology_store.add(Actor.cli(), "hp-de.babelon.tsv", …)`), `tests/t1_fixtures.py:55-100` (profile: layer `hpo`, type `phenotype`, axes `assertion`, `experiencer`, `temporality`), `tests/fixtures/hp-de.babelon.tsv` ("Krampfanfall", "Muskelhypotonie"), `src/ontotator/storage/tables.py` (`ProjectRow.creation_defaults`), `frontend/browser/leadWorkflowHelpers.ts`.
+- **Prerequisites:** `grep -n "register_lead_workflow_scenario_route(app)" tests/browser_server.py`; `grep -n "failed_check_count" src/ontotator/assignments/service.py` (R4a committed).
 
 Route `POST /__test_review_flow__?scenario=<name>` returns `result(...)` of the lead helpers plus `assignments: {name: id}` and `texts: {name: text}`.
 

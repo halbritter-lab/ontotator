@@ -12,7 +12,7 @@ Plan: [Umsetzung](../plans/2026-10-02-configured-annotation-layers.md).
 
 ## 1. Zweck und Architekturentscheidung
 
-Ontocurator bleibt ein lokaler Editor für die unabhängige Annotation und die
+Ontotator bleibt ein lokaler Editor für die unabhängige Annotation und die
 herkunftsunabhängige Prüfung von Ontologieannotation auf Texten. Ein Arbeitspaket
 enthält geordnete Fälle, eine vollständige Aufgabenbeschreibung und optional
 vorhandene Annotationen. Die annotierende Person muss keine Konfiguration schreiben.
@@ -66,10 +66,10 @@ Neue Vertragskennungen:
 
 | Vertrag | Kennung |
 | --- | --- |
-| Arbeitspaket | `ontocurator-work-package/v2` |
-| Aufgabenprofil | `ontocurator-task-profile/v1` |
-| Annotationssnapshot | `ontocurator-annotation/v3` |
-| Abgabesnapshot | `ontocurator-submission/v2` |
+| Arbeitspaket | `ontotator-work-package/v2` |
+| Aufgabenprofil | `ontotator-task-profile/v1` |
+| Annotationssnapshot | `ontotator-annotation/v3` |
+| Abgabesnapshot | `ontotator-submission/v2` |
 
 `PackageManifest` enthält `package_id`, `format_version`, `document_order`,
 `task_profile`, `task_profile_sha256`, `file_hashes`, `created_at` und optionale
@@ -239,7 +239,7 @@ aufgelöste Definition. Suchindex-Caches werden nach Ontologiehash geführt;
 Suchanfragen und Suchereignisse tragen Schicht- und Ontologieidentität.
 
 Neue Installationen verwenden das explizit gekennzeichnete Workspaceformat
-`ontocurator-workspace/v4`. Die Versionsprüfung erfolgt vor DDL oder Schreibzugriff.
+`ontotator-workspace/v4`. Die Versionsprüfung erfolgt vor DDL oder Schreibzugriff.
 Alte Datenbanken werden ohne Migration und ohne Änderung abgelehnt, mit Hinweis
 auf einen neuen Workspace bzw. ein externes Konvertierungswerkzeug. Kein Löschen,
 kein Reset, keine automatische Übernahme historischer Reviews. Das neue Schema

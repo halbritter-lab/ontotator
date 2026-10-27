@@ -7,13 +7,13 @@ from typing import Any
 from proposal_check_support import BASE, assign, proposal_env
 from test_consolidation_resolve_api import build_round, group, inputs, mutate, ok
 
-from ontocurator.application.annotation_modes import load_text_mode
-from ontocurator.application.text_targets import (
+from ontotator.application.annotation_modes import load_text_mode
+from ontotator.application.text_targets import (
     TextRow,
     text_documents,
     text_target_document,
 )
-from ontocurator.storage.proposal_queries import newest_proposal_refs
+from ontotator.storage.proposal_queries import newest_proposal_refs
 
 
 def rows(env: Any, **params: Any) -> dict[tuple[str, str], dict[str, Any]]:

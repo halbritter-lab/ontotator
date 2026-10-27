@@ -4,20 +4,20 @@ from pathlib import Path
 import pytest
 from pg_harness import database_for
 
-from ontocurator.application.editing import (
+from ontotator.application.editing import (
     AttachMentionCommand,
     CreateAnnotationCommand,
     EditMentionCommand,
     EditorService,
 )
-from ontocurator.application.workspaces import WorkspaceService
-from ontocurator.domain.documents import (
+from ontotator.application.workspaces import WorkspaceService
+from ontotator.domain.documents import (
     Document,
     OntologyRef,
     Segment,
 )
-from ontocurator.domain.errors import AccessDenied, DomainError
-from ontocurator.domain.profiles import (
+from ontotator.domain.errors import AccessDenied, DomainError
+from ontotator.domain.profiles import (
     AnnotationTypeDefinition,
     AxisDefinition,
     LayerDefinition,
@@ -25,10 +25,10 @@ from ontocurator.domain.profiles import (
     TaskProfile,
     profile_hash,
 )
-from ontocurator.domain.workspace import MutationEnvelope, WorkspaceKey
-from ontocurator.ontology.service import OntologyService
-from ontocurator.packages.models import PackageManifest, ValidatedPackage
-from ontocurator.storage.repository import Repository
+from ontotator.domain.workspace import MutationEnvelope, WorkspaceKey
+from ontotator.ontology.service import OntologyService
+from ontotator.packages.models import PackageManifest, ValidatedPackage
+from ontotator.storage.repository import Repository
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "hp.json"
 
@@ -92,7 +92,7 @@ def _setup_test_env(tmp_path: Path):
     pkg = ValidatedPackage(
         manifest=PackageManifest(
             package_id="pkg-1",
-            format_version="ontocurator-work-package/v2",
+            format_version="ontotator-work-package/v2",
             document_order=["doc-1"],
             task_profile=profile,
             task_profile_sha256=profile_hash(profile),
@@ -400,7 +400,7 @@ def test_reject_obsolete_or_unknown_term_creation(tmp_path: Path):
 
 
 def test_create_and_set_term_with_term_id(tmp_path: Path):
-    from ontocurator.application.editing import SetTermCommand
+    from ontotator.application.editing import SetTermCommand
 
     _, _, ws_svc, edit_svc, _ = _setup_test_env(tmp_path)
     ws_key = WorkspaceKey(
@@ -455,7 +455,7 @@ def test_create_and_set_term_with_term_id(tmp_path: Path):
 def test_command_conflicting_term_id_and_hpo_id_rejected():
     from pydantic import ValidationError
 
-    from ontocurator.application.editing import SetTermCommand
+    from ontotator.application.editing import SetTermCommand
 
     with pytest.raises((ValueError, ValidationError), match="Conflicting"):
         CreateAnnotationCommand.model_validate(

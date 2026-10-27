@@ -6,9 +6,9 @@ import pytest
 from t1_builders import bundle, correction_unit, native_unit, translation_unit
 from t1_fixtures import PIN, hpo_profile
 
-from ontocurator.domain.project_rules import ProjectRules
-from ontocurator.domain.variants import VariantInfo
-from ontocurator.exchange.plan import ProjectImportState, plan_import, read_t1_upload
+from ontotator.domain.project_rules import ProjectRules
+from ontotator.domain.variants import VariantInfo
+from ontotator.exchange.plan import ProjectImportState, plan_import, read_t1_upload
 
 
 def planned(tmp_path, units, state=None):

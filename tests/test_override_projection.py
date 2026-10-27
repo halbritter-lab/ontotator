@@ -12,9 +12,9 @@ from test_translation_review_service import review_env as review_env
 from test_translation_review_service import save
 from test_variant_import import commit, override, preview
 
-from ontocurator.api.document_projection import ProjectDocumentSummary
-from ontocurator.auth.audit import Actor, record_audit
-from ontocurator.storage.tables import (
+from ontotator.api.document_projection import ProjectDocumentSummary
+from ontotator.auth.audit import Actor, record_audit
+from ontotator.storage.tables import (
     AuditEventRow,
     DocumentRow,
     ProjectMembershipRow,
@@ -255,9 +255,7 @@ def test_override_metadata_is_batched_and_not_exposed(review_env, count):
     finally:
         event.remove(env.db.engine, "before_cursor_execute", capture)
     assert sum(row["accepted_without_review"] for row in result.values()) == count
-    audit_queries = [
-        sql for sql in statements if "FROM ontocurator.audit_events" in sql
-    ]
+    audit_queries = [sql for sql in statements if "FROM ontotator.audit_events" in sql]
     assert len(audit_queries) == 1
     assert "audit_events.details" not in audit_queries[0]
     assert "audit_events.actor" not in audit_queries[0]
@@ -294,4 +292,4 @@ def test_ordinary_current_authority_precedes_override_projection(review_env):
         event.remove(env.db.engine, "before_cursor_execute", capture)
     assert response.status_code in (403, 404)
     assert "accepted_without_review" not in response.text
-    assert not any("FROM ontocurator.audit_events" in sql for sql in statements)
+    assert not any("FROM ontotator.audit_events" in sql for sql in statements)

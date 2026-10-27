@@ -6,8 +6,8 @@ from sqlalchemy import select, update
 from test_reanchor_job import children, corrected, execute, generated
 from test_reanchor_job import runtime as runtime
 
-from ontocurator.domain.review import ReviewTargetSet
-from ontocurator.storage.tables import AssignmentRow, DraftRow, ProposalSetRow
+from ontotator.domain.review import ReviewTargetSet
+from ontotator.storage.tables import AssignmentRow, DraftRow, ProposalSetRow
 
 
 @pytest.fixture
@@ -168,17 +168,17 @@ def test_upgrade_preserves_pending_producer_payloads(pending, tmp_path):
     from pg_harness import unmigrated_database_url
     from sqlalchemy import MetaData, Table, create_engine, insert, text
 
-    from ontocurator.storage.schema import upgrade
-    from ontocurator.storage.tables import AnnotationSnapshotRow, DocumentRow
+    from ontotator.storage.schema import upgrade
+    from ontotator.storage.tables import AnnotationSnapshotRow, DocumentRow
 
     assert len(opened(pending).json()["view"]["draft"]["reanchor_inputs"]) == 2
     # Seed a genuine old schema with real producer output. The current head has
     # forward-only migrations and must not be downgraded to manufacture it.
     proposal_query = text(
-        "SELECT annotation_set_id, payload::text, pending_items::text FROM ontocurator.proposal_sets ORDER BY annotation_set_id"
+        "SELECT annotation_set_id, payload::text, pending_items::text FROM ontotator.proposal_sets ORDER BY annotation_set_id"
     )
     snapshot_query = text(
-        "SELECT annotation_id, version, payload::text FROM ontocurator.annotation_snapshots ORDER BY annotation_id, version"
+        "SELECT annotation_id, version, payload::text FROM ontotator.annotation_snapshots ORDER BY annotation_id, version"
     )
     with pending.db.transaction() as conn:
         before = conn.execute(proposal_query).all()
@@ -194,7 +194,7 @@ def test_upgrade_preserves_pending_producer_payloads(pending, tmp_path):
     upgrade(url, "0007")
     engine = create_engine(url)
     try:
-        metadata = MetaData(schema="ontocurator")
+        metadata = MetaData(schema="ontotator")
         tables = {
             name: Table(name, metadata, autoload_with=engine)
             for name in ("projects", "documents", *records)
@@ -255,7 +255,7 @@ def test_upgrade_preserves_pending_producer_payloads(pending, tmp_path):
             assert conn.execute(snapshot_query).all() == snapshots
             assert conn.execute(
                 text(
-                    "SELECT reanchor_inputs, reanchor_resolutions, reanchor_inputs_initialized_at FROM ontocurator.drafts"
+                    "SELECT reanchor_inputs, reanchor_resolutions, reanchor_inputs_initialized_at FROM ontotator.drafts"
                 )
             ).one() == ([], [], None)
         upgrade(url)

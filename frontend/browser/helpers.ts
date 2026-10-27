@@ -24,7 +24,7 @@ export const usernameFor = (pseudonym: string) => pseudonym.toLowerCase().replac
 /** Log in an already provisioned ordinary account without adding any roles/work. */
 export async function loginExisting(page: Page, username: string) {
   await openTasksHome(page);
-  const form = page.getByRole("form", { name: "Log in to Ontocurator" });
+  const form = page.getByRole("form", { name: "Log in to Ontotator" });
   await form.getByLabel("Username", { exact: true }).fill(username);
   await form.getByLabel("Password", { exact: true }).fill(TEST_PASSWORD);
   await form.getByRole("button", { name: "Log in", exact: true }).click();
@@ -61,7 +61,7 @@ export async function loginAs(page: Page, pseudonym: string, projects: string[] 
   const created = await page.request.post(`/__test_user__?${query.toString()}`);
   expect(created.ok()).toBeTruthy();
   await openTasksHome(page);
-  const form = page.getByRole("form", { name: "Log in to Ontocurator" });
+  const form = page.getByRole("form", { name: "Log in to Ontotator" });
   await form.getByLabel("Username").fill(username);
   await form.getByLabel("Password").fill(TEST_PASSWORD);
   await form.getByRole("button", { name: "Log in", exact: true }).click();

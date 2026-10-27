@@ -2,10 +2,10 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ontocurator stores everything in PostgreSQL through SQLAlchemy 2 and Alembic, and the whole existing test suite runs against PostgreSQL. The desktop launcher keeps working, with a database URL instead of a SQLite file.
+**Goal:** Ontotator stores everything in PostgreSQL through SQLAlchemy 2 and Alembic, and the whole existing test suite runs against PostgreSQL. The desktop launcher keeps working, with a database URL instead of a SQLite file.
 
 **Architecture:**
-- **Mappings and schema:** typed declarative table mappings live in `storage/tables.py`. A hand-written Alembic migration creates the schema `ontocurator`. Two roles: `ontocurator_owner` owns the schema and runs migrations. `ontocurator_app` is the runtime role; it may only read and insert on the append-only tables, and triggers reject updates and deletes there (T2 D6).
+- **Mappings and schema:** typed declarative table mappings live in `storage/tables.py`. A hand-written Alembic migration creates the schema `ontotator`. Two roles: `ontotator_owner` owns the schema and runs migrations. `ontotator_app` is the runtime role; it may only read and insert on the append-only tables, and triggers reject updates and deletes there (T2 D6).
 - **Repository:** `storage/repository.py` is rewritten for PostgreSQL with the **same public interface**, so application services, routes and tests stay as they are. A project replaces the package (`WorkspaceKey.package_id` carries the project key, index decision D-e).
 - **Transactions:** `Database.transaction()` joins the transaction already open in the current context. A repository call made inside an editing operation therefore commits or rolls back with it, as the single SQLite connection did.
 - **Tests:** `tests/pg_harness.py` starts one PostgreSQL testcontainer per session, migrates a template database once, and gives each test its own copy.
@@ -23,16 +23,16 @@ Spec: `docs/superpowers/specs/2026-10-14-t2-server-foundation-design.md` (P1, P2
 | File | Change |
 |---|---|
 | `pyproject.toml`, `uv.lock` | add `sqlalchemy`, `alembic`, `psycopg[binary]`; dev: `testcontainers[postgres]` |
-| `src/ontocurator/settings.py` | **new**: secrets from `NAME`/`NAME_FILE`, database URL resolution |
-| `src/ontocurator/storage/blobs.py` | **new**: content-addressed files on the data volume (D3) |
-| `src/ontocurator/storage/tables.py` | **new**: typed table mappings, schema and role names |
-| `src/ontocurator/storage/schema.py` | **new**: Alembic upgrade, head and current revision |
-| `src/ontocurator/storage/migrations/env.py`, `script.py.mako`, `versions/0001_initial.py` | **new**: Alembic environment and the first migration |
-| `src/ontocurator/storage/database.py` | **rewritten**: engine, blob store, ambient transactions |
-| `src/ontocurator/storage/repository.py` | **rewritten**: PostgreSQL repository with the old interface |
-| `src/ontocurator/storage/sqlite_database.py`, `sqlite_repository.py`, `*.sql` | temporary copies of the old storage (Task 4), **deleted** in Task 9 |
-| `src/ontocurator/config.py`, `api/app.py`, `cli.py` | `database_url` replaces `database_path`; `ontocurator db upgrade` |
-| `src/ontocurator/application/editing.py`, `api/tree_routes.py` | pass the project to `get_search_event` |
+| `src/ontotator/settings.py` | **new**: secrets from `NAME`/`NAME_FILE`, database URL resolution |
+| `src/ontotator/storage/blobs.py` | **new**: content-addressed files on the data volume (D3) |
+| `src/ontotator/storage/tables.py` | **new**: typed table mappings, schema and role names |
+| `src/ontotator/storage/schema.py` | **new**: Alembic upgrade, head and current revision |
+| `src/ontotator/storage/migrations/env.py`, `script.py.mako`, `versions/0001_initial.py` | **new**: Alembic environment and the first migration |
+| `src/ontotator/storage/database.py` | **rewritten**: engine, blob store, ambient transactions |
+| `src/ontotator/storage/repository.py` | **rewritten**: PostgreSQL repository with the old interface |
+| `src/ontotator/storage/sqlite_database.py`, `sqlite_repository.py`, `*.sql` | temporary copies of the old storage (Task 4), **deleted** in Task 9 |
+| `src/ontotator/config.py`, `api/app.py`, `cli.py` | `database_url` replaces `database_path`; `ontotator db upgrade` |
+| `src/ontotator/application/editing.py`, `api/tree_routes.py` | pass the project to `get_search_event` |
 | `tests/pg_harness.py` | **new**: PostgreSQL test server, template, per-test databases |
 | `tests/conftest.py` | database provider and engine clean-up per test |
 | `tests/test_settings.py`, `test_blobs.py`, `test_schema.py`, `test_database.py`, `test_pg_repository.py` | **new** |
@@ -75,7 +75,7 @@ The server reads its settings from the environment. Secrets come from `NAME` or 
 
 **Files:**
 - Modify: `pyproject.toml`
-- Create: `src/ontocurator/settings.py`
+- Create: `src/ontotator/settings.py`
 - Test: `tests/test_settings.py`
 
 - [ ] **Step 1: Add the dependencies**
@@ -98,8 +98,8 @@ from pathlib import Path
 
 import pytest
 
-from ontocurator import settings
-from ontocurator.settings import SettingsError, database_url, read_secret
+from ontotator import settings
+from ontotator.settings import SettingsError, database_url, read_secret
 
 
 def test_a_secret_comes_from_the_variable(tmp_path: Path) -> None:
@@ -144,22 +144,22 @@ def test_the_database_password_is_read_from_its_file(tmp_path: Path) -> None:
     secret = tmp_path / "pw"
     secret.write_text("s3cret\n", encoding="utf-8")
     env = {
-        "ONTOCURATOR_DATABASE_URL": "postgresql://ontocurator_app@db:5432/ontocurator",
-        "ONTOCURATOR_DATABASE_PASSWORD_FILE": str(secret),
+        "ONTOTATOR_DATABASE_URL": "postgresql://ontotator_app@db:5432/ontotator",
+        "ONTOTATOR_DATABASE_PASSWORD_FILE": str(secret),
     }
 
     url = database_url(env)
 
     assert url.drivername == "postgresql+psycopg"
-    assert url.username == "ontocurator_app"
+    assert url.username == "ontotator_app"
     assert url.password == "s3cret"
     assert url.host == "db"
 
 
 def test_a_password_in_the_url_and_a_password_setting_conflict() -> None:
     env = {
-        "ONTOCURATOR_DATABASE_URL": "postgresql://u:pw@db/x",
-        "ONTOCURATOR_DATABASE_PASSWORD": "other",
+        "ONTOTATOR_DATABASE_URL": "postgresql://u:pw@db/x",
+        "ONTOTATOR_DATABASE_PASSWORD": "other",
     }
 
     with pytest.raises(SettingsError, match="already contains a password"):
@@ -168,7 +168,7 @@ def test_a_password_in_the_url_and_a_password_setting_conflict() -> None:
 
 @pytest.mark.parametrize(
     "env",
-    [{}, {"ONTOCURATOR_DATABASE_URL": "sqlite:///x.db"}],
+    [{}, {"ONTOTATOR_DATABASE_URL": "sqlite:///x.db"}],
 )
 def test_only_postgresql_urls_are_accepted(env: dict[str, str]) -> None:
     with pytest.raises(SettingsError):
@@ -176,9 +176,9 @@ def test_only_postgresql_urls_are_accepted(env: dict[str, str]) -> None:
 
 
 def test_the_migration_url_has_its_own_prefix() -> None:
-    env = {"ONTOCURATOR_MIGRATION_DATABASE_URL": "postgresql://owner@db/x"}
+    env = {"ONTOTATOR_MIGRATION_DATABASE_URL": "postgresql://owner@db/x"}
 
-    assert database_url(env, prefix="ONTOCURATOR_MIGRATION_DATABASE").username == (
+    assert database_url(env, prefix="ONTOTATOR_MIGRATION_DATABASE").username == (
         "owner"
     )
 
@@ -195,11 +195,11 @@ def test_an_explicit_url_wins_over_the_provider(
 - [ ] **Step 3: Run it and see it fail**
 
 Run: `uv run pytest tests/test_settings.py -q`
-Expected: FAIL with `ImportError: cannot import name 'SettingsError' from 'ontocurator.settings'` (or `ModuleNotFoundError`).
+Expected: FAIL with `ImportError: cannot import name 'SettingsError' from 'ontotator.settings'` (or `ModuleNotFoundError`).
 
 - [ ] **Step 4: Implement**
 
-Create `src/ontocurator/settings.py`:
+Create `src/ontotator/settings.py`:
 
 ```python
 """Server settings from the environment.
@@ -244,13 +244,13 @@ def read_secret(name: str, env: Mapping[str, str] | None = None) -> str | None:
 
 
 def database_url(
-    env: Mapping[str, str] | None = None, *, prefix: str = "ONTOCURATOR_DATABASE"
+    env: Mapping[str, str] | None = None, *, prefix: str = "ONTOTATOR_DATABASE"
 ) -> URL:
     """``<prefix>_URL`` with the password of ``<prefix>_PASSWORD[_FILE]``.
 
-    The application uses ``ONTOCURATOR_DATABASE`` (role ``ontocurator_app``),
-    migrations use ``ONTOCURATOR_MIGRATION_DATABASE`` (role
-    ``ontocurator_owner``).
+    The application uses ``ONTOTATOR_DATABASE`` (role ``ontotator_app``),
+    migrations use ``ONTOTATOR_MIGRATION_DATABASE`` (role
+    ``ontotator_owner``).
     """
     env = os.environ if env is None else env
     raw = env.get(f"{prefix}_URL")
@@ -284,7 +284,7 @@ def resolve_database_url(explicit: str | None, workspace: Path | None) -> str:
     return explicit or database_url_provider(workspace)
 ```
 
-Call sites always use `settings.resolve_database_url(...)` through the module (`from ontocurator import settings`), never `from ontocurator.settings import resolve_database_url`. Otherwise a test's replacement of the provider is not seen.
+Call sites always use `settings.resolve_database_url(...)` through the module (`from ontotator import settings`), never `from ontotator.settings import resolve_database_url`. Otherwise a test's replacement of the provider is not seen.
 
 - [ ] **Step 5: Run it and see it pass**
 
@@ -294,10 +294,10 @@ Expected: `13 passed`
 - [ ] **Step 6: Lint and commit**
 
 ```bash
-uv run ruff check --fix src/ontocurator/settings.py tests/test_settings.py
-uv run ruff format src/ontocurator/settings.py tests/test_settings.py
+uv run ruff check --fix src/ontotator/settings.py tests/test_settings.py
+uv run ruff format src/ontotator/settings.py tests/test_settings.py
 uv run mypy src
-git add pyproject.toml uv.lock src/ontocurator/settings.py tests/test_settings.py
+git add pyproject.toml uv.lock src/ontotator/settings.py tests/test_settings.py
 git commit -m "feat(settings): read secrets and the PostgreSQL URL from the environment"
 ```
 
@@ -308,7 +308,7 @@ git commit -m "feat(settings): read secrets and the PostgreSQL URL from the envi
 Uploaded files are stored on the data volume under their SHA-256 (D3). The database keeps only metadata.
 
 **Files:**
-- Create: `src/ontocurator/storage/blobs.py`
+- Create: `src/ontotator/storage/blobs.py`
 - Test: `tests/test_blobs.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -323,7 +323,7 @@ from pathlib import Path
 
 import pytest
 
-from ontocurator.storage.blobs import BlobStore
+from ontotator.storage.blobs import BlobStore
 
 
 def test_a_file_is_stored_under_its_hash_and_read_back(tmp_path: Path) -> None:
@@ -362,11 +362,11 @@ def test_only_hex_digests_address_files(tmp_path: Path, bad: str) -> None:
 - [ ] **Step 2: Run it and see it fail**
 
 Run: `uv run pytest tests/test_blobs.py -q`
-Expected: FAIL with `ModuleNotFoundError: No module named 'ontocurator.storage.blobs'`
+Expected: FAIL with `ModuleNotFoundError: No module named 'ontotator.storage.blobs'`
 
 - [ ] **Step 3: Implement**
 
-Create `src/ontocurator/storage/blobs.py`:
+Create `src/ontotator/storage/blobs.py`:
 
 ```python
 """Content-addressed files on the data volume (T2 D3)."""
@@ -428,10 +428,10 @@ Expected: `7 passed`
 - [ ] **Step 5: Lint and commit**
 
 ```bash
-uv run ruff check --fix src/ontocurator/storage/blobs.py tests/test_blobs.py
-uv run ruff format src/ontocurator/storage/blobs.py tests/test_blobs.py
+uv run ruff check --fix src/ontotator/storage/blobs.py tests/test_blobs.py
+uv run ruff format src/ontotator/storage/blobs.py tests/test_blobs.py
 uv run mypy src
-git add src/ontocurator/storage/blobs.py tests/test_blobs.py
+git add src/ontotator/storage/blobs.py tests/test_blobs.py
 git commit -m "feat(storage): content-addressed file store for the data volume"
 ```
 
@@ -441,21 +441,21 @@ git commit -m "feat(storage): content-addressed file store for the data volume"
 The new modules take the final names `storage/database.py` and `storage/repository.py`. Until the switch in Task 7, the application and the existing tests keep using the SQLite code under temporary names, so every commit stays green.
 
 **Files:**
-- Rename: `src/ontocurator/storage/database.py` → `src/ontocurator/storage/sqlite_database.py`
-- Rename: `src/ontocurator/storage/repository.py` → `src/ontocurator/storage/sqlite_repository.py`
+- Rename: `src/ontotator/storage/database.py` → `src/ontotator/storage/sqlite_database.py`
+- Rename: `src/ontotator/storage/repository.py` → `src/ontotator/storage/sqlite_repository.py`
 - Modify: every importer in `src/`, `tests/` and `scripts/`
 
 - [ ] **Step 1: Rename and rewrite the imports**
 
 ```bash
-git mv src/ontocurator/storage/database.py src/ontocurator/storage/sqlite_database.py
-git mv src/ontocurator/storage/repository.py src/ontocurator/storage/sqlite_repository.py
-grep -rlE "ontocurator\.storage\.(database|repository)|from ontocurator\.storage import (database|repository)" src tests scripts \
+git mv src/ontotator/storage/database.py src/ontotator/storage/sqlite_database.py
+git mv src/ontotator/storage/repository.py src/ontotator/storage/sqlite_repository.py
+grep -rlE "ontotator\.storage\.(database|repository)|from ontotator\.storage import (database|repository)" src tests scripts \
   | xargs sed -i -E \
-      -e 's/ontocurator\.storage\.database/ontocurator.storage.sqlite_database/g' \
-      -e 's/ontocurator\.storage\.repository/ontocurator.storage.sqlite_repository/g' \
-      -e 's/from ontocurator\.storage import repository as/from ontocurator.storage import sqlite_repository as/g' \
-      -e 's/from ontocurator\.storage import database as/from ontocurator.storage import sqlite_database as/g'
+      -e 's/ontotator\.storage\.database/ontotator.storage.sqlite_database/g' \
+      -e 's/ontotator\.storage\.repository/ontotator.storage.sqlite_repository/g' \
+      -e 's/from ontotator\.storage import repository as/from ontotator.storage import sqlite_repository as/g' \
+      -e 's/from ontotator\.storage import database as/from ontotator.storage import sqlite_database as/g'
 ```
 
 - [ ] **Step 2: Check that nothing refers to the old names**
@@ -484,10 +484,10 @@ git commit -m "refactor(storage): move the SQLite storage aside for the PostgreS
 This task creates the typed mappings, the first migration with roles, grants and append-only triggers, the `Database` class with ambient transactions, and the harness that gives every test its own migrated PostgreSQL database.
 
 **Files:**
-- Create: `src/ontocurator/storage/tables.py`
-- Create: `src/ontocurator/storage/schema.py`
-- Create: `src/ontocurator/storage/migrations/env.py`, `src/ontocurator/storage/migrations/script.py.mako`, `src/ontocurator/storage/migrations/versions/0001_initial.py`
-- Create: `src/ontocurator/storage/database.py`
+- Create: `src/ontotator/storage/tables.py`
+- Create: `src/ontotator/storage/schema.py`
+- Create: `src/ontotator/storage/migrations/env.py`, `src/ontotator/storage/migrations/script.py.mako`, `src/ontotator/storage/migrations/versions/0001_initial.py`
+- Create: `src/ontotator/storage/database.py`
 - Create: `tests/pg_harness.py`
 - Modify: `tests/conftest.py`
 - Test: `tests/test_schema.py`, `tests/test_database.py`
@@ -508,8 +508,8 @@ from pg_harness import database_for, owner_engine
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
-from ontocurator.storage.schema import current_revision, head_revision
-from ontocurator.storage.tables import APPEND_ONLY_TABLES, SCHEMA, Base
+from ontotator.storage.schema import current_revision, head_revision
+from ontotator.storage.tables import APPEND_ONLY_TABLES, SCHEMA, Base
 
 
 def _only_our_schema(name: str | None, type_: str, _parents: object) -> bool:
@@ -608,8 +608,8 @@ import pytest
 from pg_harness import database_for
 from sqlalchemy import func, insert, select
 
-from ontocurator.storage.database import Database
-from ontocurator.storage.tables import StoredFileRow
+from ontotator.storage.database import Database
+from ontotator.storage.tables import StoredFileRow
 
 
 def _count(db: Database) -> int:
@@ -671,7 +671,7 @@ Expected: FAIL during collection with `ModuleNotFoundError: No module named 'pg_
 
 - [ ] **Step 3: Write the table mappings**
 
-Create `src/ontocurator/storage/tables.py`:
+Create `src/ontotator/storage/tables.py`:
 
 ```python
 """Typed table mappings of the server schema (T2 P2).
@@ -703,9 +703,9 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-SCHEMA = "ontocurator"
-OWNER_ROLE = "ontocurator_owner"
-APP_ROLE = "ontocurator_app"
+SCHEMA = "ontotator"
+OWNER_ROLE = "ontotator_owner"
+APP_ROLE = "ontotator_app"
 
 # The application role may only read and insert these (T2 D6).
 APPEND_ONLY_TABLES = ("annotation_snapshots", "evidence_snapshots", "submissions")
@@ -1005,12 +1005,12 @@ class MutationReceiptRow(Base):
 
 - [ ] **Step 4: Write the Alembic environment**
 
-Create `src/ontocurator/storage/migrations/env.py`:
+Create `src/ontotator/storage/migrations/env.py`:
 
 ```python
-"""Alembic environment: migrations run on a connection ontocurator provides.
+"""Alembic environment: migrations run on a connection ontotator provides.
 
-Use ``ontocurator db upgrade`` (``storage.schema.upgrade``), never the plain
+Use ``ontotator db upgrade`` (``storage.schema.upgrade``), never the plain
 ``alembic`` command: the upgrade takes the advisory lock and runs as the
 schema owner. Migrations are forward-only.
 """
@@ -1020,7 +1020,7 @@ from __future__ import annotations
 from alembic import context
 from sqlalchemy import Connection
 
-from ontocurator.storage.tables import SCHEMA, Base
+from ontotator.storage.tables import SCHEMA, Base
 
 
 def _only_our_schema(name: str | None, type_: str, _parents: object) -> bool:
@@ -1044,11 +1044,11 @@ if context.is_offline_mode():
     raise RuntimeError("Offline migrations are not supported")
 connection = context.config.attributes.get("connection")
 if connection is None:
-    raise RuntimeError("Run migrations with 'ontocurator db upgrade'")
+    raise RuntimeError("Run migrations with 'ontotator db upgrade'")
 _run(connection)
 ```
 
-Create `src/ontocurator/storage/migrations/script.py.mako`:
+Create `src/ontotator/storage/migrations/script.py.mako`:
 
 ```mako
 """${message}
@@ -1080,7 +1080,7 @@ def downgrade() -> None:
 
 - [ ] **Step 5: Write the first migration**
 
-Create `src/ontocurator/storage/migrations/versions/0001_initial.py`:
+Create `src/ontotator/storage/migrations/versions/0001_initial.py`:
 
 ```python
 """Initial server schema: projects, documents, drafts, submissions, search events.
@@ -1101,8 +1101,8 @@ down_revision = None
 branch_labels = None
 depends_on = None
 
-SCHEMA = "ontocurator"
-APP_ROLE = "ontocurator_app"
+SCHEMA = "ontotator"
+APP_ROLE = "ontotator_app"
 APPEND_ONLY = ("annotation_snapshots", "evidence_snapshots", "submissions")
 MUTABLE = (
     "projects",
@@ -1396,7 +1396,7 @@ def upgrade() -> None:
         CREATE FUNCTION {SCHEMA}.forbid_history_change() RETURNS trigger
         LANGUAGE plpgsql AS $$
         BEGIN
-          RAISE EXCEPTION 'ontocurator: % on %.% is not allowed, the table is append-only',
+          RAISE EXCEPTION 'ontotator: % on %.% is not allowed, the table is append-only',
             TG_OP, TG_TABLE_SCHEMA, TG_TABLE_NAME
             USING ERRCODE = '42501';
         END
@@ -1431,7 +1431,7 @@ def downgrade() -> None:
 
 - [ ] **Step 6: Write the schema functions**
 
-Create `src/ontocurator/storage/schema.py`:
+Create `src/ontotator/storage/schema.py`:
 
 ```python
 """Applying and checking the database schema (Alembic, forward only)."""
@@ -1447,7 +1447,7 @@ from alembic.script import ScriptDirectory
 from sqlalchemy import Connection, create_engine, text
 from sqlalchemy.engine import URL
 
-from ontocurator.storage.tables import SCHEMA
+from ontotator.storage.tables import SCHEMA
 
 MIGRATIONS = Path(__file__).parent / "migrations"
 # Every upgrading process takes this transaction lock, so two migrate runs
@@ -1492,7 +1492,7 @@ def upgrade(url: str | URL) -> str:
 
 - [ ] **Step 7: Write the database class**
 
-Create `src/ontocurator/storage/database.py`:
+Create `src/ontotator/storage/database.py`:
 
 ```python
 """PostgreSQL access: one engine per process and ambient transactions."""
@@ -1508,7 +1508,7 @@ from pathlib import Path
 from sqlalchemy import Connection, Engine, create_engine
 from sqlalchemy.engine import URL, make_url
 
-from ontocurator.storage.blobs import BlobStore
+from ontotator.storage.blobs import BlobStore
 
 _numbers = itertools.count()
 
@@ -1542,7 +1542,7 @@ class Database:
         self.data_dir = Path(data_dir)
         self.blobs = BlobStore(self.data_dir / "blobs")
         self._current: ContextVar[Connection | None] = ContextVar(
-            f"ontocurator-transaction-{next(_numbers)}", default=None
+            f"ontotator-transaction-{next(_numbers)}", default=None
         )
 
     @contextmanager
@@ -1571,7 +1571,7 @@ Create `tests/pg_harness.py`:
 ```python
 """PostgreSQL for the test suite (T2 P8): one server, one database per test.
 
-The server is ``ONTOCURATOR_TEST_PG_URL`` (a superuser URL of a throwaway
+The server is ``ONTOTATOR_TEST_PG_URL`` (a superuser URL of a throwaway
 server) or, by default, a testcontainer started on first use. The schema is
 migrated once into a template database as the owner role. Every test database
 is a copy of that template, used through the application role, so grants and
@@ -1590,13 +1590,13 @@ from typing import Any
 from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.engine import URL, make_url
 
-from ontocurator.storage.database import Database
-from ontocurator.storage.schema import upgrade
-from ontocurator.storage.tables import APP_ROLE, OWNER_ROLE, SCHEMA
+from ontotator.storage.database import Database
+from ontotator.storage.schema import upgrade
+from ontotator.storage.tables import APP_ROLE, OWNER_ROLE, SCHEMA
 
 IMAGE = "postgres:16.15-alpine3.24"
 PASSWORD = "test-only-password"
-TEMPLATE = "ontocurator_template"
+TEMPLATE = "ontotator_template"
 
 _lock = threading.RLock()
 _server: URL | None = None
@@ -1609,7 +1609,7 @@ _owner_engines: list[Engine] = []
 
 def _start_server() -> URL:
     global _container
-    explicit = os.environ.get("ONTOCURATOR_TEST_PG_URL")
+    explicit = os.environ.get("ONTOTATOR_TEST_PG_URL")
     if explicit:
         return make_url(explicit).set(drivername="postgresql+psycopg")
     try:
@@ -1630,7 +1630,7 @@ def _start_server() -> URL:
     except Exception as exc:  # Docker not running, image not pullable, ...
         raise RuntimeError(
             "The tests need PostgreSQL: start Docker Desktop, or set "
-            "ONTOCURATOR_TEST_PG_URL to a throwaway server's superuser URL. "
+            "ONTOTATOR_TEST_PG_URL to a throwaway server's superuser URL. "
             f"({exc})"
         ) from exc
     atexit.register(container.stop)
@@ -1685,7 +1685,7 @@ def database_url_for(path: Path | str) -> str:
     with _lock:
         name = _by_path.get(key)
         if name is None:
-            name = f"ontocurator_test_{os.getpid()}_{next(_numbers)}"
+            name = f"ontotator_test_{os.getpid()}_{next(_numbers)}"
             with admin.connect() as conn:
                 conn.execute(
                     text(
@@ -1744,8 +1744,8 @@ def database_per_workspace(monkeypatch: pytest.MonkeyPatch):  # type: ignore[no-
     """
     import pg_harness
 
-    from ontocurator import settings
-    from ontocurator.storage.database import Database
+    from ontotator import settings
+    from ontotator.storage.database import Database
 
     monkeypatch.setattr(
         settings,
@@ -1787,7 +1787,7 @@ Expected: all tests pass. The old tests still use `sqlite_repository`; the new a
 ```bash
 uv run ruff check --fix src tests && uv run ruff format src tests
 uv run mypy src
-git add src/ontocurator/storage tests/pg_harness.py tests/conftest.py tests/test_schema.py tests/test_database.py
+git add src/ontotator/storage tests/pg_harness.py tests/conftest.py tests/test_schema.py tests/test_database.py
 git commit -m "feat(storage): PostgreSQL schema with owner and app roles, append-only history and a test harness"
 ```
 
@@ -1803,7 +1803,7 @@ Behaviour kept from v4, with the reason:
 - **Each project** is created under an advisory lock on its key, so two concurrent imports of the same package serialise.
 
 **Files:**
-- Create: `src/ontocurator/storage/repository.py`
+- Create: `src/ontotator/storage/repository.py`
 - Test: `tests/test_pg_repository.py`
 
 - [ ] **Step 1: Write the failing tests**
@@ -1821,10 +1821,10 @@ from pg_harness import database_for
 from sqlalchemy import select
 from test_storage import _sample_package
 
-from ontocurator.domain.documents import Document
-from ontocurator.domain.errors import DomainError, InvalidPackage
-from ontocurator.storage.repository import Repository
-from ontocurator.storage.tables import StoredFileRow
+from ontotator.domain.documents import Document
+from ontotator.domain.errors import DomainError, InvalidPackage
+from ontotator.storage.repository import Repository
+from ontotator.storage.tables import StoredFileRow
 
 
 def _repo(tmp_path: Path) -> Repository:
@@ -1946,11 +1946,11 @@ def test_a_failed_import_leaves_nothing_behind(
 - [ ] **Step 2: Run them and see them fail**
 
 Run: `uv run pytest tests/test_pg_repository.py -q`
-Expected: FAIL during collection with `ModuleNotFoundError: No module named 'ontocurator.storage.repository'`
+Expected: FAIL during collection with `ModuleNotFoundError: No module named 'ontotator.storage.repository'`
 
 - [ ] **Step 3: Write the module helpers and the project part of the repository**
 
-Create `src/ontocurator/storage/repository.py`:
+Create `src/ontotator/storage/repository.py`:
 
 ```python
 """PostgreSQL repository for projects, revisioned drafts and immutable submissions.
@@ -1983,31 +1983,31 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from ontocurator.domain.annotations import AnnotationSnapshot
-from ontocurator.domain.axes import AxesConfig
-from ontocurator.domain.canonical import canonical_hash
-from ontocurator.domain.documents import Document, EvidenceSnapshot
-from ontocurator.domain.errors import DomainError, InvalidPackage, RevisionConflict
-from ontocurator.domain.profiles import OntologyDefinition, TaskProfile, profile_hash
-from ontocurator.domain.results import latest_submissions
-from ontocurator.domain.review import ReviewDecision, ReviewTargetSet
-from ontocurator.domain.scopes import build_scope
-from ontocurator.domain.serialization import decode_snapshot, encode_snapshot
-from ontocurator.domain.workspace import (
+from ontotator.domain.annotations import AnnotationSnapshot
+from ontotator.domain.axes import AxesConfig
+from ontotator.domain.canonical import canonical_hash
+from ontotator.domain.documents import Document, EvidenceSnapshot
+from ontotator.domain.errors import DomainError, InvalidPackage, RevisionConflict
+from ontotator.domain.profiles import OntologyDefinition, TaskProfile, profile_hash
+from ontotator.domain.results import latest_submissions
+from ontotator.domain.review import ReviewDecision, ReviewTargetSet
+from ontotator.domain.scopes import build_scope
+from ontotator.domain.serialization import decode_snapshot, encode_snapshot
+from ontotator.domain.workspace import (
     Draft,
     MutationEnvelope,
     Submission,
     WorkspaceKey,
 )
-from ontocurator.ontology.conditions import SearchCondition, validate_resources
-from ontocurator.packages.models import (
+from ontotator.ontology.conditions import SearchCondition, validate_resources
+from ontotator.packages.models import (
     PackageManifest,
     SearchEventRecord,
     ValidatedPackage,
     is_tree_walk,
 )
-from ontocurator.storage.database import Database
-from ontocurator.storage.tables import (
+from ontotator.storage.database import Database
+from ontotator.storage.tables import (
     AnnotationSnapshotRow,
     DocumentRow,
     DraftAnnotationRow,
@@ -2787,10 +2787,10 @@ Expected: `7 passed`
 - [ ] **Step 5: Lint and commit**
 
 ```bash
-uv run ruff check --fix --ignore F401 src/ontocurator/storage/repository.py tests/test_pg_repository.py
-uv run ruff format src/ontocurator/storage/repository.py tests/test_pg_repository.py
+uv run ruff check --fix --ignore F401 src/ontotator/storage/repository.py tests/test_pg_repository.py
+uv run ruff format src/ontotator/storage/repository.py tests/test_pg_repository.py
 uv run mypy src
-git add src/ontocurator/storage/repository.py tests/test_pg_repository.py
+git add src/ontotator/storage/repository.py tests/test_pg_repository.py
 git commit -m "feat(storage): PostgreSQL repository for projects, documents, proposals and files"
 ```
 
@@ -2809,7 +2809,7 @@ Rows that SQLite returned without `ORDER BY` now have explicit orders:
 - search events by `seq`.
 
 **Files:**
-- Modify: `src/ontocurator/storage/repository.py` (append to the class)
+- Modify: `src/ontotator/storage/repository.py` (append to the class)
 - Test: `tests/test_pg_repository.py` (append)
 
 - [ ] **Step 1: Write the failing tests**
@@ -2823,9 +2823,9 @@ from concurrent.futures import ThreadPoolExecutor  # noqa: E402
 from sqlalchemy import text  # noqa: E402
 from sqlalchemy.exc import DBAPIError  # noqa: E402
 
-from ontocurator.domain.errors import RevisionConflict  # noqa: E402
-from ontocurator.domain.review import ReviewTargetSet  # noqa: E402
-from ontocurator.domain.workspace import (  # noqa: E402
+from ontotator.domain.errors import RevisionConflict  # noqa: E402
+from ontotator.domain.review import ReviewTargetSet  # noqa: E402
+from ontotator.domain.workspace import (  # noqa: E402
     Draft,
     MutationEnvelope,
     Submission,
@@ -2956,7 +2956,7 @@ def test_a_submission_is_stored_and_cannot_be_changed(tmp_path: Path) -> None:
         pytest.raises(DBAPIError, match="permission denied"),
         repo.db.transaction() as conn,
     ):
-        conn.execute(text("UPDATE ontocurator.submissions SET mode = 'review'"))
+        conn.execute(text("UPDATE ontotator.submissions SET mode = 'review'"))
 
 
 def test_document_status_follows_drafts_and_submissions(tmp_path: Path) -> None:
@@ -2999,7 +2999,7 @@ Expected: the seven tests of Task 5 pass; the new ones fail with `AttributeError
 
 - [ ] **Step 3: Append the draft and submission methods to the class**
 
-Append to `src/ontocurator/storage/repository.py` (inside `class Repository`, after `_insert_search_event`):
+Append to `src/ontotator/storage/repository.py` (inside `class Repository`, after `_insert_search_event`):
 
 ```python
 # --- drafts and mutations ---------------------------------------------- #
@@ -3516,10 +3516,10 @@ Expected: `15 passed`
 - [ ] **Step 5: Lint and commit**
 
 ```bash
-uv run ruff check --fix --ignore F401 src/ontocurator/storage/repository.py tests/test_pg_repository.py
-uv run ruff format src/ontocurator/storage/repository.py tests/test_pg_repository.py
+uv run ruff check --fix --ignore F401 src/ontotator/storage/repository.py tests/test_pg_repository.py
+uv run ruff format src/ontotator/storage/repository.py tests/test_pg_repository.py
 uv run mypy src
-git add src/ontocurator/storage/repository.py tests/test_pg_repository.py
+git add src/ontotator/storage/repository.py tests/test_pg_repository.py
 git commit -m "feat(storage): drafts, idempotent mutations and submissions on PostgreSQL"
 ```
 
@@ -3528,7 +3528,7 @@ git commit -m "feat(storage): drafts, idempotent mutations and submissions on Po
 ### Task 7: Repository, part 3: search events and project export
 
 **Files:**
-- Modify: `src/ontocurator/storage/repository.py` (append to the class)
+- Modify: `src/ontotator/storage/repository.py` (append to the class)
 - Test: `tests/test_pg_repository.py` (append, then tidy the imports)
 
 - [ ] **Step 1: Write the failing tests**
@@ -3536,7 +3536,7 @@ git commit -m "feat(storage): drafts, idempotent mutations and submissions on Po
 Append to `tests/test_pg_repository.py`:
 
 ```python
-from ontocurator.packages.models import SearchEventRecord  # noqa: E402
+from ontotator.packages.models import SearchEventRecord  # noqa: E402
 
 
 def _walk(event_id: str, key: WorkspaceKey, candidates: list[str]) -> SearchEventRecord:
@@ -3615,7 +3615,7 @@ Expected: the new tests fail with `AttributeError: 'Repository' object has no at
 
 - [ ] **Step 3: Append the search-event and export methods to the class**
 
-Append to `src/ontocurator/storage/repository.py` (inside `class Repository`, after `get_submission`):
+Append to `src/ontotator/storage/repository.py` (inside `class Repository`, after `get_submission`):
 
 ```python
 # --- search events ------------------------------------------------------ #
@@ -3898,18 +3898,18 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import DBAPIError
 from test_storage import _sample_package
 
-from ontocurator.domain.documents import Document
-from ontocurator.domain.errors import DomainError, InvalidPackage, RevisionConflict
-from ontocurator.domain.review import ReviewTargetSet
-from ontocurator.domain.workspace import (
+from ontotator.domain.documents import Document
+from ontotator.domain.errors import DomainError, InvalidPackage, RevisionConflict
+from ontotator.domain.review import ReviewTargetSet
+from ontotator.domain.workspace import (
     Draft,
     MutationEnvelope,
     Submission,
     WorkspaceKey,
 )
-from ontocurator.packages.models import SearchEventRecord
-from ontocurator.storage.repository import Repository
-from ontocurator.storage.tables import StoredFileRow
+from ontotator.packages.models import SearchEventRecord
+from ontotator.storage.repository import Repository
+from ontotator.storage.tables import StoredFileRow
 ```
 
 - [ ] **Step 5: Run the tests and see them pass**
@@ -3920,10 +3920,10 @@ Expected: `18 passed`
 - [ ] **Step 6: Lint (now without exceptions) and commit**
 
 ```bash
-uv run ruff check --fix src/ontocurator/storage/repository.py tests/test_pg_repository.py
-uv run ruff format src/ontocurator/storage/repository.py tests/test_pg_repository.py
+uv run ruff check --fix src/ontotator/storage/repository.py tests/test_pg_repository.py
+uv run ruff format src/ontotator/storage/repository.py tests/test_pg_repository.py
 uv run mypy src
-git add src/ontocurator/storage/repository.py tests/test_pg_repository.py
+git add src/ontotator/storage/repository.py tests/test_pg_repository.py
 git commit -m "feat(storage): search provenance and project export on PostgreSQL"
 ```
 
@@ -3936,7 +3936,7 @@ Expected: Ruff reports no unused import; every import of the repository module i
 One commit switches the application, the CLI and every test from the SQLite storage to the PostgreSQL storage. A script makes the mechanical changes; the places that issued raw SQL against the old tables are changed by hand, with the replacements given below. Tests that only checked SQLite file formats are deleted, because there are no SQLite workspaces any more (E6).
 
 **Files:**
-- Modify: `src/ontocurator/config.py`, `src/ontocurator/api/app.py`, `src/ontocurator/cli.py`, `src/ontocurator/storage/__init__.py`, `src/ontocurator/application/editing.py`, `src/ontocurator/api/tree_routes.py`, every `src` importer of `sqlite_repository`
+- Modify: `src/ontotator/config.py`, `src/ontotator/api/app.py`, `src/ontotator/cli.py`, `src/ontotator/storage/__init__.py`, `src/ontotator/application/editing.py`, `src/ontotator/api/tree_routes.py`, every `src` importer of `sqlite_repository`
 - Modify: `tests/pg_harness.py` (helpers for the manual edits)
 - Modify: about 25 test files (script plus manual edits)
 - Create: `tests/test_cli_db.py`
@@ -3945,15 +3945,15 @@ One commit switches the application, the CLI and every test from the SQLite stor
 
 ```bash
 grep -rl "sqlite_repository\|sqlite_database" src | grep -v "storage/sqlite_" \
-  | xargs sed -i -e 's/ontocurator\.storage\.sqlite_repository/ontocurator.storage.repository/g' \
-                 -e 's/ontocurator\.storage\.sqlite_database/ontocurator.storage.database/g'
+  | xargs sed -i -e 's/ontotator\.storage\.sqlite_repository/ontotator.storage.repository/g' \
+                 -e 's/ontotator\.storage\.sqlite_database/ontotator.storage.database/g'
 ```
 
 Expected: `grep -rn "sqlite_" src --include=*.py | grep -v "storage/sqlite_"` prints nothing.
 
 - [ ] **Step 2: Replace `database_path` by `database_url` in the configuration**
 
-In `src/ontocurator/config.py`, replace the line
+In `src/ontotator/config.py`, replace the line
 
 ```python
     database_path: Path | None = None
@@ -3962,11 +3962,11 @@ In `src/ontocurator/config.py`, replace the line
 with
 
 ```python
-    # PostgreSQL URL of the application role. None: ONTOCURATOR_DATABASE_URL.
+    # PostgreSQL URL of the application role. None: ONTOTATOR_DATABASE_URL.
     database_url: str | None = None
 ```
 
-In `src/ontocurator/api/app.py`, add `from ontocurator import settings` to the imports and replace
+In `src/ontotator/api/app.py`, add `from ontotator import settings` to the imports and replace
 
 ```python
         db_path = config.database_path or (config.workspace_dir / "editor.db")
@@ -3988,7 +3988,7 @@ Uploaded and embedded files now live in `<workspace>/blobs/`.
 
 - [ ] **Step 3: Add `--database-url` to `serve` and the `db upgrade` command**
 
-In `src/ontocurator/cli.py`, add this parameter to `serve` directly after the `workspace` parameter:
+In `src/ontotator/cli.py`, add this parameter to `serve` directly after the `workspace` parameter:
 
 ```python
 database_url: Annotated[
@@ -3997,8 +3997,8 @@ database_url: Annotated[
         "--database-url",
         help=(
             "PostgreSQL URL of the application role. Default: "
-            "ONTOCURATOR_DATABASE_URL, with the password from "
-            "ONTOCURATOR_DATABASE_PASSWORD or ONTOCURATOR_DATABASE_PASSWORD_FILE."
+            "ONTOTATOR_DATABASE_URL, with the password from "
+            "ONTOTATOR_DATABASE_PASSWORD or ONTOTATOR_DATABASE_PASSWORD_FILE."
         ),
         show_default=False,
     ),
@@ -4018,25 +4018,25 @@ app.add_typer(db_app, name="db")
 def db_upgrade() -> None:
     """Upgrade the schema to this version, as the schema owner.
 
-    Reads ONTOCURATOR_MIGRATION_DATABASE_URL and the password from
-    ONTOCURATOR_MIGRATION_DATABASE_PASSWORD or ..._PASSWORD_FILE.
+    Reads ONTOTATOR_MIGRATION_DATABASE_URL and the password from
+    ONTOTATOR_MIGRATION_DATABASE_PASSWORD or ..._PASSWORD_FILE.
     """
-    from ontocurator.settings import SettingsError, database_url
-    from ontocurator.storage.schema import upgrade
+    from ontotator.settings import SettingsError, database_url
+    from ontotator.storage.schema import upgrade
 
     try:
-        head = upgrade(database_url(prefix="ONTOCURATOR_MIGRATION_DATABASE"))
+        head = upgrade(database_url(prefix="ONTOTATOR_MIGRATION_DATABASE"))
     except SettingsError as exc:
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
     typer.echo(f"Database schema is at revision {head}.")
 ```
 
-Add `"db",` to `PASSTHROUGH_FIRST_ARGS`, so `ontocurator db upgrade` is not routed to `serve`.
+Add `"db",` to `PASSTHROUGH_FIRST_ARGS`, so `ontotator db upgrade` is not routed to `serve`.
 
 - [ ] **Step 4: Search events are looked up within the project**
 
-In `src/ontocurator/application/editing.py`, replace
+In `src/ontotator/application/editing.py`, replace
 
 ```python
                 event = self.repo.get_search_event(cmd.search_event_id)
@@ -4048,7 +4048,7 @@ with
 event = self.repo.get_search_event(cmd.search_event_id, key.package_id)
 ```
 
-In `src/ontocurator/api/tree_routes.py`, replace
+In `src/ontotator/api/tree_routes.py`, replace
 
 ```python
     event = repo.get_search_event(req.browse_id)
@@ -4062,11 +4062,11 @@ with
 
 - [ ] **Step 5: Export the new classes from `storage/__init__.py`**
 
-Replace the content of `src/ontocurator/storage/__init__.py` with:
+Replace the content of `src/ontotator/storage/__init__.py` with:
 
 ```python
-from ontocurator.storage.database import Database
-from ontocurator.storage.repository import Repository
+from ontotator.storage.database import Database
+from ontotator.storage.repository import Repository
 
 __all__ = ["Database", "Repository"]
 ```
@@ -4079,7 +4079,7 @@ Append to `tests/pg_harness.py`:
 def unmigrated_database_url(path: Path | str) -> str:
     """Owner URL of a new database with the bootstrap but without the schema."""
     url, admin = server()
-    name = f"ontocurator_empty_{os.getpid()}_{next(_numbers)}"
+    name = f"ontotator_empty_{os.getpid()}_{next(_numbers)}"
     with admin.connect() as conn:
         conn.execute(text(f"CREATE DATABASE {name} OWNER {OWNER_ROLE}"))
     engine = create_engine(url.set(database=name), isolation_level="AUTOCOMMIT")
@@ -4099,7 +4099,7 @@ def insert_proposal(repo: Any, package_id: str, snapshot: Any) -> None:
     """Add an annotation proposal (and its evidence) to a project, as an import does."""
     from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-    from ontocurator.storage.tables import ProposalAnnotationRow
+    from ontotator.storage.tables import ProposalAnnotationRow
 
     with repo.db.transaction() as conn:
         project_id = conn.execute(
@@ -4176,14 +4176,14 @@ for path in sorted(Path("tests").glob("*.py")):
     source = path.read_text(encoding="utf-8")
     original = source
     source = source.replace(
-        "ontocurator.storage.sqlite_repository", "ontocurator.storage.repository"
+        "ontotator.storage.sqlite_repository", "ontotator.storage.repository"
     )
     source = source.replace(
-        "from ontocurator.storage import sqlite_repository as",
-        "from ontocurator.storage import repository as",
+        "from ontotator.storage import sqlite_repository as",
+        "from ontotator.storage import repository as",
     )
     source = re.sub(
-        r"^([ \t]*)from ontocurator\.storage\.sqlite_database import Database\n",
+        r"^([ \t]*)from ontotator\.storage\.sqlite_database import Database\n",
         r"\1from pg_harness import database_for\n",
         source,
         flags=re.M,
@@ -4256,7 +4256,7 @@ Each block below replaces SQL against the old SQLite tables. Import the helpers 
     tamper(
         ctx["repo"].db,
         "submissions",
-        "UPDATE ontocurator.submissions SET created_at = :at WHERE submission_id = :id",
+        "UPDATE ontotator.submissions SET created_at = :at WHERE submission_id = :id",
         at="2099-01-01",
         id=first.submission_id,
     )
@@ -4283,12 +4283,12 @@ Each block below replaces SQL against the old SQLite tables. Import the helpers 
         (local_key,) = column_values(repo, "submissions", "local_key")
         assert local_key.endswith(":targets-0")
         # Earlier databases can still contain the pre-fix canonical binding.
-        from ontocurator.storage.repository import _key_str
+        from ontotator.storage.repository import _key_str
 
         tamper(
             repo.db,
             "submissions",
-            "UPDATE ontocurator.submissions SET local_key = :k",
+            "UPDATE ontotator.submissions SET local_key = :k",
             k=_key_str(key_for()),
         )
    ```
@@ -4305,7 +4305,7 @@ Expected: no output.
 Create `tests/test_cli_db.py`:
 
 ```python
-"""``ontocurator db upgrade`` brings a bootstrapped database to the current schema."""
+"""``ontotator db upgrade`` brings a bootstrapped database to the current schema."""
 
 from pathlib import Path
 
@@ -4314,8 +4314,8 @@ from pg_harness import unmigrated_database_url
 from sqlalchemy import create_engine
 from typer.testing import CliRunner
 
-from ontocurator.cli import app
-from ontocurator.storage.schema import current_revision, head_revision
+from ontotator.cli import app
+from ontotator.storage.schema import current_revision, head_revision
 
 runner = CliRunner()
 
@@ -4324,7 +4324,7 @@ def test_upgrade_migrates_once_and_then_changes_nothing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     url = unmigrated_database_url(tmp_path / "fresh.db")
-    monkeypatch.setenv("ONTOCURATOR_MIGRATION_DATABASE_URL", url)
+    monkeypatch.setenv("ONTOTATOR_MIGRATION_DATABASE_URL", url)
 
     first = runner.invoke(app, ["db", "upgrade"])
     second = runner.invoke(app, ["db", "upgrade"])
@@ -4341,12 +4341,12 @@ def test_upgrade_migrates_once_and_then_changes_nothing(
 def test_upgrade_without_a_url_explains_what_is_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.delenv("ONTOCURATOR_MIGRATION_DATABASE_URL", raising=False)
+    monkeypatch.delenv("ONTOTATOR_MIGRATION_DATABASE_URL", raising=False)
 
     result = runner.invoke(app, ["db", "upgrade"])
 
     assert result.exit_code == 1
-    assert "ONTOCURATOR_MIGRATION_DATABASE_URL is not set" in result.output
+    assert "ONTOTATOR_MIGRATION_DATABASE_URL is not set" in result.output
 ```
 
 - [ ] **Step 12: Run the whole suite**
@@ -4373,7 +4373,7 @@ git commit -m "feat(storage): run the editor and its test suite on PostgreSQL"
 ### Task 9: Remove the SQLite storage, update the build scripts, verify everything
 
 **Files:**
-- Delete: `src/ontocurator/storage/sqlite_database.py`, `src/ontocurator/storage/sqlite_repository.py`, `src/ontocurator/storage/schema_v4.sql`, `src/ontocurator/storage/ontology_resources.sql`, `src/ontocurator/storage/search_conditions.sql`
+- Delete: `src/ontotator/storage/sqlite_database.py`, `src/ontotator/storage/sqlite_repository.py`, `src/ontotator/storage/schema_v4.sql`, `src/ontotator/storage/ontology_resources.sql`, `src/ontotator/storage/search_conditions.sql`
 - Modify: `scripts/build_release.py`, `scripts/build_standalone.py`, `tests/test_standalone_packaging.py`
 - Modify: `frontend/playwright.config.ts`
 - Create: `scripts/check.sh`
@@ -4381,9 +4381,9 @@ git commit -m "feat(storage): run the editor and its test suite on PostgreSQL"
 - [ ] **Step 1: Delete the old storage**
 
 ```bash
-git rm src/ontocurator/storage/sqlite_database.py src/ontocurator/storage/sqlite_repository.py \
-       src/ontocurator/storage/schema_v4.sql src/ontocurator/storage/ontology_resources.sql \
-       src/ontocurator/storage/search_conditions.sql
+git rm src/ontotator/storage/sqlite_database.py src/ontotator/storage/sqlite_repository.py \
+       src/ontotator/storage/schema_v4.sql src/ontotator/storage/ontology_resources.sql \
+       src/ontotator/storage/search_conditions.sql
 ```
 
 Run: `grep -rn "sqlite\|\.sql\b" src --include=*.py`
@@ -4391,23 +4391,23 @@ Expected: no output.
 
 - [ ] **Step 2: The wheel ships the migrations instead of the SQL scripts**
 
-In `scripts/build_release.py`, replace the three `ontocurator/storage/*.sql` entries of `REQUIRED_WHEEL_FILES` with:
+In `scripts/build_release.py`, replace the three `ontotator/storage/*.sql` entries of `REQUIRED_WHEEL_FILES` with:
 
 ```python
-("ontocurator/storage/migrations/env.py",)
-("ontocurator/storage/migrations/script.py.mako",)
-("ontocurator/storage/migrations/versions/0001_initial.py",)
+("ontotator/storage/migrations/env.py",)
+("ontotator/storage/migrations/script.py.mako",)
+("ontotator/storage/migrations/versions/0001_initial.py",)
 ```
 
 In `scripts/build_standalone.py`, replace the three `--add-data=...sql...` lines with:
 
 ```python
-(f"--add-data={STORAGE_DIR / 'migrations'}{sep}ontocurator/storage/migrations",)
+(f"--add-data={STORAGE_DIR / 'migrations'}{sep}ontotator/storage/migrations",)
 ```
 
 In `tests/test_standalone_packaging.py`:
 - in `test_pyinstaller_args`, replace `assert any("search_conditions.sql" in arg for arg in args)` with `assert any("migrations" in arg for arg in args)`;
-- in `test_build_release_wheel_check`, replace the `"ontocurator/storage/search_conditions.sql"` membership assertion with `assert "ontocurator/storage/migrations/env.py" in build_release.REQUIRED_WHEEL_FILES`.
+- in `test_build_release_wheel_check`, replace the `"ontotator/storage/search_conditions.sql"` membership assertion with `assert "ontotator/storage/migrations/env.py" in build_release.REQUIRED_WHEEL_FILES`.
 
 The standalone build itself is removed in T2b (P1); this only keeps its tests honest until then.
 

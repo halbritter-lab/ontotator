@@ -4,7 +4,7 @@ from datetime import datetime
 
 from problem_report_team import act, report
 
-from ontocurator.application.document_row_reports import report_title
+from ontotator.application.document_row_reports import report_title
 
 pytest_plugins = ("test_assignment_round_open_api", "problem_report_team")
 

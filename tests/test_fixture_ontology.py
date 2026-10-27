@@ -8,12 +8,12 @@ from modifier_fixtures import MOD_DE, MOD_PATH, MOD_PIN, create_modifier_project
 from pg_harness import database_for
 from t1_fixtures import FIXTURES, HP_PATH, HP_SHA
 
-from ontocurator.domain.documents import OntologyRef
-from ontocurator.domain.workspace import WorkspaceKey
-from ontocurator.ontology.provenance import SearchRequest
-from ontocurator.ontology.service import OntologyService
-from ontocurator.ontology.translations import discover_translation_files
-from ontocurator.storage.repository import Repository
+from ontotator.domain.documents import OntologyRef
+from ontotator.domain.workspace import WorkspaceKey
+from ontotator.ontology.provenance import SearchRequest
+from ontotator.ontology.service import OntologyService
+from ontotator.ontology.translations import discover_translation_files
+from ontotator.storage.repository import Repository
 
 # (id, label, parent) as in HPO release 2026-06-23.
 TERMS = [

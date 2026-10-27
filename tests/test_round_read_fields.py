@@ -6,20 +6,20 @@ from sqlalchemy import select, text, update
 from test_reanchor import run, source
 from test_work_rounds import rounds  # noqa: F401  (fixture reuse)
 
-from ontocurator.application.editing import EditingService
-from ontocurator.application.round_reads import (
+from ontotator.application.editing import EditingService
+from ontotator.application.round_reads import (
     enrich_inputs,
     enrich_rounds,
     enrich_sources,
 )
-from ontocurator.application.submissions import SubmissionService
-from ontocurator.application.work_rounds import WorkRoundService, _input_payload
-from ontocurator.authz.scoped import ScopedRepository
-from ontocurator.domain.errors import DomainError
-from ontocurator.domain.reanchor import NeedsReview
-from ontocurator.domain.work_rounds import RoundInputView
-from ontocurator.domain.workspace import MutationEnvelope
-from ontocurator.storage.workflow_tables import RoundInputRow
+from ontotator.application.submissions import SubmissionService
+from ontotator.application.work_rounds import WorkRoundService, _input_payload
+from ontotator.authz.scoped import ScopedRepository
+from ontotator.domain.errors import DomainError
+from ontotator.domain.reanchor import NeedsReview
+from ontotator.domain.work_rounds import RoundInputView
+from ontotator.domain.workspace import MutationEnvelope
+from ontotator.storage.workflow_tables import RoundInputRow
 
 
 def _submit_first_round(rounds):  # noqa: F811

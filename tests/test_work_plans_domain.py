@@ -1,6 +1,6 @@
 """Pure work-plan rules (spec "Work plan"); no database."""
 
-from ontocurator.domain.work_plans import (
+from ontotator.domain.work_plans import (
     LanguageChange,
     LanguageVersion,
     OpenReport,

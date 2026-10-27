@@ -26,22 +26,22 @@ from test_final_panel_api import (
 )
 from work_plan_support import assign, doc, plan_env
 
-from ontocurator.application.consolidation import (
+from ontotator.application.consolidation import (
     _Content,
     _state,
     consolidated_content_sha256,
     consolidation_group_id,
     consolidation_groups,
 )
-from ontocurator.application.document_row_panel import project_profile
-from ontocurator.application.work_rounds import WorkRoundService
-from ontocurator.auth.audit import Actor
-from ontocurator.authz.policy import Access
-from ontocurator.authz.scoped import ScopedRepository
-from ontocurator.domain.annotations import AnnotationRef
-from ontocurator.domain.review import ConsolidationMark, ReviewDecision
-from ontocurator.storage.repository import _key_str
-from ontocurator.storage.tables import DraftRow, ReviewDecisionRow
+from ontotator.application.document_row_panel import project_profile
+from ontotator.application.work_rounds import WorkRoundService
+from ontotator.auth.audit import Actor
+from ontotator.authz.policy import Access
+from ontotator.authz.scoped import ScopedRepository
+from ontotator.domain.annotations import AnnotationRef
+from ontotator.domain.review import ConsolidationMark, ReviewDecision
+from ontotator.storage.repository import _key_str
+from ontotator.storage.tables import DraftRow, ReviewDecisionRow
 
 FIRST = "sub-first-7c1"
 SECOND = "sub-second-9d2"

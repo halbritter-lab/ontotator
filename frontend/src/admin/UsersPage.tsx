@@ -274,7 +274,7 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
           { id: "project", header: "Project", cell: event => event.project_key ?? "" },
           { id: "details", header: "Details", cell: auditDetails },
         ]} />}
-      <p className="field-hint">Newest first, at most 200 entries. The CLI command <code>ontocurator admin audit</code> exports the whole trail.</p>
+      <p className="field-hint">Newest first, at most 200 entries. The CLI command <code>ontotator admin audit</code> exports the whole trail.</p>
     </Dialog>}
     {erase && <Dialog open title={`Anonymise ${erase.username}`} size="sm" onClose={busy ? undefined : () => setErase(null)}
       footer={<><Button disabled={busy} onClick={() => setErase(null)}>Cancel</Button><Button variant="danger" loading={busy} disabled={erase.typed.trim().toLowerCase() !== erase.username} onClick={() => { void anonymise(); }}>Anonymise permanently</Button></>}>

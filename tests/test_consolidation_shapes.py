@@ -3,13 +3,13 @@
 
 from __future__ import annotations
 
-from ontocurator.api.consolidation_routes import (
+from ontotator.api.consolidation_routes import (
     ConsolidationGroupView,
     ConsolidationMemberView,
     ConsolidationModifierView,
     ConsolidationView,
 )
-from ontocurator.application.consolidation_resolve import (
+from ontotator.application.consolidation_resolve import (
     ModifierIn,
     ResolveChoice,
     ResolveCommand,

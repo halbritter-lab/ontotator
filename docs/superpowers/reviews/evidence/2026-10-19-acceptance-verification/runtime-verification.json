@@ -1,7 +1,7 @@
 {
   "utc": "2026-10-18T23:07:48.344886+00:00",
   "host": "http://127.0.0.1:18190",
-  "project": "ontocurator-t5-acceptance-full-hpo",
+  "project": "ontotator-t5-acceptance-full-hpo",
   "image": "sha256:f8455c3fa3a5ca30ebfc3093f0fc3fc2bbbede10e813ba5ede2e362ef88608e9",
   "source_sha": "ba0b91b4ff3c73ae8d358896957a4dd84d20d57f",
   "source_snapshot_sha256": "1b6a67b055249e37554c332dd0618954290311aac21dc27eb9ac3dfb6c36f77e",

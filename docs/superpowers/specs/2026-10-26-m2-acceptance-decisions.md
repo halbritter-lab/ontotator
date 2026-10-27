@@ -65,5 +65,5 @@ All recommended options of the mockups were accepted, with the clarifications be
 - Gate green: `bash scripts/check.sh --only static`, `--only frontend`, `--only backend`
   (only if backend code changed), `--only browser`; contracts regenerated if an API model
   changes; embedded bundle rebuilt last (`npm --prefix frontend run build`, then replace
-  `src/ontocurator/web` with `frontend/dist`, commit "build: update embedded frontend bundle").
+  `src/ontotator/web` with `frontend/dist`, commit "build: update embedded frontend bundle").
 - No AI attribution in commits. No GitHub Actions (CI runs only on `main`).

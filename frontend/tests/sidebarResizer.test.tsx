@@ -35,7 +35,7 @@ it("clamps_and_ignores_invalid_stored_values", () => {
   localStorage.setItem(storageKey("anna"), "abc"); expect(readStoredWidth("anna")).toBeNull();
   localStorage.setItem(storageKey("anna"), "-5"); expect(readStoredWidth("anna")).toBeNull();
   localStorage.setItem(storageKey("anna"), "320"); expect(readStoredWidth("anna")).toBe(320);
-  expect(storageKey("anna")).toBe("ontocurator.editor.sidebarWidth.v1:anna");
+  expect(storageKey("anna")).toBe("ontotator.editor.sidebarWidth.v1:anna");
 });
 
 it("keyboard_changes_width_and_reports_aria_values", () => {

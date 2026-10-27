@@ -18,7 +18,7 @@ def seed():
 
 def config(seed, **changes):
     values = dict(
-        project="ontocurator-t5-acceptance-check",
+        project="ontotator-t5-acceptance-check",
         image="sha256:" + "a" * 64,
         source_sha="b" * 40,
         app_port=18080,
@@ -31,8 +31,8 @@ def config(seed, **changes):
     "changes",
     [
         {"project": "existing-production"},
-        {"project": "ontocurator-t5-acceptance/other"},
-        {"image": "ontocurator-dev:local"},
+        {"project": "ontotator-t5-acceptance/other"},
+        {"image": "ontotator-dev:local"},
         {"source_sha": "main"},
         {"app_port": 80000},
         {"app_port": 15543},
@@ -218,7 +218,7 @@ def test_full_hpo_builder_regenerates_bundle_profile_and_translation_inventory_o
         return {"filename": name, "sha256": seed["digest"](source / name)}
 
     manifest = {
-        "schema": "ontocurator-full-hpo-sources/v1",
+        "schema": "ontotator-full-hpo-sources/v1",
         "release": "2026-06-23",
         "ontology": descriptor("hp.json"),
         "translations": [
@@ -253,7 +253,7 @@ def test_compose_adapter_keeps_explicit_identity_and_overrides_ambient_ports(
     seed, tmp_path, monkeypatch
 ):
     cfg = config(seed)
-    monkeypatch.setenv("ONTOCURATOR_DEV_PORT", "9999")
+    monkeypatch.setenv("ONTOTATOR_DEV_PORT", "9999")
     monkeypatch.setenv("GITHUB_TOKEN_FILE", "unrelated-private-token")
     cfg.update(
         base_compose="checked-out-base.yml",
@@ -274,9 +274,9 @@ def test_compose_adapter_keeps_explicit_identity_and_overrides_ambient_ports(
         "-f",
         "immutable-image.json",
     ]
-    assert stack.env["ONTOCURATOR_DEV_PORT"] == "18080"
+    assert stack.env["ONTOTATOR_DEV_PORT"] == "18080"
     assert stack.env["GITHUB_TOKEN_FILE"] == str(tmp_path / "unused-build-token")
-    assert stack.env["ONTOCURATOR_MIGRATE_TARGET"] == "head"
+    assert stack.env["ONTOTATOR_MIGRATE_TARGET"] == "head"
 
 
 def test_private_files_cannot_overwrite_an_existing_attempt(seed, tmp_path):
@@ -376,8 +376,8 @@ def test_creation_defaults_are_idempotent_on_an_existing_project(seed):
 
 
 def test_seed_defaults_match_the_server_rule(seed):
-    from ontocurator.domain.profiles import TaskProfile
-    from ontocurator.projects.service import clinical_creation_defaults
+    from ontotator.domain.profiles import TaskProfile
+    from ontotator.projects.service import clinical_creation_defaults
 
     profile = shipped_profile()
     hidden = {"hpo-layer": {"temporality": ["current"]}}

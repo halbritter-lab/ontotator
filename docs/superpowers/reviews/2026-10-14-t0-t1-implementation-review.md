@@ -6,7 +6,7 @@ Date: 2026-10-14. Local implementation, independent reviews and corrections are 
 
 - T0: `feat/tree-term-links`, worktree `C:/Users/jan-p/Development/ontocurator/.worktrees/tree-term-links`, based on the user's current planning branch at `cfa1553`. Final code commit: `7870aa2`.
 - T1: new local repository `C:/Users/jan-p/Development/ontospan`, branch `feat/shared-annotation-format`, empty `main` baseline `92d0ebc`. Final code commit: `acba84c`.
-- Both reviewed plans were implemented. T1 Task 13, private GitHub repository creation, remains a separate publication step requiring explicit confirmation. No remote was created; no branch was pushed or merged. The original Ontocurator planning checkout remains unchanged.
+- Both reviewed plans were implemented. T1 Task 13, private GitHub repository creation, remains a separate publication step requiring explicit confirmation. No remote was created; no branch was pushed or merged. The original Ontotator planning checkout remains unchanged.
 
 ## Review evidence
 
@@ -43,7 +43,7 @@ The coordinator independently ran the following checks on the corrected implemen
 
 | Repository | Verification |
 |---|---|
-| Ontocurator | `uv run pytest -q`: **661 passed**; `npm --prefix frontend test`: **323 passed**; complete Playwright suite: **36 passed**. Ruff check and format, mypy (57 source files), TypeScript, OpenAPI drift and generated TS drift all pass. Wheel rebuilt and embedded assets verified. |
+| Ontotator | `uv run pytest -q`: **661 passed**; `npm --prefix frontend test`: **323 passed**; complete Playwright suite: **36 passed**. Ruff check and format, mypy (57 source files), TypeScript, OpenAPI drift and generated TS drift all pass. Wheel rebuilt and embedded assets verified. |
 | Ontospan | `uv run pytest -q`: **181 passed, 1 skipped**; Ruff check/format (35 files), mypy (18 source files), schema drift, sdist and wheel build all pass. The single skip is the directory-symlink test because this Windows environment lacks symlink creation permission. |
 
 Ontospan's wheel also imports successfully in a clean environment without the optional Phenopacket dependency. The wheel includes all three JSON schemas. No application test required a live ontology website; the tree popup test blocks external requests. Existing Starlette/React test warnings do not cause failures.

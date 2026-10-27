@@ -13,9 +13,9 @@ from fastapi.testclient import TestClient
 from pg_harness import database_url_for
 from test_browser_review_flow_fixture import Session
 
-from ontocurator.api.app import create_app
-from ontocurator.config import AppConfig
-from ontocurator.domain.axes import STANDARD_CLINICAL_AXES
+from ontotator.api.app import create_app
+from ontotator.config import AppConfig
+from ontotator.domain.axes import STANDARD_CLINICAL_AXES
 
 # Every scenario builds well inside the browser helper's timeout.
 BUILD_SECONDS = 30

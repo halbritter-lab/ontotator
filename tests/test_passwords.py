@@ -8,7 +8,7 @@ import pytest
 from argon2 import PasswordHasher, Type
 from argon2.exceptions import VerifyMismatchError
 
-from ontocurator.auth.passwords import (
+from ontotator.auth.passwords import (
     PasswordRuleError,
     assert_policy,
     check_password_rules,

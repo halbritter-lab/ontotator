@@ -6,7 +6,7 @@ T5 lets one case exist in several languages and text versions, adds a task for r
 
 ## Starting point
 
-- **Ontocurator** stores one immutable text per `document_id` and has no notion of a translation or a corrected text.
+- **Ontotator** stores one immutable text per `document_id` and has no notion of a translation or a corrected text.
 - **The benchmark** (`phentrieve-benchmark`):
   - The E3C EN/FR/ES → DE corpus has 246 machine translations (Google Translation LLM, `translation_id e3c-de-full-246-google-tllm-v1`). 185 are `ready_for_review`, 61 are `automatic_check_failed`, and none have been reviewed.
   - **`TranslationRecord`** (`models/translation.py`) holds:
@@ -50,7 +50,7 @@ T5 lets one case exist in several languages and text versions, adds a task for r
   - Per-project configurable schemes are not planned.
 - **V2, re-anchoring annotations on a new text version (same language).**
   - A codepoint-level diff between the old and the new text version maps segments in unchanged regions automatically: offsets are shifted and the segment text is re-checked (T1 F2).
-  - The result is a proposal set on the new version with `method: tool` and the tool name `ontocurator-reanchor`. `source_refs` point to the original annotations.
+  - The result is a proposal set on the new version with `method: tool` and the tool name `ontotator-reanchor`. `source_refs` point to the original annotations.
   - The annotations do not count as done until a person confirms them in a review task.
   - A segment that touches a changed region is not transferred. Its annotation is listed as **needs review**, together with the old text, the new text and the diff.
   - The old version and its annotations, submissions and releases stay unchanged and valid for that version.
@@ -87,5 +87,5 @@ T5 lets one case exist in several languages and text versions, adds a task for r
 ## Not in T5
 
 - Cross-language span projection (V2).
-- Producing translations inside Ontocurator. Translations are imported. Calling a translation provider stays in the benchmark.
+- Producing translations inside Ontotator. Translations are imported. Calling a translation provider stays in the benchmark.
 - Sentence-level alignment. The second pane couples scrolling by paragraph only.

@@ -1,8 +1,8 @@
-"""Where a term can be looked up outside Ontocurator."""
+"""Where a term can be looked up outside Ontotator."""
 
 import pytest
 
-from ontocurator.ontology.links import external_term_url
+from ontotator.ontology.links import external_term_url
 
 
 @pytest.mark.parametrize(

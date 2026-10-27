@@ -33,9 +33,9 @@
 ## Task 1: Persist frozen pending inputs and per-workspace resolutions
 
 **Files:**
-- Create `src/ontocurator/domain/reanchor_resolution.py`.
-- Create `src/ontocurator/storage/migrations/versions/0008_reanchor_resolutions.py`.
-- Modify `src/ontocurator/domain/workspace.py`, `src/ontocurator/application/workspaces.py`, `src/ontocurator/storage/tables.py`, `src/ontocurator/storage/repository.py`, `src/ontocurator/api/routes.py`, `src/ontocurator/api/assignment_routes.py`, `frontend/src/api/client.ts`.
+- Create `src/ontotator/domain/reanchor_resolution.py`.
+- Create `src/ontotator/storage/migrations/versions/0008_reanchor_resolutions.py`.
+- Modify `src/ontotator/domain/workspace.py`, `src/ontotator/application/workspaces.py`, `src/ontotator/storage/tables.py`, `src/ontotator/storage/repository.py`, `src/ontotator/api/routes.py`, `src/ontotator/api/assignment_routes.py`, `frontend/src/api/client.ts`.
 - Test in new `tests/test_reanchor_resolutions.py` and existing `tests/test_reanchor_job.py`.
 
 **Interfaces:** `PendingReanchorRef(proposal_set_id: int, source_ref: AnnotationRef)` identifies one immutable pending item. `ReanchorResolution(item: PendingReanchorRef, outcome: Literal['recreated', 'dismissed'], replacement: AnnotationRef | None, reason: str | None, reviewer_id: str)` requires an exact replacement for `recreated` and a nonblank reason for `dismissed`. Add `reanchor_inputs` and `reanchor_resolutions` lists to Draft and Submission, defaulting empty for old payloads. Persist the lists in draft JSONB columns; submission payload already stores the immutable model. Add optional `pending_proposal_set_ids: list[int] | None` to `OpenWorkspaceRequest` and its client request type. Include new submission data without rewriting historical payloads.
@@ -54,8 +54,8 @@
 ## Task 2: Resolve items transactionally through workspace commands
 
 **Files:**
-- Create `src/ontocurator/application/reanchor_resolutions.py`.
-- Modify `src/ontocurator/api/routes.py`, `src/ontocurator/authz/scoped.py`, `src/ontocurator/application/editing.py`, `src/ontocurator/domain/errors.py`.
+- Create `src/ontotator/application/reanchor_resolutions.py`.
+- Modify `src/ontotator/api/routes.py`, `src/ontotator/authz/scoped.py`, `src/ontotator/application/editing.py`, `src/ontotator/domain/errors.py`.
 - Test `tests/test_reanchor_resolutions.py`; create `tests/test_reanchor_resolution_api.py`.
 - Regenerate `contracts/openapi.json` and `frontend/src/api/generated.ts`.
 
@@ -72,7 +72,7 @@
 ## Task 3: Integrate the reviewer flow and completion
 
 **Files:**
-- Modify `frontend/src/variants/ReanchorPanel.tsx`, `frontend/src/app/CaseScreen.tsx`, `frontend/src/api/client.ts`, `src/ontocurator/application/submissions.py`.
+- Modify `frontend/src/variants/ReanchorPanel.tsx`, `frontend/src/app/CaseScreen.tsx`, `frontend/src/api/client.ts`, `src/ontotator/application/submissions.py`.
 - Test `frontend/tests/reanchorPanel.test.tsx`, `frontend/tests/reanchorIntegration.test.tsx`, `frontend/tests/reanchorProvenance.test.tsx`, `tests/test_reanchor_resolutions.py`.
 - Browser tests: `frontend/browser/reanchor.spec.ts`; fixture changes in `tests/browser_server.py` only as needed.
 
@@ -89,7 +89,7 @@
 ## Task 4: Preserve resolutions in submission read-back and audit
 
 **Files:**
-- Modify `src/ontocurator/storage/repository.py`, `src/ontocurator/domain/workspace.py`, `src/ontocurator/application/submissions.py`.
+- Modify `src/ontotator/storage/repository.py`, `src/ontotator/domain/workspace.py`, `src/ontotator/application/submissions.py`.
 - Create `tests/test_reanchor_resolution_roundtrip.py`; extend `tests/test_review_roundtrip_regressions.py`.
 
 - [ ] Test stored submission read-back with one recreated and one dismissed item; assert exact frozen refs, actor, reason and replacement hash. Test old v2 submissions lacking fields, and reject dangling references when producing new submissions.

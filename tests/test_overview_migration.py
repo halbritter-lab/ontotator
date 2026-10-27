@@ -11,13 +11,13 @@ from pg_harness import PASSWORD, unmigrated_database_url
 from sqlalchemy import Connection, Engine, create_engine, make_url, text
 from sqlalchemy.exc import DBAPIError, IntegrityError
 
-from ontocurator.storage.schema import alembic_config, upgrade
-from ontocurator.storage.tables import APP_ROLE
+from ontotator.storage.schema import alembic_config, upgrade
+from ontotator.storage.tables import APP_ROLE
 
 # Renumbering (plan Global rule 12) only touches these two constants.
 REVISION = "0019"
 PREVIOUS = "0018"
-S = "ontocurator"
+S = "ontotator"
 
 
 def _exec(conn: Connection, sql: str, **params: Any) -> Any:

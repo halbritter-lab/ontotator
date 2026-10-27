@@ -24,12 +24,12 @@ async function redeemCode(page: Page, actor: Actor) {
 
 async function logout(page: Page) {
   await page.getByRole("button", { name: "Log out", exact: true }).click();
-  await expect(page.getByRole("form", { name: "Log in to Ontocurator" })).toBeVisible();
+  await expect(page.getByRole("form", { name: "Log in to Ontotator" })).toBeVisible();
 }
 
 async function loginExisting(page: Page, actor: Actor) {
   await openTasksHome(page);
-  const form = page.getByRole("form", { name: "Log in to Ontocurator" });
+  const form = page.getByRole("form", { name: "Log in to Ontotator" });
   await form.getByLabel("Username", { exact: true }).fill(actor.username);
   await form.getByLabel("Password", { exact: true }).fill(TEST_PASSWORD);
   await form.getByRole("button", { name: "Log in", exact: true }).click();

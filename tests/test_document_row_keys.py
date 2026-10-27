@@ -9,7 +9,7 @@ import pytest
 from auth_harness import logged_in
 from work_plan_support import BASE, plan_env
 
-from ontocurator.application import document_row_keys
+from ontotator.application import document_row_keys
 
 
 @pytest.fixture

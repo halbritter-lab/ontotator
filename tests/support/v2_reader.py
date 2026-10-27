@@ -5,30 +5,30 @@ import zipfile
 from pathlib import Path
 from typing import BinaryIO
 
-from ontocurator.domain.annotations import AnnotationSnapshot
-from ontocurator.domain.axes import validate_axes
-from ontocurator.domain.canonical import canonical_hash
-from ontocurator.domain.documents import (
+from ontotator.domain.annotations import AnnotationSnapshot
+from ontotator.domain.axes import validate_axes
+from ontotator.domain.canonical import canonical_hash
+from ontotator.domain.documents import (
     Document,
     EvidenceSnapshot,
     validate_segments,
 )
-from ontocurator.domain.errors import DomainError, InvalidPackage
-from ontocurator.domain.profiles import (
+from ontotator.domain.errors import DomainError, InvalidPackage
+from ontotator.domain.profiles import (
     layer_config_hash,
     profile_hash,
     resolve_layer,
     resolve_ontology,
     resolve_type,
 )
-from ontocurator.domain.results import latest_submissions
-from ontocurator.domain.review import ReviewTargetSet
-from ontocurator.domain.scopes import build_scope
-from ontocurator.domain.serialization import decode_snapshot, verify_snapshot
-from ontocurator.domain.workspace import Submission
-from ontocurator.ontology.conditions import validate_resources, validate_search_events
-from ontocurator.ontology.registry import OntologyRegistry
-from ontocurator.packages.models import (
+from ontotator.domain.results import latest_submissions
+from ontotator.domain.review import ReviewTargetSet
+from ontotator.domain.scopes import build_scope
+from ontotator.domain.serialization import decode_snapshot, verify_snapshot
+from ontotator.domain.workspace import Submission
+from ontotator.ontology.conditions import validate_resources, validate_search_events
+from ontotator.ontology.registry import OntologyRegistry
+from ontotator.packages.models import (
     PackageManifest,
     SearchEventRecord,
     ValidatedPackage,
@@ -142,8 +142,8 @@ def _read_package(
         manifest_data = json.loads(file_contents["manifest.json"].decode("utf-8"))
         format_version = manifest_data.get("format_version")
         if format_version not in {
-            "ontocurator-work-package/v2",
-            "ontocurator-work-package/v3",
+            "ontotator-work-package/v2",
+            "ontotator-work-package/v3",
         }:
             raise InvalidPackage(
                 f"Unsupported package format version: '{format_version}'; expected v2 or v3"
@@ -372,7 +372,7 @@ def _read_package(
                 )
 
     for sub in submissions.values():
-        if sub.format_version != "ontocurator-submission/v2" or sub.draft_revision < 1:
+        if sub.format_version != "ontotator-submission/v2" or sub.draft_revision < 1:
             raise InvalidPackage("Unsupported submission format or revision")
         if sub.origin_key.document_id not in documents:
             raise InvalidPackage("Submission references missing document")

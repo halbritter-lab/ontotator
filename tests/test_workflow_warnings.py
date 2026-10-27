@@ -1,6 +1,6 @@
 """Dashboard and export share one exact warning projection."""
 
-from ontocurator.application.workflow_warnings import project_warnings
+from ontotator.application.workflow_warnings import project_warnings
 
 
 def test_missing_selection_has_explicit_omission_and_stable_shared_warning():

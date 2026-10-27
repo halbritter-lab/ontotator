@@ -14,11 +14,11 @@ from test_consolidation_start_api import env as consolidation_env
 from test_legacy_removal_migration import _purge_script
 from work_plan_support import BASE, assign, doc
 
-from ontocurator.assignments.service import AssignmentService
-from ontocurator.auth.audit import Actor
-from ontocurator.authz.policy import Access, allowed_modes
-from ontocurator.domain.errors import DomainError
-from ontocurator.storage.tables import AssignmentRow, DraftRow, EditEventRow
+from ontotator.assignments.service import AssignmentService
+from ontotator.auth.audit import Actor
+from ontotator.authz.policy import Access, allowed_modes
+from ontotator.domain.errors import DomainError
+from ontotator.storage.tables import AssignmentRow, DraftRow, EditEventRow
 
 
 @pytest.fixture

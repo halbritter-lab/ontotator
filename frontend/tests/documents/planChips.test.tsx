@@ -183,7 +183,7 @@ it("offers the external-review acceptance for an invalid combination", async () 
   render(<Harness rows={[row]} />);
   fireEvent.click(chip("Translation review, case-0101 fr"));
   const box = await screen.findByRole("group", { name: "Annotate without review" });
-  expect(within(box).getByText("This translation was reviewed outside Ontocurator — accept it as it is")).toBeTruthy();
+  expect(within(box).getByText("This translation was reviewed outside Ontotator — accept it as it is")).toBeTruthy();
   const accept = within(box).getByRole("button", { name: "Accept and annotate" });
   expect(accept.getAttribute("aria-disabled")).toBe("true");
   fireEvent.click(accept);

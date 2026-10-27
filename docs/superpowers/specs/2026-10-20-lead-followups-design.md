@@ -20,7 +20,7 @@ Builds on: [Lead workflow design](2026-10-20-lead-workflow-design.md) (called "t
 
 ### Behaviour
 
-On a row whose next step is `resolve_rejected` or `resolve_queried`, the lead chooses "Correct the translation…" (Resolve options) or "Correct the translation yourself…" (Translation review block of the expanded row). Ontocurator opens the ordinary translation review screen for that exact version, with the lead as reviewer. The lead edits the text and submits "Accepted with corrections". The corrected text becomes the next version (`origin = correction`, `translation_status = accepted`), exactly as when a reviewer submits that decision; the rejected or queried version keeps its review record. Annotation can follow under `annotate_accepted_translations_only`.
+On a row whose next step is `resolve_rejected` or `resolve_queried`, the lead chooses "Correct the translation…" (Resolve options) or "Correct the translation yourself…" (Translation review block of the expanded row). Ontotator opens the ordinary translation review screen for that exact version, with the lead as reviewer. The lead edits the text and submits "Accepted with corrections". The corrected text becomes the next version (`origin = correction`, `translation_status = accepted`), exactly as when a reviewer submits that decision; the rejected or queried version keeps its review record. Annotation can follow under `annotate_accepted_translations_only`.
 
 ### Decisions
 

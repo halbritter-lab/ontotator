@@ -13,7 +13,7 @@ from collections.abc import Iterable, Mapping, Sequence
 
 from test_agreement_groups import f as groups_f
 
-from ontocurator.domain.agreement import Finding, Group, compare, groups
+from ontotator.domain.agreement import Finding, Group, compare, groups
 
 TEXT = "Seit 2 Wochen wiederholt schwere Krampfanfälle und eine Muskelhypotonie."
 SEIZURE, HYPOTONIA, FOCAL = "HP:0001250", "HP:0001252", "HP:0007359"

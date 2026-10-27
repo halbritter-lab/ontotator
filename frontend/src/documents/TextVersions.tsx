@@ -69,7 +69,7 @@ export function isDiscarded(row: Pick<DocumentRowView, "plan_row">, version: Doc
 const dateOnly = (iso: string, now?: Date) => formatTime(iso, { now }).split(", ")[0];
 
 /**
- * "Accepted: reviewed outside Ontocurator, Project lead (ann-0002), 20 Oct, 11:40, {reason}",
+ * "Accepted: reviewed outside Ontotator, Project lead (ann-0002), 20 Oct, 11:40, {reason}",
  * "Accepted: marked as reviewed in the package, R. Roe, 1 Oct".
  */
 export function acceptanceLabel(acceptance: VersionAcceptance, now?: Date): string {
@@ -77,7 +77,7 @@ export function acceptanceLabel(acceptance: VersionAcceptance, now?: Date): stri
     const given = [acceptance.reviewer?.trim(), acceptance.reviewed_at ? dateOnly(acceptance.reviewed_at, now) : null].filter(Boolean).join(", ");
     return ["Accepted: marked as reviewed in the package", given].filter(Boolean).join(", ");
   }
-  const what = acceptance.source === "lead" ? "Accepted: reviewed outside Ontocurator" : "Accepted: without review at import";
+  const what = acceptance.source === "lead" ? "Accepted: reviewed outside Ontotator" : "Accepted: without review at import";
   return [what, acceptance.accepted_by ? identityLabel(acceptance.accepted_by) : null, acceptance.accepted_at ? formatTime(acceptance.accepted_at, { now }) : null,
     acceptance.reason?.trim()].filter(Boolean).join(", ");
 }

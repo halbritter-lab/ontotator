@@ -6,7 +6,7 @@ from typing import Any
 import pytest
 from auth_harness import logged_in
 
-from ontocurator.assignments.service import AssignmentService
+from ontotator.assignments.service import AssignmentService
 
 
 @pytest.fixture

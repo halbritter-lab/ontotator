@@ -3,7 +3,7 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Lean format: files, interfaces, tokens, test cases and acceptance criteria per task. Implementers write the code test-first; code appears only where it defines a contract. Every UI task is done with the Impeccable skill (`impeccable:impeccable`, see "Working with Impeccable").
 
 **Goal:**
-- Direction C ("reading document") becomes the visual language of Ontocurator: paper-like surfaces, clinical text in a serif with room to read, controls that recede.
+- Direction C ("reading document") becomes the visual language of Ontotator: paper-like surfaces, clinical text in a serif with room to read, controls that recede.
 - Semantic design tokens, two density modes, a small in-house component set, an `AppShell` and one keyboard-shortcut registry, so that T3b, T5 and T4 build their screens on them.
 - Login, dashboard and editor get the new look. **No workflow changes.**
 
@@ -104,7 +104,7 @@ Rules: colour tokens are `#rrggbb` literals in `tokens.css` (the token tests par
 **Create** `PRODUCT.md`, `.impeccable/config.json`, `frontend/src/styles/tokens.css` (draft), `frontend/src/editor/negation.ts`, `frontend/tests/support/colour.ts`, `frontend/tests/tokens.test.ts`, `frontend/tests/negation.test.ts`, `frontend/browser/design.spec.ts`. **Modify** `frontend/package.json` (+ lock), `frontend/src/main.tsx`, `frontend/src/styles.css`, `frontend/src/spans/adapter.ts`, `frontend/src/vendor/spans.js`, `frontend/src/editor/TextPane.tsx`, `frontend/src/app/CaseScreen.tsx` (class names, layout wrappers and the `negated` flag; no behaviour), `frontend/tests/spans.test.ts`, `frontend/browser/spans.spec.ts`, `.gitignore`.
 
 **1. Product brief.** Run `/impeccable init` and write `PRODUCT.md` from the spec, `README.md` and these facts, without inventing claims:
-- Ontocurator is a web service for annotating clinical texts with ontology terms (HPO and others), used by curators, annotators, adjudicators and project leads, often for hours at a time, on desktop screens.
+- Ontotator is a web service for annotating clinical texts with ontology terms (HPO and others), used by curators, annotators, adjudicators and project leads, often for hours at a time, on desktop screens.
 - Users read carefully and decide term by term; mistakes matter. The text is the primary object; controls support it.
 - Constraints: offline and closed networks (no CDN), WCAG 2.2 AA, light theme only, English UI, React 18 with plain CSS and no UI library, keyboard use is common.
 - Surfaces: login, dashboard ("My tasks" from T3b), editor (reading), admin and workflow pages (compact).
@@ -441,7 +441,7 @@ interface AppShellProps {
   children: React.ReactNode;
 }
 // <a className="skip-link" href="#main">Skip to content</a>
-// <header className="app-header">product name "Ontocurator", breadcrumb, actions,
+// <header className="app-header">product name "Ontotator", breadcrumb, actions,
 //   <span className="current-user" data-testid="current-user" title="Logged in as <username>">{display_name} · {pseudonym}</span>, Log out</header>
 // [<nav className="app-nav">{nav}</nav>] <main id="main" className="density-…">{children}</main>, <ShortcutHelpHost />
 ```
@@ -449,7 +449,7 @@ interface AppShellProps {
 The header keeps `app-header` and `current-user`, which `firstRun.test.tsx`, `translations.spec.ts` and the Playwright helpers use. The root class is `shell` (not `app-shell`, which is AuthGate's inert wrapper).
 
 **Screens** (straight swaps, no behaviour change):
-- **Login** (`LoginScreen`, AuthGate's "Checking your session" card): a centred paper card, serif `2xl` title, `TextInput` for each field, primary `Button`, `InlineMessage` for problems and the session notice. Form names, labels and button names stay ("Log in to Ontocurator", "Username", "Password", "Log in", "I have a setup or reset code").
+- **Login** (`LoginScreen`, AuthGate's "Checking your session" card): a centred paper card, serif `2xl` title, `TextInput` for each field, primary `Button`, `InlineMessage` for problems and the session notice. Form names, labels and button names stay ("Log in to Ontotator", "Username", "Password", "Log in", "I have a setup or reset code").
 - **Dashboard** (`App.tsx` without an open case): `AppShell` with `onLogout`, breadcrumb = the selected project's name, `actions` = the ontology summary, "Add ontology …" and "Import work package (.zip)" (`Button` size `sm`; names unchanged).
   - Project and mode selects → `Select` (ids `package-select`, `mode-select` kept).
   - Hero card → a quiet panel with `StatusBadge`; "Open case" primary.
@@ -492,7 +492,7 @@ The header keeps `app-header` and `current-user`, which `firstRun.test.tsx`, `tr
 
 ### Task 10: `DESIGN.md`, licences, embedded assets and the gate
 
-**Create** `DESIGN.md`, `.impeccable/design.json`, `frontend/public/licenses/source-serif-4-OFL.txt`, `frontend/public/licenses/source-sans-3-OFL.txt`. **Modify** `THIRD_PARTY_NOTICES.md`, `scripts/check_wheel.py` (`REQUIRED_WHEEL_FILES`), `src/ontocurator/web/` (rebuilt).
+**Create** `DESIGN.md`, `.impeccable/design.json`, `frontend/public/licenses/source-serif-4-OFL.txt`, `frontend/public/licenses/source-sans-3-OFL.txt`. **Modify** `THIRD_PARTY_NOTICES.md`, `scripts/check_wheel.py` (`REQUIRED_WHEEL_FILES`), `src/ontotator/web/` (rebuilt).
 
 - **`DESIGN.md`** through `/impeccable document` (it records the shipped system, frontmatter tokens plus the sidecar `.impeccable/design.json`). It must contain, in English:
   1. **Principles:** direction C; the text leads, controls recede; one primary action per view; meaning never by colour alone; keyboard first; offline (no external assets).
@@ -504,11 +504,11 @@ The header keeps `app-header` and `current-user`, which `firstRun.test.tsx`, `tr
   7. **Shortcuts:** `useShortcut`, scopes, `?` help; every new screen registers its keys with a description.
   8. **Do / don't** with short examples: use `Button` not `<button className="btn …">`; use `DataTable` for lists of records; use `InlineMessage` for errors; no inline `style` colours; no new UI library; no CDN fonts; no emoji as icons; `Dialog` for every modal.
   9. **Binding for T3b, T5 and T4** (spec §6.5), and what T6b will change (spec §1).
-- **Licences:** copy `node_modules/@fontsource-variable/source-serif-4/LICENSE` and `…/source-sans-3/LICENSE` to `frontend/public/licenses/` (Vite copies `public/` into the build, so the licence ships next to the fonts in the wheel and the image). `THIRD_PARTY_NOTICES.md` gains a "Fonts" section: Source Serif 4 and Source Sans 3, © Adobe, SIL Open Font License 1.1, bundled as woff2 via Fontsource, licence files in `web/licenses/`. `check_wheel.py` requires `ontocurator/web/licenses/source-serif-4-OFL.txt` and `…/source-sans-3-OFL.txt`.
-- **Embedded assets:** `npm --prefix frontend run build`, then replace `src/ontocurator/web/` with `frontend/dist/`.
+- **Licences:** copy `node_modules/@fontsource-variable/source-serif-4/LICENSE` and `…/source-sans-3/LICENSE` to `frontend/public/licenses/` (Vite copies `public/` into the build, so the licence ships next to the fonts in the wheel and the image). `THIRD_PARTY_NOTICES.md` gains a "Fonts" section: Source Serif 4 and Source Sans 3, © Adobe, SIL Open Font License 1.1, bundled as woff2 via Fontsource, licence files in `web/licenses/`. `check_wheel.py` requires `ontotator/web/licenses/source-serif-4-OFL.txt` and `…/source-sans-3-OFL.txt`.
+- **Embedded assets:** `npm --prefix frontend run build`, then replace `src/ontotator/web/` with `frontend/dist/`.
 - **Checks:**
   - `uv run python scripts/license_notices.py --out-dir build/licenses && grep -c "SIL OPEN FONT LICENSE" build/licenses/npm-packages.txt` prints 2 or more.
-  - `grep -rlE "fonts\.googleapis|fonts\.gstatic|https?://cdn" src/ontocurator/web` prints nothing.
+  - `grep -rlE "fonts\.googleapis|fonts\.gstatic|https?://cdn" src/ontotator/web` prints nothing.
   - `"$IMPECCABLE" detect --json frontend/src` reports no untriaged finding (spec §7).
   - `scripts/check.sh` prints `All local checks passed.`
 

@@ -6,7 +6,7 @@ Run the complete required gate before integration:
 bash scripts/check.sh
 ```
 
-The gate runs its phases one after another. Backend tests run in four pytest-xdist workers that share one PostgreSQL test server; every worker migrates its own template database and every test gets its own copy. Playwright uses three browser workers. Keep other heavy test runs stopped when RAM is limited. Docker must be running for backend and browser checks unless `ONTOCURATOR_TEST_PG_URL` points to a disposable test server. Never point it at production.
+The gate runs its phases one after another. Backend tests run in four pytest-xdist workers that share one PostgreSQL test server; every worker migrates its own template database and every test gets its own copy. Playwright uses three browser workers. Keep other heavy test runs stopped when RAM is limited. Docker must be running for backend and browser checks unless `ONTOTATOR_TEST_PG_URL` points to a disposable test server. Never point it at production.
 
 The PostgreSQL test container runs with `fsync`, `synchronous_commit` and `full_page_writes` switched off. These settings are for throwaway test servers only: a crash loses data. Never copy them to a deployment.
 
@@ -34,19 +34,19 @@ Work-package agents use the quick path while iterating; the full gate (`bash scr
 ```bash
 bash scripts/check.sh --quick                         # changes against main
 bash scripts/check.sh --quick --base feat/x           # changes against another ref
-bash scripts/check.sh --quick src/ontocurator/auth/passwords.py frontend/src/editor/autosave.ts
+bash scripts/check.sh --quick src/ontotator/auth/passwords.py frontend/src/editor/autosave.ts
 ```
 
 `--quick` runs `scripts/check-affected.sh`. It runs the static checks (Ruff lint/format, mypy, frontend types, OpenAPI/TypeScript/admin error catalog drift) and then only the affected tests. Without paths it uses the files changed since the merge base with the base ref (default `main`, or `CHECK_BASE`) plus uncommitted and untracked files.
 
-- Backend: changed `tests/**/test_*.py`; `tests/test_<module>.py` and `tests/test_<module>_*.py` for a changed `src/ontocurator/**/<module>.py`; `tests/test_<name>*.py` for a changed `<name>_routes.py`; test modules naming a changed migration's revision id (`"0019"`); and test modules that import a changed module or test helper. Backend changes without such tests (also `tests/conftest.py` and `tests/pg_harness.py`) are listed; when no backend test runs at all the quick check fails and asks for `--only backend`. Workers: `CHECK_PYTEST_WORKERS`, default 2, never more than the selected files.
+- Backend: changed `tests/**/test_*.py`; `tests/test_<module>.py` and `tests/test_<module>_*.py` for a changed `src/ontotator/**/<module>.py`; `tests/test_<name>*.py` for a changed `<name>_routes.py`; test modules naming a changed migration's revision id (`"0019"`); and test modules that import a changed module or test helper. Backend changes without such tests (also `tests/conftest.py` and `tests/pg_harness.py`) are listed; when no backend test runs at all the quick check fails and asks for `--only backend`. Workers: `CHECK_PYTEST_WORKERS`, default 2, never more than the selected files.
 - Frontend: `vitest related --run` for changed `frontend/src` and `frontend/tests` files; `CHECK_VITEST_WORKERS` bounds the workers (default 2). Frontend configuration changes ask for `--only frontend`.
 
 The selection follows direct imports only, and it skips the wheel build and Playwright. It is a partial gate and never replaces the full gate. pytest-testmon is not used because it conflicts with pytest-xdist.
 
 ## Test speed settings
 
-Outside `tests/test_passwords*`, `tests/test_accounts*`, `tests/test_sessions*` and `tests/test_admin_cli*`, an autouse fixture in `tests/conftest.py` switches the Argon2 hasher of `ontocurator.auth.passwords` to t=1, m=8 MiB, p=1. Hashing, verification, `needs_rehash` and the supplied-hash policy switch together, so logins behave as in production without the cost. The parameters exist only in the test suite; production code has no switch for them. The excluded modules keep the production parameters because they test hashing, the hash policy and rehash on login.
+Outside `tests/test_passwords*`, `tests/test_accounts*`, `tests/test_sessions*` and `tests/test_admin_cli*`, an autouse fixture in `tests/conftest.py` switches the Argon2 hasher of `ontotator.auth.passwords` to t=1, m=8 MiB, p=1. Hashing, verification, `needs_rehash` and the supplied-hash policy switch together, so logins behave as in production without the cost. The parameters exist only in the test suite; production code has no switch for them. The excluded modules keep the production parameters because they test hashing, the hash policy and rehash on login.
 
 Frontend unit tests without DOM access start with `// @vitest-environment node`; all others use jsdom. Add the comment only to tests that use neither DOM, browser storage, `fetch` nor Testing Library.
 
@@ -80,7 +80,7 @@ Container checks remain opt-in for a full run:
 
 ```bash
 CHECK_CONTAINERS=1 bash scripts/check.sh
-CHECK_CONTAINERS=1 CHECK_IMAGE=ontocurator:release bash scripts/check.sh
+CHECK_CONTAINERS=1 CHECK_IMAGE=ontotator:release bash scripts/check.sh
 ```
 
 `--only containers` runs that phase directly. `CHECK_IMAGE` applies to either form. `bash scripts/check.sh --help` lists the phases without starting tools or services.

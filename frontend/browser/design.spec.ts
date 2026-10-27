@@ -114,7 +114,7 @@ async function openStates(page: Page, annotator: string) {
 test.describe("Design direction C", () => {
   test("design: login and dashboard", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByRole("form", { name: "Log in to Ontocurator" })).toBeVisible();
+    await expect(page.getByRole("form", { name: "Log in to Ontotator" })).toBeVisible();
     await shoot(page, "login");
     await checkContrastAndTextSize(page);
     await importPackage(page, "", "browser-fixture-design", "design-dashboard");
@@ -179,7 +179,7 @@ test.describe("Design direction C", () => {
     const requests: string[] = [];
     page.on("request", (request) => requests.push(request.url()));
     await page.goto("/");
-    await expect(page.getByRole("form", { name: "Log in to Ontocurator" })).toBeVisible();
+    await expect(page.getByRole("form", { name: "Log in to Ontotator" })).toBeVisible();
     await page.evaluate(() => document.fonts.ready);
     await openReview(page, "?scenario=design_states", "pkg-design-states", "design-origin");
     await page.evaluate(() => document.fonts.ready);

@@ -16,13 +16,13 @@ services:
     image: postgres:16.15-alpine3.24@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
     user: "70:70"
     environment:
-      POSTGRES_DB: ontocurator
-      POSTGRES_USER: ontocurator_bootstrap
+      POSTGRES_DB: ontotator
+      POSTGRES_USER: ontotator_bootstrap
       POSTGRES_PASSWORD_FILE: /run/postgres/bootstrap-password
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./secrets/postgres:/run/postgres:ro
-      - ./docker/postgres-init.sh:/docker-entrypoint-initdb.d/10-ontocurator.sh:ro
+      - ./docker/postgres-init.sh:/docker-entrypoint-initdb.d/10-ontotator.sh:ro
     tmpfs:
       - /tmp:size=64m
       - /var/run/postgresql:size=16m,uid=70,gid=70
@@ -30,7 +30,7 @@ services:
     cpus: 1.0
     pids_limit: 256
     healthcheck:
-      test: [CMD, pg_isready, -U, ontocurator_bootstrap, -d, ontocurator]
+      test: [CMD, pg_isready, -U, ontotator_bootstrap, -d, ontotator]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -39,12 +39,12 @@ services:
 
   migrate:
     <<: *runtime
-    image: ${ONTOCURATOR_IMAGE:?Set the verified image}
+    image: ${ONTOTATOR_IMAGE:?Set the verified image}
     command: [db, upgrade]
     restart: "no"
     environment:
-      ONTOCURATOR_MIGRATION_DATABASE_URL: postgresql://ontocurator_owner@postgres:5432/ontocurator
-      ONTOCURATOR_MIGRATION_DATABASE_PASSWORD_FILE: /run/secrets/owner-password
+      ONTOTATOR_MIGRATION_DATABASE_URL: postgresql://ontotator_owner@postgres:5432/ontotator
+      ONTOTATOR_MIGRATION_DATABASE_PASSWORD_FILE: /run/secrets/owner-password
     volumes:
       - ./secrets/migrate:/run/secrets:ro
     tmpfs:
@@ -62,19 +62,19 @@ services:
 
   app:
     <<: *runtime
-    image: ${ONTOCURATOR_IMAGE:?Set the verified image}
+    image: ${ONTOTATOR_IMAGE:?Set the verified image}
     init: false # The image already runs tini as PID 1.
     environment:
-      ONTOCURATOR_ENV: production
-      ONTOCURATOR_PUBLIC_ORIGIN: ${ONTOCURATOR_PUBLIC_ORIGIN:?Set the public HTTPS origin}
-      ONTOCURATOR_TRUSTED_PROXIES: ${ONTOCURATOR_TRUSTED_PROXIES:?Set the exact proxy peer addresses}
-      ONTOCURATOR_WORKERS: ${ONTOCURATOR_WORKERS:-2}
-      ONTOCURATOR_DATABASE_URL: postgresql://ontocurator_app@postgres:5432/ontocurator
-      ONTOCURATOR_DATABASE_PASSWORD_FILE: /run/secrets/app-password
-      ONTOCURATOR_ADMIN_PASSWORD_HASH_FILE: /run/secrets/admin-password-hash
-      ONTOCURATOR_DATA_DIR: /data
+      ONTOTATOR_ENV: production
+      ONTOTATOR_PUBLIC_ORIGIN: ${ONTOTATOR_PUBLIC_ORIGIN:?Set the public HTTPS origin}
+      ONTOTATOR_TRUSTED_PROXIES: ${ONTOTATOR_TRUSTED_PROXIES:?Set the exact proxy peer addresses}
+      ONTOTATOR_WORKERS: ${ONTOTATOR_WORKERS:-2}
+      ONTOTATOR_DATABASE_URL: postgresql://ontotator_app@postgres:5432/ontotator
+      ONTOTATOR_DATABASE_PASSWORD_FILE: /run/secrets/app-password
+      ONTOTATOR_ADMIN_PASSWORD_HASH_FILE: /run/secrets/admin-password-hash
+      ONTOTATOR_DATA_DIR: /data
     volumes:
-      - ontocurator-data:/data
+      - ontotator-data:/data
       - ./secrets/app:/run/secrets:ro
     tmpfs:
       - /tmp:size=256m,mode=1777
@@ -92,10 +92,10 @@ services:
 
 volumes:
   postgres-data:
-  ontocurator-data:
+  ontotator-data:
 
 networks:
   edge:
-    name: ${ONTOCURATOR_EDGE_NETWORK:-ontocurator-edge}
+    name: ${ONTOTATOR_EDGE_NETWORK:-ontotator-edge}
   backend:
     internal: true

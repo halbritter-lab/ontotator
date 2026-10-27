@@ -1,6 +1,6 @@
 """The test-only cheap Argon2 parameters (tests/conftest.py) are in effect here."""
 
-from ontocurator.auth.passwords import hash_password, needs_rehash, verify_password
+from ontotator.auth.passwords import hash_password, needs_rehash, verify_password
 
 
 def test_hashes_outside_the_password_tests_use_the_cheap_parameters() -> None:

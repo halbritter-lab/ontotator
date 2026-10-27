@@ -3,7 +3,7 @@ import { selectText } from "../browser/helpers";
 
 test("stack smoke: log in, open the project, annotate, submit", async ({ page }) => {
   await page.goto("/");
-  const login = page.getByRole("form", { name: "Log in to Ontocurator" });
+  const login = page.getByRole("form", { name: "Log in to Ontotator" });
   await login.getByLabel("Username").fill("smoke-annotator");
   // Synthetic DEVELOPMENT ONLY account, created by scripts/seed_stack.py.
   await login.getByLabel("Password").fill(process.env.STACK_SMOKE_PASSWORD ?? "development-only-smoke-password");

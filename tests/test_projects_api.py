@@ -8,8 +8,8 @@ from auth_harness import ensure_assignment, logged_in
 from sqlalchemy import insert, select
 from test_auth_api import _app
 
-from ontocurator.auth.audit import Actor
-from ontocurator.storage.tables import (
+from ontotator.auth.audit import Actor
+from ontotator.storage.tables import (
     AssignmentRow,
     AuditEventRow,
     DocumentRow,
@@ -190,10 +190,10 @@ def test_pins_lock_after_the_first_submission(tmp_path):
     from t1_fixtures import create_project as seed
     from test_t1_export import _submit
 
-    from ontocurator.domain.errors import DomainError
-    from ontocurator.ontology.registry import OntologyRegistry
-    from ontocurator.ontology.store import OntologyStore
-    from ontocurator.projects.service import ProjectService
+    from ontotator.domain.errors import DomainError
+    from ontotator.ontology.registry import OntologyRegistry
+    from ontotator.ontology.store import OntologyStore
+    from ontotator.projects.service import ProjectService
 
     db = database_for(tmp_path / "project.db", data_dir=tmp_path)
     seed(db)
@@ -214,10 +214,10 @@ def test_a_prepared_edit_cannot_commit_after_profile_change(tmp_path, monkeypatc
     from sqlalchemy import update
     from test_editing import _setup_test_env
 
-    from ontocurator.domain.errors import RevisionConflict
-    from ontocurator.domain.profiles import profile_hash
-    from ontocurator.domain.workspace import MutationEnvelope, WorkspaceKey
-    from ontocurator.storage.tables import DraftRow
+    from ontotator.domain.errors import RevisionConflict
+    from ontotator.domain.profiles import profile_hash
+    from ontotator.domain.workspace import MutationEnvelope, WorkspaceKey
+    from ontotator.storage.tables import DraftRow
 
     repo, _ontology, _workspace_service, editor, document = _setup_test_env(tmp_path)
     key = WorkspaceKey(
@@ -265,7 +265,7 @@ def test_two_concurrent_lead_removals_leave_one_lead(app):
     from concurrent.futures import ThreadPoolExecutor
     from threading import Barrier
 
-    from ontocurator.domain.errors import DomainError
+    from ontotator.domain.errors import DomainError
 
     admin = logged_in(app, "root", system_admin=True)
     create_project(app, admin)
@@ -303,8 +303,8 @@ def test_two_concurrent_lead_removals_leave_one_lead(app):
 def test_membership_revocation_failure_rolls_back_work_roles_audit_and_sessions(
     app, monkeypatch
 ):
-    from ontocurator.projects import assignments
-    from ontocurator.storage.tables import ProjectMembershipRow
+    from ontotator.projects import assignments
+    from ontotator.storage.tables import ProjectMembershipRow
 
     admin = logged_in(app, "root", system_admin=True)
     create_project(app, admin)
@@ -381,7 +381,7 @@ def test_independent_draft_commands_remain_concurrent(tmp_path):
 
     from test_editing import _setup_test_env
 
-    from ontocurator.domain.workspace import MutationEnvelope, WorkspaceKey
+    from ontotator.domain.workspace import MutationEnvelope, WorkspaceKey
 
     repo, _, _, _, document = _setup_test_env(tmp_path)
     inside = Barrier(2)
@@ -422,10 +422,10 @@ def test_pin_update_waits_for_first_submission_then_refuses(tmp_path):
     from t1_fixtures import create_project as seed
     from test_t1_export import _submit
 
-    from ontocurator.domain.errors import DomainError
-    from ontocurator.ontology.registry import OntologyRegistry
-    from ontocurator.ontology.store import OntologyStore
-    from ontocurator.projects.service import ProjectService
+    from ontotator.domain.errors import DomainError
+    from ontotator.ontology.registry import OntologyRegistry
+    from ontotator.ontology.store import OntologyStore
+    from ontotator.projects.service import ProjectService
 
     db = database_for(tmp_path / "project.db", data_dir=tmp_path)
     seed(db)
@@ -465,11 +465,11 @@ def test_pin_update_waits_for_first_submission_then_refuses(tmp_path):
 def test_authenticated_edit_rejects_stale_prepared_profile(
     app, monkeypatch, replay, stage
 ):
-    from ontocurator.application.editing import EditorService
-    from ontocurator.domain.profiles import TaskProfile
-    from ontocurator.ontology.registry import OntologyRegistry
-    from ontocurator.projects.service import ProjectService
-    from ontocurator.storage.tables import DraftRow
+    from ontotator.application.editing import EditorService
+    from ontotator.domain.profiles import TaskProfile
+    from ontotator.ontology.registry import OntologyRegistry
+    from ontotator.projects.service import ProjectService
+    from ontotator.storage.tables import DraftRow
 
     admin = logged_in(app, "root", system_admin=True)
     project = create_project(app, admin)
@@ -559,8 +559,8 @@ def test_import_prepared_before_a_profile_change_rolls_back(tmp_path, monkeypatc
     from t1_fixtures import bundle, run_import, unit
     from t1_fixtures import create_project as seed
 
-    from ontocurator.domain.profiles import TaskProfile, profile_hash
-    from ontocurator.exchange import uploads
+    from ontotator.domain.profiles import TaskProfile, profile_hash
+    from ontotator.exchange import uploads
 
     db = database_for(tmp_path / "project.db", data_dir=tmp_path)
     seed(db)
@@ -598,7 +598,7 @@ def test_reciprocal_membership_edits_do_not_deadlock_on_audit_foreign_keys(
     from concurrent.futures import ThreadPoolExecutor
     from threading import Barrier
 
-    from ontocurator.authz import memberships
+    from ontotator.authz import memberships
 
     admin = logged_in(app, "root", system_admin=True)
     create_project(app, admin, "project-a")
@@ -644,7 +644,7 @@ def test_reciprocal_membership_edits_do_not_deadlock_on_audit_foreign_keys(
 def test_pins_can_upgrade_before_work_and_rebind_actual_release(app):
     import json
 
-    from ontocurator.domain.profiles import TaskProfile
+    from ontotator.domain.profiles import TaskProfile
 
     admin = logged_in(app, "root", system_admin=True)
     project = create_project(app, admin)

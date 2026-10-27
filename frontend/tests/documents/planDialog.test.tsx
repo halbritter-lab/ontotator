@@ -197,7 +197,7 @@ describe("PlanDialog", () => {
     expect(await screen.findByText("fr: 12 of 30 translations are not marked as reviewed in the package. Annotation needs an accepted translation.")).toBeTruthy();
     expect(screen.getByText(/18 already marked as reviewed in the package metadata need nothing\./)).toBeTruthy();
     expect(save().getAttribute("aria-disabled")).toBe("true");
-    fireEvent.click(screen.getByRole("checkbox", { name: "These translations were reviewed outside Ontocurator — accept them as they are" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "These translations were reviewed outside Ontotator — accept them as they are" }));
     expect(save().getAttribute("aria-disabled")).toBe("true");
     fireEvent.change(screen.getByLabelText(/^Reason/), { target: { value: "Vendor batch 2026-10" } });
     expect(save().getAttribute("aria-disabled")).toBeNull();
@@ -212,7 +212,7 @@ describe("PlanDialog", () => {
     await choose("fr", "Annotation", "Annotate from scratch");
     await waitFor(() => expect(lastPreviewBody().languages).toEqual({ fr: { annotate: "on", annotation_mode: "scratch" } }));
     await waitFor(() => expect(save().getAttribute("aria-disabled")).toBeNull());
-    expect(screen.queryByRole("checkbox", { name: /reviewed outside Ontocurator/ })).toBeNull();
+    expect(screen.queryByRole("checkbox", { name: /reviewed outside Ontotator/ })).toBeNull();
   });
 
   it("keeps a quick-action preset that turns annotation on without a mode", async () => {
@@ -243,7 +243,7 @@ describe("PlanDialog", () => {
     await choose("fr", "Annotation", "Annotate from scratch");
     expect(await screen.findByText("2 rejected or queried: resolve them first.")).toBeTruthy();
     expect(screen.getByText("1 in review: wait for the review or withdraw it first.")).toBeTruthy();
-    fireEvent.click(screen.getByRole("checkbox", { name: /reviewed outside Ontocurator/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /reviewed outside Ontotator/ }));
     fireEvent.change(screen.getByLabelText(/^Reason/), { target: { value: "Vendor" } });
     expect(save().getAttribute("aria-disabled")).toBe("true");
     vi.mocked(api.previewWorkPlans).mockResolvedValue(preview({ changes: 18, languages: [lang("fr", 18, [0, 18], [0, 18])] }));

@@ -87,7 +87,7 @@ conservative option was taken and should be confirmed.
 - `GET /api/v1/ontologies` still calls `load_registered()` "as before", so listing parses every
   stored ontology in that worker. See open risks.
 - CLI: `admin ontologies add FILE...` and `admin ontologies list` print
-  `<sha256>  <prefix>  <release or ->  <kind>`. The data volume is `ONTOCURATOR_DATA_DIR`
+  `<sha256>  <prefix>  <release or ->  <kind>`. The data volume is `ONTOTATOR_DATA_DIR`
   (default `./data`), as for the other admin commands; `serve --data-dir` must point to the same
   folder. `serve` no longer creates `<data dir>/ontologies`.
 - Tests changed: the two tests of the removed `<data dir>/ontologies` scan

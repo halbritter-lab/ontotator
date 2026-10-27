@@ -2,8 +2,8 @@
 
 import pytest
 
-from ontocurator.domain.errors import AccessDenied, DomainError
-from ontocurator.domain.problem_reports import (
+from ontotator.domain.errors import AccessDenied, DomainError
+from ontotator.domain.problem_reports import (
     EventFact,
     check_permission,
     check_state,

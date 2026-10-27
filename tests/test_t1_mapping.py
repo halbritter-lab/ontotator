@@ -1,4 +1,4 @@
-"""Mapping between Ontocurator snapshots and ontospan (T1) units (T2d Task 1)."""
+"""Mapping between Ontotator snapshots and ontospan (T1) units (T2d Task 1)."""
 
 import hashlib
 from datetime import UTC, datetime
@@ -8,7 +8,7 @@ from typing import Any
 import ontospan
 import pytest
 
-from ontocurator.domain.annotations import (
+from ontotator.domain.annotations import (
     ActorRef,
     Annotation,
     AnnotationRef,
@@ -16,25 +16,25 @@ from ontocurator.domain.annotations import (
     Provenance,
     snapshot,
 )
-from ontocurator.domain.documents import (
+from ontotator.domain.documents import (
     Document,
     EvidenceMention,
     EvidenceRef,
     Segment,
     snapshot_evidence,
 )
-from ontocurator.domain.errors import DomainError
-from ontocurator.domain.profiles import (
+from ontotator.domain.errors import DomainError
+from ontotator.domain.profiles import (
     AnnotationTypeDefinition,
     AxisDefinition,
     LayerDefinition,
     OntologyDefinition,
     TaskProfile,
 )
-from ontocurator.domain.review import ReviewDecision, ReviewTargetSet
-from ontocurator.domain.serialization import encode_snapshot, verify_snapshot
-from ontocurator.domain.workspace import Submission, WorkspaceKey
-from ontocurator.exchange.t1 import (
+from ontotator.domain.review import ReviewDecision, ReviewTargetSet
+from ontotator.domain.serialization import encode_snapshot, verify_snapshot
+from ontotator.domain.workspace import Submission, WorkspaceKey
+from ontotator.exchange.t1 import (
     Pin,
     check_t1_profile,
     document_from_unit,
@@ -706,7 +706,7 @@ def test_hpo_phenotype_profiles_use_only_t1_values() -> None:
 def test_the_example_hpo_profile_fits_t1() -> None:
     raw = (
         Path(__file__).parent.parent
-        / "src/ontocurator/profiles/hpo-context-example-v1.json"
+        / "src/ontotator/profiles/hpo-context-example-v1.json"
     ).read_text(encoding="utf-8")
     profile = TaskProfile.model_validate_json(raw)
 
@@ -714,7 +714,7 @@ def test_the_example_hpo_profile_fits_t1() -> None:
 
 
 def test_annotation_note_preserves_legacy_hash_and_historical_whitespace():
-    from ontocurator.domain.serialization import decode_snapshot
+    from ontotator.domain.serialization import decode_snapshot
 
     doc = document_from_unit(sketch_unit())
     original = own_snapshot(doc, "own", "HP:0001250", None, {})
@@ -1044,7 +1044,7 @@ def test_export_normalizes_only_exact_inventory_source(source_id):
 
 
 def test_export_preserves_external_hash_like_reference_without_inventory_hit():
-    from ontocurator.exchange.t1 import _export_source_ref
+    from ontotator.exchange.t1 import _export_source_ref
 
     external = ontospan.annotation_ref("external", "a" * 64)
     assert _export_source_ref(external, "proj", {}) == external
@@ -1053,7 +1053,7 @@ def test_export_preserves_external_hash_like_reference_without_inventory_hit():
 
 
 def test_export_rejects_missing_frozen_reanchor_source_even_when_it_parses_as_urn():
-    from ontocurator.domain.reanchor_resolution import PendingReanchorRef
+    from ontotator.domain.reanchor_resolution import PendingReanchorRef
 
     doc = document_from_unit(sketch_unit())
     source = own_snapshot(doc, "urn:ontospan:source:seizure", "HP:0001250", None, {})

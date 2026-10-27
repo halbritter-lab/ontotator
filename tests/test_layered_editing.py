@@ -4,20 +4,20 @@ import pytest
 from layered_fixtures import make_layered_package
 from pg_harness import database_for
 
-from ontocurator.application.editing import (
+from ontotator.application.editing import (
     CheckLayerCommand,
     CreateAnnotationCommand,
     EditingService,
     EditMentionCommand,
     SetAxesCommand,
 )
-from ontocurator.application.workspaces import WorkspaceService
-from ontocurator.domain.documents import Segment
-from ontocurator.domain.errors import DomainError, RevisionConflict
-from ontocurator.domain.scopes import build_scope
-from ontocurator.domain.workspace import MutationEnvelope, WorkspaceKey
-from ontocurator.ontology.registry import OntologyRegistry
-from ontocurator.storage.repository import Repository
+from ontotator.application.workspaces import WorkspaceService
+from ontotator.domain.documents import Segment
+from ontotator.domain.errors import DomainError, RevisionConflict
+from ontotator.domain.scopes import build_scope
+from ontotator.domain.workspace import MutationEnvelope, WorkspaceKey
+from ontotator.ontology.registry import OntologyRegistry
+from ontotator.storage.repository import Repository
 
 
 def _setup_registry_for_package(pkg) -> OntologyRegistry:

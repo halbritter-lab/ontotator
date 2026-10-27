@@ -34,11 +34,11 @@ from work_plan_support import (
 )
 from work_plan_support import service as plan_service
 
-from ontocurator.api.work_plan_routes import PlanRowPatch
-from ontocurator.application.document_rows import RowQuery
-from ontocurator.assignments.service import AssignmentService
-from ontocurator.auth.audit import Actor
-from ontocurator.storage.tables import ProjectRow
+from ontotator.api.work_plan_routes import PlanRowPatch
+from ontotator.application.document_rows import RowQuery
+from ontotator.assignments.service import AssignmentService
+from ontotator.auth.audit import Actor
+from ontotator.storage.tables import ProjectRow
 
 Key = tuple[str, str]
 

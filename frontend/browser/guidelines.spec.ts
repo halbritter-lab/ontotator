@@ -265,7 +265,7 @@ test("EMPTY: publish v1, read it in a task, publish v2, review under v2, export 
     // 7. Export: the annotation sets reference v1 and v2; the final archive carries no guideline file.
     const listing = await value<Listing>(page, `${root(s)}/guidelines`);
     const ref = (version: number) =>
-      `urn:ontocurator:${s.project}:guidelines:v${version}#sha256=${listing.versions.find(item => item.version === version)!.sha256}`;
+      `urn:ontotator:${s.project}:guidelines:v${version}#sha256=${listing.versions.find(item => item.version === version)!.sha256}`;
     const t1 = await value<{ job_id: number }>(page, `${root(s)}/exports`, "POST", { kind: "t1" });
     const t1Sets = annotationSets(await download(page, t1.job_id));
     expect(refOf(t1Sets, firstSubmission)).toBe(ref(1));

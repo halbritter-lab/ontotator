@@ -12,14 +12,14 @@ from pg_harness import database_for, database_url_for
 from sqlalchemy import insert, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from ontocurator.api.app import create_app
-from ontocurator.auth.audit import Actor
-from ontocurator.config import AppConfig
-from ontocurator.domain.errors import DomainError
-from ontocurator.ontology.registry import OntologyRegistry
-from ontocurator.ontology.store import OntologyStore
-from ontocurator.storage.database import Database
-from ontocurator.storage.tables import (
+from ontotator.api.app import create_app
+from ontotator.auth.audit import Actor
+from ontotator.config import AppConfig
+from ontotator.domain.errors import DomainError
+from ontotator.ontology.registry import OntologyRegistry
+from ontotator.ontology.store import OntologyStore
+from ontotator.storage.database import Database
+from ontotator.storage.tables import (
     AuditEventRow,
     OntologyFileRow,
     ProjectOntologyRow,
@@ -153,7 +153,7 @@ def test_a_missing_blob_does_not_stop_the_start(tmp_path: Path) -> None:
 
 def _pin_hp(db: Database) -> None:
     """A seeded project that pins the stored HP file (Task 4 creates pins)."""
-    from ontocurator.storage.repository import Repository
+    from ontotator.storage.repository import Repository
 
     Repository(db).import_package(make_layered_package("single"))
     with db.transaction() as conn:
@@ -199,7 +199,7 @@ def test_without_pins_nothing_is_preloaded(tmp_path: Path) -> None:
 def test_running_worker_searches_ontology_added_by_another_worker(
     tmp_path: Path, captured: bool
 ) -> None:
-    from ontocurator.storage.repository import Repository
+    from ontotator.storage.repository import Repository
 
     app = create_app(_config(tmp_path))
     assert app.state.ontologies_ready.wait(30)

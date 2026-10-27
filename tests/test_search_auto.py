@@ -6,12 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from ontocurator.domain.documents import OntologyRef
-from ontocurator.domain.workspace import WorkspaceKey
-from ontocurator.ontology.provenance import SearchCandidate, SearchRequest
-from ontocurator.ontology.service import OntologyService, looks_like_code
-from ontocurator.packages.models import SearchEventRecord
-from ontocurator.vendor.hpo_span_annotator.search import shuffle_seed, shuffled
+from ontotator.domain.documents import OntologyRef
+from ontotator.domain.workspace import WorkspaceKey
+from ontotator.ontology.provenance import SearchCandidate, SearchRequest
+from ontotator.ontology.service import OntologyService, looks_like_code
+from ontotator.packages.models import SearchEventRecord
+from ontotator.vendor.hpo_span_annotator.search import shuffle_seed, shuffled
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "hp.json"
 

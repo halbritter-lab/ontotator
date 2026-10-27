@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Transform ontocurator's interface into a modern, highly ergonomic clinical curation workbench with an intuitive Curation Dashboard start screen, an uncluttered 2-tier workspace header with prominent submission actions, compact segmented context axes, and 1-key review shortcuts.
+**Goal:** Transform ontotator's interface into a modern, highly ergonomic clinical curation workbench with an intuitive Curation Dashboard start screen, an uncluttered 2-tier workspace header with prominent submission actions, compact segmented context axes, and 1-key review shortcuts.
 
 **Architecture:** 
 1. `App.tsx`: Modernize the start screen into a Curation Dashboard displaying a case data table with status filters (All/Open/In Progress/Completed), search, a one-click "Resume last case" hero card, and simplified review initialization.
@@ -108,7 +108,7 @@
   - "Zuletzt bearbeitet" (Resume) card behavior.
   - Automatic loading of all review inputs when opening a review workspace.
 - [x] **Step 2: Redesign `App.tsx` into a Dashboard**
-  - Header: Ontocurator branding, selected package picker, annotator ID input/chip, package upload button.
+  - Header: Ontotator branding, selected package picker, annotator ID input/chip, package upload button.
   - Resume Hero Card: If there is an in-progress or open case, render a high-visibility card: `[ ▶ Fall X fortsetzen ]`.
   - Filter Tabs & Search: Tabs for *Alle (N)*, *Offen (N)*, *In Bearbeitung (N)*, *Abgeschlossen (N)* plus a search input.
   - Data Table:

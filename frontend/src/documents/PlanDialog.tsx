@@ -173,7 +173,7 @@ export function PlanDialog({ projectKey, caseIds, rows, initial, onClose, onSave
     const stuck = acceptance.find(language => language.not_acceptable > 0);
     const open = acceptance.find(language => !(accept[language.key] && acceptable(language) && reason.trim()));
     if (stuck) blocked = `${stuck.key}: resolve the rejected, queried or in-review translations first, or turn Review on.`;
-    else if (open) blocked = `${open.key}: accept the translations as reviewed outside Ontocurator with a reason, or turn Review on.`;
+    else if (open) blocked = `${open.key}: accept the translations as reviewed outside Ontotator with a reason, or turn Review on.`;
   }
 
   const setCells = (key: string, cells: PlanChoices[string]) => {
@@ -281,7 +281,7 @@ export function PlanDialog({ projectKey, caseIds, rows, initial, onClose, onSave
           <p className="work-plan-acceptance-title">{language.key}: {language.not_accepted} of {language.cases_in_selection} translations are not marked as reviewed in the package. Annotation needs an accepted translation.</p>
           {rejected > 0 && <p>{rejected} rejected or queried: resolve them first.</p>}
           {language.in_review > 0 && <p>{language.in_review} in review: wait for the review or withdraw it first.</p>}
-          {acceptable(language) && <Checkbox id={checkboxId} label="These translations were reviewed outside Ontocurator — accept them as they are" checked={!!accept[language.key]} onChange={event => setAccept(value => ({ ...value, [language.key]: event.target.checked }))} />}
+          {acceptable(language) && <Checkbox id={checkboxId} label="These translations were reviewed outside Ontotator — accept them as they are" checked={!!accept[language.key]} onChange={event => setAccept(value => ({ ...value, [language.key]: event.target.checked }))} />}
           {language.marked_in_package > 0 && <p className="field-hint">{language.marked_in_package} already marked as reviewed in the package metadata need nothing.</p>}
           <p className="field-hint">The acceptance is recorded with your name, the reason and the time.</p>
         </div>;

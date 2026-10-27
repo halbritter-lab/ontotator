@@ -18,7 +18,7 @@ answer; the least surprising option was taken and should be confirmed.
   `build_release.py --skip-frontend --skip-npm-ci` as its "release build (wheel contents)" step -> the
   step is now "wheel build (lock and contents)" and runs the new `scripts/check_wheel.py --out-dir
   build/check-wheel`: `uv lock --check`, `uv build --wheel`, then the same required-file check as before
-  (`__init__.py`, `cli.py`, migrations `env.py`, `script.py.mako`, `ontocurator/web/index.html`, at
+  (`__init__.py`, `cli.py`, migrations `env.py`, `script.py.mako`, `ontotator/web/index.html`, at
   least one `web/assets/*.js` and `*.css`). The migration list is now read from
   `storage/migrations/versions/`, so Task 2's `0002` is checked without editing the script. The old
   `test_build_release_wheel_check` moved to `tests/test_check_wheel.py`, because the gate keeps its value
@@ -30,23 +30,23 @@ answer; the least surprising option was taken and should be confirmed.
   from `python-runtime.txt`, because there is no executable any more and the acceptance grep covers
   `scripts`. `THIRD_PARTY_NOTICES.md` says the same now (no platformdirs, no PyInstaller).
 - Task 1: embedded web assets were to be rebuilt in Task 9 -> rebuilt now as well
-  (`npm --prefix frontend run build`, `src/ontocurator/web/` replaced by `frontend/dist/`), because the
+  (`npm --prefix frontend run build`, `src/ontotator/web/` replaced by `frontend/dist/`), because the
   acceptance grep covers `src` and the stale bundle still contained the provisioning and legacy-config
   calls. Task 9 rebuilds them again.
 - Task 1: `tests/test_cli_db.py` was not listed -> its serve test now uses `--data-dir` and patches
-  `ontocurator.cli.uvicorn.run`, because `-w`, `--no-browser` and `run_server` are gone.
+  `ontotator.cli.uvicorn.run`, because `-w`, `--no-browser` and `run_server` are gone.
 - Task 1: `tests/conftest.py`: `isolate_test_config` removed entirely; after the legacy line only
-  `ONTOCURATOR_CONFIG_PATH` was left, which nothing reads any more.
+  `ONTOTATOR_CONFIG_PATH` was left, which nothing reads any more.
 - Task 1: `application/preferences.py`: besides `LegacyConfigDecision` and the `legacy_config`
   field/methods, the internal `_StoredPreferences` subclass is gone too; it existed only to carry
   `legacy_config`. The store now reads and writes `Preferences` directly.
 - Task 1: the plan's `serve` option list leaves out `--axes-config`, `--token`, `--package`,
   `--no-browser`, `--print-url`, `--workspace`, `--import-ontology` and `--provision-dir` -> all dropped
   (`AppConfig.axes_config` stays for tests and the API). `--host` is no longer restricted to loopback
-  addresses in the CLI, because `ONTOCURATOR_HOST` is meant for server deployment; until Task 6 the
+  addresses in the CLI, because `ONTOTATOR_HOST` is meant for server deployment; until Task 6 the
   security middleware still refuses non-loopback `Host` headers. A missing `--translations-dir` folder
   is refused with exit 1 like a missing `--web-dir`.
-- Task 1: `ontocurator-settings.json` was only read from the provisioning folder -> `serve` no longer
+- Task 1: `ontotator-settings.json` was only read from the provisioning folder -> `serve` no longer
   reads it, so `AppConfig.distribution` is always the default (all modes allowed) until T2c deletes
   `distribution_settings.py`. `GET /api/v1/settings` and its tests stay. **[user-flow choice]**: no
   replacement option was added, since T2c replaces the presets with project roles.
@@ -89,7 +89,7 @@ answer; the least surprising option was taken and should be confirmed.
   (`tables.py` gained the `ck_%(table_name)s_%(constraint_name)s` convention), because 0002 is not
   released yet. The mapping/migration comparison now also sets `compare_server_default=True`; it passed
   without changes. New tests: `test_the_application_role_draws_pseudonym_numbers` (the app role can
-  `nextval('ontocurator.pseudonym_seq')`) and `test_a_one_time_code_is_for_setup_or_reset_only`.
+  `nextval('ontotator.pseudonym_seq')`) and `test_a_one_time_code_is_for_setup_or_reset_only`.
   `tests/test_schema.py` now reports `19 passed`.
 - Task 3 (review fix): `assert_policy` matched with `^…$`, so a hash with a trailing newline (as read
   from a secret file) or `m=019456` passed and then never verified -> it uses `fullmatch` and
@@ -187,7 +187,7 @@ answer; the least surprising option was taken and should be confirmed.
   the login page later, because the redemption commits before the login runs (a login cannot join
   an open transaction).
 - Task 6: the acceptance grep "prints nothing" -> it still matches the embedded bundle
-  `src/ontocurator/web/assets/index-*.js` (built from the frontend that still sends `Authorization:
+  `src/ontotator/web/assets/index-*.js` (built from the frontend that still sends `Authorization:
   Bearer`) and binary `__pycache__` files; `grep -rnIE … src tests --exclude-dir=web` prints nothing.
   The bundle cannot be rebuilt before the frontend changes of Task 8; Task 9 rebuilds it.
 - Task 6: `canonical_origin` "http(s), host, no path" -> it also accepts a lone trailing `/`,
@@ -226,10 +226,10 @@ answer; the least surprising option was taken and should be confirmed.
 - Task 6: the conversion script (`%TEMP%/t2b_task6/convert_tests.py`, outside the repo) rewrote 10
   files (43 replacements); `tests/browser_server.py` lost its `session_token` by hand, and the
   `serve` test in `tests/test_cli.py` now expects the plain address and no `#token=`.
-- Task 6: README -> the launch paragraph names the login and `ONTOCURATOR_ADMIN_PASSWORD_HASH[_FILE]`,
+- Task 6: README -> the launch paragraph names the login and `ONTOTATOR_ADMIN_PASSWORD_HASH[_FILE]`,
   the option table lists `--public-origin`, and the three security items about loopback binding,
   DNS rebinding and the bearer token are replaced by sessions, CSRF/origin and own identity. The
-  start-up warning for an ignored admin hash points to `ontocurator admin`, which Task 7 adds.
+  start-up warning for an ignored admin hash points to `ontotator admin`, which Task 7 adds.
 - Task 6: login and redemption bodies are bounded (`username` 256, `password`/`code`/`new_password`
   1024 characters; longer gives 422 `VALIDATION_ERROR`), so an absurd body never reaches Argon2.
   `logout` deletes the cookie with the same attributes it was set with.
@@ -271,7 +271,7 @@ answer; the least surprising option was taken and should be confirmed.
   carried, after the new login succeeded (a failed login leaves it open), because the new cookie
   replaces it and it would otherwise stay usable until it expires.
 - Task 6 (review fix): a start with no admin hash and no user at all logs a warning that nobody can
-  log in and names `ONTOCURATOR_ADMIN_PASSWORD_HASH[_FILE]`.
+  log in and names `ONTOTATOR_ADMIN_PASSWORD_HASH[_FILE]`.
 - Task 6 (review fix): new tests close the review's gaps: a write with a valid CSRF token from a
   foreign Origin (403 `CROSS_SITE_REQUEST`); Q4 for the document list and the package export
   (another annotator: 403 for a non-admin, 200 for a system admin and for the annotator); `own_key`
@@ -306,7 +306,7 @@ answer; the least surprising option was taken and should be confirmed.
   and prints nothing when there are no users. Usernames are shown normalised (`Alice` -> `alice`).
 - Task 7: unspecified error codes -> `SETTINGS_INVALID` (no or a bad database URL),
   `DATABASE_UNAVAILABLE` (connection failed; psycopg's message, never the URL),
-  `DATABASE_NOT_MIGRATED` (with the `ontocurator db upgrade` hint, like `serve`), `SERVICE_RUNNING`
+  `DATABASE_NOT_MIGRATED` (with the `ontotator db upgrade` hint, like `serve`), `SERVICE_RUNNING`
   (the plan's lease message), `PASSWORD_MISMATCH`, `PASSWORD_RULES`, and for the recovery file
   `RECOVERY_INPUT_UNREADABLE`, `RECOVERY_INPUT_NOT_PRIVATE`, `RECOVERY_INPUT_TOO_LARGE` and
   `RECOVERY_INPUT_INVALID` (not a regular file, not UTF-8, not JSON, or not exactly the four string
@@ -315,7 +315,7 @@ answer; the least surprising option was taken and should be confirmed.
   checked before the database is opened.
 - Task 7 (technical): every admin command opens its own `Database` (pool 2 + 2) and closes it on
   every exit, including errors; it checks the schema revision first. The admin data folder is
-  `$ONTOCURATOR_DATA_DIR` or `data` and is not created (the CLI writes no files).
+  `$ONTOTATOR_DATA_DIR` or `data` and is not created (the CLI writes no files).
 - Task 7 (technical): `RuntimeLease.release()` is idempotent and safe before `acquire()`;
   `acquire()` is a no-op while held. A lease connection whose unlock fails is invalidated instead
   of returned to the pool, since a pooled session would keep the advisory lock. The FastAPI
@@ -410,7 +410,7 @@ answer; the least surprising option was taken and should be confirmed.
   `tests/autosave.test.ts` adds the 401 and `CSRF_FAILED` cases (`it.each`, 2). Full vitest: 316 in
   33 files.
 - Task 8 **[user-flow choice]**: a `me()` failure that is not an `AuthError` (server unreachable)
-  shows the login form with "Ontocurator could not check your session: ...". A failed logout other
+  shows the login form with "Ontotator could not check your session: ...". A failed logout other
   than 401 still returns to the login screen, with "Logging out failed (...). Your session may still
   be open." While the session is checked, a plain "Checking your session..." card is shown.
 - Task 8 **[user-flow choice]**: the current user and "Log out" appear in the dashboard header only
@@ -471,7 +471,7 @@ answer; the least surprising option was taken and should be confirmed.
   its users only appear through `/__test_user__`; left as is.
 - Task 9: after the rebuild, `grep -rnE "Authorization|Bearer|SESSION_TOKEN|ALLOW_TEST_CLIENT_HOST|session_token|verify_security" src tests --exclude-dir=__pycache__`
   prints nothing (the Task 6 entry above expected this).
-- Final review: `serve --forwarded-allow-ips` (env `ONTOCURATOR_FORWARDED_ALLOW_IPS`) is passed to
+- Final review: `serve --forwarded-allow-ips` (env `ONTOTATOR_FORWARDED_ALLOW_IPS`) is passed to
   `uvicorn.run(..., proxy_headers=True, forwarded_allow_ips=…)`; unset passes `None`, which keeps
   uvicorn's default (`FORWARDED_ALLOW_IPS` or 127.0.0.1). Login throttling keeps reading
   `request.client.host`, which uvicorn then sets from `X-Forwarded-For` of a trusted proxy.

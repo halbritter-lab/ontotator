@@ -2,15 +2,15 @@ import hashlib
 
 import pytest
 
-from ontocurator.domain.annotations import (
+from ontotator.domain.annotations import (
     ActorRef,
     Annotation,
     AnnotationRef,
     Provenance,
     snapshot,
 )
-from ontocurator.domain.axes import Axes, AxisDefinition
-from ontocurator.domain.documents import (
+from ontotator.domain.axes import Axes, AxisDefinition
+from ontotator.domain.documents import (
     Document,
     EvidenceMention,
     EvidenceRef,
@@ -18,17 +18,17 @@ from ontocurator.domain.documents import (
     Segment,
     validate_segments,
 )
-from ontocurator.domain.errors import (
+from ontotator.domain.errors import (
     InvalidAnnotation,
 )
-from ontocurator.domain.profiles import (
+from ontotator.domain.profiles import (
     AnnotationTypeDefinition,
     LayerDefinition,
     OntologyDefinition,
     TaskProfile,
 )
-from ontocurator.domain.review import ReviewDecision, ReviewTargetSet
-from ontocurator.domain.serialization import (
+from ontotator.domain.review import ReviewDecision, ReviewTargetSet
+from ontotator.domain.serialization import (
     decode_snapshot,
     encode_snapshot,
     verify_snapshot,
@@ -322,15 +322,15 @@ def test_legacy_snapshot_rejected() -> None:
         "version": "dummy-hash",
     }
     with pytest.raises(
-        InvalidAnnotation, match="only 'ontocurator-annotation/v3' is supported"
+        InvalidAnnotation, match="only 'ontotator-annotation/v3' is supported"
     ):
         decode_snapshot(legacy_raw)
 
     # 2. V2 snapshot rejected
     v2_raw = dict(legacy_raw)
-    v2_raw["schema_version"] = "ontocurator-annotation/v2"
+    v2_raw["schema_version"] = "ontotator-annotation/v2"
     with pytest.raises(
-        InvalidAnnotation, match="only 'ontocurator-annotation/v3' is supported"
+        InvalidAnnotation, match="only 'ontotator-annotation/v3' is supported"
     ):
         decode_snapshot(v2_raw)
 
@@ -356,11 +356,11 @@ def test_new_snapshot_binds_layer_and_ontology_digest() -> None:
         ),
     )
     snap = snapshot(ann, [], doc, profile)
-    assert snap.schema_version == "ontocurator-annotation/v3"
+    assert snap.schema_version == "ontotator-annotation/v3"
     verify_snapshot(snap)
 
     encoded = encode_snapshot(snap)
-    assert encoded["schema_version"] == "ontocurator-annotation/v3"
+    assert encoded["schema_version"] == "ontotator-annotation/v3"
     decoded = decode_snapshot(encoded)
     assert decoded.version == snap.version
 
@@ -415,6 +415,6 @@ def test_unknown_snapshot_schema_rejected() -> None:
         "layer_config_sha256": "prof-sha-1",
     }
     with pytest.raises(
-        InvalidAnnotation, match="only 'ontocurator-annotation/v3' is supported"
+        InvalidAnnotation, match="only 'ontotator-annotation/v3' is supported"
     ):
         decode_snapshot(bad_raw)

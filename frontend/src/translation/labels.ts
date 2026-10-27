@@ -125,7 +125,7 @@ export const checkExplanations: Readonly<Record<string, string>> = {
   units_added: "The translation run's check found a unit of measurement in the translation that it did not find in the source.",
   numbers_changed: "The translation run's check found numbers in the translation that differ from those in the source.",
 };
-export const unknownCheckExplanation = "The translation run reported this check as failed. Ontocurator has no description for it; ask the project lead what it checks.";
+export const unknownCheckExplanation = "The translation run reported this check as failed. Ontotator has no description for it; ask the project lead what it checks.";
 export const checkNoLocation = "It does not point to a text location; compare the texts yourself.";
 
 const valueCheckCodes: ReadonlySet<string> = new Set(["units_added", "numbers_changed"]);

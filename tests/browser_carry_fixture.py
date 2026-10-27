@@ -66,7 +66,7 @@ def _new_project(app: FastAPI, name: str) -> Scenario:
     from sqlalchemy import update
     from t1_fixtures import create_project
 
-    from ontocurator.storage.tables import ProjectRow
+    from ontotator.storage.tables import ProjectRow
 
     key = f"carry-{name}-{uuid4().hex[:8]}"
     db = app.state.repo.db
@@ -81,14 +81,14 @@ def _new_project(app: FastAPI, name: str) -> Scenario:
 
 
 def _scoped(scenario: Scenario, name: str) -> Any:
-    from ontocurator.authz.scoped import ScopedRepository
+    from ontotator.authz.scoped import ScopedRepository
 
     access, actor = identity(scenario, name)
     return ScopedRepository(scenario.db, access, actor)
 
 
 def _envelope(scoped: Any, workspace_key: Any, payload: dict[str, Any]) -> Any:
-    from ontocurator.domain.workspace import MutationEnvelope
+    from ontotator.domain.workspace import MutationEnvelope
 
     return MutationEnvelope(
         mutation_id=f"carry-{uuid4().hex}",
@@ -107,7 +107,7 @@ def _create(
     note: str | None = None,
 ) -> Any:
     """Create one finding with every axis chosen; returns its snapshot."""
-    from ontocurator.application.editing import EditingService
+    from ontotator.application.editing import EditingService
 
     scoped = _scoped(scenario, name)
     annotation_id = f"ann-{uuid4().hex[:12]}"
@@ -142,7 +142,7 @@ def _inputs(scenario: Scenario, round_id: str) -> list[dict[str, Any]]:
 
 def _check_all(scenario: Scenario, name: str, work: Any) -> None:
     """Mark every carried input of ``work`` as checked against its carried finding."""
-    from ontocurator.application.work_rounds import RoundInputResolutionService
+    from ontotator.application.work_rounds import RoundInputResolutionService
 
     for item in _inputs(scenario, work.round_id):
         target = item["target_snapshot"]

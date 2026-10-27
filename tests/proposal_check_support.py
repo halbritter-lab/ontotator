@@ -28,9 +28,9 @@ def proposal_env(
     from test_auth_api import _app
     from work_plan_support import _user
 
-    from ontocurator.domain.work_plans import PlanFlags, RowKey
-    from ontocurator.storage import work_plan_store as store
-    from ontocurator.storage.tables import ProjectRow
+    from ontotator.domain.work_plans import PlanFlags, RowKey
+    from ontotator.storage import work_plan_store as store
+    from ontotator.storage.tables import ProjectRow
 
     app = _app(tmp_path)
     db = app.state.repo.db

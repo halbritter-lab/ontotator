@@ -9,7 +9,7 @@ from proposal_check_support import BASE, assign, client, proposal_env
 from sqlalchemy import update
 from work_plan_support import select_final, submit
 
-from ontocurator.storage.plan_tables import WorkPlanFlagsRow
+from ontotator.storage.plan_tables import WorkPlanFlagsRow
 
 
 @pytest.fixture

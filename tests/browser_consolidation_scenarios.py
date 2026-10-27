@@ -37,7 +37,7 @@ from browser_documents_scenarios import (
 from fastapi import FastAPI, Query
 from sqlalchemy import update
 
-from ontocurator.storage.tables import ProjectRow
+from ontotator.storage.tables import ProjectRow
 
 CASE = "case-0107"
 TEXT = (
@@ -126,9 +126,9 @@ def _annotate(
 
     A finding is ``(term, words, axis changes)``; in the modifier scenario
     ``(term, (words, nth), axis changes, modifiers)``."""
-    from ontocurator.application.editing import EditingService
-    from ontocurator.authz.scoped import ScopedRepository
-    from ontocurator.domain.workspace import MutationEnvelope
+    from ontotator.application.editing import EditingService
+    from ontotator.authz.scoped import ScopedRepository
+    from ontotator.domain.workspace import MutationEnvelope
 
     assignment_id = assign(scenario, document_id, name, "annotate")
     key = start_round(scenario, assignment_id, name).workspace_key
@@ -176,7 +176,7 @@ def _annotate(
 
 def start_as_lead(scenario: Scenario, document_id: str, sources: list[str]) -> Any:
     """The lead starts the consolidation as consolidator (self-grant)."""
-    from ontocurator.application.consolidation_start import (
+    from ontotator.application.consolidation_start import (
         ConsolidationStartService,
         StartConsolidation,
     )
@@ -204,8 +204,8 @@ def _modifier_project(app: FastAPI) -> Scenario:
     from modifier_fixtures import MOD_PATH, MOD_PIN, modifier_profile
     from t1_fixtures import ADMIN_ACCESS, OPERATOR
 
-    from ontocurator.authz.scoped import ScopedRepository
-    from ontocurator.ontology.store import OntologyStore
+    from ontotator.authz.scoped import ScopedRepository
+    from ontotator.ontology.store import OntologyStore
 
     key = f"documents-mods-{uuid4().hex[:8]}"
     db = app.state.repo.db
@@ -232,7 +232,7 @@ def build_modifiers(app: FastAPI, started: bool) -> dict[str, Any]:
     from modifier_fixtures import MOD_PIN, modifier_profile
     from t1_builders import native_unit
 
-    from ontocurator.exchange.t1 import layers_for
+    from ontotator.exchange.t1 import layers_for
 
     scenario = _modifier_project(app)
     unit = native_unit(CASE, "en", MOD_TEXT, case_id=CASE)

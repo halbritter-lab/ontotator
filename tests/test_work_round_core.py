@@ -11,9 +11,9 @@ import pytest
 from sqlalchemy import insert, select
 from test_work_rounds import create_consolidation_fixture, rounds  # noqa: F401
 
-from ontocurator.domain.errors import DomainError
-from ontocurator.storage.tables import AuditEventRow, ProjectMembershipRow
-from ontocurator.storage.workflow_tables import WorkflowCommandReceiptRow
+from ontotator.domain.errors import DomainError
+from ontotator.storage.tables import AuditEventRow, ProjectMembershipRow
+from ontotator.storage.workflow_tables import WorkflowCommandReceiptRow
 
 
 def _receipt(repo: Any, user_id: int, request_id: str) -> Any:
@@ -65,10 +65,10 @@ def _assert_recorded(
 
 
 def _submit(repo: Any, access: Any, actor: Any, ontology: Any, key: Any) -> Any:
-    from ontocurator.application.editing import EditingService
-    from ontocurator.application.submissions import SubmissionService
-    from ontocurator.authz.scoped import ScopedRepository
-    from ontocurator.domain.workspace import MutationEnvelope
+    from ontotator.application.editing import EditingService
+    from ontotator.application.submissions import SubmissionService
+    from ontotator.authz.scoped import ScopedRepository
+    from ontotator.domain.workspace import MutationEnvelope
 
     scoped = ScopedRepository(repo.db, access, actor)
     created = EditingService(scoped, ontology).apply(
@@ -97,7 +97,7 @@ def _submit(repo: Any, access: Any, actor: Any, ontology: Any, key: Any) -> Any:
 
 
 def test_create_behaves_as_before_for_every_kind(rounds):  # noqa: F811
-    from ontocurator.application.work_rounds import WorkRoundService
+    from ontotator.application.work_rounds import WorkRoundService
 
     repo, access, actor, assignment, ontology = rounds
     service = WorkRoundService(repo.db)
@@ -226,7 +226,7 @@ def test_create_consolidation_behaves_as_before(rounds):  # noqa: F811
 
 @pytest.mark.parametrize("kind", ["text_change", "handover"])
 def test_create_refuses_text_change_kinds(rounds, kind):  # noqa: F811
-    from ontocurator.application.work_rounds import WorkRoundService
+    from ontotator.application.work_rounds import WorkRoundService
 
     repo, access, actor, assignment, _ontology = rounds
     with pytest.raises(DomainError, match="ROUND_KIND_INVALID"):

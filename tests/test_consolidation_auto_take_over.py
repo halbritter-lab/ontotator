@@ -31,10 +31,10 @@ from test_consolidation_resolve_api import (
 from test_final_panel_api import SEIZURE, finding, span_of, submit_findings
 from work_plan_support import BASE, assign, doc, plan_env
 
-from ontocurator.application.consolidation import consolidated_content_sha256
-from ontocurator.application.consolidation_resolve import take_over_matches
-from ontocurator.storage.repository import Repository, _key_str
-from ontocurator.storage.tables import DraftRow, EditEventRow, ReviewDecisionRow
+from ontotator.application.consolidation import consolidated_content_sha256
+from ontotator.application.consolidation_resolve import take_over_matches
+from ontotator.storage.repository import Repository, _key_str
+from ontotator.storage.tables import DraftRow, EditEventRow, ReviewDecisionRow
 
 
 @pytest.fixture
@@ -206,7 +206,7 @@ def test_the_assignment_round_path_takes_over_matches(tmp_path):
 def test_ordinary_rounds_are_not_seeded(tmp_path):
     env = plan_env(tmp_path)
     access, actor = access_of(env, "anno", "annotator")
-    from ontocurator.application.work_rounds import WorkRoundService
+    from ontotator.application.work_rounds import WorkRoundService
 
     created = WorkRoundService(env.db).create(
         access,
@@ -243,8 +243,8 @@ def test_only_identical_modifier_sets_are_taken_over(tmp_path):
     )
     from test_consolidation_resolve_api import annotation
 
-    from ontocurator.domain.annotations import Modifier
-    from ontocurator.domain.documents import Segment
+    from ontotator.domain.annotations import Modifier
+    from ontotator.domain.documents import Segment
 
     env = mod_env(tmp_path)
     start = TEXT.index("schwere")

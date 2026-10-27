@@ -29,7 +29,7 @@
 | `frontend/tests/reviewActions.test.tsx` | modify | Badge in proposal details |
 | `tests/browser_server.py` | modify | `many_proposals` fixture scenario |
 | `frontend/browser/sidebar.spec.ts` | create | Real-browser test of scrolling and sticky header |
-| `src/ontocurator/web/` | regenerate | Embedded SPA build (git-tracked) |
+| `src/ontotator/web/` | regenerate | Embedded SPA build (git-tracked) |
 
 ---
 
@@ -191,7 +191,7 @@ const snapshot = (
   termId: string,
   provenance: { actor: { actor_id: string; kind: "tool" | "human" }; method: string; source_refs?: string[] },
 ) => ({
-  schema_version: "ontocurator-annotation/v3" as const,
+  schema_version: "ontotator-annotation/v3" as const,
   annotation: {
     annotation_id: annotationId,
     document_id: "doc",
@@ -825,7 +825,7 @@ git commit -m "test(e2e): browser test for the continuous sidebar and AI badges"
 ### Task 7: Full verification and embedded assets
 
 **Files:**
-- Regenerate: `src/ontocurator/web/` (git-tracked SPA build)
+- Regenerate: `src/ontotator/web/` (git-tracked SPA build)
 
 - [ ] **Step 1: Frontend checks**
 
@@ -845,7 +845,7 @@ Run (repo root):
 uv run python -c "import sys; sys.path.insert(0, 'scripts'); from build_common import build_frontend, sync_embedded_web_assets; sync_embedded_web_assets(build_frontend(npm_ci=False))"
 ```
 
-Expected: prints `--> Updating embedded web assets in …/src/ontocurator/web (tracked in git!)`; `git status` shows a replaced `src/ontocurator/web/assets/index-*.js` and `index-*.css` plus a changed `index.html`.
+Expected: prints `--> Updating embedded web assets in …/src/ontotator/web (tracked in git!)`; `git status` shows a replaced `src/ontotator/web/assets/index-*.js` and `index-*.css` plus a changed `index.html`.
 
 - [ ] **Step 4: Look at it once in the real app**
 
@@ -856,7 +856,7 @@ Check by eye: the sidebar scrolls as one list; section headers stick; every prop
 - [ ] **Step 5: Commit the assets**
 
 ```bash
-git add src/ontocurator/web
+git add src/ontotator/web
 git commit -m "build: rebuild embedded web assets"
 ```
 

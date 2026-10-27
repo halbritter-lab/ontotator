@@ -7,8 +7,8 @@ from t1_fixtures import run_import
 from test_translation_review_service import review_env as review_env
 from test_translation_review_service import save
 
-from ontocurator.application.translation_workflow import TranslationWorkflowService
-from ontocurator.domain.errors import DomainError
+from ontotator.application.translation_workflow import TranslationWorkflowService
+from ontotator.domain.errors import DomainError
 
 
 def test_repeat_review_clears_previous_submission_pointer(review_env):

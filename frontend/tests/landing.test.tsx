@@ -160,8 +160,8 @@ describe("last-used landing (F8, D4)", () => {
   it.each([["lead", "p1"], ["annotator", "p1"], ["lead", "gone"]] as const)(
     "keeps a native Back started while the projects load (%s, remembered %s)", async (role, remembered) => {
       remember(remembered);
-      window.history.replaceState({ ontocuratorRouteIndex: 0 }, "", "#/me");
-      window.history.pushState({ ontocuratorRouteIndex: 1 }, "", "#/");
+      window.history.replaceState({ ontotatorRouteIndex: 0 }, "", "#/me");
+      window.history.pushState({ ontotatorRouteIndex: 1 }, "", "#/");
       let resolveProjects: (projects: ProjectSummary[]) => void = () => {};
       vi.spyOn(api, "listProjects").mockReturnValue(new Promise(resolve => { resolveProjects = resolve; }));
       render(<App user={lead} />);

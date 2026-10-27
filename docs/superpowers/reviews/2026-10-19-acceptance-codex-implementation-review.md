@@ -14,7 +14,7 @@ No application files, database state or demo runtime were changed. No suites or 
 
 ### C1 — P2: Pending consolidation/carry/translation work never contributes its required warning
 
-**Location:** `src/ontocurator/application/final_results.py:199` (projection assembly); `src/ontocurator/storage/repository.py:498` (complete shared cause producer).
+**Location:** `src/ontotator/application/final_results.py:199` (projection assembly); `src/ontotator/storage/repository.py:498` (complete shared cause producer).
 
 **Trigger:** Select a submitted annotation result on a text. Create a consolidation review on that same text using two eligible submitted inputs, assigned to a different reviewer whose review assignment has no prior round, and leave its decisions pending. The selected submission's own round remains submitted and unchanged. With final coverage otherwise complete and no reports/source changes, request final-export preflight.
 
@@ -34,7 +34,7 @@ No application files, database state or demo runtime were changed. No suites or 
 
 ### C3 — P2: An inactive unrelated translation branch adds warnings to the selected branch's export
 
-**Location:** `src/ontocurator/storage/repository.py:510` (unfiltered obligation production), propagated by `src/ontocurator/application/final_results.py:199`.
+**Location:** `src/ontotator/storage/repository.py:510` (unfiltered obligation production), propagated by `src/ontotator/application/final_results.py:199`.
 
 **Trigger:** A case has two independent source roots and German translation chains A and B. Select the final German result on A. Correct B's source, leaving B's translation unassigned and with no active work. Request workflow warnings or final-export preflight.
 
@@ -44,11 +44,11 @@ No application files, database state or demo runtime were changed. No suites or 
 
 ### C4 — P2: Selection-warning links send the lead to another user's owner-only editor
 
-**Location:** `src/ontocurator/application/final_results.py:217` and `:236`.
+**Location:** `src/ontotator/application/final_results.py:217` and `:236`.
 
 **Trigger:** A lead selects an annotator's submitted result; that annotator's round is later superseded/abandoned or receives another submission. The lead follows **Review issue** from the dashboard or final-export preflight.
 
-**Evidence and impact:** `SELECTED_ROUND_ABANDONED`, `SELECTED_ROUND_SUPERSEDED` and `SELECTED_RESULT_REVISED` point to `#/tasks/{round_view.assignment_id}`. `WorkflowWarnings` renders that destination directly. `TaskEditor` first calls `GET /assignments/{id}`, whose `_owned_assignment` (`src/ontocurator/api/assignment_routes.py:293`) requires `qualifying_assignment(user_id)` for the caller; management authority does not substitute task ownership. The usual lead reviewing someone else's result therefore gets `ASSIGNMENT_NOT_FOUND`, displayed as no longer assigned, instead of a usable review destination. This breaks the contract's authorized actionable warning destination.
+**Evidence and impact:** `SELECTED_ROUND_ABANDONED`, `SELECTED_ROUND_SUPERSEDED` and `SELECTED_RESULT_REVISED` point to `#/tasks/{round_view.assignment_id}`. `WorkflowWarnings` renders that destination directly. `TaskEditor` first calls `GET /assignments/{id}`, whose `_owned_assignment` (`src/ontotator/api/assignment_routes.py:293`) requires `qualifying_assignment(user_id)` for the caller; management authority does not substitute task ownership. The usual lead reviewing someone else's result therefore gets `ASSIGNMENT_NOT_FOUND`, displayed as no longer assigned, instead of a usable review destination. This breaks the contract's authorized actionable warning destination.
 
 **Correction:** Link leads to the authorized case/submission-history/final-selection view for the exact selected text, or implement an explicitly read-only lead history destination. Preserve owner-only write authority.
 

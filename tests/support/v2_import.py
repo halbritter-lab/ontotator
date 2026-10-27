@@ -5,10 +5,10 @@ from __future__ import annotations
 import tempfile
 from typing import BinaryIO, cast
 
-from ontocurator.application.uploads import copy_limited
-from ontocurator.ontology.registry import OntologyRegistry
-from ontocurator.packages.models import PackageManifest, ValidatedPackage
-from ontocurator.storage.repository import Repository
+from ontotator.application.uploads import copy_limited
+from ontotator.ontology.registry import OntologyRegistry
+from ontotator.packages.models import PackageManifest, ValidatedPackage
+from ontotator.storage.repository import Repository
 from support.v2_reader import MAX_COMPRESSED_BYTES, PackageReader
 
 MAX_PACKAGE_UPLOAD_BYTES = MAX_COMPRESSED_BYTES

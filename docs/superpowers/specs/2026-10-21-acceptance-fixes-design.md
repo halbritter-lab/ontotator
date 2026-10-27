@@ -1,6 +1,6 @@
 # Acceptance fixes 2026-10-21 — design
 
-Source: manual acceptance on the :18210 stack (main `f6d04bd`), findings 1–11 and wish W1 in `.superpowers/roadmap-execution/manual-findings-2026-10-21.md`. Mockups (gitignored): `.superpowers/brainstorm/148565-1792589249/content/` — `wpa-ce-mockup.html` (WP-A, chosen), `wpa-scenarios.html` (scenario analysis), `wpe-consolidation-v2.html` (WP-E, chosen). Revised after the technical review (`ontocurator-reviews/2026-10-21-acceptance-fixes-spec-claude.md`, items T1–T17) and the UX review (`…-spec-ux.md`, items X1–X21).
+Source: manual acceptance on the :18210 stack (main `f6d04bd`), findings 1–11 and wish W1 in `.superpowers/roadmap-execution/manual-findings-2026-10-21.md`. Mockups (gitignored): `.superpowers/brainstorm/148565-1792589249/content/` — `wpa-ce-mockup.html` (WP-A, chosen), `wpa-scenarios.html` (scenario analysis), `wpe-consolidation-v2.html` (WP-E, chosen). Revised after the technical review (`ontotator-reviews/2026-10-21-acceptance-fixes-spec-claude.md`, items T1–T17) and the UX review (`…-spec-ux.md`, items X1–X21).
 
 Branch `fix/acceptance-20261021`, worktree `.worktrees/acceptance-fixes`. Implementation plan: `docs/superpowers/plans/2026-10-21-acceptance-fixes.md`.
 

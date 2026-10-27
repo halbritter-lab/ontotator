@@ -14,10 +14,10 @@ from test_case_api import case_env as case_env
 from test_translation_review_task import assigned
 from tests_support_reviews import insert_review
 
-from ontocurator.application.document_row_page import build_row
-from ontocurator.application.document_rows import RowFacts, RowQuery, load_facts
-from ontocurator.application.final_causes import authorize_final_results
-from ontocurator.storage.tables import (
+from ontotator.application.document_row_page import build_row
+from ontotator.application.document_rows import RowFacts, RowQuery, load_facts
+from ontotator.application.final_causes import authorize_final_results
+from ontotator.storage.tables import (
     AssignmentRow,
     DocumentRow,
     ProjectRow,

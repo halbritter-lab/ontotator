@@ -42,7 +42,7 @@ export async function reviewFlowScenario(page: Page, name: ReviewFlowScenarioNam
  */
 export async function loginScenarioUser(page: Page, scenario: ReviewFlowScenario, name: LeadPerson): Promise<void> {
   await openTasksHome(page);
-  const form = page.getByRole("form", { name: "Log in to Ontocurator" });
+  const form = page.getByRole("form", { name: "Log in to Ontotator" });
   await form.getByLabel("Username", { exact: true }).fill(scenario.users[name]);
   await form.getByLabel("Password", { exact: true }).fill(TEST_PASSWORD);
   await form.getByRole("button", { name: "Log in", exact: true }).click();

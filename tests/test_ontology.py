@@ -3,11 +3,11 @@ from pathlib import Path
 
 import pytest
 
-from ontocurator.domain.documents import OntologyRef
-from ontocurator.domain.errors import DomainError
-from ontocurator.domain.workspace import WorkspaceKey
-from ontocurator.ontology.provenance import SearchRequest
-from ontocurator.ontology.service import OntologyService
+from ontotator.domain.documents import OntologyRef
+from ontotator.domain.errors import DomainError
+from ontotator.domain.workspace import WorkspaceKey
+from ontotator.ontology.provenance import SearchRequest
+from ontotator.ontology.service import OntologyService
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "hp.json"
 
@@ -268,8 +268,8 @@ def test_mondo_ontology_load_validation_and_search() -> None:
 def test_prefix_ties_and_ambiguous_numeric_queries(tmp_path: Path) -> None:
     import json
 
-    from ontocurator.vendor.hpo_span_annotator.hpo import load as load_ontology
-    from ontocurator.vendor.hpo_span_annotator.search import SearchEngine
+    from ontotator.vendor.hpo_span_annotator.hpo import load as load_ontology
+    from ontotator.vendor.hpo_span_annotator.search import SearchEngine
 
     # 1. Prefix tie: 2 terms with PREA and 2 terms with PREB
     tie_payload = {
@@ -366,8 +366,8 @@ def test_prefix_ties_and_ambiguous_numeric_queries(tmp_path: Path) -> None:
 def test_case_preservation_and_alphanumeric_ids(tmp_path: Path) -> None:
     import json
 
-    from ontocurator.vendor.hpo_span_annotator.hpo import load as load_ontology
-    from ontocurator.vendor.hpo_span_annotator.search import SearchEngine
+    from ontotator.vendor.hpo_span_annotator.hpo import load as load_ontology
+    from ontotator.vendor.hpo_span_annotator.search import SearchEngine
 
     payload = {
         "graphs": [

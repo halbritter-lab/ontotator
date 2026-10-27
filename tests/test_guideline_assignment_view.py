@@ -9,9 +9,9 @@ from sqlalchemy import insert, select, update
 from test_auth_api import _app
 from test_projects_api import create_project
 
-from ontocurator.api import assignment_routes
-from ontocurator.assignments.service import AssignmentService
-from ontocurator.storage.tables import AssignmentRow, DocumentRow, ProjectRow, UserRow
+from ontotator.api import assignment_routes
+from ontotator.assignments.service import AssignmentService
+from ontotator.storage.tables import AssignmentRow, DocumentRow, ProjectRow, UserRow
 
 KEY = "phenotypes"
 BASE = f"/api/v1/projects/{KEY}/guidelines"

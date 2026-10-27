@@ -8,10 +8,10 @@ from pg_harness import PASSWORD, unmigrated_database_url
 from sqlalchemy import Engine, create_engine, make_url, text
 from sqlalchemy.exc import DBAPIError, IntegrityError
 
-from ontocurator.storage.schema import alembic_config, upgrade
-from ontocurator.storage.tables import APP_ROLE
+from ontotator.storage.schema import alembic_config, upgrade
+from ontotator.storage.tables import APP_ROLE
 
-S = "ontocurator"
+S = "ontotator"
 
 # (case, language, origin, status); "d-<case>-<language>" is the document id.
 DOCUMENTS = [

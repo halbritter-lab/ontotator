@@ -5,7 +5,7 @@ import * as downloads from "../src/api/download";
 import { ExportPage } from "../src/admin/ExportPage";
 const user: CurrentUser = { username: "lead", display_name: "Lead", pseudonym: "L", csrf_token: "csrf", is_system_admin: false };
 const job = (id: number, kind = "t1_export", status: JobView["status"] = "succeeded"): JobView => ({ id, kind, status, result: { path: "never-use-this-path" }, error: status === "failed" ? "EXPORT_FAILED: source missing" : null, created_at: "2026-10-16T10:00:00Z", finished_at: "2026-10-16T10:01:00Z" });
-const storageKey = (username = "lead", project = "p", kind = "t1") => `ontocurator:export:${JSON.stringify([username, project, kind])}`;
+const storageKey = (username = "lead", project = "p", kind = "t1") => `ontotator:export:${JSON.stringify([username, project, kind])}`;
 const card = (title = "Annotation results") => within(screen.getByRole("region", { name: title }));
 const finals = () => within(screen.getByRole("region", { name: "Selected final results" }));
 const emptyPreflight: FinalPreflight = { project: "p", selections: [], warnings: [], omissions: [], state_digest: "0".repeat(64) };
@@ -174,7 +174,7 @@ it("runs the preflight on open", async () => {
 
 it("Check again reruns it and final-selection changes rerun it while visible", async () => {
   const preflight = vi.mocked(api.finalExportPreflight).mockResolvedValue({ ...emptyPreflight, selections: [selection], warnings: [warning] });
-  const changed = (projectKey = "p") => act(() => { window.dispatchEvent(new CustomEvent("ontocurator:final-selection-changed", { detail: { projectKey } })); });
+  const changed = (projectKey = "p") => act(() => { window.dispatchEvent(new CustomEvent("ontotator:final-selection-changed", { detail: { projectKey } })); });
   render(<ExportPage projectKey="p" currentUser={user} />);
   const ack = await finals().findByLabelText("Export these selected results with the listed warnings and omissions");
   fireEvent.click(ack);

@@ -11,7 +11,7 @@ from sqlalchemy import select
 from test_api import _create_sample_package_bytes
 from test_auth_api import _app
 
-from ontocurator.storage.tables import AuditEventRow
+from ontotator.storage.tables import AuditEventRow
 
 
 @pytest.fixture
@@ -261,7 +261,7 @@ def test_admins_can_edit_each_other_concurrently_without_audit_deadlock(
     import threading
     from concurrent.futures import ThreadPoolExecutor
 
-    from ontocurator.api import admin_routes
+    from ontotator.api import admin_routes
 
     alice = logged_in(app, "alice", system_admin=True)
     bob = logged_in(app, "bobby", system_admin=True)
@@ -329,7 +329,7 @@ def test_admins_can_edit_each_other_concurrently_without_audit_deadlock(
 def test_invalid_profile_rolls_back_completed_compound_flag_changes(
     app: FastAPI,
 ) -> None:
-    from ontocurator.storage.tables import UserRow
+    from ontotator.storage.tables import UserRow
 
     admin = logged_in(app, "root", system_admin=True)
     alice = logged_in(app, "alice")
@@ -426,7 +426,7 @@ def test_a_new_user_joins_projects_at_creation_or_not_at_all(app):
 
 
 def test_anonymising_needs_deactivation_and_the_typed_username(app):
-    from ontocurator.storage.tables import (
+    from ontotator.storage.tables import (
         LoginAttemptRow,
         PasswordCredentialRow,
         SessionRow,
@@ -537,7 +537,7 @@ def test_an_admin_reads_the_audit_trail_of_a_user(app):
 def test_anonymising_leaves_the_old_username_in_no_row(app):
     from sqlalchemy import insert
 
-    from ontocurator.storage.tables import (
+    from ontotator.storage.tables import (
         JobRow,
         OneTimeCodeRow,
         UserPreferencesRow,

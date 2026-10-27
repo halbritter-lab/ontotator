@@ -17,8 +17,8 @@ COPY pyproject.toml uv.lock README.md THIRD_PARTY_NOTICES.md ./
 COPY LICENSES/ ./LICENSES/
 COPY src/ ./src/
 # Replace committed assets, so a renamed JS bundle cannot leave stale files.
-RUN rm -rf src/ontocurator/web
-COPY --from=web /web/dist/ ./src/ontocurator/web/
+RUN rm -rf src/ontotator/web
+COPY --from=web /web/dist/ ./src/ontotator/web/
 # A credential helper reads the ephemeral BuildKit secret. The credential never
 # enters the dependency URL, lockfile, image history or a persisted git config.
 RUN --mount=type=secret,id=github_token,required=true \
@@ -33,8 +33,8 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends tini \
     && rm -rf /var/lib/apt/lists/* \
     && python -m pip uninstall -y pip \
-    && groupadd --gid 1001 ontocurator \
-    && useradd --uid 1001 --gid 1001 --no-create-home --shell /usr/sbin/nologin ontocurator \
+    && groupadd --gid 1001 ontotator \
+    && useradd --uid 1001 --gid 1001 --no-create-home --shell /usr/sbin/nologin ontotator \
     && mkdir /data \
     && chown 1001:1001 /data
 WORKDIR /app
@@ -44,13 +44,13 @@ COPY LICENSES/ ./LICENSES/
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    ONTOCURATOR_ENV=production \
-    ONTOCURATOR_DATA_DIR=/data
+    ONTOTATOR_ENV=production \
+    ONTOTATOR_DATA_DIR=/data
 USER 1001:1001
 EXPOSE 8000
 VOLUME ["/data"]
 STOPSIGNAL SIGTERM
 HEALTHCHECK --interval=10s --timeout=5s --start-period=60s --retries=6 \
     CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/readyz', timeout=4).close()"]
-ENTRYPOINT ["/usr/bin/tini", "--", "ontocurator"]
+ENTRYPOINT ["/usr/bin/tini", "--", "ontotator"]
 CMD ["serve", "--production"]

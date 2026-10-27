@@ -17,8 +17,8 @@ from browser_server import ONTOLOGY, TEST_PASSWORD, run_fixture_import
 from fastapi.testclient import TestClient
 from pg_harness import database_url_for
 
-from ontocurator.api.app import create_app
-from ontocurator.config import AppConfig
+from ontotator.api.app import create_app
+from ontotator.config import AppConfig
 
 # Every scenario builds well inside the browser helper's timeout.
 BUILD_SECONDS = 30

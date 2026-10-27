@@ -10,18 +10,18 @@ import pytest
 from pg_harness import database_for
 from sqlalchemy import delete, func, insert, select, update
 
-from ontocurator.application.guidelines import GuidelineService, guideline_notice
-from ontocurator.auth.audit import Actor
-from ontocurator.authz.policy import Access
-from ontocurator.domain.errors import AccessDenied, DomainError
-from ontocurator.storage.database import advisory_lock_id
-from ontocurator.storage.guideline_tables import (
+from ontotator.application.guidelines import GuidelineService, guideline_notice
+from ontotator.auth.audit import Actor
+from ontotator.authz.policy import Access
+from ontotator.domain.errors import AccessDenied, DomainError
+from ontotator.storage.database import advisory_lock_id
+from ontotator.storage.guideline_tables import (
     GuidelineContentRow,
     GuidelineReadRow,
     GuidelineVersionRow,
     GuidelineWithdrawalRow,
 )
-from ontocurator.storage.tables import (
+from ontotator.storage.tables import (
     AuditEventRow,
     ProjectMembershipRow,
     ProjectRow,

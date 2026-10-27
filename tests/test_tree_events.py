@@ -11,9 +11,9 @@ from support.v2_writer import PackageWriter
 from test_storage import _sample_package
 from test_storage_regressions import key_for
 
-from ontocurator.domain.errors import InvalidPackage
-from ontocurator.packages.models import SearchEventRecord
-from ontocurator.storage.repository import Repository
+from ontotator.domain.errors import InvalidPackage
+from ontotator.packages.models import SearchEventRecord
+from ontotator.storage.repository import Repository
 
 
 def _walk(candidates: list[str], **overrides: object) -> SearchEventRecord:

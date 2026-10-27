@@ -4,10 +4,10 @@ import hashlib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from ontocurator.domain.documents import OntologyRef
-from ontocurator.domain.workspace import WorkspaceKey
-from ontocurator.ontology.provenance import SearchRequest
-from ontocurator.ontology.service import OntologyService
+from ontotator.domain.documents import OntologyRef
+from ontotator.domain.workspace import WorkspaceKey
+from ontotator.ontology.provenance import SearchRequest
+from ontotator.ontology.service import OntologyService
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

@@ -22,29 +22,29 @@ from test_auth_api import _app
 from test_consolidation_resolve_api import access_of, view
 from work_plan_support import _user, assign
 
-from ontocurator.application.document_row_panel import finding_of
-from ontocurator.application.work_rounds import WorkRoundService
-from ontocurator.domain.annotations import (
+from ontotator.application.document_row_panel import finding_of
+from ontotator.application.work_rounds import WorkRoundService
+from ontotator.domain.annotations import (
     ActorRef,
     Annotation,
     Modifier,
     Provenance,
     snapshot,
 )
-from ontocurator.domain.documents import (
+from ontotator.domain.documents import (
     EvidenceMention,
     EvidenceRef,
     EvidenceSnapshot,
     Segment,
 )
-from ontocurator.domain.review import ReviewTargetSet
-from ontocurator.domain.work_plans import PlanFlags, RowKey
-from ontocurator.domain.workspace import Submission, WorkspaceKey
-from ontocurator.exchange.t1 import layers_for
-from ontocurator.ontology.modifiers import NO_TERM_ROLES, TermRoles, classifier_of
-from ontocurator.storage import work_plan_store as store
-from ontocurator.storage.repository import _key_str
-from ontocurator.storage.tables import AssignmentRow, ProjectRow, UserRow
+from ontotator.domain.review import ReviewTargetSet
+from ontotator.domain.work_plans import PlanFlags, RowKey
+from ontotator.domain.workspace import Submission, WorkspaceKey
+from ontotator.exchange.t1 import layers_for
+from ontotator.ontology.modifiers import NO_TERM_ROLES, TermRoles, classifier_of
+from ontotator.storage import work_plan_store as store
+from ontotator.storage.repository import _key_str
+from ontotator.storage.tables import AssignmentRow, ProjectRow, UserRow
 
 TEXT = "Seit 2 Wochen wiederholt schwere Krampfanfälle und eine Muskelhypotonie."
 SEIZURE = "HP:0001250"

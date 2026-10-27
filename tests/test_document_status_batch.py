@@ -10,13 +10,13 @@ from test_pg_repository import _document, _key, _submission
 from test_project_scope import _access
 from test_storage import _sample_package
 
-from ontocurator.application.workspaces import WorkspaceService
-from ontocurator.authz.scoped import ScopedRepository
-from ontocurator.domain.errors import DomainError
-from ontocurator.domain.review import ReviewTargetSet
-from ontocurator.domain.scopes import build_scope
-from ontocurator.storage.repository import Repository, _key_str
-from ontocurator.storage.tables import (
+from ontotator.application.workspaces import WorkspaceService
+from ontotator.authz.scoped import ScopedRepository
+from ontotator.domain.errors import DomainError
+from ontotator.domain.review import ReviewTargetSet
+from ontotator.domain.scopes import build_scope
+from ontotator.storage.repository import Repository, _key_str
+from ontotator.storage.tables import (
     DraftAnnotationRow,
     DraftRow,
     ProjectRow,
@@ -98,10 +98,10 @@ def test_batches_are_project_scoped(tmp_path: Path) -> None:
     repo = Repository(database_for(tmp_path / "db"))
     repo.import_package(_sample_package("pkg-a"))
     repo.import_package(_sample_package("pkg-b"))
-    from ontocurator.assignments.service import AssignmentService
-    from ontocurator.auth.accounts import AccountService
-    from ontocurator.auth.audit import Actor
-    from ontocurator.authz.memberships import MembershipService
+    from ontotator.assignments.service import AssignmentService
+    from ontotator.auth.accounts import AccountService
+    from ontotator.auth.audit import Actor
+    from ontotator.authz.memberships import MembershipService
 
     user = (
         AccountService(repo.db).create_user(Actor.cli(), "batch-reader", "Reader").user

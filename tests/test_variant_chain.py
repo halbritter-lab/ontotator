@@ -4,7 +4,7 @@ from dataclasses import FrozenInstanceError, replace
 
 import pytest
 
-from ontocurator.domain.variants import VariantInfo, is_translation_chain
+from ontotator.domain.variants import VariantInfo, is_translation_chain
 
 NATIVE = VariantInfo(
     "native", "case", "native", "en", 1, "native", None, None, None, None, "a" * 64

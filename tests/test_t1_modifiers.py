@@ -19,7 +19,7 @@ from modifier_fixtures import (
 from pg_harness import database_for
 from t1_fixtures import OPERATOR, TEXT, annotation, bundle, run_import, unit
 
-from ontocurator.domain.annotations import (
+from ontotator.domain.annotations import (
     ActorRef,
     Annotation,
     AnnotationSnapshot,
@@ -27,22 +27,22 @@ from ontocurator.domain.annotations import (
     Provenance,
     snapshot,
 )
-from ontocurator.domain.documents import (
+from ontotator.domain.documents import (
     Document,
     EvidenceMention,
     EvidenceRef,
     Segment,
     snapshot_evidence,
 )
-from ontocurator.domain.errors import DomainError
-from ontocurator.domain.profiles import AxisDefinition
-from ontocurator.domain.review import ReviewTargetSet
-from ontocurator.domain.workspace import MutationEnvelope, Submission, WorkspaceKey
-from ontocurator.exchange.jobs import HANDLERS
-from ontocurator.exchange.t1 import document_from_unit, layers_for, unit_to_proposals
-from ontocurator.jobs.queue import Job, JobQueue
-from ontocurator.storage.database import Database
-from ontocurator.storage.repository import Repository
+from ontotator.domain.errors import DomainError
+from ontotator.domain.profiles import AxisDefinition
+from ontotator.domain.review import ReviewTargetSet
+from ontotator.domain.workspace import MutationEnvelope, Submission, WorkspaceKey
+from ontotator.exchange.jobs import HANDLERS
+from ontotator.exchange.t1 import document_from_unit, layers_for, unit_to_proposals
+from ontotator.jobs.queue import Job, JobQueue
+from ontotator.storage.database import Database
+from ontotator.storage.repository import Repository
 
 PROJECT = "mods"
 DOC = "EN100017"

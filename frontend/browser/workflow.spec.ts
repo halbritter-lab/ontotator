@@ -44,7 +44,7 @@ test("login: a wrong password is refused; a setup code sets the password and log
   const { code } = (await created.json()) as { code: string };
 
   await page.goto(LAUNCH_URL);
-  const login = page.getByRole("form", { name: "Log in to Ontocurator" });
+  const login = page.getByRole("form", { name: "Log in to Ontotator" });
   await login.getByLabel("Username").fill(username);
   await login.getByLabel("Password").fill("not the password at all");
   await login.getByRole("button", { name: "Log in", exact: true }).click();
@@ -61,7 +61,7 @@ test("login: a wrong password is refused; a setup code sets the password and log
   await expect(page.getByTestId("current-user")).toContainText(username);
 
   await page.getByRole("button", { name: "Log out" }).click();
-  await expect(page.getByRole("form", { name: "Log in to Ontocurator" })).toBeVisible();
+  await expect(page.getByRole("form", { name: "Log in to Ontotator" })).toBeVisible();
   await expect(page.getByTestId("current-user")).toHaveCount(0);
 });
 

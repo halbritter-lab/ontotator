@@ -110,7 +110,7 @@ Shared rules (as in the Documents spec): visible text for every state, icons fro
 - Cancel: increments `generation` (drops any in-flight preflight), clears `state`, `accepted` and `error`, returns to Idle, focuses "Prepare final export". No request is sent.
 - Opening the preflight focuses its `<h3 tabindex="-1">` "Export preflight".
 - Warning list spacing: each `li` gets `padding-block: var(--space-2)` and a hairline separator; the reason `p` gets `margin: 0 0 var(--space-1)`; the link follows directly. Link text "Review issue" stays until the Documents spec gives it a row target.
-- Existing `ontocurator:final-selection-changed` invalidation keeps returning to Idle; add an `InlineMessage tone="info"` "Final selections changed. Prepare the export again." so the change is not silent.
+- Existing `ontotator:final-selection-changed` invalidation keeps returning to Idle; add an `InlineMessage tone="info"` "Final selections changed. Prepare the export again." so the change is not silent.
 - Research export cards stay secondary (unchanged).
 
 **Keyboard and screen reader.** Preflight region is `<section aria-labelledby>`; no Escape binding (not a modal). Status of the job stays in the existing `role="status"` line.
@@ -134,7 +134,7 @@ Shared rules (as in the Documents spec): visible text for every state, icons fro
 | `selected.t1.zip` | T1 (ontospan) bundle `selected-{snapshot_id}`: `manifest.json` plus `documents/{index:05d}.json`, one unit per selected submission in `selected_content.submissions` order; annotation set id `submission-{submission_id}` | `final_export.py:114-124`, `jobs.py:303-317, 346-361`, `ontospan/bundle.py:137-159` |
 | `provenance.t1.zip` | Same format, `provenance-{snapshot_id}`; only when carried or merged inputs reference non-selected submissions | `:130-147` |
 | `source-texts.jsonl` | One JSON line per frozen text version (`document`, `source_text_sha256`, `variant`), in frozen order | `:125-129` |
-| `receipt.json` | `ontocurator-final-export/v1`: snapshot id and hash, selections, warnings, omissions, human inputs, source reviews, review decisions, provenance-only ids, `files` = SHA-256 of every other entry | `:148-174` |
+| `receipt.json` | `ontotator-final-export/v1`: snapshot id and hash, selections, warnings, omissions, human inputs, source reviews, review decisions, provenance-only ids, `files` = SHA-256 of every other entry | `:148-174` |
 
 ### Change
 
@@ -171,7 +171,7 @@ One row per selection, per omission and per provenance-only submission. Sorted b
 
 Plain English, fixed sections, no Markdown syntax beyond simple underlined headings. Content (full example in the mockup):
 
-1. Title "Ontocurator final export", project name and key, snapshot ID, snapshot SHA-256, snapshot time (UTC, from `ExportSelectionSnapshotRow.created_at`).
+1. Title "Ontotator final export", project name and key, snapshot ID, snapshot SHA-256, snapshot time (UTC, from `ExportSelectionSnapshotRow.created_at`).
 2. Summary counts: selected results, omitted text-language pairs, warnings acknowledged, provenance-only submissions.
 3. "What is in this archive": one line per file, including "receipt.json: audit receipt; lists the SHA-256 of every other file, including this README and index.csv".
 4. "How to read it": one row of `index.csv` per result; T1 = ontospan bundle (ZIP with `manifest.json` and `documents/NNNNN.json`, one per submission); text positions are Unicode code points into the text in `source-texts.jsonl`; author labels are pseudonyms; "provenance" means earlier submissions referenced by carried or merged findings, not final results.
@@ -231,7 +231,7 @@ Also remove the dead rule `components.css:129-132` (`accent-light` ring), which 
 
 ## Resolved questions (user decisions 2026-10-19)
 
-1. **Receipt format** stays `ontocurator-final-export/v1`; the two new files are additive.
+1. **Receipt format** stays `ontotator-final-export/v1`; the two new files are additive.
 2. **Snapshot time.** The frozen snapshot also stores the server's `recorded_at` for new exports (hash changes only for new exports); README and index show it as "Submitted".
 3. **index.csv** is UTF-8 **with** BOM so spreadsheet tools show non-ASCII text (µ, ±, Greek, umlauts) correctly; the receipt hash covers the file as written.
 4. **My tasks counts** show paused tasks as "of which paused: n" next to the status counts, so the numbers add up.

@@ -6,8 +6,8 @@ from test_reanchor_resolutions import opened
 from test_reanchor_resolutions import pending as pending
 from test_reanchor_resolutions import runtime as runtime
 
-from ontocurator.domain.workspace import Submission
-from ontocurator.storage.tables import DraftRow, EditEventRow, SubmissionRow
+from ontotator.domain.workspace import Submission
+from ontotator.storage.tables import DraftRow, EditEventRow, SubmissionRow
 
 
 def submitted(env, view, revision):
@@ -65,7 +65,7 @@ def test_recreated_and_dismissed_resolutions_survive_submission_readback(pending
     )
     assert readback.status_code == 200, readback.text
     assert readback.json() == submission
-    from ontocurator.exchange.t1 import layers_for, submission_to_unit
+    from ontotator.exchange.t1 import layers_for, submission_to_unit
 
     repo = pending.app.state.repo
     profile = repo.get_task_profile("proj")
@@ -84,7 +84,7 @@ def test_recreated_and_dismissed_resolutions_survive_submission_readback(pending
     )
     assert len(unit.annotation_set.annotations) == 1
     assert unit.annotation_set.annotations[0].provenance.method == "edited"
-    from ontocurator.exchange.t1 import _export_source_ref
+    from ontotator.exchange.t1 import _export_source_ref
 
     assert unit.annotation_set.annotations[0].provenance.source_refs == tuple(
         _export_source_ref(ref, "proj", repo.t1_export_content("proj").proposals)
@@ -154,7 +154,7 @@ def test_old_submission_without_metadata_is_read_without_rewriting_payload(pendi
     from pg_harness import tamper
     from sqlalchemy import text
 
-    from ontocurator.domain.review import ReviewTargetSet
+    from ontotator.domain.review import ReviewTargetSet
 
     view = opened(
         pending,
@@ -166,13 +166,13 @@ def test_old_submission_without_metadata_is_read_without_rewriting_payload(pendi
     tamper(
         pending.db,
         "submissions",
-        "UPDATE ontocurator.submissions SET payload = payload - 'reanchor_inputs' - 'reanchor_resolutions' WHERE submission_id = :sid",
+        "UPDATE ontotator.submissions SET payload = payload - 'reanchor_inputs' - 'reanchor_resolutions' WHERE submission_id = :sid",
         sid=submission_id,
     )
     with pending.db.transaction() as conn:
         before = conn.execute(
             text(
-                "SELECT payload::text FROM ontocurator.submissions WHERE submission_id = :sid"
+                "SELECT payload::text FROM ontotator.submissions WHERE submission_id = :sid"
             ),
             {"sid": submission_id},
         ).scalar_one()
@@ -187,7 +187,7 @@ def test_old_submission_without_metadata_is_read_without_rewriting_payload(pendi
         assert (
             conn.execute(
                 text(
-                    "SELECT payload::text FROM ontocurator.submissions WHERE submission_id = :sid"
+                    "SELECT payload::text FROM ontotator.submissions WHERE submission_id = :sid"
                 ),
                 {"sid": submission_id},
             ).scalar_one()

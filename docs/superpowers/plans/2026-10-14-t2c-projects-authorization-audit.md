@@ -68,7 +68,7 @@ Adding the nullable `submissions.last_edit_event_id` is an `ALTER TABLE … ADD 
 
 ### Task 2: The policy
 
-**Create** `src/ontocurator/authz/__init__.py`, `src/ontocurator/authz/policy.py` and `tests/test_policy.py`.
+**Create** `src/ontotator/authz/__init__.py`, `src/ontotator/authz/policy.py` and `tests/test_policy.py`.
 
 **Interface:**
 - `Role = Literal["lead", "annotator", "adjudicator"]`.
@@ -112,17 +112,17 @@ Commit: `feat(authz): one policy for system and project roles`.
 ### Task 3: Memberships, access and project scoping
 
 **Create:**
-- `src/ontocurator/authz/memberships.py`:
+- `src/ontotator/authz/memberships.py`:
   - `MembershipService(db, *, now=…)` with `add(actor, project_key, username, roles: Iterable[Role])`, `remove(actor, project_key, username, roles=None)`, `members(project_key) -> list[(username, pseudonym, frozenset[Role])]` and `access_for(principal) -> Access`;
   - `add` and `remove` audit `project.member_add` / `project.member_remove` with the `project_id` and the details `{username, roles}`;
   - a **removal revokes the user's sessions** (D2: a role removal revokes the affected sessions; adding a role keeps them, M2 2026-10-26, F23 follow-up);
   - unknown project: `PROJECT_NOT_FOUND`; unknown user: `USER_NOT_FOUND`; unknown role: `ROLE_INVALID`.
-- `src/ontocurator/authz/scoped.py`: `class ScopedRepository(Repository)`, constructed as `ScopedRepository(db, access)`.
+- `src/ontotator/authz/scoped.py`: `class ScopedRepository(Repository)`, constructed as `ScopedRepository(db, access)`.
   - It overrides every public method that takes a `package_id`, a `WorkspaceKey` or a `SearchEventRecord`. Each first calls `self._visible(package_id)`, which raises `DomainError("PROJECT_NOT_FOUND")` unless `can(access, VIEW_PROJECT, package_id)`, then delegates.
   - `list_manifests` returns only visible projects.
   - Lookups without a project (`get_search_event`, `get_submission`, `get_annotation_snapshot`, `get_evidence_snapshot` with `package_id=None`) raise `DomainError("PROJECT_REQUIRED")`.
   - `import_package` additionally needs `can(access, CREATE_PROJECT)` for a new key, or `IMPORT_DOCUMENTS` for an existing one; otherwise `AccessDenied("NOT_ALLOWED")`.
-- `src/ontocurator/auth/context.py`: move `current_principal: ContextVar[Principal | None]` here from `api/security.py`. `security.py` imports it; the repository reads it in Task 4.
+- `src/ontotator/auth/context.py`: move `current_principal: ContextVar[Principal | None]` here from `api/security.py`. `security.py` imports it; the repository reads it in Task 4.
 
 Overridden methods (all public methods of `Repository` that touch project data): `import_package`, `get_search_conditions`, `capture_search_conditions`, `get_embedded_files`, `get_manifest`, `manifest_hash`, `list_manifests`, `get_task_profile`, `get_axes_config`, `get_document`, `list_documents`, `get_annotation_snapshot`, `get_evidence_snapshot`, `list_annotations_for_document`, `list_workspace_keys`, `open_draft`, `run_mutation`, `get_document_status`, `get_submissions_for_workspace`, `get_submissions_for_document`, `get_submission`, `save_search_event`, `get_search_event`, `append_search_event_candidates`, `get_search_events_for_workspace`, `export_package`.
 
@@ -171,7 +171,7 @@ A test enumerates `Repository`'s public methods and fails if a new one is not ov
 - `test_the_event_names_the_user_and_the_session`: via the API, `user_id` and `session_id` match the logged-in session.
 - `test_any_revision_can_be_reconstructed`: after create, edit and delete commands, `draft_state_at(key, r)` equals the draft content observed after mutation r, for every r.
 - `test_a_submission_references_its_last_event`: the submission row's `last_edit_event_id` is the `submit` event's id.
-- `test_the_application_cannot_rewrite_the_log`: `UPDATE ontocurator.edit_events` fails with "permission denied".
+- `test_the_application_cannot_rewrite_the_log`: `UPDATE ontotator.edit_events` fails with "permission denied".
 
 **Acceptance:** the new tests pass and the full suite stays green. Commit: `feat(audit): append-only edit log for every editing command`.
 
@@ -179,7 +179,7 @@ A test enumerates `Repository`'s public methods and fails if a new one is not ov
 
 ### Task 5: Working modes from roles; the distribution presets go
 
-**Delete:** `src/ontocurator/distribution_settings.py`, the field `AppConfig.distribution`, the route `GET /api/v1/settings`, `require_mode_allowed` and `tests/test_distribution.py`.
+**Delete:** `src/ontotator/distribution_settings.py`, the field `AppConfig.distribution`, the route `GET /api/v1/settings`, `require_mode_allowed` and `tests/test_distribution.py`.
 
 **New API:**
 - `GET /api/v1/projects` returns `list[ProjectSummary]`, with `ProjectSummary = {package_id, name, description, roles: list[Role], allowed_modes: list[WorkspaceMode], document_count}`. It lists the user's visible projects, newest first. The project key keeps the field name `package_id` (index D-e) until T3.

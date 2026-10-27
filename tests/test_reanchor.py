@@ -6,7 +6,7 @@ from copy import deepcopy
 import pytest
 from t1_fixtures import hpo_profile
 
-from ontocurator.domain.annotations import (
+from ontotator.domain.annotations import (
     ActorRef,
     Annotation,
     AnnotationRef,
@@ -14,14 +14,14 @@ from ontocurator.domain.annotations import (
     Provenance,
     snapshot,
 )
-from ontocurator.domain.documents import (
+from ontotator.domain.documents import (
     Document,
     EvidenceMention,
     EvidenceRef,
     EvidenceSnapshot,
     Segment,
 )
-from ontocurator.domain.reanchor import (
+from ontotator.domain.reanchor import (
     Carried,
     MappedModifier,
     NeedsReview,

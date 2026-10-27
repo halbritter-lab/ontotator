@@ -13,10 +13,10 @@ from pg_harness import database_for
 from sqlalchemy import insert, select
 from t1_fixtures import OPERATOR
 
-from ontocurator.application.consolidation_resolve import review_decision
-from ontocurator.application.editing import EditorService
-from ontocurator.application.workspaces import WorkspaceService
-from ontocurator.domain.annotations import (
+from ontotator.application.consolidation_resolve import review_decision
+from ontotator.application.editing import EditorService
+from ontotator.application.workspaces import WorkspaceService
+from ontotator.domain.annotations import (
     ActorRef,
     Annotation,
     AnnotationRef,
@@ -24,19 +24,19 @@ from ontocurator.domain.annotations import (
     Provenance,
     snapshot,
 )
-from ontocurator.domain.documents import Document, OntologyRef
-from ontocurator.domain.errors import DomainError
-from ontocurator.domain.profiles import TaskProfile, profile_hash
-from ontocurator.domain.review import ConsolidationMark
-from ontocurator.domain.serialization import verify_snapshot
-from ontocurator.domain.workspace import Draft, MutationEnvelope, WorkspaceKey
-from ontocurator.exchange.t1 import Pin
-from ontocurator.ontology.registry import OntologyRegistry
-from ontocurator.ontology.service import OntologyService
-from ontocurator.ontology.store import OntologyStore
-from ontocurator.packages.models import PackageManifest, ValidatedPackage
-from ontocurator.storage.repository import Repository
-from ontocurator.storage.tables import ProjectOntologyRow, ProjectRow
+from ontotator.domain.documents import Document, OntologyRef
+from ontotator.domain.errors import DomainError
+from ontotator.domain.profiles import TaskProfile, profile_hash
+from ontotator.domain.review import ConsolidationMark
+from ontotator.domain.serialization import verify_snapshot
+from ontotator.domain.workspace import Draft, MutationEnvelope, WorkspaceKey
+from ontotator.exchange.t1 import Pin
+from ontotator.ontology.registry import OntologyRegistry
+from ontotator.ontology.service import OntologyService
+from ontotator.ontology.store import OntologyStore
+from ontotator.packages.models import PackageManifest, ValidatedPackage
+from ontotator.storage.repository import Repository
+from ontotator.storage.tables import ProjectOntologyRow, ProjectRow
 
 TEXT = "Seit 2 Wochen wiederholt schwere Krampfanfälle und eine Muskelhypotonie."
 SCHWERE = (25, 32)
@@ -118,7 +118,7 @@ def _env(tmp_path: Path, pin: Pin | None = MOD_PIN) -> Env:
         ValidatedPackage(
             manifest=PackageManifest(
                 package_id="mods",
-                format_version="ontocurator-work-package/v2",
+                format_version="ontotator-work-package/v2",
                 document_order=["doc-1"],
                 task_profile=profile,
                 task_profile_sha256=profile_hash(profile),
@@ -630,9 +630,9 @@ def test_convert_spanless_onto_spanned_same_term(
 def test_recreate_reanchor_keeps_modifiers(
     env: Env, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from ontocurator.application.editing import RecreateReanchorCommand
-    from ontocurator.domain.reanchor_resolution import PendingReanchorRef
-    from ontocurator.domain.scopes import build_scope
+    from ontotator.application.editing import RecreateReanchorCommand
+    from ontotator.domain.reanchor_resolution import PendingReanchorRef
+    from ontotator.domain.scopes import build_scope
 
     env.seizure()
     env.run(

@@ -43,8 +43,8 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select as sa_select
 from sqlalchemy import update
 
-from ontocurator.auth.audit import Actor
-from ontocurator.storage.tables import AssignmentRow, ProjectRow, UserRow
+from ontotator.auth.audit import Actor
+from ontotator.storage.tables import AssignmentRow, ProjectRow, UserRow
 
 LANGUAGES = ("en", "de", "fr")
 PEOPLE = {
@@ -212,8 +212,8 @@ def newest(scenario: Scenario, case: str, language: str) -> str:
 
 def plan(scenario: Scenario, cases: Sequence[str], languages: dict[str, Any]) -> None:
     """Save a bulk plan as the lead (``{"de": {"review": "on", ...}}``)."""
-    from ontocurator.api.work_plan_routes import BulkPlanRequest
-    from ontocurator.application.work_plans import WorkPlanService
+    from ontotator.api.work_plan_routes import BulkPlanRequest
+    from ontotator.application.work_plans import WorkPlanService
 
     access, actor = identity(scenario, "lead")
     WorkPlanService(scenario.db, actor, access).bulk_save(
@@ -229,9 +229,9 @@ def set_rows(
 ) -> None:
     """Exact (review, annotate) flags per row as the lead: the row counts as
     decided even when its flags do not change (a bulk save skips those)."""
-    from ontocurator.api.work_plan_routes import PlanRowsSet
-    from ontocurator.application.work_plans import WorkPlanService
-    from ontocurator.storage import work_plan_store
+    from ontotator.api.work_plan_routes import PlanRowsSet
+    from ontotator.application.work_plans import WorkPlanService
+    from ontotator.storage import work_plan_store
 
     access, actor = identity(scenario, "lead")
     cases = sorted({case for case, _language in rows})
@@ -262,7 +262,7 @@ def set_rows(
 
 def assign(scenario: Scenario, document_id: str, name: str, task: str) -> int:
     """The lead assigns ``task`` on ``document_id`` to ``name``."""
-    from ontocurator.assignments.service import AssignmentService
+    from ontotator.assignments.service import AssignmentService
 
     _access, actor = identity(scenario, "lead")
     service = AssignmentService(scenario.db)
@@ -270,7 +270,7 @@ def assign(scenario: Scenario, document_id: str, name: str, task: str) -> int:
         # D1: the consolidator's task, created the way a consolidation start does.
         from sqlalchemy import select
 
-        from ontocurator.storage.tables import ProjectRow
+        from ontotator.storage.tables import ProjectRow
 
         with scenario.db.transaction() as conn:
             project = (
@@ -301,7 +301,7 @@ def batch_assign(
     scenario: Scenario, case: str, language: str, task: str, names: Sequence[str]
 ) -> list[int]:
     """Preview and commit a batch assignment of one text as the lead."""
-    from ontocurator.assignments.batch import BatchAssignmentService, BatchSpec
+    from ontotator.assignments.batch import BatchAssignmentService, BatchSpec
 
     access, actor = identity(scenario, "lead")
     service = BatchAssignmentService(scenario.db, actor, access)
@@ -326,7 +326,7 @@ def batch_assign(
 
 def request_correction(scenario: Scenario, document_id: str, name: str) -> int:
     """The lead asks ``name`` to correct an accepted translation (D26)."""
-    from ontocurator.application.translation_workflow import (
+    from ontotator.application.translation_workflow import (
         TranslationWorkflowService,
     )
 
@@ -349,7 +349,7 @@ def request_correction(scenario: Scenario, document_id: str, name: str) -> int:
 
 def move_to_newest(scenario: Scenario, assignment_id: int, target: str) -> int:
     """Handle text change… → Move to v2: returns the new assignment id."""
-    from ontocurator.application.text_changes import TextChangeService
+    from ontotator.application.text_changes import TextChangeService
 
     access, actor = identity(scenario, "lead")
     with scenario.db.transaction() as conn:
@@ -374,7 +374,7 @@ def move_to_newest(scenario: Scenario, assignment_id: int, target: str) -> int:
 
 def carry_to_author(scenario: Scenario, submission_id: str, target: str) -> Any:
     """Carry to v2… → the author continues on ``target``."""
-    from ontocurator.application.text_changes import TextChangeService
+    from ontotator.application.text_changes import TextChangeService
 
     access, actor = identity(scenario, "lead")
     return TextChangeService(scenario.db, scenario.app.state.repo).carry(
@@ -413,7 +413,7 @@ def review_translation(
 ) -> Any:
     """``name`` submits ``decision`` on its open translation review;
     ``accepted_corrected`` appends ``CORRECTED_SUFFIX`` (accepted child v2)."""
-    from ontocurator.application.translation_reviews import TranslationReviewService
+    from ontotator.application.translation_reviews import TranslationReviewService
 
     access, _actor = identity(scenario, name)
     review = TranslationReviewService(scenario.db, scenario.app.state.jobs)
@@ -448,14 +448,14 @@ def decide_translation(
 
 
 def _scoped(scenario: Scenario, name: str) -> Any:
-    from ontocurator.authz.scoped import ScopedRepository
+    from ontotator.authz.scoped import ScopedRepository
 
     access, actor = identity(scenario, name)
     return ScopedRepository(scenario.db, access, actor)
 
 
 def _envelope(scoped: Any, workspace_key: Any, payload: dict[str, Any]) -> Any:
-    from ontocurator.domain.workspace import MutationEnvelope
+    from ontotator.domain.workspace import MutationEnvelope
 
     return MutationEnvelope(
         mutation_id=f"ovw-{uuid4().hex}",
@@ -481,7 +481,7 @@ def add_findings(
     scenario: Scenario, name: str, workspace_key: Any, terms: Iterable[str]
 ) -> None:
     """Spanless findings for each of ``terms`` the draft does not hold yet."""
-    from ontocurator.application.editing import EditingService
+    from ontotator.application.editing import EditingService
 
     scoped = _scoped(scenario, name)
     present = {
@@ -510,8 +510,8 @@ def add_findings(
 def resolve_inputs(scenario: Scenario, name: str, workspace_key: Any) -> int:
     """Check every carried or moved finding of the round: complete it where it
     is in the draft, dismiss it where it could not be placed."""
-    from ontocurator.application.work_rounds import RoundInputResolutionService
-    from ontocurator.domain.work_rounds import CARRY_ROUND_KINDS
+    from ontotator.application.work_rounds import RoundInputResolutionService
+    from ontotator.domain.work_rounds import CARRY_ROUND_KINDS
 
     round_id = workspace_key.round_id
     repo = scenario.app.state.repo
@@ -624,8 +624,8 @@ def submit_consolidation(
     scenario: Scenario, name: str, case: str, language: str
 ) -> str:
     """``name`` confirms every input finding of its consolidation and submits."""
-    from ontocurator.application.reviews import ReviewService
-    from ontocurator.application.workspaces import WorkspaceService
+    from ontotator.application.reviews import ReviewService
+    from ontotator.application.workspaces import WorkspaceService
 
     assignment_id = open_assignment(scenario, name, case, language, "review")
     workspace_key = _workspace(scenario, assignment_id, name)
@@ -653,7 +653,7 @@ def report_problem(scenario: Scenario, name: str, assignment_id: int) -> Any:
 
 def age_visit(scenario: Scenario) -> int:
     """Move the lead's last Documents visit back past the visit window."""
-    from ontocurator.storage.overview_tables import DocumentsVisitRow
+    from ontotator.storage.overview_tables import DocumentsVisitRow
 
     with scenario.db.transaction() as conn:
         pid = conn.execute(

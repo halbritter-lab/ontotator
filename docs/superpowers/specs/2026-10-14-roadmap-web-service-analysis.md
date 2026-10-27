@@ -1,14 +1,14 @@
-# Ontocurator Roadmap: Web Service, Formats, Workflows, Translations – Analysis & Open Questions
+# Ontotator Roadmap: Web Service, Formats, Workflows, Translations – Analysis & Open Questions
 
 As of: 2026-10-14 · Status: **Planning in progress. The core decisions E1–E10 have been made (§5).**
 
 ## 1. Current State (facts from the three repos)
 
-### 1.1 Ontocurator (HEAD `9692ff1`)
+### 1.1 Ontotator (HEAD `9692ff1`)
 
 **Technology**
 - FastAPI, Pydantic v2, React 18 and Vite.
-- Storage is SQLite (`ontocurator-workspace/v4`, WAL). `storage/repository.py` has about 1600 lines of raw SQL.
+- Storage is SQLite (`ontotator-workspace/v4`, WAL). `storage/repository.py` has about 1600 lines of raw SQL.
 
 **Operating model: local and single-user**
 - Binds only to loopback; every start generates a new bearer token.
@@ -17,8 +17,8 @@ As of: 2026-10-14 · Status: **Planning in progress. The core decisions E1–E10
 - There is **no** user management, no roles, no text assignment and no Docker.
 
 **Exchange**
-- Exclusively `ontocurator-work-package/v2` (ZIP).
-- The work package contains `documents.jsonl`, `annotations.jsonl` (`ontocurator-annotation/v3`), submissions, search events and the embedded ontology.
+- Exclusively `ontotator-work-package/v2` (ZIP).
+- The work package contains `documents.jsonl`, `annotations.jsonl` (`ontotator-annotation/v3`), submissions, search events and the embedded ontology.
 - There is no text import, no Phenopacket export and no GA4GH format at all.
 
 **Data model (highly reusable)**
@@ -61,7 +61,7 @@ As of: 2026-10-14 · Status: **Planning in progress. The core decisions E1–E10
 **Languages, operations, auth**
 - Languages: en, de, es, fr, nl. Search is cross-lingual via a multilingual embedding.
 - Operations: Docker Compose (API plus nginx frontend), SQLite and ChromaDB.
-- Auth: optional, with JWT and refresh cookie, CSRF protection, email verification and lockout after failed attempts. This is **a template for Ontocurator.**
+- Auth: optional, with JWT and refresh cookie, CSRF protection, email verification and lockout after failed attempts. This is **a template for Ontotator.**
 
 ### 1.3 phentrieve-benchmark (HEAD `4a58691`)
 
@@ -71,7 +71,7 @@ As of: 2026-10-14 · Status: **Planning in progress. The core decisions E1–E10
 - `curated-annotation-set/v1` with content-hash IDs and `derivations`.
 - `ReviewDecision` and `TranslationRecord`.
 
-**Ontocurator interface**
+**Ontotator interface**
 - **Export works:** `scripts/build_editor_packages.py` builds v2 work packages with LLM suggestions as `tool` annotations. EN, ES and FR are built; DE is pending.
 - **Import is only specified:** Spec §8.2 provides that the editor export becomes a `ReviewDecisionSet` and a `curated-annotation-set/v2`. This is not implemented.
 
@@ -115,7 +115,7 @@ As of: 2026-10-14 · Status: **Planning in progress. The core decisions E1–E10
 - BioC (NCBI), W3C Web Annotation, BRAT standoff and PubAnnotation.
 
 **Recommendation: three levels**
-1. **Internal:** The Ontocurator model stays rich. It has segments, axes, provenance, hashes and rounds.
+1. **Internal:** The Ontotator model stays rich. It has segments, axes, provenance, hashes and rounds.
 2. **Shared exchange format for span annotations:** a v2 of the Phentrieve sidecar `phenotype_annotation_bundle`. It is unified with the benchmark `AnnotationSet` and maintained as a JSON Schema in one repo (which one is an open question). It should contain:
    - document-relative codepoint offsets, NFC note and text hash;
    - separate axes `assertion`, `experiencer` and `temporality` instead of the mixed Phentrieve vocabulary;
@@ -128,8 +128,8 @@ As of: 2026-10-14 · Status: **Planning in progress. The core decisions E1–E10
    - `experiencer=family_member` is not recorded as a patient feature.
 
 **Consequences**
-- Phentrieve can read Ontocurator results directly as a gold standard.
-- Ontocurator can import Phentrieve outputs as suggestions. This does **not** apply to benchmark annotations, see circularity.
+- Phentrieve can read Ontotator results directly as a gold standard.
+- Ontotator can import Phentrieve outputs as suggestions. This does **not** apply to benchmark annotations, see circularity.
 - The offset inconsistency in Phentrieve (CLI document-relative, REST chunk-relative) must be fixed.
 
 ### 2.2 Web service with login and database
@@ -243,10 +243,10 @@ A project gets a configurable **sequence of stages**:
 Status: Questions 1–8 are answered, see §5. New detailed questions are resolved in the subproject specs.
 
 1. **Operating mode:** Server only (Docker), or server **and** continued offline single-user operation (portable EXE)?
-2. **Home of the shared format:** Phentrieve repo, benchmark repo, Ontocurator, or a separate small schema package?
+2. **Home of the shared format:** Phentrieve repo, benchmark repo, Ontotator, or a separate small schema package?
 3. **Users and login:** local accounts only, or integration with Charité SSO/OIDC? Who hosts, and are there data protection requirements (clinical texts, pseudonymization)?
 4. **Phentrieve as a suggestion source:** allow in general, but block in the benchmark context (circularity)?
-5. **Agreement and statistics:** in Ontocurator, or only export and evaluation in the benchmark?
+5. **Agreement and statistics:** in Ontotator, or only export and evaluation in the benchmark?
 6. **Backward compatibility:** Do v2 work packages and existing workspaces have to be migrated, or is an import sufficient?
 7. **Order:** T0 immediately, then T1? And T5 (translations) before T4 (workflows), because 185 translations are awaiting review?
 8. **Granularity of annotation versions:** Is every submission a version, or are there named releases such as "Gold v1"?
@@ -254,14 +254,14 @@ Status: Questions 1–8 are answered, see §5. New detailed questions are resolv
 ## 5. Decisions
 
 - **E1 (question 1): server only.**
-  - Ontocurator becomes a pure web service in Docker. The portable EXE and the loopback token model are dropped.
+  - Ontotator becomes a pure web service in Docker. The portable EXE and the loopback token model are dropped.
   - Locally it runs only via `docker compose up`.
   - Consequence for the database: PostgreSQL is the target. SQLAlchemy and Alembic stay nonetheless, so that the concrete database remains open.
   - Whether tests use SQLite or PostgreSQL via Testcontainers is decided in the T2 spec.
 - **E2 (question 3, login): local accounts now, OIDC later.**
   - The admin creates users: email and password with Argon2 hash, invitation or password-setting link.
   - The auth layer is structured so that an OIDC provider (Charité SSO, Keycloak, GitHub) can be connected later.
-  - Roles are always managed in Ontocurator.
+  - Roles are always managed in Ontotator.
   - The Phentrieve auth (JWT, refresh cookie, CSRF) serves as a template.
 - **E3 (data protection): still open, but designed to be retrofittable.**
   - Projects are strictly isolated from each other. Every query is filtered by project membership.
@@ -272,17 +272,17 @@ Status: Questions 1–8 are answered, see §5. New detailed questions are resolv
   - It is a new repo and PyPI package; the working title is `phenotype-annotation-schema`, the name is still open.
   - Contents: JSON Schema (draft 2020-12), Pydantic models, the Phenopacket v2 mapping and conformance fixtures.
   - It has no heavy dependencies. The `phenopackets` package is an optional extra.
-  - Ontocurator, Phentrieve and the benchmark depend on it. The Phentrieve sidecar v1 is migrated to v2 of this schema.
-- **E5 (question 4): Ontocurator stays free of Phentrieve.**
+  - Ontotator, Phentrieve and the benchmark depend on it. The Phentrieve sidecar v1 is migrated to v2 of this schema.
+- **E5 (question 4): Ontotator stays free of Phentrieve.**
   - There is no live integration and no Phentrieve pre-annotation.
-  - Phentrieve and the benchmark only **read** the Ontocurator results via the shared format.
+  - Phentrieve and the benchmark only **read** the Ontotator results via the shared format.
   - This shrinks T7: benchmark import and export and the gold reader in Phentrieve remain; the suggestion source is dropped.
   - External suggestions, such as LLM suggestions from the benchmark, still come in via file import.
 - **E6 (question 6): legacy data is not carried over.**
   - Real annotation has not started yet. There is no migration of `editor.db` and no requirement to import v2 packages.
   - The data model may be restructured for the server. Proven domain concepts are retained: codepoint segments, axes, provenance, hashes, immutable submissions.
   - Consequence for the benchmark: `build_editor_packages.py` is switched to the new import format, i.e. the shared format plus project import via the admin API.
-- **E7 (question 5): agreement as a live overview in Ontocurator.**
+- **E7 (question 5): agreement as a live overview in Ontotator.**
   - Admin and adjudicator see agreement per project, per document and per annotator pair.
   - The values are F1 at term and span level, the latter tolerant, see 2.3.
   - The scientifically cited evaluation is produced reproducibly in the benchmark from the export.

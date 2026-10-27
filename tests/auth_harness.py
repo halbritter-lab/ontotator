@@ -24,12 +24,12 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from ontocurator.api.routes import decode_workspace_id
-from ontocurator.api.security import SESSION_COOKIE
-from ontocurator.application.preferences import normalize_annotator_id
-from ontocurator.auth.audit import Actor
-from ontocurator.authz.policy import ROLES
-from ontocurator.domain.errors import AccessDenied, DomainError, PayloadTooLarge
+from ontotator.api.routes import decode_workspace_id
+from ontotator.api.security import SESSION_COOKIE
+from ontotator.application.preferences import normalize_annotator_id
+from ontotator.auth.audit import Actor
+from ontotator.authz.policy import ROLES
+from ontotator.domain.errors import AccessDenied, DomainError, PayloadTooLarge
 
 PASSWORD = "test-only passphrase"
 ORIGIN = {"Origin": "http://testserver"}
@@ -86,7 +86,7 @@ def _install_lift() -> None:
     """Wrap the service's held-annotations count once: within a lifted
     ``harness_annotation`` (same thread/context only) a full text counts as
     one below the maximum, so the real assign path runs unchanged."""
-    from ontocurator.assignments import service
+    from ontotator.assignments import service
 
     if getattr(service.held_annotations, "harness_lift", False):
         return
@@ -115,8 +115,8 @@ def harness_annotation(
     product enforces both rules on every assign path."""
     from sqlalchemy import select, update
 
-    from ontocurator.assignments.service import held_annotations
-    from ontocurator.storage.tables import ProjectRow
+    from ontotator.assignments.service import held_annotations
+    from ontotator.storage.tables import ProjectRow
 
     if task != "annotate":
         yield
@@ -167,7 +167,7 @@ def ensure_assignment(
     app: FastAPI, username: str, project: str, document_id: str, task: str
 ) -> None:
     """Use real administration; retained revoked work is never recreated."""
-    from ontocurator.assignments.service import AssignmentService
+    from ontotator.assignments.service import AssignmentService
 
     service = AssignmentService(app.state.repo.db)
     rows = service.list(
@@ -199,7 +199,7 @@ def provision_assignments(
 ) -> None:
     # Task "review" comes only from a consolidation start (D1).
     tasks = ["annotate"] if "annotator" in roles else []
-    from ontocurator.assignments.service import AssignmentService
+    from ontotator.assignments.service import AssignmentService
 
     service = AssignmentService(app.state.repo.db)
     known = {
@@ -233,7 +233,7 @@ def _set_mode(db: Any, user_id: int, key: str, proposals: bool) -> None:
     the text's mode (shared seed projects). Fixture setup only."""
     from sqlalchemy import select, update
 
-    from ontocurator.storage.tables import (
+    from ontotator.storage.tables import (
         AnnotationSnapshotRow,
         AssignmentRow,
         ProjectRow,
@@ -399,7 +399,7 @@ class AutoLoginClient(TestClient):
             and parts[1:4] == ["api", "v1", "assignments"]
             and parts[4].isdigit()
         ):
-            from ontocurator.assignments.service import AssignmentService
+            from ontotator.assignments.service import AssignmentService
 
             with self.app.state.repo.db.transaction() as conn:
                 try:
@@ -441,7 +441,7 @@ class AutoLoginClient(TestClient):
             and parts[4].isdigit()
             and parts[5] == "open"
         ):
-            from ontocurator.assignments.service import AssignmentService
+            from ontotator.assignments.service import AssignmentService
 
             with self.app.state.repo.db.transaction() as conn:
                 try:
@@ -488,7 +488,7 @@ def upload_package(client: TestClient, *, files: Mapping[str, Any]) -> UploadRes
     """
     from support.v2_import import PackageImportService
 
-    from ontocurator.authz.scoped import ScopedRepository
+    from ontotator.authz.scoped import ScopedRepository
 
     if isinstance(client, AutoLoginClient) and client.annotator is None:
         client.login_as(DEFAULT_ANNOTATOR)

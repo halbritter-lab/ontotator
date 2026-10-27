@@ -3,21 +3,21 @@ import hashlib
 import pytest
 from pydantic import ValidationError
 
-from ontocurator.domain.annotations import (
+from ontotator.domain.annotations import (
     ActorRef,
     Annotation,
     Provenance,
     snapshot,
 )
-from ontocurator.domain.documents import (
+from ontotator.domain.documents import (
     Document,
     EvidenceMention,
     EvidenceRef,
     EvidenceSnapshot,
     Segment,
 )
-from ontocurator.domain.errors import InvalidAnnotation
-from ontocurator.domain.profiles import (
+from ontotator.domain.errors import InvalidAnnotation
+from ontotator.domain.profiles import (
     AnnotationTypeDefinition,
     AxisDefinition,
     LayerDefinition,
@@ -282,7 +282,7 @@ def test_v3_snapshot_creation_and_hash_sensitivity():
         ),
     )
     snap1 = snapshot(ann1, [ev_snap], doc, profile)
-    assert snap1.schema_version == "ontocurator-annotation/v3"
+    assert snap1.schema_version == "ontotator-annotation/v3"
     assert snap1.layer_config_sha256 == layer_config_hash(profile, "hpo-layer")
     assert snap1.ontology_sha256 == profile.ontologies[0].sha256
 
@@ -309,7 +309,7 @@ def test_hpo_example_profile_file_valid():
     profile_path = (
         Path(__file__).parent.parent
         / "src"
-        / "ontocurator"
+        / "ontotator"
         / "profiles"
         / "hpo-context-example-v1.json"
     )
@@ -330,14 +330,14 @@ def test_layered_fixtures_scenarios():
 
     # Scenario A: single
     pkg_a = make_layered_package("single")
-    assert pkg_a.manifest.format_version == "ontocurator-work-package/v2"
+    assert pkg_a.manifest.format_version == "ontotator-work-package/v2"
     assert pkg_a.manifest.document_order == ["doc-beta", "doc-alpha"]
     assert len(pkg_a.manifest.task_profile.layers) == 1
     assert pkg_a.manifest.task_profile.layers[0].access == "editable"
 
     # Scenario B: assisted
     pkg_b = make_layered_package("assisted")
-    assert pkg_b.manifest.format_version == "ontocurator-work-package/v2"
+    assert pkg_b.manifest.format_version == "ontotator-work-package/v2"
     assert len(pkg_b.manifest.task_profile.ontologies) == 2
     assert len(pkg_b.manifest.task_profile.layers) == 2
     ref_layer = resolve_layer(pkg_b.manifest.task_profile, "reference-layer")
@@ -349,7 +349,7 @@ def test_layered_fixtures_scenarios():
 
     # Scenario C: multi_editable
     pkg_c = make_layered_package("multi_editable")
-    assert pkg_c.manifest.format_version == "ontocurator-work-package/v2"
+    assert pkg_c.manifest.format_version == "ontotator-work-package/v2"
     assert len(pkg_c.manifest.task_profile.layers) == 2
     assert all(
         layer.access == "editable" for layer in pkg_c.manifest.task_profile.layers

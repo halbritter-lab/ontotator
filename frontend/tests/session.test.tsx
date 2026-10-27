@@ -81,7 +81,7 @@ const caseView = (): any => ({
   axes_definition: "editor-axes/v1",
   axes_config: [],
   axes_config_sha256: "sha-axes",
-  draft: { key, targets: { target_set_id: "empty", targets: [] }, revision: 0, annotations: [{ schema_version: "ontocurator-annotation/v3", version: "pending-v1", document_id: "doc-1", text_sha256: "text", ontology_sha256: "ontology", layer_config_sha256: "layer",
+  draft: { key, targets: { target_set_id: "empty", targets: [] }, revision: 0, annotations: [{ schema_version: "ontotator-annotation/v3", version: "pending-v1", document_id: "doc-1", text_sha256: "text", ontology_sha256: "ontology", layer_config_sha256: "layer",
     annotation: { annotation_id: "pending-finding", document_id: "doc-1", layer_id: "phenotype", type_id: "default", term_id: "HP:0001252", axes_values: {}, evidence_refs: [],
       provenance: { actor: { actor_id: "ann-0007", kind: "human" }, method: "manual", source_refs: [] } }, evidence: [] }], evidence: [], decisions: [], checked_layer_ids: [] },
 });
@@ -124,7 +124,7 @@ const reviewCaseView = (): any => {
   view.draft.annotations[0].annotation.document_id = "doc-2";
   view.targets = targets;
   view.available_inputs = [{
-    schema_version: "ontocurator-annotation/v3",
+    schema_version: "ontotator-annotation/v3",
     annotation: {
       annotation_id: "prop", document_id: "doc-2", layer_id: "phenotype", type_id: "default", term_id: "HP:0001", axes_values: {},
       evidence_refs: [{ evidence_id: "ev-prop", version: "ev-v" }],
@@ -237,7 +237,7 @@ describe("the login gate", () => {
     oneCaseServer();
     render(<AuthGate />);
 
-    const form = await screen.findByRole("form", { name: "Log in to Ontocurator" });
+    const form = await screen.findByRole("form", { name: "Log in to Ontotator" });
     expect(screen.queryByRole("table")).toBeNull();
     fireEvent.change(within(form).getByLabelText("Username"), { target: { value: "alice" } });
     fireEvent.change(within(form).getByLabelText("Password"), { target: { value: "correct horse battery" } });
@@ -255,7 +255,7 @@ describe("the login gate", () => {
     oneCaseServer();
     render(<AuthGate />);
 
-    await screen.findByRole("form", { name: "Log in to Ontocurator" });
+    await screen.findByRole("form", { name: "Log in to Ontotator" });
     fireEvent.click(screen.getByRole("button", { name: "I have a setup or reset code" }));
     const form = screen.getByRole("form", { name: "Set your password" });
     expect(document.activeElement).toBe(within(form).getByRole("heading", { name: "Set your password" }));
@@ -289,7 +289,7 @@ describe("the login gate", () => {
     fireEvent.change(within(form).getByLabelText("Repeat the new password"), { target: { value: "a long new password" } });
     fireEvent.click(within(form).getByRole("button", { name: "Set password and log in" }));
 
-    const login = await screen.findByRole("form", { name: "Log in to Ontocurator" });
+    const login = await screen.findByRole("form", { name: "Log in to Ontotator" });
     expect(within(login).getByText("Your password is set. Log in with it now.")).toBeDefined();
     expect((within(login).getByLabelText("Username") as HTMLInputElement).value).toBe("bob");
   });
@@ -297,8 +297,8 @@ describe("the login gate", () => {
   it("says so when the session cannot be checked", async () => {
     vi.spyOn(api, "me").mockRejectedValue(new TypeError("Failed to fetch"));
     render(<AuthGate />);
-    await screen.findByRole("form", { name: "Log in to Ontocurator" });
-    expect(screen.getByText("Ontocurator could not check your session: Failed to fetch")).toBeDefined();
+    await screen.findByRole("form", { name: "Log in to Ontotator" });
+    expect(screen.getByText("Ontotator could not check your session: Failed to fetch")).toBeDefined();
   });
 
   it("logs out and shows the login page", async () => {
@@ -309,7 +309,7 @@ describe("the login gate", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Log out" }));
 
-    await screen.findByRole("form", { name: "Log in to Ontocurator" });
+    await screen.findByRole("form", { name: "Log in to Ontotator" });
     expect(logout).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.queryByTestId("current-user")).toBeNull();
@@ -321,7 +321,7 @@ describe("the login gate", () => {
     fireEvent.click(await screen.findByRole("link", { name: /^(Start|Continue|View)$/ }));
     await editFinding();
 
-    const dialog = await screen.findByRole("dialog", { name: "Log in to Ontocurator" });
+    const dialog = await screen.findByRole("dialog", { name: "Log in to Ontotator" });
     expect(dialog.getAttribute("aria-modal")).toBe("true");
     expect(within(dialog).getByText("Your session has ended. Please log in again.")).toBeDefined();
     await waitFor(() => expect(document.activeElement).toBe(within(dialog).getByLabelText("Username")));
@@ -330,7 +330,7 @@ describe("the login gate", () => {
 
     logInThrough(dialog, "alice");
 
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Log in to Ontocurator" })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Log in to Ontotator" })).toBeNull());
     await waitFor(() => expect(callsTo(fetchMock, "/api/v1/workspaces/ws/commands")).toHaveLength(2));
     const retried = callsTo(fetchMock, "/api/v1/workspaces/ws/commands")[1][1];
     expect(csrfOf(retried)).toBe("csrf-2");
@@ -345,10 +345,10 @@ describe("the login gate", () => {
     fireEvent.click(await screen.findByRole("link", { name: /^(Start|Continue|View)$/ }));
     await editFinding();
 
-    logInThrough(await screen.findByRole("dialog", { name: "Log in to Ontocurator" }), "bob");
+    logInThrough(await screen.findByRole("dialog", { name: "Log in to Ontotator" }), "bob");
 
     await waitFor(() => expect(screen.getByTestId("current-user").querySelector(".current-user-name")?.textContent).toBe("Bob (ann-0009)"));
-    expect(screen.queryByRole("dialog", { name: "Log in to Ontocurator" })).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "Log in to Ontotator" })).toBeNull();
     expect(screen.queryByTestId("annotator-identity")).toBeNull();
     expect(callsTo(fetchMock, "/api/v1/workspaces/ws/commands")).toHaveLength(1);
   });
@@ -406,7 +406,7 @@ describe("the login gate", () => {
     render(<AuthGate />);
     fireEvent.click(await screen.findByRole("link", { name: /^(Start|Continue|View)$/ }));
     await editFinding();
-    const dialog = await screen.findByRole("dialog", { name: "Log in to Ontocurator" });
+    const dialog = await screen.findByRole("dialog", { name: "Log in to Ontotator" });
 
     // The editor behind the dialog is inert, and its window shortcuts do not see these keys.
     expect(screen.getByTestId("annotator-identity").closest("[inert]")).not.toBeNull();
@@ -443,7 +443,7 @@ describe("the login gate", () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(me).toHaveBeenCalledTimes(2);
     expect(callsTo(fetchMock, "/api/v1/workspaces/ws/commands")).toHaveLength(1);
-    expect(screen.queryByRole("dialog", { name: "Log in to Ontocurator" })).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "Log in to Ontotator" })).toBeNull();
     expect(screen.getByTestId("annotator-identity")).toBeDefined();
   });
 });

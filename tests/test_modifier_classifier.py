@@ -7,10 +7,10 @@ from collections.abc import Iterator
 import pytest
 from modifier_fixtures import MOD_PATH, MOD_PIN, modifier_profile
 
-from ontocurator.domain.documents import OntologyRef
-from ontocurator.domain.errors import DomainError
-from ontocurator.exchange.t1 import Pin
-from ontocurator.ontology.modifiers import (
+from ontotator.domain.documents import OntologyRef
+from ontotator.domain.errors import DomainError
+from ontotator.exchange.t1 import Pin
+from ontotator.ontology.modifiers import (
     NO_MODIFIERS,
     classifier_of,
     install_service_source,
@@ -18,7 +18,7 @@ from ontocurator.ontology.modifiers import (
     term_roles,
     term_roles_for_services,
 )
-from ontocurator.ontology.service import OntologyService
+from ontotator.ontology.service import OntologyService
 
 
 @pytest.fixture(scope="module")
@@ -91,7 +91,7 @@ def test_term_roles_unknown_sha_raises(source: None) -> None:
 
 
 def test_unknown_subtree_roots_are_not_cached(service: OntologyService) -> None:
-    from ontocurator.ontology import modifiers
+    from ontotator.ontology import modifiers
 
     assert subtree(service, "HP:9999998") == frozenset()
     assert (service.ref.sha256, "HP:9999998") not in modifiers._subtrees

@@ -23,9 +23,9 @@ from test_text_change_service import (
     _submitted,
 )
 
-from ontocurator.api.app import create_app
-from ontocurator.config import AppConfig
-from ontocurator.storage.tables import AssignmentRow
+from ontotator.api.app import create_app
+from ontotator.config import AppConfig
+from ontotator.storage.tables import AssignmentRow
 
 
 @pytest.fixture
@@ -190,8 +190,8 @@ def test_error_statuses(client):
     with env.db.transaction() as conn:
         from test_text_change_service import CASE, _pid
 
-        from ontocurator.domain.work_plans import OFF, RowKey
-        from ontocurator.storage import work_plan_store
+        from ontotator.domain.work_plans import OFF, RowKey
+        from ontotator.storage import work_plan_store
 
         work_plan_store.write_rows(
             conn, _pid(env), {RowKey(CASE, "de"): OFF}, actor_id=None

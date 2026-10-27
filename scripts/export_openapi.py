@@ -6,7 +6,7 @@ import json
 import sys
 from pathlib import Path
 
-from ontocurator.api.app import create_app
+from ontotator.api.app import create_app
 
 
 def export_openapi(check: bool = False) -> None:

@@ -8,8 +8,8 @@ from pathlib import Path
 import ontospan
 import pytest
 
-from ontocurator.domain.profiles import TaskProfile
-from ontocurator.exchange.t1 import (
+from ontotator.domain.profiles import TaskProfile
+from ontotator.exchange.t1 import (
     Pin,
     check_importable,
     document_from_unit,

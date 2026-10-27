@@ -4,11 +4,11 @@ from support.v2_samples import _create_sample_package
 from support.v2_writer import write_package
 from test_reviews import _setup_review_test_env
 
-from ontocurator.application.reviews import DecisionCommand
-from ontocurator.domain.annotations import AnnotationRef
-from ontocurator.domain.errors import DomainError, InvalidPackage
-from ontocurator.domain.review import ReviewTargetSet
-from ontocurator.domain.workspace import MutationEnvelope, WorkspaceKey
+from ontotator.application.reviews import DecisionCommand
+from ontotator.domain.annotations import AnnotationRef
+from ontotator.domain.errors import DomainError, InvalidPackage
+from ontotator.domain.review import ReviewTargetSet
+from ontotator.domain.workspace import MutationEnvelope, WorkspaceKey
 
 
 def review(ctx, reviewer="one"):
@@ -119,7 +119,7 @@ def test_edit_invalidates_replacement_approval(tmp_path):
 
 
 def test_package_rejects_snapshot_document_digest_mismatch(tmp_path):
-    from ontocurator.domain.annotations import snapshot
+    from ontotator.domain.annotations import snapshot
 
     pkg = _create_sample_package()
     original = next(iter(pkg.annotations.values()))
@@ -136,7 +136,7 @@ def test_package_rejects_snapshot_document_digest_mismatch(tmp_path):
 
 
 def test_search_selection_is_bound_to_workspace_and_recorded(tmp_path):
-    from ontocurator.packages.models import SearchEventRecord
+    from ontotator.packages.models import SearchEventRecord
 
     ctx = _setup_review_test_env(tmp_path)
     key, _ = review(ctx)
@@ -212,8 +212,8 @@ def test_search_selection_is_bound_to_workspace_and_recorded(tmp_path):
     ["ontology", "evidence_document", "bounds", "submitted_snapshot", "target_hash"],
 )
 def test_package_rejects_self_consistent_but_unbound_content(tmp_path, mutation):
-    from ontocurator.domain.canonical import canonical_hash
-    from ontocurator.domain.profiles import profile_hash
+    from ontotator.domain.canonical import canonical_hash
+    from ontotator.domain.profiles import profile_hash
 
     pkg = _create_sample_package()
     if mutation == "ontology":
@@ -248,8 +248,8 @@ def test_package_rejects_self_consistent_but_unbound_content(tmp_path, mutation)
 
 
 def test_review_versions_have_separate_decisions(tmp_path):
-    from ontocurator.domain.annotations import snapshot
-    from ontocurator.domain.workspace import Draft
+    from ontotator.domain.annotations import snapshot
+    from ontotator.domain.workspace import Draft
 
     ctx = _setup_review_test_env(tmp_path)
     first = ctx["snap_a"]
@@ -264,7 +264,7 @@ def test_review_versions_have_separate_decisions(tmp_path):
         for s in [first, second]
     ]
     targets = ReviewTargetSet.create(refs)
-    from ontocurator.domain.scopes import build_scope
+    from ontotator.domain.scopes import build_scope
 
     scope = build_scope(ctx["profile"], "review")
     key = WorkspaceKey(
@@ -350,9 +350,9 @@ def test_imported_submission_read_and_resume_are_scoped(tmp_path):
 def test_sequential_search_selections_survive_two_export_imports(tmp_path):
     from pg_harness import database_for
 
-    from ontocurator.ontology.registry import OntologyRegistry
-    from ontocurator.packages.models import SearchEventRecord
-    from ontocurator.storage.repository import Repository
+    from ontotator.ontology.registry import OntologyRegistry
+    from ontotator.packages.models import SearchEventRecord
+    from ontotator.storage.repository import Repository
 
     ctx = _setup_review_test_env(tmp_path)
     key, _ = review(ctx)

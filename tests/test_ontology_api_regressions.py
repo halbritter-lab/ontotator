@@ -12,8 +12,8 @@ from pg_harness import database_url_for
 from support.v2_exports import workspace_export_zip
 from support.v2_writer import PackageWriter
 
-from ontocurator.api.app import create_app
-from ontocurator.config import AppConfig
+from ontotator.api.app import create_app
+from ontotator.config import AppConfig
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

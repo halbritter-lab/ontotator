@@ -7,10 +7,10 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from ontocurator.application.translation_reviews import TranslationReviewRecord
-from ontocurator.domain.errors import DomainError
-from ontocurator.domain.variants import VariantInfo
-from ontocurator.exchange.review_export import serialize_review_export
+from ontotator.application.translation_reviews import TranslationReviewRecord
+from ontotator.domain.errors import DomainError
+from ontotator.domain.variants import VariantInfo
+from ontotator.exchange.review_export import serialize_review_export
 
 
 def digest(text):
@@ -89,7 +89,7 @@ def record(**changes):
         status_before="ready_for_review",
         status_after="reviewed",
         created_variant_id=None,
-        review_policy="ontocurator-translation-review/v1",
+        review_policy="ontotator-translation-review/v1",
         created_at=datetime(
             2026, 10, 16, 12, 0, 5, 123456, tzinfo=timezone(timedelta(hours=2))
         ),

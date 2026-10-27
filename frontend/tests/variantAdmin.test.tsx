@@ -243,7 +243,7 @@ it("retains an unsaved translation gate when another settings section is saved",
 });
 
 it("rechecks authenticated translation-review downloads including an empty JSONL and later refusal", async () => {
-  const key = `ontocurator:export:${JSON.stringify([currentUser.username, "p", "translation_reviews"])}`;
+  const key = `ontotator:export:${JSON.stringify([currentUser.username, "p", "translation_reviews"])}`;
   sessionStorage.setItem(key, "33");
   vi.spyOn(api, "getJob").mockResolvedValue({ id: 33, kind: "translation_review_export", status: "succeeded", result: { sha256: "a".repeat(64), reviews: 0 }, error: null, created_at: retained.created_at, finished_at: retained.created_at });
   const payload = { blob: new Blob([], { type: "application/x-ndjson" }), filename: "actual.jsonl" };
@@ -318,5 +318,5 @@ it("uses the dedicated third export endpoint and true job kind", async () => {
   await card.findByRole("button", { name: "Download" });
   expect(api.exportTranslationReviews).toHaveBeenCalledWith("p");
   expect(api.startExport).not.toHaveBeenCalled();
-  expect(sessionStorage.getItem(`ontocurator:export:${JSON.stringify([currentUser.username, "p", "translation_reviews"])}`)).toBe("33");
+  expect(sessionStorage.getItem(`ontotator:export:${JSON.stringify([currentUser.username, "p", "translation_reviews"])}`)).toBe("33");
 });

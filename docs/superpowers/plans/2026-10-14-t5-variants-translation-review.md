@@ -11,13 +11,13 @@
 - Review records are exported as generic JSONL.
 
 **Architecture of Part 1:**
-- **Format (ontospan 1.1, D-aa):** optional `case_id`, `variant` and `translation` on the document, and the optional manifest `release` block (T7 I7). Task 1 builds this in the ontospan repository; Ontocurator re-pins.
+- **Format (ontospan 1.1, D-aa):** optional `case_id`, `variant` and `translation` on the document, and the optional manifest `release` block (T7 I7). Task 1 builds this in the ontospan repository; Ontotator re-pins.
 - **Data (D-o):** a variant is a `documents` row. `document_id` is the internal variant id; `external_id` keeps the T1 `document_id`. Drafts, submissions, edit events, assignments and proposals keep working per variant without change.
 - **Import:** T3a's pure `plan_import` (D-r) learns variants: cases, `derived_from` by text hash, version rules, translation status and the lead's override.
 - **Viewing (V3):** `authz/versions.py::visible_annotation_versions` is the single place that decides which annotation versions a user may open (U2).
 - **Review:** a pure decision-table validator (`domain/translation_review.py`), an autosaved draft (D-v), an append-only `translation_reviews` record and status transitions.
 - **Re-anchoring (V2, D-w):** a pure code-point mapping plus the `reanchor` job, which writes a proposal set with `origin = 'reanchor'` and a "needs review" list.
-- **Export (D-z):** the `translation_review_export` job writes `ontocurator-translation-review/v1` JSONL.
+- **Export (D-z):** the `translation_review_export` job writes `ontotator-translation-review/v1` JSONL.
 
 **Spec:** `docs/superpowers/specs/2026-10-14-t5-variants-translation-review-design.md` (V1–V6), T7 I2 and I7 (`…-t7-integrations-design.md`), T3 A2 and A4. Index with shared contracts, D-o…D-aa and Q15–Q26: `docs/superpowers/plans/2026-10-14-t3-t5-t4-index.md`. Builds on T3b.
 
@@ -138,15 +138,15 @@ Export the new names from `ontospan/__init__.py` (`Variant`, `VariantOrigin`, `T
 
 **Release of the change:** open a PR in ontospan and stop. **Merging and pushing ontospan needs the user's confirmation** (index: nothing is pushed without it). Continue with Task 2 only after the user has merged the PR on `main`.
 
-**Ontocurator re-pin (after the merge):**
+**Ontotator re-pin (after the merge):**
 - `uv add "ontospan @ git+https://github.com/janpower/ontospan.git@<full 40-character merge hash>"` (index D-n pattern; take the hash with `git -C ../ontospan rev-parse origin/main`).
 - `uv run python -c "import ontospan; assert ontospan.SCHEMA_VERSION == '1.1.0'"`.
 - The T2d exports now declare `1.1.0`; `uv run pytest tests/test_t1_export.py tests/test_t1_import.py -q` passes unchanged, and a 1.0 bundle still imports (`test_a_1_0_bundle_still_imports`, new, in `tests/test_t1_import.py`).
 
 **Acceptance:**
 - In ontospan: `uv run python -m ontospan.schema_export --check && uv run pytest -q && uv run ruff check . && uv run mypy src`.
-- In Ontocurator: `uv run pytest tests/test_t1_import.py tests/test_t1_export.py -q`.
-- Commits: ontospan `feat: format 1.1 with document variants, translations and release metadata`; Ontocurator `build: pin ontospan 1.1`.
+- In Ontotator: `uv run pytest tests/test_t1_import.py tests/test_t1_export.py -q`.
+- Commits: ontospan `feat: format 1.1 with document variants, translations and release metadata`; Ontotator `build: pin ontospan 1.1`.
 
 ---
 
@@ -170,7 +170,7 @@ Export the new names from `ontospan/__init__.py` (`Variant`, `VariantOrigin`, `T
 
 **Policy:** `Action.OVERRIDE_TRANSLATION_STATUS` (admin and lead yes; others no). Extend the literal expected-matrix in `test_every_role_and_action`.
 
-**Domain:** `src/ontocurator/domain/variants.py`:
+**Domain:** `src/ontotator/domain/variants.py`:
 - `VariantOrigin`, `TranslationStatus` (the five values) as `Literal`s;
 - `TRANSLATION_ORIGINS = frozenset({"machine_translation", "human_translation"})`;
 - `@dataclass(frozen=True) class VariantInfo(document_id, case_id, external_id, language, version, origin, derived_from, translation: dict | None, translation_status, status_reason, text_sha256)`;
@@ -192,7 +192,7 @@ Export the new names from `ontospan/__init__.py` (`Variant`, `VariantOrigin`, `T
 
 ### Task 3: Variant import (T7 I2, T7d)
 
-**Modify** `src/ontocurator/exchange/plan.py` (T3a's `plan_import`), `exchange/t1.py`, `exchange/jobs.py` (`upload_commit`, `t1_import`), `api/upload_routes.py` (T3a), `cli.py`; **create** `tests/t1_builders.py`, `tests/test_variant_import.py`.
+**Modify** `src/ontotator/exchange/plan.py` (T3a's `plan_import`), `exchange/t1.py`, `exchange/jobs.py` (`upload_commit`, `t1_import`), `api/upload_routes.py` (T3a), `cli.py`; **create** `tests/t1_builders.py`, `tests/test_variant_import.py`.
 
 **`ImportPlan` additions** (each planned document gets a `PlannedVariant`; the preview JSON lists them in a `variants` table):
 
@@ -255,7 +255,7 @@ class PlannedVariant:
 
 ### Task 4: Cases, variants and annotation versions API (V3)
 
-**Create** `src/ontocurator/authz/versions.py`, `src/ontocurator/api/variant_routes.py`, `tests/test_annotation_versions.py`, `tests/test_case_api.py`. **Modify** `authz/visibility.py`, `api/app.py`.
+**Create** `src/ontotator/authz/versions.py`, `src/ontotator/api/variant_routes.py`, `tests/test_annotation_versions.py`, `tests/test_case_api.py`. **Modify** `authz/visibility.py`, `api/app.py`.
 
 **Text access within a case.** `visibility.require_document` (T3a) is extended:
 - `readable_documents(access, project)` = the visible documents (T3a) plus every variant of a case in which the user has an active assignment on any variant. These are read-only; working still needs an assignment on that exact variant.
@@ -304,7 +304,7 @@ The existing document list (T3a) gains `case_id`, `external_id`, `version`, `ori
 
 ### Task 5: Translation review domain and service
 
-**Create** `src/ontocurator/domain/translation_review.py`, `src/ontocurator/application/translation_reviews.py`, `tests/test_translation_review_rules.py`, `tests/test_translation_review_service.py`, `contracts/translation-review-cases.json` (shared test vectors; Task 12's client-side check reads the same file).
+**Create** `src/ontotator/domain/translation_review.py`, `src/ontotator/application/translation_reviews.py`, `tests/test_translation_review_rules.py`, `tests/test_translation_review_service.py`, `contracts/translation-review-cases.json` (shared test vectors; Task 12's client-side check reads the same file).
 
 **Decision table (V1; the contract):**
 
@@ -315,7 +315,7 @@ ReviewDecisionCode = Literal[
 ClinicalCategory = Literal[
     "omission", "addition", "assertion", "value", "anatomy", "terminology", "source"
 ]
-REVIEW_POLICY = "ontocurator-translation-review/v1"
+REVIEW_POLICY = "ontotator-translation-review/v1"
 
 
 class ReviewForm(BaseModel):
@@ -453,7 +453,7 @@ A review is allowed from any status; `status_before` records it. A reopened revi
 
 ### Task 7: Re-anchoring on a new text version (V2)
 
-**Create** `src/ontocurator/domain/reanchor.py`, `src/ontocurator/exchange/reanchor_job.py`, `tests/test_reanchor.py`, `tests/test_reanchor_job.py`. **Modify** `exchange/jobs.py` (register the handler).
+**Create** `src/ontotator/domain/reanchor.py`, `src/ontotator/exchange/reanchor_job.py`, `tests/test_reanchor.py`, `tests/test_reanchor_job.py`. **Modify** `exchange/jobs.py` (register the handler).
 
 **Mapping (D-w; the contract):**
 
@@ -489,8 +489,8 @@ def map_span(m: TextMap, start: int, end: int) -> tuple[int, int] | None:
 - Per source a proposal set on the new variant:
   - `origin = 'reanchor'`, `set_kind = 'tool_output'`, `bundle_id` and `manifest_sha256` NULL, `source_sha256` NULL;
   - `annotation_set_id = f"{project}:reanchor:{new_document_id}:{source.set_id}"`; the unique key makes the job idempotent;
-  - actor `{actor_id: "ontocurator-reanchor", kind: "tool", name: "ontocurator-reanchor", version: ontocurator.__version__}`;
-  - each carried annotation: id `ontospan.annotation_ref(annotation_set_id, f"a{n}")` (n in source order), provenance `{actor: ontocurator-reanchor, method: "tool", source_refs: [<the original's reference>]}`; the original's reference is its id if it is an imported URN, otherwise `annotation_ref(source.set_id, annotation_id)`;
+  - actor `{actor_id: "ontotator-reanchor", kind: "tool", name: "ontotator-reanchor", version: ontotator.__version__}`;
+  - each carried annotation: id `ontospan.annotation_ref(annotation_set_id, f"a{n}")` (n in source order), provenance `{actor: ontotator-reanchor, method: "tool", source_refs: [<the original's reference>]}`; the original's reference is its id if it is an imported URN, otherwise `annotation_ref(source.set_id, annotation_id)`;
   - `payload` is the T1 annotation set built with the export mapping, so a release can re-emit it (D-u); `pending_items` holds the `NeedsReview` entries.
 - Sources without any annotation produce no set. The result is `{sets, carried, needs_review}`; the job audits `variant.reanchor` with the same counts.
 - Translations are never sources or targets of re-anchoring across languages (V2): the handler refuses `old` and `new` with different languages (`REANCHOR_LANGUAGE_MISMATCH`).
@@ -523,12 +523,12 @@ Re-anchored annotations are proposals: they appear and are confirmed exactly lik
 
 ### Task 8: Translation review export (D-z)
 
-**Create** `src/ontocurator/exchange/review_export.py`, `tests/test_review_export.py`. **Modify** `exchange/jobs.py`, `api/export_routes.py` (T3a), `cli.py`.
+**Create** `src/ontotator/exchange/review_export.py`, `tests/test_review_export.py`. **Modify** `exchange/jobs.py`, `api/export_routes.py` (T3a), `cli.py`.
 
 **Job `translation_review_export`** (payload `{project}`): one JSON line per `translation_reviews` row in id order, written to the blob store with a `stored_files` row, audited as `project.translation_review_export`. The record (the contract; all hashes are lower-case hex SHA-256, timestamps UTC to the second):
 
 ```json
-{"format": "ontocurator-translation-review/v1", "review_id": 12, "project": "e3c-de",
+{"format": "ontotator-translation-review/v1", "review_id": 12, "project": "e3c-de",
  "case_id": "EN100017",
  "reviewed_variant": {"document_id": "EN100017-de", "language": "de", "version": 1,
                       "origin": "machine_translation", "text_sha256": "…",
@@ -540,7 +540,7 @@ Re-anchored annotations are proposals: they appear and are confirmed exactly lik
  "rationale": "…", "machine_text_sha256": "…", "proposed_text": "…", "proposed_text_sha256": "…",
  "created_variant": {"document_id": "EN100017-de", "version": 2, "text_sha256": "…"},
  "status_before": "ready_for_review", "status_after": "reviewed",
- "review_policy": "ontocurator-translation-review/v1", "reviewed_at": "2026-10-14T12:00:05Z"}
+ "review_policy": "ontotator-translation-review/v1", "reviewed_at": "2026-10-14T12:00:05Z"}
 ```
 
 - `document_id` values are external ids. There is no user id or display name (T1 F10); the reviewer is the pseudonym.
@@ -818,7 +818,7 @@ Types: `type CaseDetail = components["schemas"]["CaseDetail"]`, and likewise `Va
   - the inline diff of the window (`DiffView` with the server's opcodes).
 - Clicking an item scrolls the text pane to the new context and briefly highlights that window (a temporary display mention of kind `context`, removed after 2 s).
 - The panel is informational: the annotator re-creates or skips the annotation with the normal tools. Nothing is written by the panel.
-- **Proposal badges:** re-anchored proposals carry the existing AI badge with the tool label "ontocurator-reanchor" and, in the detail pane, "Carried over from version N" (from the `VersionRef` label).
+- **Proposal badges:** re-anchored proposals carry the existing AI badge with the tool label "ontotator-reanchor" and, in the detail pane, "Carried over from version N" (from the `VersionRef` label).
 
 **Tests:** `reanchorPanel.test.tsx`.
 - "lists items with old and new context and the diff".
@@ -858,7 +858,7 @@ Types: `type CaseDetail = components["schemas"]["CaseDetail"]`, and likewise `Va
 - "an annotator cannot open the annotation task of an unaccepted translation": assigning `EN2-de` for annotation in the lead's dialog shows the gate message.
 
 **Finish:**
-- Rebuild the embedded assets (`npm --prefix frontend run build`, then replace `src/ontocurator/web/` with `frontend/dist/`).
+- Rebuild the embedded assets (`npm --prefix frontend run build`, then replace `src/ontotator/web/` with `frontend/dist/`).
 - `grep -rn "unverändert\|korrigiert\|Rückfrage\|abgelehnt" src frontend/src` prints nothing (U1: no consumer vocabulary in the product).
 
 **Acceptance:** `npm --prefix frontend run test:e2e -- browser/translation-review.spec.ts browser/variants.spec.ts`; then `scripts/check.sh` passes. Commit: `test(browser): translation review and variant switching; rebuild embedded assets`.
@@ -871,7 +871,7 @@ Types: `type CaseDetail = components["schemas"]["CaseDetail"]`, and likewise `Va
 |---|---|
 | V1: four decisions, clinical-change flag, seven categories with rationale, decision table on the server; English codes | 5 |
 | V1: export of review records (generic, D-z; deviation recorded in the index) | 8 |
-| V2: diff-based re-anchoring of unchanged regions; proposal set `ontocurator-reanchor` with `source_refs`; needs-review list with old text, new text and diff; old version unchanged; no cross-language projection | 7 |
+| V2: diff-based re-anchoring of unchanged regions; proposal set `ontotator-reanchor` with `source_refs`; needs-review list with old text, new text and diff; old version unchanged; no cross-language projection | 7 |
 | V3: annotation versions offered per E8 and the blind rule (backend) | 4, 9–11 |
 | V4: cases and variants with origin, `derived_from`, translation run and checks; translation status; correction as a new variant; existing documents become native variants; format 1.1 | 1, 2, 3, 5 |
 | V5: `translation_review` task on one translation variant; immutable record; status moves; reviewers read both languages; `qualification` | 5, 6 |

@@ -9,7 +9,7 @@ import { ReviewActions } from "../src/editor/ReviewActions";
 import { formatTime } from "../src/app/submissionLabels";
 
 export const proposal = (set = 1, kind: "tool" | "human" = "tool"): EditorProposal => ({
-  schema_version: "ontocurator-annotation/v3", version: `v${set}`, document_id: "doc", text_sha256: "text", ontology_sha256: "ont", layer_config_sha256: "layer", evidence: [], proposal_set_id: set, notes: ["First note", "Second note"],
+  schema_version: "ontotator-annotation/v3", version: `v${set}`, document_id: "doc", text_sha256: "text", ontology_sha256: "ont", layer_config_sha256: "layer", evidence: [], proposal_set_id: set, notes: ["First note", "Second note"],
   annotation: {annotation_id: `a${set}`, document_id: "doc", layer_id: "hpo", type_id: "finding", term_id: "HP:1", provenance: {actor: {actor_id: kind === "tool" ? "tool-1" : "doctor", kind}, method: "import"}},
 });
 export const metadata = (id = 1): ProposalSetView => ({id, origin: "import", source_document_id: null, source_version: null, document_id: "doc", annotation_set_id: `set-${id}`, bundle_id: "bundle-1", set_kind: "tool", imported_at: "2026-10-14T12:30:00Z", imported_by_pseudonym: "ann-importer", actors: [{actor_id: "unrelated", kind: "tool", name: "Wrong tool"}, {actor_id: "tool-1", kind: "tool", name: "Phentrieve", version: "1.4", model: "bge-m3", run_id: `run-${id}`} ]});

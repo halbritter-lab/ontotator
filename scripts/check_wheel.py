@@ -3,7 +3,7 @@
 Steps:
 1. ``uv lock --check``: uv.lock matches pyproject.toml.
 2. ``uv build --wheel`` into ``--out-dir``. The wheel embeds the web UI from
-   the git-tracked ``src/ontocurator/web``; nothing is rebuilt here.
+   the git-tracked ``src/ontotator/web``; nothing is rebuilt here.
 3. The wheel must contain the CLI, every database migration and the web UI
    (``index.html`` plus at least one ``.js`` and one ``.css`` asset).
 
@@ -21,20 +21,20 @@ import zipfile
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-PACKAGE_DIR = REPO_ROOT / "src" / "ontocurator"
+PACKAGE_DIR = REPO_ROOT / "src" / "ontotator"
 MIGRATION_VERSIONS = PACKAGE_DIR / "storage" / "migrations" / "versions"
 
 MIGRATION_FILES = sorted(path.name for path in MIGRATION_VERSIONS.glob("*.py"))
 
 REQUIRED_WHEEL_FILES = [
-    "ontocurator/__init__.py",
-    "ontocurator/cli.py",
-    "ontocurator/storage/migrations/env.py",
-    "ontocurator/storage/migrations/script.py.mako",
-    *(f"ontocurator/storage/migrations/versions/{name}" for name in MIGRATION_FILES),
-    "ontocurator/web/index.html",
-    "ontocurator/web/licenses/source-serif-4-OFL.txt",
-    "ontocurator/web/licenses/source-sans-3-OFL.txt",
+    "ontotator/__init__.py",
+    "ontotator/cli.py",
+    "ontotator/storage/migrations/env.py",
+    "ontotator/storage/migrations/script.py.mako",
+    *(f"ontotator/storage/migrations/versions/{name}" for name in MIGRATION_FILES),
+    "ontotator/web/index.html",
+    "ontotator/web/licenses/source-serif-4-OFL.txt",
+    "ontotator/web/licenses/source-sans-3-OFL.txt",
 ]
 
 
@@ -48,13 +48,13 @@ def run_command(cmd: list[str]) -> None:
 
 def build_wheel(out_dir: Path) -> Path:
     """Build the wheel with uv into ``out_dir`` and return it."""
-    before = set(out_dir.glob("ontocurator-*.whl"))
+    before = set(out_dir.glob("ontotator-*.whl"))
     run_command(["uv", "build", "--wheel", "--out-dir", str(out_dir)])
     wheels = sorted(
-        out_dir.glob("ontocurator-*.whl"), key=lambda p: p.stat().st_mtime, reverse=True
+        out_dir.glob("ontotator-*.whl"), key=lambda p: p.stat().st_mtime, reverse=True
     )
     if not wheels:
-        sys.exit(f"Error: No ontocurator wheel found in {out_dir} after uv build")
+        sys.exit(f"Error: No ontotator wheel found in {out_dir} after uv build")
     new = [w for w in wheels if w not in before]
     return (new or wheels)[0]
 
@@ -64,10 +64,9 @@ def missing_wheel_files(namelist: set[str]) -> list[str]:
     missing = [item for item in REQUIRED_WHEEL_FILES if item not in namelist]
     for ext in (".js", ".css"):
         if not any(
-            n.startswith("ontocurator/web/assets/") and n.endswith(ext)
-            for n in namelist
+            n.startswith("ontotator/web/assets/") and n.endswith(ext) for n in namelist
         ):
-            missing.append(f"ontocurator/web/assets/*{ext}")
+            missing.append(f"ontotator/web/assets/*{ext}")
     return missing
 
 

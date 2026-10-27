@@ -26,7 +26,7 @@ CHECK_VITEST_WORKERS: positive integer, default 2; use 4 on a dedicated machine.
 CHECK_PYTEST_WORKERS: backend pytest-xdist workers, default 4; 0 or 1 runs serially.
 CHECK_PLAYWRIGHT_WORKERS: positive integer, default 3 (spec files use separate projects).
 CHECK_CONTAINERS=1 adds containers to the complete gate; CHECK_IMAGE selects image.
-ONTOCURATOR_TEST_PG_URL may select a disposable PostgreSQL test server.
+ONTOTATOR_TEST_PG_URL may select a disposable PostgreSQL test server.
 HELP
 }
 
@@ -85,9 +85,9 @@ if runs static || runs frontend || runs browser || [ "$selected" = containers ];
     [ -d frontend/node_modules ] || fail "frontend dependencies are missing; run 'npm --prefix frontend ci' first."
 fi
 if [ "$selected" = containers ] || { [ -z "$selected" ] && [ "${CHECK_CONTAINERS:-0}" = 1 ]; } \
-    || { { runs backend || runs browser; } && [ -z "${ONTOCURATOR_TEST_PG_URL:-}" ]; }; then
+    || { { runs backend || runs browser; } && [ -z "${ONTOTATOR_TEST_PG_URL:-}" ]; }; then
     command -v docker >/dev/null 2>&1 \
-        || fail "docker is not on PATH. Start Docker or set ONTOCURATOR_TEST_PG_URL for PostgreSQL checks."
+        || fail "docker is not on PATH. Start Docker or set ONTOTATOR_TEST_PG_URL for PostgreSQL checks."
     docker info >/dev/null 2>&1 \
         || fail "Docker is not reachable. Start Docker Desktop or the Docker daemon."
 fi

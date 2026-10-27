@@ -13,9 +13,9 @@ from pg_harness import database_for
 from sqlalchemy import Connection, Engine, text
 from sqlalchemy.exc import OperationalError
 
-from ontocurator.api.app import create_app
-from ontocurator.config import AppConfig
-from ontocurator.storage.lease import RUNTIME_LEASE, RuntimeLease, exclusive_lease
+from ontotator.api.app import create_app
+from ontotator.config import AppConfig
+from ontotator.storage.lease import RUNTIME_LEASE, RuntimeLease, exclusive_lease
 
 
 def _alone(engine: Engine) -> bool:
@@ -165,7 +165,7 @@ def test_a_server_start_waits_for_a_running_recovery(
 ) -> None:
     db = database_for(tmp_path / "editor.db")
     lease = RuntimeLease(db.engine)
-    caplog.set_level(logging.WARNING, logger="ontocurator.storage.lease")
+    caplog.set_level(logging.WARNING, logger="ontotator.storage.lease")
 
     with exclusive_lease(db.engine) as acquired:
         assert acquired

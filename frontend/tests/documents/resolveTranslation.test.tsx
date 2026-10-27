@@ -132,7 +132,7 @@ it("Assign review or accept… offers Turn translation review on or the external
   vi.mocked(api.patchWorkPlan).mockClear();
   const second = renderResolve({ mode: "not_accepted", row });
   const again = screen.getByRole("group", { name: "Translation not accepted, case-0101 de" });
-  expect(within(again).getByText("This translation was reviewed outside Ontocurator — accept it as it is")).toBeTruthy();
+  expect(within(again).getByText("This translation was reviewed outside Ontotator — accept it as it is")).toBeTruthy();
   const accept = within(again).getByRole("button", { name: "Accept and annotate" });
   expect(accept.getAttribute("aria-disabled")).toBe("true");
   fireEvent.click(accept);
@@ -142,7 +142,7 @@ it("Assign review or accept… offers Turn translation review on or the external
   await waitFor(() => expect(api.patchWorkPlan).toHaveBeenCalledWith("p", "case-0101", "de", {
     annotate: true, expected_revision: 3, confirm: false, accept_external_review: { reason: "Clinic review" },
   }));
-  await waitFor(() => expect(second.onDone).toHaveBeenCalledWith("case-0101 de accepted as reviewed outside Ontocurator.", { caseId: "case-0101", revision: 4 }));
+  await waitFor(() => expect(second.onDone).toHaveBeenCalledWith("case-0101 de accepted as reviewed outside Ontotator.", { caseId: "case-0101", revision: 4 }));
 });
 
 it("Cancel in the discard step returns to the three options with focus on Discard", async () => {

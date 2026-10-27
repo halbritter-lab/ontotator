@@ -4,9 +4,9 @@ import pytest
 from pg_harness import unmigrated_database_url
 from sqlalchemy import create_engine, text
 
-from ontocurator.storage.schema import upgrade
+from ontotator.storage.schema import upgrade
 
-S = "ontocurator"
+S = "ontotator"
 
 
 def _user(conn, username: str) -> None:

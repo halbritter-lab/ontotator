@@ -13,7 +13,7 @@
 
 **Goal:** Let an annotator walk the ontology from the term of one of their annotations to a broader or narrower term and assign it, with the walk recorded like a search.
 
-**Architecture:** A new module `ontocurator/ontology/tree.py` answers roots, children and root-to-term paths over the vendored `Ontology`, leaving obsolete terms out. A new router `ontocurator/api/tree_routes.py` exposes `POST /api/v1/terms/tree/open` and `POST /api/v1/terms/tree/node`; both run the same workspace and layer checks as `POST /search` (the checks move into one shared function). `tree/open` stores a `SearchEventRecord` with `route="browse"`, and every `tree/node` appends the terms that became visible to that event, so the existing `set_term` check (term must be among the event's candidates) and the existing selection event work unchanged. In the frontend, `treeState.ts` holds the pure logic (rows, keyboard moves), `TermTree.tsx` is a hand-written ARIA tree with roving focus, and `TreeBrowser.tsx` loads data and shows the details; it renders as a modal dialog or, pinned, as a panel inside the case layout.
+**Architecture:** A new module `ontotator/ontology/tree.py` answers roots, children and root-to-term paths over the vendored `Ontology`, leaving obsolete terms out. A new router `ontotator/api/tree_routes.py` exposes `POST /api/v1/terms/tree/open` and `POST /api/v1/terms/tree/node`; both run the same workspace and layer checks as `POST /search` (the checks move into one shared function). `tree/open` stores a `SearchEventRecord` with `route="browse"`, and every `tree/node` appends the terms that became visible to that event, so the existing `set_term` check (term must be among the event's candidates) and the existing selection event work unchanged. In the frontend, `treeState.ts` holds the pure logic (rows, keyboard moves), `TermTree.tsx` is a hand-written ARIA tree with roving focus, and `TreeBrowser.tsx` loads data and shows the details; it renders as a modal dialog or, pinned, as a panel inside the case layout.
 
 **Tech Stack:** Python 3 / FastAPI / Pydantic v2 / SQLite, pytest, ruff, mypy (strict); React 18 + TypeScript (strict, `noUnusedLocals`), Vitest + Testing Library (jsdom), Playwright; OpenAPI contract in `contracts/openapi.json` with generated types in `frontend/src/api/generated.ts`. No new npm or Python dependencies.
 
@@ -21,7 +21,7 @@
 
 ## Read this first: Part 2 comes before this plan
 
-Part 2 (translations) is implemented **before** this plan is executed. It changes, among others, `src/ontocurator/ontology/service.py`, `src/ontocurator/ontology/provenance.py`, `src/ontocurator/api/routes.py`, `src/ontocurator/application/preferences.py` (new field `search_languages_by_annotator`), `frontend/src/editor/SearchPanel.tsx`, `frontend/src/App.tsx` possibly, the contract files, and it fills `Term.translations`.
+Part 2 (translations) is implemented **before** this plan is executed. It changes, among others, `src/ontotator/ontology/service.py`, `src/ontotator/ontology/provenance.py`, `src/ontotator/api/routes.py`, `src/ontotator/application/preferences.py` (new field `search_languages_by_annotator`), `frontend/src/editor/SearchPanel.tsx`, `frontend/src/App.tsx` possibly, the contract files, and it fills `Term.translations`.
 
 This plan was written against the code **before** Part 2. It is built to survive that:
 
@@ -37,7 +37,7 @@ Still: **before Task 1, re-read every file in the "modify" rows of the table bel
 - Work on the existing branch `feat/term-search`. Do not merge or push.
 - Commit messages follow the repo style (`feat(tree): …`, `feat(frontend): …`, `test(e2e): …`, `build: …`). Do **not** add any `Co-Authored-By` or "Generated with" lines.
 - Before every commit that touches Python files, run `uv run ruff check --fix <those files>` and `uv run ruff format <those files>`; CI runs `ruff check .` and `ruff format --check .` over tests as well. (`docs/work-package-v2.md` already fails the format check; leave it alone.)
-- Do not edit files under `src/ontocurator/vendor/`.
+- Do not edit files under `src/ontotator/vendor/`.
 - Some Python snippets below are methods shown at column 0 (the Markdown formatter of `ruff` removes the class indentation, as it did in Part 1's plan). Where a step says a method goes into a class, indent it by four spaces.
 - When a test in this plan fails after you typed the implementation as given, the implementation in this plan is the first suspect, not the test: from Task 3 on the code was not executed (see the end of this plan). Fix the implementation; change a test only if it contradicts the spec, and say so in your report.
 - Test ontology `tests/fixtures/hp.json` is a single-parent tree: `HP:0000001` All > `HP:0000118` Phenotypic abnormality > { `HP:0000707` Abnormality of the nervous system > { `HP:0001284` Areflexia, `HP:0001252` Hypotonia, `HP:0001250` Seizure > { `HP:0011146` Dialeptic seizure, `HP:0002133` Status epilepticus } }, `HP:0000365` Hearing impairment > `HP:0000407` Sensorineural hearing impairment }, plus the obsolete, parentless `HP:0000123`. Multi-parent behaviour is tested with a synthetic ontology written by the test (Task 1).
@@ -46,12 +46,12 @@ Still: **before Task 1, re-read every file in the "modify" rows of the table bel
 
 | File | Action | Responsibility |
 |---|---|---|
-| `src/ontocurator/ontology/tree.py` | create | Roots, children, paths, term details; the models of a tree answer |
-| `src/ontocurator/storage/repository.py` | modify | Append shown terms to a stored event; tolerate two states of one walk on import |
-| `src/ontocurator/api/routes.py` | modify | Move the checks of `search_ontology` into `layer_ontology` |
-| `src/ontocurator/api/tree_routes.py` | create | `tree/open`, `tree/node`, the walk's event |
-| `src/ontocurator/api/app.py` | modify | Include the tree router |
-| `src/ontocurator/application/preferences.py` | modify | `tree_pinned_by_annotator` |
+| `src/ontotator/ontology/tree.py` | create | Roots, children, paths, term details; the models of a tree answer |
+| `src/ontotator/storage/repository.py` | modify | Append shown terms to a stored event; tolerate two states of one walk on import |
+| `src/ontotator/api/routes.py` | modify | Move the checks of `search_ontology` into `layer_ontology` |
+| `src/ontotator/api/tree_routes.py` | create | `tree/open`, `tree/node`, the walk's event |
+| `src/ontotator/api/app.py` | modify | Include the tree router |
+| `src/ontotator/application/preferences.py` | modify | `tree_pinned_by_annotator` |
 | `tests/test_ontology_tree.py` | create | Tree helpers, single- and multi-parent |
 | `tests/test_tree_events.py` | create | The growing event in the repository and on import |
 | `tests/test_tree_api.py` | create | Endpoints, event log, `set_term` from a walk, export |
@@ -73,7 +73,7 @@ Still: **before Task 1, re-read every file in the "modify" rows of the table bel
 | `frontend/tests/caseTree.test.tsx` | create | Case screen with the tree |
 | `frontend/tests/apiClient.test.ts` | modify | The two client methods |
 | `frontend/browser/tree.spec.ts` | create | Real browser: pick, keyboard, pinned |
-| `src/ontocurator/web/` | regenerate | Embedded SPA build (git-tracked) |
+| `src/ontotator/web/` | regenerate | Embedded SPA build (git-tracked) |
 
 The API in one place, so later tasks can be read on their own:
 
@@ -132,20 +132,20 @@ Run (repo root):
 
 ```bash
 chk() { printf '%s  %s  %s\n' "$(grep -c -F -- "$2" "$1")" "$1" "$2"; }
-chk src/ontocurator/api/routes.py '@router.post("/search")'
-chk src/ontocurator/api/routes.py '    require_mode_allowed(request, req.workspace_key.mode)'
-chk src/ontocurator/api/routes.py '    ontology = request.app.state.ontology_registry.for_layer(profile, req.layer_id)'
-chk src/ontocurator/api/routes.py '    result = cast(SearchResult, ontology.search(req))'
-chk src/ontocurator/api/app.py '    app.include_router(router)'
-chk src/ontocurator/api/app.py 'from ontocurator.api.security import verify_security'
-chk src/ontocurator/storage/repository.py 'from collections.abc import Callable'
-chk src/ontocurator/storage/repository.py '    def get_search_event(self, event_id: str) -> SearchEventRecord | None:'
-chk src/ontocurator/storage/repository.py 'def _legacy_key_str(key: WorkspaceKey) -> str:'
-chk src/ontocurator/storage/repository.py '                raise InvalidPackage("Conflicting search event content")'
-chk src/ontocurator/application/preferences.py '    mode_by_package: dict[str, PreferenceMode] = Field(default_factory=dict)'
-chk src/ontocurator/application/preferences.py '    mode_by_package: dict[str, PreferenceMode] | None = None'
-chk src/ontocurator/application/preferences.py '                prefs.mode_by_package.update(change.mode_by_package)'
-chk src/ontocurator/application/preferences.py '            if isinstance(data.get("legacy_config"), dict):'
+chk src/ontotator/api/routes.py '@router.post("/search")'
+chk src/ontotator/api/routes.py '    require_mode_allowed(request, req.workspace_key.mode)'
+chk src/ontotator/api/routes.py '    ontology = request.app.state.ontology_registry.for_layer(profile, req.layer_id)'
+chk src/ontotator/api/routes.py '    result = cast(SearchResult, ontology.search(req))'
+chk src/ontotator/api/app.py '    app.include_router(router)'
+chk src/ontotator/api/app.py 'from ontotator.api.security import verify_security'
+chk src/ontotator/storage/repository.py 'from collections.abc import Callable'
+chk src/ontotator/storage/repository.py '    def get_search_event(self, event_id: str) -> SearchEventRecord | None:'
+chk src/ontotator/storage/repository.py 'def _legacy_key_str(key: WorkspaceKey) -> str:'
+chk src/ontotator/storage/repository.py '                raise InvalidPackage("Conflicting search event content")'
+chk src/ontotator/application/preferences.py '    mode_by_package: dict[str, PreferenceMode] = Field(default_factory=dict)'
+chk src/ontotator/application/preferences.py '    mode_by_package: dict[str, PreferenceMode] | None = None'
+chk src/ontotator/application/preferences.py '                prefs.mode_by_package.update(change.mode_by_package)'
+chk src/ontotator/application/preferences.py '            if isinstance(data.get("legacy_config"), dict):'
 chk frontend/src/api/client.ts 'export type SearchCandidate = components["schemas"]["SearchCandidate"];'
 chk frontend/src/api/client.ts '  async resolveTermLabels(packageId: string, terms: TermLookup[]): Promise<TermLabel[]> {'
 chk frontend/src/editor/AnnotationPanel.tsx '              <TermName termId={currentTerm} label={termLabel} />'
@@ -173,7 +173,7 @@ Expected: every line starts with `1` (that was the state before Part 2). For eve
 ### Task 1: Backend — roots, children and paths
 
 **Files:**
-- Create: `src/ontocurator/ontology/tree.py`
+- Create: `src/ontotator/ontology/tree.py`
 - Test: `tests/test_ontology_tree.py` (create)
 
 - [ ] **Step 1: Write the failing tests**
@@ -188,9 +188,9 @@ from pathlib import Path
 
 import pytest
 
-from ontocurator.domain.errors import DomainError
-from ontocurator.ontology.tree import OntologyTree
-from ontocurator.vendor.hpo_span_annotator.hpo import load
+from ontotator.domain.errors import DomainError
+from ontotator.ontology.tree import OntologyTree
+from ontotator.vendor.hpo_span_annotator.hpo import load
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "hp.json"
 
@@ -400,11 +400,11 @@ What each multi-parent test rules out: "shortest wins" fails for an implementati
 - [ ] **Step 2: Run the tests to verify they fail**
 
 Run: `uv run pytest tests/test_ontology_tree.py -q`
-Expected: collection error — `ModuleNotFoundError: No module named 'ontocurator.ontology.tree'`.
+Expected: collection error — `ModuleNotFoundError: No module named 'ontotator.ontology.tree'`.
 
 - [ ] **Step 3: Implement the helpers**
 
-Create `src/ontocurator/ontology/tree.py`:
+Create `src/ontotator/ontology/tree.py`:
 
 ```python
 """The ontology as a tree to walk: roots, children and paths from a root.
@@ -421,8 +421,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-from ontocurator.domain.errors import DomainError
-from ontocurator.vendor.hpo_span_annotator.hpo import Ontology, Term
+from ontotator.domain.errors import DomainError
+from ontotator.vendor.hpo_span_annotator.hpo import Ontology, Term
 
 
 class TreeNode(BaseModel):
@@ -543,13 +543,13 @@ Expected: `12 passed` (ten test functions, one of them with three parameters).
 
 - [ ] **Step 5: Lint and types**
 
-Run: `uv run ruff check src/ontocurator/ontology/tree.py tests/test_ontology_tree.py && uv run ruff format --check src/ontocurator/ontology/tree.py tests/test_ontology_tree.py && uv run mypy src`
+Run: `uv run ruff check src/ontotator/ontology/tree.py tests/test_ontology_tree.py && uv run ruff format --check src/ontotator/ontology/tree.py tests/test_ontology_tree.py && uv run mypy src`
 Expected: no findings.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/ontocurator/ontology/tree.py tests/test_ontology_tree.py
+git add src/ontotator/ontology/tree.py tests/test_ontology_tree.py
 git commit -m "feat(tree): walk the ontology as a tree of roots, children and paths"
 ```
 
@@ -558,7 +558,7 @@ git commit -m "feat(tree): walk the ontology as a tree of roots, children and pa
 ### Task 2: Backend — term details and the children under expanded nodes
 
 **Files:**
-- Modify: `src/ontocurator/ontology/tree.py`
+- Modify: `src/ontotator/ontology/tree.py`
 - Test: `tests/test_ontology_tree.py`
 
 - [ ] **Step 1: Write the failing tests**
@@ -627,7 +627,7 @@ Expected: 3 failures — `AttributeError: 'OntologyTree' object has no attribute
 
 - [ ] **Step 3: Add the models**
 
-In `src/ontocurator/ontology/tree.py`, directly above `class OntologyTree:`, add
+In `src/ontotator/ontology/tree.py`, directly above `class OntologyTree:`, add
 
 ```python
 class TreeLevel(BaseModel):
@@ -690,13 +690,13 @@ def detail(self, term_id: str) -> TreeTermDetail | None:
 
 - [ ] **Step 5: Run the tests to verify they pass**
 
-Run: `uv run pytest tests/test_ontology_tree.py -q && uv run ruff check src/ontocurator/ontology/tree.py tests/test_ontology_tree.py && uv run ruff format --check src/ontocurator/ontology/tree.py tests/test_ontology_tree.py && uv run mypy src`
+Run: `uv run pytest tests/test_ontology_tree.py -q && uv run ruff check src/ontotator/ontology/tree.py tests/test_ontology_tree.py && uv run ruff format --check src/ontotator/ontology/tree.py tests/test_ontology_tree.py && uv run mypy src`
 Expected: `15 passed`, no findings.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/ontocurator/ontology/tree.py tests/test_ontology_tree.py
+git add src/ontotator/ontology/tree.py tests/test_ontology_tree.py
 git commit -m "feat(tree): describe a term and list the children under expanded nodes"
 ```
 
@@ -712,7 +712,7 @@ A search event is written once (`save_search_event` is a plain `INSERT`; a secon
 Exports need no change: both export paths read `payload_json` at export time and so carry the grown event (tested below).
 
 **Files:**
-- Modify: `src/ontocurator/storage/repository.py`
+- Modify: `src/ontotator/storage/repository.py`
 - Test: `tests/test_tree_events.py` (create)
 
 - [ ] **Step 1: Write the failing tests**
@@ -728,11 +728,11 @@ import pytest
 from test_storage import _sample_package
 from test_storage_regressions import key_for
 
-from ontocurator.application.exports import ExportService
-from ontocurator.domain.errors import InvalidPackage
-from ontocurator.packages.models import SearchEventRecord
-from ontocurator.storage.database import Database
-from ontocurator.storage.repository import Repository
+from ontotator.application.exports import ExportService
+from ontotator.domain.errors import InvalidPackage
+from ontotator.packages.models import SearchEventRecord
+from ontotator.storage.database import Database
+from ontotator.storage.repository import Repository
 
 
 def _walk(candidates: list[str], **overrides: object) -> SearchEventRecord:
@@ -907,7 +907,7 @@ Expected: the four `append`/export tests fail with `AttributeError: 'Repository'
 
 - [ ] **Step 3: Add the append method**
 
-In `src/ontocurator/storage/repository.py`, replace the import line
+In `src/ontotator/storage/repository.py`, replace the import line
 
 ```python
 from collections.abc import Callable
@@ -1025,7 +1025,7 @@ Expected: all pass.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/ontocurator/storage/repository.py tests/test_tree_events.py
+git add src/ontotator/storage/repository.py tests/test_tree_events.py
 git commit -m "feat(tree): let the search event of a tree walk grow"
 ```
 
@@ -1034,9 +1034,9 @@ git commit -m "feat(tree): let the search event of a tree walk grow"
 ### Task 4: API — `tree/open`, `tree/node` and the walk's event
 
 **Files:**
-- Modify: `src/ontocurator/api/routes.py` (`search_ontology`, new `layer_ontology`)
-- Create: `src/ontocurator/api/tree_routes.py`
-- Modify: `src/ontocurator/api/app.py`
+- Modify: `src/ontotator/api/routes.py` (`search_ontology`, new `layer_ontology`)
+- Create: `src/ontotator/api/tree_routes.py`
+- Modify: `src/ontotator/api/app.py`
 - Test: `tests/test_tree_api.py` (create)
 
 - [ ] **Step 1: Write the failing tests**
@@ -1055,12 +1055,12 @@ from layered_fixtures import HP_DIGEST, make_layered_package
 from test_api import app_client as _shared_app_client
 from test_ontology_tree import tid, write_graph_ontology
 
-from ontocurator.api.app import create_app
-from ontocurator.application.exports import ExportService
-from ontocurator.config import AppConfig
-from ontocurator.domain.profiles import profile_hash
-from ontocurator.domain.workspace import WorkspaceKey
-from ontocurator.packages.writer import PackageWriter
+from ontotator.api.app import create_app
+from ontotator.application.exports import ExportService
+from ontotator.config import AppConfig
+from ontotator.domain.profiles import profile_hash
+from ontotator.domain.workspace import WorkspaceKey
+from ontotator.packages.writer import PackageWriter
 
 app_client = _shared_app_client
 
@@ -1655,7 +1655,7 @@ Expected: every test fails. The requests get `404` or `405` (the static catch-al
 
 - [ ] **Step 3: Move the checks of `search_ontology` into one function**
 
-In `src/ontocurator/api/routes.py`, directly above the line `@router.post("/search")`, add
+In `src/ontotator/api/routes.py`, directly above the line `@router.post("/search")`, add
 
 ```python
 def layer_ontology(
@@ -1747,7 +1747,7 @@ Expected: all pass, no mypy findings. This step changes no behaviour; the existi
 
 - [ ] **Step 4: Add the tree router**
 
-Create `src/ontocurator/api/tree_routes.py`:
+Create `src/ontotator/api/tree_routes.py`:
 
 ```python
 """API routes for walking the ontology tree from the term of an annotation.
@@ -1769,16 +1769,16 @@ from uuid import uuid4
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict
 
-from ontocurator.api.routes import RepoDep, WorkspaceSvcDep, layer_ontology
-from ontocurator.domain.errors import DomainError
-from ontocurator.domain.workspace import WorkspaceKey
-from ontocurator.ontology.tree import (
+from ontotator.api.routes import RepoDep, WorkspaceSvcDep, layer_ontology
+from ontotator.domain.errors import DomainError
+from ontotator.domain.workspace import WorkspaceKey
+from ontotator.ontology.tree import (
     OntologyTree,
     TreeLevel,
     TreeNode,
     TreeTermDetail,
 )
-from ontocurator.packages.models import SearchEventRecord
+from ontotator.packages.models import SearchEventRecord
 
 router = APIRouter(prefix="/api/v1")
 
@@ -1937,10 +1937,10 @@ def tree_node(
 
 - [ ] **Step 5: Include the router**
 
-In `src/ontocurator/api/app.py`, after the line `from ontocurator.api.security import verify_security`, add
+In `src/ontotator/api/app.py`, after the line `from ontotator.api.security import verify_security`, add
 
 ```python
-from ontocurator.api.tree_routes import router as tree_router
+from ontotator.api.tree_routes import router as tree_router
 ```
 
 After the line `    app.include_router(router)`, add
@@ -1962,7 +1962,7 @@ Expected: all pass. `uv run python scripts/export_openapi.py --check` fails from
 - [ ] **Step 8: Commit**
 
 ```bash
-git add src/ontocurator/api/routes.py src/ontocurator/api/tree_routes.py src/ontocurator/api/app.py tests/test_tree_api.py
+git add src/ontotator/api/routes.py src/ontotator/api/tree_routes.py src/ontotator/api/app.py tests/test_tree_api.py
 git commit -m "feat(tree): add the tree endpoints and log what a walk shows"
 ```
 
@@ -1971,7 +1971,7 @@ git commit -m "feat(tree): add the tree endpoints and log what a walk shows"
 ### Task 5: Preferences — `tree_pinned_by_annotator`
 
 **Files:**
-- Modify: `src/ontocurator/application/preferences.py`
+- Modify: `src/ontotator/application/preferences.py`
 - Test: `tests/test_preferences_api.py`
 
 - [ ] **Step 1: Write the failing tests**
@@ -1980,7 +1980,7 @@ Append to `tests/test_preferences_api.py`:
 
 ```python
 def test_tree_pin_is_stored_per_annotator_and_merged(app_client):
-    from ontocurator.application.preferences import PreferencesStore
+    from ontotator.application.preferences import PreferencesStore
 
     client, config = app_client
     assert client.get("/api/v1/preferences").json()["tree_pinned_by_annotator"] == {}
@@ -2033,7 +2033,7 @@ Expected: the two new tests fail — `KeyError: 'tree_pinned_by_annotator'`, and
 
 - [ ] **Step 3: Add the field**
 
-In `src/ontocurator/application/preferences.py`:
+In `src/ontotator/application/preferences.py`:
 
 In `class Preferences`, after the line `    mode_by_package: dict[str, PreferenceMode] = Field(default_factory=dict)`, add
 
@@ -2097,7 +2097,7 @@ Expected: all pass.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/ontocurator/application/preferences.py tests/test_preferences_api.py
+git add src/ontotator/application/preferences.py tests/test_preferences_api.py
 git commit -m "feat(tree): remember per annotator whether the tree stays open"
 ```
 
@@ -4162,7 +4162,7 @@ const layers = [{
 
 /** A snapshot, usable as a draft annotation, a proposal or a reference. */
 const snapshot = (annotationId: string, termId: string, sourceRefs?: string[]) => ({
-  schema_version: "ontocurator-annotation/v3" as const,
+  schema_version: "ontotator-annotation/v3" as const,
   annotation: {
     annotation_id: annotationId,
     document_id: "doc",
@@ -5495,7 +5495,7 @@ With a temporary Playwright spec (delete it afterwards, do not commit it), model
 8. **600×800**: the dialog fills the screen, tree above details.
 9. **1280×720, pinned, while creating a new annotation** (text marked, search panel open in the inspector): the search box and at least two candidates are reachable above the tree.
 
-For the multi-parent case there is no browser fixture. If a real `hp.json` is at hand, start the app with it (`uv run ontocurator --ontology <path>` or the equivalent your setup uses), open the tree at a term with two parents (for example `HP:0001250` Seizure in current releases), and check by eye that "Also under" lists the other parent and that a click opens that path and scrolls to the term. Also note how many root rows a real ontology shows (see "Decisions", point 5). Report what you saw; if no real file is at hand, say so.
+For the multi-parent case there is no browser fixture. If a real `hp.json` is at hand, start the app with it (`uv run ontotator --ontology <path>` or the equivalent your setup uses), open the tree at a term with two parents (for example `HP:0001250` Seizure in current releases), and check by eye that "Also under" lists the other parent and that a click opens that path and scrolls to the term. Also note how many root rows a real ontology shows (see "Decisions", point 5). Report what you saw; if no real file is at hand, say so.
 
 If a screenshot shows something clipped or overlapping, change CSS values in `frontend/src/styles.css` (not the structure), rerun `npm test` and `npx playwright test browser/tree.spec.ts`, and commit as `fix(frontend): …` with one sentence saying what was off.
 
@@ -5503,7 +5503,7 @@ If a screenshot shows something clipped or overlapping, change CSS values in `fr
 
 ```bash
 uv run python -c "import sys; sys.path.insert(0, 'scripts'); from build_common import build_frontend, sync_embedded_web_assets; sync_embedded_web_assets(build_frontend(npm_ci=False))"
-git add src/ontocurator/web
+git add src/ontotator/web
 git commit -m "build: rebuild embedded web assets"
 ```
 

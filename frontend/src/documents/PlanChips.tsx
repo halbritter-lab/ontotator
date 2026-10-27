@@ -19,7 +19,7 @@ export interface PlanFlagState { review: boolean; annotate: boolean }
 export const PLAN_CHANGED_MESSAGE = "This plan changed. Reloaded the current plan.";
 export const UNDO_WITHDRAWN_NOTE = "Undo restores the plan, not withdrawn tasks.";
 export const WITHDRAW_CHECKBOX = "I understand — withdraw the open tasks";
-export const ACCEPT_EXTERNAL_LABEL = "This translation was reviewed outside Ontocurator — accept it as it is";
+export const ACCEPT_EXTERNAL_LABEL = "This translation was reviewed outside Ontotator — accept it as it is";
 export const ACCEPTANCE_RECORDED = "The acceptance is recorded with your name, the reason and the time.";
 
 const TASK_NAMES: Readonly<Record<string, [string, string]>> = {

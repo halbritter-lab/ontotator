@@ -212,7 +212,7 @@ Each failed check in "Automatic translation checks" becomes a small block:
 |---|---|
 | `units_added` | "The translation run's check found a unit of measurement in the translation that it did not find in the source." |
 | `numbers_changed` | "The translation run's check found numbers in the translation that differ from those in the source." |
-| unknown | "The translation run reported this check as failed. Ontocurator has no description for it; ask the project lead what it checks." |
+| unknown | "The translation run reported this check as failed. Ontotator has no description for it; ask the project lead what it checks." |
 
 The "Show all checks" list uses the same structure in one line per check: badge, label, and the technical code as a separate labelled line. No text position is ever derived or invented; there is no highlight in the text for a check.
 
@@ -223,7 +223,7 @@ The "Show all checks" list uses the same structure in one line per check: badge,
 - **Keyboard:** Left/Right ±16px, Shift+Left/Right ±64px, Home = minimum, End = maximum, Enter = default. Registered through `useShortcutHint` (group "Layout") so `?` lists "Resize the findings column (focus the divider)".
 - **Limits:** minimum 220px; maximum `min(480px, 35vw, viewport − inspector − 420px)` in three columns, `min(480px, 35vw)` in the two-column layout (701–1024px). The text column keeps its reading measure as its maximum (`--measure-reading`); a wider sidebar may narrow and re-wrap the text, which is the deliberate result of resizing. Selecting or checking a finding never changes any width.
 - **Variable:** `.app-layout` gets `--sidebar-width`, used by `.sidebar` and by both tree grids (`editor.css` 821, 852, 660). The default is 260px above 1024px and 220px from 701 to 1024px.
-- **Persistence:** the preferred width is stored per user in `localStorage` under `ontocurator.editor.sidebarWidth.v1:{username}` after drag end or 300ms after the last key; applied clamped to the current limits; invalid values are ignored. Reset (Enter, double-click) removes the key. No server storage.
+- **Persistence:** the preferred width is stored per user in `localStorage` under `ontotator.editor.sidebarWidth.v1:{username}` after drag end or 300ms after the last key; applied clamped to the current limits; invalid values are ignored. Reset (Enter, double-click) removes the key. No server storage.
 - **Narrow:** at ≤700px the separator is not rendered; the pane tabs apply. The tab "List" becomes "Findings" and, in a carry-forward round, "Findings, 1 to check".
 - **Focus:** the separator's focus ring is `--focus-width` solid `--focus-ring` with `--focus-offset`. The same fix applies to the existing mention edge handle: `.resize-handle:focus-visible::before` uses a `--focus-ring` outline (2px) instead of the `--accent-light` shadow.
 - **Forced colors:** grip in `CanvasText`, focus in `Highlight`.

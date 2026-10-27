@@ -4,17 +4,17 @@ from sqlalchemy import insert
 from test_work_rounds import create_consolidation_fixture
 from test_work_rounds import rounds as rounds
 
-from ontocurator.application.editing import EditingService
-from ontocurator.application.submissions import SubmissionService
-from ontocurator.application.work_rounds import WorkRoundService
-from ontocurator.assignments.service import AssignmentService
-from ontocurator.auth.audit import Actor
-from ontocurator.authz.policy import Access
-from ontocurator.authz.scoped import ScopedRepository
-from ontocurator.authz.workflow import may_read_snapshot
-from ontocurator.domain.workspace import MutationEnvelope
-from ontocurator.packages.models import SearchEventRecord
-from ontocurator.storage.tables import ProjectMembershipRow, UserLanguageRow, UserRow
+from ontotator.application.editing import EditingService
+from ontotator.application.submissions import SubmissionService
+from ontotator.application.work_rounds import WorkRoundService
+from ontotator.assignments.service import AssignmentService
+from ontotator.auth.audit import Actor
+from ontotator.authz.policy import Access
+from ontotator.authz.scoped import ScopedRepository
+from ontotator.authz.workflow import may_read_snapshot
+from ontotator.domain.workspace import MutationEnvelope
+from ontotator.packages.models import SearchEventRecord
+from ontotator.storage.tables import ProjectMembershipRow, UserLanguageRow, UserRow
 
 
 def test_shared_document_does_not_grant_foreign_annotation_or_evidence(rounds):

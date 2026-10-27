@@ -30,7 +30,7 @@ Completion: image `sha256:74b37290e03e802b281ef0d6dc8639891152f8e84b49e3dba190b8
 ## Global constraints
 
 - This plan supersedes the old B0.5 wording to rebuild the reserved demo in place.
-- No seed, submit, save, migration, restart or image replacement against port 18080 or project `ontocurator-t5-acceptance-ready`.
+- No seed, submit, save, migration, restart or image replacement against port 18080 or project `ontotator-t5-acceptance-ready`.
 - No secrets in terminal output, docs or commits. Existing credential files need not be opened for this task.
 - Docker must run; no GitHub Actions. Run `bash scripts/check.sh` from Git Bash, not WSL's `C:\Windows\system32\bash.exe`.
 - Candidate startup requires the local implementation review and complete gates to pass. On 2026-10-18, the local immutable image was prepared alongside the final gate after complete functional evidence and a catalog-only correction; this scheduling ruling risked only a rebuild and changed no demo. Gate12 subsequently passed before candidate startup. Merge/push approval remains outstanding; a local branch candidate is sufficient for a separate preview.
@@ -58,8 +58,8 @@ Completion: image `sha256:74b37290e03e802b281ef0d6dc8639891152f8e84b49e3dba190b8
 
 **Files:** Read `scripts/seed_t5_acceptance.py`; create only ignored files under `build/t5-acceptance/phase0-candidate`. Reuse the existing seeder unchanged unless a verified defect requires a separate tested fix.
 
-- [x] From a clean checkout of the candidate commit, check that loopback ports 18081 and 15544 are free and the project `ontocurator-t5-acceptance-phase0` does not already contain data. If occupied, choose free ports and record them in the new identity; never stop an unrelated service.
-- [x] Run `uv run python scripts/seed_t5_acceptance.py prepare --project ontocurator-t5-acceptance-phase0 --image <digest> --source-sha <full-sha> --app-port 18081 --pg-port 15544 --output-dir build/t5-acceptance/phase0-candidate` with verified actual values. `prepare` requires a clean tree; the user's untracked `.impeccable/critique/` means an isolated clean checkout is appropriate.
+- [x] From a clean checkout of the candidate commit, check that loopback ports 18081 and 15544 are free and the project `ontotator-t5-acceptance-phase0` does not already contain data. If occupied, choose free ports and record them in the new identity; never stop an unrelated service.
+- [x] Run `uv run python scripts/seed_t5_acceptance.py prepare --project ontotator-t5-acceptance-phase0 --image <digest> --source-sha <full-sha> --app-port 18081 --pg-port 15544 --output-dir build/t5-acceptance/phase0-candidate` with verified actual values. `prepare` requires a clean tree; the user's untracked `.impeccable/critique/` means an isolated clean checkout is appropriate.
 - [x] Read the candidate's generated command vectors privately and start exactly that project with its pinned image, environment file and override. Validate all services and named volumes belong to that project. Run `uv run python scripts/seed_t5_acceptance.py seed --output-dir build/t5-acceptance/phase0-candidate` once on that fresh stack.
 - [x] Confirm service health and fixture preparation from the candidate's recorded result without opening or submitting the user's acceptance tasks. No full browser journey runs against this candidate after seeding.
 

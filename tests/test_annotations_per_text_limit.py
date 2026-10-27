@@ -7,9 +7,9 @@ from typing import Any
 import pytest
 from proposal_check_support import BASE, assign, proposal_env, refused_code
 
-from ontocurator.assignments.service import AssignmentService
-from ontocurator.auth.audit import Actor
-from ontocurator.domain.errors import DomainError
+from ontotator.assignments.service import AssignmentService
+from ontotator.auth.audit import Actor
+from ontotator.domain.errors import DomainError
 
 
 def _lead_actor(env: Any) -> Actor:

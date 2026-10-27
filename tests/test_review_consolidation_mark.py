@@ -9,16 +9,16 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from ontocurator.application.consolidation import consolidated_content_sha256
-from ontocurator.domain.annotations import (
+from ontotator.application.consolidation import consolidated_content_sha256
+from ontotator.domain.annotations import (
     ActorRef,
     Annotation,
     AnnotationRef,
     Provenance,
 )
-from ontocurator.domain.canonical import canonical_hash
-from ontocurator.domain.documents import EvidenceRef
-from ontocurator.domain.review import ConsolidationMark, ReviewDecision
+from ontotator.domain.canonical import canonical_hash
+from ontotator.domain.documents import EvidenceRef
+from ontotator.domain.review import ConsolidationMark, ReviewDecision
 
 # canonical_hash(decision().model_dump()) computed on fd667c1, before the mark.
 HASH_BEFORE_MARK = "a88f4f0d628a0dc4437a563923ec4a505ae7773f8a352d3e1543461e69ea3c5a"

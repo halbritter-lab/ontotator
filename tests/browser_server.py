@@ -25,21 +25,21 @@ from ontospan import AnnotatedDocument
 from pg_harness import database_url_for
 from sqlalchemy import select
 
-from ontocurator.api.app import create_app
-from ontocurator.auth.accounts import AccountService
-from ontocurator.auth.audit import Actor
-from ontocurator.authz.memberships import grant_roles
-from ontocurator.authz.policy import ROLES
-from ontocurator.config import AppConfig
-from ontocurator.domain.annotations import ActorRef, Annotation, Provenance, snapshot
-from ontocurator.domain.documents import (
+from ontotator.api.app import create_app
+from ontotator.auth.accounts import AccountService
+from ontotator.auth.audit import Actor
+from ontotator.authz.memberships import grant_roles
+from ontotator.authz.policy import ROLES
+from ontotator.config import AppConfig
+from ontotator.domain.annotations import ActorRef, Annotation, Provenance, snapshot
+from ontotator.domain.documents import (
     Document,
     EvidenceMention,
     EvidenceRef,
     EvidenceSnapshot,
     Segment,
 )
-from ontocurator.domain.profiles import (
+from ontotator.domain.profiles import (
     AnnotationTypeDefinition,
     AxisDefinition,
     LayerDefinition,
@@ -47,8 +47,8 @@ from ontocurator.domain.profiles import (
     TaskProfile,
     profile_hash,
 )
-from ontocurator.exchange.jobs import store_file
-from ontocurator.jobs.queue import Job
+from ontotator.exchange.jobs import store_file
+from ontotator.jobs.queue import Job
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -56,8 +56,8 @@ if str(ROOT) not in sys.path:
 
 from support.v2_import import PackageImportService  # noqa: E402
 
-from ontocurator.packages.models import PackageManifest, ValidatedPackage  # noqa: E402
-from ontocurator.storage.tables import (  # noqa: E402
+from ontotator.packages.models import PackageManifest, ValidatedPackage  # noqa: E402
+from ontotator.storage.tables import (  # noqa: E402
     JobRow,
     ProjectOntologyRow,
     ProjectRow,
@@ -165,7 +165,7 @@ def fixture_package(
     pkg = ValidatedPackage(
         manifest=PackageManifest(
             package_id=project_key,
-            format_version="ontocurator-work-package/v2",
+            format_version="ontotator-work-package/v2",
             document_order=["browser-doc"],
             task_profile=profile,
             task_profile_sha256=profile_hash(profile),
@@ -258,7 +258,7 @@ def design_package() -> ValidatedPackage:
     pkg = ValidatedPackage(
         manifest=PackageManifest(
             package_id="pkg-design-states",
-            format_version="ontocurator-work-package/v2",
+            format_version="ontotator-work-package/v2",
             document_order=[doc.document_id],
             task_profile=profile,
             task_profile_sha256=profile_hash(profile),
@@ -571,9 +571,9 @@ def register_variant_scenario_route(app: FastAPI) -> None:
         from t1_builders import correction_unit, native_unit, translation_unit
         from t1_fixtures import annotation
 
-        from ontocurator.application.translation_reviews import TranslationReviewService
-        from ontocurator.assignments.service import AssignmentService
-        from ontocurator.authz.policy import Access
+        from ontotator.application.translation_reviews import TranslationReviewService
+        from ontotator.assignments.service import AssignmentService
+        from ontotator.authz.policy import Access
 
         db = app.state.repo.db
         key = f"variants-{uuid4().hex[:12]}"
@@ -844,7 +844,7 @@ def register_translation_review_scenario_route(app: FastAPI) -> None:
         from t1_builders import bundle as variant_bundle
         from t1_builders import correction_unit, native_unit, translation_unit
 
-        from ontocurator.assignments.service import AssignmentService
+        from ontotator.assignments.service import AssignmentService
 
         db = app.state.repo.db
         key = f"review-{uuid4().hex[:12]}"
@@ -1035,8 +1035,8 @@ def register_variant_admin_scenario_routes(app: FastAPI) -> None:
 
     @app.get("/__test_review_child__")
     def review_child(project: str, review_id: int) -> dict[str, object]:
-        from ontocurator.exchange.reanchor_job import ReviewProducer
-        from ontocurator.storage.tables import TranslationReviewRow
+        from ontotator.exchange.reanchor_job import ReviewProducer
+        from ontotator.storage.tables import TranslationReviewRow
 
         db = app.state.repo.db
         producer = ReviewProducer(review_id=review_id)
@@ -1109,9 +1109,9 @@ def register_reanchor_scenario_route(app: FastAPI) -> None:
         from t1_builders import correction_unit, native_unit
         from t1_fixtures import PIN, annotation, hpo_profile
 
-        from ontocurator.api.variant_routes import ReanchorItem
-        from ontocurator.assignments.service import AssignmentService
-        from ontocurator.projects.service import ProjectService
+        from ontotator.api.variant_routes import ReanchorItem
+        from ontotator.assignments.service import AssignmentService
+        from ontotator.projects.service import ProjectService
 
         db = app.state.repo.db
         key = f"reanchor-{uuid4().hex[:12]}"
@@ -1285,7 +1285,7 @@ def register_reanchor_scenario_route(app: FastAPI) -> None:
         from auth_harness import harness_annotation
         from sqlalchemy import update
 
-        from ontocurator.storage.tables import AssignmentRow
+        from ontotator.storage.tables import AssignmentRow
 
         service = AssignmentService(db)
         owner = "annotator" if assisted else "adjudicator"

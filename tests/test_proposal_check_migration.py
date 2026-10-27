@@ -11,11 +11,11 @@ from pg_harness import unmigrated_database_url
 from sqlalchemy import Connection, Engine, create_engine, text
 from sqlalchemy.exc import IntegrityError
 
-from ontocurator.storage.schema import alembic_config, upgrade
+from ontotator.storage.schema import alembic_config, upgrade
 
 REVISION = "0021"
 PREVIOUS = "0020"
-S = "ontocurator"
+S = "ontotator"
 
 
 def _exec(conn: Connection, sql: str, **params: Any) -> Any:

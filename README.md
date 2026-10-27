@@ -1,6 +1,6 @@
-# Ontocurator
+# Ontotator
 
-Ontocurator is a self-hosted, multi-user web editor for annotating and reviewing biomedical ontology concepts on clinical text. Users sign in with individual accounts; projects, ontology releases and imports are managed through the administrator CLI.
+Ontotator is a self-hosted, multi-user web editor for annotating and reviewing biomedical ontology concepts on clinical text. Users sign in with individual accounts; projects, ontology releases and imports are managed through the administrator CLI.
 
 The server stores accounts, sessions, projects and annotations in PostgreSQL, with blobs, ontology files, translations and exports on a persistent data volume. The image includes the React frontend and local ontology search. It needs no internet access at runtime. Ontology releases are supplied by the operator.
 
@@ -21,7 +21,7 @@ export GITHUB_TOKEN_FILE=/absolute/path/to/private-github-token
 docker compose -f docker-compose.dev.yml up -d --build --wait
 ```
 
-Open `http://127.0.0.1:8000` and log in as **`admin` / `development-only-password`**. PostgreSQL is bound to `127.0.0.1:55432`. Set `ONTOCURATOR_DEV_PORT` and `ONTOCURATOR_DEV_PG_PORT` before starting to choose other loopback ports; the application origin follows the selected HTTP port. Use `docker compose -f docker-compose.dev.yml` for every command against this stack. Its standalone configuration is not a production override.
+Open `http://127.0.0.1:8000` and log in as **`admin` / `development-only-password`**. PostgreSQL is bound to `127.0.0.1:55432`. Set `ONTOTATOR_DEV_PORT` and `ONTOTATOR_DEV_PG_PORT` before starting to choose other loopback ports; the application origin follows the selected HTTP port. Use `docker compose -f docker-compose.dev.yml` for every command against this stack. Its standalone configuration is not a production override.
 
 ## Curation workflow
 
@@ -39,11 +39,11 @@ npm --prefix frontend ci
 npm --prefix frontend exec -- playwright install chromium
 bash scripts/check.sh
 CHECK_CONTAINERS=1 bash scripts/check.sh
-CHECK_CONTAINERS=1 CHECK_IMAGE=ontocurator:release bash scripts/check.sh
+CHECK_CONTAINERS=1 CHECK_IMAGE=ontotator:release bash scripts/check.sh
 ```
 
-Run the gate from Git Bash, Linux or macOS. It covers linting, formatting, typing, OpenAPI/TypeScript drift, wheel contents, unit tests and browser tests. Docker must be running for the PostgreSQL tests, or `ONTOCURATOR_TEST_PG_URL` must name a disposable test PostgreSQL superuser database. Container checks add browser smoke on the same disposable stack and need Docker and a build secret or a verified reusable image; set `CHECK_IMAGE` to that local image reference. There is no active CI gate; run the local checks before merging. See [local verification](docs/operations.md#local-verification) and the [representative load-test harness](loadtest/README.md). A passing harness test is not a measured performance result.
+Run the gate from Git Bash, Linux or macOS. It covers linting, formatting, typing, OpenAPI/TypeScript drift, wheel contents, unit tests and browser tests. Docker must be running for the PostgreSQL tests, or `ONTOTATOR_TEST_PG_URL` must name a disposable test PostgreSQL superuser database. Container checks add browser smoke on the same disposable stack and need Docker and a build secret or a verified reusable image; set `CHECK_IMAGE` to that local image reference. There is no active CI gate; run the local checks before merging. See [local verification](docs/operations.md#local-verification) and the [representative load-test harness](loadtest/README.md). A passing harness test is not a measured performance result.
 
 ## Licensing
 
-Ontocurator does not bundle ontology releases. Observe the license and citation requirements for every release you load, including the [Human Phenotype Ontology](https://hpo.jax.org/license). Bundled dependencies and third-party code are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Ontotator does not bundle ontology releases. Observe the license and citation requirements for every release you load, including the [Human Phenotype Ontology](https://hpo.jax.org/license). Bundled dependencies and third-party code are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

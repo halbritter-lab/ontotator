@@ -1,10 +1,10 @@
-# T1: Shared Annotation Format (Ontocurator · Phentrieve · Benchmark)
+# T1: Shared Annotation Format (Ontotator · Phentrieve · Benchmark)
 
 As of: 2026-10-14 · Status: **Design agreed** · Part of the roadmap `2026-10-14-roadmap-web-service-analysis.md` (E4, E5, E7)
 
 ## Starting Point
 
-| | Phentrieve sidecar v1 | Benchmark `AnnotationSet` | Ontocurator `annotation/v3` |
+| | Phentrieve sidecar v1 | Benchmark `AnnotationSet` | Ontotator `annotation/v3` |
 |---|---|---|---|
 | Ontology | HPO only (`hpo_id`) | HPO only (`HP:\d{7}`) | any (CURIE, multiple ontologies) |
 | Axes | `assertion` mixed (affirmed/negated/uncertain/family_history/unknown) | separate: assertion/experiencer/temporality | freely configurable |
@@ -67,7 +67,7 @@ As of: 2026-10-14 · Status: **Design agreed** · Part of the roadmap `2026-10-1
 - The restriction is a **project setting**: The manifest lists the allowed root terms as `allowed_roots`.
   - The benchmark project (E3C, rule R0) sets `["HP:0000118"]`.
   - Readers can tell from the manifest for which term space an annotation is complete.
-- Consequence for Ontocurator: search and tree show all subtrees or those of the project. The project filter comes with T3.
+- Consequence for Ontotator: search and tree show all subtrees or those of the project. The project filter comes with T3.
 
 ### F6: Modifiers
 - An annotation carries `modifiers[]` with terms from *Clinical modifier* (HP:0012823, 357 terms). Examples are Severity, Laterality, Onset, Pace of progression, Triggered by and Pain characteristic.
@@ -119,7 +119,7 @@ Hypothetical statements are not annotated. Therefore there is no `future`.
 ### F10: Identity and provenance
 - **Actors:** Persons appear only as a **project-wide stable pseudonym**, e.g. `ann-03`, with `kind: human`.
   - Name and ORCID appear in `contributors[]` only with consent in the user profile.
-  - The mapping from pseudonym to person stays in Ontocurator.
+  - The mapping from pseudonym to person stays in Ontotator.
 - **Tools:** `kind: tool` with `name`, `version` and optionally `model`/`run_id`.
 - **Annotation set:**
   - `set_kind`: `individual`, `stage_result`, `adjudicated`, `release` or `tool_output`.
@@ -129,7 +129,7 @@ Hypothetical statements are not annotated. Therefore there is no `future`.
   - `source_refs[]`: which annotations it originated from.
 
 ### F11: Matching rules
-There is a single implementation in the package. Ontocurator (merge, live agreement) and the benchmark use the same one. For ancestor detection it is passed an ontology hierarchy.
+There is a single implementation in the package. Ontotator (merge, live agreement) and the benchmark use the same one. For ancestor detection it is passed an ontology hierarchy.
 
 - **Normalization of a segment:** Unicode whitespace and punctuation (category `P*`) are trimmed at the edges. The offsets are shifted; the text stays unchanged.
 - **Mentions** are compared as sets of normalized segments:
@@ -152,7 +152,7 @@ There is a single implementation in the package. Ontocurator (merge, live agreem
 
 ### F12: Repo and distribution
 - The package lives in a **new private repo in the user's own GitHub account**. It is developed locally under `Development/<package-name>`.
-- Ontocurator includes it as a Git dependency (uv, pinned commit or tag).
+- Ontotator includes it as a Git dependency (uv, pinned commit or tag).
 - **Consequence:** Public projects such as Phentrieve cannot use a private package as a dependency. For the later Phentrieve and benchmark integration (T7) it will be decided whether the package is published, whether only the JSON Schema is exported, or whether Phentrieve vendors it. Until then **the JSON Schema is the binding contract**.
 
 ## Sketch of a Unit (informative, not normative)
@@ -212,7 +212,7 @@ The offsets in the sketch have been verified. The JSON Schema and fixtures of th
 
 - Translation or document variants (language × version) as a model. This comes with T5. For this the format only needs `document_id`, `language` and hashes. Optional references such as `variant_of` and `previous_text_sha256` are added in T5.
 - Migrating Phentrieve and the benchmark to the format (T7).
-- Ontocurator's storage model (T2). Ontocurator exports and imports this format but stores data internally according to its own schema.
+- Ontotator's storage model (T2). Ontotator exports and imports this format but stores data internally according to its own schema.
 
 ## Notes for Later Migrations (not format decisions)
 
@@ -234,7 +234,7 @@ The offsets in the sketch have been verified. The JSON Schema and fixtures of th
 
 - **Package name:** `ontospan`, import `ontospan`. Developed under `Development/ontospan`.
 - **Layers inside the unit:** a single annotated document must be self-describing, because Phentrieve writes single units. Therefore `annotation_set.layers[]` declares each layer: `layer_id`, `profile`, ontology resource and `allowed_roots`. The bundle manifest repeats the union of all layers. Units whose layers conflict with each other cannot form a bundle.
-- **Ontology `sha256` is optional in the format.** Tools that know only a release version (e.g. Phentrieve's HPO database) can still write valid units. Ontocurator always sets it, and releases carry it.
+- **Ontology `sha256` is optional in the format.** Tools that know only a release version (e.g. Phentrieve's HPO database) can still write valid units. Ontotator always sets it, and releases carry it.
 - **Phenopacket export without a hard dependency:** the export builds the protobuf-JSON structure directly. The `[phenopacket]` extra only adds validation against the official `phenopackets` classes.
 
 ## Changes After the Plan Review (2026-10-14, `reviews/2026-10-14-t0-t1-plan-review.md`)

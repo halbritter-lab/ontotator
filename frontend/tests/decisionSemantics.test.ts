@@ -4,7 +4,7 @@ import type { AnnotationSnapshot, Draft } from "../src/api/client";
 import { defaultedResults, resultSnapshots } from "../src/editor/decisionSemantics";
 
 const snap = (id: string, version = "v1", defaults: string[] = []): AnnotationSnapshot => ({
-  schema_version: "ontocurator-annotation/v3", ontology_sha256: "ontology", layer_config_sha256: "layer",
+  schema_version: "ontotator-annotation/v3", ontology_sha256: "ontology", layer_config_sha256: "layer",
   annotation: { document_id: "doc", annotation_id: id, layer_id: "hidden", type_id: "finding", term_id: "HP:0001252",
     axes_values: {}, axes_defaulted: defaults, evidence_refs: [],
     provenance: { actor: { actor_id: "curator", kind: "human" }, method: "manual", source_refs: [] } },

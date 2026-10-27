@@ -22,7 +22,7 @@ export interface MyTasksProps {
   username?: string;
 }
 
-const projectFilterKey = (username: string) => `ontocurator.myTasks.project.v1:${username}`;
+const projectFilterKey = (username: string) => `ontotator.myTasks.project.v1:${username}`;
 
 /** Status tabs in order; "To do" is the same set as the nav count (every status but submitted, paused included). */
 const statusTabs: { id: TaskStatusTab; label: string; empty: string; matches: (task: TaskSummary) => boolean }[] = [

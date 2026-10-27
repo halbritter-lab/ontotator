@@ -32,7 +32,7 @@ from browser_lead_workflow_scenarios import (
 from fastapi import FastAPI, HTTPException, Query
 from sqlalchemy import update
 
-from ontocurator.storage.tables import ProjectRow
+from ontotator.storage.tables import ProjectRow
 
 ANNOTATE_CASES = ("guide-0001", "guide-0002")
 REVIEW_CASE = ANNOTATE_CASES[0]
@@ -146,7 +146,7 @@ def build_empty(app: FastAPI) -> dict[str, Any]:
 
 def build_published(app: FastAPI) -> dict[str, Any]:
     """As ``EMPTY`` plus v1 published by the lead; Ana and Ben have not seen it."""
-    from ontocurator.application.guidelines import GuidelineService
+    from ontotator.application.guidelines import GuidelineService
 
     scenario, built = build_empty_project(app, "PUBLISHED")
     _access, actor = identity(scenario, "lead")

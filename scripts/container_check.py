@@ -116,7 +116,7 @@ class Stack:
         self.env = dict(os.environ)
         self.files = [str(ROOT / "docker-compose.dev.yml")]
         self.reservations: list[socket.socket] = []
-        for variable in ("ONTOCURATOR_DEV_PORT", "ONTOCURATOR_DEV_PG_PORT"):
+        for variable in ("ONTOTATOR_DEV_PORT", "ONTOTATOR_DEV_PG_PORT"):
             reservation = socket.socket()
             reservation.bind(("127.0.0.1", 0))
             self.reservations.append(reservation)
@@ -176,11 +176,11 @@ class Stack:
         self.compose(*args)
         # Reuse the image just built when the schema scenario recreates services.
         if self.image is None:
-            self.image = "ontocurator-dev:local"
+            self.image = "ontotator-dev:local"
 
     @property
     def host(self) -> str:
-        return f"http://127.0.0.1:{self.env['ONTOCURATOR_DEV_PORT']}"
+        return f"http://127.0.0.1:{self.env['ONTOTATOR_DEV_PORT']}"
 
     def down(self) -> None:
         for reservation in self.reservations:
@@ -233,17 +233,17 @@ print(json.dumps([response.status, json.load(response)]))
                 {
                     "services": {
                         "migrate": {
-                            "environment": {"ONTOCURATOR_MIGRATE_TARGET": "0001"}
+                            "environment": {"ONTOTATOR_MIGRATE_TARGET": "0001"}
                         },
                         "app": {
                             "environment": {
-                                "ONTOCURATOR_ENV": "production",
-                                "ONTOCURATOR_PUBLIC_ORIGIN": "https://container-check.invalid",
-                                "ONTOCURATOR_TRUSTED_PROXIES": "127.0.0.1",
-                                "ONTOCURATOR_ADMIN_PASSWORD_HASH": None,
-                                "ONTOCURATOR_ADMIN_PASSWORD_HASH_FILE": "/run/check-admin-password-hash",
-                                "ONTOCURATOR_DATABASE_URL": "postgresql://ontocurator_app@postgres:5432/ontocurator",
-                                "ONTOCURATOR_DATABASE_PASSWORD_FILE": "/run/check-app-password",
+                                "ONTOTATOR_ENV": "production",
+                                "ONTOTATOR_PUBLIC_ORIGIN": "https://container-check.invalid",
+                                "ONTOTATOR_TRUSTED_PROXIES": "127.0.0.1",
+                                "ONTOTATOR_ADMIN_PASSWORD_HASH": None,
+                                "ONTOTATOR_ADMIN_PASSWORD_HASH_FILE": "/run/check-admin-password-hash",
+                                "ONTOTATOR_DATABASE_URL": "postgresql://ontotator_app@postgres:5432/ontotator",
+                                "ONTOTATOR_DATABASE_PASSWORD_FILE": "/run/check-app-password",
                             },
                             "volumes": [
                                 {
@@ -263,8 +263,8 @@ print(json.dumps([response.status, json.load(response)]))
                     }
                 }
             ).replace(
-                '"ONTOCURATOR_ADMIN_PASSWORD_HASH": null',
-                '"ONTOCURATOR_ADMIN_PASSWORD_HASH": !reset null',
+                '"ONTOTATOR_ADMIN_PASSWORD_HASH": null',
+                '"ONTOTATOR_ADMIN_PASSWORD_HASH": !reset null',
             )
         )
         self.files.append(str(override))
@@ -333,9 +333,9 @@ def main() -> int:
                 inspection["HostConfig"]["CapDrop"] == ["ALL"],
             )
             env = stack.env | {
-                "ONTOCURATOR_IMAGE": args.image or "ontocurator-dev:local",
-                "ONTOCURATOR_PUBLIC_ORIGIN": "https://container-check.invalid",
-                "ONTOCURATOR_TRUSTED_PROXIES": "127.0.0.1",
+                "ONTOTATOR_IMAGE": args.image or "ontotator-dev:local",
+                "ONTOTATOR_PUBLIC_ORIGIN": "https://container-check.invalid",
+                "ONTOTATOR_TRUSTED_PROXIES": "127.0.0.1",
             }
             production = run(
                 [
@@ -357,13 +357,13 @@ def main() -> int:
                 "postgres",
                 "psql",
                 "-U",
-                "ontocurator_app",
+                "ontotator_app",
                 "-d",
-                "ontocurator",
+                "ontotator",
                 "-v",
                 "ON_ERROR_STOP=1",
                 "-c",
-                "UPDATE ontocurator.submissions SET mode='x'",
+                "UPDATE ontotator.submissions SET mode='x'",
                 check=False,
             )
             report(
@@ -371,11 +371,11 @@ def main() -> int:
                 denied.returncode != 0
                 and "permission denied for table submissions" in denied.stderr,
             )
-            migration = stack.exec("app", "ontocurator", "db", "upgrade", check=False)
+            migration = stack.exec("app", "ontotator", "db", "upgrade", check=False)
             report(
                 "app cannot run owner migrations",
                 migration.returncode == 1
-                and "ONTOCURATOR_MIGRATION_DATABASE_URL is not set"
+                and "ONTOTATOR_MIGRATION_DATABASE_URL is not set"
                 in migration.stdout + migration.stderr,
             )
             stack.compose("stop", "postgres")

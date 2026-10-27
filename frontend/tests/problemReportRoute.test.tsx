@@ -59,7 +59,7 @@ const report: ProblemReportView = reportFixture({ report_id: 'report-1', project
   holds: [ownHold()] });
 const released: ProblemReportView = { ...report, revision: 3, held_assignment_ids: [], holds: [ownHold({ active: false, release_action: 'resume', released_by_label: 'Lead' })] };
 const documents = { decision: 'all', language: 'en', open: ['case 7:en'] };
-const visitKey = `ontocurator:documents-visit:p/key:${JSON.stringify({ decision: 'all' })}`;
+const visitKey = `ontotator:documents-visit:p/key:${JSON.stringify({ decision: 'all' })}`;
 const snapshot = { categories: ['report'], work: [], final: null, reports: [] };
 const decided = () => JSON.parse(window.sessionStorage.getItem(visitKey) ?? '{}').decided;
 

@@ -30,14 +30,14 @@ from fastapi.testclient import TestClient
 from pg_harness import database_url_for
 from sqlalchemy import select as sa_select
 
-from ontocurator.api.app import create_app
-from ontocurator.application.document_rows import DocumentRowsService, RowQuery
-from ontocurator.auth.audit import Actor
-from ontocurator.config import AppConfig
-from ontocurator.domain.errors import DomainError
-from ontocurator.domain.work_plans import PlanFlags, RowKey
-from ontocurator.storage import work_plan_store as store
-from ontocurator.storage.tables import AssignmentRow, AuditEventRow, ProjectRow
+from ontotator.api.app import create_app
+from ontotator.application.document_rows import DocumentRowsService, RowQuery
+from ontotator.auth.audit import Actor
+from ontotator.config import AppConfig
+from ontotator.domain.errors import DomainError
+from ontotator.domain.work_plans import PlanFlags, RowKey
+from ontotator.storage import work_plan_store as store
+from ontotator.storage.tables import AssignmentRow, AuditEventRow, ProjectRow
 
 CASE = "case-0042"
 
@@ -97,7 +97,7 @@ def _pid(scenario: Scenario) -> int:
 
 
 def _assign(scenario: Scenario, **kwargs: Any) -> Any:
-    from ontocurator.assignments.service import AssignmentService
+    from ontotator.assignments.service import AssignmentService
 
     _access, actor = identity(scenario, "lead")
     return AssignmentService(scenario.db).assign(
@@ -128,7 +128,7 @@ def _codes(row: dict[str, Any]) -> list[str]:
 
 
 def _batch(scenario: Scenario, review_reason: str | None) -> tuple[Any, Any]:
-    from ontocurator.assignments.batch import BatchAssignmentService, BatchSpec
+    from ontotator.assignments.batch import BatchAssignmentService, BatchSpec
 
     access, actor = identity(scenario, "lead")
     service = BatchAssignmentService(scenario.db, actor, access)
@@ -203,8 +203,8 @@ def test_batch_assign_review_with_source_changed(app):
 
 
 def test_batch_commit_derives_source_obligations_once(app, monkeypatch):
-    import ontocurator.assignments.service as assignment_service
-    from ontocurator.domain import work_rounds
+    import ontotator.assignments.service as assignment_service
+    from ontotator.domain import work_rounds
 
     scenario = _project(app, "source-batch-once")
     service, spec = _batch(scenario, "source_changed")
@@ -285,7 +285,7 @@ def test_turns_review_on_with_audit(app):
 
 
 def test_accepting_resolves_the_obligation_and_clears_6a(app):
-    from ontocurator.application.translation_workflow import (
+    from ontotator.application.translation_workflow import (
         TranslationWorkflowService,
     )
 
@@ -317,7 +317,7 @@ def test_accepting_resolves_the_obligation_and_clears_6a(app):
     assert not [i for i in row["issues"] if i["code"] == "SOURCE_UPDATE_UNREVIEWED"]
     # Resolved: a second source-change review is not needed any more.
     with pytest.raises(DomainError) as refused:
-        from ontocurator.assignments.service import AssignmentService
+        from ontotator.assignments.service import AssignmentService
 
         AssignmentService(scenario.db).assign(
             Actor.cli(),

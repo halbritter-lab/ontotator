@@ -11,19 +11,19 @@ from test_proposal_queries import checker as checker
 from test_reanchor_resolutions import from_proposals
 from test_reviews import _setup_review_test_env
 
-from ontocurator.application.editing import CheckLayerCommand
-from ontocurator.application.reviews import DecisionCommand
-from ontocurator.application.submissions import SubmitCommand
-from ontocurator.application.work_rounds import require_independent
-from ontocurator.assignments.service import TASK_FOR_MODE
-from ontocurator.authz.policy import MODE_ACTIONS, MODE_ORDER, ROLE_ACTIONS, Action
-from ontocurator.domain.errors import DomainError, IncompleteReview
-from ontocurator.domain.scopes import build_scope, is_review_like
-from ontocurator.domain.submission_labels import submission_kind
-from ontocurator.domain.workspace import MutationEnvelope, WorkspaceKey
-from ontocurator.storage.proposal_queries import newest_proposal_refs
-from ontocurator.storage.repository import Repository
-from ontocurator.storage.tables import DocumentRow
+from ontotator.application.editing import CheckLayerCommand
+from ontotator.application.reviews import DecisionCommand
+from ontotator.application.submissions import SubmitCommand
+from ontotator.application.work_rounds import require_independent
+from ontotator.assignments.service import TASK_FOR_MODE
+from ontotator.authz.policy import MODE_ACTIONS, MODE_ORDER, ROLE_ACTIONS, Action
+from ontotator.domain.errors import DomainError, IncompleteReview
+from ontotator.domain.scopes import build_scope, is_review_like
+from ontotator.domain.submission_labels import submission_kind
+from ontotator.domain.workspace import MutationEnvelope, WorkspaceKey
+from ontotator.storage.proposal_queries import newest_proposal_refs
+from ontotator.storage.repository import Repository
+from ontotator.storage.tables import DocumentRow
 
 
 def _key(annotator: str = "checker-1") -> WorkspaceKey:
@@ -232,8 +232,8 @@ def test_review_inputs_offer_the_newest_set_to_an_annotator_from_proposals(check
 def test_open_refuses_targets_outside_the_newest_set(checker, tmp_path: Path):
     from t1_fixtures import annotation, bundle, run_import, unit
 
-    from ontocurator.domain.annotations import AnnotationRef
-    from ontocurator.domain.review import ReviewTargetSet
+    from ontotator.domain.annotations import AnnotationRef
+    from ontotator.domain.review import ReviewTargetSet
 
     old = _newest(checker)
     later = unit("EN100017", set_id="set-b", annotations=[annotation("p3", (63, 76))])

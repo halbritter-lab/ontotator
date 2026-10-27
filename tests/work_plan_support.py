@@ -12,9 +12,9 @@ from typing import Any
 
 from sqlalchemy import select, update
 
-from ontocurator.domain.work_plans import PlanFlags, RowKey
-from ontocurator.storage import work_plan_store as store
-from ontocurator.storage.repository import Repository
+from ontotator.domain.work_plans import PlanFlags, RowKey
+from ontotator.storage import work_plan_store as store
+from ontotator.storage.repository import Repository
 
 
 def plan_all(db: Any, key: str) -> None:
@@ -51,7 +51,7 @@ def plan_env(tmp_path: Any, *, rule_on: bool = True) -> SimpleNamespace:
     from t1_fixtures import TEXT, create_project, run_import
     from test_auth_api import _app
 
-    from ontocurator.storage.tables import ProjectRow
+    from ontotator.storage.tables import ProjectRow
 
     app = _app(tmp_path)
     db = app.state.repo.db
@@ -97,7 +97,7 @@ def plan_env(tmp_path: Any, *, rule_on: bool = True) -> SimpleNamespace:
 
 
 def set_rule(db: Any, rule_on: bool) -> None:
-    from ontocurator.storage.tables import ProjectRow
+    from ontotator.storage.tables import ProjectRow
 
     with db.transaction() as conn:
         conn.execute(
@@ -109,10 +109,10 @@ def set_rule(db: Any, rule_on: bool) -> None:
 
 def service(env: Any, username: str = "leader") -> Any:
     """A WorkPlanService acting as ``username`` with its current roles."""
-    from ontocurator.application.work_plans import WorkPlanService
-    from ontocurator.auth.audit import Actor
-    from ontocurator.authz.policy import Access
-    from ontocurator.storage.tables import ProjectMembershipRow, ProjectRow
+    from ontotator.application.work_plans import WorkPlanService
+    from ontotator.auth.audit import Actor
+    from ontotator.authz.policy import Access
+    from ontotator.storage.tables import ProjectMembershipRow, ProjectRow
 
     user = env.app.state.accounts.get_by_username(username)
     roles: dict[str, set[str]] = {}
@@ -137,9 +137,9 @@ def review_task(
 ) -> Any:
     """Task ``review`` the way only a consolidation start creates it (D1):
     ``_assign_locked`` with its checks; the public ``assign`` refuses it."""
-    from ontocurator.assignments.service import AssignmentService
-    from ontocurator.auth.audit import Actor
-    from ontocurator.storage.tables import ProjectRow
+    from ontotator.assignments.service import AssignmentService
+    from ontotator.auth.audit import Actor
+    from ontotator.storage.tables import ProjectRow
 
     service = AssignmentService(db)
     with db.transaction() as conn:
@@ -156,8 +156,8 @@ def review_task(
 
 def assign(env: Any, document_id: str, username: str, task: str, **extra: Any) -> int:
     """Assign through the real service as the lead; returns the assignment ID."""
-    from ontocurator.assignments.service import AssignmentService
-    from ontocurator.auth.audit import Actor
+    from ontotator.assignments.service import AssignmentService
+    from ontotator.auth.audit import Actor
 
     lead = env.app.state.accounts.get_by_username("leader")
     if task == "review" and not extra:
@@ -203,10 +203,10 @@ def submit(env: Any, assignment_id: int, submission_id: str) -> None:
     """Record a submission for the assignment's user and mark it submitted."""
     from sqlalchemy import select as sa_select
 
-    from ontocurator.domain.review import ReviewTargetSet
-    from ontocurator.domain.workspace import Submission, WorkspaceKey
-    from ontocurator.storage.repository import _key_str
-    from ontocurator.storage.tables import AssignmentRow, UserRow
+    from ontotator.domain.review import ReviewTargetSet
+    from ontotator.domain.workspace import Submission, WorkspaceKey
+    from ontotator.storage.repository import _key_str
+    from ontotator.storage.tables import AssignmentRow, UserRow
 
     with env.db.transaction() as conn:
         row = conn.execute(

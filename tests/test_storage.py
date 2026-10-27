@@ -4,22 +4,22 @@ from pathlib import Path
 import pytest
 from pg_harness import count_rows, database_for
 
-from ontocurator.domain.annotations import (
+from ontotator.domain.annotations import (
     ActorRef,
     Annotation,
     Provenance,
     snapshot,
 )
-from ontocurator.domain.canonical import canonical_hash
-from ontocurator.domain.documents import (
+from ontotator.domain.canonical import canonical_hash
+from ontotator.domain.documents import (
     Document,
     EvidenceMention,
     EvidenceRef,
     EvidenceSnapshot,
     Segment,
 )
-from ontocurator.domain.errors import InvalidPackage, RevisionConflict
-from ontocurator.domain.profiles import (
+from ontotator.domain.errors import InvalidPackage, RevisionConflict
+from ontotator.domain.profiles import (
     AnnotationTypeDefinition,
     AxisDefinition,
     LayerDefinition,
@@ -27,15 +27,15 @@ from ontocurator.domain.profiles import (
     TaskProfile,
     profile_hash,
 )
-from ontocurator.domain.review import ReviewTargetSet
-from ontocurator.domain.workspace import (
+from ontotator.domain.review import ReviewTargetSet
+from ontotator.domain.workspace import (
     Draft,
     MutationEnvelope,
     Submission,
     WorkspaceKey,
 )
-from ontocurator.packages.models import PackageManifest, ValidatedPackage
-from ontocurator.storage.repository import Repository
+from ontotator.packages.models import PackageManifest, ValidatedPackage
+from ontotator.storage.repository import Repository
 
 HP_DIGEST = "279123a1ae5314e4632a0f85be2d82efd50f44ebf0d98e0100ed6859d7cb83e4"
 
@@ -129,7 +129,7 @@ def _sample_package(pkg_id: str = "pkg-1") -> ValidatedPackage:
 
     manifest = PackageManifest(
         package_id=pkg_id,
-        format_version="ontocurator-work-package/v2",
+        format_version="ontotator-work-package/v2",
         document_order=["doc-1"],
         task_profile=profile,
         task_profile_sha256=profile_hash(profile),

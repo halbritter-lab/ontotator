@@ -9,13 +9,13 @@ from support.v2_reader import read_package
 from support.v2_writer import PackageWriter
 from test_reviews import _setup_review_test_env
 
-from ontocurator.application.editing import CreateAnnotationCommand
-from ontocurator.application.workspaces import WorkspaceService
-from ontocurator.domain.annotations import AnnotationRef
-from ontocurator.domain.errors import DomainError, InvalidPackage
-from ontocurator.domain.review import ReviewTargetSet
-from ontocurator.domain.workspace import MutationEnvelope, WorkspaceKey
-from ontocurator.storage.repository import Repository
+from ontotator.application.editing import CreateAnnotationCommand
+from ontotator.application.workspaces import WorkspaceService
+from ontotator.domain.annotations import AnnotationRef
+from ontotator.domain.errors import DomainError, InvalidPackage
+from ontotator.domain.review import ReviewTargetSet
+from ontotator.domain.workspace import MutationEnvelope, WorkspaceKey
+from ontotator.storage.repository import Repository
 
 
 def mutation(revision, payload):
@@ -152,7 +152,7 @@ def test_review_round_continues_after_export_reimport(tmp_path):
         AnnotationRef(annotation_id=a.annotation.annotation_id, version=a.version)
         for a in clean.list_annotations_for_document(project_key, ws_key.document_id)
     ]
-    from ontocurator.application.submissions import SubmissionService
+    from ontotator.application.submissions import SubmissionService
 
     continued = SubmissionService(clean).submit(
         resumed.key,
@@ -200,7 +200,7 @@ def test_decision_switch_discards_adopted_copy_but_keeps_authored_finding(tmp_pa
 
 
 def test_decision_switch_preserves_independent_unattached_evidence(tmp_path):
-    from ontocurator.domain.documents import EvidenceMention, EvidenceSnapshot, Segment
+    from ontotator.domain.documents import EvidenceMention, EvidenceSnapshot, Segment
 
     ctx = _setup_review_test_env(tmp_path)
     ws_key, ref, _ = changed_review(ctx)
@@ -362,7 +362,7 @@ def test_status_uses_revision_even_when_last_clock_is_older(tmp_path):
     tamper(
         ctx["repo"].db,
         "submissions",
-        "UPDATE ontocurator.submissions SET created_at = :at WHERE submission_id = :id",
+        "UPDATE ontotator.submissions SET created_at = :at WHERE submission_id = :id",
         at="2099-01-01",
         id=first.submission_id,
     )
@@ -418,7 +418,7 @@ def test_import_rejects_inconsistent_review_results(tmp_path, outcome):
 def test_latest_selection_preserves_full_origins_and_rejects_equal_revision_conflicts(
     tmp_path,
 ):
-    from ontocurator.domain.results import latest_submissions
+    from ontotator.domain.results import latest_submissions
 
     ctx = _setup_review_test_env(tmp_path)
     ws_key, _, _ = changed_review(ctx)

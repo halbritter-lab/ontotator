@@ -1,6 +1,6 @@
 """Generate aggregate third-party license notices for distributed artifacts.
 
-* Python: the runtime dependency closure of ``ontocurator`` as installed in the
+* Python: the runtime dependency closure of ``ontotator`` as installed in the
   current (build) environment, read via ``importlib.metadata`` - license
   metadata plus the full text of every license/notice file the wheel ships.
 * npm: the production (non-dev) packages from ``frontend/package-lock.json``
@@ -39,7 +39,7 @@ def _canonical(name: str) -> str:
     return re.sub(r"[-_.]+", "-", name).lower()
 
 
-def python_runtime_closure(root: str = "ontocurator") -> list[metadata.Distribution]:
+def python_runtime_closure(root: str = "ontotator") -> list[metadata.Distribution]:
     """Installed distributions required (transitively) by ``root`` at runtime."""
     seen: dict[str, metadata.Distribution] = {}
     stack = [root]
@@ -79,7 +79,7 @@ def _python_license(dist: metadata.Distribution) -> str:
     return "see license text below" if lic else "UNKNOWN"
 
 
-def python_notices(root: str = "ontocurator") -> list[PackageNotice]:
+def python_notices(root: str = "ontotator") -> list[PackageNotice]:
     notices = []
     for dist in python_runtime_closure(root):
         md = dist.metadata
@@ -170,7 +170,7 @@ def write_notices(
     py.write_text(
         render(
             "Bundled Python packages",
-            "Runtime dependencies of Ontocurator included in this distribution.",
+            "Runtime dependencies of Ontotator included in this distribution.",
             python_notices(),
         ),
         encoding="utf-8",
@@ -198,7 +198,7 @@ def write_notices(
         npm.write_text(
             render(
                 "Bundled JavaScript packages",
-                "Production npm packages compiled into the Ontocurator web UI.",
+                "Production npm packages compiled into the Ontotator web UI.",
                 npm_notices(frontend_dir or REPO_ROOT / "frontend"),
             ),
             encoding="utf-8",

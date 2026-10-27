@@ -131,7 +131,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ notice, overlay = fals
       )}
       {view === "login" ? (
         <form aria-labelledby="login-title" onSubmit={submitLogin} className="login-form">
-          <h1 id="login-title" ref={headingRef} tabIndex={-1}>Log in to Ontocurator</h1>
+          <h1 id="login-title" ref={headingRef} tabIndex={-1}>Log in to Ontotator</h1>
           {info && <InlineMessage tone="info">{info}</InlineMessage>}
           <TextInput
             id="login-username"

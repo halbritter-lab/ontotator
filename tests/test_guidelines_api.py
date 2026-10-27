@@ -9,7 +9,7 @@ from starlette.datastructures import UploadFile
 from test_auth_api import _app
 from test_projects_api import create_project
 
-from ontocurator.storage.guideline_tables import GuidelineVersionRow
+from ontotator.storage.guideline_tables import GuidelineVersionRow
 
 KEY = "phenotypes"
 BASE = f"/api/v1/projects/{KEY}/guidelines"

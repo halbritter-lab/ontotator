@@ -1,6 +1,6 @@
 **Important — An authorized tree expansion can modify a foreign project.**
 
-Location: [src/ontocurator/authz/scoped.py:290](C:/Users/jan-p/Development/ontocurator/.worktrees/t2c-projects-authorization-audit/src/ontocurator/authz/scoped.py:290), delegating to [storage/repository.py:1684](C:/Users/jan-p/Development/ontocurator/.worktrees/t2c-projects-authorization-audit/src/ontocurator/storage/repository.py:1684) and [storage/repository.py:1709](C:/Users/jan-p/Development/ontocurator/.worktrees/t2c-projects-authorization-audit/src/ontocurator/storage/repository.py:1709).
+Location: [src/ontotator/authz/scoped.py:290](C:/Users/jan-p/Development/ontocurator/.worktrees/t2c-projects-authorization-audit/src/ontotator/authz/scoped.py:290), delegating to [storage/repository.py:1684](C:/Users/jan-p/Development/ontocurator/.worktrees/t2c-projects-authorization-audit/src/ontotator/storage/repository.py:1684) and [storage/repository.py:1709](C:/Users/jan-p/Development/ontocurator/.worktrees/t2c-projects-authorization-audit/src/ontotator/storage/repository.py:1709).
 
 The scoped method checks permission for the supplied workspace’s project, but the underlying method locks and updates **every row with the event ID**, across all projects.
 

@@ -8,7 +8,7 @@ const props = (value: string, options = ["present", "absent"]): AnnotationPanelP
     annotation: { annotation_id: "a", document_id: "d", layer_id: "l", type_id: "t", term_id: "TERM:1",
       axes_values: { presence: value }, axes_defaulted: ["presence"], evidence_refs: [],
       provenance: { actor: { actor_id: "tool", kind: "tool" }, method: "import" } },
-    schema_version: "ontocurator-annotation/v3", evidence: [], document_id: "d", version: "v",
+    schema_version: "ontotator-annotation/v3", evidence: [], document_id: "d", version: "v",
     text_sha256: "t", ontology_sha256: "o", layer_config_sha256: "l",
   },
   allEvidence: {}, workspaceKey: { project_key: "p", document_id: "d", annotator_id: "a", mode: "independent", scope_id: "s", target_set_id: "t" },

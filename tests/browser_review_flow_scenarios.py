@@ -29,8 +29,8 @@ from browser_lead_workflow_scenarios import (
 from fastapi import FastAPI, HTTPException, Query
 from sqlalchemy import update
 
-from ontocurator.auth.audit import Actor
-from ontocurator.storage.tables import ProjectRow
+from ontotator.auth.audit import Actor
+from ontotator.storage.tables import ProjectRow
 
 REVIEW_CASES = ("failed-translation", "second-translation")
 SOURCE_TEXT = "\n\n".join(

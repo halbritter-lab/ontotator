@@ -58,7 +58,7 @@ commands, timings, exit codes and source identity.
 
 The refreshed embedded frontend contains 31 assets, including font licenses.
 Its files match the frontend build byte-for-byte. Fresh image
-`ontocurator:t3a-final-retry` has ID
+`ontotator:t3a-final-retry` has ID
 `sha256:e32a5fa3ea217e02249f10c52050598c380382b1ecaf67c0acb260004aeb981c`
 and revision label equal to the accepted source above. An actual installed-image
 hash comparison matched all 107 Python files and all 31 web files, with no missing

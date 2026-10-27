@@ -12,15 +12,15 @@ from test_review_roundtrip_regressions import registry
 from test_reviews import _setup_review_test_env
 from test_scientific_review_integrity import changed_review, submit
 
-from ontocurator.application.editing import CreateAnnotationCommand, EditorService
-from ontocurator.application.submissions import SubmissionService
-from ontocurator.application.workspaces import WorkspaceService
-from ontocurator.domain.annotations import AnnotationRef, snapshot
-from ontocurator.domain.errors import DomainError, InvalidPackage
-from ontocurator.domain.review import ReviewDecision, ReviewTargetSet
-from ontocurator.domain.scopes import build_scope
-from ontocurator.domain.workspace import MutationEnvelope, Submission, WorkspaceKey
-from ontocurator.storage.repository import Repository
+from ontotator.application.editing import CreateAnnotationCommand, EditorService
+from ontotator.application.submissions import SubmissionService
+from ontotator.application.workspaces import WorkspaceService
+from ontotator.domain.annotations import AnnotationRef, snapshot
+from ontotator.domain.errors import DomainError, InvalidPackage
+from ontotator.domain.review import ReviewDecision, ReviewTargetSet
+from ontotator.domain.scopes import build_scope
+from ontotator.domain.workspace import MutationEnvelope, Submission, WorkspaceKey
+from ontotator.storage.repository import Repository
 
 
 def archive_roundtrip(package):

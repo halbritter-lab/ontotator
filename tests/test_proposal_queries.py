@@ -14,15 +14,15 @@ from test_auth_api import _app
 from test_reanchor_resolutions import from_proposals
 from test_reviews import _setup_review_test_env
 
-from ontocurator.authz.policy import Access
-from ontocurator.authz.versions import may_read_proposals
-from ontocurator.storage.proposal_queries import (
+from ontotator.authz.policy import Access
+from ontotator.authz.versions import may_read_proposals
+from ontotator.storage.proposal_queries import (
     newest_proposal_counts,
     newest_proposal_refs,
     newest_proposal_set,
 )
-from ontocurator.storage.repository import Repository
-from ontocurator.storage.tables import ProposalAnnotationRow
+from ontotator.storage.repository import Repository
+from ontotator.storage.tables import ProposalAnnotationRow
 
 OTHER_TEXT = "Kleinwuchs und Krampfanfälle seit der Geburt."
 

@@ -11,7 +11,7 @@ from test_reanchor_resolutions import from_proposals, from_scratch, opened
 from test_reanchor_resolutions import pending as pending
 from test_reanchor_resolutions import runtime as runtime
 
-from ontocurator.storage.tables import AssignmentRow, EditEventRow
+from ontotator.storage.tables import AssignmentRow, EditEventRow
 
 
 def envelope(payload, revision=0, mutation="resolve"):
@@ -170,8 +170,8 @@ def test_recreate_preserves_verified_absent_historical_axes_and_defaults(
     if finish == "submit_and_export":
         from test_reanchor_resolution_roundtrip import submitted
 
-        from ontocurator.domain.workspace import Submission
-        from ontocurator.exchange.t1 import layers_for, submission_to_unit
+        from ontotator.domain.workspace import Submission
+        from ontotator.exchange.t1 import layers_for, submission_to_unit
 
         linked = resolve(
             runtime,
@@ -335,7 +335,7 @@ def test_independent_workspace_cannot_recreate_or_resolve(pending):
 def test_forged_correction_lineage_cannot_recreate(pending):
     from pg_harness import owner_engine
 
-    from ontocurator.storage.tables import DocumentRow
+    from ontotator.storage.tables import DocumentRow
 
     view = opened(pending).json()
     with owner_engine(pending.db).begin() as conn:
@@ -360,7 +360,7 @@ def test_diagnostic_source_mismatch_can_be_dismissed_but_not_recreated(pending, 
     tamper(
         pending.db,
         "annotation_snapshots",
-        "UPDATE ontocurator.annotation_snapshots SET payload = jsonb_set(payload, CAST(:path AS text[]), '\"diagnostic-mismatch\"') WHERE annotation_id = :aid AND version = :version",
+        "UPDATE ontotator.annotation_snapshots SET payload = jsonb_set(payload, CAST(:path AS text[]), '\"diagnostic-mismatch\"') WHERE annotation_id = :aid AND version = :version",
         path=path,
         aid=source["annotation_id"],
         version=source["version"],

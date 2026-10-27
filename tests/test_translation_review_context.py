@@ -4,10 +4,10 @@ from dataclasses import replace
 
 import pytest
 
-from ontocurator.assignments.proposals import validate_selection
-from ontocurator.authz.policy import Access, may_take
-from ontocurator.domain.errors import DomainError
-from ontocurator.domain.variants import (
+from ontotator.assignments.proposals import validate_selection
+from ontotator.authz.policy import Access, may_take
+from ontotator.domain.errors import DomainError
+from ontotator.domain.variants import (
     VariantInfo,
     resolve_translation_lineage,
     translation_review_comparisons,

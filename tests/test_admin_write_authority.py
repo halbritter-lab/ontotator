@@ -12,9 +12,9 @@ from fastapi import FastAPI
 from sqlalchemy import select, text
 from test_auth_api import _app
 
-from ontocurator.api import admin_routes
-from ontocurator.auth import accounts as accounts_module
-from ontocurator.storage.tables import AuditEventRow, OneTimeCodeRow
+from ontotator.api import admin_routes
+from ontotator.auth import accounts as accounts_module
+from ontotator.storage.tables import AuditEventRow, OneTimeCodeRow
 
 
 @pytest.fixture
@@ -128,7 +128,7 @@ def test_admin_writes_recheck_the_actor_after_initial_authorization(
     root = logged_in(app, "root", system_admin=True)
     alice = logged_in(app, "alice", system_admin=True)
     logged_in(app, "bobby")
-    principal = app.state.sessions.resolve(alice.cookies.get("ontocurator_session"))
+    principal = app.state.sessions.resolve(alice.cookies.get("ontotator_session"))
     initially_authorized, proceed = threading.Event(), threading.Event()
     real_require = admin_routes.require_system_admin
 

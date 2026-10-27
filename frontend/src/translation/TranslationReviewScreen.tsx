@@ -132,7 +132,7 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
   const focusedControl = useRef<"submit" | "reason" | null>(null);
   const [comparisonId, setComparisonId] = useState(workspace.comparisons[0]?.variant.document_id ?? "");
   // The Comparison pane starts closed (open or closed is remembered per user in this browser).
-  const comparisonOpenKey = `ontocurator.translationReview.comparisonOpen.v1:${props.username}`;
+  const comparisonOpenKey = `ontotator.translationReview.comparisonOpen.v1:${props.username}`;
   const [comparisonOpen, setComparisonOpen] = useState(() => { try { return window.localStorage.getItem(comparisonOpenKey) === "1"; } catch { return false; } });
   /** Opens (with the chosen comparison) or closes the pane; focus moves to the control that replaces the clicked one. */
   const showComparison = (open: boolean, id?: string) => {

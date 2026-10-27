@@ -6,7 +6,7 @@
 
 **Architecture:** The backend gains one conn-scoped cause derivation (`application/final_causes.py`) used by the export preflight (exclusive lock) and a new read model for Documents (`application/document_rows.py`, shared lock), with pure row rules in `domain/document_rows.py`. Two lead-only read endpoints feed a rewritten `admin/DocumentsPage.tsx` built from new `frontend/src/documents/*` modules and extended `ui/` primitives (`InlineConfirm`, grouped `DataTable`, focus-keeping `Button`). The Submission history dialog, the Progress warning list and the old final-result selector are removed.
 
-**Tech Stack:** Python 3.12, FastAPI, SQLAlchemy 2, Alembic, PostgreSQL (pytest via testcontainers or `ONTOCURATOR_TEST_PG_URL`); React 18, TypeScript, Vitest + Testing Library, Playwright + axe-core; `openapi-typescript` for `generated.ts`.
+**Tech Stack:** Python 3.12, FastAPI, SQLAlchemy 2, Alembic, PostgreSQL (pytest via testcontainers or `ONTOTATOR_TEST_PG_URL`); React 18, TypeScript, Vitest + Testing Library, Playwright + axe-core; `openapi-typescript` for `generated.ts`.
 
 ---
 
@@ -15,7 +15,7 @@
 - Work in `C:/Users/jan-p/Development/ontocurator/.worktrees/phase0-implementation` (branch `feat/phase0-acceptance-plan`). It holds many **uncommitted** implementation changes. Never `git reset`, `git checkout -- <file>`, `git stash`, or clean. Edit on top of the working tree.
 - **Do not commit or push.** Each task ends with a "Commit point" listing the files and message for later; do not run it unless the user explicitly asks.
 - No CI. All verification is local:
-  - Backend tests need PostgreSQL: Docker running, or `ONTOCURATOR_TEST_PG_URL` set to a throwaway superuser URL. Run single files with `uv run pytest tests/<file>.py -q`.
+  - Backend tests need PostgreSQL: Docker running, or `ONTOTATOR_TEST_PG_URL` set to a throwaway superuser URL. Run single files with `uv run pytest tests/<file>.py -q`.
   - Static: `uv run ruff check . && uv run ruff format --check . && uv run mypy src`.
   - Contracts: `uv run python scripts/export_openapi.py` then `npm --prefix frontend run api:generate`; drift checks `uv run python scripts/export_openapi.py --check` and `npm --prefix frontend run api:check`. Admin error codes: `uv run python scripts/export_admin_error_codes.py` (check with `--check`).
   - Frontend unit: `npm --prefix frontend test -- <path relative to frontend>`; types: `npm --prefix frontend run typecheck`.
@@ -51,7 +51,7 @@ This plan is the **single owner** of the primitives below. Sibling plans (`2026-
 | `DataTable` groups / `renderExpanded` | additive props `groups: DataTableGroup<T>[]` (one `tbody` per group, `th scope=rowgroup` header), `renderExpanded(row)` (following full-width `tr.data-table-expanded`), `Column.rowHeader`, `busy`; sorting within groups; existing props unchanged | `frontend/src/ui/DataTable.tsx` | U2 |
 | Router params and replace navigation | `ProjectDocumentsQuery` (`case`, `decision`, `final`, repeated `open`, `page`, existing filters), `documents_*` passthrough on case and report routes, `projectCase.compare`, `projectProblemReport.action = "resume"`, entries-based `querySuffix`; `NavigateOptions { replace?: boolean }` and `go(route, options)` in `App.tsx` | `frontend/src/app/router.ts`, navigation part of `frontend/src/App.tsx` | U3 |
 | Submission label and round-ordinal helpers (frontend) | `formatTime(iso, { now?, seconds? })`, `fullTimestamp(iso)`, `personLabel(pseudonym, isMe)`, `roundCell({ ordinal, author, isMe })`, `submissionLabel({ kind, ordinal, author, isMe, language, version, recordedAt }, { now?, withLanguage? })`, `kindLabels`; `<Time iso>` component | `frontend/src/app/submissionLabels.ts`, `frontend/src/app/Time.tsx` | D1 |
-| Round ordinals and submission kinds (backend) | `round_ordinals(rounds: Iterable[tuple[round_id, predecessor_id]]) -> dict[str, int]`, `submission_kind(round_kind, mode)` | `src/ontocurator/domain/submission_labels.py` | B5 |
+| Round ordinals and submission kinds (backend) | `round_ordinals(rounds: Iterable[tuple[round_id, predecessor_id]]) -> dict[str, int]`, `submission_kind(round_kind, mode)` | `src/ontotator/domain/submission_labels.py` | B5 |
 | Forced-colours / reduced-motion base rules | `.final-row`, `.status-pill`, `:focus-visible`, `.segment[aria-current="page"]`, `.disclosure-chevron` | `styles/components.css` | U1 |
 
 Siblings that need a primitive before this plan is done depend on the WP id (for example "depends on documents-lead-table U1"), not on the whole plan. If a sibling needs a contract change, it is made in the owning WP's files by this plan's lane, not in parallel.
@@ -71,10 +71,10 @@ These files are written by this plan **and** likely by a sibling plan. Only one 
 | `frontend/src/admin/FinalExportPanel.tsx` | E1 | quick-fixes-and-export (Cancel, primary button) |
 | `frontend/src/tasks/ProblemReportDetail.tsx`, `frontend/tests/problemReportRoute.test.tsx` | E2 | then problem-reports WP7 (rewrite, first test) → WP7b (second test) |
 | `frontend/src/variants/CaseViewer.tsx`, `SubmissionHistory.tsx`, `ComparePane.tsx` | E3 | editor-carried-review |
-| `src/ontocurator/application/final_results.py` | B3 → B4 | quick-fixes-and-export (export) |
-| `src/ontocurator/storage/repository.py` | B1 | problem-reports, editor-carried-review |
-| `src/ontocurator/api/app.py` | B4 → B9 | then editor B2 (status line) → editor B3 (router include) |
-| `src/ontocurator/domain/admin_error_codes.py`, `frontend/src/admin/errors.ts`, `contracts/admin-error-codes.json` | B4 | then editor B2 (one code) |
+| `src/ontotator/application/final_results.py` | B3 → B4 | quick-fixes-and-export (export) |
+| `src/ontotator/storage/repository.py` | B1 | problem-reports, editor-carried-review |
+| `src/ontotator/api/app.py` | B4 → B9 | then editor B2 (status line) → editor B3 (router include) |
+| `src/ontotator/domain/admin_error_codes.py`, `frontend/src/admin/errors.ts`, `contracts/admin-error-codes.json` | B4 | then editor B2 (one code) |
 | `contracts/openapi.json`, `frontend/src/api/generated.ts`, `frontend/src/api/client.ts` | B9 | contract slot after B9: editor B4 → problem-reports WP4 → WP8, one at a time |
 | `application/document_rows.py`, `document_row_page.py`, `api/document_row_routes.py`, `frontend/src/documents/ExpandedRow.tsx` | B6, B7, B9, DX | problem-reports WP8 (hook lines and "More" item only; after B9 and DX, not while E4 runs) |
 | `tests/browser_server.py` | P1 (one registration line only) | problem-reports WP9a, editor F10 (one line each, one at a time) |
@@ -164,55 +164,55 @@ Lane C runs only single-file vitest; when a Lane C WP needs its one full-suite r
 Every WP ends with the same closing steps: run its verification commands, tick its done checklist, and report changed files plus any deviation from the plan. No commits.
 
 **B1: Conn-scoped reads, orphan-pause cause, `submission` VersionRef**
-- Owns: `src/ontocurator/storage/repository.py`, `src/ontocurator/api/final_result_routes.py` (`FinalWarning` only), `src/ontocurator/authz/versions.py`, `tests/test_final_causes.py` (create), `tests/test_annotation_versions.py` (append).
+- Owns: `src/ontotator/storage/repository.py`, `src/ontotator/api/final_result_routes.py` (`FinalWarning` only), `src/ontotator/authz/versions.py`, `tests/test_final_causes.py` (create), `tests/test_annotation_versions.py` (append).
 - Context: Tasks 1.1, 2.5; spec "Backend and API changes" (One projection, `TASK_PAUSED_WITHOUT_REPORT` row) and "Shared rules" (access); code `repository.py:391-598` (`get_work_round`, `get_round_for_submission`, `list_workflow_causes`), `repository.py:2000-2062` (`get_annotation_version`), `authz/versions.py:105-195`, fixtures `tests/test_assignment_round_open_api.py::round_work`, `tests/test_annotation_versions.py`.
 - Verify: `uv run pytest tests/test_final_causes.py tests/test_problem_reports.py tests/test_problem_reports_api.py tests/test_final_results.py tests/test_final_warning_relevance.py tests/test_annotation_versions.py tests/test_case_api.py -q`; `uv run ruff check . && uv run ruff format --check . && uv run mypy src`.
 - Done: `*_in` methods exist and open no second transaction; report and hold causes carry `report_id`/`assignment_id`; orphan pause derived; leads get `submission` refs, annotators and reviewers do not (404 on fetch); non-lead `own` refs unchanged.
 
 **B2: Migration 0014**
-- Owns: `src/ontocurator/storage/migrations/versions/0014_final_selection_identity.py`, `src/ontocurator/storage/final_tables.py`, `tests/test_final_selection_migration.py`.
+- Owns: `src/ontotator/storage/migrations/versions/0014_final_selection_identity.py`, `src/ontotator/storage/final_tables.py`, `tests/test_final_selection_migration.py`.
 - Context: Task 1.2 (revised); spec "Backend and API changes" (cause table, `selected_at`); `storage/migrations/versions/0013_*.py`, `0001_initial.py`, `0006_variants.py`, `storage/tables.py:150-200` (documents constraints), `tests/pg_harness.py`.
 - Verify: `uv run pytest tests/test_final_selection_migration.py tests/test_schema.py -q`; ruff and mypy.
 - Done: `selected_at` backfilled per project from events; rule column nullable; round acks rewritten; text-correction acks and all other selection columns and event payloads unchanged; two-project test passes.
 
 **B3: One cause derivation (`final_causes.py`)**
-- Owns: `src/ontocurator/application/final_causes.py` (create), `src/ontocurator/application/final_results.py` (`_authorize`, `_projection`, reaffirmation code set), `tests/test_final_causes.py` (append), `tests/tests_support_reviews.py` (create); expectation-only edits in `tests/test_final_results.py`, `tests/test_final_warning_relevance.py` if they assert the old id forms.
+- Owns: `src/ontotator/application/final_causes.py` (create), `src/ontotator/application/final_results.py` (`_authorize`, `_projection`, reaffirmation code set), `tests/test_final_causes.py` (append), `tests/tests_support_reviews.py` (create); expectation-only edits in `tests/test_final_results.py`, `tests/test_final_warning_relevance.py` if they assert the old id forms.
 - Context: Task 1.3; spec "Backend and API changes" (cause table) and Open questions 1, 7 here; `final_results.py` whole file, `application/workflow_warnings.py`, `tests/test_final_warning_relevance.py::test_empty_carry_forward_is_pending_until_immutable_submission`.
 - Verify: `uv run pytest tests/test_final_causes.py tests/test_final_results.py tests/test_final_warning_relevance.py tests/test_workflow_warnings.py tests/test_final_export.py tests/test_final_human_export.py -q`; ruff, mypy.
 - Done: `derive_final_state` runs on the caller's connection; round ids without revision; NEWER and status-carrying TEXT_CORRECTED causes; rejected/queried corrections raise nothing; preflight output otherwise unchanged.
 
 **B4: `select()`: selection time, rule state, exact warning set, own result, contracts**
-- Owns: `src/ontocurator/application/final_results.py` (`select`), `src/ontocurator/api/final_result_routes.py` (`FinalSelectionView`), `src/ontocurator/api/app.py` (409 map), `src/ontocurator/domain/admin_error_codes.py`, `contracts/admin-error-codes.json` (regenerated), `frontend/src/admin/errors.ts`, `tests/test_final_causes.py` (append), `tests/test_final_warning_relevance.py` (one assertion).
+- Owns: `src/ontotator/application/final_results.py` (`select`), `src/ontotator/api/final_result_routes.py` (`FinalSelectionView`), `src/ontotator/api/app.py` (409 map), `src/ontotator/domain/admin_error_codes.py`, `contracts/admin-error-codes.json` (regenerated), `frontend/src/admin/errors.ts`, `tests/test_final_causes.py` (append), `tests/test_final_warning_relevance.py` (one assertion).
 - Context: Tasks 1.4, 1.5, 1.6; spec "Inline confirmation" (Conflict outcome), "Expanded row > 2. Submissions" (D4 own result), "Contracts preserved"; `api/app.py` `RevisionConflict` handler (~line 334); `tests/test_final_results.py:60-95`.
 - Verify: `uv run pytest tests/test_final_causes.py tests/test_final_results.py tests/test_final_warning_relevance.py tests/test_admin_error_codes.py -q`; `uv run python scripts/export_admin_error_codes.py --check`; ruff, mypy.
 - Done: reaffirmation requires the **exact** current acknowledgeable set (concurrent add, removal and status change each give 409); `selected_at` kept on reaffirmation; 409 details carry `selected_by`/`updated_at`; `OWN_RESULT_NOT_SELECTABLE` enforced for choose and keep; non-acknowledgeable ids refused.
 
 **B5: Pure row rules and shared label rules (backend)**
-- Owns: `src/ontocurator/domain/document_rows.py`, `src/ontocurator/domain/submission_labels.py`, `tests/test_document_rows_domain.py`.
+- Owns: `src/ontotator/domain/document_rows.py`, `src/ontotator/domain/submission_labels.py`, `tests/test_document_rows_domain.py`.
 - Context: Task 2.1; spec "Data model terms", "Bulk selection", "Missing final result rule", "Needs your decision bar" (categories).
 - Verify: `uv run pytest tests/test_document_rows_domain.py -q`; ruff, mypy.
 - Done: all domain tests pass without a database; `round_ordinals`/`submission_kind` live in `submission_labels.py` and are re-exported by `document_rows.py`.
 
 **B6: Facts loader and service skeleton**
-- Owns: `src/ontocurator/application/document_rows.py` (create: `RowQuery`, `RowFacts`, `load_facts`, `load_last_activity`, `DocumentRowsService`), stubs `src/ontocurator/application/document_row_page.py` and `document_row_submissions.py` (signatures only, `raise NotImplementedError`; ownership passes to B7/B8), `tests/test_document_rows_facts.py`.
+- Owns: `src/ontotator/application/document_rows.py` (create: `RowQuery`, `RowFacts`, `load_facts`, `load_last_activity`, `DocumentRowsService`), stubs `src/ontotator/application/document_row_page.py` and `document_row_submissions.py` (signatures only, `raise NotImplementedError`; ownership passes to B7/B8), `tests/test_document_rows_facts.py`.
 - Context: Task 2.2a; spec "Last activity", "Missing final result rule", "Backend and API changes"; `api/document_projection.py:287-306`, `final_causes.py`, `tests/test_case_api.py` (`case_env`), `tests/test_final_warning_relevance.py` (`Access` construction).
 - Verify: `uv run pytest tests/test_document_rows_facts.py tests/test_final_causes.py -q`; ruff, mypy.
 - Done: one connection, shared lock only; `RowFacts` fields exactly as in Task 2.2a; `ACKNOWLEDGEABLE_CODES == domain.document_rows.ACKNOWLEDGEABLE` asserted.
 
 **B7: Page builder**
-- Owns: `src/ontocurator/application/document_row_page.py`, `tests/test_document_rows_page.py`.
+- Owns: `src/ontotator/application/document_row_page.py`, `tests/test_document_rows_page.py`.
 - Context: Task 2.2b; spec "Table" (all subsections), "Needs your decision bar", "Route query", "Resolved rows and empty state"; `RowFacts` in `application/document_rows.py` (read only).
 - Verify: `uv run pytest tests/test_document_rows_page.py -q`; ruff, mypy.
 - Done: row dict and page dict exactly as specified, including `retain`, current project rule and per-row equality test on shared cause codes.
 
 **B8: Submissions builder**
-- Owns: `src/ontocurator/application/document_row_submissions.py`, `tests/test_document_rows_submissions.py`.
+- Owns: `src/ontotator/application/document_row_submissions.py`, `tests/test_document_rows_submissions.py`.
 - Context: Task 2.2c; spec "Expanded row > 2. Submissions (n)", "Data model terms" (rounds, kinds); `tests/test_work_rounds.py::create_consolidation_fixture`.
 - Verify: `uv run pytest tests/test_document_rows_submissions.py -q`; ruff, mypy.
 - Done: all versions' submissions oldest first with kinds, ordinals, counts; rounds and open translation reviews; `CASE_NOT_FOUND` for unknown rows; current project rule included.
 
 **B9: Routes, contracts, client**
-- Owns: `src/ontocurator/api/document_row_routes.py` (create), `src/ontocurator/api/app.py` (router include), `tests/test_document_rows_api.py` (HTTP tests only), `contracts/openapi.json`, `frontend/src/api/generated.ts`, `frontend/src/api/client.ts`, `frontend/tests/documents/client.test.ts`.
+- Owns: `src/ontotator/api/document_row_routes.py` (create), `src/ontotator/api/app.py` (router include), `tests/test_document_rows_api.py` (HTTP tests only), `contracts/openapi.json`, `frontend/src/api/generated.ts`, `frontend/src/api/client.ts`, `frontend/tests/documents/client.test.ts`.
 - Context: Tasks 2.4, 2.6; `api/final_result_routes.py` (`_service` pattern), `frontend/tests/apiClient.test.ts`.
 - Verify: `uv run pytest tests/test_document_rows_api.py tests/test_document_rows_page.py tests/test_document_rows_submissions.py -q`; `uv run python scripts/export_openapi.py --check`; `npm --prefix frontend run api:check`; `npm --prefix frontend test -- --maxWorkers=4 --minWorkers=1 tests/documents/client.test.ts`; `npm --prefix frontend run typecheck`; then `bash scripts/check.sh --only static` and `bash scripts/check.sh --only backend`.
 - Done: both routes lead-only with 422 on conflicting filters; generated types present; client functions encode paths and repeated `retain`.
@@ -316,14 +316,14 @@ Every WP ends with the same closing steps: run its verification commands, tick i
 ## File structure
 
 Backend (create):
-- `src/ontocurator/application/final_causes.py`: conn-scoped authorization helper, `derive_final_state`, acknowledgeable codes. Single owner of cause derivation.
-- `src/ontocurator/domain/document_rows.py`: pure row rules (chains, names, missing-final, bar, bulk/open targets, prefix match).
-- `src/ontocurator/domain/submission_labels.py`: round ordinals and submission kinds (shared primitive).
-- `src/ontocurator/application/document_rows.py`: `RowQuery`, `RowFacts`, DB facts loader, `DocumentRowsService`.
-- `src/ontocurator/application/document_row_page.py`: page builder (rows, filters, bar, grouping, paging).
-- `src/ontocurator/application/document_row_submissions.py`: submissions builder.
-- `src/ontocurator/api/document_row_routes.py`: response models and two GET routes.
-- `src/ontocurator/storage/migrations/versions/0014_final_selection_identity.py`.
+- `src/ontotator/application/final_causes.py`: conn-scoped authorization helper, `derive_final_state`, acknowledgeable codes. Single owner of cause derivation.
+- `src/ontotator/domain/document_rows.py`: pure row rules (chains, names, missing-final, bar, bulk/open targets, prefix match).
+- `src/ontotator/domain/submission_labels.py`: round ordinals and submission kinds (shared primitive).
+- `src/ontotator/application/document_rows.py`: `RowQuery`, `RowFacts`, DB facts loader, `DocumentRowsService`.
+- `src/ontotator/application/document_row_page.py`: page builder (rows, filters, bar, grouping, paging).
+- `src/ontotator/application/document_row_submissions.py`: submissions builder.
+- `src/ontotator/api/document_row_routes.py`: response models and two GET routes.
+- `src/ontotator/storage/migrations/versions/0014_final_selection_identity.py`.
 - Tests: `tests/test_final_causes.py`, `tests/test_document_rows_domain.py`, `tests/test_document_rows_facts.py`, `tests/test_document_rows_page.py`, `tests/test_document_rows_submissions.py`, `tests/test_document_rows_api.py`, `tests/test_final_selection_migration.py`, `tests/tests_support_reviews.py`.
 - Browser fixtures: `tests/browser_documents_scenarios.py`, `tests/browser_documents_scenarios_rows.py`, `tests/browser_documents_scenarios_decisions.py` and their `tests/test_browser_documents_fixture*.py`.
 
@@ -352,8 +352,8 @@ Outcome: preflight and (later) Documents derive identical causes on the caller's
 ### Task 1.1: Conn-scoped repository reads and report/hold cause shape
 
 **Files:**
-- Modify: `src/ontocurator/storage/repository.py:391-598` (`get_work_round`, `get_round_for_submission`, `list_workflow_causes`)
-- Modify: `src/ontocurator/api/final_result_routes.py` (`FinalWarning`)
+- Modify: `src/ontotator/storage/repository.py:391-598` (`get_work_round`, `get_round_for_submission`, `list_workflow_causes`)
+- Modify: `src/ontotator/api/final_result_routes.py` (`FinalWarning`)
 - Test: `tests/test_final_causes.py` (create)
 
 - [ ] **Step 1: Write the failing tests**
@@ -363,7 +363,7 @@ Outcome: preflight and (later) Documents derive identical causes on the caller's
 
 from sqlalchemy import select
 
-from ontocurator.storage.tables import AssignmentRow
+from ontotator.storage.tables import AssignmentRow
 
 pytest_plugins = ("test_assignment_round_open_api", "test_translation_review_task")
 
@@ -523,13 +523,13 @@ Expected: all PASS.
 
 - [ ] **Step 5: Commit point (later, only on request)**
 
-`git add src/ontocurator/storage/repository.py src/ontocurator/api/final_result_routes.py tests/test_final_causes.py` / message `feat: read workflow causes on the caller's connection and derive orphaned pauses`
+`git add src/ontotator/storage/repository.py src/ontotator/api/final_result_routes.py tests/test_final_causes.py` / message `feat: read workflow causes on the caller's connection and derive orphaned pauses`
 
 ### Task 1.2: Migration 0014: `selected_at`, stored rule state, round acknowledgement rewrite
 
 **Files:**
-- Create: `src/ontocurator/storage/migrations/versions/0014_final_selection_identity.py`
-- Modify: `src/ontocurator/storage/final_tables.py`
+- Create: `src/ontotator/storage/migrations/versions/0014_final_selection_identity.py`
+- Modify: `src/ontotator/storage/final_tables.py`
 - Test: `tests/test_final_selection_migration.py` (create)
 
 - [ ] **Step 1: Write the failing test**
@@ -542,7 +542,7 @@ import json
 from pg_harness import unmigrated_database_url
 from sqlalchemy import create_engine, text
 
-from ontocurator.storage.schema import upgrade
+from ontotator.storage.schema import upgrade
 
 ACKS = [
     "SELECTED_ROUND_SUPERSEDED:round-aa:7",
@@ -555,7 +555,7 @@ ACKS = [
 def _seed_project(conn, key, first_event_at):
     pid = conn.execute(
         text(
-            "INSERT INTO ontocurator.projects (project_key, name, manifest, manifest_sha256, task_profile, task_profile_sha256) "
+            "INSERT INTO ontotator.projects (project_key, name, manifest, manifest_sha256, task_profile, task_profile_sha256) "
             "VALUES (:k, :k, '{}', 'm', '{}', 't') RETURNING id"
         ),
         {"k": key},
@@ -563,14 +563,14 @@ def _seed_project(conn, key, first_event_at):
     # Valid root first: documents.derived_from has a (project_id, document_id) foreign key.
     conn.execute(
         text(
-            "INSERT INTO ontocurator.documents (project_id, document_id, language, text, case_id, external_id, version, origin, derived_from, translation_status, text_sha256) "
+            "INSERT INTO ontotator.documents (project_id, document_id, language, text, case_id, external_id, version, origin, derived_from, translation_status, text_sha256) "
             "VALUES (:pid, 'doc/v1', 'de', 'x', 'c', 'doc', 1, 'machine_translation', NULL, 'accepted', 'h1')"
         ),
         {"pid": pid},
     )
     conn.execute(
         text(
-            "INSERT INTO ontocurator.documents (project_id, document_id, language, text, case_id, external_id, version, origin, derived_from, translation_status, text_sha256) "
+            "INSERT INTO ontotator.documents (project_id, document_id, language, text, case_id, external_id, version, origin, derived_from, translation_status, text_sha256) "
             "VALUES (:pid, 'doc/v2', 'de', 'y', 'c', 'doc', 2, 'correction', 'doc/v1', 'ready_for_review', 'h2')"
         ),
         {"pid": pid},
@@ -587,15 +587,15 @@ def _seed_project(conn, key, first_event_at):
     ):  # second event = reaffirmation of the same choice
         conn.execute(
             text(
-                "INSERT INTO ontocurator.final_selection_events (project_id, payload, created_at) "
+                "INSERT INTO ontotator.final_selection_events (project_id, payload, created_at) "
                 "VALUES (:pid, CAST(:payload AS jsonb), :at)"
             ),
             {"pid": pid, "payload": json.dumps(payload), "at": at},
         )
     conn.execute(
         text(
-            "INSERT INTO ontocurator.final_selections (project_id, case_id, language, document_id, submission_id, revision, actor_id, acknowledged_cause_ids, updated_at) "
-            "SELECT :pid, 'c', 'de', 'doc/v1', 'sub-1', 2, u.id, CAST(:acks AS jsonb), '2026-10-18T12:00:00Z' FROM ontocurator.users u"
+            "INSERT INTO ontotator.final_selections (project_id, case_id, language, document_id, submission_id, revision, actor_id, acknowledged_cause_ids, updated_at) "
+            "SELECT :pid, 'c', 'de', 'doc/v1', 'sub-1', 2, u.id, CAST(:acks AS jsonb), '2026-10-18T12:00:00Z' FROM ontotator.users u"
         ),
         {"pid": pid, "acks": json.dumps(ACKS)},
     )
@@ -609,21 +609,19 @@ def test_0014_backfills_selected_at_per_project_and_rewrites_only_round_acks(tmp
     with engine.begin() as conn:
         conn.execute(
             text(
-                "INSERT INTO ontocurator.users (username, display_name, pseudonym) VALUES ('lead', 'Lead', 'lead-0001')"
+                "INSERT INTO ontotator.users (username, display_name, pseudonym) VALUES ('lead', 'Lead', 'lead-0001')"
             )
         )
         # Identical document ids in two projects; only the project's own events count.
         first = _seed_project(conn, "p1", "2026-10-18T10:00:00Z")
         second = _seed_project(conn, "p2", "2026-10-18T09:00:00Z")
         before_events = conn.execute(
-            text(
-                "SELECT id, payload FROM ontocurator.final_selection_events ORDER BY id"
-            )
+            text("SELECT id, payload FROM ontotator.final_selection_events ORDER BY id")
         ).all()
         before_rows = conn.execute(
             text(
                 "SELECT project_id, case_id, language, document_id, submission_id, revision, actor_id, updated_at "
-                "FROM ontocurator.final_selections ORDER BY project_id"
+                "FROM ontotator.final_selections ORDER BY project_id"
             )
         ).all()
     upgrade(url, "0014")
@@ -632,19 +630,17 @@ def test_0014_backfills_selected_at_per_project_and_rewrites_only_round_acks(tmp
             row.project_id: row
             for row in conn.execute(
                 text(
-                    "SELECT project_id, selected_at, adjudicator_not_annotator, acknowledged_cause_ids FROM ontocurator.final_selections"
+                    "SELECT project_id, selected_at, adjudicator_not_annotator, acknowledged_cause_ids FROM ontotator.final_selections"
                 )
             )
         }
         after_events = conn.execute(
-            text(
-                "SELECT id, payload FROM ontocurator.final_selection_events ORDER BY id"
-            )
+            text("SELECT id, payload FROM ontotator.final_selection_events ORDER BY id")
         ).all()
         after_rows = conn.execute(
             text(
                 "SELECT project_id, case_id, language, document_id, submission_id, revision, actor_id, updated_at "
-                "FROM ontocurator.final_selections ORDER BY project_id"
+                "FROM ontotator.final_selections ORDER BY project_id"
             )
         ).all()
     assert rows[first].selected_at.isoformat().startswith("2026-10-18T10:00:00")
@@ -689,7 +685,7 @@ revision = "0014"
 down_revision = "0013"
 branch_labels = None
 depends_on = None
-SCHEMA = "ontocurator"
+SCHEMA = "ontotator"
 _ROUND = re.compile(r"^(SELECTED_ROUND_(?:ABANDONED|SUPERSEDED):[^:]+):\d+$")
 
 
@@ -776,8 +772,8 @@ Files: migration, `final_tables.py`, test. Message: `feat: store selection time 
 ### Task 1.3: `final_causes.derive_final_state` with the new cause rules
 
 **Files:**
-- Create: `src/ontocurator/application/final_causes.py`
-- Modify: `src/ontocurator/application/final_results.py` (`_authorize`, `_projection` delegate)
+- Create: `src/ontotator/application/final_causes.py`
+- Modify: `src/ontotator/application/final_results.py` (`_authorize`, `_projection` delegate)
 - Test: `tests/test_final_causes.py` (extend)
 
 - [ ] **Step 1: Write the failing tests** (append to `tests/test_final_causes.py`)
@@ -787,8 +783,8 @@ from test_annotation_versions import seed_submission
 from test_case_api import BASE, CORRECTED, SOURCE, TARGET
 from test_case_api import case_env as case_env
 
-from ontocurator.application.final_causes import ACKNOWLEDGEABLE_CODES
-from ontocurator.storage.tables import DocumentRow, TranslationReviewRow
+from ontotator.application.final_causes import ACKNOWLEDGEABLE_CODES
+from ontotator.storage.tables import DocumentRow, TranslationReviewRow
 
 
 def _select(env, document, sid, revision=0, acks=()):
@@ -918,7 +914,7 @@ Write it out fully by copying the setup from `test_final_warning_relevance.py::t
 - [ ] **Step 2: Run to verify failure**
 
 Run: `uv run pytest tests/test_final_causes.py -q`
-Expected: FAIL (`ModuleNotFoundError: ontocurator.application.final_causes`).
+Expected: FAIL (`ModuleNotFoundError: ontotator.application.final_causes`).
 
 - [ ] **Step 3: Implement `final_causes.py`**
 
@@ -936,15 +932,15 @@ from urllib.parse import quote
 
 from sqlalchemy import Connection, func, select
 
-from ontocurator.application.workflow_warnings import project_warnings
-from ontocurator.auth.audit import Actor
-from ontocurator.authz.policy import Action
-from ontocurator.authz.project_authority import require_project_management
-from ontocurator.authz.scoped import project_not_found
-from ontocurator.domain.workspace import WorkspaceKey
-from ontocurator.storage.final_tables import FinalSelectionRow
-from ontocurator.storage.repository import Repository, _key_str, _lock_id
-from ontocurator.storage.tables import (
+from ontotator.application.workflow_warnings import project_warnings
+from ontotator.auth.audit import Actor
+from ontotator.authz.policy import Action
+from ontotator.authz.project_authority import require_project_management
+from ontotator.authz.scoped import project_not_found
+from ontotator.domain.workspace import WorkspaceKey
+from ontotator.storage.final_tables import FinalSelectionRow
+from ontotator.storage.repository import Repository, _key_str, _lock_id
+from ontotator.storage.tables import (
     AssignmentRow,
     DocumentRow,
     DraftRow,
@@ -952,7 +948,7 @@ from ontocurator.storage.tables import (
     TranslationReviewDraftRow,
     TranslationReviewRow,
 )
-from ontocurator.storage.workflow_tables import WorkRoundRow, WorkRoundStateRow
+from ontotator.storage.workflow_tables import WorkRoundRow, WorkRoundStateRow
 
 ACKNOWLEDGEABLE_CODES = frozenset(
     {
@@ -1086,8 +1082,8 @@ Message: `feat: one conn-scoped final cause derivation with newer-result and sta
 ### Task 1.4: `select()` stores `selected_at`, rule state; returns the summary; conflict details
 
 **Files:**
-- Modify: `src/ontocurator/application/final_results.py:97-212`
-- Modify: `src/ontocurator/api/final_result_routes.py` (`FinalSelectionView`)
+- Modify: `src/ontotator/application/final_results.py:97-212`
+- Modify: `src/ontotator/api/final_result_routes.py` (`FinalSelectionView`)
 - Test: `tests/test_final_causes.py` (extend)
 
 - [ ] **Step 1: Failing tests**
@@ -1286,7 +1282,7 @@ class FinalSelectionView(BaseModel):
 ### Task 1.5: `OWN_RESULT_NOT_SELECTABLE`
 
 **Files:**
-- Modify: `src/ontocurator/application/final_results.py`, `src/ontocurator/api/app.py` (409 map), `src/ontocurator/domain/admin_error_codes.py`, `contracts/admin-error-codes.json` (regenerated), `frontend/src/admin/errors.ts`
+- Modify: `src/ontotator/application/final_results.py`, `src/ontotator/api/app.py` (409 map), `src/ontotator/domain/admin_error_codes.py`, `contracts/admin-error-codes.json` (regenerated), `frontend/src/admin/errors.ts`
 - Test: `tests/test_final_causes.py`
 
 - [ ] **Step 1: Failing test**
@@ -1295,7 +1291,7 @@ class FinalSelectionView(BaseModel):
 def test_lead_cannot_choose_or_keep_own_result_when_rule_is_on(case_env):
     from sqlalchemy import update
 
-    from ontocurator.storage.tables import ProjectRow
+    from ontotator.storage.tables import ProjectRow
 
     env = case_env
     seed_submission(env, "leader", "own", document=TARGET)
@@ -1424,7 +1420,7 @@ Outcome: `GET /api/v1/projects/{key}/document-rows` and `GET /api/v1/projects/{k
 ### Task 2.1: Pure row rules (`domain/document_rows.py`)
 
 **Files:**
-- Create: `src/ontocurator/domain/document_rows.py`
+- Create: `src/ontotator/domain/document_rows.py`
 - Test: `tests/test_document_rows_domain.py`
 
 - [ ] **Step 1: Failing tests**
@@ -1432,7 +1428,7 @@ Outcome: `GET /api/v1/projects/{key}/document-rows` and `GET /api/v1/projects/{k
 ```python
 """Pure Documents row rules (no database)."""
 
-from ontocurator.domain.document_rows import (
+from ontotator.domain.document_rows import (
     AssignmentFact,
     Version,
     bar_categories,
@@ -1834,7 +1830,7 @@ def prefix_matches(q: str, identifiers: Iterable[str]) -> bool:
     )
 ```
 
-**Shared primitive split.** Put `round_ordinals` and `submission_kind` (bodies as above) in `src/ontocurator/domain/submission_labels.py` with a module docstring "Round ordinals and submission kinds shared by Documents and the editor history"; `domain/document_rows.py` imports and re-exports them (`from ontocurator.domain.submission_labels import round_ordinals, submission_kind` plus `__all__`), so the test import above stays valid. Sibling plans import from `submission_labels`.
+**Shared primitive split.** Put `round_ordinals` and `submission_kind` (bodies as above) in `src/ontotator/domain/submission_labels.py` with a module docstring "Round ordinals and submission kinds shared by Documents and the editor history"; `domain/document_rows.py` imports and re-exports them (`from ontotator.domain.submission_labels import round_ordinals, submission_kind` plus `__all__`), so the test import above stays valid. Sibling plans import from `submission_labels`.
 
 `ACKNOWLEDGEABLE` duplicates `final_causes.ACKNOWLEDGEABLE_CODES` deliberately to keep `domain/` free of application imports; the equality assertion `assert ACKNOWLEDGEABLE_CODES == domain.document_rows.ACKNOWLEDGEABLE` goes into `tests/test_document_rows_facts.py` (B6), because B5 may run before `final_causes.py` exists.
 
@@ -1846,8 +1842,8 @@ def prefix_matches(q: str, identifiers: Iterable[str]) -> bool:
 The former Task 2.2 is split in three (review finding 9): 2.2a loads facts on one connection and owns the service; 2.2b builds rows and pages from facts (pure, no SQL); 2.2c builds the submissions view. The interface between them is `RowFacts` below. 2.2b and 2.2c can run in parallel after 2.2a.
 
 **Files:**
-- Create: `src/ontocurator/application/document_rows.py` (`RowQuery`, `RowFacts` and its fact dataclasses, `load_facts`, `load_last_activity`, `DocumentRowsService`)
-- Create stubs (ownership passes on): `src/ontocurator/application/document_row_page.py` with `def build_page(facts: RowFacts, query: RowQuery) -> dict[str, Any]: raise NotImplementedError` (→ B7); `src/ontocurator/application/document_row_submissions.py` with `def build_submissions(conn: Connection, key: str, pid: int, case_id: str, language: str, viewer_user_id: int) -> dict[str, Any]: raise NotImplementedError` (→ B8)
+- Create: `src/ontotator/application/document_rows.py` (`RowQuery`, `RowFacts` and its fact dataclasses, `load_facts`, `load_last_activity`, `DocumentRowsService`)
+- Create stubs (ownership passes on): `src/ontotator/application/document_row_page.py` with `def build_page(facts: RowFacts, query: RowQuery) -> dict[str, Any]: raise NotImplementedError` (→ B7); `src/ontotator/application/document_row_submissions.py` with `def build_submissions(conn: Connection, key: str, pid: int, case_id: str, language: str, viewer_user_id: int) -> dict[str, Any]: raise NotImplementedError` (→ B8)
 - Create: `tests/document_rows_support.py` (shared test helpers `service(env, username="leader")`, `rows_of(page)`), `tests/test_document_rows_facts.py`
 
 Data the loader reads, all on one connection after `authorize_final_results(conn, actor, key, exclusive=False)`:
@@ -1996,13 +1992,13 @@ from test_annotation_versions import seed_submission
 from test_case_api import BASE, CASE, CORRECTED, SOURCE, TARGET
 from test_case_api import case_env as case_env
 
-from ontocurator.application import document_rows as rows_module
-from ontocurator.application.document_rows import RowQuery, load_facts
-from ontocurator.application.final_causes import (
+from ontotator.application import document_rows as rows_module
+from ontotator.application.document_rows import RowQuery, load_facts
+from ontotator.application.final_causes import (
     ACKNOWLEDGEABLE_CODES,
     authorize_final_results,
 )
-from ontocurator.domain import document_rows as domain_rows
+from ontotator.domain import document_rows as domain_rows
 
 
 def test_acknowledgeable_codes_match_the_domain_copy():
@@ -2064,7 +2060,7 @@ def test_retain_keys_are_bounded_and_mutual_exclusion_holds():
 
 ### Task 2.2b: Page builder (`application/document_row_page.py`) [WP B7]
 
-**Files:** Own `src/ontocurator/application/document_row_page.py` (replace the stub); Test `tests/test_document_rows_page.py`. Read only: `application/document_rows.py` (`RowFacts`, `RowQuery`), `domain/document_rows.py`. Every rule lives in `domain/document_rows.py`; this module only assembles.
+**Files:** Own `src/ontotator/application/document_row_page.py` (replace the stub); Test `tests/test_document_rows_page.py`. Read only: `application/document_rows.py` (`RowFacts`, `RowQuery`), `domain/document_rows.py`. Every rule lives in `domain/document_rows.py`; this module only assembles.
 
 - [ ] **Step 1: Failing tests**
 
@@ -2078,8 +2074,8 @@ from test_case_api import BASE, CASE, CORRECTED, SOURCE, TARGET
 from test_case_api import case_env as case_env
 from sqlalchemy import update
 
-from ontocurator.application.document_rows import RowQuery
-from ontocurator.storage.tables import ProjectRow
+from ontotator.application.document_rows import RowQuery
+from ontotator.storage.tables import ProjectRow
 
 # Cause codes the export preflight emits per row (MISSING_FINAL_SELECTION is unconditional
 # in the preflight and replaced by the Documents-only MISSING_FINAL rule).
@@ -2307,7 +2303,7 @@ Issue items:
 
 Former Task 2.3 merged here.
 
-**Files:** Own `src/ontocurator/application/document_row_submissions.py` (replace the stub); Test `tests/test_document_rows_submissions.py`. Read only: `domain/submission_labels.py`, `domain/document_rows.py` (`build_chains`, `version_label`).
+**Files:** Own `src/ontotator/application/document_row_submissions.py` (replace the stub); Test `tests/test_document_rows_submissions.py`. Read only: `domain/submission_labels.py`, `domain/document_rows.py` (`build_chains`, `version_label`).
 
 `build_submissions(conn, key, pid, case_id, language, viewer_user_id)` returns `{"case_id","language","adjudicator_not_annotator","submissions":[...],"rounds":[...],"open_translation_reviews":[...]}`:
 - `adjudicator_not_annotator`: the current project rule (same meaning as on the page).
@@ -2360,7 +2356,7 @@ def test_submission_without_round_has_no_ordinal(case_env):
 
 def test_unknown_row_is_case_not_found(case_env):
     import pytest
-    from ontocurator.domain.errors import DomainError
+    from ontotator.domain.errors import DomainError
 
     with pytest.raises(DomainError):
         service(case_env).submissions("proj", "missing-case", "de")
@@ -2376,8 +2372,8 @@ Fill in the service construction for the `rounds` fixture as in `tests/test_fina
 ### Task 2.4: Routes and response models [WP B9]
 
 **Files:**
-- Create: `src/ontocurator/api/document_row_routes.py`
-- Modify: `src/ontocurator/api/app.py` (include router next to `final_result_router`)
+- Create: `src/ontotator/api/document_row_routes.py`
+- Modify: `src/ontotator/api/app.py` (include router next to `final_result_router`)
 - Test: `tests/test_document_rows_api.py`
 
 - [ ] **Step 1: Failing HTTP tests**
@@ -2507,8 +2503,8 @@ Note for B9: the HTTP 403/404, 422 and `retain` tests live in `tests/test_docume
 ### Task 2.5: `VersionRef` kind `submission` for leads [WP B1]
 
 **Files:**
-- Modify: `src/ontocurator/authz/versions.py` (`VersionRef.kind`, `visible_annotation_versions`)
-- Modify: `src/ontocurator/storage/repository.py:2000-2062` (`get_annotation_version`)
+- Modify: `src/ontotator/authz/versions.py` (`VersionRef.kind`, `visible_annotation_versions`)
+- Modify: `src/ontotator/storage/repository.py:2000-2062` (`get_annotation_version`)
 - Test: `tests/test_annotation_versions.py`
 
 - [ ] **Step 1: Failing test**
@@ -3027,7 +3023,7 @@ Route types: `projectCase` gains `compare?: string`; `projectProblemReport` gain
 **Files:** Modify `frontend/src/app/router.ts` (`NavigateOptions`), `frontend/src/App.tsx` (`requestRoute`, `go`; `go` takes an optional second argument so existing `onNavigate` props stay compatible; `DocumentsPageProps` is widened by D6, not here); Test `frontend/tests/adminApp.test.tsx` (or a new `frontend/tests/navigationReplace.test.tsx`)
 
 - [ ] **Step 1: Failing test**: render `App` with a stub page that calls `onNavigate(route, { replace: true })`; assert `window.history.length` is unchanged and `window.location.hash` equals the new href, and that a following normal navigation increases the length by one. Mirror how `frontend/tests/shell.test.tsx` mounts the app with a fake user and projects.
-- [ ] **Step 2: Implement**: `export interface NavigateOptions { replace?: boolean }`; `requestRoute(next, nativeIndex?, options?)`; in the push branch: `if (options?.replace) window.history.replaceState({ ...window.history.state, ontocuratorRouteIndex: acceptedIndex.current }, "", hash); else { acceptedIndex.current++; pushState(...) }`; `go = (next: Route, options?: NavigateOptions) => { void requestRoute(next, undefined, options); }`; `DocumentsPageProps.onNavigate: (route: Route, options?: NavigateOptions) => void`.
+- [ ] **Step 2: Implement**: `export interface NavigateOptions { replace?: boolean }`; `requestRoute(next, nativeIndex?, options?)`; in the push branch: `if (options?.replace) window.history.replaceState({ ...window.history.state, ontotatorRouteIndex: acceptedIndex.current }, "", hash); else { acceptedIndex.current++; pushState(...) }`; `go = (next: Route, options?: NavigateOptions) => { void requestRoute(next, undefined, options); }`; `DocumentsPageProps.onNavigate: (route: Route, options?: NavigateOptions) => void`.
 - [ ] **Step 3: Run** `npm --prefix frontend test -- --maxWorkers=4 --minWorkers=1` and typecheck; Expected PASS. U3 only adds `NavigateOptions` and the `go`/`requestRoute` change in `App.tsx`; the `projectDocuments`, `projectProblemReport` and `projectCase` lines are changed later by D6, E2 and E3 in that order.
 - [ ] **Step 4: Commit point (later)**: `feat(router): replace navigation for row expansion`.
 
@@ -3222,7 +3218,7 @@ In `App.tsx`: `canManage={!!currentProject?.can_manage}` (open question 6). Wait
   - `rememberShown(projectKey, filterKey, rows)` stores each shown row's key **with a snapshot of its categories, work, final and report state**; `retainedKeys(projectKey, filterKey)` returns the keys to send as `retain`; `recordDecision(projectKey, rowKey)`; `badgeFor(snapshot, currentRow, decided)` returns `{ tone: "success", text: "Resolved" }` when a decision on this page or the report page removed the category, else `{ tone: "neutral", text: "Changed: Work assigned" }` etc. (open question 8 list).
   - A row that stops matching stays visible with the badge, collapses automatically, and disappears after a filter change or reload (`sessionStorage` cleared on `beforeunload`/filter change).
   - Retained rows are refreshed from the server (review finding 5): the page passes `retainedKeys(...)` to `useDocumentRows` as `retain`; the badge compares the stored snapshot with the **current** server row (`retained: true`). Tests: a row resolved by the lead's own Keep shows "Resolved"; a row whose category disappeared because work was assigned elsewhere (mocked refetch returns `retained: true`, a new `work` item, `missing_final.reason: "work_open"`) shows "Changed: Work assigned"; a row resumed externally without a local `recordDecision` shows "Changed: Task resumed".
-- [ ] **Step 2: Implement** with `sessionStorage` key `ontocurator:documents-visit:{projectKey}:{filterKey}`. "Changed:" reasons compare snapshot and current row: new non-revoked work item → "Work assigned"; a work item became held → "Task paused"; a held item is no longer held → "Task resumed"; `final` changed → "Final result changed"; otherwise "Updated elsewhere".
+- [ ] **Step 2: Implement** with `sessionStorage` key `ontotator:documents-visit:{projectKey}:{filterKey}`. "Changed:" reasons compare snapshot and current row: new non-revoked work item → "Work assigned"; a work item became held → "Task paused"; a held item is no longer held → "Task resumed"; `final` changed → "Final result changed"; otherwise "Updated elsewhere".
 - [ ] **Step 3: Run**; Expected PASS. **Commit point (later)**.
 
 ### Task 5.10: Phase gate
@@ -3421,7 +3417,7 @@ These spec files are shared with sibling plans (several are modified in the work
 
 ## Review disposition
 
-Codex review `ontocurator-reviews/2026-10-19-plan-documents-lead-table-codex.md` (10 findings). Each was checked against the code before it was applied.
+Codex review `ontotator-reviews/2026-10-19-plan-documents-lead-table-codex.md` (10 findings). Each was checked against the code before it was applied.
 
 | # | Finding | Verified against | Disposition |
 |---|---|---|---|

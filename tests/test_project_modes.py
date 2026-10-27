@@ -10,10 +10,10 @@ from auth_harness import HARNESS, logged_in, upload_package
 from pg_harness import database_url_for
 from work_plan_support import review_task
 
-from ontocurator.api.app import create_app
-from ontocurator.application.workspaces import WorkspaceService
-from ontocurator.authz.scoped import ScopedRepository
-from ontocurator.config import AppConfig
+from ontotator.api.app import create_app
+from ontotator.application.workspaces import WorkspaceService
+from ontotator.authz.scoped import ScopedRepository
+from ontotator.config import AppConfig
 
 FIXTURES = Path(__file__).parent / "fixtures"
 DEMO_PACKAGE = FIXTURES / "demo_package.zip"

@@ -3,9 +3,9 @@ from pathlib import Path
 import pytest
 from t1_fixtures import PIN, TOOL, bundle, hpo_profile, unit
 
-from ontocurator.domain.canonical import canonical_hash
-from ontocurator.domain.project_rules import ProjectRules
-from ontocurator.exchange.plan import ProjectImportState, plan_import, read_t1_upload
+from ontotator.domain.canonical import canonical_hash
+from ontotator.domain.project_rules import ProjectRules
+from ontotator.exchange.plan import ProjectImportState, plan_import, read_t1_upload
 
 
 def read(tmp_path: Path, **kwargs):
@@ -282,7 +282,7 @@ def test_the_ontospan_release_bundle_is_refused_as_input(tmp_path):
 
 
 def test_preview_round_trip_keeps_exact_evidence_versions(tmp_path):
-    from ontocurator.exchange.plan import ImportPlan
+    from ontotator.exchange.plan import ImportPlan
 
     units, issues = read(tmp_path)
     plan = plan_import(
@@ -298,7 +298,7 @@ def test_preview_round_trip_keeps_exact_evidence_versions(tmp_path):
 def test_mismatched_evidence_version_is_not_silently_accepted(tmp_path):
     from dataclasses import replace
 
-    from ontocurator.domain.errors import InvalidAnnotation
+    from ontotator.domain.errors import InvalidAnnotation
 
     units, issues = read(tmp_path)
     aset = units[0].set

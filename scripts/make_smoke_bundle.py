@@ -8,8 +8,8 @@ from pathlib import Path
 
 import ontospan
 
-from ontocurator.domain.profiles import TaskProfile
-from ontocurator.exchange.t1 import Pin, layers_for
+from ontotator.domain.profiles import TaskProfile
+from ontotator.exchange.t1 import Pin, layers_for
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests" / "fixtures"

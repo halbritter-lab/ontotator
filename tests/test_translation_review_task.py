@@ -14,10 +14,10 @@ from test_auth_api import _app
 from test_case_api import BASE, CORRECTED, SOURCE, TARGET
 from work_plan_support import plan_all, review_task
 
-from ontocurator.assignments.service import AssignmentService
-from ontocurator.domain.errors import DomainError
-from ontocurator.storage.repository import _lock_id
-from ontocurator.storage.tables import (
+from ontotator.assignments.service import AssignmentService
+from ontotator.domain.errors import DomainError
+from ontotator.storage.repository import _lock_id
+from ontotator.storage.tables import (
     AssignmentRow,
     AuditEventRow,
     DocumentRow,
@@ -817,7 +817,7 @@ def unrelated_documents(env, count=7):
 
 
 def observe_eligibility_metadata(env, monkeypatch):
-    from ontocurator.domain.variants import VariantInfo
+    from ontotator.domain.variants import VariantInfo
 
     consumed, query_rows = [], []
     original = VariantInfo.__init__
@@ -1118,8 +1118,8 @@ def test_own_review_output_grants_only_current_exact_metadata(case_env, change):
         v["document_id"] for v in env.alice.get(f"{BASE}/cases/case").json()["variants"]
     }
     user = env.app.state.accounts.get_by_username("alice")
-    from ontocurator.authz.policy import Access
-    from ontocurator.authz.scoped import ScopedRepository
+    from ontotator.authz.policy import Access
+    from ontotator.authz.scoped import ScopedRepository
 
     stale = ScopedRepository(
         env.db,

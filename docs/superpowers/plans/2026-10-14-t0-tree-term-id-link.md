@@ -38,9 +38,9 @@ All later commands run inside `.worktrees/tree-term-links`.
 
 | File | Change |
 |---|---|
-| `src/ontocurator/ontology/links.py` | **new**: `external_term_url(term_id)` |
+| `src/ontotator/ontology/links.py` | **new**: `external_term_url(term_id)` |
 | `tests/test_ontology_links.py` | **new**: prefix mapping and encoding |
-| `src/ontocurator/ontology/tree.py` | `external_url` on `TreeNode` and `TreeTermDetail` |
+| `src/ontotator/ontology/tree.py` | `external_url` on `TreeNode` and `TreeTermDetail` |
 | `tests/test_ontology_tree.py` | node/detail carry the URL |
 | `tests/test_tree_api.py` | exact node expectations gain `external_url` |
 | `contracts/openapi.json`, `frontend/src/api/generated.ts` | regenerated, never hand-edited |
@@ -50,24 +50,24 @@ All later commands run inside `.worktrees/tree-term-links`.
 | `frontend/src/styles.css` | `.tree-id`, `.tree-external` |
 | `frontend/tests/termTree.test.tsx`, `frontend/tests/caseTree.test.tsx`, `frontend/tests/treeState.test.ts` | component and state tests |
 | `frontend/browser/tree.spec.ts` | browser test |
-| `src/ontocurator/web/**` | rebuilt embedded assets |
+| `src/ontotator/web/**` | rebuilt embedded assets |
 
 ---
 
 ### Task 1: External URL function
 
 **Files:**
-- Create: `src/ontocurator/ontology/links.py`
+- Create: `src/ontotator/ontology/links.py`
 - Test: `tests/test_ontology_links.py`
 
 - [x] **Step 1: Write the failing test**
 
 ```python
-"""Where a term can be looked up outside Ontocurator."""
+"""Where a term can be looked up outside Ontotator."""
 
 import pytest
 
-from ontocurator.ontology.links import external_term_url
+from ontotator.ontology.links import external_term_url
 
 
 @pytest.mark.parametrize(
@@ -98,12 +98,12 @@ def test_something_that_is_no_curie_has_no_link(term_id: str) -> None:
 - [x] **Step 2: Run it and see it fail**
 
 Run: `uv run pytest tests/test_ontology_links.py -v`
-Expected: FAIL with `ModuleNotFoundError: No module named 'ontocurator.ontology.links'`
+Expected: FAIL with `ModuleNotFoundError: No module named 'ontotator.ontology.links'`
 
 - [x] **Step 3: Implement**
 
 ```python
-"""Where a term can be looked up outside Ontocurator.
+"""Where a term can be looked up outside Ontotator.
 
 HPO and MONDO have term pages addressed by the CURIE. Every other ontology is
 looked up through the EBI Ontology Lookup Service search, which finds a term
@@ -142,14 +142,14 @@ Expected: 9 passed
 - [x] **Step 5: Commit**
 
 ```bash
-git add src/ontocurator/ontology/links.py tests/test_ontology_links.py
+git add src/ontotator/ontology/links.py tests/test_ontology_links.py
 git commit -m "feat(ontology): map term ids to their external pages"
 ```
 
 ### Task 2: The tree carries the link
 
 **Files:**
-- Modify: `src/ontocurator/ontology/tree.py` (`TreeNode` ≈ line 30, `TreeTermDetail` ≈ line 49, `node()` ≈ line 183, `detail()` ≈ line 287)
+- Modify: `src/ontotator/ontology/tree.py` (`TreeNode` ≈ line 30, `TreeTermDetail` ≈ line 49, `node()` ≈ line 183, `detail()` ≈ line 287)
 - Test: `tests/test_ontology_tree.py` (append)
 
 - [x] **Step 1: Write the failing tests** (append to `tests/test_ontology_tree.py`)
@@ -188,10 +188,10 @@ Expected: FAIL with `AttributeError: 'TreeNode' object has no attribute 'externa
 
 - [x] **Step 3: Implement**
 
-In `src/ontocurator/ontology/tree.py`, add the import after the existing `from ontocurator.domain.errors import DomainError`:
+In `src/ontotator/ontology/tree.py`, add the import after the existing `from ontotator.domain.errors import DomainError`:
 
 ```python
-from ontocurator.ontology.links import external_term_url
+from ontotator.ontology.links import external_term_url
 ```
 
 Add the field as the last field of `TreeNode` and of `TreeTermDetail`. It is optional with a default, so older clients and the generated types treat it as optional:
@@ -300,7 +300,7 @@ Expected: all pass. The tree events log term IDs only, so the logged walks are u
 
 ```bash
 uv run ruff check --fix . && uv run ruff format .
-git add src/ontocurator/ontology/tree.py tests/test_ontology_tree.py tests/test_tree_api.py
+git add src/ontotator/ontology/tree.py tests/test_ontology_tree.py tests/test_tree_api.py
 git commit -m "feat(tree): return each term's external page with nodes and details"
 ```
 
@@ -686,12 +686,12 @@ git commit -m "test(tree): browser check for term ids and external links"
 ### Task 7: Rebuild the embedded web assets and verify everything
 
 **Files:**
-- Modify: `src/ontocurator/web/**`
+- Modify: `src/ontotator/web/**`
 
 - [x] **Step 1: Rebuild**
 
 Run: `uv run --locked python scripts/build_release.py --skip-npm-ci --out-dir dist`
-Expected: it ends after verifying the wheel. `git status` shows changed files under `src/ontocurator/web/`.
+Expected: it ends after verifying the wheel. `git status` shows changed files under `src/ontotator/web/`.
 
 - [x] **Step 2: Full verification**
 
@@ -709,6 +709,6 @@ Expected: everything passes with no errors. If a command fails, fix the cause be
 - [x] **Step 3: Commit**
 
 ```bash
-git add src/ontocurator/web
+git add src/ontotator/web
 git commit -m "build: rebuild embedded web assets"
 ```

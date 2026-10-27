@@ -20,27 +20,27 @@ from test_translation_review_service import review_env as review_env
 from test_translation_review_service import save
 from test_uploads_api import BASE, _ready, _run
 
-from ontocurator.api.variant_routes import ReanchorItem
-from ontocurator.auth.audit import Actor
-from ontocurator.domain.annotations import (
+from ontotator.api.variant_routes import ReanchorItem
+from ontotator.auth.audit import Actor
+from ontotator.domain.annotations import (
     ActorRef,
     Annotation,
     Modifier,
     Provenance,
     snapshot,
 )
-from ontocurator.domain.documents import (
+from ontotator.domain.documents import (
     Document,
     EvidenceMention,
     EvidenceRef,
     EvidenceSnapshot,
     Segment,
 )
-from ontocurator.exchange.jobs import HANDLERS
-from ontocurator.exchange.reanchor_job import ReanchorSource, rebuild_source
-from ontocurator.exchange.t1 import ImportedProposals, ImportedSet, document_to_t1
-from ontocurator.jobs.queue import JobQueue
-from ontocurator.storage.tables import (
+from ontotator.exchange.jobs import HANDLERS
+from ontotator.exchange.reanchor_job import ReanchorSource, rebuild_source
+from ontotator.exchange.t1 import ImportedProposals, ImportedSet, document_to_t1
+from ontotator.jobs.queue import JobQueue
+from ontotator.storage.tables import (
     AnnotationSnapshotRow,
     AssignmentRow,
     AuditEventRow,
@@ -605,7 +605,7 @@ def test_two_different_jobs_for_one_pair_write_only_once(runtime):
 def test_handler_audit_failure_rolls_back_all_targets_and_retry_succeeds(
     runtime, monkeypatch
 ):
-    import ontocurator.exchange.reanchor_job as module
+    import ontotator.exchange.reanchor_job as module
 
     env = runtime
     corrected(env)
@@ -773,7 +773,7 @@ def test_reviewer_current_authority_is_rechecked_when_worker_runs(review_env, lo
 
 
 def test_individual_submission_is_not_a_reanchor_source(runtime):
-    from ontocurator.application.editing import CreateAnnotationCommand
+    from ontotator.application.editing import CreateAnnotationCommand
 
     env = runtime
     imported(env, [env.source])
@@ -893,7 +893,7 @@ def test_status_finish_failure_does_not_duplicate_already_committed_handler_effe
 def test_worker_revalidates_account_after_waiting_for_project_lock(review_env):
     from sqlalchemy import event
 
-    from ontocurator.storage.repository import _lock_id
+    from ontotator.storage.repository import _lock_id
 
     env = review_env
     revision = save(env, "accepted_corrected", "Korrigiert")

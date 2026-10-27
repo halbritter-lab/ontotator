@@ -33,7 +33,7 @@ from test_consolidation_resolve_validation import refused
 from test_final_panel_api import HYPOTONIA, finding, span_of, submit_findings
 from work_plan_support import assign, doc, plan_env
 
-from ontocurator.application.work_rounds import WorkRoundService
+from ontotator.application.work_rounds import WorkRoundService
 
 FIRST, SECOND, THIRD = "sub-rel-1", "sub-rel-2", "sub-rel-3"
 

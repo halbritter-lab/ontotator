@@ -10,21 +10,21 @@ from support.v2_exports import ExportService
 from support.v2_reader import read_package
 from support.v2_writer import PackageWriter
 
-from ontocurator.application.editing import (
+from ontotator.application.editing import (
     CheckLayerCommand,
     CreateAnnotationCommand,
     EditorService,
 )
-from ontocurator.application.reviews import DecisionCommand, ReviewService
-from ontocurator.application.submissions import SubmissionService
-from ontocurator.application.workspaces import WorkspaceService
-from ontocurator.domain.annotations import AnnotationRef
-from ontocurator.domain.documents import Segment
-from ontocurator.domain.errors import DomainError
-from ontocurator.domain.review import ReviewTargetSet
-from ontocurator.domain.workspace import MutationEnvelope, WorkspaceKey
-from ontocurator.ontology.registry import OntologyRegistry
-from ontocurator.storage.repository import Repository
+from ontotator.application.reviews import DecisionCommand, ReviewService
+from ontotator.application.submissions import SubmissionService
+from ontotator.application.workspaces import WorkspaceService
+from ontotator.domain.annotations import AnnotationRef
+from ontotator.domain.documents import Segment
+from ontotator.domain.errors import DomainError
+from ontotator.domain.review import ReviewTargetSet
+from ontotator.domain.workspace import MutationEnvelope, WorkspaceKey
+from ontotator.ontology.registry import OntologyRegistry
+from ontotator.storage.repository import Repository
 
 
 @pytest.fixture
@@ -332,7 +332,7 @@ def test_review_replacement_must_match_target_layer_and_type(
     rev_svc = ReviewService(repo, registry=test_registry)
 
     # Populate a target on layer-1 (type: type-opt)
-    from ontocurator.domain.annotations import (
+    from ontotator.domain.annotations import (
         ActorRef,
         Annotation,
         Provenance,
@@ -416,7 +416,7 @@ def test_review_decision_invalidates_only_target_layer_check(
     rev_svc = ReviewService(repo, registry=test_registry)
 
     # We create a target on layer-1
-    from ontocurator.domain.annotations import (
+    from ontotator.domain.annotations import (
         ActorRef,
         Annotation,
         Provenance,

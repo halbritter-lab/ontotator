@@ -84,7 +84,7 @@ describe("historyLines", () => {
     const lines = historyLines(target, [consolidation], { now });
     expect(lines.map(line => line.text)).toEqual([
       "Review: Ana Weber (ann-0003), Accepted with corrections, v1 → v2",
-      "Review: Accepted: reviewed outside Ontocurator, Checked",
+      "Review: Accepted: reviewed outside Ontotator, Checked",
       "Consolidation: Ana Weber (ann-0003), 3 findings, v2, 09:00",
       "Consolidation: Ana Weber (ann-0003), Open, Paused",
       "Annotation: Luc Martin (ann-0005), moved to v2",

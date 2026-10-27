@@ -8,22 +8,22 @@ from support.v2_exports import ExportService
 from support.v2_reader import read_package
 from support.v2_writer import PackageWriter
 
-from ontocurator.application.editing import CreateAnnotationCommand, EditorService
-from ontocurator.application.reviews import DecisionCommand, ReviewService
-from ontocurator.application.submissions import SubmissionService
-from ontocurator.application.workspaces import WorkspaceService
-from ontocurator.domain.annotations import (
+from ontotator.application.editing import CreateAnnotationCommand, EditorService
+from ontotator.application.reviews import DecisionCommand, ReviewService
+from ontotator.application.submissions import SubmissionService
+from ontotator.application.workspaces import WorkspaceService
+from ontotator.domain.annotations import (
     ActorRef,
     Annotation,
     AnnotationRef,
     Provenance,
     snapshot,
 )
-from ontocurator.domain.errors import DomainError
-from ontocurator.domain.review import ReviewDecision, ReviewTargetSet
-from ontocurator.domain.workspace import MutationEnvelope, WorkspaceKey
-from ontocurator.ontology.registry import OntologyRegistry
-from ontocurator.storage.repository import Repository
+from ontotator.domain.errors import DomainError
+from ontotator.domain.review import ReviewDecision, ReviewTargetSet
+from ontotator.domain.workspace import MutationEnvelope, WorkspaceKey
+from ontotator.ontology.registry import OntologyRegistry
+from ontotator.storage.repository import Repository
 
 
 def registry():

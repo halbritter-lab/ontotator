@@ -1,7 +1,7 @@
 import type { CurrentUser, GuidelineDocument, GuidelineListing, GuidelineSummary, Member, OntologyInfo, ProjectSettings, TaskProfile } from "../src/api/client";
 export const currentUser: CurrentUser = { username: "lead", display_name: "Lead", pseudonym: "ann-lead", is_system_admin: false, csrf_token: "token" };
 export const profile: TaskProfile = {
-  schema: "ontocurator-task-profile/v1", profile_id: "custom-profile", version: "1", default_layer_id: "findings",
+  schema: "ontotator-task-profile/v1", profile_id: "custom-profile", version: "1", default_layer_id: "findings",
   ontologies: [{ ontology_id: "HP", label: "HPO", release: "2026", sha256: "a".repeat(64), format: "obo-graph-json" }],
   layers: [{ layer_id: "findings", label: "Findings", ontology_id: "HP", access: "editable", default_visible: true, default_type_id: "phenotype", annotation_types: [
     { type_id: "phenotype", label: "Phenotype", evidence_policy: "optional", axes: [{ id: "assertion", label: "Assertion", options: ["absent", "present"], allow_empty: true }] },

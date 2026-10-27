@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "ontocurator"
+name = "ontotator"
 version = "0.1.0"
 description = "Secure offline editor for ontology annotation and origin-neutral review"
 readme = "README.md"
@@ -25,8 +25,7 @@ dependencies = [
 ]
 
 [project.scripts]
-ontocurator = "ontocurator.cli:main"
-onto-curator = "ontocurator.cli:main"
+ontotator = "ontotator.cli:main"
 
 [dependency-groups]
 dev = [
@@ -41,7 +40,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/ontocurator"]
+packages = ["src/ontotator"]
 
 [tool.pytest.ini_options]
 addopts = "-ra --strict-config --strict-markers"
@@ -60,7 +59,7 @@ ignore = ["E501"]
 [tool.mypy]
 python_version = "3.12"
 strict = true
-packages = ["ontocurator"]
+packages = ["ontotator"]
 mypy_path = ["src"]
 
 [[tool.mypy.overrides]]

@@ -10,11 +10,11 @@ from auth_harness import grant, logged_in
 from sqlalchemy import insert, update
 from work_plan_support import BASE, assign, doc, plan_env, select_final, submit, write
 
-from ontocurator.assignments.service import AssignmentService
-from ontocurator.auth.audit import Actor
-from ontocurator.domain.work_plans import PlanFlags, RowKey
-from ontocurator.storage.tables import DocumentRow
-from ontocurator.storage.workflow_tables import (
+from ontotator.assignments.service import AssignmentService
+from ontotator.auth.audit import Actor
+from ontotator.domain.work_plans import PlanFlags, RowKey
+from ontotator.storage.tables import DocumentRow
+from ontotator.storage.workflow_tables import (
     ProblemReportRow,
     ProblemReportStateRow,
     WorkRoundRow,

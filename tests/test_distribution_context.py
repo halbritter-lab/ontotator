@@ -4,7 +4,7 @@ from dataclasses import replace
 
 import pytest
 
-from ontocurator.assignments.proposals import (
+from ontotator.assignments.proposals import (
     DistributionContext,
     DistributionSnapshot,
     SnapshotDocument,
@@ -13,7 +13,7 @@ from ontocurator.assignments.proposals import (
     require_fresh_context,
     validate_selection,
 )
-from ontocurator.domain.errors import DomainError
+from ontotator.domain.errors import DomainError
 
 
 @pytest.fixture
@@ -144,8 +144,8 @@ def stored(tmp_path):
     from pg_harness import database_for
     from sqlalchemy import insert
 
-    from ontocurator.assignments.proposals import DistributionService
-    from ontocurator.storage.tables import (
+    from ontotator.assignments.proposals import DistributionService
+    from ontotator.storage.tables import (
         DocumentRow,
         ProjectMembershipRow,
         ProjectRow,
@@ -208,7 +208,7 @@ def stored(tmp_path):
 def test_stored_proposal_is_ordered_bounded_and_writes_nothing(stored):
     from sqlalchemy import event
 
-    from ontocurator.auth.audit import Actor
+    from ontotator.auth.audit import Actor
 
     db, service, _project, users = stored
     statements = []
@@ -234,7 +234,7 @@ def test_stored_proposal_is_ordered_bounded_and_writes_nothing(stored):
 
 
 def test_seed_generated_once_and_echoed(stored, monkeypatch):
-    from ontocurator.auth.audit import Actor
+    from ontotator.auth.audit import Actor
 
     calls = []
 
@@ -242,7 +242,7 @@ def test_seed_generated_once_and_echoed(stored, monkeypatch):
         calls.append(limit)
         return 123
 
-    monkeypatch.setattr("ontocurator.assignments.proposals.secrets.randbelow", seed)
+    monkeypatch.setattr("ontotator.assignments.proposals.secrets.randbelow", seed)
     _db, service, _project, _users = stored
     result = service.propose(Actor.cli(), "p", ["first"], "annotate")
     assert calls == [2**31]
@@ -258,8 +258,8 @@ def test_project_load_counts_all_tasks_and_reopened_but_not_submitted_revoked_or
 
     from sqlalchemy import insert
 
-    from ontocurator.auth.audit import Actor
-    from ontocurator.storage.tables import AssignmentRow, DocumentRow, ProjectRow
+    from ontotator.auth.audit import Actor
+    from ontotator.storage.tables import AssignmentRow, DocumentRow, ProjectRow
 
     db, service, project, users = stored
     with db.transaction() as conn:
@@ -319,8 +319,8 @@ def test_project_load_counts_all_tasks_and_reopened_but_not_submitted_revoked_or
 def test_current_database_inputs_make_context_stale(stored, change):
     from sqlalchemy import delete, insert, update
 
-    from ontocurator.auth.audit import Actor
-    from ontocurator.storage.tables import (
+    from ontotator.auth.audit import Actor
+    from ontotator.storage.tables import (
         AssignmentRow,
         DocumentRow,
         ProjectMembershipRow,
@@ -373,7 +373,7 @@ def test_current_database_inputs_make_context_stale(stored, change):
 
 
 def test_proposal_rechecks_management_and_does_not_disclose_missing_document(stored):
-    from ontocurator.auth.audit import Actor
+    from ontotator.auth.audit import Actor
 
     _db, service, _project, users = stored
     with pytest.raises(DomainError, match="NOT_ALLOWED"):
@@ -391,8 +391,8 @@ def test_proposal_rechecks_management_and_does_not_disclose_missing_document(sto
 def test_database_candidates_use_current_roles_activity_and_languages(stored, change):
     from sqlalchemy import delete, update
 
-    from ontocurator.auth.audit import Actor
-    from ontocurator.storage.tables import (
+    from ontotator.auth.audit import Actor
+    from ontotator.storage.tables import (
         ProjectMembershipRow,
         UserLanguageRow,
         UserRow,
@@ -435,8 +435,8 @@ def test_database_opposite_assignment_excludes_only_when_enabled(
 ):
     from sqlalchemy import insert, update
 
-    from ontocurator.auth.audit import Actor
-    from ontocurator.storage.tables import (
+    from ontotator.auth.audit import Actor
+    from ontotator.storage.tables import (
         AssignmentRow,
         ProjectMembershipRow,
         ProjectRow,
@@ -471,8 +471,8 @@ def test_database_opposite_assignment_excludes_only_when_enabled(
 def test_actual_foreign_document_is_missing_without_metadata(stored):
     from sqlalchemy import insert
 
-    from ontocurator.auth.audit import Actor
-    from ontocurator.storage.tables import DocumentRow, ProjectRow
+    from ontotator.auth.audit import Actor
+    from ontotator.storage.tables import DocumentRow, ProjectRow
 
     db, service, _project, _users = stored
     with db.transaction() as conn:

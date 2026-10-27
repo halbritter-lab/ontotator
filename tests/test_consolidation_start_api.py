@@ -19,23 +19,23 @@ from sqlalchemy import event, func, select, update
 from test_final_panel_api import SEIZURE, finding, span_of, submit_findings
 from work_plan_support import BASE, assign, doc, plan_env
 
-from ontocurator.application.consolidation_start import (
+from ontotator.application.consolidation_start import (
     ConsolidationStartService,
     StartConsolidation,
 )
-from ontocurator.assignments.service import AssignmentService
-from ontocurator.auth.audit import Actor
-from ontocurator.authz.policy import Access
-from ontocurator.domain.errors import DomainError
-from ontocurator.storage.repository import _lock_id
-from ontocurator.storage.tables import (
+from ontotator.assignments.service import AssignmentService
+from ontotator.auth.audit import Actor
+from ontotator.authz.policy import Access
+from ontotator.domain.errors import DomainError
+from ontotator.storage.repository import _lock_id
+from ontotator.storage.tables import (
     AssignmentRow,
     AuditEventRow,
     ProjectMembershipRow,
     ProjectRow,
     UserRow,
 )
-from ontocurator.storage.workflow_tables import (
+from ontotator.storage.workflow_tables import (
     WorkflowCommandReceiptRow,
     WorkRoundRow,
 )

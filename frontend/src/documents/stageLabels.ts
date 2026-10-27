@@ -48,7 +48,7 @@ const BLOCKED_TEXT: Readonly<Record<string, string>> = {
   translation_not_accepted: "not accepted",
 };
 const RE_REVIEW_TEXT: Readonly<Record<string, string>> = { correction: "correction", new_review: "new review", source_changed: "source changed" };
-const ACCEPTED_TEXT: Readonly<Record<string, string>> = { unchanged: "unchanged", in_package: "in package", outside: "outside Ontocurator" };
+const ACCEPTED_TEXT: Readonly<Record<string, string>> = { unchanged: "unchanged", in_package: "in package", outside: "outside Ontotator" };
 
 /** The short form of a person in a cell: the display name, else the pseudonym. */
 export function shortName(person: PersonRefView): string {

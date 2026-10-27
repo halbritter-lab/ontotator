@@ -30,20 +30,20 @@ from browser_lead_workflow_scenarios import (
 from fastapi import FastAPI, Query
 from sqlalchemy import update
 
-from ontocurator.application.preferences import PreferencesUpdate
-from ontocurator.authz.scoped import ScopedRepository
-from ontocurator.domain.annotations import ActorRef, Annotation, Provenance, snapshot
-from ontocurator.domain.documents import (
+from ontotator.application.preferences import PreferencesUpdate
+from ontotator.authz.scoped import ScopedRepository
+from ontotator.domain.annotations import ActorRef, Annotation, Provenance, snapshot
+from ontotator.domain.documents import (
     EvidenceMention,
     EvidenceRef,
     Segment,
     snapshot_evidence,
 )
-from ontocurator.domain.workspace import Draft, MutationEnvelope
-from ontocurator.exchange.t1 import layers_for
-from ontocurator.ontology.registry import OntologyRegistry
-from ontocurator.ontology.store import OntologyStore
-from ontocurator.storage.tables import ProjectRow
+from ontotator.domain.workspace import Draft, MutationEnvelope
+from ontotator.exchange.t1 import layers_for
+from ontotator.ontology.registry import OntologyRegistry
+from ontotator.ontology.store import OntologyStore
+from ontotator.storage.tables import ProjectRow
 
 CASE = "modifiers"
 TEXT = "Seit 2 Wochen wiederholt schwere Krampfanfälle und eine Muskelhypotonie."
@@ -57,7 +57,7 @@ def span(word: str) -> Segment:
 
 
 def _command(scenario: Scenario, key: Any, payload: dict[str, Any]) -> Draft:
-    from ontocurator.application.editing import EditorService
+    from ontotator.application.editing import EditorService
 
     access, actor = identity(scenario, "annotator")
     scoped = ScopedRepository(scenario.db, access, actor)

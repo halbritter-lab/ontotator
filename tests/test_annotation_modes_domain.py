@@ -2,7 +2,7 @@
 
 import pytest
 
-from ontocurator.domain.annotation_modes import TextMode, text_mode, workspace_mode
+from ontotator.domain.annotation_modes import TextMode, text_mode, workspace_mode
 
 
 def mode(**kw):

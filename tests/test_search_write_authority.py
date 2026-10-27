@@ -12,13 +12,13 @@ from test_admin_write_authority import _wait_for_database_lock
 from test_visibility import PROJECT, _envelope, _open
 from test_visibility import assigned as assigned
 
-from ontocurator.api.routes import decode_workspace_id
-from ontocurator.assignments.service import AssignmentService
-from ontocurator.authz.scoped import ScopedRepository
-from ontocurator.domain.errors import DomainError
-from ontocurator.packages.models import SearchEventRecord
-from ontocurator.storage.repository import Repository
-from ontocurator.storage.tables import AssignmentRow, EditEventRow, MutationReceiptRow
+from ontotator.api.routes import decode_workspace_id
+from ontotator.assignments.service import AssignmentService
+from ontotator.authz.scoped import ScopedRepository
+from ontotator.domain.errors import DomainError
+from ontotator.packages.models import SearchEventRecord
+from ontotator.storage.repository import Repository
+from ontotator.storage.tables import AssignmentRow, EditEventRow, MutationReceiptRow
 
 
 def _context(assigned, operation):

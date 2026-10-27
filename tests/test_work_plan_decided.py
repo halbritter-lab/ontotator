@@ -16,18 +16,18 @@ from test_import_work_plan import commit_plan, set_import_plan, two_cases
 from test_variant_import import preview
 from work_plan_support import plan_env, revision_of, service
 
-from ontocurator.api.work_plan_routes import (
+from ontotator.api.work_plan_routes import (
     BulkPlanRequest,
     LanguageChangeView,
     PlanRowPatch,
     PlanRowsSet,
     UndoRowView,
 )
-from ontocurator.domain.work_plans import PlanFlags, RowKey
-from ontocurator.storage import work_plan_store as store
-from ontocurator.storage.database import Database
-from ontocurator.storage.plan_tables import WorkPlanFlagsRow
-from ontocurator.storage.tables import ProjectRow, UserRow
+from ontotator.domain.work_plans import PlanFlags, RowKey
+from ontotator.storage import work_plan_store as store
+from ontotator.storage.database import Database
+from ontotator.storage.plan_tables import WorkPlanFlagsRow
+from ontotator.storage.tables import ProjectRow, UserRow
 
 ROWS = (RowKey("c1", "en"), RowKey("c1", "de"))
 

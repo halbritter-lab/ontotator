@@ -5,11 +5,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from ontocurator.api.document_projection import _legacy_statuses
-from ontocurator.domain.errors import DomainError
-from ontocurator.domain.review import ReviewTargetSet
-from ontocurator.domain.workspace import Submission, WorkspaceKey
-from ontocurator.storage.repository import Repository, _key_str
+from ontotator.api.document_projection import _legacy_statuses
+from ontotator.domain.errors import DomainError
+from ontotator.domain.review import ReviewTargetSet
+from ontotator.domain.workspace import Submission, WorkspaceKey
+from ontotator.storage.repository import Repository, _key_str
 
 
 class QueryResults:

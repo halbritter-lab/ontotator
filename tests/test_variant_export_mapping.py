@@ -6,8 +6,8 @@ import ontospan
 import pytest
 from t1_builders import native_unit, translation_unit
 
-from ontocurator.domain.variants import VariantInfo
-from ontocurator.exchange.t1 import document_from_unit, document_to_t1
+from ontotator.domain.variants import VariantInfo
+from ontotator.exchange.t1 import document_from_unit, document_to_t1
 
 
 def test_translation_exports_external_id_and_source_variant_hash_separately():
@@ -81,7 +81,7 @@ def test_plain_native_keeps_original_format_document_shape():
 
 
 def test_export_refuses_unresolvable_source_instead_of_emitting_internal_id():
-    from ontocurator.domain.errors import DomainError
+    from ontotator.domain.errors import DomainError
 
     raw = native_unit("native", "de", "Original")
     document = document_from_unit(raw)

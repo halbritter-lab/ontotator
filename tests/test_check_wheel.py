@@ -13,22 +13,22 @@ _spec.loader.exec_module(check_wheel)
 def test_a_complete_wheel_misses_nothing() -> None:
     complete = {
         *check_wheel.REQUIRED_WHEEL_FILES,
-        "ontocurator/web/assets/index-1.js",
-        "ontocurator/web/assets/index-1.css",
+        "ontotator/web/assets/index-1.js",
+        "ontotator/web/assets/index-1.css",
     }
 
     assert check_wheel.missing_wheel_files(complete) == []
-    assert "ontocurator/storage/migrations/env.py" in check_wheel.REQUIRED_WHEEL_FILES
-    assert "ontocurator/web/index.html" in check_wheel.REQUIRED_WHEEL_FILES
+    assert "ontotator/storage/migrations/env.py" in check_wheel.REQUIRED_WHEEL_FILES
+    assert "ontotator/web/index.html" in check_wheel.REQUIRED_WHEEL_FILES
 
 
 def test_missing_files_and_asset_kinds_are_reported() -> None:
     names = {
         *check_wheel.REQUIRED_WHEEL_FILES,
-        "ontocurator/web/assets/index-1.js",
-    } - {"ontocurator/cli.py"}
+        "ontotator/web/assets/index-1.js",
+    } - {"ontotator/cli.py"}
 
     assert check_wheel.missing_wheel_files(names) == [
-        "ontocurator/cli.py",
-        "ontocurator/web/assets/*.css",
+        "ontotator/cli.py",
+        "ontotator/web/assets/*.css",
     ]

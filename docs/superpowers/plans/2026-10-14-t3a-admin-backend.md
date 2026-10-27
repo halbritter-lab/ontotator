@@ -53,7 +53,7 @@ project_key: str = Field(validation_alias=AliasChoices("project_key", "package_i
 - The existing suites are the rest of the test.
 
 **Acceptance:**
-- `grep -rnE "\bpackage_id\b|/packages/" src/ontocurator --include=*.py | grep -v "packages/models.py"` prints only reads of `manifest.package_id` (list them in the commit message; at most a handful).
+- `grep -rnE "\bpackage_id\b|/packages/" src/ontotator --include=*.py | grep -v "packages/models.py"` prints only reads of `manifest.package_id` (list them in the commit message; at most a handful).
 - `grep -rnE "packageId|listPackages|package-select" frontend/src frontend/tests frontend/browser | grep -v generated.ts` prints nothing.
 - `scripts/check.sh` passes.
 - Commit: `refactor: rename package_id to project_key (T2 D-e)`.
@@ -545,7 +545,7 @@ One query groups assignments per document and per user; there is no per-document
 
 **Acceptance:**
 - `scripts/check.sh` passes, Playwright included.
-- `CHECK_CONTAINERS=1 scripts/check.sh` passes; the T2e seed script now creates an assignment for the smoke annotator (add `ontocurator admin assign smoke DOC USER --task annotate`, a CLI wrapper of `AssignmentService.assign`, and call it from `scripts/seed_stack.py`).
+- `CHECK_CONTAINERS=1 scripts/check.sh` passes; the T2e seed script now creates an assignment for the smoke annotator (add `ontotator admin assign smoke DOC USER --task annotate`, a CLI wrapper of `AssignmentService.assign`, and call it from `scripts/seed_stack.py`).
 - Commit: `test: assignments in the harness and the browser server; CLI assign`.
 
 ---

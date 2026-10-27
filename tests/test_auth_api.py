@@ -14,11 +14,11 @@ from fastapi.testclient import TestClient
 from pg_harness import database_url_for
 from test_api import FIXTURE_PATH, _create_sample_package_bytes
 
-from ontocurator.api.app import create_app
-from ontocurator.api.identity import PrincipalDep
-from ontocurator.auth.audit import Actor
-from ontocurator.auth.passwords import hash_password
-from ontocurator.config import AppConfig
+from ontotator.api.app import create_app
+from ontotator.api.identity import PrincipalDep
+from ontotator.auth.audit import Actor
+from ontotator.auth.passwords import hash_password
+from ontotator.config import AppConfig
 
 ADMIN = Actor(None, "test:admin")
 PACKAGE = "pkg-scenario-a"
@@ -71,7 +71,7 @@ def test_login_sets_a_strict_cookie_and_me_names_the_user(app: FastAPI) -> None:
     assert response.status_code == 200, response.text
     user = response.json()
     cookie = _set_cookie(response)
-    assert cookie.startswith("ontocurator_session=")
+    assert cookie.startswith("ontotator_session=")
     lowered = cookie.lower()
     assert "httponly" in lowered
     assert "samesite=lax" in lowered
@@ -141,16 +141,16 @@ def test_a_write_needs_the_csrf_token(app: FastAPI) -> None:
 
 def test_logout_ends_the_session(app: FastAPI) -> None:
     client = logged_in(app, "alice")
-    token = client.cookies.get("ontocurator_session")
+    token = client.cookies.get("ontotator_session")
 
     response = client.post("/api/v1/auth/logout")
 
     assert response.status_code == 204
-    assert 'ontocurator_session=""' in _set_cookie(response)
+    assert 'ontotator_session=""' in _set_cookie(response)
     assert "path=/" in _set_cookie(response).lower()
     assert client.get("/api/v1/auth/me").status_code == 401
     # The old cookie is useless, also when a client keeps sending it.
-    stale = TestClient(app, cookies={"ontocurator_session": token})
+    stale = TestClient(app, cookies={"ontotator_session": token})
     assert stale.get("/api/v1/auth/me").status_code == 401
 
 
@@ -315,14 +315,14 @@ def test_a_write_with_the_token_from_a_foreign_origin_is_refused(
 
 def test_a_new_login_ends_the_session_the_request_came_with(app: FastAPI) -> None:
     client = logged_in(app, "alice")
-    old = client.cookies.get("ontocurator_session")
+    old = client.cookies.get("ontotator_session")
     ensure_user(app, "bob")
 
     response = _login(client, "bob", headers=ORIGIN)
 
     assert response.status_code == 200, response.text
     assert client.get("/api/v1/auth/me").json()["username"] == "bob"
-    stale = TestClient(app, cookies={"ontocurator_session": old})
+    stale = TestClient(app, cookies={"ontotator_session": old})
     assert stale.get("/api/v1/auth/me").status_code == 401
 
 
@@ -344,10 +344,10 @@ def test_only_trusted_hosts_are_served(tmp_path: Path) -> None:
 def test_a_start_without_any_user_warns_about_the_missing_admin(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
-    with caplog.at_level(logging.WARNING, logger="ontocurator.api.app"):
+    with caplog.at_level(logging.WARNING, logger="ontotator.api.app"):
         _app(tmp_path)
 
-    assert "ONTOCURATOR_ADMIN_PASSWORD_HASH" in caplog.text
+    assert "ONTOTATOR_ADMIN_PASSWORD_HASH" in caplog.text
 
 
 @pytest.fixture

@@ -5,15 +5,15 @@ from pathlib import Path
 
 import pytest
 
-from ontocurator.domain.errors import DomainError
-from ontocurator.domain.profiles import (
+from ontotator.domain.errors import DomainError
+from ontotator.domain.profiles import (
     AnnotationTypeDefinition,
     LayerDefinition,
     OntologyDefinition,
     TaskProfile,
 )
-from ontocurator.ontology.registry import OntologyRegistry
-from ontocurator.storage.blobs import BlobStore
+from ontotator.ontology.registry import OntologyRegistry
+from ontotator.storage.blobs import BlobStore
 
 
 def _create_synthetic_obo(
@@ -130,8 +130,8 @@ def test_same_term_id_in_two_ontologies_independent_indices_and_labels(tmp_path:
     assert status2.status == "valid"
     assert status2.label == "Renal Failure"
 
-    from ontocurator.domain.workspace import WorkspaceKey
-    from ontocurator.ontology.provenance import SearchRequest
+    from ontotator.domain.workspace import WorkspaceKey
+    from ontotator.ontology.provenance import SearchRequest
 
     ws_key = WorkspaceKey(
         project_key="p1",
@@ -194,8 +194,8 @@ def test_same_term_id_in_two_ontologies_independent_indices_and_labels(tmp_path:
 
 
 def test_numeric_search_is_scoped_to_layer_ontology(tmp_path: Path):
-    from ontocurator.domain.workspace import WorkspaceKey
-    from ontocurator.ontology.provenance import SearchRequest
+    from ontotator.domain.workspace import WorkspaceKey
+    from ontotator.ontology.provenance import SearchRequest
 
     path1, digest1 = _create_synthetic_obo(
         tmp_path, "ont1.json", "TEST:0001", "Condition Alpha"

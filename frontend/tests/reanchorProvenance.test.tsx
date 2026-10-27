@@ -5,8 +5,8 @@ import { historical } from './variantFixtures';
 import { ProposalMetadataProvider, ProposalSource } from '../src/editor/ProposalSource';
 import { AiBadge } from '../src/editor/AiBadge';
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
-const source:EditorProposal = { ...historical.annotations[0], proposal_set_id:4, document_id:'doc', notes:[], annotation:{...historical.annotations[0].annotation, document_id:'doc', provenance:{actor:{actor_id:'ontocurator-reanchor',kind:'tool'},method:'reanchor',source_refs:[]}} };
-const metadata:ProposalSetView = {id:4, document_id:'doc', annotation_set_id:'carried-set',bundle_id:null,set_kind:'tool_output',actors:[{actor_id:'ontocurator-reanchor',kind:'tool',name:'ontocurator-reanchor',version:'1'}],origin:'reanchor',source_document_id:'original/id',source_version:7,imported_at:'2026-10-16T00:00:00Z',imported_by_pseudonym:null};
+const source:EditorProposal = { ...historical.annotations[0], proposal_set_id:4, document_id:'doc', notes:[], annotation:{...historical.annotations[0].annotation, document_id:'doc', provenance:{actor:{actor_id:'ontotator-reanchor',kind:'tool'},method:'reanchor',source_refs:[]}} };
+const metadata:ProposalSetView = {id:4, document_id:'doc', annotation_set_id:'carried-set',bundle_id:null,set_kind:'tool_output',actors:[{actor_id:'ontotator-reanchor',kind:'tool',name:'ontotator-reanchor',version:'1'}],origin:'reanchor',source_document_id:'original/id',source_version:7,imported_at:'2026-10-16T00:00:00Z',imported_by_pseudonym:null};
 it('uses only inline currently offered metadata without a forbidden ordinary public fetch', () => {
   const get=vi.spyOn(api,'getProposalSet');
   const mounted=render(<ProposalMetadataProvider scope="alice:doc" projectKey="p" proposals={[source]} metadata={[metadata]} allowPublicFetch={false}><ProposalSource source={source}/><AiBadge provenance={source.annotation.provenance} source={source}/></ProposalMetadataProvider>);

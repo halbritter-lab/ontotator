@@ -4,10 +4,10 @@ from typing import Any
 
 from sqlalchemy import select
 
-from ontocurator.application.document_rows import DocumentRowsService
-from ontocurator.auth.audit import Actor
-from ontocurator.authz.policy import Access
-from ontocurator.storage.tables import ProjectMembershipRow, ProjectRow
+from ontotator.application.document_rows import DocumentRowsService
+from ontotator.auth.audit import Actor
+from ontotator.authz.policy import Access
+from ontotator.storage.tables import ProjectMembershipRow, ProjectRow
 
 
 def service(env: Any, username: str = "leader") -> DocumentRowsService:

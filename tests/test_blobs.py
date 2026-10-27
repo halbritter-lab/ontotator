@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from ontocurator.storage.blobs import BlobStore
+from ontotator.storage.blobs import BlobStore
 
 
 def test_a_file_is_stored_under_its_hash_and_read_back(tmp_path: Path) -> None:

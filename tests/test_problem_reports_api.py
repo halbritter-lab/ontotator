@@ -2,7 +2,7 @@
 
 from auth_harness import logged_in
 
-from ontocurator.assignments.service import AssignmentService
+from ontotator.assignments.service import AssignmentService
 
 pytest_plugins = ("test_assignment_round_open_api", "test_translation_review_task")
 

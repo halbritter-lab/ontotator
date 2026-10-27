@@ -14,7 +14,7 @@ const withSpan = { ...snapshot, evidence: [evidence], annotation: { ...snapshot.
 const decision = { decision_id: "d-1", target: { annotation_id: "old", version: "annotation-v1" }, outcome: "confirmed" as const, note: "Fine", reviewer_id: "lead" };
 
 const submission: Submission = {
-  format_version: "ontocurator-submission/v2", submission_id: "sub-raw", origin_key: workspaceFixture("target").view.key,
+  format_version: "ontotator-submission/v2", submission_id: "sub-raw", origin_key: workspaceFixture("target").view.key,
   targets: { target_set_id: "empty", targets: [] }, draft_revision: 1, snapshots: [withSpan], decisions: [decision],
   document_checked: true, created_at: "2026-10-19T00:16:00Z",
 };

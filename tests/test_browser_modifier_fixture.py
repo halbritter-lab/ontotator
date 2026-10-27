@@ -12,8 +12,8 @@ from modifier_fixtures import MOD_PIN
 from pg_harness import database_url_for
 from test_browser_review_flow_fixture import Session
 
-from ontocurator.api.app import create_app
-from ontocurator.config import AppConfig
+from ontotator.api.app import create_app
+from ontotator.config import AppConfig
 
 
 @pytest.fixture

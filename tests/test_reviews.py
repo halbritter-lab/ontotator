@@ -5,30 +5,30 @@ import pytest
 from pg_harness import database_for
 from support.v2_exports import ExportService
 
-from ontocurator.application.editing import CreateAnnotationCommand, EditorService
-from ontocurator.application.reviews import DecisionCommand, ReviewService
-from ontocurator.application.submissions import SubmissionService, SubmitCommand
-from ontocurator.application.workspaces import WorkspaceService
-from ontocurator.domain.annotations import (
+from ontotator.application.editing import CreateAnnotationCommand, EditorService
+from ontotator.application.reviews import DecisionCommand, ReviewService
+from ontotator.application.submissions import SubmissionService, SubmitCommand
+from ontotator.application.workspaces import WorkspaceService
+from ontotator.domain.annotations import (
     ActorRef,
     Annotation,
     AnnotationRef,
     Provenance,
     snapshot,
 )
-from ontocurator.domain.documents import (
+from ontotator.domain.documents import (
     Document,
     EvidenceMention,
     EvidenceRef,
     OntologyRef,
     Segment,
 )
-from ontocurator.domain.errors import DomainError, IncompleteReview
-from ontocurator.domain.review import ReviewOutcome, ReviewTargetSet
-from ontocurator.domain.workspace import MutationEnvelope, WorkspaceKey
-from ontocurator.ontology.service import OntologyService
-from ontocurator.packages.models import PackageManifest, ValidatedPackage
-from ontocurator.storage.repository import Repository
+from ontotator.domain.errors import DomainError, IncompleteReview
+from ontotator.domain.review import ReviewOutcome, ReviewTargetSet
+from ontotator.domain.workspace import MutationEnvelope, WorkspaceKey
+from ontotator.ontology.service import OntologyService
+from ontotator.packages.models import PackageManifest, ValidatedPackage
+from ontotator.storage.repository import Repository
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "hp.json"
 
@@ -60,7 +60,7 @@ def _setup_review_test_env(tmp_path: Path):
         text_sha256=text_digest,
     )
 
-    from ontocurator.domain.profiles import (
+    from ontotator.domain.profiles import (
         AnnotationTypeDefinition,
         AxisDefinition,
         LayerDefinition,
@@ -107,7 +107,7 @@ def _setup_review_test_env(tmp_path: Path):
     )
 
     # 1. Proposal A (human): Hypotonia (HP:0001252)
-    from ontocurator.domain.documents import EvidenceSnapshot
+    from ontotator.domain.documents import EvidenceSnapshot
 
     ev_a = EvidenceSnapshot.create(
         EvidenceMention(
@@ -172,7 +172,7 @@ def _setup_review_test_env(tmp_path: Path):
 
     pkg = ValidatedPackage(
         manifest=PackageManifest(
-            format_version="ontocurator-work-package/v2",
+            format_version="ontotator-work-package/v2",
             package_id="pkg-rev-1",
             created_at="2026-10-01T00:00:00Z",
             document_order=["doc-1"],
@@ -297,7 +297,7 @@ def test_review_decision_can_be_cleared_to_offen(tmp_path: Path):
     assert draft1.decisions[0].outcome == "confirmed"
 
     # 2. Mark layer checked
-    from ontocurator.application.editing import CheckLayerCommand
+    from ontotator.application.editing import CheckLayerCommand
 
     ctx["edit_svc"].apply(
         ws_key,
@@ -494,7 +494,7 @@ def test_review_submission_completeness_and_export_scoping(tmp_path: Path):
             ),
         )
 
-    from ontocurator.application.editing import CheckLayerCommand
+    from ontotator.application.editing import CheckLayerCommand
 
     # 3b. Check layer before submitting
     ctx["edit_svc"].apply(
@@ -548,7 +548,7 @@ def test_independent_mode_null_finding_and_hidden_proposals(tmp_path: Path):
     assert view.targets.targets == []
 
     # Check layer first
-    from ontocurator.application.editing import CheckLayerCommand
+    from ontotator.application.editing import CheckLayerCommand
 
     ctx["edit_svc"].apply(
         ws_key,
@@ -584,8 +584,8 @@ def test_independent_mode_null_finding_and_hidden_proposals(tmp_path: Path):
 def test_required_axes_enforced_on_confirmation_replacement_and_submission(
     tmp_path: Path,
 ):
-    from ontocurator.application.editing import CheckLayerCommand
-    from ontocurator.domain.profiles import (
+    from ontotator.application.editing import CheckLayerCommand
+    from ontotator.domain.profiles import (
         AnnotationTypeDefinition,
         AxisDefinition,
         LayerDefinition,
@@ -664,7 +664,7 @@ def test_required_axes_enforced_on_confirmation_replacement_and_submission(
 
     pkg = ValidatedPackage(
         manifest=PackageManifest(
-            format_version="ontocurator-work-package/v2",
+            format_version="ontotator-work-package/v2",
             package_id="pkg-strict-1",
             created_at="2026-10-01T00:00:00Z",
             document_order=["doc-1"],
@@ -823,7 +823,7 @@ def test_required_axes_enforced_on_confirmation_replacement_and_submission(
         )
 
     # 6. Delete rep-bad, then submission succeeds
-    from ontocurator.application.editing import DeleteDraftAnnotationCommand
+    from ontotator.application.editing import DeleteDraftAnnotationCommand
 
     edit_svc.apply(
         ws_key,

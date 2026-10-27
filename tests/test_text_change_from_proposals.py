@@ -15,7 +15,7 @@ from proposal_check_support import (
 )
 from sqlalchemy import select, update
 
-from ontocurator.storage.tables import AssignmentRow, DocumentRow, JobRow
+from ontotator.storage.tables import AssignmentRow, DocumentRow, JobRow
 
 
 def _correction_of_c1(env: Any) -> str:
@@ -24,7 +24,7 @@ def _correction_of_c1(env: Any) -> str:
     from t1_builders import bundle, correction_unit
     from t1_fixtures import TEXT, run_import
 
-    from ontocurator.auth.audit import Actor
+    from ontotator.auth.audit import Actor
 
     child = correction_unit(env.c1_unit, "Prefix " + TEXT)
     (env.tmp_path / "v2").mkdir()
@@ -46,8 +46,8 @@ def _correction_of_c1(env: Any) -> str:
 
 
 def _run_reanchor_jobs(env: Any) -> None:
-    from ontocurator.exchange.jobs import HANDLERS
-    from ontocurator.jobs.queue import JobQueue
+    from ontotator.exchange.jobs import HANDLERS
+    from ontotator.jobs.queue import JobQueue
 
     queue = JobQueue(env.db, HANDLERS)
     with env.db.transaction() as conn:
@@ -67,10 +67,10 @@ def _run_reanchor_jobs(env: Any) -> None:
 
 def _submit(env: Any, assignment_id: int, mode: str) -> str:
     """Record a submission of ``mode`` for the assignment's user."""
-    from ontocurator.domain.review import ReviewTargetSet
-    from ontocurator.domain.workspace import Submission, WorkspaceKey
-    from ontocurator.storage.repository import _key_str
-    from ontocurator.storage.tables import UserRow
+    from ontotator.domain.review import ReviewTargetSet
+    from ontotator.domain.workspace import Submission, WorkspaceKey
+    from ontotator.storage.repository import _key_str
+    from ontotator.storage.tables import UserRow
 
     submission_id = f"sub-{assignment_id}"
     with env.db.transaction() as conn:

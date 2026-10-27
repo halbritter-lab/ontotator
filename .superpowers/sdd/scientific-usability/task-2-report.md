@@ -21,7 +21,7 @@ eight-entry LRU.
 
 Optional `manifest.search_conditions` contains one condition per distinct
 ontology digest, including valid unused declarations and aliases sharing a
-digest. Each `ontocurator-search-condition/v1` condition records:
+digest. Each `ontotator-search-condition/v1` condition records:
 
 - Canonical `condition_id`, covering every condition field except itself.
 - Bound ontology SHA-256 and translation filename, digest, languages and path.

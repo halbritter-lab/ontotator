@@ -13,19 +13,19 @@ from sqlalchemy.exc import DBAPIError, IntegrityError
 from test_storage import _sample_package
 from test_storage_regressions import key_for
 
-from ontocurator.domain.documents import Document
-from ontocurator.domain.errors import DomainError, InvalidPackage, RevisionConflict
-from ontocurator.domain.review import ReviewTargetSet
-from ontocurator.domain.workspace import (
+from ontotator.domain.documents import Document
+from ontotator.domain.errors import DomainError, InvalidPackage, RevisionConflict
+from ontotator.domain.review import ReviewTargetSet
+from ontotator.domain.workspace import (
     Draft,
     MutationEnvelope,
     Submission,
     WorkspaceKey,
 )
-from ontocurator.packages.models import SearchEventRecord, ValidatedPackage
-from ontocurator.storage.database import TransactionRollbackOnly
-from ontocurator.storage.repository import Repository, _key_str, _lock_id
-from ontocurator.storage.tables import (
+from ontotator.packages.models import SearchEventRecord, ValidatedPackage
+from ontotator.storage.database import TransactionRollbackOnly
+from ontotator.storage.repository import Repository, _key_str, _lock_id
+from ontotator.storage.tables import (
     DraftRow,
     MutationReceiptRow,
     SearchEventRow,
@@ -340,7 +340,7 @@ def test_a_submission_is_stored_and_cannot_be_changed(tmp_path: Path) -> None:
         pytest.raises(DBAPIError, match="permission denied"),
         repo.db.transaction() as conn,
     ):
-        conn.execute(text("UPDATE ontocurator.submissions SET mode = 'review'"))
+        conn.execute(text("UPDATE ontotator.submissions SET mode = 'review'"))
 
 
 def test_document_status_follows_drafts_and_submissions(tmp_path: Path) -> None:
@@ -675,7 +675,7 @@ def test_an_export_contains_proposals_drafts_history_and_events(
 
     exported = repo.export_package("pkg-a")
 
-    assert exported.manifest.format_version == "ontocurator-work-package/v3"
+    assert exported.manifest.format_version == "ontotator-work-package/v3"
     assert exported.manifest.workflow_history == {}
     assert set(exported.manifest.proposal_annotation_refs) == set(package.annotations)
     assert set(exported.manifest.proposal_evidence_refs) == set(package.evidence)

@@ -7,20 +7,20 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
-from ontocurator.domain.annotations import AnnotationSnapshot
-from ontocurator.domain.canonical import canonical_hash
-from ontocurator.domain.documents import Document, EvidenceSnapshot
-from ontocurator.domain.errors import DomainError
-from ontocurator.domain.profiles import TaskProfile, profile_hash
-from ontocurator.domain.scopes import build_scope
-from ontocurator.domain.workspace import WorkspaceKey, WorkspaceMode
-from ontocurator.ontology.conditions import projected_conditions
-from ontocurator.packages.models import (
+from ontotator.domain.annotations import AnnotationSnapshot
+from ontotator.domain.canonical import canonical_hash
+from ontotator.domain.documents import Document, EvidenceSnapshot
+from ontotator.domain.errors import DomainError
+from ontotator.domain.profiles import TaskProfile, profile_hash
+from ontotator.domain.scopes import build_scope
+from ontotator.domain.workspace import WorkspaceKey, WorkspaceMode
+from ontotator.ontology.conditions import projected_conditions
+from ontotator.packages.models import (
     PackageManifest,
     SearchEventRecord,
     ValidatedPackage,
 )
-from ontocurator.storage.repository import Repository
+from ontotator.storage.repository import Repository
 
 
 class ExportService:
@@ -101,7 +101,7 @@ class ExportService:
         )
 
         manifest = PackageManifest(
-            format_version="ontocurator-work-package/v2",
+            format_version="ontotator-work-package/v2",
             package_id=f"export-{uuid4()}",
             created_at=datetime.now(UTC).isoformat(),
             document_order=list(documents),
@@ -254,7 +254,7 @@ class ExportService:
             for item in condition.translations
         }
         manifest = PackageManifest(
-            format_version="ontocurator-work-package/v2",
+            format_version="ontotator-work-package/v2",
             package_id=export_pkg_id,
             created_at=now,
             document_order=[key.document_id],
@@ -300,7 +300,7 @@ def package_export_zip(
 
 def workspace_export_zip(app: Any, workspace_id: str) -> bytes:
     """One workspace as a v2 ZIP, as the removed workspace export wrote it."""
-    from ontocurator.api.routes import decode_workspace_id
+    from ontotator.api.routes import decode_workspace_id
     from support.v2_writer import PackageWriter
 
     pkg = ExportService(app.state.repo).for_workspace(decode_workspace_id(workspace_id))

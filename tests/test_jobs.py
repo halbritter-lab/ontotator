@@ -9,12 +9,12 @@ import pytest
 from fastapi.testclient import TestClient
 from pg_harness import database_for, database_url_for
 
-from ontocurator.api.app import create_app
-from ontocurator.auth.audit import Actor
-from ontocurator.config import AppConfig
-from ontocurator.domain.errors import DomainError
-from ontocurator.jobs.queue import Job, JobContext, JobQueue, Worker
-from ontocurator.storage.database import Database
+from ontotator.api.app import create_app
+from ontotator.auth.audit import Actor
+from ontotator.config import AppConfig
+from ontotator.domain.errors import DomainError
+from ontotator.jobs.queue import Job, JobContext, JobQueue, Worker
+from ontotator.storage.database import Database
 
 
 def _db(tmp_path: Path) -> Database:
@@ -68,7 +68,7 @@ def test_a_claimed_but_locked_job_is_skipped(tmp_path: Path) -> None:
 
     with db.engine.begin() as conn:
         conn.execute(
-            text("SELECT id FROM ontocurator.jobs WHERE id = :id FOR UPDATE"),
+            text("SELECT id FROM ontotator.jobs WHERE id = :id FOR UPDATE"),
             {"id": first},
         )
         # Another worker holds the first row: this one takes the second.

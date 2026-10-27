@@ -34,7 +34,7 @@ This plan adds one helper on top: `WorkflowService.released_task_results(documen
 
 ### Task 1: k-way grouping (pure)
 
-**Create:** `src/ontocurator/workflow/grouping.py`, `tests/test_grouping.py`. **Modify:** `src/ontocurator/exchange/t1.py`.
+**Create:** `src/ontotator/workflow/grouping.py`, `tests/test_grouping.py`. **Modify:** `src/ontotator/exchange/t1.py`.
 
 **Refactor in `exchange/t1.py`:** extract `annotation_from_snapshot(snapshot, evidence: Mapping[ref, EvidenceSnapshot], document, *, annotation_id: str) -> ontospan.Annotation` from `submission_to_unit`. Axes follow Q13, segments quote the canonical text. `submission_to_unit` calls it; its tests stay green.
 
@@ -82,7 +82,7 @@ def group_results(results: Sequence[TaskResult], document: Document, profile: Ta
 6. `group_id = canonical_hash(sorted(member.ref for member in members))`.
 7. Groups are ordered by `(start is None, start, layer_id, group_id)`, so document-level groups come last.
 
-Edge whitespace and punctuation never create a conflict, because the matcher compares normalised mentions (T1 F11). Modifiers cannot be represented in Ontocurator (Resolved Q11), so `modifier_conflict` does not occur in practice. It is kept so the rule matches the matcher.
+Edge whitespace and punctuation never create a conflict, because the matcher compares normalised mentions (T1 F11). Modifiers cannot be represented in Ontotator (Resolved Q11), so `modifier_conflict` does not occur in practice. It is kept so the rule matches the matcher.
 
 **Tests (`tests/test_grouping.py`):** a 3-sentence German text, an HPO profile, three task results built in the test.
 - `test_identical_annotations_form_one_agreed_equal_group`: k = 2, same term, axes and span gives one group, `agreed_equal`, `contributors == {0, 1}`.
@@ -110,7 +110,7 @@ Edge whitespace and punctuation never create a conflict, because the matcher com
 
 ### Task 2: The adjudication draft and the adjudicated result (O3)
 
-**Create:** `src/ontocurator/workflow/adjudication.py`, `src/ontocurator/storage/migrations/versions/0008_agreement.py` (this task's column plus Task 5's tables, one migration), `tests/test_adjudication.py`. **Modify:** `domain/scopes.py`, `domain/workspace.py`, `application/editing.py`, the T4a materialiser and `storage/tables.py`.
+**Create:** `src/ontotator/workflow/adjudication.py`, `src/ontotator/storage/migrations/versions/0008_agreement.py` (this task's column plus Task 5's tables, one migration), `tests/test_adjudication.py`. **Modify:** `domain/scopes.py`, `domain/workspace.py`, `application/editing.py`, the T4a materialiser and `storage/tables.py`.
 
 **Draft kind:** `WorkspaceMode` gains `"adjudicate"`. `build_scope` treats it like `review` (reference layers included). The T4a mapping from task to draft kind maps `adjudicate` to it. The draft's targets are the members of all groups, so the edit log records which inputs the adjudicator worked from.
 
@@ -276,7 +276,7 @@ Regenerate the contract. **Acceptance:** the tests pass; `uv run python scripts/
 
 ### Task 5: Live agreement (W6)
 
-**Modify:** `0008_agreement.py` (from Task 2), `storage/tables.py`, `authz/policy.py`, `tests/test_policy.py`, the T4a workflow service where `advance` transitions are applied. **Create:** `src/ontocurator/workflow/agreement.py`, `src/ontocurator/workflow/agreement_jobs.py`, `tests/test_agreement.py`.
+**Modify:** `0008_agreement.py` (from Task 2), `storage/tables.py`, `authz/policy.py`, `tests/test_policy.py`, the T4a workflow service where `advance` transitions are applied. **Create:** `src/ontotator/workflow/agreement.py`, `src/ontotator/workflow/agreement_jobs.py`, `tests/test_agreement.py`.
 
 | Table | Columns | Keys |
 |---|---|---|
@@ -285,7 +285,7 @@ Regenerate the contract. **Acceptance:** the tests pass; `uv run python scripts/
 
 Both tables are recomputed, not history: the application role gets `SELECT, INSERT, UPDATE, DELETE`. A recomputation replaces the rows of its document stage in one transaction. The history of what was shown is not needed (W6: a steering aid).
 
-**Trigger:** where T4a applies `advance` transitions, a transition of an `annotate` stage with `k >= 2` to `complete` enqueues `jobs.enqueue("agreement", {"document_stage_id": id}, project_id=…)` in the same transaction. A stage that is reopened and completes again enqueues again. No other path enqueues it, except the CLI `ontocurator admin agreement recompute PROJECT` (enqueues one job per completed parallel stage; for operators after a fix).
+**Trigger:** where T4a applies `advance` transitions, a transition of an `annotate` stage with `k >= 2` to `complete` enqueues `jobs.enqueue("agreement", {"document_stage_id": id}, project_id=…)` in the same transaction. A stage that is reopened and completes again enqueues again. No other path enqueues it, except the CLI `ontotator admin agreement recompute PROJECT` (enqueues one job per completed parallel stage; for operators after a fix).
 
 **Job `agreement`** (`agreement_jobs.py`):
 - loads `released_task_results(document_stage_id)`, the document, and the pinned ontology as `ObographOntology` (cached per job run);
@@ -428,7 +428,7 @@ New codes and their HTTP status. The existing handler maps `DomainError` subclas
 
 - `releases.documents` is a list of `{document_id, external_id, language, final_result_id, set_ids: [...]}`; `excluded` is a list of `{document_id, reason}`.
 - `target_owner_user_id` is the user whose draft or task result holds the commented annotation, fixed when the comment is written; it is null for document comments and for imported proposals. It lets the visibility rule hide comments on a peer's annotations (W8) without re-deriving ownership.
-- The root comment's `thread_id` equals its own `id`. Because the table is append-only, the id cannot be filled in afterwards: take `nextval(pg_get_serial_sequence('ontocurator.comments', 'id'))` first, then `INSERT … OVERRIDING SYSTEM VALUE` with `id = thread_id = <that value>`. The application role needs `USAGE` on the sequence (T2c grants it for all sequences). The test below checks it.
+- The root comment's `thread_id` equals its own `id`. Because the table is append-only, the id cannot be filled in afterwards: take `nextval(pg_get_serial_sequence('ontotator.comments', 'id'))` first, then `INSERT … OVERRIDING SYSTEM VALUE` with `id = thread_id = <that value>`. The application role needs `USAGE` on the sequence (T2c grants it for all sequences). The test below checks it.
 - Grants: `SELECT, INSERT` on the three append-only tables; full DML on `comment_reads`.
 
 **Policy:** `CREATE_RELEASE` and `DOWNLOAD_RELEASE` for admins and leads; `VIEW_RELEASES` for admins and every project role. Add the rows to the expected matrix.
@@ -449,7 +449,7 @@ New codes and their HTTP status. The existing handler maps `DomainError` subclas
 
 ### Task 8: The release builder (pure)
 
-**Create:** `src/ontocurator/release/__init__.py`, `src/ontocurator/release/builder.py`, `tests/test_release_builder.py`.
+**Create:** `src/ontotator/release/__init__.py`, `src/ontotator/release/builder.py`, `tests/test_release_builder.py`.
 
 **Inputs** (plain dataclasses; the job in Task 9 loads them):
 
@@ -511,7 +511,7 @@ release_annotation = …                       # each annotation of a "release" 
 
 **Manifest data:**
 - `bundle_id = "{project}-release-{release_id}"`;
-- `release = {name, description, project_id: project key, producer: {name: "ontocurator", version: ontocurator.__version__}, supersedes: [{bundle_id, manifest_sha256}]}` (I7);
+- `release = {name, description, project_id: project key, producer: {name: "ontotator", version: ontotator.__version__}, supersedes: [{bundle_id, manifest_sha256}]}` (I7);
 - `release_name = name` (equal to `release.name`, I7).
 
 **Tests (`tests/test_release_builder.py`):** inputs built in the test from a two-annotator parallel workflow on one document, where annotator A adopted a tool proposal and B annotated manually, and from a revise chain on a second document.
@@ -541,7 +541,7 @@ release_annotation = …                       # each annotation of a "release" 
 
 ### Task 9: Release job, storage, API and CLI
 
-**Create:** `src/ontocurator/release/jobs.py`, `src/ontocurator/release/service.py`, `api/release_routes.py`, `tests/test_releases.py`. **Modify:** `api/app.py`, `cli.py`, `tests/test_admin_cli.py`.
+**Create:** `src/ontotator/release/jobs.py`, `src/ontotator/release/service.py`, `api/release_routes.py`, `tests/test_releases.py`. **Modify:** `api/app.py`, `cli.py`, `tests/test_admin_cli.py`.
 
 **`ReleaseService(db, jobs, *, now=…)`:**
 - `candidates(project) -> {included: [DocumentSummary], excluded: [{document_id, reason}]}`: included are documents whose stage chain has a final result (T4a `final_result_id`). Excluded with reasons `no_final_result` (work in progress) or `no_workflow`.
@@ -575,7 +575,7 @@ The bundle bytes never change after the insert (W7). A correction is a new relea
 
 Job status uses T3a's `GET /api/v1/jobs/{id}`.
 
-**CLI:** `ontocurator admin export-release PROJECT RELEASE OUT.zip`. `RELEASE` is the id or the name. It copies the stored bytes and refuses to overwrite `OUT`. It audits `release.download` with the actor `Actor.cli()` (T7 I5: the same bytes as the download).
+**CLI:** `ontotator admin export-release PROJECT RELEASE OUT.zip`. `RELEASE` is the id or the name. It copies the stored bytes and refuses to overwrite `OUT`. It audits `release.download` with the actor `Actor.cli()` (T7 I5: the same bytes as the download).
 
 **Tests (`tests/test_releases.py`):**
 - `test_candidates_list_excluded_documents_with_reasons`.
@@ -584,7 +584,7 @@ Job status uses T3a's `GET /api/v1/jobs/{id}`.
 - `test_a_document_without_final_result_cannot_be_selected`.
 - `test_release_names_are_unique_per_project`.
 - `test_a_correction_supersedes_the_earlier_release`: the second manifest's `release.supersedes` names the first bundle id and manifest hash; the list shows `superseded_by`.
-- `test_releases_are_immutable`: `UPDATE ontocurator.releases` fails with "permission denied".
+- `test_releases_are_immutable`: `UPDATE ontotator.releases` fails with "permission denied".
 - `test_every_member_sees_the_list_but_only_leads_download`: an annotator gets the list and 403 on download; the lead downloads; `release.download` is audited.
 - `test_a_lineage_error_fails_the_job_and_writes_no_row`.
 - `tests/test_admin_cli.py::test_export_release_writes_the_identical_bytes`.
@@ -640,7 +640,7 @@ Job status uses T3a's `GET /api/v1/jobs/{id}`.
 
 > **Open question Q25:** May an annotator see the adjudicated or final result of a document they annotated? Provisional default: not before a release contains it. Then it is visible to everyone through the release.
 
-**Re-anchoring (Q21):** when T5's re-anchor runs for a new text version, the sources are the old version's proposal sets (T5) **plus the old version's final stage result**, if one exists. The final result becomes one more proposal set with `origin = "reanchor"`, the tool actor `ontocurator-reanchor`, and `source_refs` to the final result's annotations. Individual submissions are not carried over.
+**Re-anchoring (Q21):** when T5's re-anchor runs for a new text version, the sources are the old version's proposal sets (T5) **plus the old version's final stage result**, if one exists. The final result becomes one more proposal set with `origin = "reanchor"`, the tool actor `ontotator-reanchor`, and `source_refs` to the final result's annotations. Individual submissions are not carried over.
 
 > **Open question Q21:** When a text gets a corrected version, which annotations are carried over automatically? Provisional default: imported proposals and the document's final result; individual annotators' submissions stay with the old version.
 
@@ -665,7 +665,7 @@ Job status uses T3a's `GET /api/v1/jobs/{id}`.
 
 ### Task 12: Comments backend (W8)
 
-**Create:** `src/ontocurator/comments/__init__.py`, `src/ontocurator/comments/service.py`, `src/ontocurator/authz/comments.py`, `api/comment_routes.py`, `tests/test_comments.py`. **Modify:** the edit-log export handler (T2d), the "My tasks" endpoint (T3a), `api/app.py`.
+**Create:** `src/ontotator/comments/__init__.py`, `src/ontotator/comments/service.py`, `src/ontotator/authz/comments.py`, `api/comment_routes.py`, `tests/test_comments.py`. **Modify:** the edit-log export handler (T2d), the "My tasks" endpoint (T3a), `api/app.py`.
 
 **`CommentService(db, *, now=…)`:**
 - `post(actor, project, document_id, *, body, assignment_id=None, annotation=None, parent_id=None, corrects_comment_id=None, addressed: list[str] = []) -> Comment`:
@@ -788,7 +788,7 @@ Translation-review assignments have no stage; they see lead comments and their o
    - set kinds for `case-1`: one `release`, one `adjudicated`, two `individual`, two `tool_output`;
    - the `tool_output` sets keep the producer's `annotation_set_id`, annotation ids, `basis: "defaulted"` and notes (O1, D-u);
    - every release annotation's `source_refs` starts with the adjudicated annotation and contains the proposal URNs it descends from (O3); every reference resolves inside the bundle;
-   - `manifest.release` has the name, description, project key, `producer.name == "ontocurator"` and empty `supersedes` (O6, I7);
+   - `manifest.release` has the name, description, project key, `producer.name == "ontotator"` and empty `supersedes` (O6, I7);
    - no username or display name occurs in the ZIP bytes;
    - the audit log has `project.import` twice with bundle ids and manifest hashes, and `release.create` with the manifest hash (I9).
 9. A second release "Gold v1.1" superseding "Gold v1" has `release.supersedes == [{bundle_id, manifest_sha256}]` of the first.
@@ -796,7 +796,7 @@ Translation-review assignments have no stage; they see lead comments and their o
 
 **Script (`scripts/check_integration_roundtrip.py`):** the same flow against the dev compose stack, run by hand before tagging a release:
 - precondition: `docker compose -f docker-compose.dev.yml up -d --build --wait`;
-- users through `docker compose … exec app ontocurator admin users create`, codes redeemed through `POST /api/v1/auth/redeem-code` (as `scripts/seed_stack.py`, T2e; reuse its helpers);
+- users through `docker compose … exec app ontotator admin users create`, codes redeemed through `POST /api/v1/auth/redeem-code` (as `scripts/seed_stack.py`, T2e; reuse its helpers);
 - the HTTP steps with `httpx` and CSRF headers, against `http://127.0.0.1:8000`, using a unique project key per run (`rt-<timestamp>`);
 - downloads the release to a temporary directory, checks it with `ontospan.read_bundle` and the assertions of step 8, and prints `PASS`/`FAIL` per step; exit code non-zero on any failure;
 - it leaves the stack running and does not delete the project (the data shows what was checked).

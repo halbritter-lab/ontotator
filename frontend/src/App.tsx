@@ -30,7 +30,7 @@ function clearLegacyStorage(): void {
   try {
     const storage = window.localStorage;
     const stale = Array.from({ length: storage.length }, (_, index) => storage.key(index))
-      .filter((key): key is string => key === "ontocurator.annotatorId" || !!key?.startsWith("ontocurator.mode."));
+      .filter((key): key is string => key === "ontotator.annotatorId" || !!key?.startsWith("ontotator.mode."));
     stale.forEach(key => storage.removeItem(key));
   } catch { /* Storage may be unavailable. Identity always comes from the session. */ }
 }
@@ -69,7 +69,7 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
     return () => { active = false; };
   }, [taskIdentity]);
   const acceptedHash = useRef(window.location.hash || "#/");
-  const acceptedIndex = useRef(typeof window.history.state?.ontocuratorRouteIndex === "number" ? window.history.state.ontocuratorRouteIndex as number : 0);
+  const acceptedIndex = useRef(typeof window.history.state?.ontotatorRouteIndex === "number" ? window.history.state.ontotatorRouteIndex as number : 0);
   type HistoryEntry = { hash: string; index: number; state: Record<string, unknown> };
   const historyCursor = useRef(acceptedIndex.current);
   const replacedEntries = useRef(new Map<number, HistoryEntry>());
@@ -87,7 +87,7 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
     clearLegacyStorage();
     // Mark entries created by this controller so a cancelled Back/Forward can
     // restore the history cursor as well as the visible URL.
-    window.history.replaceState({ ...window.history.state, ontocuratorRouteIndex: acceptedIndex.current }, "", acceptedHash.current);
+    window.history.replaceState({ ...window.history.state, ontotatorRouteIndex: acceptedIndex.current }, "", acceptedHash.current);
     return () => { alive.current = false; historyRestored.current?.(); };
   }, []);
   useEffect(() => {
@@ -151,10 +151,10 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
         if (hash === acceptedHash.current) return;
         // Replace keeps the accepted index (e.g. row expansion), so Back skips it.
         if (target.options?.replace) {
-          window.history.replaceState({ ...window.history.state, ontocuratorRouteIndex: acceptedIndex.current }, "", hash);
+          window.history.replaceState({ ...window.history.state, ontotatorRouteIndex: acceptedIndex.current }, "", hash);
         } else {
           acceptedIndex.current++;
-          window.history.pushState({ ...window.history.state, ontocuratorRouteIndex: acceptedIndex.current }, "", hash);
+          window.history.pushState({ ...window.history.state, ontotatorRouteIndex: acceptedIndex.current }, "", hash);
         }
         historyCursor.current = acceptedIndex.current;
       } else acceptedIndex.current = target.nativeIndex;
@@ -218,14 +218,14 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
       if (event instanceof HashChangeEvent && event.newURL !== window.location.href) return;
       const hash = window.location.hash;
       const state = window.history.state ?? {};
-      const index = typeof state.ontocuratorRouteIndex === "number" ? state.ontocuratorRouteIndex : historyCursor.current + 1;
+      const index = typeof state.ontotatorRouteIndex === "number" ? state.ontotatorRouteIndex : historyCursor.current + 1;
       historyCursor.current = index;
       if (restoringHistory.current) {
         if (index === historyTarget.current) historyRestored.current?.();
         return;
       }
       if (hash === acceptedHash.current && index === acceptedIndex.current && !leaving.current) return;
-      const original = replacedEntries.current.get(index) ?? { hash, index, state: { ...state, ontocuratorRouteIndex: index } };
+      const original = replacedEntries.current.get(index) ?? { hash, index, state: { ...state, ontotatorRouteIndex: index } };
       replacedEntries.current.set(index, original);
       window.history.replaceState(original.state, "", acceptedHash.current);
       void requestRef.current(parseRoute(original.hash), index);

@@ -1,10 +1,10 @@
 # Translation review export v1
 
-The generic UTF-8 JSONL format is `ontocurator-translation-review/v1`. Consumer-specific mappings belong in the consumer repository. The export contains one compact JSON object per immutable review, ordered by ascending numeric review ID, followed by LF. A history with no reviews exports zero bytes. No annotation submission is needed.
+The generic UTF-8 JSONL format is `ontotator-translation-review/v1`. Consumer-specific mappings belong in the consumer repository. The export contains one compact JSON object per immutable review, ordered by ascending numeric review ID, followed by LF. A history with no reviews exports zero bytes. No annotation submission is needed.
 
 Request `POST /api/v1/projects/{key}/exports/translation-reviews`; the response is `{ "job_id": ... }`. Poll the existing job endpoint; success returns only `{ "sha256": "...", "reviews": 3 }`. Download the authenticated artifact from `/api/v1/jobs/{id}/download`. Current full-export permission is required at enqueue, worker execution and download, including for the requester. Downloads use `application/x-ndjson` and a server-generated `project-translation-reviews-YYYYMMDDTHHMMSSZ.jsonl` attachment name.
 
-CLI: `ontocurator admin export-translation-reviews PROJECT OUT.jsonl [--no-wait]`. Default execution waits, writes the exact artifact and refuses overwrite. `--no-wait` only queues a project-associated job and prints its ID; it creates no local output.
+CLI: `ontotator admin export-translation-reviews PROJECT OUT.jsonl [--no-wait]`. Default execution waits, writes the exact artifact and refuses overwrite. `--no-wait` only queues a project-associated job and prints its ID; it creates no local output.
 
 ## Record fields
 
@@ -12,7 +12,7 @@ Every record has exactly these keys, in this serialization order:
 
 | Key | Value |
 | --- | --- |
-| format | `ontocurator-translation-review/v1` |
+| format | `ontotator-translation-review/v1` |
 | review_id | Immutable numeric review ID |
 | project | Project key |
 | case_id | Reviewed variant's actual case ID |

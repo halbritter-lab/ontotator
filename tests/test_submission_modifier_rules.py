@@ -8,10 +8,10 @@ from typing import Any
 import pytest
 from sqlalchemy import update
 
-from ontocurator.application.submissions import SubmissionService
-from ontocurator.domain.errors import DomainError
-from ontocurator.domain.workspace import MutationEnvelope, WorkspaceKey
-from ontocurator.storage.tables import ProjectRow
+from ontotator.application.submissions import SubmissionService
+from ontotator.domain.errors import DomainError
+from ontotator.domain.workspace import MutationEnvelope, WorkspaceKey
+from ontotator.storage.tables import ProjectRow
 
 SUBMIT = {"document_checked": True, "checked_layer_ids": ["hpo-layer"]}
 

@@ -8,7 +8,7 @@ from test_case_api import BASE, CASE, CORRECTED, TARGET
 from test_case_api import case_env as case_env
 from test_translation_review_task import assigned
 
-from ontocurator.storage.tables import DocumentRow
+from ontotator.storage.tables import DocumentRow
 
 
 def test_routes_are_lead_only_and_validate_query(case_env):

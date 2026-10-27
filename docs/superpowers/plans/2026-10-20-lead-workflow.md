@@ -6,7 +6,7 @@
 
 **Architecture:** Migration `0016_work_plans` adds plan rows, case revisions, translation acceptances, discards and two project settings. A pure module `domain/work_plans.py` holds defaults, validity, tri-state merge and consequences; `application/work_plans.py` saves plans under the project lock and is exposed by `api/work_plan_routes.py`. The Documents read model gains a pure next-step derivation (`domain/next_steps.py`) that feeds rows, bar segments, filters, the selection summary and Progress. Bulk assignment reuses `AssignmentService._assign_locked` inside one transaction. The frontend gets three primitives (`PlanChip`, `TriStateButton`, `Toast`) and grouped-table case selection, then rebuilds Documents (6 columns, chips, selection bar), the assign dialog, the plan dialog, the upload "Work plan" step, Progress, landing and Export.
 
-**Tech Stack:** Python 3.12, FastAPI, SQLAlchemy 2, Alembic, PostgreSQL (pytest via Docker testcontainers or `ONTOCURATOR_TEST_PG_URL`); React 18, TypeScript, Vitest + Testing Library, Playwright + axe-core; `openapi-typescript` for `generated.ts`.
+**Tech Stack:** Python 3.12, FastAPI, SQLAlchemy 2, Alembic, PostgreSQL (pytest via Docker testcontainers or `ONTOTATOR_TEST_PG_URL`); React 18, TypeScript, Vitest + Testing Library, Playwright + axe-core; `openapi-typescript` for `generated.ts`.
 
 **Binding inputs:** the spec above; mockups in `.superpowers/mockups/lead-workflow-20261020/approved/` (`work-plan-flow.html`, `work-plan-by-language.html`, `work-plan-shift-select.html`, `work-plan-step3.html`, `work-plan-step4-assign.html`; binding for layout and copy of the work-plan flow); `PRODUCT.md`; `DESIGN.md`. Where a mockup and the spec differ, the spec wins.
 
@@ -23,7 +23,7 @@ Worktree: `C:/Users/jan-p/Development/ontocurator/.worktrees/phase0-implementati
 5. **Machine limits (16 GB).** At most **two heavy** agents at once. Heavy = backend pytest that touches PostgreSQL, a full Vitest run, Playwright, a `scripts/check.sh` stage. Light = pure-Python pytest files without a database (`tests/test_*_domain.py`, `tests/test_batch_layout.py`), single Vitest files, `npm --prefix frontend run typecheck`, ruff/mypy, generator scripts. At most three light agents at once. Lane **L+** = light, but its one full Vitest run at the end waits until the orchestrator confirms a free heavy slot.
 6. **Vitest always** with `--maxWorkers=4 --minWorkers=1`: single file `npm --prefix frontend test -- --maxWorkers=4 --minWorkers=1 tests/<path>`; full suite `npm --prefix frontend test -- --maxWorkers=4 --minWorkers=1`.
 7. **Playwright: one run at a time on the machine**, always with `HPO_E2E_PORT=18765` for this plan: `HPO_E2E_PORT=18765 npm --prefix frontend run test:e2e -- <spec>` (it rebuilds `frontend/dist`). If the build fails because another agent is mid-edit, rerun after it finishes; never fix its files. The same holds for the static gate during parallel work: `scripts/check.sh --only static` checks the whole tree (ruff, format, mypy, contract drift), so it may fail on a sibling WP's in-progress files or on a pending regeneration. A WP fixes only failures in its own Owns, reports the others with file names, and the orchestrator reruns the static gate after the sibling WP is done.
-8. **Backend tests.** Need Docker running or `ONTOCURATOR_TEST_PG_URL`. Run single files: `uv run pytest tests/<file>.py -q`. Static: `uv run ruff check . && uv run ruff format --check . && uv run mypy src`. The full backend suite (~25 min) runs only where a WP block says so and in the final gate.
+8. **Backend tests.** Need Docker running or `ONTOTATOR_TEST_PG_URL`. Run single files: `uv run pytest tests/<file>.py -q`. Static: `uv run ruff check . && uv run ruff format --check . && uv run mypy src`. The full backend suite (~25 min) runs only where a WP block says so and in the final gate.
 9. **Contracts.** `contracts/openapi.json`, `frontend/src/api/generated.ts` and `contracts/admin-error-codes.json` are never hand-edited. Regenerate with `uv run python scripts/export_openapi.py && npm --prefix frontend run api:generate` and `uv run python scripts/export_admin_error_codes.py`; drift checks `uv run python scripts/export_openapi.py --check`, `npm --prefix frontend run api:check`, `uv run python scripts/export_admin_error_codes.py --check` (all three are part of `scripts/check.sh --only static`). One contracts writer at a time, in the order L0b → L1 → L1p → L1b, never while another backend WP is mid-edit on API models. Before a WP's regeneration step, backend WPs verify with ruff/mypy and their pytest files (OpenAPI drift is expected until then).
 10. **API changes are additive.** New response fields get defaults (`= None`, `= 0`, `Field(default_factory=…)`) so the generated TypeScript fields stay optional and existing frontend code and fixtures keep compiling. Old fields stay until a frontend WP stops using them; no WP removes a response field.
 11. **Migration:** this plan creates `0016_work_plans` (`down_revision = "0015"`). Never renumber; a later migration is `0017+`.
@@ -78,13 +78,13 @@ Review: one review per flagged WP by the `superpowers:code-reviewer` agent (or `
 | File(s) | Writers in order |
 |---|---|
 | `contracts/openapi.json`, `frontend/src/api/generated.ts`, `frontend/src/api/client.ts` | L0b (also covers L0c's upload models) → L1 → L1p → L1b |
-| `src/ontocurator/domain/admin_error_codes.py`, `contracts/admin-error-codes.json`, `frontend/src/admin/errors.ts`, `src/ontocurator/api/app.py` | L0b → L1b |
-| `src/ontocurator/storage/tables.py` | L0a only |
-| `src/ontocurator/domain/document_rows.py` | L0b (`ACKNOWLEDGEABLE` += `PLAN_RESTORED`; `missing_final_counts(per_text=…)`) → L1 |
-| `src/ontocurator/assignments/service.py` | L0b (`check_assignable(check_plan=…)`, reassign bypass, D25 `review_accepted_translation`) → L1p (`TaskSummary.case_id`) |
-| `src/ontocurator/api/assignment_routes.py` | L0b only (create request field `review_accepted_translation`) |
-| `src/ontocurator/application/document_rows.py`, `application/document_row_page.py`, `api/document_row_routes.py`, `tests/document_rows_support.py` | L1 → L1p |
-| `src/ontocurator/application/document_row_submissions.py`, `application/document_row_reports.py` | L1p only |
+| `src/ontotator/domain/admin_error_codes.py`, `contracts/admin-error-codes.json`, `frontend/src/admin/errors.ts`, `src/ontotator/api/app.py` | L0b → L1b |
+| `src/ontotator/storage/tables.py` | L0a only |
+| `src/ontotator/domain/document_rows.py` | L0b (`ACKNOWLEDGEABLE` += `PLAN_RESTORED`; `missing_final_counts(per_text=…)`) → L1 |
+| `src/ontotator/assignments/service.py` | L0b (`check_assignable(check_plan=…)`, reassign bypass, D25 `review_accepted_translation`) → L1p (`TaskSummary.case_id`) |
+| `src/ontotator/api/assignment_routes.py` | L0b only (create request field `review_accepted_translation`) |
+| `src/ontotator/application/document_rows.py`, `application/document_row_page.py`, `api/document_row_routes.py`, `tests/document_rows_support.py` | L1 → L1p |
+| `src/ontotator/application/document_row_submissions.py`, `application/document_row_reports.py` | L1p only |
 | `frontend/tests/documents/fixtures.ts` | L1 → L1p → L3 → L4 |
 | `frontend/tests/projectFixtures.ts` | L0b → L5b |
 | `tests/t1_fixtures.py`, `tests/browser_documents_scenarios.py` (fixture-only `plan_all` calls) | L0b only |
@@ -156,7 +156,7 @@ These names are fixed for all WPs. A WP that produces one implements it exactly;
 ### Backend: work plan (L0a/L0b/L0c)
 
 ```python
-# src/ontocurator/domain/work_plans.py (L0a, pure)
+# src/ontotator/domain/work_plans.py (L0a, pure)
 ImportPlanSetting = Literal["nothing", "review_and_annotate_translations"]
 TriState = Literal["keep", "on", "off"]
 Preset = Literal["review_and_annotate_translations", "annotate_only"]
@@ -261,9 +261,9 @@ def mixed_counts(
 ) -> dict[str, int]: ...  # {"review_on", "review_off", "annotate_on", "annotate_off"}
 ```
 
-Tables (L0a, `src/ontocurator/storage/plan_tables.py`, imported at the end of `storage/tables.py` like `final_tables`): `work_plans(id, project_id, case_id, revision CHECK (revision >= 1), updated_at; unique(project_id, case_id))`, `work_plan_rows(id, project_id, case_id, language, review, annotate, restored_revision NULL, updated_by NULL FK → users, updated_at, created_at; unique(project_id, case_id, language))`, `translation_acceptances(id, project_id, document_id, source CHECK IN ('package','lead','override'), reason NULL CHECK (source = 'package' OR reason IS NOT NULL), accepted_by NULL FK → users, accepted_at, upload_id NULL FK → uploads, metadata jsonb '{}'; FK (project_id, document_id) → documents)`, `discarded_variants(id, project_id, document_id, reason, discarded_by FK → users, discarded_at; unique(project_id, document_id); FK → documents)`. `translation_acceptances` and `discarded_variants` are append-only (added to `APPEND_ONLY_TABLES`). `projects.annotations_per_text` (int, server default 1, CHECK 1–5), `projects.import_plan` (text, server default `'review_and_annotate_translations'`, CHECK in the two values).
+Tables (L0a, `src/ontotator/storage/plan_tables.py`, imported at the end of `storage/tables.py` like `final_tables`): `work_plans(id, project_id, case_id, revision CHECK (revision >= 1), updated_at; unique(project_id, case_id))`, `work_plan_rows(id, project_id, case_id, language, review, annotate, restored_revision NULL, updated_by NULL FK → users, updated_at, created_at; unique(project_id, case_id, language))`, `translation_acceptances(id, project_id, document_id, source CHECK IN ('package','lead','override'), reason NULL CHECK (source = 'package' OR reason IS NOT NULL), accepted_by NULL FK → users, accepted_at, upload_id NULL FK → uploads, metadata jsonb '{}'; FK (project_id, document_id) → documents)`, `discarded_variants(id, project_id, document_id, reason, discarded_by FK → users, discarded_at; unique(project_id, document_id); FK → documents)`. `translation_acceptances` and `discarded_variants` are append-only (added to `APPEND_ONLY_TABLES`). `projects.annotations_per_text` (int, server default 1, CHECK 1–5), `projects.import_plan` (text, server default `'review_and_annotate_translations'`, CHECK in the two values).
 
-Store (L0a, `src/ontocurator/storage/work_plan_store.py`, conn-scoped, no transactions of its own):
+Store (L0a, `src/ontotator/storage/work_plan_store.py`, conn-scoped, no transactions of its own):
 
 ```python
 def language_versions(
@@ -324,7 +324,7 @@ def discarded(conn, project_id: int) -> dict[str, dict[str, Any]]: ...
 
 Error codes (L0b adds to `ADMIN_ERROR_CODES`, `errors.ts` messages and the `app.py` status map): `WORK_PLAN_CONFIRMATION_REQUIRED` (409), `WORK_PLAN_CHANGED` (409), `WORK_PLAN_INVALID` (422), `NOT_IN_WORK_PLAN` (409), `CASE_IDS_TOO_MANY` (422), `VARIANT_ALREADY_DISCARDED` (409). L1b adds `ASSIGNMENT_BATCH_STALE` (409) and `ASSIGNMENT_BATCH_REFUSED` (409).
 
-API models (L0b, `src/ontocurator/api/work_plan_routes.py`; `PersonRefView` in `src/ontocurator/api/person_views.py`, loader `person_refs` in `src/ontocurator/application/people.py`):
+API models (L0b, `src/ontotator/api/work_plan_routes.py`; `PersonRefView` in `src/ontotator/api/person_views.py`, loader `person_refs` in `src/ontotator/application/people.py`):
 
 ```python
 class PersonRefView(BaseModel):  # display_name only for lead callers; None otherwise
@@ -501,7 +501,7 @@ Upload (L0c): `ImportPlan.work_plan: UploadWorkPlan | None = None` with `UploadW
 ### Backend: next step and identity (L1/L1p)
 
 ```python
-# src/ontocurator/domain/next_steps.py (L1, pure)
+# src/ontotator/domain/next_steps.py (L1, pure)
 StepCode = Literal[
     "decide_report",
     "resume_task",
@@ -596,7 +596,7 @@ L1p: `PersonRefView` fields added next to the existing label strings (`WorkItemV
 ### Backend: batch assignment (L1b)
 
 ```python
-# src/ontocurator/domain/batch_layout.py (pure)
+# src/ontotator/domain/batch_layout.py (pure)
 def layout(
     case_ids: Sequence[str],
     people: Sequence[str],
@@ -771,17 +771,17 @@ Router (L3 adds; others consume): `ProjectDocumentsQuery` gains `segment`, `step
 - **Goal:** persistent work plans and the pure rules every later WP uses.
 - **Spec:** "Work plan" (Concept, Project default for imports, Editing after work started, Migration of existing projects), "Backend and API" › "Work plan, selection, acceptance" (Data model, Domain).
 - **Shared contracts:** "Backend: work plan" (domain, tables, store).
-- **Owns:** `src/ontocurator/storage/migrations/versions/0016_work_plans.py` (create), `src/ontocurator/storage/plan_tables.py` (create), `src/ontocurator/storage/tables.py` (two `ProjectRow` columns, `APPEND_ONLY_TABLES` += 2 names, one import line at the end), `src/ontocurator/storage/work_plan_store.py` (create), `src/ontocurator/domain/work_plans.py` (create), `tests/test_work_plans_domain.py`, `tests/test_work_plan_migration.py`, `tests/test_work_plan_store.py` (create).
+- **Owns:** `src/ontotator/storage/migrations/versions/0016_work_plans.py` (create), `src/ontotator/storage/plan_tables.py` (create), `src/ontotator/storage/tables.py` (two `ProjectRow` columns, `APPEND_ONLY_TABLES` += 2 names, one import line at the end), `src/ontotator/storage/work_plan_store.py` (create), `src/ontotator/domain/work_plans.py` (create), `tests/test_work_plans_domain.py`, `tests/test_work_plan_migration.py`, `tests/test_work_plan_store.py` (create).
 - **Size / lane / review:** L / heavy / yes (backend-critical).
 - **Code to read:** `storage/final_tables.py` (mapping style), `storage/migrations/versions/0013_problem_reports.py` (grants: `GRANT SELECT, INSERT` for append-only, `SELECT, INSERT, UPDATE` otherwise) and `0015_problem_report_lifecycle.py` (header), `storage/tables.py:78-122` (`ProjectRow`), `:158-206` (`DocumentRow`), `tests/test_problem_report_migration.py` (migration test pattern with `unmigrated_database_url`), `tests/test_schema.py` (mapped tables must equal the migration), `domain/variants.py` (`resolve_translation_lineage`, `TRANSLATION_ORIGINS`), `domain/document_rows.py:79-175` (`Version`, `build_chains`).
-- **Prerequisites:** `ls src/ontocurator/storage/migrations/versions/ | grep -c '^0016'` prints `0`; `test ! -e src/ontocurator/domain/work_plans.py`.
+- **Prerequisites:** `ls src/ontotator/storage/migrations/versions/ | grep -c '^0016'` prints `0`; `test ! -e src/ontotator/domain/work_plans.py`.
 
 - [ ] **Step 1: Failing domain tests** (`tests/test_work_plans_domain.py`, pure, light):
 
 ```python
 """Pure work-plan rules (spec "Work plan"); no database."""
 
-from ontocurator.domain.work_plans import (
+from ontotator.domain.work_plans import (
     LanguageChange,
     LanguageVersion,
     OpenReport,
@@ -935,10 +935,10 @@ def test_mixed_counts():
 - **Goal:** every plan write path of the spec, its effects on assignment, export and final causes, and the regenerated contracts.
 - **Spec:** "Work plan" (Concept, Selection bar, Inline plan chips, Plan dialog, Annotate without review, Editing after work started, Discarding a language version), "Concepts › Stage", "Screens › Export" (plan scope), "Settings › Workflow", "Backend and API" (L0 list), "Testing" (Contract).
 - **Shared contracts:** "Backend: work plan" (all).
-- **Owns:** `src/ontocurator/application/work_plans.py`, `src/ontocurator/application/people.py`, `src/ontocurator/api/person_views.py`, `src/ontocurator/api/work_plan_routes.py` (create all four), `src/ontocurator/api/app.py` (router include, status map), `src/ontocurator/assignments/eligibility.py`, `src/ontocurator/assignments/service.py` (`check_assignable(check_plan=…)`, `reassign`, the create path for `review_accepted_translation`), `src/ontocurator/api/assignment_routes.py` (create request field only), `src/ontocurator/assignments/proposals.py` (`snapshot_on` only), `src/ontocurator/projects/service.py` (settings fields), `src/ontocurator/application/final_causes.py`, `src/ontocurator/application/final_results.py`, `src/ontocurator/application/workflow_warnings.py`, `src/ontocurator/api/final_result_routes.py` (`FinalPreflight.not_in_plan`), `src/ontocurator/domain/document_rows.py` (`ACKNOWLEDGEABLE` and `missing_final_counts(per_text=1)` only), `src/ontocurator/domain/admin_error_codes.py`, `contracts/admin-error-codes.json`, `frontend/src/admin/errors.ts`, `contracts/openapi.json`, `frontend/src/api/generated.ts`, `frontend/src/api/client.ts`, `frontend/tests/workPlanClient.test.ts` (create), `frontend/tests/projectFixtures.ts` (only if typecheck needs it), `tests/test_work_plans_service.py`, `tests/test_work_plans_api.py`, `tests/test_work_plan_effects.py`, `tests/work_plan_support.py` (create all four); fixture-only `plan_all` calls in `tests/t1_fixtures.py`, `tests/browser_documents_scenarios.py` and any other fixture module the full backend run shows failing with `NOT_IN_WORK_PLAN` or the new export scope, never a file L0c owns. The hand-back lists every swept file by exact path; the orchestrator stages exactly that list.
+- **Owns:** `src/ontotator/application/work_plans.py`, `src/ontotator/application/people.py`, `src/ontotator/api/person_views.py`, `src/ontotator/api/work_plan_routes.py` (create all four), `src/ontotator/api/app.py` (router include, status map), `src/ontotator/assignments/eligibility.py`, `src/ontotator/assignments/service.py` (`check_assignable(check_plan=…)`, `reassign`, the create path for `review_accepted_translation`), `src/ontotator/api/assignment_routes.py` (create request field only), `src/ontotator/assignments/proposals.py` (`snapshot_on` only), `src/ontotator/projects/service.py` (settings fields), `src/ontotator/application/final_causes.py`, `src/ontotator/application/final_results.py`, `src/ontotator/application/workflow_warnings.py`, `src/ontotator/api/final_result_routes.py` (`FinalPreflight.not_in_plan`), `src/ontotator/domain/document_rows.py` (`ACKNOWLEDGEABLE` and `missing_final_counts(per_text=1)` only), `src/ontotator/domain/admin_error_codes.py`, `contracts/admin-error-codes.json`, `frontend/src/admin/errors.ts`, `contracts/openapi.json`, `frontend/src/api/generated.ts`, `frontend/src/api/client.ts`, `frontend/tests/workPlanClient.test.ts` (create), `frontend/tests/projectFixtures.ts` (only if typecheck needs it), `tests/test_work_plans_service.py`, `tests/test_work_plans_api.py`, `tests/test_work_plan_effects.py`, `tests/work_plan_support.py` (create all four); fixture-only `plan_all` calls in `tests/t1_fixtures.py`, `tests/browser_documents_scenarios.py` and any other fixture module the full backend run shows failing with `NOT_IN_WORK_PLAN` or the new export scope, never a file L0c owns. The hand-back lists every swept file by exact path; the orchestrator stages exactly that list.
 - **Size / lane / review:** L / heavy / yes (backend-critical).
 - **Code to read:** `assignments/eligibility.py`, `assignments/service.py:293-350`, `assignments/proposals.py:229-320`, `assignments/confirmations.py:63-150` (lock order: shared `members`, exclusive `project`), `projects/assignments.py:36-66` (`revoke_assignments`), `projects/service.py:53-120`, `application/final_causes.py:47-60, 122-368`, `application/final_results.py:59-260`, `application/workflow_warnings.py`, `api/final_result_routes.py`, `api/app.py:389-430`, `auth/audit.py:42`, `api/document_row_routes.py:247-260` (`_service` pattern), `frontend/src/api/client.ts:255-310`.
-- **Prerequisites:** `grep -n "def import_defaults" src/ontocurator/domain/work_plans.py`; `grep -n "def write_rows" src/ontocurator/storage/work_plan_store.py`; `grep -n 'revision = "0016"' src/ontocurator/storage/migrations/versions/0016_work_plans.py`.
+- **Prerequisites:** `grep -n "def import_defaults" src/ontotator/domain/work_plans.py`; `grep -n "def write_rows" src/ontotator/storage/work_plan_store.py`; `grep -n 'revision = "0016"' src/ontotator/storage/migrations/versions/0016_work_plans.py`.
 - **Coordination:** L0c runs at the same time (import files). Steps 8 (fixture sweep) and 9 (contracts) start only after L0c reports done. All reads of flags use `work_plan_store.effective_plan`.
 
 - [ ] **Step 1: Failing service tests** (`tests/test_work_plans_service.py`, heavy). Fixture: project via `t1_fixtures.create_project`; lead; reviewers `ana` ("Ana Weber") and `ben` ("Ben Roth"); one annotator; cases `c1`, `c2` with `en` source and `de`, `fr` MT versions; plan rows via one `work_plan_store.write_rows` call (so each case is at revision 2: implicit 1, stored current + 1).
@@ -977,9 +977,9 @@ def test_mixed_counts():
 
 from typing import Any
 
-from ontocurator.domain.work_plans import PlanFlags
-from ontocurator.storage import work_plan_store as store
-from ontocurator.storage.repository import Repository
+from ontotator.domain.work_plans import PlanFlags
+from ontotator.storage import work_plan_store as store
+from ontotator.storage.repository import Repository
 
 
 def plan_all(db: Any, key: str) -> None:
@@ -1002,10 +1002,10 @@ def plan_all(db: Any, key: str) -> None:
 - **Goal:** imports create plan rows from the project default, accept package-reviewed translations, and let the lead change the plan and accept external reviews in the upload preview.
 - **Spec:** "Work plan › Project default for imports", "Planning at import (upload preview)", "Annotate without review: acceptance record (D20)" (From the package), "Backend and API › Import".
 - **Shared contracts:** "Backend: work plan" (Upload part, domain, store).
-- **Owns:** `src/ontocurator/exchange/variant_plan.py`, `src/ontocurator/exchange/plan.py` (`ImportPlan.work_plan`), `src/ontocurator/exchange/uploads.py`, `src/ontocurator/api/upload_routes.py`, `tests/test_import_work_plan.py` (create); expectation-only edits in `tests/test_variant_import.py`, `tests/test_variant_import_plan.py`, `tests/test_upload_preview_job_api.py` where they assert the exact preview shape or plan hash.
+- **Owns:** `src/ontotator/exchange/variant_plan.py`, `src/ontotator/exchange/plan.py` (`ImportPlan.work_plan`), `src/ontotator/exchange/uploads.py`, `src/ontotator/api/upload_routes.py`, `tests/test_import_work_plan.py` (create); expectation-only edits in `tests/test_variant_import.py`, `tests/test_variant_import_plan.py`, `tests/test_upload_preview_job_api.py` where they assert the exact preview shape or plan hash.
 - **Size / lane / review:** M / heavy / yes (backend-critical).
 - **Code to read:** `exchange/variant_plan.py`, `exchange/plan.py:60-130, 240-340`, `exchange/uploads.py:140-460, 497-600, 680-723`, `exchange/variant_overrides.py`, `api/upload_routes.py`, `tests/test_variant_import.py:36-100` (helpers `staged`, `units`, `preview`, `commit`, `override`), `tests/t1_fixtures.py:156-220`.
-- **Prerequisites:** as L0b's first three checks; plus `grep -n "def ensure_rows" src/ontocurator/storage/work_plan_store.py`.
+- **Prerequisites:** as L0b's first three checks; plus `grep -n "def ensure_rows" src/ontotator/storage/work_plan_store.py`.
 - **Coordination:** L0b runs at the same time and owns error codes, `app.py` and contracts. Raise `DomainError("WORK_PLAN_INVALID", …)` (L0b registers it). Tell the orchestrator "L0c API models final" once `plan.py` and `upload_routes.py` models no longer change; never regenerate contracts.
 
 - [ ] **Step 1: Failing tests** (`tests/test_import_work_plan.py`, heavy, helpers from `tests/test_variant_import.py`):
@@ -1032,10 +1032,10 @@ def plan_all(db: Any, key: str) -> None:
 - **Goal:** one server-side next-step derivation per row that feeds the row, the bar, the filters and the header checkbox.
 - **Spec:** "Concepts › Stage", "Next step" (rules table, precedence, secondary line, owner), "Bar (D21)", "Screens › Documents" (filters, sort, not-in-plan rows), "Backend and API › Next step, identity, counts" (bar and query parts), "Selection on Documents" (header checkbox list), "Testing" (Unit: next-step rules, bar segments; Contract: Documents bar equals per-row step kinds).
 - **Shared contracts:** "Backend: next step and identity" (domain, L1 API), "Backend: work plan" (store: `effective_plan`, `acceptances`, `discarded`).
-- **Owns:** `src/ontocurator/domain/next_steps.py` (create), `src/ontocurator/domain/document_rows.py` (bar helpers), `src/ontocurator/application/document_rows.py`, `src/ontocurator/application/document_row_page.py`, `src/ontocurator/api/document_row_routes.py`, `tests/document_rows_support.py`, `tests/test_next_steps_domain.py` (create), `tests/test_document_rows_next_step.py` (create), expectation-only edits in `tests/test_document_rows_page.py`, `tests/test_document_rows_api.py`, `tests/test_document_rows_domain.py`, `tests/test_document_rows_facts.py`, `tests/test_document_rows_submissions.py`, `tests/test_document_rows_problem_reports.py` (missing-final now only on Annotate rows; bar fields added), `contracts/openapi.json`, `frontend/src/api/generated.ts`, `frontend/src/api/client.ts`, `frontend/tests/documents/client.test.ts`, `frontend/tests/documents/fixtures.ts` (defaults for new fields only).
+- **Owns:** `src/ontotator/domain/next_steps.py` (create), `src/ontotator/domain/document_rows.py` (bar helpers), `src/ontotator/application/document_rows.py`, `src/ontotator/application/document_row_page.py`, `src/ontotator/api/document_row_routes.py`, `tests/document_rows_support.py`, `tests/test_next_steps_domain.py` (create), `tests/test_document_rows_next_step.py` (create), expectation-only edits in `tests/test_document_rows_page.py`, `tests/test_document_rows_api.py`, `tests/test_document_rows_domain.py`, `tests/test_document_rows_facts.py`, `tests/test_document_rows_submissions.py`, `tests/test_document_rows_problem_reports.py` (missing-final now only on Annotate rows; bar fields added), `contracts/openapi.json`, `frontend/src/api/generated.ts`, `frontend/src/api/client.ts`, `frontend/tests/documents/client.test.ts`, `frontend/tests/documents/fixtures.ts` (defaults for new fields only).
 - **Size / lane / review:** L / heavy / yes (backend-critical).
 - **Code to read:** `domain/document_rows.py` (whole), `application/document_rows.py:53-145, 467-518`, `application/document_row_page.py` (whole), `api/document_row_routes.py` (whole), `tests/document_rows_support.py`, `tests/test_document_rows_page.py` (fixture style).
-- **Prerequisites:** `grep -n "def effective_plan" src/ontocurator/storage/work_plan_store.py`; `grep -n "PLAN_RESTORED" src/ontocurator/domain/document_rows.py`; `grep -n "patchWorkPlan" frontend/src/api/client.ts` (L0b contracts done).
+- **Prerequisites:** `grep -n "def effective_plan" src/ontotator/storage/work_plan_store.py`; `grep -n "PLAN_RESTORED" src/ontotator/domain/document_rows.py`; `grep -n "patchWorkPlan" frontend/src/api/client.ts` (L0b contracts done).
 
 - [ ] **Step 1: Failing domain tests** (`tests/test_next_steps_domain.py`, pure, light):
 
@@ -1044,7 +1044,7 @@ def plan_all(db: Any, key: str) -> None:
 
 import pytest
 
-from ontocurator.domain.next_steps import StepFacts, derive_steps, in_plan, segment_of
+from ontotator.domain.next_steps import StepFacts, derive_steps, in_plan, segment_of
 
 
 def facts(**kw):
@@ -1297,10 +1297,10 @@ def test_review_only_row_done_on_acceptance():
 - **Goal:** lead-only display names in one person format, open-task workload per member, the case ID on My tasks, and Progress counts from the same derivation as Documents.
 - **Spec:** "Identity (D1)", "Text label", "Screens › Progress (D9)", "Backend and API › Next step, identity, counts" (PersonRef, `Member.open_tasks`, `TaskSummary.case_id`, progress `stages`), "Testing" (Contract: Documents and Progress counts equal).
 - **Shared contracts:** "Backend: next step and identity" (L1p part), `PersonRefView` and `person_refs` (L0b).
-- **Owns:** `src/ontocurator/application/document_rows.py`, `src/ontocurator/application/document_row_page.py`, `src/ontocurator/application/document_row_submissions.py`, `src/ontocurator/application/document_row_reports.py`, `src/ontocurator/api/document_row_routes.py`, `src/ontocurator/api/project_routes.py`, `src/ontocurator/assignments/service.py` (`TaskSummary`, `my_tasks`), `src/ontocurator/application/progress.py` (create), `tests/document_rows_support.py`, `tests/test_person_refs.py`, `tests/test_progress_stages.py` (create), expectation-only edits in `tests/test_progress_export_api.py`, `tests/test_assignments.py` (TaskSummary shape), `contracts/openapi.json`, `frontend/src/api/generated.ts`, `frontend/src/api/client.ts`, `frontend/tests/documents/fixtures.ts` (defaults only), `frontend/tests/progressExportClient.test.ts`.
+- **Owns:** `src/ontotator/application/document_rows.py`, `src/ontotator/application/document_row_page.py`, `src/ontotator/application/document_row_submissions.py`, `src/ontotator/application/document_row_reports.py`, `src/ontotator/api/document_row_routes.py`, `src/ontotator/api/project_routes.py`, `src/ontotator/assignments/service.py` (`TaskSummary`, `my_tasks`), `src/ontotator/application/progress.py` (create), `tests/document_rows_support.py`, `tests/test_person_refs.py`, `tests/test_progress_stages.py` (create), expectation-only edits in `tests/test_progress_export_api.py`, `tests/test_assignments.py` (TaskSummary shape), `contracts/openapi.json`, `frontend/src/api/generated.ts`, `frontend/src/api/client.ts`, `frontend/tests/documents/fixtures.ts` (defaults only), `frontend/tests/progressExportClient.test.ts`.
 - **Size / lane / review:** M / heavy / yes (backend-critical).
 - **Code to read:** `api/project_routes.py:55-190, 317-360`, `assignments/service.py:95-112, 603-674`, `application/document_row_page.py` (author/reporter labels), `application/document_row_submissions.py`, `application/document_row_reports.py`, `application/people.py`, `api/person_views.py`.
-- **Prerequisites:** `grep -n "def derive_steps" src/ontocurator/domain/next_steps.py`; `grep -n "listDocumentCaseIds" frontend/src/api/client.ts` (L1 contracts done).
+- **Prerequisites:** `grep -n "def derive_steps" src/ontotator/domain/next_steps.py`; `grep -n "listDocumentCaseIds" frontend/src/api/client.ts` (L1 contracts done).
 
 - [ ] **Step 1: Failing tests.** `tests/test_person_refs.py` (heavy): `test_lead_sees_display_names_of_others` (work item, final summary, submission, round, open review, report reporter carry `{"pseudonym": "ann-0004", "display_name": "Ana Weber", "is_me": False}`), `test_lead_own_items_are_marked_is_me`, `test_members_hide_other_display_names_from_non_leads` (annotator calling `GET /members` sees `display_name == ""` and `username == ""` for others, only their pseudonyms; own record intact; a lead still sees all usernames and names), `test_members_carry_open_tasks` (`{"translation_review": 1, "annotate": 2, "review": 0}`; submitted and revoked not counted), `test_my_tasks_carry_case_id`. `tests/test_progress_stages.py` (heavy): `test_progress_lede_counts` (`cases`, `translations_to_review`, `versions_to_annotate`, `not_in_plan`, `needs_decision`, `to_assign`), `test_stage_cards_count_rows_per_state` (Translation review: `to_assign`, `in_review`, `check_failed`, `check_failed_with_reviewer`, `rejected_or_queried`, `accepted`; Annotation: `waiting_for_review`, `to_assign`, `in_progress`, `paused`, `submitted`; Final: `not_ready`, `to_choose`, `to_confirm`, `final`, `would_be_omitted`), `test_progress_counts_equal_documents_bar` (`needs_decision`/`to_assign` equal `bar.needs_decision`/`bar.to_assign` of `GET document-rows`), `test_workload_people_sorted_by_open_work` (person refs; columns translation reviews open, annotations open, reviews open, paused, submitted).
 - [ ] **Step 2:** `uv run pytest tests/test_person_refs.py tests/test_progress_stages.py -q` → FAIL.
@@ -1316,15 +1316,15 @@ def test_review_only_row_done_on_acceptance():
 - **Goal:** assign a planned batch to one person or split it evenly in contiguous blocks, all-or-nothing, and tell the selection bar which step is common.
 - **Spec:** "Assign dialog › From the selection bar, many cases (D21)", "Bar (D21)" (waiting for review), "Backend and API › Bulk assignment (WP L1b)", "Testing" (batch assign layout, contract all-or-nothing).
 - **Shared contracts:** "Backend: batch assignment".
-- **Owns:** `src/ontocurator/domain/batch_layout.py` (create), `src/ontocurator/assignments/batch.py` (create), `src/ontocurator/api/assignment_batch_routes.py` (create), `src/ontocurator/api/app.py` (router include, two status codes), `src/ontocurator/domain/admin_error_codes.py`, `contracts/admin-error-codes.json`, `frontend/src/admin/errors.ts`, `tests/test_batch_layout.py`, `tests/test_assignment_batch.py` (create), `contracts/openapi.json`, `frontend/src/api/generated.ts`, `frontend/src/api/client.ts`, `frontend/tests/assignmentBatchClient.test.ts` (create).
+- **Owns:** `src/ontotator/domain/batch_layout.py` (create), `src/ontotator/assignments/batch.py` (create), `src/ontotator/api/assignment_batch_routes.py` (create), `src/ontotator/api/app.py` (router include, two status codes), `src/ontotator/domain/admin_error_codes.py`, `contracts/admin-error-codes.json`, `frontend/src/admin/errors.ts`, `tests/test_batch_layout.py`, `tests/test_assignment_batch.py` (create), `contracts/openapi.json`, `frontend/src/api/generated.ts`, `frontend/src/api/client.ts`, `frontend/tests/assignmentBatchClient.test.ts` (create).
 - **Size / lane / review:** M / heavy / yes (backend-critical).
 - **Code to read:** `assignments/confirmations.py` (lock order, `begin_nested` per row), `assignments/service.py:403-460` (`_assign_locked`), `api/assignment_routes.py:45-75, 273-310` (`AssignmentView`, `_views`), `application/document_rows.py` (`load_facts`), `domain/next_steps.py`.
-- **Prerequisites:** `grep -n "def derive_steps" src/ontocurator/domain/next_steps.py`; `grep -n "def sorted_case_ids" src/ontocurator/application/document_row_page.py`. (L1p runs at the same time; its contracts are checked in Step 6, not here.)
+- **Prerequisites:** `grep -n "def derive_steps" src/ontotator/domain/next_steps.py`; `grep -n "def sorted_case_ids" src/ontotator/application/document_row_page.py`. (L1p runs at the same time; its contracts are checked in Step 6, not here.)
 
 - [ ] **Step 1: Failing layout tests** (`tests/test_batch_layout.py`, pure, light):
 
 ```python
-from ontocurator.domain.batch_layout import layout
+from ontotator.domain.batch_layout import layout
 
 CASES = [f"case-{n:04d}" for n in range(101, 121)]
 
@@ -1655,7 +1655,7 @@ it("formats texts as case · language with an optional version", () => {
 
 - [ ] **Step 1: Failing tests.**
   - `nextStepLabels.test.ts`: `it("labels every step code")` (all 15 codes incl. `translation_not_accepted` → spec copy; action `accept_or_review` → "Assign review or accept…"), `it("labels the secondary line per detail kind")` ("v1 machine translation · ready for review", "Source text · ready to annotate", "2 of 2 annotations submitted", "Round 1 · in progress", report excerpt cut at 60 characters with reporter and "task paused", "Final: Annotation · Round 1 · Annotator (ann-0004)", "Review only · not annotated"), `it("labels the owner")` ("You", "Ana Weber (ann-0004)", "2 annotators", "—").
-  - `planChips.test.tsx` (mock `api.patchWorkPlan`): `it("toggles and saves with one click and shows the undo toast")` ("fr of case-0101: Review off · Undo"), `it("undo restores the previous flags with the returned revision")` (via `runPlanUndo`, `undo: true`), `it("undo after an intervening assignment shows the message and the normal confirmation")` ("Since your change, work was assigned: 1 open translation review (Ana Weber, ann-0004) would be withdrawn.", checkbox, "Undo anyway" resends with `confirm: true`), `it("serialises two quick toggles on one case and sends the revision of the first response")` (second `patchWorkPlan` call waits for the first and uses its `revision`; no `WORK_PLAN_CHANGED`), `it("announces Saving… in the page's shared polite region")`, `it("opens an inline confirmation with consequences instead of saving")` (409 details → lines and checkbox "I understand — withdraw the open tasks", primary "Save" sends `confirm: true`), `it("offers the external-review acceptance for an invalid combination")` (422 → "This translation was reviewed outside Ontocurator — accept it as it is", reason required, primary "Accept and annotate"), `it("keeps focus while saving and shows an inline error with Retry")`, `it("reloads after a stale revision with the message")` ("This plan changed. Reloaded the current plan."), `it("shows only Annotate on the source row")`.
+  - `planChips.test.tsx` (mock `api.patchWorkPlan`): `it("toggles and saves with one click and shows the undo toast")` ("fr of case-0101: Review off · Undo"), `it("undo restores the previous flags with the returned revision")` (via `runPlanUndo`, `undo: true`), `it("undo after an intervening assignment shows the message and the normal confirmation")` ("Since your change, work was assigned: 1 open translation review (Ana Weber, ann-0004) would be withdrawn.", checkbox, "Undo anyway" resends with `confirm: true`), `it("serialises two quick toggles on one case and sends the revision of the first response")` (second `patchWorkPlan` call waits for the first and uses its `revision`; no `WORK_PLAN_CHANGED`), `it("announces Saving… in the page's shared polite region")`, `it("opens an inline confirmation with consequences instead of saving")` (409 details → lines and checkbox "I understand — withdraw the open tasks", primary "Save" sends `confirm: true`), `it("offers the external-review acceptance for an invalid combination")` (422 → "This translation was reviewed outside Ontotator — accept it as it is", reason required, primary "Accept and annotate"), `it("keeps focus while saving and shows an inline error with Retry")`, `it("reloads after a stale revision with the message")` ("This plan changed. Reloaded the current plan."), `it("shows only Annotate on the source row")`.
   - `documentsTable.test.tsx` (rewrite cases that asserted the 7-column layout): `it("renders six columns in order")` (Text · language, Plan, Next step, Owner, Action, Last activity), `it("renders the case header with source plus translations and a decision badge")` ("case-0101 · en source + 2 translations", "1 decision"), `it("collapses not-in-plan rows into one line with show")` ("en, fr, es not in plan · show" expands rows with chips), `it("expands groups with a decision initially and collapses the others above 50 cases")`, `it("names the row action with step and text")` ("Assign translation review…, case-0101 · de"), `it("shows badges Your decision, Check failed, Paused and +1 more step")`.
   - `decisionBar.test.tsx`: `it("shows All, Needs your decision, To assign, In progress")`, `it("links segments to the segment filter and marks the current one")`, `it("moves No final result to More filters")`.
   - `documentCards.test.tsx`: `it("renders one article per language row with chips, next step, owner and a full-width action")`.
@@ -1711,7 +1711,7 @@ it("formats texts as case · language with an optional version", () => {
 - **Code to read:** `App.tsx`, `app/Shell.tsx`, `ui/AppShell.tsx`, `tasks/MyTasks.tsx`, `app/router.ts` (read only).
 - **Prerequisites:** `grep -n "ProgressWorkloadView" frontend/src/api/client.ts` (L1p done, so `TaskSummary.case_id` exists); `grep -n "export function textLabel" frontend/src/app/identity.ts`.
 
-- [ ] **Step 1: Failing tests** (`landing.test.tsx`): `it("sends a lead from #/ to Documents of the last opened project with replace")` (`localStorage["ontocurator.lastProject.v1:lead"] = "p2"`; history length unchanged), `it("skips a remembered project the user no longer leads")`, `it("falls back to the first led project")`, `it("keeps users who lead nothing on My tasks")`, `it("lands on Documents even with own open tasks")`. `shell.test.tsx`: `it("shows My tasks (n) counting unsubmitted tasks, refreshed on focus")`, `it("shows Display name (pseudonym) with the role as a second line")`. `myTasks.test.tsx`: `it("labels tasks by text label and drops the Language column")` ("case-0101 · de"), `it("offers Go to Documents to a lead with no tasks")`.
+- [ ] **Step 1: Failing tests** (`landing.test.tsx`): `it("sends a lead from #/ to Documents of the last opened project with replace")` (`localStorage["ontotator.lastProject.v1:lead"] = "p2"`; history length unchanged), `it("skips a remembered project the user no longer leads")`, `it("falls back to the first led project")`, `it("keeps users who lead nothing on My tasks")`, `it("lands on Documents even with own open tasks")`. `shell.test.tsx`: `it("shows My tasks (n) counting unsubmitted tasks, refreshed on focus")`, `it("shows Display name (pseudonym) with the role as a second line")`. `myTasks.test.tsx`: `it("labels tasks by text label and drops the Language column")` ("case-0101 · de"), `it("offers Go to Documents to a lead with no tasks")`.
 - [ ] **Step 2:** run → FAIL; implement (remember the project on every project route; `listMyTasks` once per session and on window focus); run → PASS.
 - [ ] **Step 3: Verify:** owned test files; typecheck; full Vitest suite at the end (heavy slot).
 - **Done:** landing per D7; "My tasks (n)"; header identity; text label in My tasks.
@@ -1762,7 +1762,7 @@ it("formats texts as case · language with an optional version", () => {
 - **Size / lane / review:** M / L+ / —.
 - **Prerequisites:** `grep -n "useCaseSelection" frontend/src/admin/DocumentsPage.tsx`; `grep -n "personLabel" frontend/src/documents/TextVersions.tsx`.
 
-- [ ] **Step 1: Failing tests.** `stageBlocks.test.tsx`: `it("renders blocks only for planned stages")` (Translation review, Annotation "0 of 2 assigned", Final result; review-only row: one block plus "Not annotated in this plan"), `it("marks the current stage with an accent top edge and a status badge")`, `it("lists people, times and links per block")` ("Text versions (n)", "Translation reviews", "Assignment actions", "Assign annotation review…"), `it("lists report and source-change lines under Issues")`. `expandedRow.test.tsx`: `it("shows Submissions only when there is one or a final")` (no empty table header), `it("More holds Start consolidation…, Text versions, Problem reports, Technical details with IDs and plan revision")`, `it("labels acceptances and discarded versions in Text versions")` ("Accepted: reviewed outside Ontocurator · Project lead (ann-0002) · 20 Oct, 11:40 · {reason}", "Accepted: marked as reviewed in the package · R. Roe, 1 Oct", "Discarded"), `it("offers Assign a new review… for lead and override acceptances only")` (D25: the Translation review block shows the link for `lead`/`override`, not for `package`; it calls `onAssign(row, "translation_review", { newReviewOfAccepted: true })`), `it("keeps open problem reports listed under More for rows not in plan")`.
+- [ ] **Step 1: Failing tests.** `stageBlocks.test.tsx`: `it("renders blocks only for planned stages")` (Translation review, Annotation "0 of 2 assigned", Final result; review-only row: one block plus "Not annotated in this plan"), `it("marks the current stage with an accent top edge and a status badge")`, `it("lists people, times and links per block")` ("Text versions (n)", "Translation reviews", "Assignment actions", "Assign annotation review…"), `it("lists report and source-change lines under Issues")`. `expandedRow.test.tsx`: `it("shows Submissions only when there is one or a final")` (no empty table header), `it("More holds Start consolidation…, Text versions, Problem reports, Technical details with IDs and plan revision")`, `it("labels acceptances and discarded versions in Text versions")` ("Accepted: reviewed outside Ontotator · Project lead (ann-0002) · 20 Oct, 11:40 · {reason}", "Accepted: marked as reviewed in the package · R. Roe, 1 Oct", "Discarded"), `it("offers Assign a new review… for lead and override acceptances only")` (D25: the Translation review block shows the link for `lead`/`override`, not for `package`; it calls `onAssign(row, "translation_review", { newReviewOfAccepted: true })`), `it("keeps open problem reports listed under More for rows not in plan")`.
 - [ ] **Step 2:** run → FAIL; implement; run → PASS.
 - [ ] **Step 3: Verify:** owned test files; typecheck; full Vitest suite at the end (heavy slot).
 - **Done:** no repeated "v1 · Native", "None", "No activity"; no empty Submissions header; acceptance and discard visible.
@@ -1789,7 +1789,7 @@ it("formats texts as case · language with an optional version", () => {
 - **Owns:** `tests/browser_lead_workflow_scenarios.py` (create), `tests/test_browser_lead_workflow_fixture.py` (create), `tests/browser_server.py` (one import and one registration line after `register_carry_forward_scenario_route(app)`), `frontend/browser/leadWorkflowHelpers.ts` (create).
 - **Size / lane / review:** M / heavy / —.
 - **Code to read:** `tests/browser_documents_scenarios.py` (route, `new_project`, `import_texts`, `Scenario`), `tests/test_browser_documents_fixture.py`, `tests/browser_server.py:440-500, 1265-1300`, `tests/t1_fixtures.py` (`unit`, `bundle`, `single`), `frontend/browser/documentsHelpers.ts`.
-- **Prerequisites:** `grep -n "class BatchAssignmentService" src/ontocurator/assignments/batch.py`; `grep -n "class WorkPlanService" src/ontocurator/application/work_plans.py`.
+- **Prerequisites:** `grep -n "class BatchAssignmentService" src/ontotator/assignments/batch.py`; `grep -n "class WorkPlanService" src/ontotator/application/work_plans.py`.
 
 Route `POST /__test_lead_workflow__?scenario=<name>` returns `{project, users: {lead, ana, ben, annotator, ...}, display_names, bundle_path?, case_ids: {de?: [...], fr?: [...]}, rows: [{case_id, language}]}`. Project keys `lead-{scenario}-{uuid8}`; display names "Project Lead", "Ana Weber", "Ben Roth" (reviewers reading `en`, `de`, `fr`), "Cy Annotator" (annotator reading `en`, `de`, `fr`). Bundles are written to a temp directory and returned as an absolute path for `page.setInputFiles`; projects for upload scenarios start empty.
 
@@ -1831,7 +1831,7 @@ Count activations with a small helper `const clicks = counter(page)` that wraps 
   - `DEFAULT_IMPORT: import with 0 extra clicks`.
   - `ROWS: one chip click with Undo` — "fr of case-0101: Review off · Undo"; Undo restores; Ctrl+Z works while the toast is visible, also with a case checkbox focused.
   - `FR_OFF: turning fr off names persons and withdraws tasks` — confirmation lists "Ana Weber (ann-…) · Ben Roth (ann-…)" and the final; checkbox required; after save the tasks are gone and Export lists "Not in plan, not exported".
-  - `ACCEPTANCE: annotate without review` — Plan dialog shows "fr: 12 of 30 translations are not marked as reviewed in the package…", "18 already marked as reviewed in the package metadata need nothing."; save after checkbox + reason; Text versions shows "Accepted: reviewed outside Ontocurator · …".
+  - `ACCEPTANCE: annotate without review` — Plan dialog shows "fr: 12 of 30 translations are not marked as reviewed in the package…", "18 already marked as reviewed in the package metadata need nothing."; save after checkbox + reason; Text versions shows "Accepted: reviewed outside Ontotator · …".
   - `ROWS: row actions within three clicks` — Choose final (2/3), Review changes (3), Decide on report (3, lands on Decide with focus), Resolve… (3; three options).
   - `annotator sees only pseudonyms` — log in as the annotator: My tasks and the task screen show no display names of others.
   - `lead lands on Documents of the last project` (D7).

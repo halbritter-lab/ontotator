@@ -6,10 +6,10 @@ import pytest
 from auth_harness import HARNESS, AutoLoginClient, logged_in
 from pg_harness import database_url_for
 
-from ontocurator.api.app import create_app
-from ontocurator.config import AppConfig
-from ontocurator.domain.errors import DomainError
-from ontocurator.ontology.discovery import discover_ontologies
+from ontotator.api.app import create_app
+from ontotator.config import AppConfig
+from ontotator.domain.errors import DomainError
+from ontotator.ontology.discovery import discover_ontologies
 
 SAMPLE_OBO_JSON = {
     "graphs": [

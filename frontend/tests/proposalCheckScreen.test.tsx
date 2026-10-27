@@ -12,7 +12,7 @@ const axes = [
   { id: "temporality", label: "Temporality", options: ["current", "historical", "future"], allow_empty: true },
 ];
 const proposal = (id: string, term: string): AnnotationSnapshot => ({
-  schema_version: "ontocurator-annotation/v3", version: `${id}-v1`, document_id: "doc-pc-1", text_sha256: "text", ontology_sha256: "ontology", layer_config_sha256: "layer",
+  schema_version: "ontotator-annotation/v3", version: `${id}-v1`, document_id: "doc-pc-1", text_sha256: "text", ontology_sha256: "ontology", layer_config_sha256: "layer",
   annotation: { annotation_id: id, document_id: "doc-pc-1", layer_id: "phenotype", type_id: "default", term_id: term, axes_values: {}, evidence_refs: [],
     provenance: { actor: { actor_id: "tool", kind: "tool" }, method: "automatic", source_refs: [] } }, evidence: [],
 } as unknown as AnnotationSnapshot);

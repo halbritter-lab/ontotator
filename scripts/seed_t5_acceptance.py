@@ -56,8 +56,8 @@ def configuration(
     pg_port: int,
     snapshot_sha256: str | None = None,
 ) -> dict[str, Any]:
-    if not re.fullmatch(r"ontocurator-t5-acceptance(?:-[a-z0-9][a-z0-9-]*)?", project):
-        raise ValueError("Use a dedicated ontocurator-t5-acceptance[-suffix] project")
+    if not re.fullmatch(r"ontotator-t5-acceptance(?:-[a-z0-9][a-z0-9-]*)?", project):
+        raise ValueError("Use a dedicated ontotator-t5-acceptance[-suffix] project")
     if not re.fullmatch(r"sha256:[0-9a-f]{64}", image):
         raise ValueError("An immutable local sha256 image ID is required")
     if not re.fullmatch(r"[0-9a-f]{40}", source_sha):
@@ -155,9 +155,9 @@ def write_private(path: Path, value: Any) -> None:
 
 def compose_environment(cfg: dict[str, Any], directory: Path) -> dict[str, str]:
     return {
-        "ONTOCURATOR_DEV_PORT": str(cfg["app_port"]),
-        "ONTOCURATOR_DEV_PG_PORT": str(cfg["pg_port"]),
-        "ONTOCURATOR_MIGRATE_TARGET": "head",
+        "ONTOTATOR_DEV_PORT": str(cfg["app_port"]),
+        "ONTOTATOR_DEV_PG_PORT": str(cfg["pg_port"]),
+        "ONTOTATOR_MIGRATE_TARGET": "head",
         "GITHUB_TOKEN_FILE": str(directory / "unused-build-token"),
     }
 
@@ -368,7 +368,7 @@ class Stack:
         return checked(self.command + list(args), env=self.env, data=data)
 
     def cli(self, *args: str) -> str:
-        return self.compose("exec", "-T", "app", "ontocurator", "admin", *args)
+        return self.compose("exec", "-T", "app", "ontotator", "admin", *args)
 
     def verify(self) -> dict[str, Any]:
         cfg = self.cfg
@@ -438,7 +438,7 @@ class Stack:
                 raise ValueError("Volume belongs to another Compose project")
             mounts[name] = volumes[0]["Name"]
         if (
-            f"ONTOCURATOR_PUBLIC_ORIGIN={cfg['host']}"
+            f"ONTOTATOR_PUBLIC_ORIGIN={cfg['host']}"
             not in services["app"]["Config"]["Env"]
         ):
             raise ValueError("App public origin differs from actual acceptance origin")

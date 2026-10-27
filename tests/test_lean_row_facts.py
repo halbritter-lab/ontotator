@@ -15,15 +15,15 @@ from fastapi.testclient import TestClient
 from pg_harness import database_url_for
 from sqlalchemy import select
 
-from ontocurator.api.app import create_app
-from ontocurator.application import document_row_panel
-from ontocurator.application.document_row_page import needs_decision
-from ontocurator.application.document_rows import load_facts
-from ontocurator.auth.audit import Actor
-from ontocurator.authz.policy import Access
-from ontocurator.authz.scoped import ScopedRepository
-from ontocurator.config import AppConfig
-from ontocurator.storage.tables import DocumentRow, ProjectRow, UserRow
+from ontotator.api.app import create_app
+from ontotator.application import document_row_panel
+from ontotator.application.document_row_page import needs_decision
+from ontotator.application.document_rows import load_facts
+from ontotator.auth.audit import Actor
+from ontotator.authz.policy import Access
+from ontotator.authz.scoped import ScopedRepository
+from ontotator.config import AppConfig
+from ontotator.storage.tables import DocumentRow, ProjectRow, UserRow
 
 # Rows with finals, text changes, source changes, reviews and reports.
 SCENARIOS = ["S3", "S6", "S9", "S12", "S15", "WALKTHROUGH"]

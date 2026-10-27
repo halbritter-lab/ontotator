@@ -5,21 +5,21 @@ from dataclasses import replace
 import pytest
 from test_distribution_context import stored as stored
 
-from ontocurator.assignments.confirmations import (
+from ontotator.assignments.confirmations import (
     ConfirmationRow,
     DistributionConfirmationService,
     validate_confirmation_rows,
 )
-from ontocurator.assignments.proposals import DistributionContext
-from ontocurator.auth.audit import Actor
-from ontocurator.domain.errors import DomainError
+from ontotator.assignments.proposals import DistributionContext
+from ontotator.auth.audit import Actor
+from ontotator.domain.errors import DomainError
 
 
 def _per_text(db, project, limit):
     """Room for several annotators on one text (the limit holds since P3)."""
     from sqlalchemy import update
 
-    from ontocurator.storage.tables import ProjectRow
+    from ontotator.storage.tables import ProjectRow
 
     with db.transaction() as conn:
         conn.execute(
@@ -35,12 +35,12 @@ def test_distribution_snapshot_is_json_native_without_changing_canonical_hash():
     from copy import deepcopy
     from dataclasses import asdict
 
-    from ontocurator.assignments.proposals import (
+    from ontotator.assignments.proposals import (
         DistributionSnapshot,
         SnapshotDocument,
         SnapshotMember,
     )
-    from ontocurator.domain.variants import VariantInfo
+    from ontotator.domain.variants import VariantInfo
 
     variant = VariantInfo(
         "target",
@@ -109,8 +109,8 @@ def api(tmp_path):
     from layered_fixtures import make_layered_package
     from pg_harness import database_url_for
 
-    from ontocurator.api.app import create_app
-    from ontocurator.config import AppConfig
+    from ontotator.api.app import create_app
+    from ontotator.config import AppConfig
 
     app = create_app(
         AppConfig(
@@ -134,14 +134,14 @@ def test_http_proposal_writes_nothing_and_confirmation_audit_reproduces_input(ap
 
     from sqlalchemy import func, select
 
-    from ontocurator.assignments.proposals import (
+    from ontotator.assignments.proposals import (
         DistributionSnapshot,
         SnapshotDocument,
         SnapshotMember,
         build_proposal,
     )
-    from ontocurator.domain.variants import VariantInfo
-    from ontocurator.storage.tables import AssignmentRow, AuditEventRow
+    from ontotator.domain.variants import VariantInfo
+    from ontotator.storage.tables import AssignmentRow, AuditEventRow
 
     app, client, project = api
     url = f"/api/v1/projects/{project}/assignments"
@@ -227,7 +227,7 @@ def test_http_proposal_writes_nothing_and_confirmation_audit_reproduces_input(ap
 def test_http_unassignable_languages_and_generated_seed(api):
     from sqlalchemy import update
 
-    from ontocurator.storage.tables import DocumentRow
+    from ontotator.storage.tables import DocumentRow
 
     app, client, project = api
     with app.state.repo.db.transaction() as conn:
@@ -258,7 +258,7 @@ def test_http_unassignable_languages_and_generated_seed(api):
 def test_http_stale_is_409_and_manual_rows_keep_partial_refusals(api):
     from sqlalchemy import select, update
 
-    from ontocurator.storage.tables import AuditEventRow, DocumentRow
+    from ontotator.storage.tables import AuditEventRow, DocumentRow
 
     app, client, project = api
     url = f"/api/v1/projects/{project}/assignments"
@@ -329,7 +329,7 @@ def test_http_human_edited_language_refusal_and_explicit_override(api):
     from auth_harness import HARNESS
     from sqlalchemy import select
 
-    from ontocurator.storage.tables import AuditEventRow
+    from ontotator.storage.tables import AuditEventRow
 
     app, client, project = api
     app.state.accounts.set_languages(HARNESS, "alice", ["en"])
@@ -390,8 +390,8 @@ def test_http_queued_confirmation_rechecks_current_management_rights(api):
 
     from sqlalchemy import delete, event, func, select
 
-    from ontocurator.storage.repository import _lock_id
-    from ontocurator.storage.tables import (
+    from ontotator.storage.repository import _lock_id
+    from ontotator.storage.tables import (
         AssignmentRow,
         AuditEventRow,
         ProjectMembershipRow,
@@ -469,7 +469,7 @@ def test_edited_rows_validate_selection_uniqueness_and_document_cap(rows):
 def test_confirmation_mixed_rows_preserves_partial_success_and_original_audit(stored):
     from sqlalchemy import insert, select
 
-    from ontocurator.storage.tables import AuditEventRow, UserLanguageRow, UserRow
+    from ontotator.storage.tables import AuditEventRow, UserLanguageRow, UserRow
 
     db, proposals, _project, users = stored
     _per_text(db, "p", 2)
@@ -529,7 +529,7 @@ def test_final_distribution_audit_failure_rolls_back_assignments_and_create_audi
 ):
     from sqlalchemy import func, select
 
-    from ontocurator.storage.tables import AssignmentRow, AuditEventRow
+    from ontotator.storage.tables import AssignmentRow, AuditEventRow
 
     db, proposals, _project, _users = stored
     original = proposals.propose(Actor.cli(), "p", ["first"], "annotate", seed=7)
@@ -537,7 +537,7 @@ def test_final_distribution_audit_failure_rolls_back_assignments_and_create_audi
     def fail(*args, **kwargs):
         raise RuntimeError("audit unavailable")
 
-    monkeypatch.setattr("ontocurator.assignments.confirmations.record_audit", fail)
+    monkeypatch.setattr("ontotator.assignments.confirmations.record_audit", fail)
     with pytest.raises(RuntimeError, match="audit unavailable"):
         DistributionConfirmationService(db).confirm(
             Actor.cli(),
@@ -560,7 +560,7 @@ def test_final_distribution_audit_failure_rolls_back_assignments_and_create_audi
 def test_context_task_seed_and_forged_hash_refused_before_writes(stored):
     from sqlalchemy import func, select
 
-    from ontocurator.storage.tables import AssignmentRow, AuditEventRow
+    from ontotator.storage.tables import AssignmentRow, AuditEventRow
 
     db, proposals, _project, _users = stored
     original = proposals.propose(Actor.cli(), "p", ["first"], "annotate", seed=7)

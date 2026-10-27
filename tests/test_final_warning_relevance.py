@@ -10,17 +10,17 @@ from test_case_api import BASE, CORRECTED, SOURCE, TARGET
 from test_translation_review_task import assigned
 from test_work_rounds import create_consolidation_fixture
 
-from ontocurator.application.final_results import FinalResultService
-from ontocurator.application.reviews import ReviewService
-from ontocurator.application.submissions import SubmissionService
-from ontocurator.application.work_rounds import WorkRoundService
-from ontocurator.application.workspaces import WorkspaceService
-from ontocurator.assignments.service import AssignmentService
-from ontocurator.authz.policy import Access
-from ontocurator.authz.scoped import ScopedRepository
-from ontocurator.domain.errors import RevisionConflict
-from ontocurator.domain.workspace import MutationEnvelope
-from ontocurator.storage.tables import ProjectMembershipRow
+from ontotator.application.final_results import FinalResultService
+from ontotator.application.reviews import ReviewService
+from ontotator.application.submissions import SubmissionService
+from ontotator.application.work_rounds import WorkRoundService
+from ontotator.application.workspaces import WorkspaceService
+from ontotator.assignments.service import AssignmentService
+from ontotator.authz.policy import Access
+from ontotator.authz.scoped import ScopedRepository
+from ontotator.domain.errors import RevisionConflict
+from ontotator.domain.workspace import MutationEnvelope
+from ontotator.storage.tables import ProjectMembershipRow
 
 pytest_plugins = ("test_work_rounds", "test_translation_review_task")
 

@@ -2,10 +2,10 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Lean format: files, interfaces, configuration, checks and acceptance criteria per task. Implementers write the code test-first where code is involved; configuration that is a contract is given in full.
 
-**Goal:** Ontocurator ships as a verified, hardened application image with a compose service contract (app, one-shot migration, PostgreSQL), following the Limin pattern (D1). Health probes, container checks, a browser smoke test against the stack and a load test show that it works and meets P9.
+**Goal:** Ontotator ships as a verified, hardened application image with a compose service contract (app, one-shot migration, PostgreSQL), following the Limin pattern (D1). Health probes, container checks, a browser smoke test against the stack and a load test show that it works and meets P9.
 
 **Architecture:**
-- **Production entry point:** `ontocurator serve --production` reads its configuration from the environment and secrets from `*_FILE`. It runs Uvicorn with N workers (D4) and honours forwarded headers only from the listed proxy addresses.
+- **Production entry point:** `ontotator serve --production` reads its configuration from the environment and secrets from `*_FILE`. It runs Uvicorn with N workers (D4) and honours forwarded headers only from the listed proxy addresses.
 - **Probes:** `/livez` and `/readyz` sit outside `/api` and need no session. Readiness requires a reachable database, the schema at head and the pinned ontologies loaded.
 - **Image and stack:** a multi-stage image (frontend build, uv sync with a BuildKit secret for the private `ontospan`, then a slim non-root runtime). Compose runs `postgres`, `migrate` (owner role, one shot; index D-d) and `app` (application role) with D1's hardening.
 - **Verification:** a dev compose file for local work, a container check script, a Playwright smoke spec against the stack, and a Locust load test. An operations guide replaces the desktop README sections.
@@ -22,7 +22,7 @@
 
 ### Task 1: Health probes
 
-**Create** `src/ontocurator/api/health.py`; **modify** `api/app.py` (include the router before the static mount).
+**Create** `src/ontotator/api/health.py`; **modify** `api/app.py` (include the router before the static mount).
 
 **Interface:**
 - `GET /livez` returns 200 `{"ok": true}`, or 503 while the app is draining (`app.state.draining`, set at shutdown).
@@ -46,19 +46,19 @@
 
 ### Task 2: The production entry point
 
-**Create** `src/ontocurator/api/server.py`; **modify** `cli.py serve`, `settings.py` and `api/app.py`.
+**Create** `src/ontotator/api/server.py`; **modify** `cli.py serve`, `settings.py` and `api/app.py`.
 
 **`settings.server_settings(env) -> ServerSettings`:** a dataclass with these fields:
 
 | Field | Source | Rule |
 |---|---|---|
-| `environment` | `ONTOCURATOR_ENV` (`development` or `production`; default `development`) | |
-| `data_dir` | `ONTOCURATOR_DATA_DIR` (default `/data` in production) | |
-| `public_origin` | `ONTOCURATOR_PUBLIC_ORIGIN` | required and `https://` in production; `canonical_origin` |
-| `trusted_proxies` | `ONTOCURATOR_TRUSTED_PROXIES` | comma-separated exact IP addresses (`ipaddress.ip_address`); required in production; `*` and CIDR ranges are refused (Limin) |
-| `workers` | `ONTOCURATOR_WORKERS` (default 2, D4) | 1..16 |
-| `admin_password_hash` | `read_secret("ONTOCURATOR_ADMIN_PASSWORD_HASH")` | |
-| database URL | `database_url()` (T2a) | in production the passwords must come from `*_FILE`: a direct `ONTOCURATOR_DATABASE_PASSWORD` is refused, as Limin refuses plaintext secrets |
+| `environment` | `ONTOTATOR_ENV` (`development` or `production`; default `development`) | |
+| `data_dir` | `ONTOTATOR_DATA_DIR` (default `/data` in production) | |
+| `public_origin` | `ONTOTATOR_PUBLIC_ORIGIN` | required and `https://` in production; `canonical_origin` |
+| `trusted_proxies` | `ONTOTATOR_TRUSTED_PROXIES` | comma-separated exact IP addresses (`ipaddress.ip_address`); required in production; `*` and CIDR ranges are refused (Limin) |
+| `workers` | `ONTOTATOR_WORKERS` (default 2, D4) | 1..16 |
+| `admin_password_hash` | `read_secret("ONTOTATOR_ADMIN_PASSWORD_HASH")` | |
+| database URL | `database_url()` (T2a) | in production the passwords must come from `*_FILE`: a direct `ONTOTATOR_DATABASE_PASSWORD` is refused, as Limin refuses plaintext secrets |
 
 **`api/server.py`:** `app_from_env() -> FastAPI` builds `AppConfig` from `server_settings`, with the embedded web assets, `public_origin` and the admin hash. In production FastAPI's `/docs` and `/openapi.json` are disabled: `create_app` gets `expose_docs: bool`.
 
@@ -66,7 +66,7 @@
 
 ```python
 uvicorn.run(
-    "ontocurator.api.server:app_from_env",
+    "ontotator.api.server:app_from_env",
     factory=True,
     host="0.0.0.0",
     port=8000,
@@ -111,7 +111,7 @@ Write each as `FROM <image>@sha256:<digest> AS <stage>`, and record the resolved
 1. `web`, on node: `npm ci` and `npm run build` in `frontend/`; the output is `/web/dist`.
 2. `build`, on python with uv copied from the uv image:
    - `apt-get install --no-install-recommends git`;
-   - copy `pyproject.toml`, `uv.lock`, `README.md`, `src/`, and `--from=web /web/dist` into `src/ontocurator/web/`;
+   - copy `pyproject.toml`, `uv.lock`, `README.md`, `src/`, and `--from=web /web/dist` into `src/ontotator/web/`;
    - install the dependencies without leaving the token in any layer:
 
 ```dockerfile
@@ -125,15 +125,15 @@ RUN --mount=type=secret,id=github_token,env=GITHUB_TOKEN \
 
 3. `runtime`, on python slim:
    - `apt-get install --no-install-recommends tini`; remove `pip`;
-   - user and group `ontocurator` with uid/gid 1001, no shell;
-   - copy `/app/.venv`; `ENV PATH=/app/.venv/bin:$PATH PYTHONDONTWRITEBYTECODE=1 ONTOCURATOR_ENV=production ONTOCURATOR_DATA_DIR=/data`;
+   - user and group `ontotator` with uid/gid 1001, no shell;
+   - copy `/app/.venv`; `ENV PATH=/app/.venv/bin:$PATH PYTHONDONTWRITEBYTECODE=1 ONTOTATOR_ENV=production ONTOTATOR_DATA_DIR=/data`;
    - `mkdir /data && chown 1001:1001 /data`; `USER 1001:1001`; `EXPOSE 8000`; `VOLUME ["/data"]`; `STOPSIGNAL SIGTERM`;
    - healthcheck and entry point:
 
 ```dockerfile
 HEALTHCHECK --interval=10s --timeout=5s --start-period=60s --retries=6 \
   CMD ["python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/readyz', timeout=4).status == 200 else 1)"]
-ENTRYPOINT ["/usr/bin/tini", "--", "ontocurator"]
+ENTRYPOINT ["/usr/bin/tini", "--", "ontotator"]
 CMD ["serve", "--production"]
 ```
 
@@ -143,14 +143,14 @@ The start period is 60 s because HPO loads in about 5.5 s per worker (E11).
 
 ```bash
 gh auth token > "$TEMP/gh_token"     # or a fine-grained PAT with contents:read on ontospan
-docker build --secret id=github_token,src="$TEMP/gh_token" -t ontocurator:dev .
+docker build --secret id=github_token,src="$TEMP/gh_token" -t ontotator:dev .
 rm "$TEMP/gh_token"
 ```
 
 **Acceptance:**
 - the build succeeds;
-- `docker run --rm --entrypoint id ontocurator:dev -u` prints `1001`;
-- `docker history --no-trunc ontocurator:dev | grep -i token` prints nothing.
+- `docker run --rm --entrypoint id ontotator:dev -u` prints `1001`;
+- `docker history --no-trunc ontotator:dev | grep -i token` prints nothing.
 
 Commit: `build: hardened multi-stage application image`.
 
@@ -172,13 +172,13 @@ for value in "$owner_password" "$app_password"; do
 done
 case "$POSTGRES_DB" in ''|*[!a-z0-9_]*) echo 'Invalid database identifier' >&2; exit 1;; esac
 psql --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" --set=ON_ERROR_STOP=1 <<SQL
-CREATE ROLE ontocurator_owner LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD '$owner_password';
-CREATE ROLE ontocurator_app   LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD '$app_password';
+CREATE ROLE ontotator_owner LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD '$owner_password';
+CREATE ROLE ontotator_app   LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD '$app_password';
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 REVOKE ALL ON DATABASE "$POSTGRES_DB" FROM PUBLIC;
-GRANT CONNECT ON DATABASE "$POSTGRES_DB" TO ontocurator_owner, ontocurator_app;
-CREATE SCHEMA ontocurator AUTHORIZATION ontocurator_owner;
-GRANT USAGE ON SCHEMA ontocurator TO ontocurator_app;
+GRANT CONNECT ON DATABASE "$POSTGRES_DB" TO ontotator_owner, ontotator_app;
+CREATE SCHEMA ontotator AUTHORIZATION ontotator_owner;
+GRANT USAGE ON SCHEMA ontotator TO ontotator_app;
 SQL
 ```
 
@@ -188,25 +188,25 @@ These are the same statements as `tests/pg_harness.py` (T2a); a comment in each 
 - **Anchor `x-runtime`:** `restart: unless-stopped`, `read_only: true`, `cap_drop: [ALL]`, `security_opt: [no-new-privileges:true]`, json-file logging with `max-size: 10m` and `max-file: "3"`.
 - **`postgres`:**
   - image `postgres:16.15-alpine3.24@sha256:<digest>`, resolved as in Task 3; user `70:70`;
-  - `POSTGRES_DB=ontocurator`, `POSTGRES_USER=ontocurator_bootstrap`, `POSTGRES_PASSWORD_FILE=/run/postgres/bootstrap-password`;
-  - volumes `postgres-data:/var/lib/postgresql/data`, `./secrets/postgres:/run/postgres:ro`, `./docker/postgres-init.sh:/docker-entrypoint-initdb.d/10-ontocurator.sh:ro`;
+  - `POSTGRES_DB=ontotator`, `POSTGRES_USER=ontotator_bootstrap`, `POSTGRES_PASSWORD_FILE=/run/postgres/bootstrap-password`;
+  - volumes `postgres-data:/var/lib/postgresql/data`, `./secrets/postgres:/run/postgres:ro`, `./docker/postgres-init.sh:/docker-entrypoint-initdb.d/10-ontotator.sh:ro`;
   - tmpfs `/tmp:size=64m` and `/var/run/postgresql:size=16m,uid=70,gid=70`;
   - `mem_limit: 1g`, `cpus: 1.0`, `pids_limit: 256`;
-  - healthcheck `pg_isready -U ontocurator_bootstrap -d ontocurator`;
+  - healthcheck `pg_isready -U ontotator_bootstrap -d ontotator`;
   - network `backend` only.
 - **`migrate`:**
-  - image `${ONTOCURATOR_IMAGE:?Set the verified image}`, `command: ["db", "upgrade"]`, `restart: "no"`;
-  - env `ONTOCURATOR_MIGRATION_DATABASE_URL=postgresql://ontocurator_owner@postgres:5432/ontocurator`, `ONTOCURATOR_MIGRATION_DATABASE_PASSWORD_FILE=/run/secrets/owner-password`;
+  - image `${ONTOTATOR_IMAGE:?Set the verified image}`, `command: ["db", "upgrade"]`, `restart: "no"`;
+  - env `ONTOTATOR_MIGRATION_DATABASE_URL=postgresql://ontotator_owner@postgres:5432/ontotator`, `ONTOTATOR_MIGRATION_DATABASE_PASSWORD_FILE=/run/secrets/owner-password`;
   - secrets volume `./secrets/app:/run/secrets:ro`, holding only `owner-password`;
   - `depends_on: postgres: {condition: service_healthy}`; network `backend`; limits 512m, 1 cpu.
 - **`app`:**
-  - image `${ONTOCURATOR_IMAGE:?}`; `init: false` (tini is PID 1);
+  - image `${ONTOTATOR_IMAGE:?}`; `init: false` (tini is PID 1);
   - `depends_on: postgres healthy, migrate: {condition: service_completed_successfully}`;
-  - env `ONTOCURATOR_ENV=production`, `ONTOCURATOR_PUBLIC_ORIGIN=${ONTOCURATOR_PUBLIC_ORIGIN:?}`, `ONTOCURATOR_TRUSTED_PROXIES=${ONTOCURATOR_TRUSTED_PROXIES:?}`, `ONTOCURATOR_WORKERS=${ONTOCURATOR_WORKERS:-2}`, `ONTOCURATOR_DATABASE_URL=postgresql://ontocurator_app@postgres:5432/ontocurator`, `ONTOCURATOR_DATABASE_PASSWORD_FILE=/run/secrets/app-password`, `ONTOCURATOR_ADMIN_PASSWORD_HASH_FILE=/run/secrets/admin-password-hash`;
-  - volumes `ontocurator-data:/data` and `./secrets/app:/run/secrets:ro`; tmpfs `/tmp:size=256m,mode=1777`;
+  - env `ONTOTATOR_ENV=production`, `ONTOTATOR_PUBLIC_ORIGIN=${ONTOTATOR_PUBLIC_ORIGIN:?}`, `ONTOTATOR_TRUSTED_PROXIES=${ONTOTATOR_TRUSTED_PROXIES:?}`, `ONTOTATOR_WORKERS=${ONTOTATOR_WORKERS:-2}`, `ONTOTATOR_DATABASE_URL=postgresql://ontotator_app@postgres:5432/ontotator`, `ONTOTATOR_DATABASE_PASSWORD_FILE=/run/secrets/app-password`, `ONTOTATOR_ADMIN_PASSWORD_HASH_FILE=/run/secrets/admin-password-hash`;
+  - volumes `ontotator-data:/data` and `./secrets/app:/run/secrets:ro`; tmpfs `/tmp:size=256m,mode=1777`;
   - `mem_limit: 2g` (2 workers × ≈150 MB HPO plus headroom; D4), `cpus: 2.0`, `pids_limit: 256`, `stop_grace_period: 35s`;
   - healthcheck `/readyz` as in the image;
-  - networks `edge` (the proxy network, `name: ${ONTOCURATOR_EDGE_NETWORK:-ontocurator-edge}`) and `backend` (`internal: true`);
+  - networks `edge` (the proxy network, `name: ${ONTOTATOR_EDGE_NETWORK:-ontotator-edge}`) and `backend` (`internal: true`);
   - **no `ports:`**: the app port is never published (D1); the external proxy joins `edge`.
 - **Secret files:** `secrets/postgres/{bootstrap-password,owner-password,app-password}` and `secrets/app/{owner-password,app-password,admin-password-hash}`, each mode 0600 and owned by the service UID (Limin). `docker/env.example` documents every variable.
 
@@ -214,7 +214,7 @@ These are the same statements as `tests/pg_harness.py` (T2a); a comment in each 
 
 **`docker-compose.dev.yml`** is a standalone development stack:
 - it builds the image locally (`build: { context: ., secrets: [github_token] }`, with `secrets.github_token.file: ${GITHUB_TOKEN_FILE:?}`);
-- `ONTOCURATOR_ENV=development`;
+- `ONTOTATOR_ENV=development`;
 - plaintext dev passwords inline, marked "development only";
 - `ports: ["127.0.0.1:8000:8000"]` for the app and `["127.0.0.1:55432:5432"]` for PostgreSQL;
 - the same migrate step;
@@ -231,7 +231,7 @@ Commit: `build: compose service contract, dev stack and PostgreSQL role bootstra
 
 ### Task 5: Container checks
 
-**Create** `scripts/container_check.py`, run with `uv run python scripts/container_check.py [--image ontocurator:dev]`. It drives `docker` with `subprocess` and the dev compose file under a unique project name (`-p ontocheck<random>`). It prints PASS/FAIL per check, exits non-zero on any failure and tears the stack down at the end.
+**Create** `scripts/container_check.py`, run with `uv run python scripts/container_check.py [--image ontotator:dev]`. It drives `docker` with `subprocess` and the dev compose file under a unique project name (`-p ontocheck<random>`). It prints PASS/FAIL per check, exits non-zero on any failure and tears the stack down at the end.
 
 | Check | How | Expected |
 |---|---|---|
@@ -241,9 +241,9 @@ Commit: `build: compose service contract, dev stack and PostgreSQL role bootstra
 | capabilities dropped | `docker inspect` of app: `HostConfig.CapDrop` | `["ALL"]` |
 | no published app port (production contract) | `docker compose -f docker-compose.yml config --format json` | `services.app.ports` absent |
 | `/readyz` without a database | `docker compose stop postgres`, then `exec app python -c …/readyz` | 503, `checks.database == false`; start postgres again |
-| `/readyz` with pending migrations | run a fresh stack whose `migrate` is replaced by `db upgrade` to `0001` (`ONTOCURATOR_MIGRATE_TARGET=0001`, add this optional argument to `db upgrade`) | 503, `checks.schema == false` |
-| app role cannot write history | `exec postgres psql -U ontocurator_app -c "UPDATE ontocurator.submissions SET mode='x'"` | `permission denied` |
-| migrations never run as the app | `exec app ontocurator db upgrade` (no owner secret) | exit 1, `ONTOCURATOR_MIGRATION_DATABASE_URL is not set` |
+| `/readyz` with pending migrations | run a fresh stack whose `migrate` is replaced by `db upgrade` to `0001` (`ONTOTATOR_MIGRATE_TARGET=0001`, add this optional argument to `db upgrade`) | 503, `checks.schema == false` |
+| app role cannot write history | `exec postgres psql -U ontotator_app -c "UPDATE ontotator.submissions SET mode='x'"` | `permission denied` |
+| migrations never run as the app | `exec app ontotator db upgrade` (no owner secret) | exit 1, `ONTOTATOR_MIGRATION_DATABASE_URL is not set` |
 
 `scripts/check.sh` gains a final stage that runs only when `CHECK_CONTAINERS=1` is set:
 
@@ -258,7 +258,7 @@ if [ "${CHECK_CONTAINERS:-0}" = "1" ]; then uv run python scripts/container_chec
 ### Task 6: Browser smoke test against the compose stack
 
 **Create:**
-- `scripts/seed_stack.py`: it runs `docker compose -f docker-compose.dev.yml exec app ontocurator admin …` to
+- `scripts/seed_stack.py`: it runs `docker compose -f docker-compose.dev.yml exec app ontotator admin …` to
   - create `smoke-admin` (system admin) and `smoke-annotator`;
   - redeem their setup codes through `POST /api/v1/auth/redeem-code` with `Origin: http://127.0.0.1:8000`;
   - add `tests/fixtures/hp.json` with `admin ontologies add` (copied into the container through `docker compose cp`);
@@ -343,16 +343,16 @@ The spec requires recording workload and limits.
    - `docker compose up -d --wait`;
    - the admin logs in as `admin`;
    - remove `admin-password-hash` afterwards; it is ignored once used (D2).
-5. **Users and projects** with the CLI (`docker compose exec app ontocurator admin …`):
+5. **Users and projects** with the CLI (`docker compose exec app ontotator admin …`):
    - users: create, reset code, deactivate;
    - ontologies add; projects create and members; import and export; edit-log export.
 
    Codes are shown once and handed over out of band.
 6. **Upgrades:** pull or build the new image; `docker compose up -d` runs `migrate` first. Migrations are forward-only, and a newer database is refused by `/readyz` (schema not at head).
-7. **Backups:** `pg_dump` of the database and a copy of the `ontocurator-data` volume (blobs, translations, exports), taken together; restore order.
+7. **Backups:** `pg_dump` of the database and a copy of the `ontotator-data` volume (blobs, translations, exports), taken together; restore order.
 8. **Lost admin password:** stop `app`; write the recovery JSON (0600); run `docker compose run --rm app admin recover-admin --input /run/recovery.json` with the file mounted read-only; start `app`.
-9. **Proxy settings:** forward the Host header and `X-Forwarded-For`/`-Proto`; `ONTOCURATOR_TRUSTED_PROXIES` lists the proxy's exact address on `edge`; `ONTOCURATOR_PUBLIC_ORIGIN` is the exact HTTPS origin.
-10. **Resource limits and workers** (D4): what `ONTOCURATOR_WORKERS` costs in memory.
+9. **Proxy settings:** forward the Host header and `X-Forwarded-For`/`-Proto`; `ONTOTATOR_TRUSTED_PROXIES` lists the proxy's exact address on `edge`; `ONTOTATOR_PUBLIC_ORIGIN` is the exact HTTPS origin.
+10. **Resource limits and workers** (D4): what `ONTOTATOR_WORKERS` costs in memory.
 11. **Local checks:** `scripts/check.sh`, `CHECK_CONTAINERS=1`, the load test.
 
 **Acceptance:** `scripts/check.sh` passes (with `CHECK_CONTAINERS=1` too); the guide's commands match the files. Commit: `docs: operations guide for the server deployment`.

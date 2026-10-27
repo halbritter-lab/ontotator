@@ -3,7 +3,7 @@
     uv run python scripts/purge_annotation_work.py --project KEY \
         [--case CASE --language LANG] --confirm
 
-Runs as the schema owner (ONTOCURATOR_MIGRATION_DATABASE_URL and its password,
+Runs as the schema owner (ONTOTATOR_MIGRATION_DATABASE_URL and its password,
 or ``--database-url``). Deletes the annotate assignments with their rounds,
 drafts and submissions, and the consolidations and final results built on
 them; translation reviews stay. Irreversible: back up the database first.
@@ -18,12 +18,12 @@ from collections.abc import Sequence
 
 from sqlalchemy import create_engine, func, select
 
-from ontocurator.storage.database import (
+from ontotator.storage.database import (
     advisory_lock_id,
     connect_args,
     psycopg_url,
 )
-from ontocurator.storage.work_purge import purge_annotation_work
+from ontotator.storage.work_purge import purge_annotation_work
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -42,9 +42,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.database_url:
         url = psycopg_url(args.database_url)
     else:
-        from ontocurator.settings import database_url
+        from ontotator.settings import database_url
 
-        url = database_url(prefix="ONTOCURATOR_MIGRATION_DATABASE")
+        url = database_url(prefix="ONTOTATOR_MIGRATION_DATABASE")
     engine = create_engine(url, connect_args=connect_args(url))
     try:
         with engine.begin() as conn:

@@ -8,7 +8,7 @@
 
 **Verification commands** in this plan are written for the **Bash tool (Git Bash)**: POSIX syntax, forward slashes, `VAR=value cmd` prefixes. Run them from the worktree root.
 
-**Tech Stack:** Python 3.12, FastAPI, SQLAlchemy 2, Alembic, PostgreSQL (pytest via testcontainers or `ONTOCURATOR_TEST_PG_URL`); React 18, TypeScript, Vitest + Testing Library, Playwright + axe-core; `openapi-typescript` for `generated.ts`.
+**Tech Stack:** Python 3.12, FastAPI, SQLAlchemy 2, Alembic, PostgreSQL (pytest via testcontainers or `ONTOTATOR_TEST_PG_URL`); React 18, TypeScript, Vitest + Testing Library, Playwright + axe-core; `openapi-typescript` for `generated.ts`.
 
 ---
 
@@ -18,7 +18,7 @@
 - **Exclusive file ownership (same rule as the Documents plan).** A WP writes only the files listed under its "Owns". A file shared with a sibling plan has exactly **one** owner WP at any moment across all four plans; the coordinator sequences owners in the order given in "Cross-plan schedule" below. Shared primitives owned by a sibling (Documents U1/U3/D1/B5, Editor F1 `Dialog`) are never modified here; a needed change is a **change request (CR)** executed by the owning WP (see "Change requests to sibling plans"). A WP that finds a prerequisite missing stops and reports; it does not re-implement it.
 - **No commits, no pushes.** Each WP ends with a "Commit point" (files and message) for later; do not run it.
 - **No CI / GitHub Actions.** All verification is local:
-  - Backend tests need PostgreSQL: Docker running, or `ONTOCURATOR_TEST_PG_URL` set. Single files: `uv run pytest tests/<file>.py -q`.
+  - Backend tests need PostgreSQL: Docker running, or `ONTOTATOR_TEST_PG_URL` set. Single files: `uv run pytest tests/<file>.py -q`.
   - Static: `uv run ruff check . && uv run ruff format --check . && uv run mypy src`.
   - Contracts: `uv run python scripts/export_openapi.py` then `npm --prefix frontend run api:generate`; drift checks `uv run python scripts/export_openapi.py --check` and `npm --prefix frontend run api:check`. No new error codes in this plan, so `scripts/export_admin_error_codes.py --check` must stay green unchanged.
   - Frontend unit (always with the worker cap on this 16 GB machine): `npm --prefix frontend test -- <path relative to frontend> --maxWorkers=4 --minWorkers=1`. Types: `npm --prefix frontend run typecheck`.
@@ -57,9 +57,9 @@ Sibling plans: **Documents** = `2026-10-19-documents-lead-table.md` (WP IDs B1�
 
 | File | Owner(s), in order | What this plan assumes / does |
 |---|---|---|
-| `src/ontocurator/storage/repository.py` (`workflow_causes_in`, `TASK_PAUSED_WITHOUT_REPORT`, `report_id` on causes) | Documents B1 | Not modified. Assumes "open" means `state == "open"`; a withdrawn report raises nothing (withdraw leaves no hold of the report active); reopen re-raises `OPEN_PROBLEM_REPORT`. |
+| `src/ontotator/storage/repository.py` (`workflow_causes_in`, `TASK_PAUSED_WITHOUT_REPORT`, `report_id` on causes) | Documents B1 | Not modified. Assumes "open" means `state == "open"`; a withdrawn report raises nothing (withdraw leaves no hold of the report active); reopen re-raises `OPEN_PROBLEM_REPORT`. |
 | `storage/migrations/versions/0014_final_selection_identity.py` | Documents B2 | WP1 creates `0015_problem_report_lifecycle.py` with `down_revision = "0014"`. **WP1 starts only after B2 is done.** No other plan adds a migration; any later one is `0016+`. |
-| `src/ontocurator/domain/submission_labels.py` (`round_ordinals`, re-exported by `domain/document_rows.py`) | Documents B5 | WP2 imports `round_ordinals` from `ontocurator.domain.submission_labels`; does not modify it. |
+| `src/ontotator/domain/submission_labels.py` (`round_ordinals`, re-exported by `domain/document_rows.py`) | Documents B5 | WP2 imports `round_ordinals` from `ontotator.domain.submission_labels`; does not modify it. |
 | `application/document_rows.py` (facts), `application/document_row_page.py` (row dict), `api/document_row_routes.py` (models) | Documents B6, B7, B9 | WP8 takes ownership **after B9** and adds only hook lines that call its new module `application/document_row_reports.py`. `OPEN_PROBLEM_REPORT` issue fields stay Documents'. |
 | `contracts/openapi.json`, `frontend/src/api/generated.ts`, `frontend/src/api/client.ts` | **contract slot**: Documents B9 → Editor B4 → this plan WP4 → WP8 | One contract writer at a time across all plans (see "Cross-plan schedule"). WP4 adds only problem-report types and methods to `client.ts`. |
 | `frontend/src/ui/Button.tsx` (`loading`), `ui/shortcuts.ts`, `ui/InlineConfirm.tsx` | Documents U1 | Consumed unchanged. The optional `conflictMessage` prop needed by WP7 is **CR-1** to U1. |
@@ -157,10 +157,10 @@ Recommended lanes (never more than two test-heavy agents):
 **Goal:** Report states `open|resolved|withdrawn`; actions `withdraw` and `reopen`; each hold release records who, when, how and which event; permission and state rules as pure functions; contract tests that holds are never lifted silently.
 
 **Owns (writes):**
-- Create `src/ontocurator/domain/problem_reports.py`
-- Create `src/ontocurator/storage/migrations/versions/0015_problem_report_lifecycle.py`
-- Modify `src/ontocurator/storage/workflow_tables.py` (`ProblemReportRow`, `TaskHoldRow`, `TaskHoldStateRow`, `ProblemReportEventRow` only)
-- Modify `src/ontocurator/application/problem_reports.py` (`ReportAction`, `ProblemReportView.state`, `_release`, `act`)
+- Create `src/ontotator/domain/problem_reports.py`
+- Create `src/ontotator/storage/migrations/versions/0015_problem_report_lifecycle.py`
+- Modify `src/ontotator/storage/workflow_tables.py` (`ProblemReportRow`, `TaskHoldRow`, `TaskHoldStateRow`, `ProblemReportEventRow` only)
+- Modify `src/ontotator/application/problem_reports.py` (`ReportAction`, `ProblemReportView.state`, `_release`, `act`)
 - Create `tests/problem_report_team.py` (fixture + helpers, used by WP2, WP3, WP8)
 - Create `tests/test_problem_report_rules.py`, `tests/test_problem_report_lifecycle.py`, `tests/test_problem_report_migration.py`
 
@@ -175,8 +175,8 @@ Recommended lanes (never more than two test-heavy agents):
 
 import pytest
 
-from ontocurator.domain.errors import AccessDenied, DomainError
-from ontocurator.domain.problem_reports import (
+from ontotator.domain.errors import AccessDenied, DomainError
+from ontotator.domain.problem_reports import (
     EventFact,
     check_permission,
     check_state,
@@ -264,8 +264,8 @@ def test_transitions():
     assert next_resolution("resume", "Fixed text", "continue") == "Fixed text"
 ```
 
-- [ ] Run `uv run pytest tests/test_problem_report_rules.py -q`. Expected: FAIL, `ModuleNotFoundError: ontocurator.domain.problem_reports`.
-- [ ] Create `src/ontocurator/domain/problem_reports.py`:
+- [ ] Run `uv run pytest tests/test_problem_report_rules.py -q`. Expected: FAIL, `ModuleNotFoundError: ontotator.domain.problem_reports`.
+- [ ] Create `src/ontotator/domain/problem_reports.py`:
 
 ```python
 """Pure lifecycle rules of problem reports and their task pauses (no I/O)."""
@@ -274,7 +274,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Literal
 
-from ontocurator.domain.errors import AccessDenied, DomainError
+from ontotator.domain.errors import AccessDenied, DomainError
 
 ReportState = Literal["open", "resolved", "withdrawn"]
 ReportAction = Literal[
@@ -348,7 +348,7 @@ def next_resolution(action: str, current: str | None, reason: str) -> str | None
 
 ### Step 1.2: Migration 0015 and ORM (test first)
 
-- [ ] Confirm `ls src/ontocurator/storage/migrations/versions/` shows `0014_final_selection_identity.py` (Documents WP B2). If it is missing, stop and report; do not renumber.
+- [ ] Confirm `ls src/ontotator/storage/migrations/versions/` shows `0014_final_selection_identity.py` (Documents WP B2). If it is missing, stop and report; do not renumber.
 - [ ] Write `tests/test_problem_report_migration.py`. It builds two releases at revision 0014 with raw SQL (one with a matching `resume` event, one without), upgrades to 0015 and checks the backfill and the state constraint:
 
 ```python
@@ -359,9 +359,9 @@ from pg_harness import unmigrated_database_url
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import IntegrityError
 
-from ontocurator.storage.schema import upgrade
+from ontotator.storage.schema import upgrade
 
-S = "ontocurator"
+S = "ontotator"
 
 
 def _seed(conn) -> None:
@@ -469,7 +469,7 @@ def test_0015_rejects_unknown_report_states(tmp_path):
 If an `INSERT` fails on a NOT NULL column without default, add the column with a neutral literal (check `\d` or `storage/tables.py`); do not change the scenario.
 
 - [ ] Run `uv run pytest tests/test_problem_report_migration.py -q`. Expected: FAIL (`Migration target must be head or an exact known revision` for `0015`).
-- [ ] Create `src/ontocurator/storage/migrations/versions/0015_problem_report_lifecycle.py`:
+- [ ] Create `src/ontotator/storage/migrations/versions/0015_problem_report_lifecycle.py`:
 
 ```python
 """Problem report lifecycle: withdrawn state and recorded hold releases."""
@@ -481,7 +481,7 @@ revision = "0015"
 down_revision = "0014"
 branch_labels = None
 depends_on = None
-SCHEMA = "ontocurator"
+SCHEMA = "ontotator"
 
 BACKFILL = f"""
 UPDATE {SCHEMA}.task_hold_state AS s
@@ -589,7 +589,7 @@ from typing import Any
 import pytest
 from auth_harness import logged_in
 
-from ontocurator.assignments.service import AssignmentService
+from ontotator.assignments.service import AssignmentService
 
 
 @pytest.fixture
@@ -686,7 +686,7 @@ def held(app, task_id: int) -> tuple[bool, str | None]:
 from problem_report_team import act, held, report
 from sqlalchemy import select
 
-from ontocurator.storage.workflow_tables import TaskHoldRow, TaskHoldStateRow
+from ontotator.storage.workflow_tables import TaskHoldRow, TaskHoldStateRow
 
 pytest_plugins = ("test_assignment_round_open_api", "problem_report_team")
 
@@ -860,7 +860,7 @@ If `TASK_HELD` is answered with a status other than 409, read `api/app.py` and a
 
 - [ ] Run `uv run pytest tests/test_problem_report_lifecycle.py -q`. Expected: FAIL (`withdraw` is not a valid `action`, 422).
 - [ ] Implement in `application/problem_reports.py`:
-  1. Replace `ReportAction = Literal[...]` by `from ontocurator.domain.problem_reports import ReportAction, EventFact, check_permission, check_state, next_resolution, next_state, withdrawable` (keep the name `ReportAction` exported; `api/problem_report_routes.py` imports it).
+  1. Replace `ReportAction = Literal[...]` by `from ontotator.domain.problem_reports import ReportAction, EventFact, check_permission, check_state, next_resolution, next_state, withdrawable` (keep the name `ReportAction` exported; `api/problem_report_routes.py` imports it).
   2. `ProblemReportView.state: Literal["open", "resolved", "withdrawn"]`.
   3. `_release(self, conn, report_id, assignment_ids, now, *, released_by: int, release_action: str, event_id: str)`: select only **active** holds of this report on those tasks and record the release:
 
@@ -951,7 +951,7 @@ If `TASK_HELD` is answered with a status other than 409, read `api/app.py` and a
 - [ ] Contract tests: another report's pause survives resume/resolve/reopen; restart fails atomically with `TASK_HELD`.
 - [ ] Existing problem report tests unchanged and green.
 
-**Commit point (later):** `src/ontocurator/domain/problem_reports.py src/ontocurator/storage/migrations/versions/0015_problem_report_lifecycle.py src/ontocurator/storage/workflow_tables.py src/ontocurator/application/problem_reports.py tests/problem_report_team.py tests/test_problem_report_rules.py tests/test_problem_report_lifecycle.py tests/test_problem_report_migration.py` / `feat: withdraw and reopen problem reports with recorded pause releases`
+**Commit point (later):** `src/ontotator/domain/problem_reports.py src/ontotator/storage/migrations/versions/0015_problem_report_lifecycle.py src/ontotator/storage/workflow_tables.py src/ontotator/application/problem_reports.py tests/problem_report_team.py tests/test_problem_report_rules.py tests/test_problem_report_lifecycle.py tests/test_problem_report_migration.py` / `feat: withdraw and reopen problem reports with recorded pause releases`
 
 ---
 
@@ -960,9 +960,9 @@ If `TASK_HELD` is answered with a status other than 409, read `api/app.py` and a
 **Goal:** One `ProblemReportView` builder per viewer. Leads see everything; the reporter sees only their own task. New `GET /problem-reports/{report_id}`, `?assignment_id=` filter and `GET /problem-reports/{report_id}/pause-candidates`. Contract tests for blinding.
 
 **Owns:**
-- Create `src/ontocurator/application/problem_report_views.py`
-- Modify `src/ontocurator/application/problem_reports.py` (`ProblemReportView` fields, `_view`, `_receipt` replay, `list`, new `get`, `pause_candidates`)
-- Modify `src/ontocurator/api/problem_report_routes.py`
+- Create `src/ontotator/application/problem_report_views.py`
+- Modify `src/ontotator/application/problem_reports.py` (`ProblemReportView` fields, `_view`, `_receipt` replay, `list`, new `get`, `pause_candidates`)
+- Modify `src/ontotator/api/problem_report_routes.py`
 - Create `tests/test_problem_report_views.py`, `tests/test_problem_report_blinding.py`
 - Modify `tests/test_problem_reports_api.py` only where an assertion reads the old `events[].details` shape
 
@@ -1359,7 +1359,7 @@ def pause_candidates(
 - [ ] `REPORT_NOT_FOUND` (404) for unrelated users and unknown IDs alike.
 - [ ] No events synthesized: creation is not an event; `events` only from rows.
 
-**Commit point (later):** `src/ontocurator/application/problem_report_views.py src/ontocurator/application/problem_reports.py src/ontocurator/api/problem_report_routes.py tests/test_problem_report_views.py tests/test_problem_report_blinding.py tests/test_problem_reports_api.py` / `feat: per-viewer problem report read model with reporter redaction`
+**Commit point (later):** `src/ontotator/application/problem_report_views.py src/ontotator/application/problem_reports.py src/ontotator/api/problem_report_routes.py tests/test_problem_report_views.py tests/test_problem_report_blinding.py tests/test_problem_reports_api.py` / `feat: per-viewer problem report read model with reporter redaction`
 
 ---
 
@@ -1367,7 +1367,7 @@ def pause_candidates(
 
 **Goal:** The dialog's "Your task: Paused" causes without revealing other reports.
 
-**Owns:** Modify `src/ontocurator/api/assignment_routes.py`; Create `tests/test_assignment_active_holds.py`.
+**Owns:** Modify `src/ontotator/api/assignment_routes.py`; Create `tests/test_assignment_active_holds.py`.
 **May read:** spec "Dialog > 1. Task status", "API changes" row `AssignmentView.active_holds`; `tests/problem_report_team.py`; `storage/workflow_tables.py`.
 
 - [ ] Test first, `tests/test_assignment_active_holds.py`:
@@ -1411,7 +1411,7 @@ def test_lead_listing_does_not_carry_active_holds(team):
 - [ ] Run `uv run pytest tests/test_assignment_active_holds.py tests/test_assignment_round_open_api.py -q`, then ruff + mypy. Expected: PASS / clean.
 
 **Done checklist WP3:** owner-only field; other report IDs never present; existing assignment tests green.
-**Commit point (later):** `src/ontocurator/api/assignment_routes.py tests/test_assignment_active_holds.py` / `feat: owner sees the causes of their task pauses`
+**Commit point (later):** `src/ontotator/api/assignment_routes.py tests/test_assignment_active_holds.py` / `feat: owner sees the causes of their task pauses`
 
 ---
 
@@ -1727,10 +1727,10 @@ Use `conflictMessage` (CR-1, implemented in Documents U1). Do not edit `ui/Inlin
 **Goal:** Spec "Lead flow > Entry points", bullet "Closed reports stay findable".
 
 **Owns (after Documents B9 and DX are done and while no Documents WP owns these files):**
-- Create `src/ontocurator/application/document_row_reports.py` (`load_row_reports(conn, pid, row_keys) -> dict[tuple[str, str], list[dict]]`, the per-row query and `title` rule)
-- Modify `src/ontocurator/application/document_rows.py` (B6 file: one `RowFacts` field `row_reports` filled by `load_row_reports`; nothing else)
-- Modify `src/ontocurator/application/document_row_page.py` (B7 file: copy `row_reports[(case, language)]` into each row dict as `problem_reports`; nothing else)
-- Modify `src/ontocurator/api/document_row_routes.py` (B9 file: model `RowProblemReport`, field `DocumentRowView.problem_reports: list[RowProblemReport] = []`)
+- Create `src/ontotator/application/document_row_reports.py` (`load_row_reports(conn, pid, row_keys) -> dict[tuple[str, str], list[dict]]`, the per-row query and `title` rule)
+- Modify `src/ontotator/application/document_rows.py` (B6 file: one `RowFacts` field `row_reports` filled by `load_row_reports`; nothing else)
+- Modify `src/ontotator/application/document_row_page.py` (B7 file: copy `row_reports[(case, language)]` into each row dict as `problem_reports`; nothing else)
+- Modify `src/ontotator/api/document_row_routes.py` (B9 file: model `RowProblemReport`, field `DocumentRowView.problem_reports: list[RowProblemReport] = []`)
 - Contract slot: regenerated `contracts/openapi.json`, `frontend/src/api/generated.ts` (Editor B4 and WP4 not running)
 - Modify `frontend/src/documents/ExpandedRow.tsx` ("More" item only; not while Documents E4 runs)
 - Create `tests/test_document_rows_problem_reports.py`, `frontend/tests/documents/expandedRowReports.test.tsx`
@@ -1842,7 +1842,7 @@ Use `conflictMessage` (CR-1, implemented in Documents U1). Do not edit `ui/Inlin
 
 ## Review disposition
 
-Codex review `ontocurator-reviews/2026-10-19-plan-problem-reports-codex.md` (8 findings, no P0). Each was checked against the code, the spec and the sibling plans before it was applied.
+Codex review `ontotator-reviews/2026-10-19-plan-problem-reports-codex.md` (8 findings, no P0). Each was checked against the code, the spec and the sibling plans before it was applied.
 
 | # | Finding | Verified against | Disposition |
 |---|---|---|---|

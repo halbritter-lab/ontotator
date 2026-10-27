@@ -2,12 +2,12 @@
 
 Date: 2026-10-14 · Status: **design agreed, file review pending** · Part of the roadmap `2026-10-14-roadmap-web-service-analysis.md` (E1, E2, E3, E6, E9, E11, E12)
 
-T2 turns Ontocurator from a local single-user tool into a multi-user web service. Workflows (T4), admin screens (T3) and translation review (T5) build on it.
+T2 turns Ontotator from a local single-user tool into a multi-user web service. Workflows (T4), admin screens (T3) and translation review (T5) build on it.
 
 ## Starting point
 
-- FastAPI app with a loopback-only guard and a fresh bearer token per launch (`api/security.py`), one instance per workspace (`.ontocurator.lock`).
-- SQLite `ontocurator-workspace/v4` behind a ~1600-line raw-SQL `storage/repository.py`.
+- FastAPI app with a loopback-only guard and a fresh bearer token per launch (`api/security.py`), one instance per workspace (`.ontotator.lock`).
+- SQLite `ontotator-workspace/v4` behind a ~1600-line raw-SQL `storage/repository.py`.
 - Identity is typed initials; no users, roles or assignments.
 - Domain (`domain/`), ontology/search (`ontology/`) and application services are reusable. `packages/` (ZIP v2) becomes obsolete per E6. Its import/export role moves to the T1 format.
 
@@ -39,7 +39,7 @@ T2 turns Ontocurator from a local single-user tool into a multi-user web service
 - **D1, hosting follows the Limin pattern** (`../limin`: `docker-compose.web-staging.yml`, `Dockerfile`, `.planning/docs/process/web-staging-operations.md`).
   - **What this repository ships:** a verified application image and a compose service contract (app + PostgreSQL). It ships no reverse proxy, TLS or host provisioning.
   - **TLS:** terminated by an external Nginx Proxy Manager, the same as Phentrieve and Limin. Host deployment, DNS and certificates belong to a separate deployment repository.
-  - **Proxy configuration:** `ONTOCURATOR_PUBLIC_ORIGIN` is set to the exact public HTTPS origin. `ONTOCURATOR_TRUSTED_PROXIES` lists the exact proxy peer addresses. Forwarded headers are honoured only from those peers. The app port is never published publicly.
+  - **Proxy configuration:** `ONTOTATOR_PUBLIC_ORIGIN` is set to the exact public HTTPS origin. `ONTOTATOR_TRUSTED_PROXIES` lists the exact proxy peer addresses. Forwarded headers are honoured only from those peers. The app port is never published publicly.
   - **Hardened runtime:**
     - non-root user, `read_only` root filesystem with explicit volumes and tmpfs;
     - `cap_drop: [ALL]`, `no-new-privileges`, `init`;
@@ -50,7 +50,7 @@ T2 turns Ontocurator from a local single-user tool into a multi-user web service
   - **PostgreSQL roles:** a bootstrap role creates a non-superuser application role that owns a dedicated schema (init script as in `docker/postgres-init.sh`). The application never connects as superuser.
   - **Development:** a separate dev compose binds the app and PostgreSQL to `127.0.0.1` with dev-only credentials.
 - **D2, account recovery without e-mail** (Limin pattern; resolves open question 2):
-  - **First admin:** the first start creates `admin` from an Argon2id hash supplied once via `ONTOCURATOR_ADMIN_PASSWORD_HASH_FILE`. Later starts ignore it.
+  - **First admin:** the first start creates `admin` from an Argon2id hash supplied once via `ONTOTATOR_ADMIN_PASSWORD_HASH_FILE`. Later starts ignore it.
   - **New users:** an administrator creates them, and they receive a single-use setup code (valid 24 h, because it is handed over out of band; shown only to that administrator).
   - **Password resets:** issued as single-use reset codes the same way (valid 15 min).
   - **Session revocation:** changing a password, role or activation status revokes the affected sessions.
@@ -61,7 +61,7 @@ T2 turns Ontocurator from a local single-user tool into a multi-user web service
 
 - **D5, scope: the current editor as a web service.** After T2:
   - Logged-in project members annotate with the current editor (independent mode and the existing review mode) on PostgreSQL.
-  - Projects, users, memberships, ontologies and documents are created by a CLI (`ontocurator admin …`) until the admin UI arrives with T3. Documents and proposals are imported in the T1 format.
+  - Projects, users, memberships, ontologies and documents are created by a CLI (`ontotator admin …`) until the admin UI arrives with T3. Documents and proposals are imported in the T1 format.
   - Submitted results are exported in the T1 format.
   - Not in T2: admin UI, assignments and distribution (T3); the stage-based workflows, merge, blind toggle and removal of the start-mode choice (T4); document variants (T5).
   - Dependency: the T1 package must exist before T2 import/export is implemented. This matches the roadmap order.

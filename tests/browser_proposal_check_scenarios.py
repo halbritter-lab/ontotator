@@ -36,8 +36,8 @@ from browser_lead_workflow_scenarios import (
 from fastapi import FastAPI, HTTPException, Query
 from sqlalchemy import update
 
-from ontocurator.domain.errors import DomainError
-from ontocurator.storage.tables import ProjectRow
+from ontotator.domain.errors import DomainError
+from ontotator.storage.tables import ProjectRow
 
 PEOPLE.update({"tom": "Tom Reis", "mia": "Mia Berg", "ali": "Ali Kaya"})
 WITH_PROPOSALS = "EN100024"
@@ -116,12 +116,12 @@ def check_and_submit(
     scenario: Scenario, assignment_id: int, name: str, outcomes: tuple[str, ...]
 ) -> str:
     """Start the proposal check, decide every proposal and submit it."""
-    from ontocurator.application.editing import EditingService
-    from ontocurator.application.reviews import ReviewService
-    from ontocurator.application.submissions import SubmissionService
-    from ontocurator.authz.scoped import ScopedRepository
-    from ontocurator.domain.annotations import AnnotationRef
-    from ontocurator.domain.workspace import MutationEnvelope
+    from ontotator.application.editing import EditingService
+    from ontotator.application.reviews import ReviewService
+    from ontotator.application.submissions import SubmissionService
+    from ontotator.authz.scoped import ScopedRepository
+    from ontotator.domain.annotations import AnnotationRef
+    from ontotator.domain.workspace import MutationEnvelope
 
     key = start_round(scenario, assignment_id, name).workspace_key
     if key.mode != "proposal_check":

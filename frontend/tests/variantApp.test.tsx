@@ -11,7 +11,7 @@ import { caseDetail } from './variantFixtures';
 function workspaceFixture(...args: Parameters<typeof emptyWorkspaceFixture>) {
   const response = emptyWorkspaceFixture(...args);
   response.view.layers![0].annotation_types[0].axes = [{ id: 'assertion', label: 'Assertion', options: ['present', 'absent'], allow_empty: true }];
-  response.view.draft.annotations = [{ schema_version: 'ontocurator-annotation/v3', version: 'pending-v1',
+  response.view.draft.annotations = [{ schema_version: 'ontotator-annotation/v3', version: 'pending-v1',
     document_id: response.view.document.document_id, text_sha256: 'text', ontology_sha256: 'ontology', layer_config_sha256: 'layer',
     annotation: { annotation_id: 'pending-finding', document_id: response.view.document.document_id, layer_id: 'phenotype',
       type_id: 'default', term_id: 'HP:0001252', axes_values: {}, evidence_refs: [],

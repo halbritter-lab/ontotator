@@ -21,7 +21,7 @@ const progress: ProjectProgress = {
   workload: [],
 };
 const job = (id: number): JobView => ({ id, kind: "t1_export", status: "succeeded", result: { path: "never-use-server-path" }, error: null, created_at: "2026-10-16T10:00:00Z", finished_at: "2026-10-16T10:01:00Z" });
-const storageKey = (username: string, key = "p/key") => `ontocurator:export:${JSON.stringify([username, key, "t1"])}`;
+const storageKey = (username: string, key = "p/key") => `ontotator:export:${JSON.stringify([username, key, "t1"])}`;
 beforeEach(() => {
   sessionStorage.clear();
   vi.spyOn(api, "listProjects").mockResolvedValue([project]);

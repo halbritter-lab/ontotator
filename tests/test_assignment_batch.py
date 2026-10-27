@@ -11,10 +11,10 @@ from sqlalchemy import func, insert, select, update
 from tests_support_reviews import insert_review
 from work_plan_support import _user, assign, set_rule, submit
 
-from ontocurator.domain.work_plans import PlanFlags, RowKey
-from ontocurator.storage import work_plan_store as store
-from ontocurator.storage.plan_tables import DiscardedVariantRow
-from ontocurator.storage.tables import (
+from ontotator.domain.work_plans import PlanFlags, RowKey
+from ontotator.storage import work_plan_store as store
+from ontotator.storage.plan_tables import DiscardedVariantRow
+from ontotator.storage.tables import (
     AssignmentRow,
     AuditEventRow,
     DocumentRow,

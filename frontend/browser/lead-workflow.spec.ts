@@ -56,8 +56,8 @@ const person = (s: LeadScenario, name: LeadPerson) => `${s.display_names[name]} 
 async function login(page: Page, s: LeadScenario, name: LeadPerson, remember?: string) {
   if (remember === undefined) await openTasksHome(page);
   else await page.goto("/");
-  if (remember !== undefined) await page.evaluate(([key, value]) => window.localStorage.setItem(key, value), [`ontocurator.lastProject.v1:${s.users[name]}`, remember]);
-  const form = page.getByRole("form", { name: "Log in to Ontocurator" });
+  if (remember !== undefined) await page.evaluate(([key, value]) => window.localStorage.setItem(key, value), [`ontotator.lastProject.v1:${s.users[name]}`, remember]);
+  const form = page.getByRole("form", { name: "Log in to Ontotator" });
   await form.getByLabel("Username", { exact: true }).fill(s.users[name]);
   await form.getByLabel("Password", { exact: true }).fill(TEST_PASSWORD);
   await form.getByRole("button", { name: "Log in", exact: true }).click();
@@ -356,7 +356,7 @@ test("ROWS: one chip click with Undo", async ({ page }) => {
   await openPlan(page, both, "fr");
   await chip(page, "Translation review", both, "fr").click();
   const offer = page.getByRole("group", { name: "Annotate without review" });
-  await expect(offer.getByText("This translation was reviewed outside Ontocurator — accept it as it is", { exact: true })).toBeVisible();
+  await expect(offer.getByText("This translation was reviewed outside Ontotator — accept it as it is", { exact: true })).toBeVisible();
   await expect(offer.getByRole("textbox", { name: "Reason (required)" })).toBeVisible();
   await expect(offer.getByRole("button", { name: "Accept and annotate", exact: true })).toHaveAttribute("aria-disabled", "true");
   await expect(toast(page)).toHaveCount(0);
@@ -433,7 +433,7 @@ test("ACCEPTANCE: annotate without review", async ({ page }) => {
   await expect(save).toHaveAttribute("aria-disabled", "true");
 
   // Checkbox + reason make Save available.
-  await block.getByRole("checkbox", { name: "These translations were reviewed outside Ontocurator — accept them as they are", exact: true }).check();
+  await block.getByRole("checkbox", { name: "These translations were reviewed outside Ontotator — accept them as they are", exact: true }).check();
   await expect(save).toHaveAttribute("aria-disabled", "true");
   const reason = "Reviewed by the partner clinic.";
   await dialog.getByLabel(/^Reason/).fill(reason);
@@ -450,7 +450,7 @@ test("ACCEPTANCE: annotate without review", async ({ page }) => {
     return (await textVersionItems(card, 1)).first();
   };
   const lead = await versions(accepted);
-  await expect(lead).toContainText(new RegExp(`Accepted: reviewed outside Ontocurator${SEP}Project Lead \\(${esc(s.pseudonyms.lead)}, you\\)${SEP}${TIME}${SEP}${esc(reason)}`));
+  await expect(lead).toContainText(new RegExp(`Accepted: reviewed outside Ontotator${SEP}Project Lead \\(${esc(s.pseudonyms.lead)}, you\\)${SEP}${TIME}${SEP}${esc(reason)}`));
   await textCard(page, accepted, "fr").getByRole("button", { name: "Close", exact: true }).click();
   const pkg = await versions(marked);
   await expect(pkg).toContainText(/Accepted: marked as reviewed in the package\W+R\. Roe, 1 Oct/);
@@ -553,8 +553,8 @@ async function twoProjectLead(page: Page) {
   /** Log in at "#/" (the landing applies); `remember` seeds the last-used project first. */
   const loginDana = async (remember?: string) => {
     await page.goto("/");
-    if (remember !== undefined) await page.evaluate(([key, value]) => window.localStorage.setItem(key, value), [`ontocurator.lastProject.v1:${username}`, remember]);
-    const form = page.getByRole("form", { name: "Log in to Ontocurator" });
+    if (remember !== undefined) await page.evaluate(([key, value]) => window.localStorage.setItem(key, value), [`ontotator.lastProject.v1:${username}`, remember]);
+    const form = page.getByRole("form", { name: "Log in to Ontotator" });
     await form.getByLabel("Username", { exact: true }).fill(username);
     await form.getByLabel("Password", { exact: true }).fill(TEST_PASSWORD);
     await form.getByRole("button", { name: "Log in", exact: true }).click();
@@ -576,7 +576,7 @@ test("lead lands on the last-used project, else on Projects (F8, D4)", async ({ 
   await page.goto(`/#/projects/${encodeURIComponent(b)}/documents`);
   await expect(page.getByRole("heading", { name: "Documents", level: 1 })).toBeVisible();
   await page.getByRole("button", { name: "Log out", exact: true }).click();
-  await expect(page.getByRole("form", { name: "Log in to Ontocurator" })).toBeVisible();
+  await expect(page.getByRole("form", { name: "Log in to Ontotator" })).toBeVisible();
   await loginDana();
   await expect(page).toHaveURL(new RegExp(`#/projects/${esc(b)}/documents`));
   await expect(page.getByRole("heading", { name: "Documents", level: 1 })).toBeVisible();

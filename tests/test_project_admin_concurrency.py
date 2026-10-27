@@ -9,9 +9,9 @@ from sqlalchemy import event, func, select
 from test_auth_api import _app
 from test_projects_api import create_project
 
-from ontocurator.auth.audit import Actor
-from ontocurator.storage.repository import _lock_id
-from ontocurator.storage.tables import AuditEventRow, ProjectMembershipRow
+from ontotator.auth.audit import Actor
+from ontotator.storage.repository import _lock_id
+from ontotator.storage.tables import AuditEventRow, ProjectMembershipRow
 
 
 @pytest.mark.parametrize("route", ["members", "settings", "pins", "profile"])
@@ -127,7 +127,7 @@ def test_queued_http_manager_must_still_be_authorized(tmp_path, route, revocatio
 def test_member_list_remains_coherent_when_removal_commits_between_reads(
     tmp_path, monkeypatch
 ):
-    from ontocurator.api import project_routes
+    from ontotator.api import project_routes
 
     app = _app(tmp_path)
     root = logged_in(app, "root", system_admin=True)

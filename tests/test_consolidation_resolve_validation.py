@@ -231,11 +231,11 @@ def test_a_term_of_the_group_or_another_valid_term_is_accepted(cons):
 def test_another_term_is_stored_by_its_canonical_id(cons):
     """An alternative id of another term ("Other term…") is stored as the
     term's canonical id (``TermStatus.term_id``)."""
-    from ontocurator.application.consolidation_resolve import (
+    from ontotator.application.consolidation_resolve import (
         ConsolidationGroupService,
     )
-    from ontocurator.domain.workspace import MutationEnvelope
-    from ontocurator.storage.repository import Repository
+    from ontotator.domain.workspace import MutationEnvelope
+    from ontotator.storage.repository import Repository
 
     asked: list[tuple[str, str]] = []
 

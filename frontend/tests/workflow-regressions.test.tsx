@@ -129,7 +129,7 @@ const baseView = (): WorkspaceView => ({
 it("submits the API payload and preserves its envelope through a lost-response retry", async () => {
  const view = baseView();
  const submission = {
-   format_version: "ontocurator-work-package/v2",
+   format_version: "ontotator-work-package/v2",
    submission_id: "sub",
    created_at: "today",
    draft_revision: 1,
@@ -169,7 +169,7 @@ it("flush yields while a write is outstanding", async () => {
 });
 
 const proposal = (version: string, hpoId: string) => ({
- schema_version: "ontocurator-annotation/v3" as const,
+ schema_version: "ontotator-annotation/v3" as const,
  annotation: {
    annotation_id: "same",
    document_id: "doc",
@@ -399,7 +399,7 @@ it("uses the search event when assigning a candidate and trusts obsolete metadat
 it("exposes an immutable historical submission", () => {
  const view = baseView();
  view.submissions = [{
-   format_version: "ontocurator-work-package/v2",
+   format_version: "ontotator-work-package/v2",
    submission_id: "historical",
    created_at: "yesterday",
    draft_revision: 1,
@@ -541,7 +541,7 @@ it("adopts a review proposal as an editable copy and records 'changed' only once
     if (cmd.command === "create_annotation") {
       const evidence = cmd.evidence_id ? [{ mention: { evidence_id: cmd.evidence_id, segments: cmd.segments, cue_segments: [] }, version: "v-ev1", document_id: "doc", text_sha256: "text" }] : [];
       const newSnap = {
-        schema_version: "ontocurator-annotation/v3" as const,
+        schema_version: "ontotator-annotation/v3" as const,
         annotation: {
           annotation_id: cmd.annotation_id,
           document_id: "doc",

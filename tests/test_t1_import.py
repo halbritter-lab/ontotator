@@ -27,13 +27,13 @@ from t1_fixtures import (
 )
 from typer.testing import CliRunner
 
-from ontocurator.authz.policy import Access
-from ontocurator.authz.scoped import ScopedRepository
-from ontocurator.cli import app
-from ontocurator.domain.errors import AccessDenied
-from ontocurator.storage.database import Database
-from ontocurator.storage.repository import Repository
-from ontocurator.storage.tables import (
+from ontotator.authz.policy import Access
+from ontotator.authz.scoped import ScopedRepository
+from ontotator.cli import app
+from ontotator.domain.errors import AccessDenied
+from ontotator.storage.database import Database
+from ontotator.storage.repository import Repository
+from ontotator.storage.tables import (
     SCHEMA,
     AuditEventRow,
     DocumentRow,
@@ -197,7 +197,7 @@ def test_the_import_audit_names_the_bundle(db: Database, tmp_path: Path) -> None
 def test_the_cli_creates_a_project_and_imports(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("ONTOCURATOR_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("ONTOTATOR_DATA_DIR", str(tmp_path / "data"))
     url = database_url_for(tmp_path / "cli.db")
     profile = tmp_path / "profile.json"
     data = hpo_profile().model_dump(mode="json")
@@ -421,7 +421,7 @@ def test_the_application_cannot_rewrite_imported_sets(
 def test_unrepresentable_units_refuse_the_import(db: Database, tmp_path: Path) -> None:
     """Q11: a modifier on a generic layer cannot be represented; the whole
     import is refused (hpo-phenotype layers keep them: test_t1_modifiers)."""
-    from ontocurator.exchange.t1 import Pin, layers_for
+    from ontotator.exchange.t1 import Pin, layers_for
 
     generic = Pin(sha256=HP_SHA, allowed_roots=("HP:0000118",))
     create_project(db, "gen", pin=generic)

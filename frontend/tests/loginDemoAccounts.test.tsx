@@ -68,7 +68,7 @@ describe("demo accounts on the login screen", () => {
 
     render(<LoginScreen overlay onLoggedIn={vi.fn()} />);
 
-    await screen.findByRole("dialog", { name: "Log in to Ontocurator" });
+    await screen.findByRole("dialog", { name: "Log in to Ontotator" });
     expect(demoLogins).not.toHaveBeenCalled();
     expect(screen.queryByRole("region", { name: "Demo accounts" })).toBeNull();
   });

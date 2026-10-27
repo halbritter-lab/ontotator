@@ -10,7 +10,7 @@ import { assigned, taskOf, workspaceFixture as emptyWorkspaceFixture } from "./a
 function workspaceFixture(...args: Parameters<typeof emptyWorkspaceFixture>) {
   const response = emptyWorkspaceFixture(...args);
   response.view.layers![0].annotation_types[0].axes = [{ id: 'assertion', label: 'Assertion', options: ['present', 'absent'], allow_empty: true }];
-  response.view.draft.annotations = [{ schema_version: 'ontocurator-annotation/v3', version: 'pending-v1',
+  response.view.draft.annotations = [{ schema_version: 'ontotator-annotation/v3', version: 'pending-v1',
     document_id: response.view.document.document_id, text_sha256: 'text', ontology_sha256: 'ontology', layer_config_sha256: 'layer',
     annotation: { annotation_id: 'pending-finding', document_id: response.view.document.document_id, layer_id: 'phenotype',
       type_id: 'default', term_id: 'HP:0001252', axes_values: {}, evidence_refs: [],
@@ -33,16 +33,16 @@ function clickSection(name: string | RegExp): void {
 
 it("uses the assigned task list, cleans old identity preferences and routes through the real shell", async () => {
   window.history.replaceState(null, "", "#/?status=all");
-  localStorage.setItem("ontocurator.annotatorId", "someone-else");
-  localStorage.setItem("ontocurator.mode.pkg", "independent");
+  localStorage.setItem("ontotator.annotatorId", "someone-else");
+  localStorage.setItem("ontotator.mode.pkg", "independent");
   vi.spyOn(api, "listProjects").mockResolvedValue([]);
   vi.spyOn(api, "listMyTasks").mockResolvedValue([]);
   const preferences = vi.spyOn(api, "getPreferences");
   render(<App user={testUser("alice")} />);
   await screen.findByRole("heading", { name: "My tasks" });
   expect(screen.queryByLabelText("Working mode")).toBeNull();
-  expect(localStorage.getItem("ontocurator.annotatorId")).toBeNull();
-  expect(localStorage.getItem("ontocurator.mode.pkg")).toBeNull();
+  expect(localStorage.getItem("ontotator.annotatorId")).toBeNull();
+  expect(localStorage.getItem("ontotator.mode.pkg")).toBeNull();
   expect(preferences).not.toHaveBeenCalled();
   vi.spyOn(api, "adminListUsers").mockResolvedValue([]);
   clickSection("Users");
@@ -132,7 +132,7 @@ it("restores the accepted history entry after cancelling several raw-hash destin
   await waitFor(() => expect(window.location.hash).toBe("#/tasks/17"));
   fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
   await waitFor(() => expect(window.location.hash).toBe("#/tasks/17"));
-  await waitFor(() => expect(window.history.state.ontocuratorRouteIndex).toBe(0));
+  await waitFor(() => expect(window.history.state.ontotatorRouteIndex).toBe(0));
   expect(screen.getByTestId("annotator-identity")).toBeDefined();
 });
 
@@ -299,9 +299,9 @@ async function threeTaskHistory() {
   await screen.findByText("Offline – changes not saved");
   act(() => window.history.back());
   const dialog = await screen.findByRole("dialog", { name: "Changes not saved" });
-  await waitFor(() => expect(window.history.state.ontocuratorRouteIndex).toBe(1));
+  await waitFor(() => expect(window.history.state.ontotatorRouteIndex).toBe(1));
   act(() => window.history.back());
-  await waitFor(() => expect(window.history.state.ontocuratorRouteIndex).toBe(0));
+  await waitFor(() => expect(window.history.state.ontotatorRouteIndex).toBe(0));
   expect(screen.getAllByRole("dialog")).toHaveLength(1);
   expect(window.location.hash).toBe("#/tasks/8");
   return { dialog, open };
@@ -310,7 +310,7 @@ async function threeTaskHistory() {
 it("preserves the intermediate task after two pending Back traversals are cancelled", async () => {
   const { dialog, open } = await threeTaskHistory();
   fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
-  await waitFor(() => expect(window.history.state.ontocuratorRouteIndex).toBe(2));
+  await waitFor(() => expect(window.history.state.ontotatorRouteIndex).toBe(2));
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
   act(() => window.history.back());
   fireEvent.click(within(await screen.findByRole("dialog", { name: "Changes not saved" })).getByRole("button", { name: "Discard edits and leave" }));

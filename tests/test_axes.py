@@ -2,7 +2,7 @@ import pytest
 
 
 def test_axis_definition_validation() -> None:
-    from ontocurator.domain.axes import (
+    from ontotator.domain.axes import (
         AxesConfig,
         AxisDefinition,
     )
@@ -44,7 +44,7 @@ def test_axis_definition_validation() -> None:
 
 
 def test_axes_validation_with_config() -> None:
-    from ontocurator.domain.axes import (
+    from ontotator.domain.axes import (
         Axes,
         AxesConfig,
         AxisDefinition,
@@ -95,7 +95,7 @@ def test_axes_validation_with_config() -> None:
 
 
 def test_empty_axes_config() -> None:
-    from ontocurator.domain.axes import Axes, AxesConfig, validate_axes
+    from ontotator.domain.axes import Axes, AxesConfig, validate_axes
 
     empty_cfg = AxesConfig(definition_name="empty/v1", axes=[])
     axes = Axes(definition_name="empty/v1", values={})
@@ -107,7 +107,7 @@ def test_empty_axes_config() -> None:
 
 
 def test_builtin_clinical_profile() -> None:
-    from ontocurator.domain.axes import (
+    from ontotator.domain.axes import (
         CLINICAL_PHENOTYPE_CONFIG,
         EDITOR_AXES_CONFIG,
         Axes,
@@ -126,7 +126,7 @@ def test_builtin_clinical_profile() -> None:
 
 
 def test_standard_axes_have_english_labels_and_stable_ids() -> None:
-    from ontocurator.domain.axes import STANDARD_CLINICAL_AXES
+    from ontotator.domain.axes import STANDARD_CLINICAL_AXES
 
     assert [(axis.id, axis.label, axis.options) for axis in STANDARD_CLINICAL_AXES] == [
         ("assertion", "Assertion", ["present", "absent", "uncertain"]),
@@ -136,6 +136,6 @@ def test_standard_axes_have_english_labels_and_stable_ids() -> None:
 
 
 def test_family_member_is_a_valid_experiencer() -> None:
-    from ontocurator.domain.axes import EDITOR_AXES_CONFIG, validate_axes
+    from ontotator.domain.axes import EDITOR_AXES_CONFIG, validate_axes
 
     validate_axes({"experiencer": "family_member"}, EDITOR_AXES_CONFIG, complete=False)

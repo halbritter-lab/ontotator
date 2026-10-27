@@ -2,9 +2,9 @@
 
 from test_t1_mapping import document_from_unit, hpo_profile, sketch_unit, submission
 
-from ontocurator.exchange.final_content import freeze_content
-from ontocurator.exchange.t1 import ImportedDocument
-from ontocurator.storage.repository import ProjectExport
+from ontotator.exchange.final_content import freeze_content
+from ontotator.exchange.t1 import ImportedDocument
+from ontotator.storage.repository import ProjectExport
 
 
 def test_reviewed_source_texts_and_exact_review_receipt_join_frozen_closure():

@@ -308,15 +308,15 @@ test('live qualification refusal retains inputs and the guarded profile link flu
   const leave = page.getByRole('dialog', { name: 'Changes not saved', exact: true });
   await leave.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`#/tasks/${s.assignment_id}$`)); await expect(target(page)).toHaveValue(localOnly);
-  const cursor = await page.evaluate(() => window.history.state.ontocuratorRouteIndex as number);
+  const cursor = await page.evaluate(() => window.history.state.ontotatorRouteIndex as number);
   await page.evaluate(() => { window.location.hash = '#/me'; });
   await page.getByRole('dialog', { name: 'Changes not saved', exact: true }).getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`#/tasks/${s.assignment_id}$`));
-  await expect.poll(() => page.evaluate(() => window.history.state.ontocuratorRouteIndex as number)).toBe(cursor);
+  await expect.poll(() => page.evaluate(() => window.history.state.ontotatorRouteIndex as number)).toBe(cursor);
   await expect(target(page)).toHaveValue(localOnly);
   await page.goBack();
   await page.getByRole('dialog', { name: 'Changes not saved', exact: true }).getByRole('button', { name: 'Cancel', exact: true }).click();
-  await expect.poll(() => page.evaluate(() => window.history.state.ontocuratorRouteIndex as number)).toBe(cursor);
+  await expect.poll(() => page.evaluate(() => window.history.state.ontotatorRouteIndex as number)).toBe(cursor);
   await expect(target(page)).toHaveValue(localOnly);
   await page.getByRole('button', { name: 'Log out', exact: true }).click();
   const logoutDialog = page.getByRole('dialog', { name: 'Unsaved changes', exact: true });
@@ -332,7 +332,7 @@ for (const actor of ['reviewer', 'other'] as const) test(`expired review session
   const before = await workspace(page, s.assignment_id!);
   const logout = await authenticatedRequest(page, '/api/v1/auth/logout', 'POST'); expect(logout.ok()).toBeTruthy();
   await target(page).fill(text); await page.getByRole('radio', { name: 'Accepted with corrections', exact: true }).check();
-  const dialog = page.getByRole('dialog', { name: 'Log in to Ontocurator', exact: true }); await expect(dialog).toBeVisible();
+  const dialog = page.getByRole('dialog', { name: 'Log in to Ontotator', exact: true }); await expect(dialog).toBeVisible();
   await expect(target(page)).toHaveValue(text); await expect(page.locator('.app-shell')).toHaveAttribute('inert', '');
   const marker = await target(page).evaluate(el => { el.setAttribute('data-session-owner', 'original'); return el.getAttribute('data-session-owner'); }); expect(marker).toBe('original');
   await dialog.getByLabel('Username', { exact: true }).fill(s.users[actor]); await dialog.getByLabel('Password', { exact: true }).fill(TEST_PASSWORD);

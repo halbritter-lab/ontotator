@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, type FinalPreflight } from '../api/client';
 
-export const FINAL_SELECTION_CHANGED = 'ontocurator:final-selection-changed';
+export const FINAL_SELECTION_CHANGED = 'ontotator:final-selection-changed';
 export function notifyFinalSelectionChanged(projectKey: string): void {
   window.dispatchEvent(new CustomEvent(FINAL_SELECTION_CHANGED, { detail: { projectKey } }));
 }

@@ -106,7 +106,7 @@ describe("My submissions", () => {
 
   it("entry point 2: an editor without an assignment keeps the Submission history list on raw submissions", () => {
     const view = workspaceFixture().view;
-    const base = { format_version: "ontocurator-submission/v2", origin_key: view.key, targets: view.targets!, draft_revision: 1,
+    const base = { format_version: "ontotator-submission/v2", origin_key: view.key, targets: view.targets!, draft_revision: 1,
       decisions: [], document_checked: true, created_at: new Date(2026, 9, 17, 9, 5).toISOString() };
     view.submissions = [{ ...base, submission_id: "raw-1", snapshots: [snapshot("raw-finding", "HP:0001250")] }];
     const list = vi.spyOn(api, "listAssignmentSubmissions");
@@ -124,7 +124,7 @@ describe("My submissions", () => {
     const list = vi.spyOn(api, "listAssignmentSubmissions").mockResolvedValue(rows);
     const view = workspaceFixture().view;
     view.key.round_id = "round-3"; view.draft.key = view.key;
-    const submitted: Submission = { format_version: "ontocurator-submission/v2", origin_key: view.key, targets: view.targets!, draft_revision: 1,
+    const submitted: Submission = { format_version: "ontotator-submission/v2", origin_key: view.key, targets: view.targets!, draft_revision: 1,
       snapshots: [], decisions: [], document_checked: true, created_at: at(19, 2, 5), submission_id: "fresh-submission" };
     vi.spyOn(api, "submitWorkspace").mockResolvedValue(submitted);
     render(<CaseScreen view={view} workspaceId="ws-submit" onClose={vi.fn()} roundOrdinal={3}

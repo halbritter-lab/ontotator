@@ -2,8 +2,8 @@
 
 from sqlalchemy import insert, select
 
-from ontocurator.storage.database import Database
-from ontocurator.storage.tables import (
+from ontotator.storage.database import Database
+from ontotator.storage.tables import (
     AssignmentRow,
     ProjectRow,
     TranslationReviewRow,
@@ -41,7 +41,7 @@ def insert_review(
                 proposed_text_sha256="a" * 64,
                 status_before="ready_for_review",
                 status_after="reviewed",
-                review_policy="ontocurator-translation-review/v1",
+                review_policy="ontotator-translation-review/v1",
             )
             .returning(TranslationReviewRow.id)
         ).scalar_one()

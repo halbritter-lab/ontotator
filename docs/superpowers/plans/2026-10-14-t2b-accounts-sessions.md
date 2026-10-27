@@ -9,7 +9,7 @@
 - **Data:** new tables hold users, Argon2id credentials, single-use codes, server-side sessions, login attempts, user preferences and an append-only `audit_events`.
 - **Services:** `AccountService` (users, codes, first admin, recovery) and `SessionService` (login, throttling, expiry) implement D2.
 - **HTTP:** a middleware resolves the session cookie, enforces CSRF and Origin, and binds every workspace to the principal's pseudonym.
-- **CLI:** `ontocurator admin …` manages users and recovers a lost admin password offline.
+- **CLI:** `ontotator admin …` manages users and recovers a lost admin password offline.
 - **Frontend:** a login gate replaces the token link and the initials field.
 
 **Spec:** `docs/superpowers/specs/2026-10-14-t2-server-foundation-design.md` (P3, P4, P5, D2; E2 refined by R1). Index, decisions D-a…D-n, open questions Q1–Q14: `docs/superpowers/plans/2026-10-14-t2-index.md`. Builds on T2a.
@@ -27,18 +27,18 @@
 ### Task 1: Retire the desktop distribution
 
 **Delete:**
-- `src/ontocurator/{instance,config_store,file_manager}.py`, `src/ontocurator/application/{legacy_config,provisioning}.py`;
+- `src/ontotator/{instance,config_store,file_manager}.py`, `src/ontotator/application/{legacy_config,provisioning}.py`;
 - `scripts/{build_standalone,build_release,build_common,provision_bundle}.py`;
 - `tests/{test_cli_standalone,test_followup_standalone,test_standalone_packaging,test_bundle_preload,test_config_store,test_legacy_config,test_release,test_cli_console}.py`;
 - `frontend/src/app/LegacyConfigNotice.tsx`, `frontend/tests/legacyConfig.test.tsx`, `frontend/browser/legacy-config.spec.ts`.
 
 Then `uv remove platformdirs` and `uv remove --dev pyinstaller`. Keep `scripts/license_notices.py` and `scripts/create_demo_package.py`; the latter goes in T2d.
 
-**Rewrite `src/ontocurator/cli.py`** with these commands:
+**Rewrite `src/ontotator/cli.py`** with these commands:
 - `serve` with options:
-  - `--data-dir` (env `ONTOCURATOR_DATA_DIR`, default `data`), passed as `AppConfig.workspace_dir`;
+  - `--data-dir` (env `ONTOTATOR_DATA_DIR`, default `data`), passed as `AppConfig.workspace_dir`;
   - `--database-url`, `-o/--ontology` (repeatable), `--translations-dir` (repeatable);
-  - `--host` (env `ONTOCURATOR_HOST`), `--port` (env `ONTOCURATOR_PORT`), `--web-dir`, `--verbose`.
+  - `--host` (env `ONTOTATOR_HOST`), `--port` (env `ONTOTATOR_PORT`), `--web-dir`, `--verbose`.
 
   It refuses a missing ontology file (exit 1, "Ontology file not found"). It builds `AppConfig` and runs `uvicorn.run(app, host=…, port=…)`. Until Task 6 it still generates a session token and prints `http://host:port/#token=…`.
 - `analyze`: unchanged, copied verbatim.
@@ -61,7 +61,7 @@ Then `uv remove platformdirs` and `uv remove --dev pyinstaller`. Keep `scripts/l
   - `test_version_comes_from_package_metadata`;
   - `test_help_lists_the_commands` (serve, db, analyze, version);
   - `test_serve_refuses_a_missing_ontology`;
-  - `test_serve_starts_the_app_on_the_given_address`: patches `ontocurator.cli.uvicorn.run`; asserts the port and that HP is loaded.
+  - `test_serve_starts_the_app_on_the_given_address`: patches `ontotator.cli.uvicorn.run`; asserts the port and that HP is loaded.
 - `tests/test_distribution.py`: delete the provisioning and settings-file/CLI tests:
   - `test_provisioning_registers_ontologies_and_imports_packages`, `test_changed_package_with_same_id_is_not_imported_and_warns`, `test_new_ontology_version_is_registered_alongside_old`, `test_invalid_provisioning_files_are_skipped_without_blocking`;
   - `test_settings_file_is_applied_and_open_package_in_url`, `test_invalid_settings_file_warns_and_uses_defaults`, `test_browser_precedence_cli_over_settings_over_config`;
@@ -72,7 +72,7 @@ Then `uv remove platformdirs` and `uv remove --dev pyinstaller`. Keep `scripts/l
 - `tests/test_ontology_management.py`: rename `test_ontologies_listed_on_app_startup_from_persistent_config` to `test_uploaded_ontologies_are_listed_after_a_restart`. It no longer uses `load_persistent_config`; the second app finds the upload in `ws/ontologies`.
 - `tests/test_review_findings.py`: drop the two `persisted` lines in `test_ontology_upload_is_content_addressed_and_never_overwrites`.
 - `tests/test_preferences_api.py`: drop `"legacy_config": None` from the stored-file expectation.
-- `tests/conftest.py`: drop the legacy-config env line; drop `isolate_test_config` if only `ONTOCURATOR_CONFIG_PATH` remains.
+- `tests/conftest.py`: drop the legacy-config env line; drop `isolate_test_config` if only `ONTOTATOR_CONFIG_PATH` remains.
 - `tests/browser_server.py`: drop provisioning, the legacy fixture, `file_manager` and the config-path arguments.
 - `frontend/browser/workflow.spec.ts`: delete the "provisioning: …" test.
 
@@ -104,7 +104,7 @@ Then `uv remove platformdirs` and `uv remove --dev pyinstaller`. Keep `scripts/l
 | `user_preferences` | `user_id` → users; `preferences` jsonb | PK user_id |
 | `instance_state` | `key` text; `value` jsonb; `updated_at` default now() | PK key |
 
-The migration also creates `SEQUENCE ontocurator.pseudonym_seq`, which yields the pseudonyms `ann-0001`, `ann-0002`, … These parts define the contract and must match exactly:
+The migration also creates `SEQUENCE ontotator.pseudonym_seq`, which yields the pseudonyms `ann-0001`, `ann-0002`, … These parts define the contract and must match exactly:
 
 ```python
 op.execute(f"CREATE SEQUENCE {SCHEMA}.pseudonym_seq")
@@ -146,7 +146,7 @@ op.execute(f"GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA {SCHEMA} TO {APP_ROL
 
 ### Task 3: Passwords
 
-**Create** `src/ontocurator/auth/__init__.py` and `src/ontocurator/auth/passwords.py`; `uv add "argon2-cffi>=23.1,<26"`.
+**Create** `src/ontotator/auth/__init__.py` and `src/ontotator/auth/passwords.py`; `uv add "argon2-cffi>=23.1,<26"`.
 
 **Interface:**
 - `MEMORY_COST = 19_456`, `TIME_COST = 2`, `PARALLELISM = 1` (OWASP; Limin `ARGON2ID_POLICY`); `MIN_LENGTH = 12`, `MAX_LENGTH = 256`.
@@ -173,7 +173,7 @@ Commit: `feat(auth): Argon2id password hashing, supplied-hash policy and passwor
 
 ### Task 4: Accounts, codes, the first admin, recovery and the audit hook
 
-**Create** `src/ontocurator/auth/audit.py`, `src/ontocurator/auth/accounts.py`. **Modify** `domain/errors.py`.
+**Create** `src/ontotator/auth/audit.py`, `src/ontotator/auth/accounts.py`. **Modify** `domain/errors.py`.
 
 **Errors:**
 - `class AccessDenied(DomainError)`, mapped to HTTP 403.
@@ -233,7 +233,7 @@ Task 4 needs `revoke_user_sessions` from Task 5. Implement both tasks before run
 
 ### Task 5: Sessions and login throttling
 
-**Create** `src/ontocurator/auth/sessions.py`.
+**Create** `src/ontotator/auth/sessions.py`.
 
 **Interface:**
 - `SessionPolicy(idle=12 h, absolute=14 days, window=15 min, failures_per_account=5, failures_per_address=30)`.
@@ -293,17 +293,17 @@ Task 4 needs `revoke_user_sessions` from Task 5. Implement both tasks before run
   - removes the old bearer middleware.
 - `api/routes.py`: identity binding (see the table below); preferences per user.
 - `application/preferences.py`: keep only the models and `normalize_annotator_id`; delete the file store.
-- `cli.py serve`: no token; option `--public-origin` (env `ONTOCURATOR_PUBLIC_ORIGIN`); `admin_password_hash=settings.read_secret("ONTOCURATOR_ADMIN_PASSWORD_HASH")`, which also reads the `_FILE` form (D1); prints `http://host:port/`.
+- `cli.py serve`: no token; option `--public-origin` (env `ONTOTATOR_PUBLIC_ORIGIN`); `admin_password_hash=settings.read_secret("ONTOTATOR_ADMIN_PASSWORD_HASH")`, which also reads the `_FILE` form (D1); prints `http://host:port/`.
 
 **Security middleware:** this is the contract; implement it as shown.
 
 ```python
-SESSION_COOKIE = "ontocurator_session"
+SESSION_COOKIE = "ontotator_session"
 CSRF_HEADER = "x-csrf-token"
 UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 PUBLIC_PATHS = frozenset({"/api/v1/auth/login", "/api/v1/auth/redeem-code"})
 current_principal: ContextVar[Principal | None] = ContextVar(
-    "ontocurator_principal", default=None
+    "ontotator_principal", default=None
 )
 
 
@@ -443,7 +443,7 @@ Acceptance check: `grep -rnE "Authorization|Bearer|SESSION_TOKEN|ALLOW_TEST_CLIE
 
 ### Task 7: Admin CLI, runtime lease and offline recovery
 
-**Create** `src/ontocurator/storage/lease.py` and `tests/test_admin_cli.py`. **Modify** `api/app.py` and `cli.py`.
+**Create** `src/ontotator/storage/lease.py` and `tests/test_admin_cli.py`. **Modify** `api/app.py` and `cli.py`.
 
 **Runtime lease:** running servers hold it, and recovery needs it exclusively. This is the contract:
 
@@ -464,7 +464,7 @@ def exclusive_lease(engine) -> Iterator[bool]:   # True only if no server holds 
 
 `api/app.py` gets a FastAPI `lifespan` that acquires `app.state.runtime_lease` (a `RuntimeLease(db.engine)`) in a thread pool and releases it at shutdown. `TestClient` runs the lifespan only inside `with TestClient(app):`.
 
-**CLI** (`ontocurator admin [--database-url URL] …`). The callback stores the URL in `ctx.obj`; the database is `Database(settings.resolve_database_url(url, None), data_dir=$ONTOCURATOR_DATA_DIR or data)`.
+**CLI** (`ontotator admin [--database-url URL] …`). The callback stores the URL in `ctx.obj`; the database is `Database(settings.resolve_database_url(url, None), data_dir=$ONTOTATOR_DATA_DIR or data)`.
 
 | Command | Output / effect |
 |---|---|
@@ -482,7 +482,7 @@ Errors are `Error: <CODE>: <details>` with exit 1. All actions use `Actor.cli()`
 
 `recover-admin`:
 - the input file must be private (`st_mode & 0o077 == 0` on POSIX), at most 8 KiB, and contain exactly `{username, password_hash, operator, reason}`;
-- under `exclusive_lease`; if the lease is held it refuses with "Stop the Ontocurator service first; it is still running.";
+- under `exclusive_lease`; if the lease is held it refuses with "Stop the Ontotator service first; it is still running.";
 - otherwise it calls `AccountService.recover_admin` and prints `Recovered 'admin'; all of its sessions were ended.`;
 - no plaintext password is ever written to disk (D2).
 
@@ -530,7 +530,7 @@ if (response.status === 204) return undefined as T;
   Downloads use `fetch(url, { credentials: "same-origin" })`; a 401 there also notifies.
 
 **`LoginScreen`:**
-- A form named "Log in to Ontocurator" with the labels "Username" and "Password" and the button "Log in".
+- A form named "Log in to Ontotator" with the labels "Username" and "Password" and the button "Log in".
 - The toggle button "I have a setup or reset code" switches to the form "Set your password". It has the labels "Username", "Setup or reset code", "New password" (hint "At least 12 characters.") and "Repeat the new password", and the button "Set password and log in". "Back to login" switches back.
 - Errors are shown as `role="alert"`. "The two passwords differ." is checked on the client.
 - It reuses the `.session-lost` and `.session-lost-card` styles.
@@ -600,7 +600,7 @@ if (response.status === 204) return undefined as T;
   - the username is the pseudonym lower-cased, with characters outside `[a-z0-9._-]` replaced by `-`;
   - POST `/__test_user__`;
   - `goto("/")`;
-  - fill the form "Log in to Ontocurator";
+  - fill the form "Log in to Ontotator";
   - expect `current-user` to contain the pseudonym.
 - `openCase(page, _opts)`: clicks "Open case"; no dialog.
 - `importPackage(page, query, packageId, annotator)`: `loginAs` replaces the token link and the initials; the upload stays as before.
@@ -612,7 +612,7 @@ if (response.status === 204) return undefined as T;
 - `tree.spec.ts`: replace the `dashboard-identity` check with `expect(page.getByTestId("current-user")).toBeVisible()`. The cookie survives the reload.
 - Other specs are unchanged; they go through `importPackage` and `openCase`.
 
-**Embedded assets:** `npm --prefix frontend run build`, then replace `src/ontocurator/web/` with `frontend/dist/` (remove the old `assets/`).
+**Embedded assets:** `npm --prefix frontend run build`, then replace `src/ontotator/web/` with `frontend/dist/` (remove the old `assets/`).
 
 **Acceptance:**
 - `grep -rnE "#token=|Your initials|dashboard-identity|Yes, continue" frontend/browser` prints nothing.

@@ -9,9 +9,9 @@ from t1_fixtures import run_import
 from test_annotation_versions import seed_submission
 from test_translation_review_service import save
 
-from ontocurator.application.final_results import FinalResultService
-from ontocurator.application.translation_workflow import TranslationWorkflowService
-from ontocurator.auth.audit import Actor
+from ontotator.application.final_results import FinalResultService
+from ontotator.application.translation_workflow import TranslationWorkflowService
+from ontotator.auth.audit import Actor
 
 pytest_plugins = ("test_translation_review_service",)
 

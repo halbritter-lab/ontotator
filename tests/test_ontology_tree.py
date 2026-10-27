@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from ontocurator.domain.errors import DomainError
-from ontocurator.ontology.tree import OntologyTree, tree_for
-from ontocurator.vendor.hpo_span_annotator.hpo import load
+from ontotator.domain.errors import DomainError
+from ontotator.ontology.tree import OntologyTree, tree_for
+from ontotator.vendor.hpo_span_annotator.hpo import load
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "hp.json"
 

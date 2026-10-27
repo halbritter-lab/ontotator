@@ -66,8 +66,8 @@ def test_synthetic_corpus_is_repeatable_and_valid_t1(tmp_path):
         assert 1500 <= len(unit.document.text) <= 3000
         assert len(unit.annotation_set.annotations) == 3
         actor = unit.annotation_set.actors[0]
-        assert actor.name == "ontocurator-load" and actor.version == "1.0.0"
-    from ontocurator.domain.profiles import TaskProfile
+        assert actor.name == "ontotator-load" and actor.version == "1.0.0"
+    from ontotator.domain.profiles import TaskProfile
 
     TaskProfile.model_validate_json((tmp_path / "a" / "profile.json").read_text())
 
@@ -122,8 +122,8 @@ def test_http_commands_use_returned_revision_and_api_payload_models():
 import importlib.util
 from types import SimpleNamespace
 from locust import HttpUser
-from ontocurator.domain.workspace import MutationEnvelope
-from ontocurator.application.editing import CreateAnnotationCommand, SetAxesCommand
+from ontotator.domain.workspace import MutationEnvelope
+from ontotator.application.editing import CreateAnnotationCommand, SetAxesCommand
 spec = importlib.util.spec_from_file_location("workload", "loadtest/locustfile.py")
 m = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)

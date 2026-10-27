@@ -16,7 +16,7 @@ All of them read carefully and decide term by term. Mistakes matter: an annotati
 
 ## Product Purpose
 
-Ontocurator is a self-hosted, multi-user web service for annotating and reviewing ontology concepts (such as the Human Phenotype Ontology, MONDO and other OBO ontologies) on clinical text documents. It supports independent annotation, origin-neutral review of proposals from people or tools, and the extraction of results for scientific use. Success means correct, traceable annotations produced without fatigue or avoidable slips.
+Ontotator is a self-hosted, multi-user web service for annotating and reviewing ontology concepts (such as the Human Phenotype Ontology, MONDO and other OBO ontologies) on clinical text documents. It supports independent annotation, origin-neutral review of proposals from people or tools, and the extraction of results for scientific use. Success means correct, traceable annotations produced without fatigue or avoidable slips.
 
 ## Positioning
 

@@ -8,9 +8,9 @@ import numpy as np
 import pytest
 import scipy.sparse as sp
 
-from ontocurator.ontology.translations import LanguageLexicalIndex
-from ontocurator.vendor.hpo_span_annotator.hpo import load, load_translations
-from ontocurator.vendor.hpo_span_annotator.lexical import LexicalIndex
+from ontotator.ontology.translations import LanguageLexicalIndex
+from ontotator.vendor.hpo_span_annotator.hpo import load, load_translations
+from ontotator.vendor.hpo_span_annotator.lexical import LexicalIndex
 
 FIXTURES = Path(__file__).parent / "fixtures"
 QUERIES = (

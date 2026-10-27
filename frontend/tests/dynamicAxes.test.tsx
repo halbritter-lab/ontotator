@@ -16,7 +16,7 @@ describe("Dynamic Axes and Non-HPO UI", () => {
   } as unknown as ApiClient);
 
   const sampleAnnotation: AnnotationSnapshot = {
-    schema_version: "ontocurator-annotation/v3",
+    schema_version: "ontotator-annotation/v3",
     annotation: {
       annotation_id: "ann-custom-1",
       document_id: "doc-1",

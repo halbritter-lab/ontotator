@@ -9,7 +9,7 @@ No implementation changes were made.
 
 ## Finding: P2 — validate exported units against the pinned ontologies
 
-**Location:** `src/ontocurator/exchange/jobs.py:336–348`, particularly the call to
+**Location:** `src/ontotator/exchange/jobs.py:336–348`, particularly the call to
 `ontospan.write_bundle` at line 339.
 
 The export calls `write_bundle`, whose pinned ontospan 1.1 implementation validates

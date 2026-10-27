@@ -50,26 +50,26 @@ def test_pending_schema_removes_inline_admin_secret_from_compose(
 ):
     import json
 
-    stack = checker.Stack(tmp_path, "ontocurator:test-only")
+    stack = checker.Stack(tmp_path, "ontotator:test-only")
     monkeypatch.setattr(stack, "up", lambda **kwargs: None)
     monkeypatch.setattr(stack, "down", lambda: None)
     try:
         if source == "ambient":
-            stack.env["ONTOCURATOR_ADMIN_PASSWORD_HASH"] = "ambient-review-placeholder"
+            stack.env["ONTOTATOR_ADMIN_PASSWORD_HASH"] = "ambient-review-placeholder"
             prefix = []
         else:
-            stack.env.pop("ONTOCURATOR_ADMIN_PASSWORD_HASH", None)
+            stack.env.pop("ONTOTATOR_ADMIN_PASSWORD_HASH", None)
             dotenv = tmp_path / "review.env"
             dotenv.write_text(
-                "ONTOCURATOR_ADMIN_PASSWORD_HASH=dotenv-review-placeholder\n"
+                "ONTOTATOR_ADMIN_PASSWORD_HASH=dotenv-review-placeholder\n"
             )
             prefix = ["--env-file", str(dotenv)]
         stack.pending_schema()
         config = json.loads(stack.compose(*prefix, "config", "--format", "json").stdout)
         environment = config["services"]["app"]["environment"]
-        assert "ONTOCURATOR_ADMIN_PASSWORD_HASH" not in environment
+        assert "ONTOTATOR_ADMIN_PASSWORD_HASH" not in environment
         assert (
-            environment["ONTOCURATOR_ADMIN_PASSWORD_HASH_FILE"]
+            environment["ONTOTATOR_ADMIN_PASSWORD_HASH_FILE"]
             == "/run/check-admin-password-hash"
         )
     finally:

@@ -15,15 +15,15 @@ from typing import Any
 
 import pytest
 
-from ontocurator.domain import stage_cells as stage_cells_module
-from ontocurator.domain.next_steps import (
+from ontotator.domain import stage_cells as stage_cells_module
+from ontotator.domain.next_steps import (
     REVIEWER_NEEDED_STATUSES,
     OldItem,
     StepFacts,
     derive_steps,
     in_plan,
 )
-from ontocurator.domain.stage_cells import (
+from ontotator.domain.stage_cells import (
     STEP_CELL,
     StageCells,
     StageFacts,
@@ -1063,7 +1063,7 @@ def test_every_lead_step_has_exactly_one_actionable_cell() -> None:
 def test_step_cell_covers_every_step_code() -> None:
     from typing import get_args
 
-    from ontocurator.domain.next_steps import StepCode
+    from ontotator.domain.next_steps import StepCode
 
     assert set(STEP_CELL) == set(get_args(StepCode))
     assert STEP_CELL["decide_plan"] == "annotation"

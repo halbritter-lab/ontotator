@@ -5,17 +5,17 @@ from types import SimpleNamespace
 import pytest
 from t1_fixtures import hpo_profile, unit
 
-from ontocurator.auth.audit import Actor
-from ontocurator.domain.project_rules import ProjectRules
-from ontocurator.exchange.plan import (
+from ontotator.auth.audit import Actor
+from ontotator.domain.project_rules import ProjectRules
+from ontotator.exchange.plan import (
     IncomingSet,
     IncomingUnit,
     ProjectImportState,
     plan_import,
 )
-from ontocurator.exchange.t1 import document_from_unit, unit_to_proposals
-from ontocurator.exchange.uploads import apply_plan
-from ontocurator.storage.repository import Repository
+from ontotator.exchange.t1 import document_from_unit, unit_to_proposals
+from ontotator.exchange.uploads import apply_plan
+from ontotator.storage.repository import Repository
 
 
 def test_repeated_set_identity_keeps_the_first_planned_add(monkeypatch):

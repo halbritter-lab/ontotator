@@ -1007,7 +1007,7 @@ describe("Resolved and Changed badges", () => {
     await waitFor(() => expect(lastRequest()).toEqual({ decision: "missing-final", retain: ["case-0042:en"] }));
     view.rerender(<DocumentsPage projectKey="p" canManage query={{ decision: "missing-final", page: "2" }} onNavigate={onNavigate} />);
     await waitFor(() => expect(lastRequest()).toEqual({ decision: "missing-final", page: 2, retain: ["case-0042:en"] }));
-    expect(sessionStorage.getItem(`ontocurator:documents-visit:p:${JSON.stringify({ decision: "missing-final" })}`)).not.toBeNull();
+    expect(sessionStorage.getItem(`ontotator:documents-visit:p:${JSON.stringify({ decision: "missing-final" })}`)).not.toBeNull();
   });
 
   it("starts a new visit after a filter change and sends no retain without a decision filter", async () => {
@@ -1016,7 +1016,7 @@ describe("Resolved and Changed badges", () => {
     const view = renderPage({ query: { decision: "missing-final" }, onNavigate });
     await waitFor(() => expect(lastRequest()).toEqual({ decision: "missing-final", retain: ["case-0042:en"] }));
     view.rerender(<DocumentsPage projectKey="p" canManage query={{ decision: "all" }} onNavigate={onNavigate} />);
-    await waitFor(() => expect(sessionStorage.getItem(`ontocurator:documents-visit:p:${JSON.stringify({ decision: "missing-final" })}`)).toBeNull());
+    await waitFor(() => expect(sessionStorage.getItem(`ontotator:documents-visit:p:${JSON.stringify({ decision: "missing-final" })}`)).toBeNull());
     expect(api.listDocumentRows).toHaveBeenCalledWith("p", { decision: "all" });
     view.rerender(<DocumentsPage projectKey="p" canManage query={{}} onNavigate={onNavigate} />);
     await waitFor(() => expect(lastRequest()).toEqual({}));
@@ -1332,7 +1332,7 @@ describe("lead review fixes", () => {
     const fr = screen.getByRole("button", { name: "Open text card, case-1 fr" }).closest("tr")!;
     expect(fr.className).toContain("documents-row--not-in-plan");
     expect(within(fr).getAllByRole("button").map(button => button.getAttribute("aria-label"))).toEqual(["Open text card, case-1 fr", "Add to plan…, case-1 fr"]);
-    expect(window.localStorage.getItem("ontocurator.documents.showNotInPlan.v1:lead")).toBe("1");
+    expect(window.localStorage.getItem("ontotator.documents.showNotInPlan.v1:lead")).toBe("1");
     fireEvent.click(within(fr).getByRole("button", { name: "Add to plan…, case-1 fr" }));
     expect(await screen.findByRole("dialog", { name: "Plan for case-1 fr" })).toBeTruthy();
     cleanup();

@@ -154,7 +154,7 @@ const AXES = [
 const LABELS: Record<string, string> = { "HP:0034263": "Vaginal hemorrhage", "HP:0002018": "Nausea", "HP:0002013": "Vomiting", "HP:0012825": "Mild" };
 type Seg = { start: number; end: number };
 function snapOf(id: string, termId: string, mentions: Seg[][], assertion: string, actor: "tool" | "human" = "tool", extra: Record<string, unknown> = {}) {
-  return { schema_version: "ontocurator-annotation/v3", version: `${id}-v1`, document_id: "EN100068", text_sha256: "t", ontology_sha256: "o", layer_config_sha256: "l",
+  return { schema_version: "ontotator-annotation/v3", version: `${id}-v1`, document_id: "EN100068", text_sha256: "t", ontology_sha256: "o", layer_config_sha256: "l",
     annotation: { annotation_id: id, document_id: "EN100068", layer_id: "phenotype", type_id: "default", term_id: termId,
       axes_values: { assertion, experiencer: "patient", temporality: "current" }, axes_defaulted: [],
       evidence_refs: mentions.map((_, i) => ({ evidence_id: `ev-${id}-${i}`, version: "ev-1" })),

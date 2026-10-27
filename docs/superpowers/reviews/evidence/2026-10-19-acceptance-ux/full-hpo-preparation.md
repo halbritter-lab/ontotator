@@ -21,7 +21,7 @@ Contributing translation term counts: cs: 16,558; de: 3,615; es: 18,980; fr: 13,
 
 ## Isolation and source identity
 
-Private `candidate-plan.json` proposes Compose project `ontocurator-t5-acceptance-full-hpo`, app 18190 / PostgreSQL 15590 on loopback; these ports were free when inspected. The running phase0 demo remains on 18081. Final runtime must recheck free ports and bind the exact final immutable image.
+Private `candidate-plan.json` proposes Compose project `ontotator-t5-acceptance-full-hpo`, app 18190 / PostgreSQL 15590 on loopback; these ports were free when inspected. The running phase0 demo remains on 18081. Final runtime must recheck free ports and bind the exact final immutable image.
 
 The seed adapter supports explicit `--inputs-dir` for `full-hpo/v1` manifests while retaining original strict four-file validation. It stages translations under their exact Babelon filenames and ingests them before project creation.
 

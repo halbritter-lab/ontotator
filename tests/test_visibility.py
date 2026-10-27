@@ -8,11 +8,11 @@ from layered_fixtures import make_layered_package
 from pg_harness import database_url_for
 from sqlalchemy import func, select
 
-from ontocurator.api.app import create_app
-from ontocurator.assignments.service import AssignmentService
-from ontocurator.config import AppConfig
-from ontocurator.domain.errors import DomainError
-from ontocurator.storage.tables import (
+from ontotator.api.app import create_app
+from ontotator.assignments.service import AssignmentService
+from ontotator.config import AppConfig
+from ontotator.domain.errors import DomainError
+from ontotator.storage.tables import (
     EditEventRow,
     MutationReceiptRow,
     ProjectRow,
@@ -93,8 +93,8 @@ def test_unassigned_document_is_404_on_routes(assigned, route):
             json={"project_key": PROJECT, "document_id": "doc-alpha", "mode": "review"},
         )
     elif route == "commands":
-        from ontocurator.api.routes import encode_workspace_id
-        from ontocurator.domain.workspace import WorkspaceKey
+        from ontotator.api.routes import encode_workspace_id
+        from ontotator.domain.workspace import WorkspaceKey
 
         response = client.post(
             f"/api/v1/workspaces/{encode_workspace_id(WorkspaceKey(**key, target_set_id='targets-0'))}/commands",
@@ -289,8 +289,8 @@ def test_membership_removal_before_waiting_command_is_revalidated(
 
     from sqlalchemy import event
 
-    from ontocurator.authz.memberships import MembershipService
-    from ontocurator.storage.repository import _lock_id
+    from ontotator.authz.memberships import MembershipService
+    from ontotator.storage.repository import _lock_id
 
     app, client, row = assigned
     token = _open(client, row)["workspace_id"]
@@ -351,9 +351,9 @@ def test_independent_drafts_mutate_concurrently(assigned):
     from threading import Event
     from types import SimpleNamespace
 
-    from ontocurator.api.routes import decode_workspace_id
-    from ontocurator.authz.scoped import ScopedRepository
-    from ontocurator.domain.workspace import MutationEnvelope
+    from ontotator.api.routes import decode_workspace_id
+    from ontotator.authz.scoped import ScopedRepository
+    from ontotator.domain.workspace import MutationEnvelope
 
     app, client, _row = assigned
     ensure_assignment(app, "alice", PROJECT, "doc-alpha", "annotate")
@@ -395,7 +395,7 @@ def test_current_task_roles_control_visibility_counts_and_retained_submitted_met
 ):
     from sqlalchemy import delete, update
 
-    from ontocurator.storage.tables import AssignmentRow, ProjectMembershipRow
+    from ontotator.storage.tables import AssignmentRow, ProjectMembershipRow
 
     app, client, row = assigned
     # Two tasks for one document still count as one document.
@@ -423,16 +423,16 @@ def test_document_method_enumeration_uses_central_guard(assigned, monkeypatch):
 
     from sqlalchemy import insert
 
-    import ontocurator.authz.scoped as scoped_module
-    import ontocurator.authz.versions as versions_module
-    from ontocurator.api.routes import decode_workspace_id
-    from ontocurator.domain.annotations import AnnotationRef
-    from ontocurator.domain.reanchor_resolution import PendingReanchorRef
-    from ontocurator.domain.review import ReviewTargetSet
-    from ontocurator.domain.workspace import Draft, MutationEnvelope
-    from ontocurator.packages.models import SearchEventRecord
-    from ontocurator.storage.repository import Repository
-    from ontocurator.storage.tables import ProposalSetRow, StoredFileRow
+    import ontotator.authz.scoped as scoped_module
+    import ontotator.authz.versions as versions_module
+    from ontotator.api.routes import decode_workspace_id
+    from ontotator.domain.annotations import AnnotationRef
+    from ontotator.domain.reanchor_resolution import PendingReanchorRef
+    from ontotator.domain.review import ReviewTargetSet
+    from ontotator.domain.workspace import Draft, MutationEnvelope
+    from ontotator.packages.models import SearchEventRecord
+    from ontotator.storage.repository import Repository
+    from ontotator.storage.tables import ProposalSetRow, StoredFileRow
 
     app, client, previous = assigned
     service = AssignmentService(app.state.repo.db)
@@ -442,7 +442,7 @@ def test_document_method_enumeration_uses_central_guard(assigned, monkeypatch):
     service.revoke(HARNESS, previous.id)
     opened = _open(client, row)
     key = decode_workspace_id(opened["workspace_id"])
-    from ontocurator.domain.annotations import AnnotationSnapshot
+    from ontotator.domain.annotations import AnnotationSnapshot
 
     created = client.post(
         f"/api/v1/workspaces/{opened['workspace_id']}/commands",
@@ -738,8 +738,8 @@ def test_assignment_admin_routes_partial_refusals_display_name_and_confirmations
 def test_cli_assignment_requires_explicit_audited_language_confirmation(assigned):
     from typer.testing import CliRunner
 
-    from ontocurator.cli import app as cli
-    from ontocurator.storage.tables import AuditEventRow
+    from ontotator.cli import app as cli
+    from ontotator.storage.tables import AuditEventRow
 
     app, _client, _row = assigned
     runner = CliRunner()
@@ -788,8 +788,8 @@ def test_revocation_waits_for_successful_command_transaction(
 
     from sqlalchemy import event
 
-    from ontocurator.authz.scoped import ScopedRepository
-    from ontocurator.storage.repository import _lock_id
+    from ontotator.authz.scoped import ScopedRepository
+    from ontotator.storage.repository import _lock_id
 
     app, client, row = assigned
     token = _open(client, row)["workspace_id"]
@@ -862,7 +862,7 @@ def test_request_memo_checks_once_and_a_write_invalidates_it(assigned):
     from sqlalchemy import event
     from sqlalchemy.engine import Engine
 
-    from ontocurator.authz.scoped import ScopedRepository
+    from ontotator.authz.scoped import ScopedRepository
 
     app, _client, row = assigned
     user = app.state.accounts.get_by_username("alice")
@@ -899,7 +899,7 @@ def test_request_memo_is_dropped_by_a_rollback(assigned):
     from sqlalchemy import event
     from sqlalchemy.engine import Engine
 
-    from ontocurator.authz.scoped import ScopedRepository
+    from ontotator.authz.scoped import ScopedRepository
 
     app, _client, _row = assigned
     user = app.state.accounts.get_by_username("alice")

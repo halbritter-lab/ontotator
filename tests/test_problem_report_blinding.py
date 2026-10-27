@@ -6,7 +6,7 @@ from auth_harness import HARNESS, log_in, logged_in
 from pg_harness import tamper
 from problem_report_team import act, report
 
-from ontocurator.assignments.service import AssignmentService
+from ontotator.assignments.service import AssignmentService
 
 pytest_plugins = ("test_assignment_round_open_api", "problem_report_team")
 
@@ -185,7 +185,7 @@ def test_legacy_shape_receipt_is_rebuilt(team):
     tamper(
         team.app.state.repo.db,
         "workflow_command_receipts",
-        "UPDATE ontocurator.workflow_command_receipts"
+        "UPDATE ontotator.workflow_command_receipts"
         " SET response = CAST(:response AS jsonb) WHERE request_id = 'legacy'",
         response=json.dumps(legacy),
     )

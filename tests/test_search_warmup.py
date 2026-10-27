@@ -8,15 +8,15 @@ from unittest.mock import Mock
 
 import pytest
 
-from ontocurator.application.workspace_opening import WorkspaceOpeningService
-from ontocurator.authz.scoped import ScopedRepository
-from ontocurator.domain.documents import OntologyRef
-from ontocurator.domain.profiles import OntologyDefinition
-from ontocurator.domain.workspace import WorkspaceKey
-from ontocurator.ontology.provenance import SearchRequest
-from ontocurator.ontology.registry import OntologyRegistry
-from ontocurator.ontology.service import OntologyService
-from ontocurator.ontology.translations import LanguageLexicalIndex
+from ontotator.application.workspace_opening import WorkspaceOpeningService
+from ontotator.authz.scoped import ScopedRepository
+from ontotator.domain.documents import OntologyRef
+from ontotator.domain.profiles import OntologyDefinition
+from ontotator.domain.workspace import WorkspaceKey
+from ontotator.ontology.provenance import SearchRequest
+from ontotator.ontology.registry import OntologyRegistry
+from ontotator.ontology.service import OntologyService
+from ontotator.ontology.translations import LanguageLexicalIndex
 
 FIXTURES = Path(__file__).parent / "fixtures"
 HP = FIXTURES / "hp.json"

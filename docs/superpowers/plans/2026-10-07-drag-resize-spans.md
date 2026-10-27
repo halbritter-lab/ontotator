@@ -32,7 +32,7 @@
 | `frontend/tests/spanResize.test.ts` | create | Editor/adapter tests: handles, keyboard, selection offsets |
 | `frontend/tests/caseResize.test.tsx` | create | CaseScreen tests: which mentions get handles, command sent |
 | `frontend/browser/resize.spec.ts` | create | Real mouse drag, Escape, review copy |
-| `src/ontocurator/web/` | regenerate | Embedded SPA build |
+| `src/ontotator/web/` | regenerate | Embedded SPA build |
 
 ---
 
@@ -1162,7 +1162,7 @@ git commit -m "feat(frontend): pass resizable mentions and resize events through
 
 Rules (from the spec): handles on all mentions of the **selected curated annotation** whose layer is editable; none while "+ Add Mention" waits for a selection or a new annotation is pending; none for proposals and references (they are never the selected curated annotation). Saving sends `edit_mention` with `annotation_id` through `mutateAnnotationAndSyncDecision`, the same path `handleDetachMention` uses, so an adopted copy is recorded as "changed" and an explicit rejection is left alone.
 
-Backend detail to respect: when the evidence is shared by several annotations, `edit_mention` with `annotation_id` creates a copy with a new id `<old id>-cow-<hex>` for that annotation (`src/ontocurator/application/editing.py`, `_edit_mention`). The selection must follow that id.
+Backend detail to respect: when the evidence is shared by several annotations, `edit_mention` with `annotation_id` creates a copy with a new id `<old id>-cow-<hex>` for that annotation (`src/ontotator/application/editing.py`, `_edit_mention`). The selection must follow that id.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1192,7 +1192,7 @@ const layers = [{
 
 const snapshot = (annotationId: string, termId: string, segments: Array<{ start: number; end: number }>,
   provenance: any = { actor: { actor_id: "dr-a", kind: "human" }, method: "manual" }) => ({
-  schema_version: "ontocurator-annotation/v3" as const,
+  schema_version: "ontotator-annotation/v3" as const,
   annotation: {
     annotation_id: annotationId, document_id: "doc", layer_id: "phenotype", type_id: "default", term_id: termId,
     axes_values: { assertion: "present" },
@@ -1580,7 +1580,7 @@ Check: handles do not shift the text (compare the line layout with and without s
 
 ```bash
 uv run python -c "import sys; sys.path.insert(0, 'scripts'); from build_common import build_frontend, sync_embedded_web_assets; sync_embedded_web_assets(build_frontend(npm_ci=False))"
-git add src/ontocurator/web
+git add src/ontotator/web
 git commit -m "build: rebuild embedded web assets"
 ```
 

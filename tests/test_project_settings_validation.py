@@ -4,13 +4,13 @@ from datetime import UTC, datetime
 
 import pytest
 
-from ontocurator.domain.errors import DomainError
-from ontocurator.exchange.t1 import Pin
-from ontocurator.ontology.store import OntologyFile
+from ontotator.domain.errors import DomainError
+from ontotator.exchange.t1 import Pin
+from ontotator.ontology.store import OntologyFile
 
 
 def profile():
-    from ontocurator.domain.profile_templates import PROFILE_TEMPLATES
+    from ontotator.domain.profile_templates import PROFILE_TEMPLATES
 
     return PROFILE_TEMPLATES["hpo-phenotype"](
         OntologyFile(
@@ -32,7 +32,7 @@ def test_template_binds_the_actual_uploaded_ontology():
 
 
 def test_defaults_come_from_t1_and_generic_has_no_inferred_default():
-    from ontocurator.projects.service import axis_defaults
+    from ontotator.projects.service import axis_defaults
 
     result = profile()
     assert axis_defaults(result, {"HP": Pin("a" * 64, (), "hpo-phenotype")}) == {
@@ -54,7 +54,7 @@ def test_defaults_come_from_t1_and_generic_has_no_inferred_default():
     ],
 )
 def test_hidden_values_must_exist_and_not_be_the_default(hidden):
-    from ontocurator.projects.service import validate_hidden_values
+    from ontotator.projects.service import validate_hidden_values
 
     with pytest.raises(DomainError) as error:
         validate_hidden_values(
@@ -65,7 +65,7 @@ def test_hidden_values_must_exist_and_not_be_the_default(hidden):
 
 
 def test_hidden_validation_does_not_mutate_the_profile():
-    from ontocurator.projects.service import validate_hidden_values
+    from ontotator.projects.service import validate_hidden_values
 
     result = profile()
     before = result.model_dump()

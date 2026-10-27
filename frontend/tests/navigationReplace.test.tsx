@@ -30,17 +30,17 @@ it("replace navigation keeps the history length; a following normal navigation a
   render(<App user={user} />);
   await screen.findByText("Project none");
   const before = window.history.length;
-  const index = window.history.state?.ontocuratorRouteIndex as number;
+  const index = window.history.state?.ontotatorRouteIndex as number;
 
   fireEvent.click(screen.getByRole("button", { name: "Replace" }));
   await screen.findByText("Project replaced");
   expect(window.location.hash).toBe(routeHref({ name: "tasks", project: "replaced" }));
   expect(window.history.length).toBe(before);
-  expect(window.history.state?.ontocuratorRouteIndex).toBe(index);
+  expect(window.history.state?.ontotatorRouteIndex).toBe(index);
 
   fireEvent.click(screen.getByRole("button", { name: "Push" }));
   await screen.findByText("Project pushed");
   await waitFor(() => expect(window.location.hash).toBe(routeHref({ name: "tasks", project: "pushed" })));
   expect(window.history.length).toBe(before + 1);
-  expect(window.history.state?.ontocuratorRouteIndex).toBe(index + 1);
+  expect(window.history.state?.ontotatorRouteIndex).toBe(index + 1);
 });

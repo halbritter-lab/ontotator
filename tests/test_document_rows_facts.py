@@ -6,13 +6,13 @@ from test_annotation_versions import seed_submission
 from test_case_api import BASE, CASE, CORRECTED, SOURCE, TARGET
 from test_case_api import case_env as case_env
 
-from ontocurator.application import document_rows as rows_module
-from ontocurator.application.document_rows import RowQuery, load_facts
-from ontocurator.application.final_causes import (
+from ontotator.application import document_rows as rows_module
+from ontotator.application.document_rows import RowQuery, load_facts
+from ontotator.application.final_causes import (
     ACKNOWLEDGEABLE_CODES,
     authorize_final_results,
 )
-from ontocurator.domain import document_rows as domain_rows
+from ontotator.domain import document_rows as domain_rows
 
 pytest_plugins = ("test_work_rounds",)
 
@@ -78,8 +78,8 @@ def test_retain_keys_are_bounded_and_mutual_exclusion_holds():
 
 
 def test_facts_carry_reports_rounds_and_report_activity(rounds):
-    from ontocurator.application.problem_reports import ProblemReportService
-    from ontocurator.auth.audit import Actor
+    from ontotator.application.problem_reports import ProblemReportService
+    from ontotator.auth.audit import Actor
 
     repo, access, actor, assignment, _ = rounds
     reason = "Unclear passage " + "x" * 200

@@ -60,7 +60,7 @@ const baseView = (): WorkspaceView => ({
 });
 
 const proposal = (annotationId: string, version: string, termId: string, segments = [{ start: 0, end: 5 }]) => ({
-  schema_version: "ontocurator-annotation/v3" as const,
+  schema_version: "ontotator-annotation/v3" as const,
   annotation: {
     annotation_id: annotationId,
     document_id: "doc",

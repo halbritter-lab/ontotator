@@ -7,10 +7,10 @@ import ontospan
 import pytest
 from t1_fixtures import HP_PATH, PIN, TEXT, annotation, hpo_profile, unit
 
-from ontocurator.api.variant_routes import ReanchorItem
-from ontocurator.domain.documents import Document
-from ontocurator.exchange.reanchor_job import ReanchorSource, rebuild_source
-from ontocurator.exchange.t1 import document_from_unit, unit_to_proposals
+from ontotator.api.variant_routes import ReanchorItem
+from ontotator.domain.documents import Document
+from ontotator.exchange.reanchor_job import ReanchorSource, rebuild_source
+from ontotator.exchange.t1 import document_from_unit, unit_to_proposals
 
 
 def inputs(text=TEXT, annotations=None):
@@ -68,11 +68,11 @@ def test_reconstruction_recomputes_real_target_snapshots_and_valid_t1_with_basis
         assert snap.annotation.provenance.source_refs == [
             previous.annotation.annotation_id
         ]
-        assert snap.annotation.provenance.actor.actor_id == "ontocurator-reanchor"
+        assert snap.annotation.provenance.actor.actor_id == "ontotator-reanchor"
         assert item.proposals.notes[snap.annotation.annotation_id] == ["score 0.91"]
         assert snap.evidence[0].version != previous.evidence[0].version
     aset = payload.annotation_set
-    assert aset.actors[0].name == "ontocurator-reanchor"
+    assert aset.actors[0].name == "ontotator-reanchor"
     assert aset.annotations[0].axes["experiencer"].basis == "defaulted"
     assert aset.annotations[0].provenance.notes == ("score 0.91",)
     assert original.annotation_set.actors[0].model == "bge-m3"
@@ -148,7 +148,7 @@ def test_empty_source_has_no_generated_set():
 def test_server_owned_payload_rejects_untyped_or_override_authority(change):
     from pydantic import ValidationError
 
-    from ontocurator.exchange.reanchor_job import ReanchorPayload
+    from ontotator.exchange.reanchor_job import ReanchorPayload
 
     value = {
         "project": "proj",
@@ -162,14 +162,14 @@ def test_server_owned_payload_rejects_untyped_or_override_authority(change):
 
 
 def test_registry_contains_the_actual_handler_not_a_placeholder():
-    from ontocurator.exchange.jobs import HANDLERS
-    from ontocurator.exchange.reanchor_job import reanchor
+    from ontotator.exchange.jobs import HANDLERS
+    from ontotator.exchange.reanchor_job import reanchor
 
     assert HANDLERS["reanchor"] is reanchor
 
 
 def test_corrupt_source_positions_are_not_persisted_as_invalid_typed_pending_json():
-    from ontocurator.domain.errors import DomainError
+    from ontotator.domain.errors import DomainError
 
     _original, old, source = inputs()
     source.annotations[0].evidence[0].mention.segments[0].end = 9999

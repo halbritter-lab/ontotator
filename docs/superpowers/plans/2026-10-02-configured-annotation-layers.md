@@ -56,7 +56,7 @@ Keine automatische Bereitstellung, Veröffentlichung oder Benchmark-Migration.
 
 ### Task 2: Profile und neue kanonische Verträge
 
-**Files:** Create `src/ontocurator/domain/profiles.py`, `src/ontocurator/profiles/hpo-context-example-v1.json`, `tests/test_profiles.py`, `tests/layered_fixtures.py`; modify `domain/axes.py`, `domain/annotations.py`, `domain/serialization.py`, `domain/workspace.py`, `packages/models.py` unter `src/ontocurator/`; extend `tests/test_domain.py`.
+**Files:** Create `src/ontotator/domain/profiles.py`, `src/ontotator/profiles/hpo-context-example-v1.json`, `tests/test_profiles.py`, `tests/layered_fixtures.py`; modify `domain/axes.py`, `domain/annotations.py`, `domain/serialization.py`, `domain/workspace.py`, `packages/models.py` unter `src/ontotator/`; extend `tests/test_domain.py`.
 
 **Interfaces:**
 - `TaskProfile`, `OntologyDefinition`, `LayerDefinition`, `AnnotationTypeDefinition` mit genau den Feldern aus Spec §4.
@@ -73,7 +73,7 @@ Keine automatische Bereitstellung, Veröffentlichung oder Benchmark-Migration.
 
 ### Task 3: Ontologien registrieren und Pakete atomar bereitstellen
 
-**Files:** Create `src/ontocurator/ontology/registry.py`, `tests/test_ontology_registry.py`; modify `ontology/service.py`, `ontology/provenance.py`, `packages/reader.py`, `packages/writer.py`, `config.py`, `cli.py`, `api/app.py`, `api/routes.py` unter `src/ontocurator/`; extend `tests/test_packages.py`, `tests/test_cli.py`.
+**Files:** Create `src/ontotator/ontology/registry.py`, `tests/test_ontology_registry.py`; modify `ontology/service.py`, `ontology/provenance.py`, `packages/reader.py`, `packages/writer.py`, `config.py`, `cli.py`, `api/app.py`, `api/routes.py` unter `src/ontotator/`; extend `tests/test_packages.py`, `tests/test_cli.py`.
 
 **Interfaces:**
 - `OntologyRegistry.register(path: Path, expected: OntologyDefinition) -> None` prüft Digest und unterstütztes Format.
@@ -89,7 +89,7 @@ Keine automatische Bereitstellung, Veröffentlichung oder Benchmark-Migration.
 
 ### Task 4: Arbeitsumfang, Speicherung und Bearbeitung nach Schicht
 
-**Files:** Create `src/ontocurator/domain/scopes.py`, `src/ontocurator/storage/schema_v4.sql`, `tests/test_layered_editing.py`; modify `domain/workspace.py`, `storage/database.py`, `storage/repository.py`, `application/workspaces.py`, `application/editing.py` unter `src/ontocurator/`; extend `tests/test_storage_regressions.py`, `tests/test_api_regressions.py`.
+**Files:** Create `src/ontotator/domain/scopes.py`, `src/ontotator/storage/schema_v4.sql`, `tests/test_layered_editing.py`; modify `domain/workspace.py`, `storage/database.py`, `storage/repository.py`, `application/workspaces.py`, `application/editing.py` unter `src/ontotator/`; extend `tests/test_storage_regressions.py`, `tests/test_api_regressions.py`.
 
 **Interfaces:**
 - `TaskScope(scope_id, mode, editable_layer_ids, reference_layer_ids)` gemäß Spec §6.
@@ -100,7 +100,7 @@ Keine automatische Bereitstellung, Veröffentlichung oder Benchmark-Migration.
 - Neues `CheckLayerCommand(kind: Literal["check_layer"], layer_id: str, checked: bool)` durchläuft Revision und Receipt wie andere Mutationen.
 
 - [ ] Failing tests: falsche Schicht/Typ, fremder Scope, Mutation einer Referenzschicht und Änderung von Schicht/Typ einer bestehenden ID abgelehnt. Evidenzkorrektur am Ziel lässt Quellsnapshot und Quellevidenz unverändert. Independent-Ansicht enthält keine importierten Annotationen oder deren abgeleitete Termstatusdaten.
-- [ ] Test einer alten DB-Kopie: Öffnen führt zu `UNSUPPORTED_WORKSPACE_VERSION`; Dateiinhalt bleibt byteidentisch und es entstehen keine Migrationen. Leere/neue DB startet im Format `ontocurator-workspace/v4`.
+- [ ] Test einer alten DB-Kopie: Öffnen führt zu `UNSUPPORTED_WORKSPACE_VERSION`; Dateiinhalt bleibt byteidentisch und es entstehen keine Migrationen. Leere/neue DB startet im Format `ontotator-workspace/v4`.
 - [ ] Tests zunächst ausführen: `uv run pytest tests/test_layered_editing.py tests/test_storage_regressions.py tests/test_api_regressions.py -q`.
 - [ ] Versionsprüfung vor DDL einführen, neues Schema mit Profilen, Scope und schichtbezogenen Prüfmarken initialisieren. Alte Migrationspfade nicht aufrufen. Mitgliedschaft und lokale Ursprungsbindungen weiterhin strikt paketbezogen prüfen.
 - [ ] Bearbeitung, Termvalidierung und Copy-on-write anhand aufgelöster Definitionen ausführen. Bestehende transaktionale Revision-/Receiptlogik übernehmen; alle Antwortdaten nach Modus filtern. Importierte Snapshots unverändert halten. Inhaltliche Mutationen entfernen nur die Prüfmarke der betroffenen Schicht; ein Test erhält zugleich die Prüfmarke der anderen Schicht und die historische Abgabe.
@@ -108,7 +108,7 @@ Keine automatische Bereitstellung, Veröffentlichung oder Benchmark-Migration.
 
 ### Task 5: Review, Abschluss und verlustfreier Export
 
-**Files:** Modify `src/ontocurator/application/reviews.py`, `submissions.py`, `exports.py` im selben Verzeichnis, `src/ontocurator/domain/review.py`, `src/ontocurator/domain/workspace.py`; create `tests/test_layered_workflows.py`; extend `tests/test_reviews.py`, `tests/test_packages.py`.
+**Files:** Modify `src/ontotator/application/reviews.py`, `submissions.py`, `exports.py` im selben Verzeichnis, `src/ontotator/domain/review.py`, `src/ontotator/domain/workspace.py`; create `tests/test_layered_workflows.py`; extend `tests/test_reviews.py`, `tests/test_packages.py`.
 
 **Interfaces:** `Submission` enthält V2-Kennung, unveränderlichen `TaskScope`, `checked_layer_ids`, Zielmenge und gebundene Snapshots/Entscheidungen. `validate_completion(draft: Draft, profile: TaskProfile, scope: TaskScope) -> None` in `application/submissions.py` meldet fehlende Schichten oder Pflichtwerte explizit.
 
@@ -120,7 +120,7 @@ Keine automatische Bereitstellung, Veröffentlichung oder Benchmark-Migration.
 
 ### Task 6: API-Vertrag und sichere Clientzustände
 
-**Files:** Modify `src/ontocurator/api/routes.py`, `src/ontocurator/application/workspaces.py`, `frontend/src/api/client.ts`, `frontend/src/editor/searchState.ts`, `frontend/src/editor/autosave.ts`, `frontend/src/api/generated.ts`, `contracts/openapi.json`; create `frontend/src/editor/layerState.ts`, `frontend/tests/layerState.test.ts`; extend `frontend/tests/searchState.test.ts`, `tests/test_api.py`.
+**Files:** Modify `src/ontotator/api/routes.py`, `src/ontotator/application/workspaces.py`, `frontend/src/api/client.ts`, `frontend/src/editor/searchState.ts`, `frontend/src/editor/autosave.ts`, `frontend/src/api/generated.ts`, `contracts/openapi.json`; create `frontend/src/editor/layerState.ts`, `frontend/tests/layerState.test.ts`; extend `frontend/tests/searchState.test.ts`, `tests/test_api.py`.
 
 **Interfaces:** `WorkspaceView` liefert aufgelöste zugängliche Definitionen, `TaskScope`, Prüfstatus und Termstatus nach `(layer_id, term_id)`. Dokumentliste liefert Paketposition und ausschließlich person-/modusbezogenen Arbeitsstatus. `LayerSelection` enthält `activeLayerId: string | null`, `activeTypeId: string | null`, `visibleLayerIds: string[]`. Suchkontext enthält Workspace-ID, Dokument-ID, Schicht-ID, Typ-ID und Anfragenummer.
 
@@ -145,7 +145,7 @@ Keine automatische Bereitstellung, Veröffentlichung oder Benchmark-Migration.
 
 ### Task 8: Legacy-Entfernung, Dokumentation und Releaseprüfung
 
-**Files:** Modify `README.md`, `docs/work-package-v1.md`, `tests/test_compatibility.py`, `tests/test_release.py`, `scripts/create_demo_package.py`, `tests/browser_server.py`; create `docs/work-package-v2.md`; audit all `src/ontocurator/`, `frontend/src/`, build scripts and synthetic fixtures.
+**Files:** Modify `README.md`, `docs/work-package-v1.md`, `tests/test_compatibility.py`, `tests/test_release.py`, `scripts/create_demo_package.py`, `tests/browser_server.py`; create `docs/work-package-v2.md`; audit all `src/ontotator/`, `frontend/src/`, build scripts and synthetic fixtures.
 
 **Interfaces:** Dokumentierter V2-Vertrag und unterstützte aktuelle CLI; kein Leser für alte Formate. Die V1-Dokumentation bleibt als historischer Text gekennzeichnet und verweist auf V2. Vorhandene Legacy-Fixtures werden nur für explizite Ablehnung bzw. Unverändertheit alter Dateien verwendet.
 

@@ -8,9 +8,9 @@ Manual acceptance is in progress. Follow the [running findings and session check
 
 - Worktree: `C:/Users/jan-p/Development/ontocurator/.worktrees/phase0-implementation`.
 - Runtime source revision: `0e9271aeb5310c39a7497dc97e0576d6de927628`.
-- Image: `sha256:74b37290e03e802b281ef0d6dc8639891152f8e84b49e3dba190b8e8950c928d` (local tag `ontocurator-phase0:reviewed`; startup uses the immutable ID).
+- Image: `sha256:74b37290e03e802b281ef0d6dc8639891152f8e84b49e3dba190b8e8950c928d` (local tag `ontotator-phase0:reviewed`; startup uses the immutable ID).
 - Original seed/tooling revision: `87367d8bd963646d7b4ffd05f7c3f9a13bc5b8e1`. This identifies the initial fixture preparation, not the current application image. The refresh from `001c6729` to `0e9271a` includes application fixes; subsequent acceptance-documentation changes do not change runtime code.
-- Compose project: `ontocurator-t5-acceptance-phase0`.
+- Compose project: `ontotator-t5-acceptance-phase0`.
 - Preparation directory: `build/t5-acceptance/phase0-candidate` within that worktree.
 - Private account passwords: `credentials.json` within the preparation directory. Do not copy them into issues or commits.
 - `identity.json` and `commands.json` describe current startup. `seed-result.json` remains historical initial-seed evidence; `refresh-result.json` records the updated image, readiness and preserved database contents.

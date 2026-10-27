@@ -4,7 +4,7 @@ import json
 import sys
 from pathlib import Path
 
-from ontocurator.domain.admin_error_codes import ADMIN_ERROR_CODES
+from ontotator.domain.admin_error_codes import ADMIN_ERROR_CODES
 
 
 def export_admin_error_codes(*, check: bool = False) -> None:

@@ -12,8 +12,8 @@ from t1_fixtures import run_import
 from tests_support_reviews import insert_review
 from work_plan_support import BASE, assign, doc, plan_env, select_final, submit, write
 
-from ontocurator.domain.work_plans import PlanFlags, RowKey
-from ontocurator.storage.tables import AssignmentRow, DocumentRow, ProjectRow
+from ontotator.domain.work_plans import PlanFlags, RowKey
+from ontotator.storage.tables import AssignmentRow, DocumentRow, ProjectRow
 
 BOTH = PlanFlags(True, True)
 REVIEW = PlanFlags(True, False)

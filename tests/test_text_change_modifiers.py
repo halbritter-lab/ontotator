@@ -23,10 +23,10 @@ from sqlalchemy import delete
 from test_text_change_service import Env, _carry, _env, _move, _pid, _scoped
 from test_text_change_service import app as app
 
-from ontocurator.domain.annotations import Modifier, snapshot
-from ontocurator.domain.documents import Segment
-from ontocurator.storage.repository import Repository, _key_str
-from ontocurator.storage.tables import DraftAnnotationRow, DraftEvidenceRow
+from ontotator.domain.annotations import Modifier, snapshot
+from ontotator.domain.documents import Segment
+from ontotator.storage.repository import Repository, _key_str
+from ontotator.storage.tables import DraftAnnotationRow, DraftEvidenceRow
 
 SEVERE = "HP:0012828"
 RECURRENT = "HP:0031796"
@@ -121,7 +121,7 @@ def test_text_change_sends_a_changed_modifier_text_to_review(app):
 
 
 def test_carry_from_a_submission_carries_modifiers(app, monkeypatch):
-    from ontocurator.application import submissions
+    from ontotator.application import submissions
 
     env = _env(app)
     work = _hypotonia_with(env, "Untersuchung")

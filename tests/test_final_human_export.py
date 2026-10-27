@@ -17,22 +17,22 @@ from test_text_change_service import _carry, _submitted
 from test_work_rounds import create_consolidation_fixture
 from test_work_rounds import rounds as rounds
 
-from ontocurator.application.consolidation_resolve import ConsolidationGroupService
-from ontocurator.application.editing import EditingService
-from ontocurator.application.final_results import FinalResultService
-from ontocurator.application.reviews import ReviewService
-from ontocurator.application.submissions import SubmissionService
-from ontocurator.application.work_rounds import MergeRoundInputsService
-from ontocurator.application.workspaces import WorkspaceService
-from ontocurator.auth.audit import Actor
-from ontocurator.authz.policy import Access
-from ontocurator.domain.errors import DomainError
-from ontocurator.domain.workspace import MutationEnvelope
-from ontocurator.exchange.jobs import HANDLERS
-from ontocurator.jobs.queue import JobQueue
-from ontocurator.ontology.registry import OntologyRegistry
-from ontocurator.ontology.store import OntologyStore
-from ontocurator.storage.tables import ProjectOntologyRow
+from ontotator.application.consolidation_resolve import ConsolidationGroupService
+from ontotator.application.editing import EditingService
+from ontotator.application.final_results import FinalResultService
+from ontotator.application.reviews import ReviewService
+from ontotator.application.submissions import SubmissionService
+from ontotator.application.work_rounds import MergeRoundInputsService
+from ontotator.application.workspaces import WorkspaceService
+from ontotator.auth.audit import Actor
+from ontotator.authz.policy import Access
+from ontotator.domain.errors import DomainError
+from ontotator.domain.workspace import MutationEnvelope
+from ontotator.exchange.jobs import HANDLERS
+from ontotator.jobs.queue import JobQueue
+from ontotator.ontology.registry import OntologyRegistry
+from ontotator.ontology.store import OntologyStore
+from ontotator.storage.tables import ProjectOntologyRow
 
 
 @pytest.mark.parametrize("mode", ["decided", "merged", "auto"])

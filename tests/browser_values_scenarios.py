@@ -32,13 +32,13 @@ from browser_lead_workflow_scenarios import (
 from fastapi import FastAPI, HTTPException, Query
 from sqlalchemy import update
 
-from ontocurator.authz.scoped import ScopedRepository
-from ontocurator.domain.axes import STANDARD_CLINICAL_AXES, AxisDefinition
-from ontocurator.domain.profiles import TaskProfile
-from ontocurator.exchange.t1 import Pin, layers_for
-from ontocurator.ontology.registry import OntologyRegistry
-from ontocurator.ontology.store import OntologyStore
-from ontocurator.storage.tables import ProjectRow
+from ontotator.authz.scoped import ScopedRepository
+from ontotator.domain.axes import STANDARD_CLINICAL_AXES, AxisDefinition
+from ontotator.domain.profiles import TaskProfile
+from ontotator.exchange.t1 import Pin, layers_for
+from ontotator.ontology.registry import OntologyRegistry
+from ontotator.ontology.store import OntologyStore
+from ontotator.storage.tables import ProjectRow
 
 CASE = "values"
 TEXT = "The patient has a seizure and hypotonia."

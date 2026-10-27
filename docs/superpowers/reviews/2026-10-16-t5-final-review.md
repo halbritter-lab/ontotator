@@ -7,7 +7,7 @@ The user's acceptance remains pending. T4 is not started by this closure.
 
 Runtime/source: `e72e2fa10c8f9527814ffb7e0f9127867ae5d26b`.
 Immutable image: `sha256:f89b1437fcc36f46eb5cc040c5d42ff6c664cfcc2e4dd9c90ae88d08a1612ff1`.
-Convenience tag: `ontocurator:t5-interim-final`; the prepared stack uses the immutable ID.
+Convenience tag: `ontotator:t5-interim-final`; the prepared stack uses the immutable ID.
 The OCI revision equals the runtime source. The final acceptance commit changes
 only documentation; its identity is separate from the runtime/image revision.
 
@@ -55,7 +55,7 @@ image payload manifests before/after the fixture correction are exactly equal.
 
 ## Actual persistent packaged validation
 
-Dedicated project `ontocurator-t5-acceptance-ready` runs the final image at
+Dedicated project `ontotator-t5-acceptance-ready` runs the final image at
 **http://127.0.0.1:18080**. PostgreSQL uses the internal Compose network; its
 loopback15543 host binding is configured, but Docker reports no active PostgreSQL
 host publication after restart. Owner migration completed successfully; app and

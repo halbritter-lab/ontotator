@@ -7,22 +7,22 @@ from test_annotation_versions import seed_submission
 from test_case_api import BASE, CORRECTED, TARGET
 from test_case_api import case_env as case_env
 
-from ontocurator.application.final_causes import (
+from ontotator.application.final_causes import (
     ACKNOWLEDGEABLE_CODES,
     corrects_selected_text,
 )
-from ontocurator.application.final_results import FinalResultService
-from ontocurator.application.final_results import _pseudonym as _user_pseudonym
-from ontocurator.application.problem_reports import ProblemReportService
-from ontocurator.application.submissions import SubmissionService
-from ontocurator.application.work_rounds import WorkRoundService
-from ontocurator.assignments.service import AssignmentService
-from ontocurator.auth.audit import Actor
-from ontocurator.authz.policy import Access
-from ontocurator.authz.scoped import ScopedRepository
-from ontocurator.domain.errors import AccessDenied, RevisionConflict
-from ontocurator.domain.workspace import MutationEnvelope
-from ontocurator.storage.tables import AssignmentRow, DocumentRow, ProjectMembershipRow
+from ontotator.application.final_results import FinalResultService
+from ontotator.application.final_results import _pseudonym as _user_pseudonym
+from ontotator.application.problem_reports import ProblemReportService
+from ontotator.application.submissions import SubmissionService
+from ontotator.application.work_rounds import WorkRoundService
+from ontotator.assignments.service import AssignmentService
+from ontotator.auth.audit import Actor
+from ontotator.authz.policy import Access
+from ontotator.authz.scoped import ScopedRepository
+from ontotator.domain.errors import AccessDenied, RevisionConflict
+from ontotator.domain.workspace import MutationEnvelope
+from ontotator.storage.tables import AssignmentRow, DocumentRow, ProjectMembershipRow
 
 pytest_plugins = (
     "test_assignment_round_open_api",
@@ -454,7 +454,7 @@ def test_keep_requires_the_exact_current_warning_set(case_env):
 
 
 def _set_rule(env, value):
-    from ontocurator.storage.tables import ProjectRow
+    from ontotator.storage.tables import ProjectRow
 
     with env.db.transaction() as conn:
         conn.execute(
@@ -535,9 +535,9 @@ def test_pseudonym_of_a_missing_user_is_none(case_env):
 
 
 def _seed_round_submission(app, key, document, sid):
-    from ontocurator.domain.review import ReviewTargetSet
-    from ontocurator.domain.workspace import Submission, WorkspaceKey
-    from ontocurator.storage.repository import _key_str
+    from ontotator.domain.review import ReviewTargetSet
+    from ontotator.domain.workspace import Submission, WorkspaceKey
+    from ontotator.storage.repository import _key_str
 
     origin = WorkspaceKey(
         project_key=key,

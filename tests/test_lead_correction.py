@@ -10,15 +10,15 @@ from test_translation_review_service import review_env as review_env
 from test_translation_review_service import save
 from work_plan_support import flags_of, revision_of, write
 
-from ontocurator.application.translation_workflow import TranslationWorkflowService
-from ontocurator.assignments.service import AssignmentService
-from ontocurator.auth.audit import Actor
-from ontocurator.authz.memberships import MembershipService
-from ontocurator.authz.policy import TASK_ROLES
-from ontocurator.domain.errors import DomainError
-from ontocurator.domain.work_plans import PlanFlags, RowKey
-from ontocurator.storage.plan_tables import DiscardedVariantRow
-from ontocurator.storage.tables import (
+from ontotator.application.translation_workflow import TranslationWorkflowService
+from ontotator.assignments.service import AssignmentService
+from ontotator.auth.audit import Actor
+from ontotator.authz.memberships import MembershipService
+from ontotator.authz.policy import TASK_ROLES
+from ontotator.domain.errors import DomainError
+from ontotator.domain.work_plans import PlanFlags, RowKey
+from ontotator.storage.plan_tables import DiscardedVariantRow
+from ontotator.storage.tables import (
     AssignmentRow,
     AuditEventRow,
     DocumentRow,

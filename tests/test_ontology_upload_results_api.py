@@ -9,8 +9,8 @@ from auth_harness import logged_in
 from sqlalchemy import func, select
 from test_auth_api import _app
 
-from ontocurator.auth.audit import Actor
-from ontocurator.storage.tables import AuditEventRow, OntologyFileRow
+from ontotator.auth.audit import Actor
+from ontotator.storage.tables import AuditEventRow, OntologyFileRow
 
 FIXTURES = Path(__file__).parent / "fixtures"
 HP = (FIXTURES / "hp.json").read_bytes()

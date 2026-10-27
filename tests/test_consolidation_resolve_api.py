@@ -27,14 +27,14 @@ from test_final_panel_api import (
 )
 from work_plan_support import assign, doc, plan_env
 
-from ontocurator.application.consolidation import consolidated_content_sha256
-from ontocurator.application.work_rounds import WorkRoundService
-from ontocurator.auth.audit import Actor
-from ontocurator.authz.policy import Access
-from ontocurator.domain.annotations import AnnotationSnapshot
-from ontocurator.domain.workspace import Draft
-from ontocurator.storage.repository import Repository, _key_str
-from ontocurator.storage.tables import DraftRow, EditEventRow
+from ontotator.application.consolidation import consolidated_content_sha256
+from ontotator.application.work_rounds import WorkRoundService
+from ontotator.auth.audit import Actor
+from ontotator.authz.policy import Access
+from ontotator.domain.annotations import AnnotationSnapshot
+from ontotator.domain.workspace import Draft
+from ontotator.storage.repository import Repository, _key_str
+from ontotator.storage.tables import DraftRow, EditEventRow
 
 FIRST = "sub-first-res"
 SECOND = "sub-second-res"
@@ -566,7 +566,7 @@ def test_reopen_of_an_auto_group_reads_open(cons):
 
 
 def test_resolve_writes_one_edit_event_per_command(cons):
-    from ontocurator.storage.tables import EditEventRow
+    from ontotator.storage.tables import EditEventRow
 
     def events() -> int:
         with cons.env.db.transaction() as conn:

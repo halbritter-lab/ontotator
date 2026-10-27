@@ -8,9 +8,9 @@ from sqlalchemy import event, insert, select
 from test_case_api import BASE, CASE, CORRECTED, SOURCE, TARGET
 from test_case_api import case_env as case_env
 
-from ontocurator.storage import work_plan_store as store
-from ontocurator.storage.plan_tables import DiscardedVariantRow
-from ontocurator.storage.tables import ProjectRow
+from ontotator.storage import work_plan_store as store
+from ontotator.storage.plan_tables import DiscardedVariantRow
+from ontotator.storage.tables import ProjectRow
 
 REVIEWED_AT = "2026-10-01T09:30:00+00:00"
 

@@ -10,8 +10,8 @@ import pytest
 from auth_harness import logged_in
 from work_plan_support import BASE, assign, doc, flags_of, plan_env, revision_of, write
 
-from ontocurator.api import assignment_batch_routes, document_row_routes
-from ontocurator.domain.work_plans import PlanFlags, RowKey
+from ontotator.api import assignment_batch_routes, document_row_routes
+from ontotator.domain.work_plans import PlanFlags, RowKey
 
 ANNOTATE = PlanFlags(False, True)
 OFF = PlanFlags(False, False)

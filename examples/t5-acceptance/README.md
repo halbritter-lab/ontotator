@@ -143,7 +143,7 @@ image is identical to its base revision.
 
 The prepared 2026-10-18 input set is under the ignored
 `build/t5-acceptance/full-hpo-20261018-candidate/inputs`. Its proposed Compose
-project is `ontocurator-t5-acceptance-full-hpo`, application port **18190** and
+project is `ontotator-t5-acceptance-full-hpo`, application port **18190** and
 PostgreSQL port **15590**, both loopback. These were free when checked; final
 startup must recheck them. Final image binding, actual startup/seed and browser
 acceptance belong to the integration package. The running phase0 demo on 18081

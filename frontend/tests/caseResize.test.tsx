@@ -21,7 +21,7 @@ const layers = [{
 
 const snapshot = (annotationId: string, termId: string, segments: Array<{ start: number; end: number }>,
   provenance: any = { actor: { actor_id: "dr-a", kind: "human" }, method: "manual" }) => ({
-  schema_version: "ontocurator-annotation/v3" as const,
+  schema_version: "ontotator-annotation/v3" as const,
   annotation: {
     annotation_id: annotationId, document_id: "doc", layer_id: "phenotype", type_id: "default", term_id: termId,
     axes_values: { assertion: "present" },

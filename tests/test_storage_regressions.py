@@ -5,10 +5,10 @@ from pg_harness import column_values, database_for, tamper
 from support.v2_exports import ExportService
 from test_storage import _sample_package
 
-from ontocurator.domain.review import ReviewTargetSet
-from ontocurator.domain.scopes import build_scope
-from ontocurator.domain.workspace import MutationEnvelope, Submission, WorkspaceKey
-from ontocurator.storage.repository import Repository
+from ontotator.domain.review import ReviewTargetSet
+from ontotator.domain.scopes import build_scope
+from ontotator.domain.workspace import MutationEnvelope, Submission, WorkspaceKey
+from ontotator.storage.repository import Repository
 
 
 def key_for(project_key="pkg-1"):
@@ -107,9 +107,9 @@ def test_imported_submission_seeds_draft(tmp_path):
 def test_export_fails_on_missing_decision_dependency(tmp_path):
     import pytest
 
-    from ontocurator.domain.annotations import AnnotationRef
-    from ontocurator.domain.errors import DomainError
-    from ontocurator.domain.review import ReviewDecision
+    from ontotator.domain.annotations import AnnotationRef
+    from ontotator.domain.errors import DomainError
+    from ontotator.domain.review import ReviewDecision
 
     repo = Repository(database_for(tmp_path / "db"))
     package = _sample_package()
@@ -136,7 +136,7 @@ def test_export_fails_on_missing_decision_dependency(tmp_path):
 
 
 def test_imported_search_audit_survives_scoped_export(tmp_path):
-    from ontocurator.packages.models import SearchEventRecord
+    from ontotator.packages.models import SearchEventRecord
 
     repo = Repository(database_for(tmp_path / "db"))
     package = _sample_package()
@@ -159,7 +159,7 @@ def test_imported_search_audit_survives_scoped_export(tmp_path):
 def test_import_rejects_conflicting_existing_snapshot_atomically(tmp_path):
     import pytest
 
-    from ontocurator.domain.errors import InvalidPackage
+    from ontotator.domain.errors import InvalidPackage
 
     repo = Repository(database_for(tmp_path / "db"))
     original = _sample_package()
@@ -200,12 +200,12 @@ def test_independent_import_resumes_at_default_api_key(tmp_path):
         (local_key,) = column_values(repo, "submissions", "local_key")
         assert local_key.endswith(":targets-0")
         # Earlier databases can still contain the pre-fix canonical binding.
-        from ontocurator.storage.repository import _key_str
+        from ontotator.storage.repository import _key_str
 
         tamper(
             repo.db,
             "submissions",
-            "UPDATE ontocurator.submissions SET local_key = :k",
+            "UPDATE ontotator.submissions SET local_key = :k",
             k=_key_str(key_for()),
         )
         assert repo.get_submissions_for_workspace(api_key) == [sub]
@@ -213,8 +213,8 @@ def test_independent_import_resumes_at_default_api_key(tmp_path):
 
 def _evidence_edit(package, end):
     """An edit that sets the draft's only annotation to evidence ending at ``end``."""
-    from ontocurator.domain.annotations import snapshot
-    from ontocurator.domain.documents import (
+    from ontotator.domain.annotations import snapshot
+    from ontotator.domain.documents import (
         EvidenceMention,
         EvidenceRef,
         EvidenceSnapshot,
@@ -271,7 +271,7 @@ def test_export_reads_one_snapshot_while_an_evidence_edit_commits(tmp_path):
         if (
             threading.get_ident() != reader
             or edits
-            or "FROM ontocurator.evidence_snapshots" not in statement
+            or "FROM ontotator.evidence_snapshots" not in statement
         ):
             return
         envelope = MutationEnvelope(mutation_id="m2", expected_revision=1, payload={})
@@ -300,7 +300,7 @@ def test_export_reads_one_snapshot_while_an_evidence_edit_commits(tmp_path):
 def test_export_inside_a_read_committed_transaction_is_refused(tmp_path):
     import pytest
 
-    from ontocurator.storage.database import SnapshotUnavailable
+    from ontotator.storage.database import SnapshotUnavailable
 
     db = database_for(tmp_path / "db")
     repo = Repository(db)

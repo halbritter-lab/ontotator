@@ -7,7 +7,7 @@ Latest follow-up: all [Phase 0 review fixes](../reviews/2026-10-18-phase0-review
 - The user authorized autonomous implementation of decided Phase 0 functions, efficient GPT-6.1-sol medium implementers and independent Astra review.
 - The explicit six-item approval settled P0-S/A/R/U, permitted publishing only the reviewed ontospan branch and permitted replacing embedded assets. All six are implemented. A renewed exact-file deletion approval succeeded; no manual deletion remains.
 - Subsequent instructions authorized the reviewed Phase 0 merge, push and separate candidate refresh. D6–D15 remain undecided later product questions, already prepared in the roadmap.
-- Preserve the reserved port-18080 project `ontocurator-t5-acceptance-ready`, its files and volumes. It was already stopped; do not restart, seed, migrate or replace it.
+- Preserve the reserved port-18080 project `ontotator-t5-acceptance-ready`, its files and volumes. It was already stopped; do not restart, seed, migrate or replace it.
 - Preserve the primary checkout's untracked `.impeccable/critique/` directory. All implementation is in `.worktrees/phase0-implementation`, branch `feat/phase0-usability`.
 - German conversation; English files/commits; no co-author/generated-by trailers; no GitHub Actions.
 
@@ -17,19 +17,19 @@ B0.1–B0.4 are implemented: opt-in reading-only positional scrolling; stable re
 
 Backend `873e466` and UI `0480fe2` complete flagged unresolved exports and the approved policies. Clinical axes and original provenance remain separate from `review_resolution`. Valid unresolved results are included with a reviewer/note flag. Historical missing notes receive explicit warnings. Invalid targets fail explicitly; flagged re-import is refused until storage preserves reviewer metadata. Independent review approved these changes and the subsequent fixture/catalog/smoke corrections.
 
-Ontospan `738f3d43ca0896c9d146a15fb9538b938229368a` (format/package 1.2) was pushed with specific approval to `feat/review-resolution-format`, verified remotely and pinned in Ontocurator. Frozen 1.0/1.1 schemas remain unchanged; lossy Phenopacket conversion fails explicitly. No ontospan merge occurred.
+Ontospan `738f3d43ca0896c9d146a15fb9538b938229368a` (format/package 1.2) was pushed with specific approval to `feat/review-resolution-format`, verified remotely and pinned in Ontotator. Frozen 1.0/1.1 schemas remain unchanged; lossy Phenopacket conversion fails explicitly. No ontospan merge occurred.
 
 ## Artifacts and verification
 
 All 31 embedded frontend paths/hashes match the fresh build. Current bundles are `index-DAM43_6Y.js` and `index-Bz01LmIQ.css`; obsolete bundles are replaced as part of the review fixes.
 
-**Current refreshed candidate:** runtime source `0e9271aeb5310c39a7497dc97e0576d6de927628`, image `sha256:74b37290e03e802b281ef0d6dc8639891152f8e84b49e3dba190b8e8950c928d` (local tag `ontocurator-phase0:reviewed`). The image source label and all 31 frontend file hashes were verified. Disposable packaged container checks and the real browser smoke passed. Startup returned `/readyz` 200, all 36 application-table contents matched before/after, and existing credentials and volumes were preserved without reseeding. Evidence and a pre-refresh database backup remain private under `build/t5-acceptance/phase0-review-refresh`.
+**Current refreshed candidate:** runtime source `0e9271aeb5310c39a7497dc97e0576d6de927628`, image `sha256:74b37290e03e802b281ef0d6dc8639891152f8e84b49e3dba190b8e8950c928d` (local tag `ontotator-phase0:reviewed`). The image source label and all 31 frontend file hashes were verified. Disposable packaged container checks and the real browser smoke passed. Startup returned `/readyz` 200, all 36 application-table contents matched before/after, and existing credentials and volumes were preserved without reseeding. Evidence and a pre-refresh database backup remain private under `build/t5-acceptance/phase0-review-refresh`.
 
 **Historical pre-review container candidate (does not contain the later review fixes):**
 
 - Runtime source: `001c6729487eee532647f80aa6d0e3442019d1f7`.
 - Image: `sha256:9c42d4545a3c1cb4331b513b77160edfda3d78574a4fc849140454687167370a`.
-- Local image tag: `ontocurator-phase0:local`. OCI revision and packaged frontend hashes verified.
+- Local image tag: `ontotator-phase0:local`. OCI revision and packaged frontend hashes verified.
 - Disposable `container_check.py --smoke` exited 0; all contracts and the real login/annotation/submission/reload journey passed. Host smoke correction `06fa716` changes only the test; the image remains valid.
 - Full browser preflight: all 87 passed. Corrected integrated gate 12 exited 0: 1,305 frontend, 2,183 backend (one Windows skip), 87 browser passes; 1,863 seconds total.
 - Logs/reports/identity snapshots remain ignored under `.superpowers/sdd/2026-10-17-phase0-priorities/`. Do not delete or force-add that evidence.
@@ -44,7 +44,7 @@ The original candidate gate used the pre-change harness. The review-fix verifica
 
 Phase 0 implementation, all review fixes, independent review and full stage verification are complete. Review-fix commit `778e3a0` was fast-forwarded into local `main`; identical branch tree hashes were verified. The final checks passed 1,320 frontend tests, 2,209 backend tests (one expected Windows skip), 88 browser tests and all static/contract/wheel checks. The documentation completion at `0e9271a` was then pushed with explicit user approval and verified remotely. The current demo refresh changes deployment identity and documentation, not application code.
 
-The separate candidate was originally prepared from clean seed/tooling revision `87367d8bd963646d7b4ffd05f7c3f9a13bc5b8e1` and seeded once. Its image has now been refreshed to the reviewed source above. It retains six synthetic documents, two open translation reviews and one open annotation task. Its exact project is `ontocurator-t5-acceptance-phase0`, app port 18081, PostgreSQL port 15544; private files live at `build/t5-acceptance/phase0-candidate` in this worktree. `seed-result.json` records the original seed, while `refresh-result.json` records the current deployment.
+The separate candidate was originally prepared from clean seed/tooling revision `87367d8bd963646d7b4ffd05f7c3f9a13bc5b8e1` and seeded once. Its image has now been refreshed to the reviewed source above. It retains six synthetic documents, two open translation reviews and one open annotation task. Its exact project is `ontotator-t5-acceptance-phase0`, app port 18081, PostgreSQL port 15544; private files live at `build/t5-acceptance/phase0-candidate` in this worktree. `seed-result.json` records the original seed, while `refresh-result.json` records the current deployment.
 
 It is stopped after verification to preserve the requested RAM headroom. Retain its volumes and use [the acceptance instructions](../../operations/phase0-acceptance.md) to start it without reseeding. Those instructions include actual image/source identity, private credential-file location, the additional Adjudicator role required for annotation review, and the correct order for the test journeys. The reserved old demo's identities/state match the baseline exactly.
 

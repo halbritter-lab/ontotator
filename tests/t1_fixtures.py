@@ -10,22 +10,22 @@ from typing import Any
 
 import ontospan
 
-from ontocurator.auth.audit import Actor
-from ontocurator.authz.policy import Access
-from ontocurator.authz.scoped import ScopedRepository
-from ontocurator.domain.profiles import (
+from ontotator.auth.audit import Actor
+from ontotator.authz.policy import Access
+from ontotator.authz.scoped import ScopedRepository
+from ontotator.domain.profiles import (
     AnnotationTypeDefinition,
     AxisDefinition,
     LayerDefinition,
     OntologyDefinition,
     TaskProfile,
 )
-from ontocurator.exchange.jobs import HANDLERS, store_file
-from ontocurator.exchange.t1 import Pin, layers_for
-from ontocurator.jobs.queue import Job, JobQueue
-from ontocurator.ontology.registry import OntologyRegistry
-from ontocurator.ontology.store import OntologyStore
-from ontocurator.storage.database import Database
+from ontotator.exchange.jobs import HANDLERS, store_file
+from ontotator.exchange.t1 import Pin, layers_for
+from ontotator.jobs.queue import Job, JobQueue
+from ontotator.ontology.registry import OntologyRegistry
+from ontotator.ontology.store import OntologyStore
+from ontotator.storage.database import Database
 
 FIXTURES = Path(__file__).parent / "fixtures"
 HP_PATH = FIXTURES / "hp.json"

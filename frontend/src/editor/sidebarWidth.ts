@@ -23,7 +23,7 @@ const TEXT_RESERVE = 420;
 const KEY_COMMIT_DELAY_MS = 300;
 
 export function storageKey(username: string): string {
-  return `ontocurator.editor.sidebarWidth.v1:${username}`;
+  return `ontotator.editor.sidebarWidth.v1:${username}`;
 }
 
 export function sidebarLimits({ viewport, inspector }: { viewport: number; inspector: number }): SidebarLimits {

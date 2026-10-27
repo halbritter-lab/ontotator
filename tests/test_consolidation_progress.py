@@ -9,11 +9,11 @@ from typing import Any
 import pytest
 from test_consolidation_resolve_api import build_round, group, mutate, ok, payload
 
-from ontocurator.application.consolidation import (
+from ontotator.application.consolidation import (
     consolidation_progress,
     open_group_count,
 )
-from ontocurator.storage.repository import Repository
+from ontotator.storage.repository import Repository
 
 
 @pytest.fixture

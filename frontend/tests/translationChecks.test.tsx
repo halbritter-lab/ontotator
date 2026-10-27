@@ -35,7 +35,7 @@ it("ends the guidance after Query or Rejected for codes other than units and num
   render(<ChecksSummary failed={[{ code: "glossary_miss", passed: false }]} all={null} />);
   fireEvent.click(screen.getByRole("button", { name: "Details" }));
   expect(screen.getByText(/choose Query or Rejected\.$/)).toBeTruthy();
-  expect(screen.getByText(/Ontocurator has no description for it; ask the project lead what it checks\./)).toBeTruthy();
+  expect(screen.getByText(/Ontotator has no description for it; ask the project lead what it checks\./)).toBeTruthy();
 });
 it("shows the calm states without a fill", () => {
   const { rerender } = render(<ChecksSummary failed={[]} all={[{ code: "a", passed: true }, { code: "b", passed: true }]} />);

@@ -5,10 +5,10 @@ import json
 import re
 from pathlib import Path
 
-from ontocurator.domain.admin_error_codes import ADMIN_ERROR_CODES
+from ontotator.domain.admin_error_codes import ADMIN_ERROR_CODES
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "src" / "ontocurator"
+SOURCE = ROOT / "src" / "ontotator"
 # Directories include future modules in these administration surfaces and their
 # shared repository/workspace producers. Other services retain server fallback.
 PATHS = (
@@ -98,7 +98,7 @@ def source_codes(source: str, *, error_defaults: bool = False) -> set[str]:
     for node in ast.walk(tree):
         if (
             isinstance(node, ast.ImportFrom)
-            and node.module == "ontocurator.domain.errors"
+            and node.module == "ontotator.domain.errors"
         ):
             constructors.update(
                 alias.asname or alias.name

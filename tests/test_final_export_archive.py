@@ -11,8 +11,8 @@ from test_annotation_versions import seed_submission
 from test_case_api import BASE, SOURCE
 from test_case_api import case_env as case_env
 
-from ontocurator.exchange.final_export_guide import guide_files
-from ontocurator.storage.final_tables import ExportSelectionSnapshotRow
+from ontotator.exchange.final_export_guide import guide_files
+from ontotator.storage.final_tables import ExportSelectionSnapshotRow
 
 
 def _export(env):
@@ -61,7 +61,7 @@ def test_archive_contains_hashed_readme_and_index(case_env):
         "index.csv",
     } <= names
     receipt = json.loads(archive.read("receipt.json"))
-    assert receipt["format"] == "ontocurator-final-export/v1"
+    assert receipt["format"] == "ontotator-final-export/v1"
     assert set(receipt["files"]) == names - {"receipt.json"}
     for name, digest in receipt["files"].items():
         assert hashlib.sha256(archive.read(name)).hexdigest() == digest, name
@@ -85,7 +85,7 @@ def test_archive_contains_hashed_readme_and_index(case_env):
                 unit["annotation_set"]["annotation_set_id"] == row["annotation_set_id"]
             )
     readme = archive.read("README.txt").decode("utf-8")
-    assert readme.startswith("Ontocurator final export\n")
+    assert readme.startswith("Ontotator final export\n")
     assert f"Snapshot ID:      {receipt['snapshot_id']}" in readme
 
 

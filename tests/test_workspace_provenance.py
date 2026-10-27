@@ -10,16 +10,16 @@ from t1_fixtures import TEXT, annotation, create_project, run_import
 from test_auth_api import _app
 from test_reanchor_resolutions import from_proposals, from_scratch
 
-from ontocurator.application.workspaces import WorkspaceService
-from ontocurator.auth.audit import Actor
-from ontocurator.authz.policy import Access
-from ontocurator.authz.scoped import ScopedRepository
-from ontocurator.domain.errors import DomainError
-from ontocurator.domain.profiles import profile_hash
-from ontocurator.domain.review import ReviewTargetSet
-from ontocurator.domain.workspace import WorkspaceKey
-from ontocurator.storage.repository import Repository
-from ontocurator.storage.tables import (
+from ontotator.application.workspaces import WorkspaceService
+from ontotator.auth.audit import Actor
+from ontotator.authz.policy import Access
+from ontotator.authz.scoped import ScopedRepository
+from ontotator.domain.errors import DomainError
+from ontotator.domain.profiles import profile_hash
+from ontotator.domain.review import ReviewTargetSet
+from ontotator.domain.workspace import WorkspaceKey
+from ontotator.storage.repository import Repository
+from ontotator.storage.tables import (
     AssignmentRow,
     ProjectMembershipRow,
     ProjectRow,
@@ -427,7 +427,7 @@ def test_actual_reanchor_source_version_and_tool_metadata_are_inlined(tmp_path):
         and item["source_document_id"] == "case"
         and item["source_version"] == 1
     )
-    assert item["actors"][0]["actor_id"] == "ontocurator-reanchor"
+    assert item["actors"][0]["actor_id"] == "ontotator-reanchor"
 
 
 def test_existing_foreign_project_sets_cannot_be_projected_or_publicly_read(

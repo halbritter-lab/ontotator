@@ -8,7 +8,7 @@ from browser_server import register_variant_admin_scenario_routes
 from fastapi import FastAPI
 from sqlalchemy.dialects import postgresql
 
-from ontocurator.exchange.reanchor_job import ReanchorPayload, ReviewProducer
+from ontotator.exchange.reanchor_job import ReanchorPayload, ReviewProducer
 
 
 def test_review_child_waiter_selects_the_actual_serialized_producer():

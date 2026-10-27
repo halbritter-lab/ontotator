@@ -6,12 +6,12 @@ from test_round_inputs_access_api import carried_round  # noqa: F401
 from test_round_read_fields import _submit_first_round
 from test_work_rounds import rounds  # noqa: F401
 
-from ontocurator.application.editing import EditingService
-from ontocurator.application.submissions import SubmissionService
-from ontocurator.application.work_rounds import RoundInputResolutionService
-from ontocurator.authz.scoped import ScopedRepository
-from ontocurator.domain.errors import DomainError
-from ontocurator.domain.workspace import Draft, MutationEnvelope
+from ontotator.application.editing import EditingService
+from ontotator.application.submissions import SubmissionService
+from ontotator.application.work_rounds import RoundInputResolutionService
+from ontotator.authz.scoped import ScopedRepository
+from ontotator.domain.errors import DomainError
+from ontotator.domain.workspace import Draft, MutationEnvelope
 
 
 def _ctx(rounds):  # noqa: F811
@@ -274,7 +274,7 @@ def test_undo_of_a_plain_dismissal_restores_nothing(rounds):  # noqa: F811
 
 def test_submission_rejects_a_legacy_dismissal_while_the_carried_finding_exists(rounds):  # noqa: F811
     repo, scoped, ontology, key, item = _ctx(rounds)
-    from ontocurator.domain.workspace import RoundInputResolution
+    from ontotator.domain.workspace import RoundInputResolution
 
     def legacy(draft):  # type: ignore[no-untyped-def]  # what the pre-B2 resolve() allowed
         draft.round_input_resolutions = [

@@ -4,23 +4,23 @@ from types import SimpleNamespace
 
 import pytest
 
-from ontocurator.domain.annotations import (
+from ontotator.domain.annotations import (
     ActorRef,
     Annotation,
     AnnotationSnapshot,
     Provenance,
     snapshot,
 )
-from ontocurator.domain.documents import (
+from ontotator.domain.documents import (
     Document,
     EvidenceMention,
     EvidenceRef,
     EvidenceSnapshot,
     Segment,
 )
-from ontocurator.domain.errors import InvalidAnnotation
-from ontocurator.domain.profiles import TaskProfile
-from ontocurator.domain.project_rules import (
+from ontotator.domain.errors import InvalidAnnotation
+from ontotator.domain.profiles import TaskProfile
+from ontotator.domain.project_rules import (
     ProjectRules,
     RuleViolation,
     rule_violations,

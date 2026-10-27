@@ -2,21 +2,21 @@
 
 import hashlib
 
-from ontocurator.domain.annotations import (
+from ontotator.domain.annotations import (
     ActorRef,
     Annotation,
     AnnotationRef,
     Provenance,
     snapshot,
 )
-from ontocurator.domain.documents import (
+from ontotator.domain.documents import (
     Document,
     EvidenceMention,
     EvidenceRef,
     EvidenceSnapshot,
     Segment,
 )
-from ontocurator.domain.profiles import (
+from ontotator.domain.profiles import (
     AnnotationTypeDefinition,
     AxisDefinition,
     LayerDefinition,
@@ -24,9 +24,9 @@ from ontocurator.domain.profiles import (
     TaskProfile,
     profile_hash,
 )
-from ontocurator.domain.review import ReviewDecision, ReviewTargetSet
-from ontocurator.domain.workspace import Submission, WorkspaceKey
-from ontocurator.packages.models import (
+from ontotator.domain.review import ReviewDecision, ReviewTargetSet
+from ontotator.domain.workspace import Submission, WorkspaceKey
+from ontotator.packages.models import (
     PackageManifest,
     SearchEventRecord,
     ValidatedPackage,
@@ -188,7 +188,7 @@ def _create_sample_package(profile: TaskProfile | None = None) -> ValidatedPacka
 
     manifest = PackageManifest(
         package_id="pkg-test-1",
-        format_version="ontocurator-work-package/v2",
+        format_version="ontotator-work-package/v2",
         document_order=["doc-1"],
         task_profile=profile,
         task_profile_sha256=profile_hash(profile),

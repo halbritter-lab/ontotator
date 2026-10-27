@@ -6,7 +6,7 @@ import { hiddenCount, HiddenAxisValuesField, type HiddenAxisValuesFieldProps } f
 type Axis = components["schemas"]["AxisDefinition"];
 const axis = (id: string, options: string[], label = id === "assertion" ? "Status" : "Confidence"): Axis => ({ id, label, options, allow_empty: true });
 const profile: HiddenAxisValuesFieldProps["profile"] = {
-  schema: "ontocurator-task-profile/v1", profile_id: "test/v1", version: "1",
+  schema: "ontotator-task-profile/v1", profile_id: "test/v1", version: "1",
   ontologies: [{ ontology_id: "hp", label: "HPO", release: "2026", sha256: "a".repeat(64), format: "obo-graph-json" }],
   default_layer_id: "layer-a",
   layers: [

@@ -16,12 +16,12 @@ from argon2 import Parameters, PasswordHasher, extract_parameters
 from pg_harness import column_values, count_rows, database_for
 from sqlalchemy import insert, text, update
 
-import ontocurator.auth.sessions as sessions_module
-from ontocurator.auth.accounts import AccountService
-from ontocurator.auth.audit import Actor
-from ontocurator.auth.sessions import SessionService
-from ontocurator.domain.errors import LoginFailed
-from ontocurator.storage.tables import LoginAttemptRow, PasswordCredentialRow
+import ontotator.auth.sessions as sessions_module
+from ontotator.auth.accounts import AccountService
+from ontotator.auth.audit import Actor
+from ontotator.auth.sessions import SessionService
+from ontotator.domain.errors import LoginFailed
+from ontotator.storage.tables import LoginAttemptRow, PasswordCredentialRow
 
 PASSWORD = "correct horse battery"
 ADMIN = Actor(None, "test:admin")

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from ontocurator.domain.agreement import (
+from ontotator.domain.agreement import (
     Finding,
     Group,
     compare,

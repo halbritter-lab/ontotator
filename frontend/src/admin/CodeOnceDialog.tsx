@@ -15,7 +15,7 @@ export type CodeOnceDialogProps = components["schemas"]["CodeResponse"] & {
 export function handoverText({ code, expires_at, kind, username }: Pick<CodeOnceDialogProps, "code" | "expires_at" | "kind" | "username">, loginUrl: string, now = Date.now()): string {
   const hours = Math.max(1, Math.round((new Date(expires_at).getTime() - now) / 3_600_000));
   return [
-    kind === "setup" ? "Your Ontocurator account is ready." : "Your Ontocurator password can be reset.",
+    kind === "setup" ? "Your Ontotator account is ready." : "Your Ontotator password can be reset.",
     `1. Open ${loginUrl}`,
     `2. Choose "I have a setup or reset code".`,
     `3. Enter your username${username ? ` ${username}` : ""}, the code below and a new password of at least 12 characters.`,

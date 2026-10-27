@@ -28,17 +28,17 @@ from work_plan_support import (
 )
 from work_plan_support import service as plan_service
 
-from ontocurator.api.work_plan_routes import PlanRowPatch
-from ontocurator.application import document_row_page
-from ontocurator.application.document_row_page import cases_not_shown, sorted_case_ids
-from ontocurator.application.document_rows import RowFacts, RowQuery, load_facts
-from ontocurator.application.final_causes import authorize_final_results
-from ontocurator.assignments.service import AssignmentService
-from ontocurator.auth.audit import Actor
-from ontocurator.domain.errors import DomainError
-from ontocurator.domain.next_steps import Segment
-from ontocurator.domain.work_plans import PlanFlags, RowKey
-from ontocurator.storage.tables import AssignmentRow, DocumentRow, ProjectRow
+from ontotator.api.work_plan_routes import PlanRowPatch
+from ontotator.application import document_row_page
+from ontotator.application.document_row_page import cases_not_shown, sorted_case_ids
+from ontotator.application.document_rows import RowFacts, RowQuery, load_facts
+from ontotator.application.final_causes import authorize_final_results
+from ontotator.assignments.service import AssignmentService
+from ontotator.auth.audit import Actor
+from ontotator.domain.errors import DomainError
+from ontotator.domain.next_steps import Segment
+from ontotator.domain.work_plans import PlanFlags, RowKey
+from ontotator.storage.tables import AssignmentRow, DocumentRow, ProjectRow
 
 BOTH = PlanFlags(True, True)
 REVIEW = PlanFlags(True, False)

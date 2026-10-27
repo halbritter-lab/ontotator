@@ -30,8 +30,8 @@ async function evidence(page: Page, name: string, part?: Locator) {
 async function openRows(page: Page): Promise<LeadScenario> {
   const s = await leadScenario(page, "ROWS");
   await page.goto("/");
-  await page.evaluate(([key, value]) => window.localStorage.setItem(key, value), [`ontocurator.lastProject.v1:${s.users.lead}`, s.project]);
-  const form = page.getByRole("form", { name: "Log in to Ontocurator" });
+  await page.evaluate(([key, value]) => window.localStorage.setItem(key, value), [`ontotator.lastProject.v1:${s.users.lead}`, s.project]);
+  const form = page.getByRole("form", { name: "Log in to Ontotator" });
   await form.getByLabel("Username", { exact: true }).fill(s.users.lead);
   await form.getByLabel("Password", { exact: true }).fill(TEST_PASSWORD);
   await form.getByRole("button", { name: "Log in", exact: true }).click();

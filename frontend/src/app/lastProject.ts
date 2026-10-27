@@ -7,7 +7,7 @@ import type { ProjectSummary } from "../api/client";
  * `?project=` or an opened task of that project. The key is per user so a shared browser never
  * mixes two people's projects.
  */
-export const LAST_PROJECT_PREFIX = "ontocurator.lastProject.v1:";
+export const LAST_PROJECT_PREFIX = "ontotator.lastProject.v1:";
 
 export function rememberProject(username: string, key: string): void {
   try {

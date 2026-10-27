@@ -12,13 +12,13 @@ from t1_builders import bundle, correction_unit, native_unit, translation_unit
 from t1_fixtures import create_project, run_import
 from test_auth_api import _app
 
-from ontocurator.application.translation_reviews import TranslationReviewService
-from ontocurator.assignments.service import AssignmentService
-from ontocurator.authz.policy import Access
-from ontocurator.domain.errors import DomainError
-from ontocurator.projects.service import ProjectService
-from ontocurator.storage.repository import _lock_id
-from ontocurator.storage.tables import (
+from ontotator.application.translation_reviews import TranslationReviewService
+from ontotator.assignments.service import AssignmentService
+from ontotator.authz.policy import Access
+from ontotator.domain.errors import DomainError
+from ontotator.projects.service import ProjectService
+from ontotator.storage.repository import _lock_id
+from ontotator.storage.tables import (
     AssignmentRow,
     AuditEventRow,
     DocumentRow,
@@ -396,10 +396,8 @@ def test_final_failure_rolls_back_entire_submission(review_env, fault):
     before = count(env, AuditEventRow)
 
     def fail(conn, cursor, statement, parameters, context, executemany):
-        if (
-            fault == "audit" and "INSERT INTO ontocurator.audit_events" in statement
-        ) or (
-            fault == "correction" and "INSERT INTO ontocurator.documents" in statement
+        if (fault == "audit" and "INSERT INTO ontotator.audit_events" in statement) or (
+            fault == "correction" and "INSERT INTO ontotator.documents" in statement
         ):
             raise RuntimeError("injected final failure")
 
@@ -800,17 +798,17 @@ def test_authority_lock_graph_precedes_assignment_and_draft_rows(review_env, ope
     actor = next(
         i
         for i, (sql, _) in enumerate(statements)
-        if "FROM ontocurator.users" in sql and "FOR SHARE" in sql
+        if "FROM ontotator.users" in sql and "FOR SHARE" in sql
     )
     assignment = next(
         i
         for i, (sql, _) in enumerate(statements)
-        if "FROM ontocurator.assignments" in sql and "FOR NO KEY UPDATE" in sql
+        if "FROM ontotator.assignments" in sql and "FOR NO KEY UPDATE" in sql
     )
     draft = next(
         i
         for i, (sql, _) in enumerate(statements)
-        if "FROM ontocurator.translation_review_drafts" in sql and "FOR UPDATE" in sql
+        if "FROM ontotator.translation_review_drafts" in sql and "FOR UPDATE" in sql
     )
     assert actor < assignment < draft
 

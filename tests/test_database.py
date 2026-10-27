@@ -10,13 +10,13 @@ from sqlalchemy import func, insert, select, text
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.exc import DBAPIError
 
-from ontocurator import settings
-from ontocurator.storage.database import (
+from ontotator import settings
+from ontotator.storage.database import (
     Database,
     SnapshotUnavailable,
     TransactionRollbackOnly,
 )
-from ontocurator.storage.tables import StoredFileRow
+from ontotator.storage.tables import StoredFileRow
 
 
 def _count(db: Database) -> int:
@@ -184,7 +184,7 @@ def test_a_password_with_url_characters_survives_the_round_trip(
     tmp_path: Path, source: str
 ) -> None:
     # Roles are cluster-wide: parallel workers share the server (pg_harness).
-    role = f"ontocurator_password_probe_{pg_harness.process_suffix()}"
+    role = f"ontotator_password_probe_{pg_harness.process_suffix()}"
     _, admin = pg_harness.server()
     with admin.connect() as conn:
         conn.execute(text(f"DROP ROLE IF EXISTS {role}"))
@@ -197,10 +197,10 @@ def test_a_password_with_url_characters_survives_the_round_trip(
         port=target.port,
         database=target.database,
     ).render_as_string()
-    env = {"ONTOCURATOR_DATABASE_PASSWORD": PASSWORD}
+    env = {"ONTOTATOR_DATABASE_PASSWORD": PASSWORD}
     if source == "environment":
         resolved = settings.database_url(
-            {**env, "ONTOCURATOR_DATABASE_URL": bare}
+            {**env, "ONTOTATOR_DATABASE_URL": bare}
         ).render_as_string(hide_password=False)
     else:
         resolved = settings.resolve_database_url(bare, None, env)

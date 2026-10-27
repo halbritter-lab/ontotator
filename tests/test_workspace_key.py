@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from ontocurator.domain.workspace import Submission, WorkspaceKey
+from ontotator.domain.workspace import Submission, WorkspaceKey
 
 
 def test_old_payloads_with_package_id_still_load():

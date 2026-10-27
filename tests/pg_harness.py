@@ -1,6 +1,6 @@
 """PostgreSQL for the test suite (T2 P8): one server, one database per test.
 
-The server is ``ONTOCURATOR_TEST_PG_URL`` (a superuser URL of a throwaway
+The server is ``ONTOTATOR_TEST_PG_URL`` (a superuser URL of a throwaway
 server) or, by default, a testcontainer started on first use. The schema is
 migrated once into a template database as the owner role. Every test database
 is a copy of that template, used through the application role, so grants and
@@ -9,10 +9,10 @@ append-only triggers are exercised exactly as in production.
 Parallel runs (pytest-xdist, ``-n N``): the controller process starts the one
 testcontainer before the workers run and hands its URL to every worker
 (``tests/conftest.py``); it stops the container when the run ends. Each worker
-migrates its own template (``ontocurator_template_gw0``, ...) and names its
+migrates its own template (``ontotator_template_gw0``, ...) and names its
 databases after itself, so workers never drop or copy each other's databases.
 The cluster-wide roles are created under an advisory lock. Serial runs keep
-the single ``ontocurator_template``.
+the single ``ontotator_template``.
 
 The container runs with durability switched off (``fsync``,
 ``synchronous_commit``, ``full_page_writes``): test-only settings that lose
@@ -31,13 +31,13 @@ from typing import Any
 from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.engine import URL, make_url
 
-from ontocurator.storage.database import Database
-from ontocurator.storage.schema import upgrade
-from ontocurator.storage.tables import APP_ROLE, OWNER_ROLE, SCHEMA
+from ontotator.storage.database import Database
+from ontotator.storage.schema import upgrade
+from ontotator.storage.tables import APP_ROLE, OWNER_ROLE, SCHEMA
 
 IMAGE = "postgres:16.15-alpine3.24"
 PASSWORD = "test-only-password"
-TEMPLATE = "ontocurator_template"
+TEMPLATE = "ontotator_template"
 # Test-only server settings: no durability (a crash loses the data, which a
 # throwaway test server never needs), enough connections for parallel workers.
 SERVER_COMMAND = (
@@ -74,7 +74,7 @@ def process_suffix() -> str:
 
 
 def _database_prefix(kind: str) -> str:
-    return f"ontocurator_{kind}_{process_suffix()}"
+    return f"ontotator_{kind}_{process_suffix()}"
 
 
 def use_shared_server(url: str | None, error: str | None) -> None:
@@ -90,7 +90,7 @@ def start_shared_server() -> str:
 
 def _start_server() -> URL:
     global _container
-    explicit = os.environ.get("ONTOCURATOR_TEST_PG_URL")
+    explicit = os.environ.get("ONTOTATOR_TEST_PG_URL")
     if explicit:
         return make_url(explicit).set(drivername="postgresql+psycopg")
     if _shared is not None:
@@ -112,16 +112,16 @@ def _start_server() -> URL:
             driver="psycopg",
         )
         container.with_command(SERVER_COMMAND)
-        e2e_run = os.environ.get("ONTOCURATOR_E2E_RUN")
+        e2e_run = os.environ.get("ONTOTATOR_E2E_RUN")
         if e2e_run:
             # The Playwright run removes its own container by this label
             # (frontend/playwright.teardown.ts); Ryuk stays the fallback.
-            container.with_kwargs(labels={"ontocurator.e2e-run": e2e_run})
+            container.with_kwargs(labels={"ontotator.e2e-run": e2e_run})
         container.start()
     except Exception as exc:  # Docker not running, image not pullable, ...
         raise RuntimeError(
             "The tests need PostgreSQL: start Docker Desktop, or set "
-            "ONTOCURATOR_TEST_PG_URL to a throwaway server's superuser URL. "
+            "ONTOTATOR_TEST_PG_URL to a throwaway server's superuser URL. "
             f"({exc})"
         ) from exc
     atexit.register(container.stop)
@@ -266,7 +266,7 @@ def insert_proposal(repo: Any, project_key: str, snapshot: Any) -> None:
     """Add an annotation proposal (and its evidence) to a project, as an import does."""
     from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-    from ontocurator.storage.tables import ProposalAnnotationRow
+    from ontotator.storage.tables import ProposalAnnotationRow
 
     with repo.db.transaction() as conn:
         project_id = conn.execute(

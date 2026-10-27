@@ -1,6 +1,6 @@
 # A small scientific annotation workflow
 
-Ontocurator records annotation and consolidation results. A submitted
+Ontotator records annotation and consolidation results. A submitted
 consolidation is not automatically an adjudicated gold standard. Consolidation
 displays source provenance; annotation from scratch (`independent` mode) shows
 neither proposals nor other people's work.
@@ -72,8 +72,8 @@ assess whether the guideline and workflow produce useful, consistent annotation.
 ## Extract results for analysis
 
 ```sh
-ontocurator analyze annotator-a.zip --annotator A --output annotator-a.json
-ontocurator analyze annotator-b.zip --annotator B --output annotator-b.json
+ontotator analyze annotator-a.zip --annotator A --output annotator-a.json
+ontotator analyze annotator-b.zip --annotator B --output annotator-b.json
 ```
 
 `--mode independent` (annotation) or `--mode review` (consolidation) restricts the
@@ -84,7 +84,7 @@ therefore needs an expected annotator ID to produce missing-work rows. Analyze
 each per-annotator export separately; absence from another person's scoped export
 does not establish absence from the study.
 
-The JSON format is `ontocurator-analysis/v1`. It includes the source manifest,
+The JSON format is `ontotator-analysis/v1`. It includes the source manifest,
 one row per document/person/mode/layer/scope/round, and explicit ambiguity records.
 The command validates the archive before producing output. Output is written
 atomically and cannot overwrite the input package.

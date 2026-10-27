@@ -76,12 +76,12 @@ file because Compose reads its declared path. Do not use `down --volumes` for an
 ordinary stop. The real stop/start test preserved all checked state and blob
 bytes, with both named volumes unchanged:
 
-- `ontocurator-t5-acceptance-ready_postgres-data`
-- `ontocurator-t5-acceptance-ready_ontocurator-data`
+- `ontotator-t5-acceptance-ready_postgres-data`
+- `ontotator-t5-acceptance-ready_ontotator-data`
 
 Runtime/source: `e72e2fa10c8f9527814ffb7e0f9127867ae5d26b`.
 Image: `sha256:f89b1437fcc36f46eb5cc040c5d42ff6c664cfcc2e4dd9c90ae88d08a1612ff1`.
-Prepared project: `ontocurator-t5-acceptance-ready`; app18080 is bound to loopback.
+Prepared project: `ontotator-t5-acceptance-ready`; app18080 is bound to loopback.
 PG15543 is configured for loopback, but Docker reports no active PostgreSQL host
 publication after restart. The app uses the healthy internal database connection.
 Do not reuse the separately retained failed `demo-final` preparation.

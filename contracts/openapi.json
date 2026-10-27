@@ -1,7 +1,7 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Ontocurator Local API",
+    "title": "Ontotator Local API",
     "version": "0.1.0"
   },
   "paths": {
@@ -8069,9 +8069,9 @@
         "properties": {
           "schema_version": {
             "type": "string",
-            "const": "ontocurator-annotation/v3",
+            "const": "ontotator-annotation/v3",
             "title": "Schema Version",
-            "default": "ontocurator-annotation/v3"
+            "default": "ontotator-annotation/v3"
           },
           "annotation": {
             "$ref": "#/components/schemas/Annotation"
@@ -12627,9 +12627,9 @@
         "properties": {
           "schema_version": {
             "type": "string",
-            "const": "ontocurator-annotation/v3",
+            "const": "ontotator-annotation/v3",
             "title": "Schema Version",
-            "default": "ontocurator-annotation/v3"
+            "default": "ontotator-annotation/v3"
           },
           "annotation": {
             "$ref": "#/components/schemas/Annotation"
@@ -14031,7 +14031,7 @@
           "reason"
         ],
         "title": "ImportAcceptance",
-        "description": "Translations of these languages were reviewed outside Ontocurator."
+        "description": "Translations of these languages were reviewed outside Ontotator."
       },
       "ImportPlan": {
         "properties": {
@@ -20765,7 +20765,7 @@
           "format_version": {
             "type": "string",
             "title": "Format Version",
-            "default": "ontocurator-submission/v2"
+            "default": "ontotator-submission/v2"
           },
           "input_manifest_sha256": {
             "anyOf": [
@@ -21029,9 +21029,9 @@
         "properties": {
           "schema": {
             "type": "string",
-            "const": "ontocurator-task-profile/v1",
+            "const": "ontotator-task-profile/v1",
             "title": "Schema",
-            "default": "ontocurator-task-profile/v1"
+            "default": "ontotator-task-profile/v1"
           },
           "profile_id": {
             "type": "string",
@@ -23709,7 +23709,7 @@
             "anyOf": [
               {
                 "type": "string",
-                "const": "ontocurator-workspace-key/v3"
+                "const": "ontotator-workspace-key/v3"
               },
               {
                 "type": "null"

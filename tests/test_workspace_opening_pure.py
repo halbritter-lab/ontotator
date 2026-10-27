@@ -5,11 +5,11 @@ from unittest.mock import Mock
 
 import pytest
 
-from ontocurator.application.workspace_opening import WorkspaceOpeningService
-from ontocurator.authz.scoped import ScopedRepository
-from ontocurator.domain.errors import DomainError
-from ontocurator.domain.review import ReviewTargetSet
-from ontocurator.domain.workspace import WorkspaceKey
+from ontotator.application.workspace_opening import WorkspaceOpeningService
+from ontotator.authz.scoped import ScopedRepository
+from ontotator.domain.errors import DomainError
+from ontotator.domain.review import ReviewTargetSet
+from ontotator.domain.workspace import WorkspaceKey
 
 
 def context(*, mode="independent", explicit=False, held=False, state="editable"):
@@ -24,7 +24,7 @@ def context(*, mode="independent", explicit=False, held=False, state="editable")
         update={
             "scope_id": "old-scope",
             "round_id": "modern" if explicit else None,
-            "format_version": "ontocurator-workspace-key/v3" if explicit else None,
+            "format_version": "ontotator-workspace-key/v3" if explicit else None,
         }
     )
     assignment = SimpleNamespace(
@@ -125,7 +125,7 @@ def test_only_explicit_assignment_adapter_calls_the_legacy_binder(monkeypatch):
     bind = Mock()
     factory = Mock(return_value=SimpleNamespace(bind_legacy=bind))
     monkeypatch.setattr(
-        "ontocurator.application.workspace_opening.WorkRoundService", factory
+        "ontotator.application.workspace_opening.WorkRoundService", factory
     )
     service.open(key)
     factory.assert_not_called()
@@ -139,7 +139,7 @@ def test_existing_assignment_binding_is_not_reactivated_or_replaced(monkeypatch)
     service, _workspaces, key, _bound = context()
     factory = Mock()
     monkeypatch.setattr(
-        "ontocurator.application.workspace_opening.WorkRoundService", factory
+        "ontotator.application.workspace_opening.WorkRoundService", factory
     )
     service.bind_assignment_workspace(key, object())
     factory.assert_not_called()

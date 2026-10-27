@@ -10,10 +10,10 @@ from browser_server import ONTOLOGY, T1_PROJECT, register_t1_import_route
 from fastapi.testclient import TestClient
 from pg_harness import database_url_for
 
-from ontocurator.api.app import create_app
-from ontocurator.auth.audit import Actor
-from ontocurator.config import AppConfig
-from ontocurator.jobs.queue import JobQueue
+from ontotator.api.app import create_app
+from ontotator.auth.audit import Actor
+from ontotator.config import AppConfig
+from ontotator.jobs.queue import JobQueue
 
 
 @pytest.fixture

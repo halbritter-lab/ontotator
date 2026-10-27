@@ -67,7 +67,7 @@ describe("project members", () => {
     fireEvent.click(await screen.findByRole("checkbox", { name: "alice: Annotator" }));
     const dialog = await screen.findByRole("dialog", { name: "Remove Alice from the project?" });
     expect(dialog.textContent).toContain("Alice loses access to this project.");
-    expect(dialog.textContent).toContain("This logs Alice out of Ontocurator on all devices");
+    expect(dialog.textContent).toContain("This logs Alice out of Ontotator on all devices");
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(api.setMemberRoles).not.toHaveBeenCalled();
     expect((screen.getByRole("checkbox", { name: "alice: Annotator" }) as HTMLInputElement).checked).toBe(true);

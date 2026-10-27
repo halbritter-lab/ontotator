@@ -1,7 +1,7 @@
 import pytest
 
-from ontocurator.auth import accounts
-from ontocurator.domain.errors import DomainError
+from ontotator.auth import accounts
+from ontotator.domain.errors import DomainError
 
 
 @pytest.mark.parametrize("value", ["", " " * 3, "x" * 121])

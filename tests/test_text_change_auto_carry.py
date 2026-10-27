@@ -50,21 +50,21 @@ from test_text_change_service import (
     _started,
 )
 
-from ontocurator.api.app import create_app
-from ontocurator.api.routes import encode_workspace_id
-from ontocurator.application.document_rows import DocumentRowsService, RowQuery
-from ontocurator.config import AppConfig
-from ontocurator.domain.errors import DomainError
-from ontocurator.storage.overview_tables import TextChangeResolutionRow
-from ontocurator.storage.repository import _lock_id
-from ontocurator.storage.tables import (
+from ontotator.api.app import create_app
+from ontotator.api.routes import encode_workspace_id
+from ontotator.application.document_rows import DocumentRowsService, RowQuery
+from ontotator.config import AppConfig
+from ontotator.domain.errors import DomainError
+from ontotator.storage.overview_tables import TextChangeResolutionRow
+from ontotator.storage.repository import _lock_id
+from ontotator.storage.tables import (
     AssignmentRow,
     AuditEventRow,
     ProjectMembershipRow,
     ProjectRow,
     SubmissionRow,
 )
-from ontocurator.storage.workflow_tables import WorkRoundRow
+from ontotator.storage.workflow_tables import WorkRoundRow
 
 SYSTEM = "system:text_change"
 
@@ -269,7 +269,7 @@ def test_auto_carry_skipped_when_target_not_annotatable(client, app):
 
 def test_auto_carry_skipped_when_person_left_project(client, env, monkeypatch):
     work = _finishing(env)
-    from ontocurator.assignments import service as assignment_service
+    from ontotator.assignments import service as assignment_service
 
     original = assignment_service.AssignmentService._require_target
     # Tom leaves between his last request check and the carry (a member
@@ -320,7 +320,7 @@ def test_auto_carry_to_v3_when_text_changed_twice(client, env):
 
 
 def _staged_failure(monkeypatch: pytest.MonkeyPatch, failure: str) -> list[str]:
-    from ontocurator.application import text_changes
+    from ontotator.application import text_changes
 
     calls: list[str] = []
 
@@ -387,7 +387,7 @@ def test_submission_never_fails_because_of_the_hook(
 ):
     work = _finishing(env)
     calls = _staged_failure(monkeypatch, failure)
-    with caplog.at_level(logging.WARNING, logger="ontocurator.application"):
+    with caplog.at_level(logging.WARNING, logger="ontotator.application"):
         submission_id = _submit(client, env, "tom", work)
     assert calls == [failure]
     _assert_not_carried(env, submission_id)
@@ -507,7 +507,7 @@ def test_hook_does_not_deadlock_with_concurrent_submit(client, app, env):
 def test_resolution_after_the_unlocked_check_still_carries(client, env, monkeypatch):
     # The lead lets Tom finish between the unlocked pre-check and the lock:
     # the re-read under the shared lock starts the submit over exclusively.
-    from ontocurator.application.submissions import SubmissionService
+    from ontotator.application.submissions import SubmissionService
 
     work = _finishing(env)
     original = SubmissionService._finish_then_carry
@@ -559,8 +559,8 @@ def test_auto_carry_actor(client, env):
 def test_scoped_repository_passes_the_submit_options_through(env, monkeypatch):
     from browser_documents_scenarios import identity
 
-    from ontocurator.authz.scoped import ScopedRepository
-    from ontocurator.storage.repository import Repository
+    from ontotator.authz.scoped import ScopedRepository
+    from ontotator.storage.repository import Repository
 
     seen: dict[str, Any] = {}
 

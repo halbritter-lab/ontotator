@@ -21,9 +21,9 @@ from fastapi import FastAPI, HTTPException, Query
 from sqlalchemy import select as sa_select
 from sqlalchemy import update
 
-from ontocurator.auth.audit import Actor
-from ontocurator.authz.policy import Access
-from ontocurator.storage.tables import JobRow, ProjectMembershipRow, ProjectRow
+from ontotator.auth.audit import Actor
+from ontotator.authz.policy import Access
+from ontotator.storage.tables import JobRow, ProjectMembershipRow, ProjectRow
 
 Builder = Callable[[FastAPI], dict[str, Any]]
 
@@ -157,7 +157,7 @@ def _wait_for_children(scenario: Scenario, job_id: int, timeout: float = 30) -> 
 
 
 def assign(scenario: Scenario, document_id: str, name: str, task: str) -> int:
-    from ontocurator.assignments.service import AssignmentService
+    from ontotator.assignments.service import AssignmentService
 
     if task == "review":
         # D1: the consolidator's task, as a consolidation start creates it.
@@ -195,8 +195,8 @@ def start_round(
     reason: str | None = None,
 ) -> Any:
     """Start a work round on ``assignment_id`` as ``by`` (default its owner)."""
-    from ontocurator.application.work_rounds import WorkRoundService
-    from ontocurator.assignments.service import AssignmentService
+    from ontotator.application.work_rounds import WorkRoundService
+    from ontotator.assignments.service import AssignmentService
 
     access, actor = identity(scenario, by or name)
     with scenario.db.transaction() as conn:
@@ -215,9 +215,9 @@ def start_round(
 
 def finish_round(scenario: Scenario, name: str, workspace_key: Any) -> str:
     """Submit the round's (unchanged) draft as its owner; returns the submission id."""
-    from ontocurator.application.submissions import SubmissionService
-    from ontocurator.authz.scoped import ScopedRepository
-    from ontocurator.domain.workspace import MutationEnvelope
+    from ontotator.application.submissions import SubmissionService
+    from ontotator.authz.scoped import ScopedRepository
+    from ontotator.domain.workspace import MutationEnvelope
 
     access, actor = identity(scenario, name)
     scoped = ScopedRepository(scenario.db, access, actor)
@@ -263,9 +263,9 @@ def select(
     scenario: Scenario, document_id: str, submission_id: str, name: str = "lead"
 ) -> dict[str, Any]:
     """Choose ``submission_id`` as the row's final result as lead ``name``."""
-    from ontocurator.application.final_results import FinalResultService
-    from ontocurator.storage.final_tables import FinalSelectionRow
-    from ontocurator.storage.tables import DocumentRow
+    from ontotator.application.final_results import FinalResultService
+    from ontotator.storage.final_tables import FinalSelectionRow
+    from ontotator.storage.tables import DocumentRow
 
     access, actor = identity(scenario, name)
     with scenario.db.transaction() as conn:
@@ -293,7 +293,7 @@ def select(
 
 def accept_translation(scenario: Scenario, document_id: str, name: str) -> int:
     """A qualified reviewer submits ``accepted_unchanged`` for ``document_id``."""
-    from ontocurator.application.translation_reviews import TranslationReviewService
+    from ontotator.application.translation_reviews import TranslationReviewService
 
     assignment_id = assign(scenario, document_id, name, "translation_review")
     access, _actor = identity(scenario, name)

@@ -14,7 +14,7 @@ const props = (overrides: Partial<AnnotationPanelProps> = {}, defaulted = ["asse
     annotation: { annotation_id: "a", document_id: "d", layer_id: "l", type_id: "t", term_id: "HP:0001250",
       axes_values: { assertion: "present", experiencer: "patient", temporality: "current" }, axes_defaulted: defaulted,
       evidence_refs: [], provenance: { actor: { actor_id: "u", kind: "human" }, method: "manual" } },
-    schema_version: "ontocurator-annotation/v3", evidence: [], document_id: "d", version: "v",
+    schema_version: "ontotator-annotation/v3", evidence: [], document_id: "d", version: "v",
     text_sha256: "t", ontology_sha256: "o", layer_config_sha256: "l",
   },
   allEvidence: {}, workspaceKey: { project_key: "p", document_id: "d", annotator_id: "a", mode: "independent", scope_id: "s", target_set_id: "t" },

@@ -6,7 +6,7 @@ As of: 2026-10-14 · Status: **Design approved** · Part of the roadmap `2026-10
 
 - `frontend/src/editor/TermTree.tsx:112-118`: The row shows only the label, the number of children and the "current" marker. The ID appears only in `data-term-id`.
 - `frontend/src/editor/TreeBrowser.tsx:247-313`: The detail pane shows the ID without a link.
-- Backend: `src/ontocurator/ontology/tree.py`, with `TreeNode` and `TreeTermDetail`.
+- Backend: `src/ontotator/ontology/tree.py`, with `TreeNode` and `TreeTermDetail`.
 
 ## Design
 

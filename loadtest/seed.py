@@ -15,7 +15,7 @@ from pathlib import Path
 import httpx
 import ontospan
 
-from ontocurator.projects.service import ProjectSettingsChange
+from ontotator.projects.service import ProjectSettingsChange
 
 ANNOTATORS_PER_TEXT = 5  # the project setting's maximum
 GROUPS = 30 // ANNOTATORS_PER_TEXT
@@ -101,8 +101,8 @@ def build_assets(
         ],
         "default_layer_id": "hpo",
     }
-    from ontocurator.domain.profiles import TaskProfile
-    from ontocurator.exchange.t1 import Pin, layers_for
+    from ontotator.domain.profiles import TaskProfile
+    from ontotator.exchange.t1 import Pin, layers_for
 
     layers = [
         layer.model_dump(mode="json")
@@ -173,7 +173,7 @@ def build_assets(
                             {
                                 "actor_id": "load-tool",
                                 "kind": "tool",
-                                "name": "ontocurator-load",
+                                "name": "ontotator-load",
                                 "version": "1.0.0",
                                 "run_id": "load-20261014",
                             }
@@ -254,13 +254,13 @@ def main() -> None:
     parser.add_argument("--host", default="http://127.0.0.1:8000")
     parser.add_argument(
         "--password",
-        default=os.environ.get("ONTOCURATOR_LOAD_PASSWORD"),
-        help="Synthetic accounts only; prefer ONTOCURATOR_LOAD_PASSWORD",
+        default=os.environ.get("ONTOTATOR_LOAD_PASSWORD"),
+        help="Synthetic accounts only; prefer ONTOTATOR_LOAD_PASSWORD",
     )
     args = parser.parse_args()
     if not args.prepare_only and (not args.compose_project or not args.password):
         parser.error(
-            "seeding requires --compose-project and --password or ONTOCURATOR_LOAD_PASSWORD"
+            "seeding requires --compose-project and --password or ONTOTATOR_LOAD_PASSWORD"
         )
     if not args.prepare_only and len(args.password) < 12:
         parser.error("synthetic password must be at least 12 characters")
@@ -295,7 +295,7 @@ def main() -> None:
         return result.stdout
 
     def admin(*command: str) -> str:
-        return run("exec", "-T", "app", "ontocurator", "admin", *command)
+        return run("exec", "-T", "app", "ontotator", "admin", *command)
 
     for local, remote in (
         (args.hpo, "/tmp/load-hp.json"),

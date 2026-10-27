@@ -8,12 +8,12 @@ import { execFileSync } from "node:child_process";
  * per run, so containers of other runs (or other worktrees) never match.
  */
 export default function globalTeardown(): void {
-  const run = process.env.ONTOCURATOR_E2E_RUN;
+  const run = process.env.ONTOTATOR_E2E_RUN;
   if (!run) return;
   try {
     const ids = execFileSync(
       "docker",
-      ["ps", "-aq", "--filter", `label=ontocurator.e2e-run=${run}`],
+      ["ps", "-aq", "--filter", `label=ontotator.e2e-run=${run}`],
       { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
     )
       .split(/\s+/)
@@ -22,6 +22,6 @@ export default function globalTeardown(): void {
       execFileSync("docker", ["rm", "-f", ...ids], { stdio: "ignore" });
     }
   } catch {
-    // No Docker, or the server used ONTOCURATOR_TEST_PG_URL: nothing to remove.
+    // No Docker, or the server used ONTOTATOR_TEST_PG_URL: nothing to remove.
   }
 }

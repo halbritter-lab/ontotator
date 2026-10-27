@@ -42,24 +42,24 @@ from pg_harness import database_url_for
 from sqlalchemy import func, update
 from sqlalchemy import select as sa_select
 
-from ontocurator.api.app import create_app
-from ontocurator.config import AppConfig
-from ontocurator.domain.canonical import canonical_hash
-from ontocurator.domain.errors import DomainError
-from ontocurator.storage.final_tables import FinalSelectionRow
-from ontocurator.storage.overview_tables import (
+from ontotator.api.app import create_app
+from ontotator.config import AppConfig
+from ontotator.domain.canonical import canonical_hash
+from ontotator.domain.errors import DomainError
+from ontotator.storage.final_tables import FinalSelectionRow
+from ontotator.storage.overview_tables import (
     DraftSnapshotRow,
     TextChangeResolutionRow,
 )
-from ontocurator.storage.repository import Repository
-from ontocurator.storage.tables import (
+from ontotator.storage.repository import Repository
+from ontotator.storage.tables import (
     AssignmentRow,
     AuditEventRow,
     DraftRow,
     ProjectRow,
     SubmissionRow,
 )
-from ontocurator.storage.workflow_tables import (
+from ontotator.storage.workflow_tables import (
     WorkflowCommandReceiptRow,
     WorkRoundRow,
 )
@@ -101,7 +101,7 @@ class Env:
         return self.scenario.key
 
     def service(self) -> Any:
-        from ontocurator.application.text_changes import TextChangeService
+        from ontotator.application.text_changes import TextChangeService
 
         return TextChangeService(self.db, self.repo)
 
@@ -282,7 +282,7 @@ def _draft(env: Env, key: Any) -> Any:
 
 
 def _scoped(env: Env, name: str) -> Any:
-    from ontocurator.authz.scoped import ScopedRepository
+    from ontotator.authz.scoped import ScopedRepository
 
     access, actor = identity(env.scenario, name)
     return ScopedRepository(env.db, access, actor)
@@ -318,7 +318,7 @@ def test_preview_counts_placed_unplaced_and_changed_passages_without_writing(env
 
 
 def test_move_snapshots_draft_creates_target_round_and_revokes_old(env):
-    from ontocurator.domain.work_rounds import DraftSnapshotPayload
+    from ontotator.domain.work_rounds import DraftSnapshotPayload
 
     work = _started(env)
     old_key = work["round"].workspace_key
@@ -386,7 +386,7 @@ def test_move_snapshots_draft_creates_target_round_and_revokes_old(env):
 def test_move_freezes_only_editable_findings(env):
     """Reference-layer findings are not carried: the frozen draft leaves them
     out (as the preview counts), so the target round accepts it."""
-    from ontocurator.domain.work_rounds import DraftSnapshotPayload
+    from ontotator.domain.work_rounds import DraftSnapshotPayload
 
     work = _started(env)
     # The findings' layer becomes a reference layer beside a new editable one.
@@ -420,9 +420,9 @@ def test_move_freezes_only_editable_findings(env):
 
 
 def test_move_unplaced_inputs_need_resolution_before_submit(env):
-    from ontocurator.application.submissions import SubmissionService
-    from ontocurator.application.work_rounds import RoundInputResolutionService
-    from ontocurator.domain.workspace import MutationEnvelope
+    from ontotator.application.submissions import SubmissionService
+    from ontotator.application.work_rounds import RoundInputResolutionService
+    from ontotator.domain.workspace import MutationEnvelope
 
     work = _started(env)
     result = _move(env, work["assignment_id"])
@@ -470,7 +470,7 @@ def test_move_unplaced_inputs_need_resolution_before_submit(env):
 
 
 def test_carry_round_submissions_have_kind_carry_forward():
-    from ontocurator.domain.submission_labels import submission_kind
+    from ontotator.domain.submission_labels import submission_kind
 
     for kind in ("carry_forward", "text_change", "handover"):
         assert submission_kind(kind, "independent") == "carry_forward"
@@ -533,7 +533,7 @@ def test_move_refuses_stale_target(app):
 
 
 def test_move_not_ancestor_and_already_on_target(env, monkeypatch):
-    from ontocurator.application import text_changes
+    from ontotator.application import text_changes
 
     on_target = assign(env.scenario, env.docs[1], "tom", "annotate")
     with pytest.raises(DomainError) as refused:
@@ -762,10 +762,10 @@ def test_carry_from_final_does_not_touch_the_final(env):
 
 
 def test_carry_refusals(env):
-    from ontocurator.assignments.service import AssignmentService
-    from ontocurator.auth.audit import Actor
-    from ontocurator.domain.work_plans import OFF, RowKey
-    from ontocurator.storage import work_plan_store
+    from ontotator.assignments.service import AssignmentService
+    from ontotator.auth.audit import Actor
+    from ontotator.domain.work_plans import OFF, RowKey
+    from ontotator.storage import work_plan_store
 
     work = _submitted(env)
     AssignmentService(env.db).reopen(Actor.cli(), work["assignment_id"])
@@ -801,7 +801,7 @@ def test_carry_is_idempotent_per_request(env):
 
 
 def test_operations_are_lead_only(env):
-    from ontocurator.domain.errors import AccessDenied
+    from ontotator.domain.errors import AccessDenied
 
     work = _started(env)
     access, actor = identity(env.scenario, "tom")
@@ -820,7 +820,7 @@ def test_operations_are_lead_only(env):
 
 
 def test_all_or_nothing_on_failure(env, monkeypatch):
-    from ontocurator.application.work_rounds import WorkRoundService
+    from ontotator.application.work_rounds import WorkRoundService
 
     work = _started(env)
     before = _counts(env)
@@ -886,7 +886,7 @@ def _third_version(env: Env) -> None:
 
 
 def test_move_of_a_moved_round_keeps_its_undecided_unplaced_inputs(env):
-    from ontocurator.domain.work_rounds import DraftSnapshotPayload
+    from ontotator.domain.work_rounds import DraftSnapshotPayload
 
     work = _started(env)
     first = _move(env, work["assignment_id"])
@@ -915,8 +915,8 @@ def test_move_of_a_moved_round_keeps_its_undecided_unplaced_inputs(env):
 
 
 def test_move_of_a_carry_round_drops_decided_inputs(env):
-    from ontocurator.application.work_rounds import RoundInputResolutionService
-    from ontocurator.domain.workspace import MutationEnvelope
+    from ontotator.application.work_rounds import RoundInputResolutionService
+    from ontotator.domain.workspace import MutationEnvelope
 
     work = _started(env)
     first = _move(env, work["assignment_id"])
@@ -1010,8 +1010,8 @@ def test_carry_refused_from_a_held_source_assignment(env):
 
 
 def test_preview_of_a_submission_runs_the_carry_source_checks(env):
-    from ontocurator.assignments.service import AssignmentService
-    from ontocurator.auth.audit import Actor
+    from ontotator.assignments.service import AssignmentService
+    from ontotator.auth.audit import Actor
 
     work = _submitted(env)
     AssignmentService(env.db).reopen(Actor.cli(), work["assignment_id"])
@@ -1023,7 +1023,7 @@ def test_preview_of_a_submission_runs_the_carry_source_checks(env):
 
 
 def test_carry_refused_to_a_discarded_version(env):
-    from ontocurator.storage.plan_tables import DiscardedVariantRow
+    from ontotator.storage.plan_tables import DiscardedVariantRow
 
     work = _submitted(env)
     with env.db.transaction() as conn:
@@ -1042,7 +1042,7 @@ def test_carry_refused_to_a_discarded_version(env):
 
 
 def test_carry_refused_when_the_target_is_not_annotatable(env, monkeypatch):
-    from ontocurator.application import text_changes
+    from ontotator.application import text_changes
 
     work = _submitted(env)
 
@@ -1057,7 +1057,7 @@ def test_carry_refused_when_the_target_is_not_annotatable(env, monkeypatch):
 
 
 def test_carry_author_refused_when_the_author_left_the_project(env):
-    from ontocurator.storage.tables import ProjectMembershipRow
+    from ontotator.storage.tables import ProjectMembershipRow
 
     work = _submitted(env)
     tom = identity(env.scenario, "tom")[0].user_id
@@ -1105,7 +1105,7 @@ def test_carry_author_refuses_a_target_assignment_with_a_result(env):
 
 
 def test_operations_lock_the_assignee(env, monkeypatch):
-    from ontocurator.application import text_changes
+    from ontotator.application import text_changes
 
     _per_text(env, 2)  # ana's carried and eva's moved work both land on v2
     work = _submitted(env)

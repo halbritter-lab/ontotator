@@ -10,8 +10,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pg_harness import database_url_for
 
-from ontocurator.api.app import create_app
-from ontocurator.config import AppConfig
+from ontotator.api.app import create_app
+from ontotator.config import AppConfig
 
 URL = "/api/v1/preferences"
 EMPTY_PREFERENCES = {
@@ -113,8 +113,8 @@ def test_preferences_need_a_session(app: FastAPI) -> None:
 
 
 def test_search_preferences_keep_explicit_disabled_automation():
-    from ontocurator.application.preferences import PreferencesUpdate
-    from ontocurator.auth.preferences import _from_stored
+    from ontotator.application.preferences import PreferencesUpdate
+    from ontotator.auth.preferences import _from_stored
 
     change = PreferencesUpdate.model_validate(
         {

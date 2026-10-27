@@ -96,7 +96,7 @@ export async function overviewAct(page: Page, body: OverviewActBody): Promise<Ov
  */
 export async function loginOverviewUser(page: Page, scenario: Pick<OverviewScenario, "users" | "display_names">, name: OverviewPerson): Promise<void> {
   await openTasksHome(page);
-  const form = page.getByRole("form", { name: "Log in to Ontocurator" });
+  const form = page.getByRole("form", { name: "Log in to Ontotator" });
   await form.getByLabel("Username", { exact: true }).fill(scenario.users[name]);
   await form.getByLabel("Password", { exact: true }).fill(TEST_PASSWORD);
   await form.getByRole("button", { name: "Log in", exact: true }).click();

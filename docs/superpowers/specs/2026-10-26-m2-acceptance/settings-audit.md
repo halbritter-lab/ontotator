@@ -2,7 +2,7 @@
 
 Branch `feat/ux-calm` (7d96d38b). Read-only: code plus the live test server (127.0.0.1:18210, lead account), projects `e3c-proposals` and `t5-acceptance`. Nothing saved or toggled.
 
-Sources: `frontend/src/admin/ProjectSettingsPage.tsx`, `admin/projectFields.tsx`, `admin/GuidelinesSection.tsx`, `admin/MembersSection.tsx`, `admin/HiddenAxisValuesField.tsx`, `admin/LanguagesField.tsx`, `app/router.ts` (`SETTINGS_SECTIONS`); backend `src/ontocurator/projects/service.py` (`ProjectSettingsChange`, `update_settings`), `domain/project_rules.py`, `assignments/*`, `exchange/uploads.py`, `exchange/plan.py`, `application/annotation_modes.py`, `application/final_results.py`; DESIGN.md "Settings sections".
+Sources: `frontend/src/admin/ProjectSettingsPage.tsx`, `admin/projectFields.tsx`, `admin/GuidelinesSection.tsx`, `admin/MembersSection.tsx`, `admin/HiddenAxisValuesField.tsx`, `admin/LanguagesField.tsx`, `app/router.ts` (`SETTINGS_SECTIONS`); backend `src/ontotator/projects/service.py` (`ProjectSettingsChange`, `update_settings`), `domain/project_rules.py`, `assignments/*`, `exchange/uploads.py`, `exchange/plan.py`, `application/annotation_modes.py`, `application/final_results.py`; DESIGN.md "Settings sections".
 
 Screenshots (1440x900): 01-e3c-general, 02-e3c-guidelines (focus outline around whole section), 03-e3c-rules (focus outline), 04-e3c-rules-hidden-values-open, 05-e3c-workflow, 06-e3c-creation-defaults, 07-e3c-ontology-profile (unlocked), 08-e3c-members, 09-t5-workflow, 10-t5-creation-defaults (with presets), 11-t5-ontology-profile (locked).
 

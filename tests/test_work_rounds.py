@@ -4,10 +4,10 @@ import pytest
 from sqlalchemy import insert
 from test_editing import _setup_test_env
 
-from ontocurator.assignments.service import AssignmentService
-from ontocurator.auth.audit import Actor
-from ontocurator.authz.policy import Access
-from ontocurator.storage.tables import ProjectMembershipRow, UserLanguageRow, UserRow
+from ontotator.assignments.service import AssignmentService
+from ontotator.auth.audit import Actor
+from ontotator.authz.policy import Access
+from ontotator.storage.tables import ProjectMembershipRow, UserLanguageRow, UserRow
 
 
 @pytest.fixture
@@ -34,7 +34,7 @@ def rounds(tmp_path):
 
 
 def test_round_creation_is_idempotent_and_keeps_exact_assignment(rounds):
-    from ontocurator.application import work_rounds
+    from ontotator.application import work_rounds
 
     repo, access, actor, assignment, _ontology = rounds
     service = work_rounds.WorkRoundService(repo.db)
@@ -53,15 +53,15 @@ def test_round_creation_is_idempotent_and_keeps_exact_assignment(rounds):
 
 
 def test_round_submit_carry_completion_and_clean_restart_preserve_old_work(rounds):
-    from ontocurator.application.editing import EditingService
-    from ontocurator.application.submissions import SubmissionService
-    from ontocurator.application.work_rounds import (
+    from ontotator.application.editing import EditingService
+    from ontotator.application.submissions import SubmissionService
+    from ontotator.application.work_rounds import (
         RoundInputResolutionService,
         WorkRoundService,
     )
-    from ontocurator.authz.scoped import ScopedRepository
-    from ontocurator.domain.errors import DomainError
-    from ontocurator.domain.workspace import MutationEnvelope
+    from ontotator.authz.scoped import ScopedRepository
+    from ontotator.domain.errors import DomainError
+    from ontotator.domain.workspace import MutationEnvelope
 
     repo, access, actor, assignment, ontology = rounds
     scoped = ScopedRepository(repo.db, access, actor)
@@ -98,7 +98,7 @@ def test_round_submit_carry_completion_and_clean_restart_preserve_old_work(round
             payload={"document_checked": True},
         ),
     )
-    assert submission.format_version == "ontocurator-submission/v3"
+    assert submission.format_version == "ontotator-submission/v3"
     assert (
         repo.get_round_for_submission("pkg-1", submission.submission_id).state
         == "submitted"
@@ -182,9 +182,9 @@ def test_round_submit_carry_completion_and_clean_restart_preserve_old_work(round
 def test_consolidation_rechecks_actual_contributor_and_profile(rounds, changed):
     from sqlalchemy import update
 
-    from ontocurator.application.work_rounds import WorkRoundService
-    from ontocurator.domain.errors import DomainError
-    from ontocurator.storage.tables import ProjectRow
+    from ontotator.application.work_rounds import WorkRoundService
+    from ontotator.domain.errors import DomainError
+    from ontotator.storage.tables import ProjectRow
 
     repo, _, _, _, sources, lead, actor = create_consolidation_fixture(rounds)
     with repo.db.transaction() as conn:
@@ -232,11 +232,11 @@ def test_consolidation_rechecks_actual_contributor_and_profile(rounds, changed):
 
 def create_consolidation_fixture(rounds):
     """Real private submissions with colliding local IDs and one assigned reviewer."""
-    from ontocurator.application.editing import EditingService
-    from ontocurator.application.submissions import SubmissionService
-    from ontocurator.application.work_rounds import WorkRoundService
-    from ontocurator.authz.scoped import ScopedRepository
-    from ontocurator.domain.workspace import MutationEnvelope
+    from ontotator.application.editing import EditingService
+    from ontotator.application.submissions import SubmissionService
+    from ontotator.application.work_rounds import WorkRoundService
+    from ontotator.authz.scoped import ScopedRepository
+    from ontotator.domain.workspace import MutationEnvelope
 
     repo, access, actor, assignment, ontology = rounds
     with repo.db.transaction() as conn:
@@ -336,10 +336,10 @@ def create_consolidation_fixture(rounds):
 def reopen_automatic(repo, reviewer, result, revision):
     """Reopen the group kept automatically at the start (the fixture's two
     inputs match), so a test can decide in the editor alone."""
-    from ontocurator.application.consolidation_resolve import (
+    from ontotator.application.consolidation_resolve import (
         ConsolidationGroupService,
     )
-    from ontocurator.domain.workspace import MutationEnvelope
+    from ontotator.domain.workspace import MutationEnvelope
 
     inventory = repo.get_round_input_inventory("pkg-1", result.round_id)
     return ConsolidationGroupService(reviewer).reopen(
@@ -353,10 +353,10 @@ def reopen_automatic(repo, reviewer, result, revision):
 
 
 def test_consolidation_frozen_collision_inputs_open_decide_submit_and_export(rounds):
-    from ontocurator.application.reviews import ReviewService
-    from ontocurator.application.submissions import SubmissionService
-    from ontocurator.application.workspaces import WorkspaceService
-    from ontocurator.domain.workspace import MutationEnvelope
+    from ontotator.application.reviews import ReviewService
+    from ontotator.application.submissions import SubmissionService
+    from ontotator.application.workspaces import WorkspaceService
+    from ontotator.domain.workspace import MutationEnvelope
 
     repo, ontology, reviewer, result, inputs, _lead, _actor = (
         create_consolidation_fixture(rounds)
@@ -399,13 +399,13 @@ def test_consolidation_frozen_collision_inputs_open_decide_submit_and_export(rou
 
 
 def test_v3_package_roundtrip_retains_private_input_closure_without_promotion(rounds):
-    from ontocurator.domain.canonical import canonical_hash
+    from ontotator.domain.canonical import canonical_hash
 
     repo, _ontology, _reviewer, result, inputs, _lead, _actor = (
         create_consolidation_fixture(rounds)
     )
     package = repo.export_package("pkg-1")
-    assert package.manifest.format_version == "ontocurator-work-package/v3"
+    assert package.manifest.format_version == "ontotator-work-package/v3"
     original = {
         s.submission_id: canonical_hash(s.model_dump(mode="json")) for s in inputs
     }
@@ -431,11 +431,11 @@ def test_v3_package_roundtrip_retains_private_input_closure_without_promotion(ro
 
 
 def test_deliberate_merge_binds_every_input_to_one_exact_output(rounds):
-    from ontocurator.application.editing import EditingService
-    from ontocurator.application.submissions import SubmissionService
-    from ontocurator.application.work_rounds import MergeRoundInputsService
-    from ontocurator.application.workspaces import WorkspaceService
-    from ontocurator.domain.workspace import MutationEnvelope
+    from ontotator.application.editing import EditingService
+    from ontotator.application.submissions import SubmissionService
+    from ontotator.application.work_rounds import MergeRoundInputsService
+    from ontotator.application.workspaces import WorkspaceService
+    from ontotator.domain.workspace import MutationEnvelope
 
     repo, ontology, reviewer, result, _inputs, _lead, _actor = (
         create_consolidation_fixture(rounds)

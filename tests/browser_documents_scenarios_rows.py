@@ -29,7 +29,7 @@ from browser_documents_scenarios import (
 from fastapi import FastAPI, HTTPException
 from sqlalchemy import select as sa_select
 
-from ontocurator.storage.tables import JobRow, ProjectRow
+from ontotator.storage.tables import JobRow, ProjectRow
 
 # --- Helpers of this module ---------------------------------------------------- #
 
@@ -38,8 +38,8 @@ def report(
     scenario: Scenario, name: str, assignment_id: int, round_id: str, reason: str
 ) -> Any:
     """``name`` reports a problem on its own task; the task is paused."""
-    from ontocurator.application.problem_reports import ProblemReportService
-    from ontocurator.assignments.service import AssignmentService
+    from ontotator.application.problem_reports import ProblemReportService
+    from ontotator.assignments.service import AssignmentService
 
     access, actor = identity(scenario, name)
     with scenario.db.transaction() as conn:
@@ -64,7 +64,7 @@ def act(
     name: str = "lead",
 ) -> Any:
     """The lead acts on a report (``resolve`` keeps every pause)."""
-    from ontocurator.application.problem_reports import ProblemReportService
+    from ontotator.application.problem_reports import ProblemReportService
 
     access, actor = identity(scenario, name)
     return ProblemReportService(scenario.db).act(
@@ -92,7 +92,7 @@ def review_translation(
     ``rejected`` and ``query`` carry a clinical change; ``accepted_corrected``
     needs the changed ``text`` and creates an accepted child correction.
     """
-    from ontocurator.application.translation_reviews import TranslationReviewService
+    from ontotator.application.translation_reviews import TranslationReviewService
 
     assignment_id = assign(scenario, document_id, name, "translation_review")
     access, _actor = identity(scenario, name)

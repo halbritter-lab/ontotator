@@ -98,4 +98,4 @@ Kuratierte Annotationen bekommen **kein** Badge, auch wenn sie aus einem AI-Prop
 
 - Paket mit vielen Proposals: Die kuratierten Annotationen sind durch Scrollen der Leiste erreichbar, und die Überschrift des gerade sichtbaren Abschnitts bleibt am oberen Rand stehen.
 
-**Danach:** eingebettete Web-Assets neu bauen (`src/ontocurator/web`), wie bei den bisherigen Frontend-Änderungen.
+**Danach:** eingebettete Web-Assets neu bauen (`src/ontotator/web`), wie bei den bisherigen Frontend-Änderungen.

@@ -2,9 +2,9 @@
 
 from typer.testing import CliRunner
 
-from ontocurator.api.project_routes import router
-from ontocurator.cli import app
-from ontocurator.exchange.jobs import HANDLERS
+from ontotator.api.project_routes import router
+from ontotator.cli import app
+from ontotator.exchange.jobs import HANDLERS
 
 
 def test_review_export_handler_and_http_route_are_registered():

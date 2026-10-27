@@ -10,12 +10,12 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 
-from ontocurator.api import ontology_routes
-from ontocurator.api.identity import principal_of
-from ontocurator.auth.audit import Actor
-from ontocurator.auth.sessions import Principal
-from ontocurator.domain.errors import AccessDenied, DomainError, PayloadTooLarge
-from ontocurator.ontology.store import OntologyFile, OntologyStore
+from ontotator.api import ontology_routes
+from ontotator.api.identity import principal_of
+from ontotator.auth.audit import Actor
+from ontotator.auth.sessions import Principal
+from ontotator.domain.errors import AccessDenied, DomainError, PayloadTooLarge
+from ontotator.ontology.store import OntologyFile, OntologyStore
 
 
 def file_row(name="canonical.json", digest="a" * 64):
@@ -184,7 +184,7 @@ def test_new_route_requires_actual_system_admin_guard(upload_client):
 
 @pytest.mark.parametrize("inserted", [None, "a" * 64])
 def test_insert_outcome_comes_from_actual_returning_value(monkeypatch, inserted):
-    import ontocurator.ontology.store as module
+    import ontotator.ontology.store as module
 
     canonical = file_row()
     statements = []

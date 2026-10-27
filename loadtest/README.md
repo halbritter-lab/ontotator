@@ -11,7 +11,7 @@ From the repository root (PowerShell example):
 ```powershell
 uv sync --dev --locked
 # Supply a synthetic password of at least 12 characters through your environment.
-# ONTOCURATOR_LOAD_PASSWORD must match for seeding and Locust.
+# ONTOTATOR_LOAD_PASSWORD must match for seeding and Locust.
 uv run python loadtest/seed.py --hpo C:/path/to/hp.json --compose-project t2e-load-unique --compose-file docker-compose.dev.yml --host http://127.0.0.1:8000
 ```
 
@@ -21,7 +21,7 @@ the same stack. `--compose-file` defaults to `docker-compose.dev.yml`; override 
 explicitly for another Compose configuration. The service is named `app`, and
 its CLI obtains the database and data directory from the service environment.
 Seeding streams file bytes over `docker compose exec -T` into the app container's
-writable `/tmp`, and uses `ontocurator admin` for the project, users, memberships
+writable `/tmp`, and uses `ontotator admin` for the project, users, memberships
 and one T1 import,
 and HTTP code redemption for passwords. It does not start or stop containers.
 Rerun against a fresh project/volume: existing users/projects intentionally cause
@@ -35,7 +35,7 @@ uv run python loadtest/seed.py --hpo C:/path/to/hp.json --prepare-only
 
 The fixed RNG seed is 20261014. The corpus contains 1,000 documents of 1,500–3,000
 characters with real active HPO phenotype labels, three proposals per document,
-and a tool actor named `ontocurator-load`, version `1.0.0`. The T1 bundle, pinned
+and a tool actor named `ontotator-load`, version `1.0.0`. The T1 bundle, pinned
 profile and Locust manifest are under `loadtest/results/seed/` by default; use
 `--out` to change that and `--load-manifest` when invoking Locust.
 

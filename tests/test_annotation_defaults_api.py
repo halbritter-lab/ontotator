@@ -47,11 +47,11 @@ def test_server_default_warning_submit_receipt_and_t1_keep_defaulted_basis(tmp_p
     from sqlalchemy import select, update
     from test_editing import _setup_test_env
 
-    from ontocurator.application.submissions import SubmissionService
-    from ontocurator.domain.errors import DomainError
-    from ontocurator.domain.workspace import MutationEnvelope, WorkspaceKey
-    from ontocurator.exchange.t1 import Pin, layers_for, submission_to_unit
-    from ontocurator.storage.tables import EditEventRow, ProjectRow
+    from ontotator.application.submissions import SubmissionService
+    from ontotator.domain.errors import DomainError
+    from ontotator.domain.workspace import MutationEnvelope, WorkspaceKey
+    from ontotator.exchange.t1 import Pin, layers_for, submission_to_unit
+    from ontotator.storage.tables import EditEventRow, ProjectRow
 
     repo, ontology, workspaces, editor, document = _setup_test_env(tmp_path)
     with repo.db.transaction() as conn:

@@ -14,8 +14,8 @@ from test_document_rows_stages import undecide
 from test_progress_stages import progress, scenario, set_status
 from work_plan_support import BASE, doc, plan_env, write
 
-from ontocurator.domain.work_plans import PlanFlags, RowKey
-from ontocurator.storage import work_plan_store as store
+from ontotator.domain.work_plans import PlanFlags, RowKey
+from ontotator.storage import work_plan_store as store
 
 ANNOTATE = PlanFlags(False, True)
 REVIEW_ON = ["review", "review_and_annotate"]

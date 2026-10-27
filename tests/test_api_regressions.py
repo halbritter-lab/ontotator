@@ -91,7 +91,7 @@ def test_review_open_computes_stable_target_identity(app_client):
     pkg_id = opened["view"]["key"]["project_key"]
     doc_id = opened["view"]["key"]["document_id"]
 
-    from ontocurator.domain.annotations import (
+    from ontotator.domain.annotations import (
         ActorRef,
         Annotation,
         Provenance,
@@ -130,10 +130,10 @@ def test_review_open_computes_stable_target_identity(app_client):
     }
     # D1: a review workspace opens only through a consolidation round, so the
     # target identity is checked on the service the round open uses.
-    from ontocurator.application.workspaces import WorkspaceService
-    from ontocurator.domain.annotations import AnnotationRef
-    from ontocurator.domain.review import ReviewTargetSet
-    from ontocurator.domain.workspace import WorkspaceKey
+    from ontotator.application.workspaces import WorkspaceService
+    from ontotator.domain.annotations import AnnotationRef
+    from ontotator.domain.review import ReviewTargetSet
+    from ontotator.domain.workspace import WorkspaceKey
 
     service = WorkspaceService(
         client.app.state.repo, client.app.state.ontology_registry

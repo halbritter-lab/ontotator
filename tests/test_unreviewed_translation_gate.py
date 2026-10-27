@@ -25,13 +25,13 @@ from t1_fixtures import create_project, run_import
 from test_auth_api import _app
 from work_plan_support import plan_all, set_rule
 
-from ontocurator.api.app import create_app
-from ontocurator.application.text_changes import TextChangeService
-from ontocurator.application.text_targets import TextRow, text_translation_statuses
-from ontocurator.config import AppConfig
-from ontocurator.domain.errors import DomainError
-from ontocurator.storage.repository import Repository
-from ontocurator.storage.tables import (
+from ontotator.api.app import create_app
+from ontotator.application.text_changes import TextChangeService
+from ontotator.application.text_targets import TextRow, text_translation_statuses
+from ontotator.config import AppConfig
+from ontotator.domain.errors import DomainError
+from ontotator.storage.repository import Repository
+from ontotator.storage.tables import (
     AssignmentRow,
     AuditEventRow,
     DocumentRow,
@@ -267,7 +267,7 @@ def test_reassign_needs_it(gate_env):
 def test_cli_assign_needs_the_flag(gate_env):
     from typer.testing import CliRunner
 
-    from ontocurator.cli import app as cli
+    from ontotator.cli import app as cli
 
     arguments = [
         "admin",

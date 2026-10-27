@@ -2,7 +2,7 @@
 
 import pytest
 
-from ontocurator.domain.batch_layout import TooFewPeople, layout
+from ontotator.domain.batch_layout import TooFewPeople, layout
 
 CASES = [f"case-{n:04d}" for n in range(101, 121)]
 

@@ -1,4 +1,4 @@
-"""``ontocurator db upgrade`` brings a bootstrapped database to the current schema."""
+"""``ontotator db upgrade`` brings a bootstrapped database to the current schema."""
 
 from pathlib import Path
 
@@ -7,8 +7,8 @@ from pg_harness import unmigrated_database_url
 from sqlalchemy import create_engine
 from typer.testing import CliRunner
 
-from ontocurator.cli import app
-from ontocurator.storage.schema import current_revision, head_revision
+from ontotator.cli import app
+from ontotator.storage.schema import current_revision, head_revision
 
 runner = CliRunner()
 
@@ -17,7 +17,7 @@ def test_upgrade_migrates_once_and_then_changes_nothing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     url = unmigrated_database_url(tmp_path / "fresh.db")
-    monkeypatch.setenv("ONTOCURATOR_MIGRATION_DATABASE_URL", url)
+    monkeypatch.setenv("ONTOTATOR_MIGRATION_DATABASE_URL", url)
 
     first = runner.invoke(app, ["db", "upgrade"])
     second = runner.invoke(app, ["db", "upgrade"])
@@ -34,12 +34,12 @@ def test_upgrade_migrates_once_and_then_changes_nothing(
 def test_upgrade_without_a_url_explains_what_is_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.delenv("ONTOCURATOR_MIGRATION_DATABASE_URL", raising=False)
+    monkeypatch.delenv("ONTOTATOR_MIGRATION_DATABASE_URL", raising=False)
 
     result = runner.invoke(app, ["db", "upgrade"])
 
     assert result.exit_code == 1
-    assert "ONTOCURATOR_MIGRATION_DATABASE_URL is not set" in result.output
+    assert "ONTOTATOR_MIGRATION_DATABASE_URL is not set" in result.output
 
 
 def test_serve_on_an_unmigrated_database_points_to_db_upgrade(
@@ -49,21 +49,21 @@ def test_serve_on_an_unmigrated_database_points_to_db_upgrade(
 
     url = unmigrated_database_url(tmp_path / "empty.db")
 
-    with patch("ontocurator.cli.uvicorn.run") as mock_run:
+    with patch("ontotator.cli.uvicorn.run") as mock_run:
         result = runner.invoke(
             app,
             ["serve", "--data-dir", str(tmp_path), "--database-url", url],
         )
 
     assert result.exit_code == 1
-    assert "ontocurator db upgrade" in result.output
+    assert "ontotator db upgrade" in result.output
     assert url not in result.output
     mock_run.assert_not_called()
 
 
 @pytest.mark.parametrize("target", ["base", "-1", "+1", "0001:0002", "unknown"])
 def test_upgrade_rejects_non_revision_targets_before_connecting(target: str) -> None:
-    from ontocurator.storage.schema import upgrade
+    from ontotator.storage.schema import upgrade
 
     with pytest.raises(ValueError, match="target"):
         upgrade("postgresql://unreachable.invalid/db", target=target)
@@ -73,8 +73,8 @@ def test_upgrade_to_specific_revision_is_forward_only(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     url = unmigrated_database_url(tmp_path / "target.db")
-    monkeypatch.setenv("ONTOCURATOR_MIGRATION_DATABASE_URL", url)
-    monkeypatch.setenv("ONTOCURATOR_MIGRATE_TARGET", "0001")
+    monkeypatch.setenv("ONTOTATOR_MIGRATION_DATABASE_URL", url)
+    monkeypatch.setenv("ONTOTATOR_MIGRATE_TARGET", "0001")
     first = runner.invoke(app, ["db", "upgrade"])
     assert first.exit_code == 0, first.output
     assert "revision 0001." in first.output

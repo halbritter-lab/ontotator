@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Provide a zero-installation, portable standalone distribution of Ontocurator with persistent configuration, automatic ontology discovery, in-app ontology upload, and a local PyInstaller build pipeline.
+**Goal:** Provide a zero-installation, portable standalone distribution of Ontotator with persistent configuration, automatic ontology discovery, in-app ontology upload, and a local PyInstaller build pipeline.
 
 **Architecture:** A lightweight persistent configuration module (`PersistentConfig`) resolves standard OS configuration directories and local overrides. The application server automatically discovers and loads ontologies from `<workspace>/ontologies/` on startup. The REST API is extended with `GET /api/v1/ontologies` and `POST /api/v1/ontologies`, allowing the web UI to manage ontologies and recover from `ONTOLOGY_NOT_FOUND` errors dynamically. A standalone packaging script (`scripts/build_standalone.py`) builds the frontend, packages the application via PyInstaller into a portable zero-install directory/ZIP, and validates the build.
 
@@ -20,19 +20,19 @@
 
 ## Review Focus
 
-1. Corrupted or invalid JSON in `%APPDATA%/ontocurator/config.json`: Must fall back gracefully to defaults instead of crashing.
+1. Corrupted or invalid JSON in `%APPDATA%/ontotator/config.json`: Must fall back gracefully to defaults instead of crashing.
 2. Incompatible or malformed JSON file dropped in `<workspace>/ontologies/`: Must log a warning and skip the file without aborting server startup.
 3. Uploading an ontology that is already registered: Must return success with existing metadata without duplicate service registration.
 4. Uploading an invalid/non-OBO JSON to `POST /api/v1/ontologies`: Must return 400 Bad Request with a clear message, leaving existing registry unchanged.
-5. Launching `ontocurator` with a single file path as argument (e.g. dropped file): Must gracefully handle `.zip` or `.json` or directory without unhandled exceptions.
+5. Launching `ontotator` with a single file path as argument (e.g. dropped file): Must gracefully handle `.zip` or `.json` or directory without unhandled exceptions.
 
 ---
 
 ### Task 1: Persistent Configuration Subsystem (`PersistentConfig`)
 
 **Files:**
-- Create: `src/ontocurator/config_store.py`
-- Modify: `src/ontocurator/config.py`
+- Create: `src/ontotator/config_store.py`
+- Modify: `src/ontotator/config.py`
 - Test: `tests/test_config_store.py`
 
 **Interfaces:**
@@ -60,7 +60,7 @@
 from pathlib import Path
 import json
 import pytest
-from ontocurator.config_store import (
+from ontotator.config_store import (
     PersistentConfig,
     get_default_config_path,
     load_persistent_config,
@@ -105,9 +105,9 @@ def test_corrupted_config_falls_back_to_defaults(tmp_path: Path) -> None:
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/test_config_store.py -v`
-Expected: FAIL with `ModuleNotFoundError: No module named 'ontocurator.config_store'`
+Expected: FAIL with `ModuleNotFoundError: No module named 'ontotator.config_store'`
 
-- [ ] **Step 3: Implement `src/ontocurator/config_store.py`**
+- [ ] **Step 3: Implement `src/ontotator/config_store.py`**
 
 ```python
 from __future__ import annotations
@@ -128,7 +128,7 @@ class PersistentConfig(BaseModel):
 
 
 def get_default_config_path() -> Path:
-    """Resolve standard OS configuration path for ontocurator."""
+    """Resolve standard OS configuration path for ontotator."""
     if sys.platform == "win32":
         app_data = os.environ.get("APPDATA")
         base = Path(app_data) if app_data else Path.home() / "AppData" / "Roaming"
@@ -138,7 +138,7 @@ def get_default_config_path() -> Path:
         xdg_config = os.environ.get("XDG_CONFIG_HOME")
         base = Path(xdg_config) if xdg_config else Path.home() / ".config"
 
-    return base / "ontocurator" / "config.json"
+    return base / "ontotator" / "config.json"
 
 
 def load_persistent_config(custom_path: Path | None = None) -> PersistentConfig:
@@ -180,7 +180,7 @@ Expected: PASS (3 passed)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/ontocurator/config_store.py tests/test_config_store.py
+git add src/ontotator/config_store.py tests/test_config_store.py
 git commit -m "feat(config): add persistent configuration store with OS directory resolution"
 ```
 
@@ -189,9 +189,9 @@ git commit -m "feat(config): add persistent configuration store with OS director
 ### Task 2: Auto-Discovery & In-App Ontology Management
 
 **Files:**
-- Create: `src/ontocurator/ontology/discovery.py`
-- Modify: `src/ontocurator/api/routes.py`
-- Modify: `src/ontocurator/api/app.py`
+- Create: `src/ontotator/ontology/discovery.py`
+- Modify: `src/ontotator/api/routes.py`
+- Modify: `src/ontotator/api/app.py`
 - Test: `tests/test_ontology_management.py`
 
 **Interfaces:**
@@ -211,9 +211,9 @@ from pathlib import Path
 import json
 import pytest
 from fastapi.testclient import TestClient
-from ontocurator.api.app import create_app
-from ontocurator.config import AppConfig
-from ontocurator.ontology.discovery import discover_ontologies
+from ontotator.api.app import create_app
+from ontotator.config import AppConfig
+from ontotator.ontology.discovery import discover_ontologies
 
 SAMPLE_OBO_JSON = {
     "graphs": [
@@ -286,9 +286,9 @@ def test_get_and_post_ontologies_endpoint(tmp_path: Path) -> None:
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/test_ontology_management.py -v`
-Expected: FAIL with `ModuleNotFoundError: No module named 'ontocurator.ontology.discovery'`
+Expected: FAIL with `ModuleNotFoundError: No module named 'ontotator.ontology.discovery'`
 
-- [ ] **Step 3: Implement `src/ontocurator/ontology/discovery.py`**
+- [ ] **Step 3: Implement `src/ontotator/ontology/discovery.py`**
 
 ```python
 from __future__ import annotations
@@ -329,7 +329,7 @@ def discover_ontologies(search_dirs: list[Path]) -> list[Path]:
     return found
 ```
 
-- [ ] **Step 4: Implement endpoints in `src/ontocurator/api/routes.py` and models**
+- [ ] **Step 4: Implement endpoints in `src/ontotator/api/routes.py` and models**
 
 Add `OntologyInfo` model and endpoints:
 ```python
@@ -380,8 +380,8 @@ async def upload_ontology(
     dest_path.write_bytes(content)
 
     digest = registry.register_path(dest_path)
-    from ontocurator.ontology.service import OntologyService
-    from ontocurator.domain.annotations import OntologyRef
+    from ontotator.ontology.service import OntologyService
+    from ontotator.domain.annotations import OntologyRef
 
     svc = OntologyService.load(
         dest_path, OntologyRef(release="uploaded", sha256=digest)
@@ -389,7 +389,7 @@ async def upload_ontology(
     registry.register_service(svc)
 
     # Persist in configuration
-    from ontocurator.config_store import load_persistent_config, save_persistent_config
+    from ontotator.config_store import load_persistent_config, save_persistent_config
 
     p_cfg = load_persistent_config()
     if dest_path.resolve() not in [p.resolve() for p in p_cfg.ontology_paths]:
@@ -413,7 +413,7 @@ Expected: PASS
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/ontocurator/ontology/discovery.py src/ontocurator/api/routes.py tests/test_ontology_management.py
+git add src/ontotator/ontology/discovery.py src/ontotator/api/routes.py tests/test_ontology_management.py
 git commit -m "feat(ontology): add ontology auto-discovery and in-app upload endpoints"
 ```
 
@@ -422,12 +422,12 @@ git commit -m "feat(ontology): add ontology auto-discovery and in-app upload end
 ### Task 3: Zero-CLI Startup & Safe Argument Handling in CLI
 
 **Files:**
-- Modify: `src/ontocurator/cli.py`
+- Modify: `src/ontotator/cli.py`
 - Test: `tests/test_cli_standalone.py`
 
 **Interfaces:**
 - CLI behavior:
-  - When invoked as `ontocurator` (without arguments):
+  - When invoked as `ontotator` (without arguments):
     - Loads `PersistentConfig`.
     - Auto-discovers ontologies in `<workspace>/ontologies/`.
     - Automatically creates `<workspace>` and `<workspace>/ontologies/`.
@@ -444,8 +444,8 @@ from pathlib import Path
 from unittest.mock import patch
 import pytest
 from typer.testing import CliRunner
-from ontocurator.cli import app
-from ontocurator.config_store import PersistentConfig
+from ontotator.cli import app
+from ontotator.config_store import PersistentConfig
 
 runner = CliRunner()
 
@@ -461,9 +461,9 @@ def test_cli_default_launch_loads_config_and_discovers_ontologies(
     fake_config = PersistentConfig(workspace_dir=ws)
 
     with (
-        patch("ontocurator.cli.load_persistent_config", return_value=fake_config),
-        patch("ontocurator.cli.uvicorn.run") as mock_run,
-        patch("ontocurator.cli.webbrowser.open"),
+        patch("ontotator.cli.load_persistent_config", return_value=fake_config),
+        patch("ontotator.cli.uvicorn.run") as mock_run,
+        patch("ontotator.cli.webbrowser.open"),
     ):
         result = runner.invoke(app, ["serve", "--no-browser", "--port", "0"])
         assert result.exit_code == 0
@@ -474,9 +474,9 @@ def test_cli_default_launch_loads_config_and_discovers_ontologies(
 
 Run: `uv run pytest tests/test_cli_standalone.py -v`
 
-- [ ] **Step 3: Modify `src/ontocurator/cli.py` to integrate PersistentConfig, Auto-Discovery, and Safe Argument Interpretation**
+- [ ] **Step 3: Modify `src/ontotator/cli.py` to integrate PersistentConfig, Auto-Discovery, and Safe Argument Interpretation**
 
-Update `serve` command in `src/ontocurator/cli.py`:
+Update `serve` command in `src/ontotator/cli.py`:
 1. Check `load_persistent_config()`. If `--workspace` was not explicitly passed, use `persistent_config.workspace_dir`.
 2. Discover ontologies in `<workspace>/ontologies/` and combine with CLI `--ontology` and `persistent_config.ontology_paths`.
 3. Support a root callback in `cli.py` that interprets single argument `target_path: Path | None = None` if `serve` was omitted.
@@ -489,7 +489,7 @@ Expected: PASS
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/ontocurator/cli.py tests/test_cli_standalone.py
+git add src/ontotator/cli.py tests/test_cli_standalone.py
 git commit -m "feat(cli): integrate persistent config, ontology auto-discovery and zero-CLI launch"
 ```
 
@@ -561,9 +561,9 @@ git commit -m "feat(ui): add in-app ontology management and recovery modal for m
 
 **Interfaces:**
 - Produces:
-  - `dist/ontocurator-portable-<os>-<arch>/` and `dist/ontocurator-portable-<os>-<arch>.zip`
+  - `dist/ontotator-portable-<os>-<arch>/` and `dist/ontotator-portable-<os>-<arch>.zip`
   - Containing:
-    - `ontocurator.exe` (or `ontocurator` on Unix)
+    - `ontotator.exe` (or `ontotator` on Unix)
     - `ontologies/README.txt`
     - `workspace/`
     - `README.txt`
@@ -582,7 +582,7 @@ Run `uv sync` to install PyInstaller.
 - [ ] **Step 2: Implement `scripts/build_standalone.py`**
 
 ```python
-"""Standalone portable release packager for Ontocurator."""
+"""Standalone portable release packager for Ontotator."""
 
 import os
 import shutil
@@ -593,7 +593,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = REPO_ROOT / "frontend"
-WEB_DIR = REPO_ROOT / "src" / "ontocurator" / "web"
+WEB_DIR = REPO_ROOT / "src" / "ontotator" / "web"
 DIST_DIR = REPO_ROOT / "dist"
 
 

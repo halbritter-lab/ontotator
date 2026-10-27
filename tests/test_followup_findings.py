@@ -10,14 +10,14 @@ from pg_harness import database_for
 from support.v2_exports import ExportService
 from test_storage import _sample_package
 
-from ontocurator.domain.review import ReviewTargetSet
-from ontocurator.domain.scopes import build_scope
-from ontocurator.domain.workspace import (
+from ontotator.domain.review import ReviewTargetSet
+from ontotator.domain.scopes import build_scope
+from ontotator.domain.workspace import (
     MutationEnvelope,
     Submission,
     WorkspaceKey,
 )
-from ontocurator.storage.repository import Repository
+from ontotator.storage.repository import Repository
 
 
 def _colon_key() -> WorkspaceKey:
@@ -105,8 +105,8 @@ def test_package_export_loads_package_once_and_keeps_resubmissions(
 def test_registry_parses_outside_shared_lock_and_only_once(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from ontocurator.ontology import registry as registry_module
-    from ontocurator.ontology.registry import OntologyRegistry
+    from ontotator.ontology import registry as registry_module
+    from ontotator.ontology.registry import OntologyRegistry
 
     hp = Path(__file__).parent / "fixtures" / "hp.json"
     reg = OntologyRegistry()

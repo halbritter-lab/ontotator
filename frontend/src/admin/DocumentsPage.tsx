@@ -656,7 +656,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
 
   const [planFor, setPlanFor] = useState<DocumentRowView | null>(null);
   // "Show texts not in plan" (All tab only; off by default, remembered per user in this browser).
-  const notInPlanKey = `ontocurator.documents.showNotInPlan.v1:${currentUser?.username ?? ""}`;
+  const notInPlanKey = `ontotator.documents.showNotInPlan.v1:${currentUser?.username ?? ""}`;
   const [showNotInPlan, setShowNotInPlan] = useState(() => { try { return window.localStorage.getItem(notInPlanKey) === "1"; } catch { return false; } });
   const changeShowNotInPlan = (value: boolean) => {
     setShowNotInPlan(value);

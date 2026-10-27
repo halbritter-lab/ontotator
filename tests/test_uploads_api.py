@@ -12,11 +12,11 @@ from sqlalchemy import func, select, update
 from t1_fixtures import bundle, create_project, manifest_sha256, unit
 from test_auth_api import _app
 
-from ontocurator.auth.audit import Actor
-from ontocurator.domain.errors import DomainError
-from ontocurator.exchange.uploads import UploadService
-from ontocurator.storage.repository import Repository
-from ontocurator.storage.tables import (
+from ontotator.auth.audit import Actor
+from ontotator.domain.errors import DomainError
+from ontotator.exchange.uploads import UploadService
+from ontotator.storage.repository import Repository
+from ontotator.storage.tables import (
     AuditEventRow,
     DocumentRow,
     JobRow,
@@ -147,7 +147,7 @@ def test_commit_rereads_fresh_complete_project_context(staged, change):
                 .values(languages=["de", "en"])
             )
         else:
-            from ontocurator.storage.tables import ProjectSearchConditionsRow
+            from ontotator.storage.tables import ProjectSearchConditionsRow
 
             conn.execute(
                 ProjectSearchConditionsRow.__table__.insert().values(
@@ -548,7 +548,7 @@ def test_commit_rechecks_after_a_real_import_lock_wait(staged, change):
     from sqlalchemy import text
     from test_admin_write_authority import _wait_for_database_lock
 
-    from ontocurator.storage.repository import _lock_id
+    from ontotator.storage.repository import _lock_id
 
     app, admin = staged
     lead = logged_in(app, "lead", projects={"proj": ["lead"]})
@@ -570,7 +570,7 @@ def test_commit_rechecks_after_a_real_import_lock_wait(staged, change):
                 else:
                     holder.execute(
                         text(
-                            "INSERT INTO ontocurator.documents (project_id, document_id, case_id, external_id, position, language, text, text_sha256) SELECT id, 'unrelated', 'unrelated', 'unrelated', 0, 'de', 'Else', :sha FROM ontocurator.projects WHERE project_key = 'proj'"
+                            "INSERT INTO ontotator.documents (project_id, document_id, case_id, external_id, position, language, text, text_sha256) SELECT id, 'unrelated', 'unrelated', 'unrelated', 0, 'de', 'Else', :sha FROM ontotator.projects WHERE project_key = 'proj'"
                         ),
                         {"sha": hashlib.sha256(b"Else").hexdigest()},
                     )

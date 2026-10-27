@@ -8,11 +8,11 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 
-from ontocurator.api import assignment_routes as routes
-from ontocurator.api.identity import principal_of
-from ontocurator.api.routes import get_workspace_service
-from ontocurator.auth.sessions import Principal
-from ontocurator.domain.errors import DomainError
+from ontotator.api import assignment_routes as routes
+from ontotator.api.identity import principal_of
+from ontotator.api.routes import get_workspace_service
+from ontotator.auth.sessions import Principal
+from ontotator.domain.errors import DomainError
 
 
 @pytest.fixture

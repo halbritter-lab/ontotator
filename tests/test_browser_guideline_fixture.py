@@ -12,10 +12,10 @@ from browser_server import ONTOLOGY
 from fastapi.testclient import TestClient
 from pg_harness import database_url_for
 
-from ontocurator.api.app import create_app
-from ontocurator.application.guidelines import GuidelineService
-from ontocurator.config import AppConfig
-from ontocurator.domain.guidelines import MAX_GUIDELINE_BYTES
+from ontotator.api.app import create_app
+from ontotator.application.guidelines import GuidelineService
+from ontotator.config import AppConfig
+from ontotator.domain.guidelines import MAX_GUIDELINE_BYTES
 
 # Every scenario builds well inside the browser helper's timeout.
 BUILD_SECONDS = 30
@@ -63,7 +63,7 @@ def listing(client: TestClient, built: dict[str, Any], name: str) -> Any:
 def my_tasks(client: TestClient, built: dict[str, Any], name: str) -> list[int]:
     from sqlalchemy import select
 
-    from ontocurator.storage.tables import AssignmentRow
+    from ontotator.storage.tables import AssignmentRow
 
     user = client.app.state.accounts.get_by_username(built["users"][name])  # type: ignore[attr-defined]
     with client.app.state.repo.db.transaction() as conn:  # type: ignore[attr-defined]

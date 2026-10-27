@@ -28,20 +28,20 @@ def quick(tmp_path):
         shutil.copyfile(ROOT / "scripts" / name, scripts / name)
     (tmp_path / "frontend/node_modules").mkdir(parents=True)
     files = {
-        "src/ontocurator/auth/passwords.py": "",
-        "src/ontocurator/auth/__init__.py": "",
-        "src/ontocurator/orphan.py": "",
+        "src/ontotator/auth/passwords.py": "",
+        "src/ontotator/auth/__init__.py": "",
+        "src/ontotator/orphan.py": "",
         "tests/test_passwords.py": "",
         "tests/test_passwords_policy.py": "",
-        "tests/test_login.py": "from ontocurator.auth.passwords import x\n",
-        "tests/test_cli.py": "from ontocurator.auth import sessions, passwords\n",
-        "tests/test_other.py": "import ontocurator.storage\n",
+        "tests/test_login.py": "from ontotator.auth.passwords import x\n",
+        "tests/test_cli.py": "from ontotator.auth import sessions, passwords\n",
+        "tests/test_other.py": "import ontotator.storage\n",
         "tests/auth_harness.py": "",
         "tests/test_users.py": "from auth_harness import log_in\n",
-        "src/ontocurator/api/guideline_routes.py": "",
+        "src/ontotator/api/guideline_routes.py": "",
         "tests/test_guidelines_api.py": "",
         "tests/test_guideline_files.py": "",
-        "src/ontocurator/storage/migrations/versions/0042_things.py": "",
+        "src/ontotator/storage/migrations/versions/0042_things.py": "",
         "tests/test_things_migration.py": 'REVISION = "0042"\n',
         "frontend/src/a.ts": "",
         "frontend/tests/a.test.ts": "",
@@ -69,7 +69,7 @@ def quick(tmp_path):
             "CHECK_BASE",
             "CHECK_VITEST_WORKERS",
             "CHECK_PYTEST_WORKERS",
-            "ONTOCURATOR_TEST_PG_URL",
+            "ONTOTATOR_TEST_PG_URL",
         ]:
             env.pop(name, None)
         env.update(
@@ -93,7 +93,7 @@ def quick(tmp_path):
 
 
 def test_changed_module_selects_named_and_importing_tests(quick):
-    result, calls = quick("src/ontocurator/auth/passwords.py", "frontend/src/a.ts")
+    result, calls = quick("src/ontotator/auth/passwords.py", "frontend/src/a.ts")
     assert result.returncode == 0, result.stderr
     assert calls[0] == "docker info"
     assert calls[1:8] == STATIC
@@ -114,23 +114,23 @@ def test_changed_module_selects_named_and_importing_tests(quick):
 
 
 def test_changed_test_and_helper_select_their_tests_serially_for_one_file(quick):
-    result, calls = quick("tests/auth_harness.py", ONTOCURATOR_TEST_PG_URL="test-only")
+    result, calls = quick("tests/auth_harness.py", ONTOTATOR_TEST_PG_URL="test-only")
     assert result.returncode == 0, result.stderr
     assert calls == [*STATIC, "uv run pytest -q tests/test_users.py"]
 
 
 def test_unmapped_python_change_fails_without_backend_tests(quick):
-    result, calls = quick("src/ontocurator/orphan.py", CHECK_PYTEST_WORKERS="4")
+    result, calls = quick("src/ontotator/orphan.py", CHECK_PYTEST_WORKERS="4")
     assert result.returncode != 0
     assert "no backend tests ran" in result.stderr
     assert "--only backend" in result.stderr
-    assert "src/ontocurator/orphan.py" in result.stderr
+    assert "src/ontotator/orphan.py" in result.stderr
     # Static checks still run; no pytest, so no Docker either.
     assert calls == STATIC
 
 
 def test_shared_test_setup_points_to_the_backend_stage(quick):
-    result, calls = quick("tests/conftest.py", ONTOCURATOR_TEST_PG_URL="test-only")
+    result, calls = quick("tests/conftest.py", ONTOTATOR_TEST_PG_URL="test-only")
     assert result.returncode != 0
     assert "--only backend" in result.stderr
     assert calls == STATIC
@@ -138,19 +138,19 @@ def test_shared_test_setup_points_to_the_backend_stage(quick):
 
 def test_mapped_and_unmapped_changes_run_the_mapped_tests_with_a_note(quick):
     result, calls = quick(
-        "src/ontocurator/orphan.py",
+        "src/ontotator/orphan.py",
         "tests/test_other.py",
-        ONTOCURATOR_TEST_PG_URL="test-only",
+        ONTOTATOR_TEST_PG_URL="test-only",
     )
     assert result.returncode == 0, result.stderr
     assert calls[-1] == "uv run pytest -q tests/test_other.py"
-    assert "src/ontocurator/orphan.py" in result.stdout
+    assert "src/ontotator/orphan.py" in result.stdout
     assert "--only backend" in result.stdout
 
 
 def test_route_module_selects_tests_named_after_its_feature(quick):
     result, calls = quick(
-        "src/ontocurator/api/guideline_routes.py", ONTOCURATOR_TEST_PG_URL="test-only"
+        "src/ontotator/api/guideline_routes.py", ONTOTATOR_TEST_PG_URL="test-only"
     )
     assert result.returncode == 0, result.stderr
     backend = calls[-1].split()
@@ -163,8 +163,8 @@ def test_route_module_selects_tests_named_after_its_feature(quick):
 
 def test_migration_selects_tests_naming_its_revision(quick):
     result, calls = quick(
-        "src/ontocurator/storage/migrations/versions/0042_things.py",
-        ONTOCURATOR_TEST_PG_URL="test-only",
+        "src/ontotator/storage/migrations/versions/0042_things.py",
+        ONTOTATOR_TEST_PG_URL="test-only",
     )
     assert result.returncode == 0, result.stderr
     assert calls[-1] == "uv run pytest -q tests/test_things_migration.py"
@@ -212,7 +212,7 @@ def test_without_paths_uses_changes_against_the_base_ref(quick):
     git("commit", "-qam", "change")
     (workspace / "frontend/src/a.ts").write_text("// dirty\n", encoding="utf-8")
 
-    result, calls = quick("--base", "trunk", ONTOCURATOR_TEST_PG_URL="test-only")
+    result, calls = quick("--base", "trunk", ONTOTATOR_TEST_PG_URL="test-only")
     assert result.returncode == 0, result.stderr
     assert calls[-2].endswith("--minWorkers=1 src/a.ts")
     assert calls[-1] == "uv run pytest -q tests/test_other.py"

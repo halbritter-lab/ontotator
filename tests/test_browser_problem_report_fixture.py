@@ -14,9 +14,9 @@ from fastapi.testclient import TestClient
 from pg_harness import database_url_for
 from sqlalchemy import select
 
-from ontocurator.api.app import create_app
-from ontocurator.config import AppConfig
-from ontocurator.storage.tables import TranslationReviewDraftRow
+from ontotator.api.app import create_app
+from ontotator.config import AppConfig
+from ontotator.storage.tables import TranslationReviewDraftRow
 
 
 @pytest.fixture

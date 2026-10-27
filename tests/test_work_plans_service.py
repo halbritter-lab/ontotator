@@ -23,7 +23,7 @@ from work_plan_support import (
     write,
 )
 
-from ontocurator.api.work_plan_routes import (
+from ontotator.api.work_plan_routes import (
     AcceptExternalReview,
     BulkAcceptance,
     BulkPlanRequest,
@@ -32,13 +32,13 @@ from ontocurator.api.work_plan_routes import (
     PlanRowsSet,
     UndoRowView,
 )
-from ontocurator.assignments.service import AssignmentService
-from ontocurator.domain.errors import DomainError
-from ontocurator.domain.work_plans import PlanFlags, RowKey
-from ontocurator.storage import work_plan_store as store
-from ontocurator.storage.final_tables import FinalSelectionRow
-from ontocurator.storage.plan_tables import DiscardedVariantRow
-from ontocurator.storage.tables import (
+from ontotator.assignments.service import AssignmentService
+from ontotator.domain.errors import DomainError
+from ontotator.domain.work_plans import PlanFlags, RowKey
+from ontotator.storage import work_plan_store as store
+from ontotator.storage.final_tables import FinalSelectionRow
+from ontotator.storage.plan_tables import DiscardedVariantRow
+from ontotator.storage.tables import (
     AssignmentRow,
     AuditEventRow,
     DocumentRow,
@@ -908,7 +908,7 @@ def test_no_op_patch_writes_nothing(env):
 def test_process_actor_cannot_discard(env):
     from auth_harness import HARNESS
 
-    from ontocurator.domain.errors import AccessDenied
+    from ontotator.domain.errors import AccessDenied
 
     process = service(env)
     process.actor = HARNESS
@@ -917,10 +917,10 @@ def test_process_actor_cannot_discard(env):
 
 
 def correct(env: Any, document_id: str, username: str = "ana") -> Any:
-    from ontocurator.application.translation_workflow import (
+    from ontotator.application.translation_workflow import (
         TranslationWorkflowService,
     )
-    from ontocurator.auth.audit import Actor
+    from ontotator.auth.audit import Actor
 
     lead = env.app.state.accounts.get_by_username("leader")
     variant = env.app.state.repo.get_variant("proj", document_id)

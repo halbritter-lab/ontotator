@@ -1,6 +1,6 @@
 """Pure Documents row rules (no database)."""
 
-from ontocurator.domain.document_rows import (
+from ontotator.domain.document_rows import (
     AssignmentFact,
     Version,
     bar_categories,

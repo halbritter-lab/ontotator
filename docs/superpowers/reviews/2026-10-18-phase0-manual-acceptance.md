@@ -67,10 +67,10 @@ Do not confuse the submitted annotation task on accepted-translation with the la
 - Private directory, relative to the worktree: `build/t5-acceptance/phase0-candidate`.
 - `credentials.json` has `host` and an `accounts` array with `username`, `password`, `role`. Use accounts demo-lead (lead), demo-reviewer (translation reviewer and now also Adjudicator), demo-annotator (annotator). The user's Adjudicator grant is runtime state; the seed's original role description may not include it.
 - `identity.json` supplies `project`, `environment`, `env_file`, `base_compose` and `override`. `commands.json` contains preparation/start information. Do not print the environment or credential contents into logs or commits.
-- Compose project: `ontocurator-t5-acceptance-phase0`; running containers: `ontocurator-t5-acceptance-phase0-app-1` and `ontocurator-t5-acceptance-phase0-postgres-1`.
+- Compose project: `ontotator-t5-acceptance-phase0`; running containers: `ontotator-t5-acceptance-phase0-app-1` and `ontotator-t5-acceptance-phase0-postgres-1`.
 - Runtime source: `0e9271aeb5310c39a7497dc97e0576d6de927628`. Documentation commits do not change the running image.
 - Immutable image: `sha256:74b37290e03e802b281ef0d6dc8639891152f8e84b49e3dba190b8e8950c928d`.
-- Old demo: Compose project `ontocurator-t5-acceptance-ready`, port 18080, stopped at the user's request. Preserve its files and volumes too.
+- Old demo: Compose project `ontotator-t5-acceptance-ready`, port 18080, stopped at the user's request. Preserve its files and volumes too.
 - Handoff read-only check on 2026-10-18: both new containers healthy; `/readyz` returned HTTP 200. Credentials and identity files exist. Status may change between sessions; check before assuming the server is offline or restarting it.
 
 If the new demo has stopped, use PowerShell from the worktree, without reseeding or rebuilding:
@@ -181,7 +181,7 @@ User requirement: use a representative full HPO in the demo and make the officia
 
 During the optional-reason check, the user tried Hypotonia again because they did not know which other terms the fixture contained. This constrained the acceptance test to a possible duplicate. The fixture also contains Status epilepticus (HP:0002133), which can be used as a distinct test finding if it is not already present.
 
-Evidence: [demo inputs](../../../examples/t5-acceptance/README.md), [translation loading](../../../src/ontocurator/ontology/translations.py), [search languages](../../../frontend/src/editor/searchLanguages.ts).
+Evidence: [demo inputs](../../../examples/t5-acceptance/README.md), [translation loading](../../../src/ontotator/ontology/translations.py), [search languages](../../../frontend/src/editor/searchLanguages.ts).
 
 ### F03 New annotation defaults do not match the usual workflow
 
@@ -191,7 +191,7 @@ The user normally expects `present`, `patient`, `current`, but explicitly cautio
 
 Open design questions: whether and at which scope defaults should be configurable, how preset values remain recognizable, and what confirmation is appropriate. Mandatory confirmation of every axis has not been decided.
 
-Evidence: `initialAxisValues` in [CaseScreen](../../../frontend/src/app/CaseScreen.tsx), [axis definitions](../../../src/ontocurator/domain/axes.py).
+Evidence: `initialAxisValues` in [CaseScreen](../../../frontend/src/app/CaseScreen.tsx), [axis definitions](../../../src/ontotator/domain/axes.py).
 
 ### F04 Sidebars leave too little room for the document
 
@@ -642,12 +642,12 @@ This subsection preserves the chronological discussion: an initially open questi
 
 ### Source evidence
 
-- [Workspace identities and immutable submissions](../../../src/ontocurator/domain/workspace.py); [revision selection](../../../src/ontocurator/domain/results.py); [reopen/resubmit regression](../../../tests/test_visibility.py).
-- [Review inputs](../../../src/ontocurator/application/workspaces.py): `get_review_inputs` does not automatically expose other members' drafts/submissions; [T1 mapping](../../../src/ontocurator/exchange/t1.py) exports review as an individual result, not a global consensus.
-- [Translation ancestry](../../../src/ontocurator/domain/variants.py); [translation review application](../../../src/ontocurator/application/translation_reviews.py); [new-assignment eligibility](../../../src/ontocurator/assignments/eligibility.py); [existing assignment reopening](../../../src/ontocurator/assignments/service.py).
-- [Translation-review scenario tests](../../../tests/test_translation_review_service.py): unchanged resubmission after reopening, stale competing correction rejection, and second correction with a directly inserted assignment; [variant import rules](../../../src/ontocurator/exchange/variant_plan.py) enforce separate identities and linear correction ancestry.
-- [Reanchor source selection and same-language boundary](../../../src/ontocurator/exchange/reanchor_job.py): `reanchor_sources`, `_check_pair`; [tests](../../../tests/test_reanchor_job.py), including individual submissions excluded and cross-language pairs rejected.
-- [Evidence mapping](../../../src/ontocurator/domain/reanchor.py); [reviewer-specific resolutions](../../../src/ontocurator/application/reanchor_resolutions.py); [export inventory/selection](../../../src/ontocurator/storage/repository.py): `t1_export_content`.
+- [Workspace identities and immutable submissions](../../../src/ontotator/domain/workspace.py); [revision selection](../../../src/ontotator/domain/results.py); [reopen/resubmit regression](../../../tests/test_visibility.py).
+- [Review inputs](../../../src/ontotator/application/workspaces.py): `get_review_inputs` does not automatically expose other members' drafts/submissions; [T1 mapping](../../../src/ontotator/exchange/t1.py) exports review as an individual result, not a global consensus.
+- [Translation ancestry](../../../src/ontotator/domain/variants.py); [translation review application](../../../src/ontotator/application/translation_reviews.py); [new-assignment eligibility](../../../src/ontotator/assignments/eligibility.py); [existing assignment reopening](../../../src/ontotator/assignments/service.py).
+- [Translation-review scenario tests](../../../tests/test_translation_review_service.py): unchanged resubmission after reopening, stale competing correction rejection, and second correction with a directly inserted assignment; [variant import rules](../../../src/ontotator/exchange/variant_plan.py) enforce separate identities and linear correction ancestry.
+- [Reanchor source selection and same-language boundary](../../../src/ontotator/exchange/reanchor_job.py): `reanchor_sources`, `_check_pair`; [tests](../../../tests/test_reanchor_job.py), including individual submissions excluded and cross-language pairs rejected.
+- [Evidence mapping](../../../src/ontotator/domain/reanchor.py); [reviewer-specific resolutions](../../../src/ontotator/application/reanchor_resolutions.py); [export inventory/selection](../../../src/ontotator/storage/repository.py): `t1_export_content`.
 
 
 ## Candidate walkthrough follow-up — 2026-10-19

@@ -391,7 +391,7 @@ Ratio 22 : 18 : 14 instead of 15 : 14 : 14. The toolbar keeps its height (52 px)
 
 ## Resolved questions (user decisions 2026-10-20)
 
-1. **Rationale for Accepted unchanged with failed checks:** optional, with the prompting hint "Optional. Say why the flagged difference is correct." No backend change; policy stays `ontocurator-translation-review/v1`.
+1. **Rationale for Accepted unchanged with failed checks:** optional, with the prompting hint "Optional. Say why the flagged difference is correct." No backend change; policy stays `ontotator-translation-review/v1`.
 2. **Check details:** always collapsed by default; the disclosure state is not stored.
 3. **Edited text:** "Accepted with corrections" is selected automatically with the visible note, and reverted when the edit is undone (A.4).
 4. **Next task:** the next unsubmitted task of any type in the same project, in My tasks order.

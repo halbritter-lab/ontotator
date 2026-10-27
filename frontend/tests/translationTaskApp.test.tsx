@@ -103,7 +103,7 @@ it("keeps the mounted review and history on cancelled raw-hash leave, then expli
   const dialog = await screen.findByRole("dialog", { name: "Changes not saved" });
   fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
   await waitFor(() => expect(window.location.hash).toBe("#/tasks/17"));
-  await waitFor(() => expect(window.history.state.ontocuratorRouteIndex).toBe(0));
+  await waitFor(() => expect(window.history.state.ontotatorRouteIndex).toBe(0));
   expect(screen.getByRole("textbox", { name: "Translation (de)" })).toBe(input);
   expect((input as HTMLTextAreaElement).value).toBe("Keep raw text");
   section("Profile");
@@ -164,12 +164,12 @@ it.each(["alice", "bob"])("uses the real AuthGate after an expired translation s
   render(<AuthGate />);
   const input = await screen.findByRole("textbox", { name: "Translation (de)" });
   fireEvent.change(input, { target: { value: "Unsaved Alice text" } });
-  const dialog = await screen.findByRole("dialog", { name: "Log in to Ontocurator" });
+  const dialog = await screen.findByRole("dialog", { name: "Log in to Ontotator" });
   expect(input.closest("[inert]")).not.toBeNull();
   fireEvent.change(within(dialog).getByLabelText("Username"), { target: { value: nextUsername } });
   fireEvent.change(within(dialog).getByLabelText("Password"), { target: { value: "a long password" } });
   fireEvent.click(within(dialog).getByRole("button", { name: "Log in" }));
-  await waitFor(() => expect(screen.queryByRole("dialog", { name: "Log in to Ontocurator" })).toBeNull());
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "Log in to Ontotator" })).toBeNull());
   if (nextUsername === "alice") {
     expect(screen.getByRole("textbox", { name: "Translation (de)" })).toBe(input);
     expect((input as HTMLTextAreaElement).value).toBe("Unsaved Alice text");

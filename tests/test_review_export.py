@@ -13,11 +13,11 @@ from test_translation_review_service import review_env as review_env
 from test_translation_review_service import save
 from typer.testing import CliRunner
 
-from ontocurator.assignments.service import AssignmentService
-from ontocurator.auth.audit import Actor
-from ontocurator.cli import app as cli
-from ontocurator.storage.repository import _lock_id
-from ontocurator.storage.tables import (
+from ontotator.assignments.service import AssignmentService
+from ontotator.auth.audit import Actor
+from ontotator.cli import app as cli
+from ontotator.storage.repository import _lock_id
+from ontotator.storage.tables import (
     AssignmentRow,
     AuditEventRow,
     DocumentRow,
@@ -346,7 +346,7 @@ def test_download_refuses_invalid_review_artifact_without_audit(exported_env, br
 def test_failed_audit_rolls_back_stored_metadata_and_job_success(
     exported_env, monkeypatch
 ):
-    import ontocurator.exchange.review_export as module
+    import ontotator.exchange.review_export as module
 
     env = exported_env
 
@@ -374,7 +374,7 @@ def test_cli_writes_reviews_and_preserves_no_wait_overwrite_contract(
 ):
     env = exported_env
     submit(env)
-    monkeypatch.setenv("ONTOCURATOR_DATA_DIR", str(env.db.data_dir))
+    monkeypatch.setenv("ONTOTATOR_DATA_DIR", str(env.db.data_dir))
     args = [
         "admin",
         "--database-url",
@@ -479,14 +479,14 @@ def test_review_read_is_bounded_metadata_with_no_document_text(exported_env):
     document_queries = [
         sql
         for sql in statements
-        if sql.startswith("SELECT ") and "ontocurator.documents" in sql
+        if sql.startswith("SELECT ") and "ontotator.documents" in sql
     ]
     assert len(document_queries) == 1
-    assert "ontocurator.documents.text," not in document_queries[0]
+    assert "ontotator.documents.text," not in document_queries[0]
     review_queries = [
         sql
         for sql in statements
-        if sql.startswith("SELECT ") and "FROM ontocurator.translation_reviews" in sql
+        if sql.startswith("SELECT ") and "FROM ontotator.translation_reviews" in sql
     ]
     assert len(review_queries) == 1
 
@@ -496,10 +496,10 @@ def test_cli_output_creation_race_and_failed_job_are_honest(
 ):
     from pathlib import Path
 
-    import ontocurator.exchange.review_export as module
+    import ontotator.exchange.review_export as module
 
     env = exported_env
-    monkeypatch.setenv("ONTOCURATOR_DATA_DIR", str(env.db.data_dir))
+    monkeypatch.setenv("ONTOTATOR_DATA_DIR", str(env.db.data_dir))
     args = [
         "admin",
         "--database-url",

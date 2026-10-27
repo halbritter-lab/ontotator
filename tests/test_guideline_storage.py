@@ -6,15 +6,15 @@ from pathlib import Path
 from pg_harness import database_for
 from sqlalchemy import text
 
-from ontocurator.storage.guidelines import (
+from ontotator.storage.guidelines import (
     GuidelineFact,
     current_guideline_version,
     guideline_facts,
 )
-from ontocurator.storage.tables import SCHEMA
+from ontotator.storage.tables import SCHEMA
 
 S = SCHEMA
-ROOT = Path(__file__).resolve().parents[1] / "src" / "ontocurator" / "storage"
+ROOT = Path(__file__).resolve().parents[1] / "src" / "ontotator" / "storage"
 
 
 def _seed(conn) -> tuple[int, int, int]:
@@ -110,9 +110,9 @@ def test_storage_does_not_import_application() -> None:
     # The guideline storage modules import no application module at all;
     # repository.py already has a function-local workflow_guards import, so
     # for it the scan forbids the guideline service (that import is circular).
-    anything = re.compile(r"^\s*(from|import)\s+ontocurator\.application", re.M)
+    anything = re.compile(r"^\s*(from|import)\s+ontotator\.application", re.M)
     service = re.compile(
-        r"^\s*(from|import)\s+ontocurator\.application(\.guidelines|\s+import\s+.*\bguidelines\b)",
+        r"^\s*(from|import)\s+ontotator\.application(\.guidelines|\s+import\s+.*\bguidelines\b)",
         re.M,
     )
     for name in ("guidelines.py", "guideline_tables.py"):

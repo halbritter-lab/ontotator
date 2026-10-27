@@ -7,14 +7,14 @@ from pathlib import Path
 
 import pytest
 
-from ontocurator.ontology.translations import (
+from ontotator.ontology.translations import (
     apply_translations,
     babelon_problem,
     discover_translation_files,
     parse_translation_name,
     translation_counts,
 )
-from ontocurator.vendor.hpo_span_annotator.hpo import load as load_ontology
+from ontotator.vendor.hpo_span_annotator.hpo import load as load_ontology
 
 FIXTURES = Path(__file__).parent / "fixtures"
 HP = FIXTURES / "hp.json"

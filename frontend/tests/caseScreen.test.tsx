@@ -111,7 +111,7 @@ describe("CaseScreen integration", () => {
   };
 
   const withEditableFinding = (view: WorkspaceView) => {
-    view.draft.annotations = [{ schema_version: "ontocurator-annotation/v3", version: "pending-v1",
+    view.draft.annotations = [{ schema_version: "ontotator-annotation/v3", version: "pending-v1",
       document_id: view.document.document_id, text_sha256: "text", ontology_sha256: "ontology", layer_config_sha256: "layer",
       annotation: { annotation_id: "pending-finding", document_id: view.document.document_id, layer_id: "phenotype",
         type_id: "default", term_id: "HP:0001252", axes_values: {}, evidence_refs: [],
@@ -327,7 +327,7 @@ describe("CaseScreen integration", () => {
     const axisWarning = (view: WorkspaceView, axes: string[], acknowledgement = acknowledgementOf(view)) =>
       new ApiError(422, "Review defaults", "AXIS_CONFIRMATION_WARNING", { acknowledgement,
         warnings: axes.map(axis => ({ annotation_id: "pending-finding", rule: "axis_not_chosen", detail: { axis } })) });
-    const submissionOf = (view: WorkspaceView) => ({ format_version: "ontocurator-submission/v2", submission_id: "warning-submitted", origin_key: view.key,
+    const submissionOf = (view: WorkspaceView) => ({ format_version: "ontotator-submission/v2", submission_id: "warning-submitted", origin_key: view.key,
       targets: view.targets!, draft_revision: view.draft.revision, snapshots: view.draft.annotations!, decisions: [], document_checked: true,
       created_at: "2026-10-18T12:00:00Z" });
     const openSubmit = async () => {
@@ -630,7 +630,7 @@ describe("CaseScreen integration", () => {
       revision: 1,
       annotations: [
         {
-          schema_version: "ontocurator-annotation/v3" as const,
+          schema_version: "ontotator-annotation/v3" as const,
           annotation: {
             annotation_id: "ann-spanless-1",
             document_id: "doc-test-1",
@@ -768,7 +768,7 @@ describe("CaseScreen integration", () => {
         revision: 1,
         annotations: [
           {
-            schema_version: "ontocurator-annotation/v3" as const,
+            schema_version: "ontotator-annotation/v3" as const,
             annotation: {
               annotation_id: "ann-1",
               document_id: "doc-test-1",
@@ -859,7 +859,7 @@ describe("CaseScreen integration", () => {
         revision: 1,
         annotations: [
           {
-            schema_version: "ontocurator-annotation/v3" as const,
+            schema_version: "ontotator-annotation/v3" as const,
             annotation: {
               annotation_id: "ann-to-del",
               document_id: "doc-test-1",
@@ -1280,7 +1280,7 @@ describe("CaseScreen integration", () => {
           if (p.command === "create_annotation") {
             const evidence = { mention: { evidence_id: p.evidence_id, segments: p.segments }, version: "ev-1" };
             current.evidence = [...(current.evidence ?? []), evidence] as any;
-            current.annotations = [...(current.annotations ?? []), { schema_version: "ontocurator-annotation/v3", version: "v1",
+            current.annotations = [...(current.annotations ?? []), { schema_version: "ontotator-annotation/v3", version: "v1",
               document_id: view.document.document_id, text_sha256: "t", ontology_sha256: "o", layer_config_sha256: "l",
               annotation: { annotation_id: p.annotation_id, document_id: view.document.document_id, layer_id: p.layer_id,
                 type_id: p.type_id, term_id: p.term_id, axes_values: p.axes_values,
@@ -1694,7 +1694,7 @@ describe("CaseScreen integration", () => {
     second.annotation.annotation_id = "second-history-finding"; second.annotation.term_id = "HP:0001250";
     const current = structuredClone(first); current.annotation.note = "Current draft note";
     view.draft.annotations = [current];
-    const base = { format_version: "ontocurator-submission/v2", origin_key: view.key,
+    const base = { format_version: "ontotator-submission/v2", origin_key: view.key,
       targets: view.targets!, draft_revision: 1, snapshots: [first], decisions: [], document_checked: true,
       created_at: new Date(2026, 9, 17, 9, 5).toISOString() };
     view.submissions = [{ ...base, submission_id: "sub-exact-first" },
@@ -1728,7 +1728,7 @@ describe("CaseScreen integration", () => {
   it("adds the exact successful submission to history immediately and keeps it read-only", async () => {
     const view = withEditableFinding(structuredClone(sampleView));
     view.draft.annotations![0].annotation.note = "Exact submitted clinical note";
-    const submission = { format_version: "ontocurator-submission/v2", origin_key: view.key, targets: view.targets!,
+    const submission = { format_version: "ontotator-submission/v2", origin_key: view.key, targets: view.targets!,
       draft_revision: 1, snapshots: structuredClone(view.draft.annotations!), decisions: [], document_checked: true,
       created_at: new Date(2026, 9, 18, 9, 5).toISOString(), submission_id: "fresh-exact-submission" };
     vi.spyOn(api, "submitWorkspace").mockResolvedValue(submission);
@@ -2410,7 +2410,7 @@ describe("CaseScreen integration", () => {
     const withMention = (view: WorkspaceView) => {
       const evidence = { mention: { evidence_id: "ev-h", segments: [{ start: 26, end: 35 }] }, version: "ev-1" };
       view.draft.evidence = [evidence] as any;
-      view.draft.annotations = [{ schema_version: "ontocurator-annotation/v3", version: "v1",
+      view.draft.annotations = [{ schema_version: "ontotator-annotation/v3", version: "v1",
         document_id: view.document.document_id, text_sha256: "text", ontology_sha256: "ontology", layer_config_sha256: "layer",
         annotation: { annotation_id: "ann-h", document_id: view.document.document_id, layer_id: "phenotype",
           type_id: "default", term_id: "HP:0001252", axes_values: {}, evidence_refs: [{ evidence_id: "ev-h", version: "ev-1" }],
@@ -2502,7 +2502,7 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
   type Mod = { term_id: string; segments?: { start: number; end: number }[] };
   type Finding = [id: string, term: string, word: string | null, modifiers?: Mod[]];
   const findingSnap = ([id, term, word, modifiers = []]: Finding) => ({
-    schema_version: "ontocurator-annotation/v3", version: `${id}-v1`, document_id: "doc-mod", text_sha256: "t", ontology_sha256: "o", layer_config_sha256: "l",
+    schema_version: "ontotator-annotation/v3", version: `${id}-v1`, document_id: "doc-mod", text_sha256: "t", ontology_sha256: "o", layer_config_sha256: "l",
     annotation: { annotation_id: id, document_id: "doc-mod", layer_id: "phenotype", type_id: "default", term_id: term, axes_values: { assertion: "present" },
       axes_defaulted: [], evidence_refs: word ? [{ evidence_id: `ev-${id}`, version: "ev-1" }] : [], modifiers,
       provenance: { actor: { actor_id: "ann", kind: "human" }, method: "manual", source_refs: [] } },
@@ -2916,7 +2916,7 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
       new ApiError(422, "Review warnings", "AXIS_CONFIRMATION_WARNING", {
         acknowledgement: { draft_revision: view.draft.revision, policy_revision: 1, warning_digest: digest },
         warnings: warnings.map(warning => ({ annotation_id: "seizure", ...warning })) });
-    const submitted = (view: WorkspaceView) => ({ format_version: "ontocurator-submission/v2", submission_id: "mod-submitted", origin_key: view.key,
+    const submitted = (view: WorkspaceView) => ({ format_version: "ontotator-submission/v2", submission_id: "mod-submitted", origin_key: view.key,
       targets: view.targets!, draft_revision: view.draft.revision, snapshots: view.draft.annotations!, decisions: [], document_checked: true,
       created_at: "2026-10-25T12:00:00Z" });
     const openSubmit = async () => {

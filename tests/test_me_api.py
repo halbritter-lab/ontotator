@@ -9,9 +9,9 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from test_auth_api import _app
 
-from ontocurator.auth.audit import Actor
-from ontocurator.domain.errors import DomainError
-from ontocurator.storage.tables import LoginAttemptRow, UserRow
+from ontotator.auth.audit import Actor
+from ontotator.domain.errors import DomainError
+from ontotator.storage.tables import LoginAttemptRow, UserRow
 
 NEW_PASSWORD = "a fresh secure passphrase"
 
@@ -126,7 +126,7 @@ def test_password_change_refuses_an_unusable_keep_session(app, kind):
     alice = logged_in(app, "alice")
     other = logged_in(app, "bob" if kind == "foreign" else "alice")
     account = app.state.accounts.get_by_username("alice")
-    principal = app.state.sessions.resolve(other.cookies.get("ontocurator_session"))
+    principal = app.state.sessions.resolve(other.cookies.get("ontotator_session"))
     if kind == "revoked":
         app.state.sessions.logout(principal.session_id)
     if kind == "expired":
@@ -134,7 +134,7 @@ def test_password_change_refuses_an_unusable_keep_session(app, kind):
 
         from sqlalchemy import update
 
-        from ontocurator.storage.tables import SessionRow
+        from ontotator.storage.tables import SessionRow
 
         with app.state.accounts.db.transaction() as conn:
             conn.execute(
@@ -170,7 +170,7 @@ def test_required_profile_patch_fields_cannot_be_null(app, body):
 
 
 def test_profile_languages_failure_rolls_back_profile_and_audit(app):
-    from ontocurator.storage.tables import AuditEventRow
+    from ontotator.storage.tables import AuditEventRow
 
     client = logged_in(app, "alice")
     response = client.patch(
@@ -188,7 +188,7 @@ def test_profile_languages_failure_rolls_back_profile_and_audit(app):
 
 
 def test_consent_without_orcid_and_profile_audits_only_field_names(app):
-    from ontocurator.storage.tables import AuditEventRow
+    from ontotator.storage.tables import AuditEventRow
 
     client = logged_in(app, "alice")
     response = client.patch(

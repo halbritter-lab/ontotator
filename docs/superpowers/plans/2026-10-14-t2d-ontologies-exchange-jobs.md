@@ -12,7 +12,7 @@
 - **Ontology files** live in the blob store (D3), with metadata in `ontology_files` (P7). Projects pin them in `project_ontologies`, together with `allowed_roots` and the T1 profile of each pinned ontology.
 - **Loading:** each worker process loads the pinned ontologies in a background thread at start-up; any other ontology loads lazily on first use and stays cached.
 - **Jobs:** a `jobs` table with a `FOR UPDATE SKIP LOCKED` worker thread per process (P6, index D-l). CLI commands enqueue and run their job inline, so they also work while the server is stopped.
-- **T1 exchange:** `exchange/t1.py` maps between Ontocurator snapshots and `ontospan` units. Import turns annotation sets into proposals; export writes submissions as `individual` sets in a validated bundle (D5).
+- **T1 exchange:** `exchange/t1.py` maps between Ontotator snapshots and `ontospan` units. Import turns annotation sets into proposals; export writes submissions as `individual` sets in a validated bundle (D5).
 - **Edit log:** the export is pseudonymised JSONL (D6).
 - **v2 retirement:** the v2 upload and export endpoints, buttons and `analyze` are removed. The v2 reader and writer move into the test suite as round-trip fixtures (index D-f).
 
@@ -28,7 +28,7 @@
 
 **Dependency:** `uv add "ontospan @ git+https://github.com/janpower/ontospan.git@263368b"`. That is the merge commit of PR #1 on `main` (index D-n). It needs read access to the private repository through the local Git credentials. Write the full 40-character hash into `pyproject.toml` (`git -C ../ontospan rev-parse 263368b`), so `uv.lock` and the Docker build resolve the same commit.
 
-**Create** `src/ontocurator/exchange/__init__.py` and `src/ontocurator/exchange/t1.py`. These are pure functions without database access.
+**Create** `src/ontotator/exchange/__init__.py` and `src/ontotator/exchange/t1.py`. These are pure functions without database access.
 
 | Function | Contract |
 |---|---|
@@ -46,7 +46,7 @@
 - Provenance is `ActorRef(actor_id, kind)`, `method` is the T1 method, and `source_refs` are the T1 `source_refs`.
 - **Modifiers** cannot be represented: the whole unit is refused with `DomainError("T1_UNSUPPORTED", {"annotations": [...ids with modifiers]})`.
 
-> **Resolved Q11:** units that Ontocurator cannot represent (e.g. modifiers) are refused as a whole; the refusal lists every affected annotation.
+> **Resolved Q11:** units that Ontotator cannot represent (e.g. modifiers) are refused as a whole; the refusal lists every affected annotation.
 
 **Export rules (`submission_to_unit`):** this is one unit per (document, submission).
 - **Set:**
@@ -80,7 +80,7 @@
 
 ### Task 2: Ontology files, pins and per-worker loading (migration 0004 part 1)
 
-**Create:** `storage/migrations/versions/0004_ontologies_jobs.py` (this task's tables plus `jobs` from Task 3 and `proposal_sets` from Task 4, one migration); `src/ontocurator/ontology/store.py`.
+**Create:** `storage/migrations/versions/0004_ontologies_jobs.py` (this task's tables plus `jobs` from Task 3 and `proposal_sets` from Task 4, one migration); `src/ontotator/ontology/store.py`.
 
 | Table | Columns | Keys |
 |---|---|---|
@@ -134,7 +134,7 @@ Move every existing test that uploaded ontologies over HTTP (`tests/test_ontolog
 |---|---|---|
 | `jobs` | `id` bigint identity; `kind` text; `status` text CHECK in ('queued','running','succeeded','failed'); `project_id` → projects null; `requested_by` → users null; `requested_label` text; `payload` jsonb; `result` jsonb null; `error` text null; `created_at` default now(); `started_at` null; `finished_at` null; `worker` text null | PK id; ix (status, id) |
 
-**Create** `src/ontocurator/jobs/__init__.py` and `src/ontocurator/jobs/queue.py`:
+**Create** `src/ontotator/jobs/__init__.py` and `src/ontotator/jobs/queue.py`:
 - `@dataclass Job(id, kind, status, project_id, payload, result, error)`.
 - `JobQueue(db, handlers: Mapping[str, Callable[[Job, JobContext], dict]])`:
   - `enqueue(kind, payload, *, project_id=None, actor) -> int`;
@@ -148,8 +148,8 @@ Move every existing test that uploaded ontologies over HTTP (`tests/test_ontolog
 The claim statement is the contract:
 
 ```sql
-UPDATE ontocurator.jobs SET status = 'running', started_at = now(), worker = :worker
- WHERE id = (SELECT id FROM ontocurator.jobs WHERE status = 'queued'
+UPDATE ontotator.jobs SET status = 'running', started_at = now(), worker = :worker
+ WHERE id = (SELECT id FROM ontotator.jobs WHERE status = 'queued'
              ORDER BY id FOR UPDATE SKIP LOCKED LIMIT 1)
 RETURNING id, kind, status, project_id, payload
 ```
@@ -191,7 +191,7 @@ Add `"proposal_sets"` to `APPEND_ONLY_TABLES` (triggers and `SELECT, INSERT` gra
 - **Tool provenance (I3):** every actor of kind `tool` needs `name` and `version`. Otherwise the whole import is refused with `DomainError("T1_TOOL_PROVENANCE", {"units": [document_id, …]})`, in line with Q11.
 - **Bundle identity (I1, I9):** `manifest_sha256` is the SHA-256 of the `manifest.json` bytes as stored in the bundle; a single `.json` unit has neither bundle id nor manifest hash.
 
-**Import handler `t1_import`** (`src/ontocurator/exchange/jobs.py`). The payload is `{project, blob_sha256, filename}`.
+**Import handler `t1_import`** (`src/ontotator/exchange/jobs.py`). The payload is `{project, blob_sha256, filename}`.
 - The blob is a `.zip` or a directory bundle (`ontospan.read_bundle`) or a single `.json` unit (`load_annotated_document`). The validation uses `ObographOntology.load(blob path)` for each pinned ontology, keyed by `ontology_id`.
 - **Pins must match:** for each layer, the ontology id, the version (= release) and the sha256 (if given) must equal the project's pin. The bundle's `allowed_roots` must equal the pin's. Otherwise `PIN_MISMATCH` with the differences listed (T3 A1).
 - Every unit becomes a document plus, unless its set is empty, one imported set with its proposals (Task 1 mapping). One transaction for the whole bundle.
@@ -221,7 +221,7 @@ Add `"proposal_sets"` to `APPEND_ONLY_TABLES` (triggers and `SELECT, INSERT` gra
 - `test_tool_actors_need_name_and_version` (I3): a set whose tool actor lacks `version` refuses the whole import with `T1_TOOL_PROVENANCE` naming the unit; nothing is written.
 - `test_two_sets_for_one_document_are_kept_apart`: two bundles with a set each for the same document give two `proposal_sets` rows and distinct proposal ids.
 - `test_the_import_audit_names_the_bundle` (I1, I9): the `project.import` details hold `bundle_id`, `manifest_sha256` and `producers`.
-- `test_the_application_cannot_rewrite_imported_sets`: `UPDATE ontocurator.proposal_sets` fails with "permission denied".
+- `test_the_application_cannot_rewrite_imported_sets`: `UPDATE ontotator.proposal_sets` fails with "permission denied".
 
 `tests/test_schema.py` gains the three append-only cases of `proposal_sets`; update its expected count accordingly.
 
@@ -275,8 +275,8 @@ Both copy the blob to `OUT` when run inline and refuse to overwrite an existing 
 **Backend:**
 - Delete the routes `POST /api/v1/packages`, `GET /api/v1/workspaces/{id}/export` and `GET /api/v1/packages/{id}/export`.
 - Delete `application/uploads.PackageImportService`, `application/exports.py` (`ExportService`), `application/analysis.py`, the CLI `analyze` and `scripts/create_demo_package.py`.
-- Move `src/ontocurator/packages/reader.py` → `tests/support/v2_reader.py` and `src/ontocurator/packages/writer.py` → `tests/support/v2_writer.py`. Move `ExportService` → `tests/support/v2_exports.py` and `PackageImportService` → `tests/support/v2_import.py`. Fix the imports with sed (`ontocurator.packages.reader` → `support.v2_reader`, and so on).
-- `ontocurator/packages/models.py` stays: `ValidatedPackage` is the internal seed structure (index D-f), and `SearchEventRecord` is part of the domain.
+- Move `src/ontotator/packages/reader.py` → `tests/support/v2_reader.py` and `src/ontotator/packages/writer.py` → `tests/support/v2_writer.py`. Move `ExportService` → `tests/support/v2_exports.py` and `PackageImportService` → `tests/support/v2_import.py`. Fix the imports with sed (`ontotator.packages.reader` → `support.v2_reader`, and so on).
+- `ontotator/packages/models.py` stays: `ValidatedPackage` is the internal seed structure (index D-f), and `SearchEventRecord` is part of the domain.
 - Delete these tests: `test_packages.py`, `test_compatibility.py`, `test_demo_fixture.py`, `test_analysis.py`, and `tests/fixtures/demo_package.zip` and `tests/fixtures/legacy_v1/` if nothing else references them (check with grep).
 - Convert API tests that uploaded zips: `client.post("/api/v1/packages", files=…)` becomes `upload_package(client, files=…)` from `auth_harness`. That helper reads the zip with `support.v2_reader`, calls `app.state.repo.import_package` and grants the current user all roles. It returns a response-like object with `status_code` and `json()`: 200 `{package_id, manifest}`, or the status and `{code, details}` the old handler mapped (422 for `InvalidPackage`/`DomainError`, 413 for `PayloadTooLarge`).
 - Tests that called the removed export routes switch to `support.v2_exports.ExportService` directly, or are deleted if they only tested the HTTP download (list the deletions in the commit message).

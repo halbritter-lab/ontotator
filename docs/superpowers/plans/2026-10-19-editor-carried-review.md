@@ -6,7 +6,7 @@
 
 **Architecture:** The backend gains read-only fields on round, input and source views (computed in a new `application/round_reads.py`, reusing `round_ordinals` from `domain/submission_labels.py`, Documents WP B5), an atomic "dismiss and remove carried finding" resolution, a "clear resolution" mutation that restores a finding removed by that dismissal, a submission-time check that no dismissed input still has its carried finding, and an own-submissions endpoint per assignment. All check-state logic is a pure frontend function (`editor/carried/checkState.ts`) consumed by small components under `editor/carried/` and one hook (`useCarriedReview`). `CaseScreen.tsx` is first split (no behaviour change) so later work packages own separate files and only add thin wiring to `CaseScreen.tsx` in a strict sequence.
 
-**Tech Stack:** Python 3.12, FastAPI, SQLAlchemy 2, PostgreSQL (pytest via testcontainers or `ONTOCURATOR_TEST_PG_URL`); React 18, TypeScript, Vitest + Testing Library, Playwright + axe-core; `openapi-typescript` for `generated.ts`.
+**Tech Stack:** Python 3.12, FastAPI, SQLAlchemy 2, PostgreSQL (pytest via testcontainers or `ONTOTATOR_TEST_PG_URL`); React 18, TypeScript, Vitest + Testing Library, Playwright + axe-core; `openapi-typescript` for `generated.ts`.
 
 ---
 
@@ -15,7 +15,7 @@
 - Work in `C:/Users/jan-p/Development/ontocurator/.worktrees/phase0-implementation`. It holds many **uncommitted** changes from other work. Never `git reset`, `git checkout -- <file>`, `git stash`, `git clean`, or rewrite a file you do not own. Edit on top of the working tree with exact-string edits.
 - **Do not commit or push.** Each work package ends with a "Commit point" (files and message) for later; do not run it unless the user explicitly asks. No `Co-Authored-By` or "Generated with" lines anywhere.
 - No CI or GitHub Actions. All verification is local. **Every command in this plan is written for the Bash tool (Git Bash) and runs from the worktree root**: start each call with `cd /c/Users/jan-p/Development/ontocurator/.worktrees/phase0-implementation && …` (the Bash tool does not keep the working directory between calls). `VAR=value command` prefixes are Bash syntax; do not use the PowerShell tool for these commands.
-  - Backend tests need PostgreSQL (Docker running, or `ONTOCURATOR_TEST_PG_URL`). Run single files: `uv run pytest tests/<file>.py -q`.
+  - Backend tests need PostgreSQL (Docker running, or `ONTOTATOR_TEST_PG_URL`). Run single files: `uv run pytest tests/<file>.py -q`.
   - Static: `uv run ruff check . && uv run ruff format --check . && uv run mypy src`.
   - Contracts: `uv run python scripts/export_openapi.py` then `npm --prefix frontend run api:generate`; drift checks `uv run python scripts/export_openapi.py --check` and `npm --prefix frontend run api:check`. Error codes: `uv run python scripts/export_admin_error_codes.py` (check: `--check`).
   - Frontend unit: `npm --prefix frontend test -- --maxWorkers=4 --minWorkers=1 <paths relative to frontend>`; types: `npm --prefix frontend run typecheck`.
@@ -32,14 +32,14 @@ This plan reuses, and never duplicates, the shared primitives that [2026-10-19-d
 
 | Piece | Documents WP (task) | Check | Needed by |
 |---|---|---|---|
-| `round_ordinals()` in `src/ontocurator/domain/submission_labels.py` (re-exported by `domain/document_rows.py`; import from `submission_labels`) | B5 (2.1) | `grep -n "def round_ordinals" src/ontocurator/domain/submission_labels.py` | B1 |
+| `round_ordinals()` in `src/ontotator/domain/submission_labels.py` (re-exported by `domain/document_rows.py`; import from `submission_labels`) | B5 (2.1) | `grep -n "def round_ordinals" src/ontotator/domain/submission_labels.py` | B1 |
 | `Button` `loading` keeps focus (`aria-disabled`, not `disabled`) | U1 (3.1) | `grep -n 'aria-disabled={loading' frontend/src/ui/Button.tsx` (`aria-busy` already exists today and proves nothing) | F5b, F6c, F7 |
 | `InlineConfirm` in `frontend/src/ui/InlineConfirm.tsx`, exported from `ui/index.ts` | U1 (3.3) | `grep -n "InlineConfirm" frontend/src/ui/index.ts` | F5b |
 | `useMediaQuery` in `frontend/src/ui/useMediaQuery.ts` | U1 (3.5) | `test -f frontend/src/ui/useMediaQuery.ts` | F8a |
 | `DataTable` (groups, `renderExpanded`, `Column.rowHeader`) | U2 (3.4) | `grep -n "renderExpanded" frontend/src/ui/DataTable.tsx` | F8a |
 | `formatTime`, `fullTimestamp` in `frontend/src/app/submissionLabels.ts`; `<Time iso>` in `frontend/src/app/Time.tsx` (never import them from `documents/`) | D1 (5.1) | `grep -n "export function formatTime" frontend/src/app/submissionLabels.ts && test -f frontend/src/app/Time.tsx` | F2, F5b, F8a, F8b |
 | Read-only `SubmissionsTable` (`showFinalColumn`, `viewRoute`, `actions` optional) in `frontend/src/documents/SubmissionsTable.tsx` | DX (5.7) | `grep -n "showFinalColumn" frontend/src/documents/SubmissionsTable.tsx` | F8b (optional, see F8b) |
-| `submission` VersionRef for leads; `CaseViewer` history rewritten | B1 (2.5), E3 (6.4) | `grep -n "\"submission\"" src/ontocurator/authz/versions.py` and E3 reported done | F9 |
+| `submission` VersionRef for leads; `CaseViewer` history rewritten | B1 (2.5), E3 (6.4) | `grep -n "\"submission\"" src/ontotator/authz/versions.py` and E3 reported done | F9 |
 | `DESIGN.md` contracts of the Documents plan | X1 (8.1) | X1 reported done | F11 |
 
 Recommended: run Documents U1, U2 and D1 (no backend dependency) and B5 before Wave 2 of this plan.
@@ -58,11 +58,11 @@ Recommended: run Documents U1, U2 and D1 (no backend dependency) and B5 before W
 | `ui/Button.tsx`, `ui/InlineConfirm.tsx`, `ui/shortcuts.ts`, `ui/useMediaQuery.ts`, `ui/index.ts` | Documents U1 | Consumed unchanged. `Button` busy = `loading` (focus kept). Inline confirmations use `InlineConfirm`. Shortcuts use `useShortcut` / `useShortcutHint` as is. |
 | `ui/DataTable.tsx` | Documents U2 | Consumed unchanged by F8a. |
 | `frontend/src/app/submissionLabels.ts`, `app/Time.tsx` | Documents D1 | Imported for all times (`formatTime`, `Time`). Round names use `Round {n}` built from server `round_ordinal`; no second ordinal algorithm in the frontend. |
-| `src/ontocurator/domain/submission_labels.py` (`round_ordinals`) | Documents B5 | Imported by `application/round_reads.py`. |
-| `src/ontocurator/api/app.py` | Documents B4 → B9 (owner) | B2 (one status-map line) and B3 (one router include) take the file only while no Documents/problem-reports WP holds it. |
-| `src/ontocurator/domain/admin_error_codes.py`, `contracts/admin-error-codes.json`, `frontend/src/admin/errors.ts` | Documents B4 (owner) | B2 adds one code, regenerates, adds one message; only after Documents B4 and never concurrently with another writer. |
+| `src/ontotator/domain/submission_labels.py` (`round_ordinals`) | Documents B5 | Imported by `application/round_reads.py`. |
+| `src/ontotator/api/app.py` | Documents B4 → B9 (owner) | B2 (one status-map line) and B3 (one router include) take the file only while no Documents/problem-reports WP holds it. |
+| `src/ontotator/domain/admin_error_codes.py`, `contracts/admin-error-codes.json`, `frontend/src/admin/errors.ts` | Documents B4 (owner) | B2 adds one code, regenerates, adds one message; only after Documents B4 and never concurrently with another writer. |
 | `contracts/openapi.json`, `frontend/src/api/generated.ts`, `frontend/src/api/client.ts` | Documents B9 (owner); problem-reports WP4/WP8 | B4 regenerates and adds a carried-review section to `client.ts`; one regeneration at a time across all plans. |
-| `src/ontocurator/storage/repository.py` | Documents B1 | **Not modified** by this plan. B2 calls existing methods (`run_mutation(before_operation=…)`, `_draft_events`) only. |
+| `src/ontotator/storage/repository.py` | Documents B1 | **Not modified** by this plan. B2 calls existing methods (`run_mutation(before_operation=…)`, `_draft_events`) only. |
 | `tests/browser_server.py` | Documents P1, problem-reports WP9 | F10 adds one import and one registration line; never concurrently with P1 or WP9. |
 | `variants/CaseViewer.tsx`, `frontend/tests/caseViewer.test.tsx` | Documents E3 | F9 adds one mount and one test after E3. |
 | `DESIGN.md` | Documents X1 | F11 adds rows after X1. |
@@ -161,9 +161,9 @@ Parallel-safe (disjoint owned files): any of B1–B3 with F0, F2, F3, F4a, F5a, 
 **Goal:** `WorkRoundView`, `RoundInputView` and `RoundSourceView` carry ordinals, server times and counts; new carry-forward inputs store the re-anchor `review_reason`.
 
 **Spec sections:** "API and backend changes" (first three rows), "Terms" (source round).
-**May read:** `src/ontocurator/application/work_rounds.py:157-520` (create), `src/ontocurator/api/work_round_routes.py`, `src/ontocurator/domain/work_rounds.py:1-60`, `src/ontocurator/storage/repository.py:391-496` (`get_work_round`, `get_round_input_inventory`), `src/ontocurator/storage/workflow_tables.py` (`WorkRoundRow`, `WorkRoundStateRow`, `RoundSubmissionBindingRow`, `RoundInputRow`), `src/ontocurator/storage/tables.py:375-400` (`SubmissionRow.recorded_at`), `src/ontocurator/domain/submission_labels.py` (`round_ordinals`), `src/ontocurator/authz/scoped.py:129-152` (`get_work_round`, `get_round_input_inventory`), `tests/test_work_rounds.py:1-180` (fixture `rounds` and the create → submit → carry flow), `tests/test_assignment_round_open_api.py` (`round_work` fixture, HTTP users).
+**May read:** `src/ontotator/application/work_rounds.py:157-520` (create), `src/ontotator/api/work_round_routes.py`, `src/ontotator/domain/work_rounds.py:1-60`, `src/ontotator/storage/repository.py:391-496` (`get_work_round`, `get_round_input_inventory`), `src/ontotator/storage/workflow_tables.py` (`WorkRoundRow`, `WorkRoundStateRow`, `RoundSubmissionBindingRow`, `RoundInputRow`), `src/ontotator/storage/tables.py:375-400` (`SubmissionRow.recorded_at`), `src/ontotator/domain/submission_labels.py` (`round_ordinals`), `src/ontotator/authz/scoped.py:129-152` (`get_work_round`, `get_round_input_inventory`), `tests/test_work_rounds.py:1-180` (fixture `rounds` and the create → submit → carry flow), `tests/test_assignment_round_open_api.py` (`round_work` fixture, HTTP users).
 
-**Prerequisite check:** `grep -n "def round_ordinals" src/ontocurator/domain/submission_labels.py` must match (Documents B5).
+**Prerequisite check:** `grep -n "def round_ordinals" src/ontotator/domain/submission_labels.py` must match (Documents B5).
 
 - [ ] **Step 1: Failing tests** in `tests/test_round_read_fields.py`
 
@@ -173,16 +173,16 @@ Parallel-safe (disjoint owned files): any of B1–B3 with F0, F2, F3, F4a, F5a, 
 import pytest
 from test_work_rounds import rounds  # noqa: F401  (fixture reuse)
 
-from ontocurator.application.editing import EditingService
-from ontocurator.application.round_reads import (
+from ontotator.application.editing import EditingService
+from ontotator.application.round_reads import (
     enrich_inputs,
     enrich_rounds,
     enrich_sources,
 )
-from ontocurator.application.submissions import SubmissionService
-from ontocurator.application.work_rounds import WorkRoundService
-from ontocurator.authz.scoped import ScopedRepository
-from ontocurator.domain.workspace import MutationEnvelope
+from ontotator.application.submissions import SubmissionService
+from ontotator.application.work_rounds import WorkRoundService
+from ontotator.authz.scoped import ScopedRepository
+from ontotator.domain.workspace import MutationEnvelope
 
 
 def _submit_first_round(rounds):  # noqa: F811
@@ -281,11 +281,11 @@ Access regression tests (user decision 3; no authorization change) in `tests/tes
   - `test_outsider_is_refused`: a user without membership in the project → the same not-found answer as an unknown round id (assert both responses are equal in status and code).
 These tests pin today's behaviour; if one fails before Step 3, stop and report (do not change access rules).
 
-- [ ] **Step 2: Run** `uv run pytest tests/test_round_read_fields.py tests/test_round_inputs_access_api.py -q`; Expected: `test_round_read_fields.py` FAIL (`ModuleNotFoundError: ontocurator.application.round_reads`); the four access tests PASS already except the enriched-field assertion in `test_owner_reads_enriched_inputs`.
+- [ ] **Step 2: Run** `uv run pytest tests/test_round_read_fields.py tests/test_round_inputs_access_api.py -q`; Expected: `test_round_read_fields.py` FAIL (`ModuleNotFoundError: ontotator.application.round_reads`); the four access tests PASS already except the enriched-field assertion in `test_owner_reads_enriched_inputs`.
 
 - [ ] **Step 3: Implement**
 
-`src/ontocurator/domain/work_rounds.py`: add optional fields (defaults keep `get_work_round`, archived rounds and packages valid):
+`src/ontotator/domain/work_rounds.py`: add optional fields (defaults keep `get_work_round`, archived rounds and packages valid):
 
 ```python
 class RoundInputView(BaseModel):
@@ -314,7 +314,7 @@ class WorkRoundView(BaseModel):
 
 `application/work_rounds.py` (create, the `inputs.append({...})` block at ~436): add `"review_reason": None if target else mapped.reason` when `mapped` is a `NeedsReview` (import it from `domain.reanchor`); for any other non-`Carried` result store `None`. This changes the manifest hash of new rounds only. Run `tests/test_work_rounds.py::test_v3_package_roundtrip_retains_private_input_closure_without_promotion`; if a package schema rejects the key, add `review_reason: str | None = None` to that schema model.
 
-New `src/ontocurator/application/round_reads.py`:
+New `src/ontotator/application/round_reads.py`:
 
 ```python
 """Read-only facts for rounds, carried inputs and carry sources (no writes)."""
@@ -324,11 +324,11 @@ from typing import Any
 
 from sqlalchemy import func, select
 
-from ontocurator.domain.submission_labels import round_ordinals
-from ontocurator.domain.work_rounds import RoundInputView, WorkRoundView
-from ontocurator.storage.repository import Repository
-from ontocurator.storage.tables import SubmissionRow
-from ontocurator.storage.workflow_tables import (
+from ontotator.domain.submission_labels import round_ordinals
+from ontotator.domain.work_rounds import RoundInputView, WorkRoundView
+from ontotator.storage.repository import Repository
+from ontotator.storage.tables import SubmissionRow
+from ontotator.storage.workflow_tables import (
     RoundInputRow,
     RoundSubmissionBindingRow,
     WorkRoundRow,
@@ -401,7 +401,7 @@ The response model for sources stays `RoundSourceView` in the routes module.
 - [ ] **Step 4: Run** `uv run pytest tests/test_round_read_fields.py tests/test_round_inputs_access_api.py tests/test_work_rounds.py tests/test_work_round_identity.py tests/test_assignment_round_open_api.py -q` and `uv run ruff check . && uv run ruff format --check . && uv run mypy src`. Expected: all PASS, no lint/type errors. (OpenAPI drift is expected until B4; do not run `check.sh --only static` here.)
 
 **Done checklist:** new fields optional with defaults; no change to access checks; access regression tests for owner, lead, other annotator and outsider green; enrichment only after scoped reads; `review_reason` stored only for new rounds; listed test files green; static checks green.
-**Commit point (later):** `src/ontocurator/domain/work_rounds.py src/ontocurator/application/round_reads.py src/ontocurator/application/work_rounds.py src/ontocurator/api/work_round_routes.py tests/test_round_read_fields.py tests/test_round_inputs_access_api.py` — `feat: read-only round ordinals, times and counts for rounds and carried inputs`.
+**Commit point (later):** `src/ontotator/domain/work_rounds.py src/ontotator/application/round_reads.py src/ontotator/application/work_rounds.py src/ontotator/api/work_round_routes.py tests/test_round_read_fields.py tests/test_round_inputs_access_api.py` — `feat: read-only round ordinals, times and counts for rounds and carried inputs`.
 
 ---
 
@@ -410,7 +410,7 @@ The response model for sources stays `RoundSourceView` in the routes module.
 **Goal:** Dismissing an input whose carried finding still exists removes that finding and records the dismissal in one mutation; a plain dismissal is rejected while the carried finding exists. **Submission enforces the same invariant**: a dismissed input whose carried finding is in the draft (legacy dismissals, or a finding re-created with the carried ID) blocks submission. A new mutation clears a resolution before submission; when the dismissal removed the carried finding, clearing restores that finding exactly as it was (user decision 1). All are logged as edit events by `run_mutation`.
 
 **Spec sections:** "Resolved questions" 1 and 3; "Contracts preserved".
-**May read:** `src/ontocurator/application/work_rounds.py:582-657` (`validate_round_input_resolutions`, `RoundInputResolutionService`), `src/ontocurator/application/submissions.py:425-435` (where validation runs), `src/ontocurator/application/editing.py:1223-1265` (`_delete_annotation`), `src/ontocurator/storage/repository.py:222-260` (`DraftState`, stored as `edit_events.state`), `:1782-1830` (`_insert_snapshots`, snapshot rows), `:2949-3060` (`run_mutation`, `before_operation`), `:3122-3170` (`_log_edit`, `_draft_events`), `:1535-1575` (`edit_log`), `src/ontocurator/api/app.py:390-410` (status map), `tests/test_work_rounds.py:55-180`.
+**May read:** `src/ontotator/application/work_rounds.py:582-657` (`validate_round_input_resolutions`, `RoundInputResolutionService`), `src/ontotator/application/submissions.py:425-435` (where validation runs), `src/ontotator/application/editing.py:1223-1265` (`_delete_annotation`), `src/ontotator/storage/repository.py:222-260` (`DraftState`, stored as `edit_events.state`), `:1782-1830` (`_insert_snapshots`, snapshot rows), `:2949-3060` (`run_mutation`, `before_operation`), `:3122-3170` (`_log_edit`, `_draft_events`), `:1535-1575` (`edit_log`), `src/ontotator/api/app.py:390-410` (status map), `tests/test_work_rounds.py:55-180`.
 
 **Lock:** starts only after Documents B4 (owner of the error-code files and the `app.py` status map) and while no other WP holds `app.py` or the error-code files. Does not modify `storage/repository.py`.
 
@@ -421,12 +421,12 @@ import pytest
 from test_round_read_fields import _submit_first_round
 from test_work_rounds import rounds  # noqa: F401
 
-from ontocurator.application.editing import EditingService
-from ontocurator.application.submissions import SubmissionService
-from ontocurator.application.work_rounds import RoundInputResolutionService
-from ontocurator.authz.scoped import ScopedRepository
-from ontocurator.domain.errors import DomainError
-from ontocurator.domain.workspace import MutationEnvelope
+from ontotator.application.editing import EditingService
+from ontotator.application.submissions import SubmissionService
+from ontotator.application.work_rounds import RoundInputResolutionService
+from ontotator.authz.scoped import ScopedRepository
+from ontotator.domain.errors import DomainError
+from ontotator.domain.workspace import MutationEnvelope
 
 
 def _ctx(rounds):  # noqa: F811
@@ -652,7 +652,7 @@ def test_undo_of_a_plain_dismissal_restores_nothing(rounds):  # noqa: F811
 
 def test_submission_rejects_a_legacy_dismissal_while_the_carried_finding_exists(rounds):  # noqa: F811
     repo, scoped, ontology, key, item = _ctx(rounds)
-    from ontocurator.domain.workspace import RoundInputResolution
+    from ontotator.domain.workspace import RoundInputResolution
 
     def legacy(draft):  # what the pre-B2 resolve() allowed
         draft.round_input_resolutions = [
@@ -879,7 +879,7 @@ Register `ROUND_INPUT_CARRIED_FINDING_PRESENT` in `domain/admin_error_codes.py`,
 **Goal:** `GET /api/v1/assignments/{assignment_id}/submissions` lists the assignment's submissions across all its rounds (owner and leads). The submission history detail additionally returns what the read-only views need: carried inputs and resolutions (lead read-only check states), checked layers and re-anchor history (historical dialog).
 
 **Spec sections:** "API and backend changes" (row 4), section 7 "My submissions", Resolved question 5.
-**May read:** `src/ontocurator/api/submission_history_routes.py`, `src/ontocurator/api/work_round_routes.py:56-77` (owner-or-lead check pattern), `src/ontocurator/application/round_reads.py` (B1), `tests/test_submission_history_api.py`.
+**May read:** `src/ontotator/api/submission_history_routes.py`, `src/ontotator/api/work_round_routes.py:56-77` (owner-or-lead check pattern), `src/ontotator/application/round_reads.py` (B1), `tests/test_submission_history_api.py`.
 
 - [ ] **Step 1: Failing tests** `tests/test_assignment_submissions_api.py`, modelled on `tests/test_submission_history_api.py` (HTTP, real PostgreSQL):
   - `test_owner_lists_submissions_of_all_rounds_oldest_first`: Round 1 submitted, Round 2 carry-forward submitted → two items, `round_ordinal` 1 then 2, `recorded_at` ascending, `finding_count` equals snapshot count, `submission_id`, `round_id`, `document_id`, `language`, `version` present.
@@ -949,7 +949,7 @@ round_inputs: list[RoundInputView] = []
 round_input_resolutions: list[RoundInputResolution] = []
 ```
 
-Fill the first four from the decoded `Submission`; when the summary's `round_id` is set and that round is `carry_forward`, after leaving the snapshot `with` block call `enrich_inputs(repo, key, repo.get_round_input_inventory(key, round_id))` and take `submission.round_input_resolutions`. Use the exact types used by `Submission` for re-anchor fields (`grep -n "reanchor_inputs" src/ontocurator/domain/workspace.py`). Authorization stays `may_read_human_submission` (leads and owner).
+Fill the first four from the decoded `Submission`; when the summary's `round_id` is set and that round is `carry_forward`, after leaving the snapshot `with` block call `enrich_inputs(repo, key, repo.get_round_input_inventory(key, round_id))` and take `submission.round_input_resolutions`. Use the exact types used by `Submission` for re-anchor fields (`grep -n "reanchor_inputs" src/ontotator/domain/workspace.py`). Authorization stays `may_read_human_submission` (leads and owner).
 
 - [ ] **Step 4: Run** `uv run pytest tests/test_assignment_submissions_api.py tests/test_submission_history_api.py -q` and static checks. Expected: PASS.
 
@@ -1370,7 +1370,7 @@ it("failed_check_block_has_heading_explanation_detail_location_guidance_and_code
 });
 it("unknown_code_uses_the_fallback_explanation", () => {
   render(<ChecksSummary failed={[{ code: "glossary_miss", passed: false }]} all={null} />);
-  expect(screen.getByText(/Ontocurator has no description for it; ask the project lead what it checks\./)).toBeTruthy();
+  expect(screen.getByText(/Ontotator has no description for it; ask the project lead what it checks\./)).toBeTruthy();
 });
 it("show_all_checks_lists_the_code_on_its_own_labelled_line", () => {
   const { container } = render(<ChecksSummary failed={[]} all={[{ code: "numbers_changed", passed: true }]} />);
@@ -1389,7 +1389,7 @@ export const checkExplanations: Readonly<Record<string, string>> = {
   units_added: "The translation run's check found a unit of measurement in the translation that it did not find in the source.",
   numbers_changed: "The translation run's check found numbers in the translation that differ from those in the source.",
 };
-export const unknownCheckExplanation = "The translation run reported this check as failed. Ontocurator has no description for it; ask the project lead what it checks.";
+export const unknownCheckExplanation = "The translation run reported this check as failed. Ontotator has no description for it; ask the project lead what it checks.";
 export const checkNoLocation = "This check does not point to a text location. Compare the source and the translation yourself.";
 export const checkDeviationGuidance = "Choose Accepted unchanged and say in the rationale why the difference is correct. If it changes the clinical meaning, choose Query or Rejected with the category Number or unit.";
 export function checkExplanation(code: string): string { return Object.hasOwn(checkExplanations, code) ? checkExplanations[code] : unknownCheckExplanation; }
@@ -1447,7 +1447,7 @@ it("clamps_and_ignores_invalid_stored_values", () => {
   expect(clampSidebarWidth(100, limits)).toBe(220);
   localStorage.setItem(storageKey("anna"), "abc"); expect(readStoredWidth("anna")).toBeNull();
   localStorage.setItem(storageKey("anna"), "320"); expect(readStoredWidth("anna")).toBe(320);
-  expect(storageKey("anna")).toBe("ontocurator.editor.sidebarWidth.v1:anna");
+  expect(storageKey("anna")).toBe("ontotator.editor.sidebarWidth.v1:anna");
 });
 it("keyboard_changes_width_and_reports_aria_values", () => {
   const onChange = vi.fn();
@@ -1749,7 +1749,7 @@ Order: carried (input order), evidence issues, re-anchor, open review targets, u
 ## F8b: My submissions, historical dialog, toolbar identity
 
 **Goal:** Spec section 7 "My submissions", identity line in the toolbar title, carried states in the historical dialog (Resolved 5 for the owner side); pass F8a's new optional props from their callers.
-**May read:** spec section 7; `frontend/src/tasks/TaskEditor.tsx:50-170` (incl. the `<WorkRoundsDialog` call ~160); `editor/HistoricalSubmissionDialog.tsx` (F0); CaseScreen "Submission history" section (~2375), historical dialog mount (~2593), "View submitted result" (~2643), `<RoundInputEvidenceDialog` (~2592); `src/ontocurator/api/submission_history_routes.py:30-45` (`SubmissionHistoryDetail` shape) and the `Submission` type in `api/client.ts` (the two shapes differ); `editor/rounds/roundLabels.ts`; `editor/carried/CarriedChecksReadOnly.tsx`, `editor/carried/checkState.ts`; `api.listAssignmentSubmissions`, `api.getSubmissionHistory` (B3/B4); `frontend/src/documents/SubmissionsTable.tsx` (DX, if present).
+**May read:** spec section 7; `frontend/src/tasks/TaskEditor.tsx:50-170` (incl. the `<WorkRoundsDialog` call ~160); `editor/HistoricalSubmissionDialog.tsx` (F0); CaseScreen "Submission history" section (~2375), historical dialog mount (~2593), "View submitted result" (~2643), `<RoundInputEvidenceDialog` (~2592); `src/ontotator/api/submission_history_routes.py:30-45` (`SubmissionHistoryDetail` shape) and the `Submission` type in `api/client.ts` (the two shapes differ); `editor/rounds/roundLabels.ts`; `editor/carried/CarriedChecksReadOnly.tsx`, `editor/carried/checkState.ts`; `api.listAssignmentSubmissions`, `api.getSubmissionHistory` (B3/B4); `frontend/src/documents/SubmissionsTable.tsx` (DX, if present).
 
 The historical dialog has three entry points with two data shapes: (1) "View" in My submissions → `SubmissionHistoryDetail` (B3); (2) the retained non-assignment "Submission history" list and (3) "View submitted result" in "Case submitted" → raw `Submission` objects. One presentation model covers both:
 
@@ -1884,7 +1884,7 @@ export function fromHistoryDetail(detail: SubmissionHistoryDetail, heading: stri
 
 ## Review disposition
 
-Codex review `ontocurator-reviews/2026-10-19-plan-editor-carried-review-codex.md` (10 findings plus one note). Each finding was checked against the code and the sibling plans before it was applied.
+Codex review `ontotator-reviews/2026-10-19-plan-editor-carried-review-codex.md` (10 findings plus one note). Each finding was checked against the code and the sibling plans before it was applied.
 
 | # | Finding | Verified against | Disposition |
 |---|---|---|---|

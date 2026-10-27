@@ -104,7 +104,7 @@ export const AuthGate: React.FC = () => {
         // Without a session the login simply shows; anything else is worth saying.
         const notice = err instanceof AuthError || !(err instanceof Error)
           ? undefined
-          : `Ontocurator could not check your session: ${err.message}`;
+          : `Ontotator could not check your session: ${err.message}`;
         setState({ kind: "anonymous", notice });
       },
     );

@@ -19,11 +19,11 @@ from test_ontology_tree import (
     write_mixed_ontology,
 )
 
-from ontocurator.api.app import create_app
-from ontocurator.config import AppConfig
-from ontocurator.domain.profiles import profile_hash
-from ontocurator.domain.workspace import WorkspaceKey
-from ontocurator.storage.repository import Repository
+from ontotator.api.app import create_app
+from ontotator.config import AppConfig
+from ontotator.domain.profiles import profile_hash
+from ontotator.domain.workspace import WorkspaceKey
+from ontotator.storage.repository import Repository
 
 app_client = _shared_app_client
 
@@ -71,8 +71,8 @@ def _review_key(client, annotator="annotator-1"):
     from auth_harness import username_for
     from work_plan_support import review_task
 
-    from ontocurator.application.workspaces import WorkspaceService
-    from ontocurator.domain.review import ReviewTargetSet
+    from ontotator.application.workspaces import WorkspaceService
+    from ontotator.domain.review import ReviewTargetSet
 
     _open(client, "pkg-scenario-b", annotator=annotator)  # joins the project
     app = client.app

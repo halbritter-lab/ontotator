@@ -15,13 +15,13 @@ from test_pg_repository import _key, _submission
 from test_storage import _sample_package
 from test_t1_export import DOC, _own, _submit
 
-from ontocurator.domain.annotations import AnnotationRef
-from ontocurator.domain.errors import DomainError
-from ontocurator.domain.review import ReviewTargetSet
-from ontocurator.domain.scopes import build_scope
-from ontocurator.exchange.jobs import store_file
-from ontocurator.storage.repository import _key_str
-from ontocurator.storage.tables import (
+from ontotator.domain.annotations import AnnotationRef
+from ontotator.domain.errors import DomainError
+from ontotator.domain.review import ReviewTargetSet
+from ontotator.domain.scopes import build_scope
+from ontotator.exchange.jobs import store_file
+from ontotator.storage.repository import _key_str
+from ontotator.storage.tables import (
     AssignmentRow,
     AuditEventRow,
     DocumentRow,
@@ -248,8 +248,7 @@ def test_progress_groups_all_statuses_in_one_metadata_query(project):
     projections = [
         statement
         for statement in statements
-        if "FROM ontocurator.documents LEFT OUTER JOIN ontocurator.assignments"
-        in statement
+        if "FROM ontotator.documents LEFT OUTER JOIN ontotator.assignments" in statement
     ]
     assert len(projections) == 1
     assert "documents.text" not in projections[0]
@@ -864,17 +863,15 @@ def test_document_list_queries_are_bounded_and_metadata_only(project, count):
         "annotation_snapshots" in sql or "evidence_snapshots" in sql
         for sql in statements
     )
-    document_queries = [
-        sql for sql in statements if "FROM ontocurator.documents" in sql
-    ]
+    document_queries = [sql for sql in statements if "FROM ontotator.documents" in sql]
     assert len(document_queries) == 1
-    assert "length(ontocurator.documents.text)" in document_queries[0]
+    assert "length(ontotator.documents.text)" in document_queries[0]
 
 
 def test_work_of_an_anonymised_account_still_exports_under_its_pseudonym(
     project, tmp_path
 ):
-    from ontocurator.auth.audit import Actor
+    from ontotator.auth.audit import Actor
 
     app, lead, _, _ = project
     db = app.state.repo.db

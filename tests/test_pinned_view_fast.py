@@ -15,16 +15,16 @@ from typing import Any
 
 import pytest
 
-from ontocurator.domain.documents import OntologyRef
-from ontocurator.domain.workspace import WorkspaceKey
-from ontocurator.ontology import service as service_module
-from ontocurator.ontology import translations as translations_module
-from ontocurator.ontology.provenance import SearchRequest
-from ontocurator.ontology.registry import OntologyRegistry
-from ontocurator.ontology.service import OntologyService
-from ontocurator.ontology.translations import LanguageLexicalIndex, apply_translations
-from ontocurator.vendor.hpo_span_annotator.lexical import LexicalIndex
-from ontocurator.vendor.hpo_span_annotator.search import SearchEngine
+from ontotator.domain.documents import OntologyRef
+from ontotator.domain.workspace import WorkspaceKey
+from ontotator.ontology import service as service_module
+from ontotator.ontology import translations as translations_module
+from ontotator.ontology.provenance import SearchRequest
+from ontotator.ontology.registry import OntologyRegistry
+from ontotator.ontology.service import OntologyService
+from ontotator.ontology.translations import LanguageLexicalIndex, apply_translations
+from ontotator.vendor.hpo_span_annotator.lexical import LexicalIndex
+from ontotator.vendor.hpo_span_annotator.search import SearchEngine
 
 KEY = WorkspaceKey(
     project_key="p",

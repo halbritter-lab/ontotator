@@ -15,9 +15,9 @@ from sqlalchemy import func, select
 from test_document_rows_stages import ANNOTATE, REVIEW, plan, set_status, undecide
 from work_plan_support import BASE, doc, plan_env
 
-from ontocurator.application.document_rows import RowQuery
-from ontocurator.application.documents_visits import GAP, baseline
-from ontocurator.storage.overview_tables import DocumentsVisitRow
+from ontotator.application.document_rows import RowQuery
+from ontotator.application.documents_visits import GAP, baseline
+from ontotator.storage.overview_tables import DocumentsVisitRow
 
 T0 = datetime(2026, 10, 21, 9, 0, tzinfo=UTC)
 

@@ -8,7 +8,7 @@
 
 ## 1. Ziel und Umfang
 
-Ontocurator soll als **vollständig portables Standalone-Paket** verteilt werden können. Zielgruppe sind u. a. klinische Curation-Teams und Annotatoren, die auf Dienst-PCs arbeiten und über keine Entwicklertools (weder Python noch Node.js) und typischerweise keine Administratorrechte verfügen.
+Ontotator soll als **vollständig portables Standalone-Paket** verteilt werden können. Zielgruppe sind u. a. klinische Curation-Teams und Annotatoren, die auf Dienst-PCs arbeiten und über keine Entwicklertools (weder Python noch Node.js) und typischerweise keine Administratorrechte verfügen.
 
 ### Kernanforderungen:
 1. **Keine Installation (Portable Distribution):** Auslieferung als ZIP-Archiv. Entpacken und Starten per Doppelklick ohne Setup-Assistent, ohne Registry-Änderungen und ohne Admin-Rechte.
@@ -22,17 +22,17 @@ Ontocurator soll als **vollständig portables Standalone-Paket** verteilt werden
 
 ---
 
-## 2. Persistente Konfiguration (`ontocurator.config`)
+## 2. Persistente Konfiguration (`ontotator.config`)
 
-Bislang liest `ontocurator serve` Einstellungen ausschließlich aus CLI-Flags und Umgebungswerten. Neu eingeführt wird ein strukturierter Konfigurationsmechanismus:
+Bislang liest `ontotator serve` Einstellungen ausschließlich aus CLI-Flags und Umgebungswerten. Neu eingeführt wird ein strukturierter Konfigurationsmechanismus:
 
 ### Speicherorte (Reihenfolge der Priorität):
 1. **CLI-Argumente:** Explizite Flags (`--workspace`, `--ontology`, etc.) überschreiben persistierte Werte.
 2. **Lokaler Workspace-Override:** `<workspace>/config.json` (falls vorhanden).
 3. **OS-Benutzerkonfiguration:** Standardmäßiges Konfigurationsverzeichnis des Betriebssystems:
-   - Windows: `%APPDATA%\ontocurator\config.json`
-   - macOS: `~/Library/Application Support/ontocurator/config.json`
-   - Linux: `~/.config/ontocurator/config.json`
+   - Windows: `%APPDATA%\ontotator\config.json`
+   - macOS: `~/Library/Application Support/ontotator/config.json`
+   - Linux: `~/.config/ontotator/config.json`
 4. **Defaults:** Fallback auf `./workspace`, Port 8000, Loopback 127.0.0.1.
 
 ### Datenmodell `PersistentConfig`:
@@ -79,7 +79,7 @@ Neue API-Endpunkte unter `/api/v1/ontologies`:
 * Sobald die Datei hochgeladen ist, wird das Paket automatisch ohne Seiten-Neuladen geöffnet.
 
 ### 3.3 Sichere Auswertung von Startargumenten (`sys.argv`)
-Falls `ontocurator` per Doppelklick auf eine Datei, „Öffnen mit...“ oder Drag & Drop auf das Programmsymbol gestartet wird, übergibt das Betriebssystem Pfade als Positionsargumente:
+Falls `ontotator` per Doppelklick auf eine Datei, „Öffnen mit...“ oder Drag & Drop auf das Programmsymbol gestartet wird, übergibt das Betriebssystem Pfade als Positionsargumente:
 * `.zip`: Startet den Server, importiert das Paket direkt in den Workspace und öffnet die UI mit Fokus auf diesem Paket.
 * `.json`: Prüft auf OBO-Graph, kopiert nach `<workspace>/ontologies/`, registriert die Ontologie und startet normal.
 * Verzeichnis: Verwendet dieses Verzeichnis als `workspace_dir`.
@@ -92,17 +92,17 @@ Falls `ontocurator` per Doppelklick auf eine Datei, „Öffnen mit...“ oder Dr
 ### 4.1 Build-Skript `scripts/build_standalone.py`
 Das Skript führt folgende Schritte deterministisch aus:
 1. **Frontend-Build:** Führt `npm run build` in `frontend/` aus.
-2. **Asset-Synchronisation:** Kopiert die kompilierte SPA nach `src/ontocurator/web/`.
+2. **Asset-Synchronisation:** Kopiert die kompilierte SPA nach `src/ontotator/web/`.
 3. **PyInstaller Execution:**
-   - Entry-Point: `ontocurator.cli:main`
+   - Entry-Point: `ontotator.cli:main`
    - Modus: `--onedir` (Ordnerstruktur) für schnellen Start ohne Dekomprimierungs-Latenz.
-   - Eingebettete Daten: `src/ontocurator/web` -> `ontocurator/web`, `src/ontocurator/storage/*.sql` -> `ontocurator/storage`.
+   - Eingebettete Daten: `src/ontotator/web` -> `ontotator/web`, `src/ontotator/storage/*.sql` -> `ontotator/storage`.
    - Hidden Imports: `uvicorn.logging`, `uvicorn.loops`, `uvicorn.protocols`, `sklearn`, `scipy`.
 4. **Verpackung des portablen Distributions-ZIPs:**
-   Struktur des resultierenden Archivs `dist/ontocurator-portable-<os>-<arch>.zip`:
+   Struktur des resultierenden Archivs `dist/ontotator-portable-<os>-<arch>.zip`:
    ```
-   ontocurator/
-   ├── ontocurator.exe (bzw. ontocurator unter Unix)
+   ontotator/
+   ├── ontotator.exe (bzw. ontotator unter Unix)
    ├── _internal/          <-- Python-Runtime und Bibliotheken (PyInstaller)
    ├── ontologies/         <-- Drop-Ordner für hp.json, mondo.json
    │   └── README.txt      <-- "Legen Sie hier Ihre OBO-Graph-JSON-Dateien ab"

@@ -4,7 +4,7 @@
 
 **Goal:** Ship the nine quick fixes Q1 to Q9 of [2026-10-19-quick-fixes-and-export-design.md](../specs/2026-10-19-quick-fixes-and-export-design.md), including its "Resolved questions", as independent, locally verified work packages.
 
-**Architecture:** Eight small frontend changes (dialog footers, My tasks filter and counts, a link-based project picker, a one-primary export preflight, two CSS fixes, one formatter swap) and one backend change: the final export worker adds `README.txt` and `index.csv`, built by a new pure module `exchange/final_export_guide.py` from the frozen snapshot only. The snapshot gains two additive keys for new exports (`project_name`, `submission_recorded_at`); the receipt format stays `ontocurator-final-export/v1`.
+**Architecture:** Eight small frontend changes (dialog footers, My tasks filter and counts, a link-based project picker, a one-primary export preflight, two CSS fixes, one formatter swap) and one backend change: the final export worker adds `README.txt` and `index.csv`, built by a new pure module `exchange/final_export_guide.py` from the frozen snapshot only. The snapshot gains two additive keys for new exports (`project_name`, `submission_recorded_at`); the receipt format stays `ontotator-final-export/v1`.
 
 **Tech Stack:** Python 3.12, SQLAlchemy 2, PostgreSQL (pytest), `csv`/`textwrap` from the standard library; React 18, TypeScript, Vitest + Testing Library, Playwright.
 
@@ -21,7 +21,7 @@
 - English for all files and UI copy. Icons only from `frontend/src/ui/icons.tsx`; no Unicode glyphs as icons ("·" as a text separator is fine where the spec uses it).
 - **Shell: every command in this plan is written for the Bash tool (Git Bash), run from the worktree root** (`VAR=value cmd`, `test -f`, `grep`). Do not run them in PowerShell. `rg` is not installed in Git Bash; searches use `grep -rnE`.
 - No CI or GitHub Actions. Local verification only, from the worktree root:
-  - Backend tests need PostgreSQL (Docker running, or `ONTOCURATOR_TEST_PG_URL` set to a throwaway superuser URL): `uv run pytest tests/<file>.py -q`.
+  - Backend tests need PostgreSQL (Docker running, or `ONTOTATOR_TEST_PG_URL` set to a throwaway superuser URL): `uv run pytest tests/<file>.py -q`.
   - Backend static: `uv run ruff check . && uv run ruff format --check . && uv run mypy src`.
   - Frontend unit (always with these worker flags on this 16 GB machine): `npm --prefix frontend test -- <path relative to frontend> --maxWorkers=4 --minWorkers=1`.
   - Types: `npm --prefix frontend run typecheck`.
@@ -55,7 +55,7 @@ Sibling WP IDs: **Documents** = `2026-10-19-documents-lead-table.md` (B1-B9, U1-
 | `frontend/tests/finalSelection.test.tsx` | This plan WP-E; Documents E3 (Task 6.4 adjusts it) | **WP-E runs before Documents E3**; E3 keeps WP-E's export-panel tests. |
 | `frontend/src/variants/FinalResultSelector.tsx`, `frontend/tests/finalResultSelector.test.tsx` | Documents E3 (Task 6.4 deletes both) | WP-G only while the file exists, never while E3 runs. |
 | `frontend/src/app/router.ts`, `frontend/src/App.tsx` | Documents U3 and later | Not modified. WP-D uses `routeHref` and the existing routes only. |
-| `src/ontocurator/application/final_results.py` | Documents B3 → B4 (`_authorize`, `_projection`, `select()`) | WP-A edits only the `freeze()` payload construction. **WP-A runs after Documents B4** (or, if it can finish first, before Documents B3 starts); never between B3 and B4 or concurrently with either. |
+| `src/ontotator/application/final_results.py` | Documents B3 → B4 (`_authorize`, `_projection`, `select()`) | WP-A edits only the `freeze()` payload construction. **WP-A runs after Documents B4** (or, if it can finish first, before Documents B3 starts); never between B3 and B4 or concurrently with either. |
 | `frontend/browser/final-workflow.spec.ts`, `frontend/browser/admin.spec.ts` | Documents P7 (Task 7.6), problem-reports WP9 (`final-workflow.spec.ts` report steps), editor F10 (specs asserting removed UI) | **WP-E (export lines ~109-112) and WP-D (`selectProject` ~111-116) run before Documents P7, problem-reports WP9 and editor F10.** |
 | `tests/browser_server.py` | Documents P1, problem-reports WP9, editor F10 (one registration line each) | Not modified. WP-H uses the existing `/__test_translation_review__?workflow=true` fixture. |
 
@@ -81,7 +81,7 @@ Constraints the coordinator enforces (in addition to "at most two heavy agents" 
 
 | WP | Fix | Owns (writes) | Heavy tests? | Depends on |
 |---|---|---|---|---|
-| WP-A | Q5 backend: `README.txt`, `index.csv`, frozen keys | `src/ontocurator/exchange/final_export_guide.py` (new), `src/ontocurator/exchange/final_export.py`, `src/ontocurator/application/final_results.py` (`freeze()` payload only), `tests/test_final_export_guide.py` (new), `tests/test_final_export_archive.py` (new) | yes (pytest + PostgreSQL) | Documents B4 (see sequencing) |
+| WP-A | Q5 backend: `README.txt`, `index.csv`, frozen keys | `src/ontotator/exchange/final_export_guide.py` (new), `src/ontotator/exchange/final_export.py`, `src/ontotator/application/final_results.py` (`freeze()` payload only), `tests/test_final_export_guide.py` (new), `tests/test_final_export_archive.py` (new) | yes (pytest + PostgreSQL) | Documents B4 (see sequencing) |
 | WP-B | Q1 dialog Close in footer | B1: `frontend/src/tasks/RoundInputEvidenceDialog.tsx`, `frontend/src/tasks/WorkRoundsDialog.tsx`; B2: `frontend/src/tasks/TaskProblemActions.tsx`; `frontend/tests/dialogFooters.test.tsx` (new) | no | none; parts skipped per sequencing |
 | WP-C | Q2 filter + Q9 counts | `frontend/src/tasks/MyTasks.tsx`, `frontend/tests/myTasks.test.tsx`, components.css region "after `.stat-row dd`" | no | Documents U1 (`components.css` slot) |
 | WP-D | Q3 project picker + Q2 header names | `frontend/src/app/ProjectPicker.tsx` (new), `frontend/src/app/Shell.tsx`, `frontend/tests/projectPicker.test.tsx` (new), `frontend/tests/shell.test.tsx`, `frontend/browser/admin.spec.ts` (`selectProject` only), components.css region `.shell-project-*` | no | Documents U1 (`components.css` slot), WP-C |
@@ -116,9 +116,9 @@ Recommended lanes (at most two heavy at once across all plans):
 
 **Sequencing:** after Documents B4 (preferred) or entirely before Documents B3 starts; never concurrently with B3 or B4 (`final_results.py`). If B3/B4 already landed, Read `freeze()` again before editing; the anchor is still the `payload = {` construction.
 
-**Owns:** `src/ontocurator/exchange/final_export_guide.py` (create), `src/ontocurator/exchange/final_export.py`, `src/ontocurator/application/final_results.py` (only the `payload = {...}` construction in `freeze()`, ~line 512), `tests/test_final_export_guide.py` (create), `tests/test_final_export_archive.py` (create).
+**Owns:** `src/ontotator/exchange/final_export_guide.py` (create), `src/ontotator/exchange/final_export.py`, `src/ontotator/application/final_results.py` (only the `payload = {...}` construction in `freeze()`, ~line 512), `tests/test_final_export_guide.py` (create), `tests/test_final_export_archive.py` (create).
 
-**Read:** `src/ontocurator/exchange/final_content.py` (`freeze_content` output shape), `src/ontocurator/exchange/jobs.py:217-375` (`serialize_t1_content`: units appended in `content.submissions` order; `ontospan.write_bundle` names them `documents/{index:05d}.json`, 0-based; set id `submission-{id}`), `tests/test_final_export.py` (fixture pattern), `src/ontocurator/storage/tables.py` (`SubmissionRow.recorded_at`, `ProjectRow.name`).
+**Read:** `src/ontotator/exchange/final_content.py` (`freeze_content` output shape), `src/ontotator/exchange/jobs.py:217-375` (`serialize_t1_content`: units appended in `content.submissions` order; `ontospan.write_bundle` names them `documents/{index:05d}.json`, 0-based; set id `submission-{id}`), `tests/test_final_export.py` (fixture pattern), `src/ontotator/storage/tables.py` (`SubmissionRow.recorded_at`, `ProjectRow.name`).
 
 **Facts:** snapshot `payload` keys today: `format`, `project`, `request`, `state` (`selections[{case_id, language, document_id, submission_id, revision}]`, `warnings[{id, code, case_id, language, reason, ...}]`, `omissions[{case_id, language}]`), `immutable_submissions`, `content` (`documents` dict in frozen order with `document`, `source_text_sha256`, `variant` or null; `submissions` list of `Submission` JSON with `submission_id`, `origin_key{document_id, annotator_id, mode}`, `snapshots`), `round_inputs`, `round_kinds` (`{submission_id: "ordinary"|"carry_forward"|"clean_restart"|"consolidation"}`), `selected_submission_ids`.
 
@@ -133,7 +133,7 @@ import csv
 import io
 from datetime import UTC, datetime
 
-from ontocurator.exchange.final_export_guide import (
+from ontotator.exchange.final_export_guide import (
     INDEX_COLUMNS,
     build_index_csv,
     build_readme,
@@ -329,7 +329,7 @@ def test_readme_lists_everything_in_plain_text():
         provenance_ids=["earlier"],
     ).decode("utf-8")
     assert "\r" not in text and not text.startswith("\ufeff")
-    assert text.startswith("Ontocurator final export\n========================\n")
+    assert text.startswith("Ontotator final export\n========================\n")
     for line in [
         "Project:          T5 acceptance (t5)",
         "Snapshot ID:      snap-1",
@@ -397,9 +397,9 @@ def test_project_name_falls_back_to_key():
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `uv run pytest tests/test_final_export_guide.py -q`
-Expected: FAIL with `ModuleNotFoundError: No module named 'ontocurator.exchange.final_export_guide'`.
+Expected: FAIL with `ModuleNotFoundError: No module named 'ontotator.exchange.final_export_guide'`.
 
-- [ ] **Step 3: Implement** `src/ontocurator/exchange/final_export_guide.py`:
+- [ ] **Step 3: Implement** `src/ontotator/exchange/final_export_guide.py`:
 
 ```python
 """Plain-language guide (README.txt) and result table (index.csv) for a final export.
@@ -592,7 +592,7 @@ def build_readme(
     key = payload["project"]
     name = payload.get("project_name") or key
     state = payload["state"]
-    out: list[str] = [*_heading("Ontocurator final export", "="), ""]
+    out: list[str] = [*_heading("Ontotator final export", "="), ""]
     out += [
         f"Project:          {name if name == key else f'{name} ({key})'}",
         f"Snapshot ID:      {snapshot_id}",
@@ -719,7 +719,7 @@ def guide_files(
 
 Note: the order in `guide_files` equals the worker's order because the worker thaws `payload["content"]["submissions"]` into `content.submissions` and filters it with the same `selected_ids` (`final_export.py:108-113, 130-132`).
 
-- [ ] **Step 4: Run** `uv run pytest tests/test_final_export_guide.py -q` — Expected: PASS (7 tests). Then `uv run ruff format src/ontocurator/exchange/final_export_guide.py tests/test_final_export_guide.py` and `uv run ruff check src/ontocurator/exchange/final_export_guide.py tests/test_final_export_guide.py`.
+- [ ] **Step 4: Run** `uv run pytest tests/test_final_export_guide.py -q` — Expected: PASS (7 tests). Then `uv run ruff format src/ontotator/exchange/final_export_guide.py tests/test_final_export_guide.py` and `uv run ruff check src/ontotator/exchange/final_export_guide.py tests/test_final_export_guide.py`.
 
 ### Task A2: Freeze project name and server submission time
 
@@ -739,8 +739,8 @@ from test_annotation_versions import seed_submission
 from test_case_api import BASE, SOURCE
 from test_case_api import case_env as case_env
 
-from ontocurator.exchange.final_export_guide import guide_files
-from ontocurator.storage.final_tables import ExportSelectionSnapshotRow
+from ontotator.exchange.final_export_guide import guide_files
+from ontotator.storage.final_tables import ExportSelectionSnapshotRow
 
 
 def _export(env):
@@ -789,7 +789,7 @@ def test_archive_contains_hashed_readme_and_index(case_env):
         "index.csv",
     } <= names
     receipt = json.loads(archive.read("receipt.json"))
-    assert receipt["format"] == "ontocurator-final-export/v1"
+    assert receipt["format"] == "ontotator-final-export/v1"
     assert set(receipt["files"]) == names - {"receipt.json"}
     for name, digest in receipt["files"].items():
         assert hashlib.sha256(archive.read(name)).hexdigest() == digest, name
@@ -813,7 +813,7 @@ def test_archive_contains_hashed_readme_and_index(case_env):
                 unit["annotation_set"]["annotation_set_id"] == row["annotation_set_id"]
             )
     readme = archive.read("README.txt").decode("utf-8")
-    assert readme.startswith("Ontocurator final export\n")
+    assert readme.startswith("Ontotator final export\n")
     assert f"Snapshot ID:      {receipt['snapshot_id']}" in readme
 
 
@@ -846,7 +846,7 @@ If `case_env` does not expose `db`, use `case_env.app.state.repo.db` (both appea
 
 - [ ] **Step 2: Run** `uv run pytest tests/test_final_export_archive.py -q` — Expected: FAIL (`README.txt` missing from the archive).
 
-- [ ] **Step 3: Freeze the two keys** in `src/ontocurator/application/final_results.py`, inside `freeze()`, directly before `payload = {` (~line 512). Add `ProjectRow` and `SubmissionRow` to the existing `from ontocurator.storage.tables import (...)` block if they are not imported yet; `UTC` is already imported.
+- [ ] **Step 3: Freeze the two keys** in `src/ontotator/application/final_results.py`, inside `freeze()`, directly before `payload = {` (~line 512). Add `ProjectRow` and `SubmissionRow` to the existing `from ontotator.storage.tables import (...)` block if they are not imported yet; `UTC` is already imported.
 
 ```python
             recorded_at = {
@@ -872,7 +872,7 @@ and add to the payload dict, after `"selected_submission_ids": selected_ids,`:
 
 The snapshot hash changes only for new exports; old snapshots keep verifying because `state_digest(row["payload"])` is computed over the stored payload.
 
-- [ ] **Step 4: Write the files in the worker.** In `src/ontocurator/exchange/final_export.py` add `from ontocurator.exchange.final_export_guide import guide_files` and, directly before `receipt = {` (~line 148), insert:
+- [ ] **Step 4: Write the files in the worker.** In `src/ontotator/exchange/final_export.py` add `from ontotator.exchange.final_export_guide import guide_files` and, directly before `receipt = {` (~line 148), insert:
 
 ```python
     files.update(
@@ -902,7 +902,7 @@ Expected: all PASS; ruff and mypy clean.
 - [ ] Each `selected` row's `bundle_entry` opens to a unit with the listed `annotation_set_id`.
 - [ ] README/index are a pure function of the stored snapshot row.
 - [ ] Existing final export tests pass unchanged.
-- [ ] **Commit point:** `src/ontocurator/exchange/final_export_guide.py src/ontocurator/exchange/final_export.py src/ontocurator/application/final_results.py tests/test_final_export_guide.py tests/test_final_export_archive.py` — `feat(export): add README.txt and index.csv to the final export`.
+- [ ] **Commit point:** `src/ontotator/exchange/final_export_guide.py src/ontotator/exchange/final_export.py src/ontotator/application/final_results.py tests/test_final_export_guide.py tests/test_final_export_archive.py` — `feat(export): add README.txt and index.csv to the final export`.
 
 ---
 
@@ -1539,7 +1539,7 @@ it("says so when final selections change while the preflight is open", async () 
   render(<FinalExportPanel projectKey="p" username="lead" />);
   fireEvent.click(screen.getByRole("button", { name: "Prepare final export" }));
   await screen.findByRole("heading", { name: "Export preflight" });
-  act(() => { window.dispatchEvent(new CustomEvent("ontocurator:final-selection-changed", { detail: { projectKey: "p" } })); });
+  act(() => { window.dispatchEvent(new CustomEvent("ontotator:final-selection-changed", { detail: { projectKey: "p" } })); });
   expect(screen.getByText("Final selections changed. Prepare the export again.")).toBeDefined();
   expect(screen.queryByRole("region", { name: "Export preflight" })).toBeNull();
 });
@@ -1578,8 +1578,8 @@ function FinalExportContent({ projectKey }: { projectKey: string }): JSX.Element
       generation.current += 1;
       setState(undefined); setAccepted(false);
     };
-    window.addEventListener("ontocurator:final-selection-changed", invalidate);
-    return () => window.removeEventListener("ontocurator:final-selection-changed", invalidate);
+    window.addEventListener("ontotator:final-selection-changed", invalidate);
+    return () => window.removeEventListener("ontotator:final-selection-changed", invalidate);
   }, [projectKey]);
   useEffect(() => { if (state) heading.current?.focus(); }, [state]);
   useEffect(() => {
@@ -2051,7 +2051,7 @@ Expected: no output.
 
 ## Review disposition
 
-Codex review `ontocurator-reviews/2026-10-19-plan-quick-fixes-and-export-codex.md` (8 findings), each checked against the code and the three sibling plans.
+Codex review `ontotator-reviews/2026-10-19-plan-quick-fixes-and-export-codex.md` (8 findings), each checked against the code and the three sibling plans.
 
 | # | Finding | Verified against | Disposition |
 |---|---|---|---|

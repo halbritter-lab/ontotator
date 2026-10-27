@@ -6,7 +6,7 @@ from dataclasses import replace
 
 import pytest
 
-from ontocurator.domain.next_steps import (
+from ontotator.domain.next_steps import (
     REVIEWER_NEEDED_STATUSES,
     OldItem,
     StepFacts,
@@ -288,7 +288,7 @@ def test_unmatched_in_plan_row_gets_logged_needs_attention_fallback(caplog):
         translation_statuses=("accepted",),
         annotation_assignments=1,
     )
-    with caplog.at_level(logging.WARNING, logger="ontocurator.domain.next_steps"):
+    with caplog.at_level(logging.WARNING, logger="ontotator.domain.next_steps"):
         [step] = derive_steps(broken, row=("c1", "de"))
     assert (step.code, step.kind, step.action) == ("needs_attention", "decision", None)
     assert step.badges == ("your_decision",)

@@ -47,12 +47,12 @@ from test_text_change_service import (
     _submitted,
 )
 
-from ontocurator.api.app import create_app
-from ontocurator.application.document_rows import DocumentRowsService, RowQuery
-from ontocurator.config import AppConfig
-from ontocurator.storage.overview_tables import TextChangeResolutionRow
-from ontocurator.storage.plan_tables import DiscardedVariantRow
-from ontocurator.storage.tables import ProjectRow
+from ontotator.api.app import create_app
+from ontotator.application.document_rows import DocumentRowsService, RowQuery
+from ontotator.config import AppConfig
+from ontotator.storage.overview_tables import TextChangeResolutionRow
+from ontotator.storage.plan_tables import DiscardedVariantRow
+from ontotator.storage.tables import ProjectRow
 
 
 @pytest.fixture

@@ -88,7 +88,7 @@ def _new_project(app: FastAPI, name: str) -> Scenario:
     from sqlalchemy import update
     from t1_fixtures import create_project
 
-    from ontocurator.storage.tables import ProjectRow
+    from ontotator.storage.tables import ProjectRow
 
     key = f"problems-{name}-{uuid4().hex[:8]}"
     db = app.state.repo.db
@@ -160,7 +160,7 @@ def build_final(app: FastAPI) -> dict[str, Any]:
 
 
 def build_translation(app: FastAPI) -> dict[str, Any]:
-    from ontocurator.application.translation_reviews import TranslationReviewService
+    from ontotator.application.translation_reviews import TranslationReviewService
 
     scenario, documents = _project(app, "translation", accepted=False)
     tasks = _annotate_tasks(scenario, documents, reporter=False)

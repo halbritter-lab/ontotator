@@ -1,5 +1,5 @@
 {
-  "schema_version": "ontocurator-task-profile/v1",
+  "schema_version": "ontotator-task-profile/v1",
   "profile_id": "t5-synthetic-acceptance/v1",
   "version": "1.0.0",
   "ontologies": [

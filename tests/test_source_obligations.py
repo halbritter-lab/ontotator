@@ -2,11 +2,11 @@
 
 from dataclasses import replace
 
-from ontocurator.domain.variants import VariantInfo
+from ontotator.domain.variants import VariantInfo
 
 
 def test_inventory_obligations_keep_old_source_and_resolve_only_exact_edge():
-    from ontocurator.domain import work_rounds
+    from ontotator.domain import work_rounds
 
     original = VariantInfo(
         "en1", "case", "original", "en", 1, "native", None, None, None, None, "1" * 64
@@ -59,7 +59,7 @@ def test_inventory_obligations_keep_old_source_and_resolve_only_exact_edge():
 
 
 def test_resolution_of_old_translation_text_does_not_certify_later_changed_text():
-    from ontocurator.domain.work_rounds import derive_source_obligations
+    from ontotator.domain.work_rounds import derive_source_obligations
 
     source = VariantInfo(
         "en1", "case", "original", "en", 1, "native", None, None, None, None, "1" * 64

@@ -9,8 +9,8 @@ from pg_harness import database_for, owner_engine, unmigrated_database_url
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import DBAPIError, IntegrityError
 
-from ontocurator.storage.schema import current_revision, head_revision, upgrade
-from ontocurator.storage.tables import APPEND_ONLY_TABLES, SCHEMA, Base
+from ontotator.storage.schema import current_revision, head_revision, upgrade
+from ontotator.storage.tables import APPEND_ONLY_TABLES, SCHEMA, Base
 
 
 def _only_our_schema(name: str | None, type_: str, _parents: object) -> bool:
@@ -203,7 +203,7 @@ def test_spanless_migration_preserves_old_draft_marker_and_defaults_only_new_row
 ):
     from alembic import command
 
-    from ontocurator.storage.schema import alembic_config
+    from ontotator.storage.schema import alembic_config
 
     url = unmigrated_database_url(tmp_path / "spanless.db")
     upgrade(url, "0006")
@@ -211,12 +211,12 @@ def test_spanless_migration_preserves_old_draft_marker_and_defaults_only_new_row
     with engine.begin() as conn:
         conn.execute(
             text(
-                "INSERT INTO ontocurator.projects (project_key, name, manifest, manifest_sha256, task_profile, task_profile_sha256) VALUES ('p', 'p', '{}', 'm', '{}', 't')"
+                "INSERT INTO ontotator.projects (project_key, name, manifest, manifest_sha256, task_profile, task_profile_sha256) VALUES ('p', 'p', '{}', 'm', '{}', 't')"
             )
         )
         conn.execute(
             text(
-                "INSERT INTO ontocurator.drafts (project_id, draft_key, document_id, annotator_id, mode, scope_id, target_set_id, targets, updated_at) SELECT id, 'old', 'doc', 'a', 'independent', '', 'targets-0', '{}', now() FROM ontocurator.projects"
+                "INSERT INTO ontotator.drafts (project_id, draft_key, document_id, annotator_id, mode, scope_id, target_set_id, targets, updated_at) SELECT id, 'old', 'doc', 'a', 'independent', '', 'targets-0', '{}', now() FROM ontotator.projects"
             )
         )
     upgrade(url, "0007")
@@ -224,38 +224,38 @@ def test_spanless_migration_preserves_old_draft_marker_and_defaults_only_new_row
         assert (
             conn.execute(
                 text(
-                    "SELECT spanless_policy_version FROM ontocurator.drafts WHERE draft_key = 'old'"
+                    "SELECT spanless_policy_version FROM ontotator.drafts WHERE draft_key = 'old'"
                 )
             ).scalar_one()
             is None
         )
         assert (
             conn.execute(
-                text("SELECT allow_spanless_findings FROM ontocurator.projects")
+                text("SELECT allow_spanless_findings FROM ontotator.projects")
             ).scalar_one()
             is True
         )
         conn.execute(
             text(
-                "INSERT INTO ontocurator.drafts (project_id, draft_key, document_id, annotator_id, mode, scope_id, target_set_id, targets, updated_at) SELECT id, 'new', 'doc', 'b', 'independent', '', 'targets-0', '{}', now() FROM ontocurator.projects"
+                "INSERT INTO ontotator.drafts (project_id, draft_key, document_id, annotator_id, mode, scope_id, target_set_id, targets, updated_at) SELECT id, 'new', 'doc', 'b', 'independent', '', 'targets-0', '{}', now() FROM ontotator.projects"
             )
         )
         assert (
             conn.execute(
                 text(
-                    "SELECT spanless_policy_version FROM ontocurator.drafts WHERE draft_key = 'new'"
+                    "SELECT spanless_policy_version FROM ontotator.drafts WHERE draft_key = 'new'"
                 )
             ).scalar_one()
             == 1
         )
         command.downgrade(alembic_config(conn), "0006")
         assert (
-            conn.execute(text("SELECT count(*) FROM ontocurator.drafts")).scalar_one()
+            conn.execute(text("SELECT count(*) FROM ontotator.drafts")).scalar_one()
             == 2
         )
         assert not conn.execute(
             text(
-                "SELECT column_name FROM information_schema.columns WHERE table_schema='ontocurator' AND column_name IN ('spanless_policy_version', 'allow_spanless_findings')"
+                "SELECT column_name FROM information_schema.columns WHERE table_schema='ontotator' AND column_name IN ('spanless_policy_version', 'allow_spanless_findings')"
             )
         ).all()
     engine.dispose()
@@ -264,7 +264,7 @@ def test_spanless_migration_preserves_old_draft_marker_and_defaults_only_new_row
 def test_spanless_note_migration_preserves_content_and_legacy_markers(tmp_path):
     from alembic import command
 
-    from ontocurator.storage.schema import alembic_config
+    from ontotator.storage.schema import alembic_config
 
     url = unmigrated_database_url(tmp_path / "spanless-note.db")
     upgrade(url, "0008")
@@ -272,70 +272,70 @@ def test_spanless_note_migration_preserves_content_and_legacy_markers(tmp_path):
     with engine.begin() as conn:
         conn.execute(
             text(
-                "INSERT INTO ontocurator.projects (project_key, name, manifest, manifest_sha256, task_profile, task_profile_sha256) VALUES ('p', 'p', '{\"original\": true}', 'm', '{}', 't')"
+                "INSERT INTO ontotator.projects (project_key, name, manifest, manifest_sha256, task_profile, task_profile_sha256) VALUES ('p', 'p', '{\"original\": true}', 'm', '{}', 't')"
             )
         )
         for key, marker in (("old", None), ("current", 1)):
             conn.execute(
                 text(
-                    "INSERT INTO ontocurator.drafts (project_id, draft_key, document_id, annotator_id, mode, scope_id, target_set_id, targets, updated_at, spanless_policy_version) SELECT id, :key, 'doc', :key, 'independent', '', 'targets-0', '{}', now(), :marker FROM ontocurator.projects"
+                    "INSERT INTO ontotator.drafts (project_id, draft_key, document_id, annotator_id, mode, scope_id, target_set_id, targets, updated_at, spanless_policy_version) SELECT id, :key, 'doc', :key, 'independent', '', 'targets-0', '{}', now(), :marker FROM ontotator.projects"
                 ),
                 {"key": key, "marker": marker},
             )
         conn.execute(
             text(
-                "INSERT INTO ontocurator.annotation_snapshots (project_id, annotation_id, version, document_id, payload) SELECT id, 'a', 'immutable-version', 'doc', '{\"note\": null}' FROM ontocurator.projects"
+                "INSERT INTO ontotator.annotation_snapshots (project_id, annotation_id, version, document_id, payload) SELECT id, 'a', 'immutable-version', 'doc', '{\"note\": null}' FROM ontotator.projects"
             )
         )
         before_drafts = conn.execute(
-            text("SELECT to_jsonb(d) FROM ontocurator.drafts d ORDER BY draft_key")
+            text("SELECT to_jsonb(d) FROM ontotator.drafts d ORDER BY draft_key")
         ).all()
         before_snapshots = conn.execute(
-            text("SELECT to_jsonb(a) FROM ontocurator.annotation_snapshots a")
+            text("SELECT to_jsonb(a) FROM ontotator.annotation_snapshots a")
         ).all()
         before_projects = conn.execute(
-            text("SELECT to_jsonb(p) FROM ontocurator.projects p")
+            text("SELECT to_jsonb(p) FROM ontotator.projects p")
         ).all()
     upgrade(url, "0009")
     with engine.begin() as conn:
         assert (
             conn.execute(
-                text("SELECT to_jsonb(d) FROM ontocurator.drafts d ORDER BY draft_key")
+                text("SELECT to_jsonb(d) FROM ontotator.drafts d ORDER BY draft_key")
             ).all()
             == before_drafts
         )
         assert (
             conn.execute(
-                text("SELECT to_jsonb(a) FROM ontocurator.annotation_snapshots a")
+                text("SELECT to_jsonb(a) FROM ontotator.annotation_snapshots a")
             ).all()
             == before_snapshots
         )
         assert (
             conn.execute(
                 text(
-                    "SELECT to_jsonb(p) - 'require_spanless_note' FROM ontocurator.projects p"
+                    "SELECT to_jsonb(p) - 'require_spanless_note' FROM ontotator.projects p"
                 )
             ).all()
             == before_projects
         )
         assert (
             conn.execute(
-                text("SELECT require_spanless_note FROM ontocurator.projects")
+                text("SELECT require_spanless_note FROM ontotator.projects")
             ).scalar_one()
             is True
         )
         conn.execute(
-            text("UPDATE ontocurator.projects SET require_spanless_note = false")
+            text("UPDATE ontotator.projects SET require_spanless_note = false")
         )
         conn.execute(
             text(
-                "INSERT INTO ontocurator.projects (project_key, name, manifest, manifest_sha256, task_profile, task_profile_sha256) VALUES ('new', 'new', '{}', 'n', '{}', 't')"
+                "INSERT INTO ontotator.projects (project_key, name, manifest, manifest_sha256, task_profile, task_profile_sha256) VALUES ('new', 'new', '{}', 'n', '{}', 't')"
             )
         )
         assert (
             conn.execute(
                 text(
-                    "SELECT require_spanless_note FROM ontocurator.projects WHERE project_key = 'new'"
+                    "SELECT require_spanless_note FROM ontotator.projects WHERE project_key = 'new'"
                 )
             ).scalar_one()
             is True
@@ -343,26 +343,26 @@ def test_spanless_note_migration_preserves_content_and_legacy_markers(tmp_path):
         command.downgrade(alembic_config(conn), "0008")
         assert (
             conn.execute(
-                text("SELECT to_jsonb(d) FROM ontocurator.drafts d ORDER BY draft_key")
+                text("SELECT to_jsonb(d) FROM ontotator.drafts d ORDER BY draft_key")
             ).all()
             == before_drafts
         )
         assert (
             conn.execute(
-                text("SELECT to_jsonb(a) FROM ontocurator.annotation_snapshots a")
+                text("SELECT to_jsonb(a) FROM ontotator.annotation_snapshots a")
             ).all()
             == before_snapshots
         )
         assert (
             conn.execute(
                 text(
-                    "SELECT to_jsonb(p) FROM ontocurator.projects p WHERE project_key = 'p'"
+                    "SELECT to_jsonb(p) FROM ontotator.projects p WHERE project_key = 'p'"
                 )
             ).all()
             == before_projects
         )
         assert (
-            conn.execute(text("SELECT count(*) FROM ontocurator.projects")).scalar_one()
+            conn.execute(text("SELECT count(*) FROM ontotator.projects")).scalar_one()
             == 2
         )
     engine.dispose()

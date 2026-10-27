@@ -19,23 +19,23 @@ from test_translation_review_service import save
 from test_work_rounds import create_consolidation_fixture
 from test_work_rounds import rounds as rounds
 
-from ontocurator.application.editing import EditingService
-from ontocurator.application.guidelines import GuidelineService
-from ontocurator.application.reviews import ReviewService
-from ontocurator.application.submissions import SubmissionService
-from ontocurator.application.work_rounds import (
+from ontotator.application.editing import EditingService
+from ontotator.application.guidelines import GuidelineService
+from ontotator.application.reviews import ReviewService
+from ontotator.application.submissions import SubmissionService
+from ontotator.application.work_rounds import (
     RoundInputResolutionService,
     WorkRoundService,
 )
-from ontocurator.application.workspaces import WorkspaceService
-from ontocurator.assignments.service import AssignmentService
-from ontocurator.auth.audit import Actor
-from ontocurator.authz.scoped import ScopedRepository
-from ontocurator.domain.review import ReviewTargetSet
-from ontocurator.domain.workspace import MutationEnvelope, Submission, WorkspaceKey
-from ontocurator.storage.database import Database
-from ontocurator.storage.repository import Repository
-from ontocurator.storage.tables import (
+from ontotator.application.workspaces import WorkspaceService
+from ontotator.assignments.service import AssignmentService
+from ontotator.auth.audit import Actor
+from ontotator.authz.scoped import ScopedRepository
+from ontotator.domain.review import ReviewTargetSet
+from ontotator.domain.workspace import MutationEnvelope, Submission, WorkspaceKey
+from ontotator.storage.database import Database
+from ontotator.storage.repository import Repository
+from ontotator.storage.tables import (
     ProjectMembershipRow,
     ProjectRow,
     SubmissionRow,
@@ -385,7 +385,7 @@ def test_draft_started_under_v2_submitted_under_v3_records_v3(tmp_path) -> None:
 
 def _stamped_seed(env: Any, username: str, sid: str, version: int) -> None:
     """A submission row as ``seed_submission`` writes it, stamped with ``version``."""
-    from ontocurator.storage.repository import _key_str
+    from ontotator.storage.repository import _key_str
 
     user = env.app.state.accounts.get_by_username(username)
     key = WorkspaceKey(

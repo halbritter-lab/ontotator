@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from ontocurator.authz.policy import Access, Action, Role, allowed_modes, can, may_take
+from ontotator.authz.policy import Access, Action, Role, allowed_modes, can, may_take
 
 PROJECT = "A"
 
