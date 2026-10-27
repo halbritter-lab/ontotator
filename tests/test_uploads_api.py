@@ -279,7 +279,9 @@ def test_multi_source_apply_failure_rolls_back_then_persists_failed(
 
     monkeypatch.setattr(Repository, "add_documents_and_proposals", fail_second)
     job = _commit(app, admin, upload)
-    assert job.status == "failed" and "second source fails" in job.error
+    # The exception text stays in the server log; the job names only its type.
+    assert job.status == "failed" and job.error.startswith("RuntimeError")
+    assert "second source fails" not in job.error
     assert len(calls) == 2
     assert (
         _count(app, DocumentRow)

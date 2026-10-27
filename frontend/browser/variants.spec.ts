@@ -132,7 +132,7 @@ test('mixed-role assigned task opens the real case, exact equal-version runs and
   await expectExactText(page, s.texts.source);
   expect(writes).toEqual([]);
   await page.goto(`/#/projects/${encodeURIComponent(s.project)}/cases/not-readable`);
-  await expect(page.getByText('This case is not available to you.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Case not found or no access' })).toBeVisible();
   await expect(textSurface(page)).toHaveCount(0);
 });
 

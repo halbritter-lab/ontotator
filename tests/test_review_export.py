@@ -49,7 +49,12 @@ def submit(env, decision="accepted_unchanged", text="Übersetzt"):
         text,
         clinical_change=decision in {"query", "rejected"},
         categories=["source"] if decision in {"query", "rejected"} else [],
-        rationale="Clarify" if decision in {"query", "rejected"} else None,
+        # The fixture failed an automatic check: an unchanged accept needs a reason.
+        rationale="Clarify"
+        if decision in {"query", "rejected"}
+        else "Checked."
+        if decision == "accepted_unchanged"
+        else None,
     )
     return env.service.submit(
         env.accesses["alice"], env.ids["alice"], expected_revision=rev

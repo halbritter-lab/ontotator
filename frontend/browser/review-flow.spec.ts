@@ -88,6 +88,8 @@ async function acceptUnchanged(page: Page) {
   await expectFocusOutsideTextFields(page);
   await page.keyboard.press("1");
   await expect(radio(page, "Accepted unchanged")).toBeChecked();
+  // The seeded translation failed an automatic check: an unchanged accept needs a rationale (R-12).
+  await page.getByRole("textbox", { name: "Rationale", exact: true }).fill("Checked the flagged difference.");
   await expect(saveStatus(page)).toHaveText("Saved");
   await expect(submitButton(page)).not.toHaveAttribute("aria-disabled", "true");
   await page.keyboard.press("Control+Enter");
@@ -259,7 +261,8 @@ test("keyboard only: 1, Ctrl+Enter, Enter, Enter opens the next task", async ({ 
   await expect(radio(page, "Accepted unchanged")).toBeChecked();
   const rationale = page.getByRole("textbox", { name: "Rationale", exact: true });
   await expect(rationale).toBeVisible();
-  await expect(rationale).toHaveAccessibleDescription(/Optional\. Say why the flagged difference is correct\./);
+  await expect(rationale).toHaveAccessibleDescription(/Required: an automatic check failed\. Say why the flagged difference is correct\./);
+  await rationale.fill("Checked the flagged difference.");
   await expect(saveStatus(page)).toHaveText("Saved");
   await page.keyboard.press("Control+Enter");
   await expect(confirmDialog(page)).toBeVisible();
