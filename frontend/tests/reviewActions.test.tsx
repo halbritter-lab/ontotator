@@ -1,4 +1,4 @@
-import { act, render, screen, fireEvent } from "@testing-library/react";
+import { act, render, screen, fireEvent, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ReviewActions, type TargetProposal } from "../src/editor/ReviewActions";
 
@@ -254,7 +254,11 @@ describe("ReviewActions", () => {
     const more = screen.getByText("Source and rules").closest("details")!;
     expect(more.open).toBe(false);
     expect(confirm.compareDocumentPosition(more) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(more.textContent).toContain("This proposal is immutable.");
+    expect(more.textContent).toContain("This proposal is immutable: its defaulted values cannot be confirmed. Unresolved keeps them.");
+    // IDs and the version hash sit in a closed "Technical details" inside (#48 N-21).
+    const technical = within(more).getByText("Technical details").closest("details")!;
+    expect(technical.open).toBe(false);
+    expect(technical.textContent).toContain("v-prop-1");
     expect(more.textContent).toContain("Method");
     expect(more.textContent).toContain("v-prop-1");
     // R-17: the last block of the review, pinned to the pane's bottom by CSS.
@@ -271,7 +275,7 @@ describe("ReviewActions", () => {
     fireEvent.change(input, { target: { value: "  Need specialist input  " } });
     fireEvent.click(screen.getByRole("button", { name: "Save decision" }));
     expect(decide).toHaveBeenCalledWith({ outcome: "uncertain", replacement: undefined, note: "Need specialist input" });
-    expect(screen.getByText("Source and rules").closest("details")!.textContent).toContain("Unresolved is a reviewer decision, separate from clinical uncertainty; a note is required.");
+    expect(screen.getByText("Source and rules").closest("details")!.textContent).toContain("Unresolved is a reviewer flag, not clinical uncertainty; it needs a note.");
   });
 
   it("honors a parent note request and preserves the controlled draft on reset", () => {

@@ -408,7 +408,7 @@ describe("Submit", () => {
     expect(screen.getAllByRole("button", { name: /Submit Case/i })).toHaveLength(1);
     fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/i }));
     const dialog = await screen.findByRole("dialog", { name: /Submit case/i });
-    expect(dialog.textContent).toMatch(/1 annotation\(s\)/);
+    expect(dialog.textContent).toMatch(/1 annotation in this case/);
     const confirm = within(dialog).getByRole("button", { name: /^Submit case$/i }) as HTMLButtonElement;
     expect(dialog.textContent).toContain("Submitting confirms you checked the entire text for further findings.");
     expect(confirm.getAttribute("aria-disabled")).toBeNull();
@@ -422,7 +422,7 @@ describe("Submit", () => {
     render(<CaseScreen view={reviewView()} workspaceId="ws" onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/i }));
     const dialog = await screen.findByRole("dialog", { name: /Submit case/i });
-    expect(dialog.textContent).toMatch(/0 of 1 review proposal\(s\) decided/);
+    expect(dialog.textContent).toMatch(/0 of 1 review proposal decided/);
     expect(within(dialog).getByRole("button", { name: /^Submit case$/i }).getAttribute("aria-disabled")).toBe("true");
   });
 });
@@ -440,7 +440,7 @@ describe("Review cases", () => {
     render(<CaseScreen view={reviewView([confirmed], [own], own.evidence)} workspaceId="ws" onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/i }));
     const dialog = await screen.findByRole("dialog", { name: /Submit case/i });
-    expect(dialog.textContent).toMatch(/2 annotation\(s\) will be submitted \(1 confirmed proposal\(s\), 0 unresolved with reviewer flags, 1 saved findings\)/);
+    expect(dialog.textContent).toMatch(/2 annotations will be submitted \(1 confirmed proposal, 1 saved finding\)/);
   });
 
   it("offers the next case including zero proposals after submitting a review", async () => {

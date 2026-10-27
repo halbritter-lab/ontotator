@@ -366,7 +366,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
             const replLabel = replSnap ? resolveTermLabel?.(replSnap.annotation.layer_id, replTermId) : null;
             return (
               <div className="review-actions__block-body">
-                {replacedBy.length > 1 ? `Replaced by ${replacedBy.length} findings, ` : "Replaced by: "}
+                {replacedBy.length > 1 ? `Replaced by ${replacedBy.length} findings, ` : <span className="replaced-by-label">Replaced by: </span>}
                 <strong>
                   <TermName termId={replTermId} label={replLabel} />
                 </strong>
@@ -413,14 +413,20 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
       {/* Rarely needed while working: at the very bottom of the pane, collapsed, opens downwards (R-17). */}
       <details className="technical-details review-actions__more">
         <summary>Source and rules</summary>
-        <ProposalSource source={source} compact />
-        <dl className="axis-list">
-          {target.provenance && <><dt>Method</dt><dd>{target.provenance.method}</dd></>}
-          <dt>Version</dt><dd>{target.version}</dd>
-        </dl>
-        {!!target.axes_defaulted?.length && <p>This proposal is immutable. Its defaulted values cannot be confirmed directly. An Unresolved decision and its reviewer note keep the original clinical values.</p>}
-        <p>Edit &amp; Replace is a separate review decision: it creates an editable copy and replaces the existing decision. Use it only when you intend to replace the proposal.</p>
-        <p>Unresolved is a reviewer decision, separate from clinical uncertainty; a note is required. Unresolved proposals are included in exports with a separate reviewer flag and note. Clinical axis values are unchanged.</p>
+        {/* One line per rule; IDs and hashes behind their own disclosure. */}
+        <ul className="review-actions__rules">
+          {!!target.axes_defaulted?.length && <li>This proposal is immutable: its defaulted values cannot be confirmed. Unresolved keeps them.</li>}
+          <li>Edit &amp; Replace makes an editable copy that replaces the proposal.</li>
+          <li>Unresolved is a reviewer flag, not clinical uncertainty; it needs a note.</li>
+        </ul>
+        <details className="technical-details">
+          <summary>Technical details</summary>
+          <ProposalSource source={source} compact />
+          <dl className="axis-list">
+            {target.provenance && <><dt>Method</dt><dd>{target.provenance.method}</dd></>}
+            <dt>Version</dt><dd className="review-actions__version">{target.version}</dd>
+          </dl>
+        </details>
       </details>
     </div>
   );
