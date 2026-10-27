@@ -57,6 +57,19 @@ it("proposal rows are tab stops and Enter or Space selects them (N-2)", () => {
   expect(rows[1].getAttribute("aria-pressed")).toBe("false");
 });
 
+it("a click on the selected proposal keeps it selected, so its keys still work (N-6)", async () => {
+  const view = proposalView();
+  const record = recordDecisions(view);
+  render(<CaseScreen view={view} workspaceId="ws-pc" onClose={vi.fn()} />);
+  const row = document.querySelector<HTMLElement>('[data-list-key^="target:"]')!;
+  fireEvent.click(row);
+  fireEvent.click(row);
+  expect(row.classList.contains("selected")).toBe(true);
+  fireEvent.keyDown(window, { key: "1" });
+  await waitFor(() => expect(record).toHaveBeenCalledWith("ws-pc", expect.objectContaining({
+    payload: expect.objectContaining({ outcome: "confirmed", target: { annotation_id: "p-1", version: "p-1-v1" } }) })));
+});
+
 it("J moves to the next proposal and 1 confirms it", async () => {
   const view = proposalView();
   const record = vi.spyOn(api, "recordDecision").mockImplementation(async (_id, envelope) => {

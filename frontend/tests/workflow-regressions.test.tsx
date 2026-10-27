@@ -747,13 +747,14 @@ it("displays replacement term link in sidebar and allows deselecting so no term 
   expect(screen.queryByRole("heading", { name: "Values" })).toBeNull();
   expect(screen.queryByText(/Review decision for this proposal|Review-Entscheidung für diesen Vorschlag/i)).toBeNull();
 
-  // 4. Selecting target1 in sidebar opens ReviewActions, then clicking it again deselects it
+  // 4. Selecting target1 in sidebar opens ReviewActions; clicking it again keeps it (N-6), Escape deselects it
   fireEvent.click(screen.getAllByText("HP:0001")[0]);
   await waitFor(() => {
     expect(screen.getByText(/Review decision for this proposal|Review-Entscheidung für diesen Vorschlag/i)).toBeDefined();
   });
-  // Click target1 again to deselect
   fireEvent.click(screen.getAllByText("HP:0001")[0]);
+  expect(screen.getByText(/Review decision for this proposal|Review-Entscheidung für diesen Vorschlag/i)).toBeDefined();
+  fireEvent.keyDown(window, { key: "Escape" });
   await waitFor(() => {
     expect(screen.getByText("No finding selected")).toBeDefined();
   });
