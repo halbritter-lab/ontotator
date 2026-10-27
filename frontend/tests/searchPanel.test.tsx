@@ -201,7 +201,7 @@ describe("SearchPanel", () => {
     expect(onSelectCandidate).toHaveBeenCalledWith(expect.objectContaining({ term_id: "HP:0001250" }), "s-1");
   });
 
-  it("never adds a stale hit: Enter while a search is pending runs it and waits for a second Enter", async () => {
+  it("Enter while a search is pending runs it and adds its active hit when it answers (#31)", async () => {
     const onSelectCandidate = vi.fn();
     const searchOntology = vi.fn().mockResolvedValue(threeHits);
     const input = renderPanel(searchOntology, { onSelectCandidate, debounceMs: 10_000 });
@@ -210,11 +210,22 @@ describe("SearchPanel", () => {
     fireEvent.keyDown(input, { key: "Enter" });
     expect(searchOntology).toHaveBeenCalledTimes(1);
     expect(searchOntology.mock.calls[0][0].query).toBe("hypo");
-    await waitFor(() => expect(options()).toHaveLength(3));
-    expect(onSelectCandidate).not.toHaveBeenCalled();
-    fireEvent.keyDown(input, { key: "Enter" });
-    expect(onSelectCandidate).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("status").textContent).toBe("Searching…");
+    await waitFor(() => expect(onSelectCandidate).toHaveBeenCalledTimes(1));
+    expect(onSelectCandidate).toHaveBeenCalledWith(expect.objectContaining({ term_id: "HP:0001250" }), "s-1");
     expect(searchOntology).toHaveBeenCalledTimes(1);
+  });
+
+  it("never adds a stale hit: a queued Enter is dropped when the query changes before the answer", async () => {
+    const onSelectCandidate = vi.fn();
+    let answer: (value: typeof threeHits) => void = () => {};
+    const searchOntology = vi.fn().mockReturnValueOnce(new Promise((resolve) => { answer = resolve; })).mockResolvedValue(threeHits);
+    const input = renderPanel(searchOntology, { onSelectCandidate, debounceMs: 10_000 });
+    fireEvent.change(input, { target: { value: "hypo" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    fireEvent.change(input, { target: { value: "hypot" } });
+    await act(async () => { answer(threeHits); await Promise.resolve(); });
+    expect(onSelectCandidate).not.toHaveBeenCalled();
   });
 
   it("hides hits of an earlier query while the new one is pending", async () => {
