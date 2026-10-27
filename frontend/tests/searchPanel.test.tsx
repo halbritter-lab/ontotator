@@ -76,7 +76,7 @@ describe("SearchPanel", () => {
       expect(options()).toHaveLength(3);
       expect(activeId(input)).toBe(options()[1].id);
       expect(options()[1].getAttribute("aria-selected")).toBe("true");
-      expect(document.querySelector(".search-hint")!.textContent).toBe("2 terms, ↓↑ choose, Enter add, Esc cancel");
+      expect(document.querySelector(".search-hint")!.textContent).toBe("3 terms, ↓↑ choose, Enter add, Esc cancel");
     } finally {
       vi.useRealTimers();
     }
@@ -431,7 +431,7 @@ describe("SearchPanel", () => {
     expect(input.selectionEnd).toBe("Krampfanfall".length);
     await waitFor(() => expect(options()).toHaveLength(3));
     const hintLine = () => document.querySelector(".search-hint")!.textContent!;
-    expect(hintLine()).toBe(`${hint}2 terms, ↓↑ choose, Enter add, Esc cancel`);
+    expect(hintLine()).toBe(`${hint}3 terms, ↓↑ choose, Enter add, Esc cancel`);
     expect(screen.getByText(hint)).toBeDefined();
     fireEvent.change(input, { target: { value: "Fieberkrampf" } });
     await waitFor(() => expect(hintLine()).toBe(
@@ -708,6 +708,38 @@ describe("SearchPanel: modifier roles (finding modifiers)", () => {
       expect(search.mock.calls.at(-1)![0]).toMatchObject({ query: "sev", within: ["HP:0012823", "HP:0040279"] });
       fireEvent.change(input, { target: { value: "MOD: sev" } });
       expect(input.value).toBe("sev");
+    });
+
+    it("an emptied field switches a mod:-set chip off; the count names the listed modifiers (#32)", async () => {
+      const search = vi.fn().mockResolvedValue(roleHits);
+      const input = renderPanel(search, { modifierFilter: true, assignMode: "change" });
+      fireEvent.change(input, { target: { value: "mod:severe" } });
+      await waitFor(() => expect(options()).toHaveLength(3));
+      expect(document.querySelector(".search-hint")!.textContent).toBe("3 modifiers, ↓↑ choose, Enter add, Esc cancel");
+      fireEvent.change(input, { target: { value: "" } });
+      expect(screen.getByRole("button", { name: "Modifiers only" }).getAttribute("aria-pressed")).toBe("false");
+      fireEvent.change(input, { target: { value: "tremor" } });
+      await waitFor(() => expect(search).toHaveBeenCalledTimes(2));
+      expect(roots(search.mock.calls[1])).toBeUndefined();
+      // Clear button: same.
+      fireEvent.change(input, { target: { value: "mod:x" } });
+      fireEvent.click(screen.getByRole("button", { name: "Clear search" }));
+      expect(screen.getByRole("button", { name: "Modifiers only" })).toBeTruthy();
+    });
+
+    it("a chip switched on by hand stays on when the field is emptied", () => {
+      const input = renderPanel(vi.fn().mockResolvedValue(threeHits), { modifierFilter: true });
+      fireEvent.click(screen.getByRole("button", { name: "Modifiers only" }));
+      fireEvent.change(input, { target: { value: "sev" } });
+      fireEvent.change(input, { target: { value: "" } });
+      expect(screen.getByRole("button", { name: "Remove filter Modifiers only" })).toBeTruthy();
+    });
+
+    it("lists only unusable hits without the keys line", async () => {
+      const input = renderPanel(vi.fn().mockResolvedValue({ search_id: "s-m", candidates: [hit("HP:0012828", "Severe", { role: "modifier" })] }), { assignMode: "change" });
+      fireEvent.change(input, { target: { value: "severe" } });
+      await waitFor(() => expect(options()).toHaveLength(1));
+      expect(document.querySelector(".search-hint")!.textContent).toBe("1 term");
     });
 
     it("the modifier search itself offers no chip", () => {

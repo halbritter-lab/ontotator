@@ -75,6 +75,8 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   modifierFilter = false,
 }) => {
   const [modifiersOnly, setModifiersOnly] = useState(false);
+  // "Modifiers only" switched on by the `mod:` prefix: an emptied field switches it off again.
+  const modifiersFromPrefix = useRef(false);
   const offerModifierFilter = modifierFilter && mode === "finding";
   const within = mode === "modifier" || (offerModifierFilter && modifiersOnly) ? MODIFIER_ROOTS : undefined;
   // "/" focuses #search-input (the term search); the modifier search has its own id.
@@ -130,7 +132,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
     const isMount = identity.every((value, index) => Object.is(value, mountIdentity.current[index]));
     const query = isMount ? initialQuery ?? "" : "";
     setQueryInput(query);
-    if (!isMount) setModifiersOnly(false);
+    if (!isMount) dropPrefixFilter();
     if (query.trim()) runSearch(query, true, isMount ? within ?? null : mode === "modifier" ? MODIFIER_ROOTS : null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [annotationId, workspaceKey, layerId, searchManager]);
@@ -244,16 +246,24 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
     const start = val.trimStart();
     if (offerModifierFilter && start.slice(0, MODIFIER_PREFIX.length).toLowerCase() === MODIFIER_PREFIX) {
       const rest = start.slice(MODIFIER_PREFIX.length).trimStart();
+      if (!modifiersOnly) modifiersFromPrefix.current = true;
       setModifiersOnly(true);
       setQueryInput(rest);
       runSearch(rest, false, MODIFIER_ROOTS);
       return;
     }
+    if (!val.trim() && modifiersFromPrefix.current) dropPrefixFilter();
     setQueryInput(val);
     runSearch(val);
   };
 
+  const dropPrefixFilter = () => {
+    modifiersFromPrefix.current = false;
+    setModifiersOnly(false);
+  };
+
   const toggleModifiersOnly = (on: boolean) => {
+    modifiersFromPrefix.current = false;
     setModifiersOnly(on);
     if (queryInput.trim()) runSearch(queryInput, true, on ? MODIFIER_ROOTS : null);
     inputRef.current?.focus({ preventScroll: true });
@@ -261,6 +271,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
 
   const handleClear = () => {
     userTyped.current = true;
+    if (modifiersFromPrefix.current) dropPrefixFilter();
     cancelDebounce();
     setQueryInput("");
     searchManager.clear();
@@ -297,8 +308,10 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
     }
   };
 
-  const usableCount = candidates.filter(isUsable).length;
-  const termCount = (count: number) => `${count} ${count === 1 ? "term" : "terms"}`;
+  // The count names the listed hits; the keys line only when one of them can be added.
+  const noun = within ? "modifier" : "term";
+  const hitCount = `${candidates.length} ${noun}${candidates.length === 1 ? "" : "s"}`;
+  const anyUsable = candidates.some(isUsable);
 
   return (
     <div className="search-panel">
@@ -343,12 +356,12 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
           ) : failed ? null : noHits ? (
             `${languageHint ? `${languageHint} ` : ""}No terms match “${queryInput.trim()}”. Change the words, try a code (HP:0001250) or switch search languages.`
           ) : expanded ? (
-            canAssign ? (
+            anyUsable ? (
               <>
-                {termCount(usableCount)}, <Kbd>↓</Kbd><Kbd>↑</Kbd> choose, <Kbd>Enter</Kbd> add, <Kbd>Esc</Kbd> cancel
+                {hitCount}, <Kbd>↓</Kbd><Kbd>↑</Kbd> choose, <Kbd>Enter</Kbd> add, <Kbd>Esc</Kbd> cancel
               </>
             ) : (
-              termCount(candidates.length)
+              hitCount
             )
           ) : null}
         </div>
