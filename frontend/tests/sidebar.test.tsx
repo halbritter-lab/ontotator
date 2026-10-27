@@ -155,7 +155,7 @@ describe("continuous sidebar", () => {
     expect(scrollers.length).toBe(1);
     const scroller = scrollers[0];
 
-    for (const title of ["Review Proposals (2)", "Reference Annotations (1)", "Findings (1)"]) {
+    for (const title of ["Review Proposals (2)", "Reference Annotations (1)", "Your own findings (1)"]) {
       const header = Array.from(scroller.querySelectorAll(".sidebar-header"))
         .find((el) => el.textContent?.includes(title));
       expect(header, title).toBeDefined();
@@ -169,6 +169,15 @@ describe("continuous sidebar", () => {
     // Creation remains in the shared scroller; submission errors have one global location.
     expect(scroller.contains(screen.getByRole("button", { name: /Add finding without a text span/ }))).toBe(true);
     expect(sidebar.querySelector(".sidebar-footer__error")).toBeNull();
+  });
+
+  it("names the own findings and counts the result, confirmed proposals included (#35)", () => {
+    const own = snapshot("own", "HP:0004", { actor: { actor_id: "dr-a", kind: "human" }, method: "manual", source_refs: [] });
+    const view = reviewView([own]);
+    view.draft.decisions = [{ decision_id: "d1", target: { annotation_id: "tool-prop", version: "tool-prop-v1" }, outcome: "confirmed", reviewer_id: "dr-a" }] as never;
+    const { container } = renderCase(view);
+    expect(container.querySelector(".sidebar-header--actions")!.textContent).toContain("Your own findings (1)");
+    expect(container.querySelector("[data-result-count]")!.textContent).toBe("In the result: 2 (1 proposal, 1 own finding)");
   });
 
   it("scrolls the selected entry into view", () => {

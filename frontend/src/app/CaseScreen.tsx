@@ -55,6 +55,7 @@ import {
 } from "../editor/autosave";
 import { newEvidenceId } from "../editor/ids";
 import { submissionHistoryLabel } from "../editor/submissionHistoryLabel";
+import { plural } from "./labels";
 import { FindingRow, ModifierLine } from "../editor/FindingRow";
 import { SubmitCaseDialog } from "../editor/SubmitCaseDialog";
 import { SubmitControl } from "../editor/SubmitControl";
@@ -3598,7 +3599,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
             <div className="sidebar-section">
               <div className="sidebar-header sidebar-header--actions">
-                <span>Findings ({visibleAnnotations.length})</span>
+                {/* Confirmed proposals stay in the proposal list: in review this section holds only the annotator's own findings. */}
+                <span>{isReviewLike(view.key.mode) ? "Your own findings" : "Findings"} ({visibleAnnotations.length})</span>
                 <Button
                   type="button"
                   size="sm"
@@ -3608,6 +3610,12 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                   Add finding without a text span
                 </Button>
               </div>
+              {isReviewLike(view.key.mode) && (() => {
+                const proposals = completionResults.filter(s => reviewTargets.some(t => t.annotation_id === s.annotation.annotation_id && t.version === s.version)).length;
+                return <p className="field-hint" data-result-count>
+                  In the result: {completionResults.length} ({plural(proposals, "proposal")}, {plural(completionResults.length - proposals, "own finding")})
+                </p>;
+              })()}
               {spanlessBlockedReason && <p className="field-hint">{spanlessBlockedReason}</p>}
               {legacySubmissionHint && <p className="field-hint">{legacySubmissionHint}</p>}
               {carriedActive && <CarriedProgress text={carried.progress} showNext={carried.openKeys.size > 0} onNext={() => { goToUnchecked(1); }} />}
