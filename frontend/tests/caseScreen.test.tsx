@@ -1263,15 +1263,13 @@ describe("CaseScreen integration", () => {
         } finally { window.matchMedia = original; }
       });
 
-      it("above 700 px the Marked text bar is shown and Discard discards", () => {
+      it("above 700 px nothing floats over the text and Discard exists once (#21)", () => {
         vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
         const rendered = render(<CaseScreen view={structuredClone(sampleView)} workspaceId="ws-f1-bar" onClose={vi.fn()} />);
         markThe(rendered.container);
         expect(rendered.container.querySelector(".pending-bar")).toBeNull();
-        const bar = screen.getByRole("group", { name: "Marked text" });
-        expect(bar.textContent).toContain("Drag the edges to adjust");
-        fireEvent.click(within(bar).getByRole("button", { name: "Discard" }));
         expect(screen.queryByRole("group", { name: "Marked text" })).toBeNull();
+        fireEvent.click(screen.getByRole("button", { name: "Discard" }));
         expect(screen.queryByRole("region", { name: "New finding" })).toBeNull();
       });
 

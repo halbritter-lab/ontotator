@@ -44,14 +44,6 @@ it("keeps the system background on a hovered segment in forced colours", () => {
   expect(editor.lastIndexOf(hover)).toBeGreaterThan(editor.indexOf(hover));
 });
 
-it("lets a handle drag reach the text under the pending mark bar", () => {
-  const editor = readFileSync(new URL("../src/styles/screens/editor.css", import.meta.url), "utf8");
-  // The bar is a sibling after the text pane: during a drag it must not catch the pointer.
-  const rule = editor.match(/\.center-pane:has\(\.text-container\.resizing\) ~ \.pending-mark-bar \{([^}]*)\}/);
-  expect(rule?.[1]).toMatch(/pointer-events: none/);
-  expect(rule?.[1]).toMatch(/opacity: 0\.4/);
-});
-
 it("the text card's grid for technical details never reaches the editor's Source and rules disclosure (R-5)", () => {
   const css = readFileSync(new URL("../src/documents/textCard/textCard.css", import.meta.url), "utf8");
   expect(css).not.toMatch(/(^|[\s,}])\.technical-details\b/m);

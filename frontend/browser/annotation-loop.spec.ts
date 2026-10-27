@@ -386,31 +386,15 @@ test("Shift+Tab from the search field reaches the inspector Discard", async ({ p
   await expect(announcer(page)).toHaveText("Marked text discarded.");
 });
 
-test("the Marked text bar never moves the text", async ({ page }) => {
+test("marking puts nothing over the text; Discard exists once (#21)", async ({ page }) => {
   const s = await startLoop(page);
   await openLoop(page, s, "loop-en");
-  const [start, end] = offsetsOf(s, "loop-en", "seizure");
   const before = await textGeometry(page, 0, 3);
   await markAndWaitForHits(page, s, "loop-en", "seizure");
-  const bar = page.getByRole("group", { name: "Marked text", exact: true });
-  await expect(bar).toBeVisible();
-  await expect(bar).toContainText("Drag the edges to adjust");
   expect(await textGeometry(page, 0, 3)).toEqual(before);
-  // The bar sits under (or, near the pane bottom, above) the mark and never covers it.
-  const mark = await textGeometry(page, start, end);
-  const box = (await bar.boundingBox())!;
-  const markLine = await textPane(page).evaluate((container, offsets) => {
-    const run = Array.from(container.querySelectorAll<HTMLElement>(".run[data-mentions]"))
-      .find(element => Number(element.dataset.start) <= offsets.start && offsets.start < Number(element.dataset.start) + (element.textContent?.length ?? 0))!;
-    const rect = run.getBoundingClientRect();
-    return { top: rect.top, bottom: rect.bottom };
-  }, { start, end });
-  expect(box.y >= markLine.bottom - 1 || box.y + box.height <= markLine.top + 1, "bar overlaps the mark").toBe(true);
-  expect(mark.viewport.y).toBeGreaterThan(0);
-  mkdirSync(resolve(test.info().config.rootDir, "../../build/annotator-ui/evidence"), { recursive: true });
-  await page.screenshot({ path: resolve(test.info().config.rootDir, "../../build/annotator-ui/evidence/pending-mark-bar.png") });
-  await bar.getByRole("button", { name: "Discard", exact: true }).click();
-  await expect(bar).toHaveCount(0);
+  await expect(page.getByRole("group", { name: "Marked text", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Discard", exact: true })).toHaveCount(1);
+  await newFinding(page).getByRole("button", { name: "Discard", exact: true }).click();
   await expect(newFinding(page)).toHaveCount(0);
   expect(await textGeometry(page, 0, 3)).toEqual(before);
 });
