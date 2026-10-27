@@ -4,7 +4,7 @@ This guide describes the image and Compose files in this repository. Commands ru
 
 ## Deployment boundary
 
-`docker-compose.yml` provides PostgreSQL, a one-shot `migrate` service and the app service `ontotator_app` (in the development stack it is `app`). TLS, DNS, host provisioning and the reverse proxy belong to the host. Like Phentrieve, the stack runs behind Nginx Proxy Manager (NPM): `ontotator_app` joins NPM's existing external Docker network (`NPM_SHARED_NETWORK_NAME`, for example `npm_default`), so NPM forwards to `http://ontotator_app:8000`; the prefixed service name avoids clashing with other stacks (NPM itself names its service `app`). App has **no published host port**. PostgreSQL is only on the internal backend network. Compose does not create the NPM network; it must exist before `up`.
+`docker-compose.yml` provides PostgreSQL (`ontotator_postgres`), a one-shot `migrate` service and the app (`ontotator_app`); the development stack names them `postgres` and `app`. TLS, DNS, host provisioning and the reverse proxy belong to the host. Like Phentrieve, the stack runs behind Nginx Proxy Manager (NPM): `ontotator_app` joins NPM's existing external Docker network (`NPM_SHARED_NETWORK_NAME`, for example `npm_default`), so NPM forwards to `http://ontotator_app:8000`. The prefixed names avoid clashes on that shared network: NPM itself names its service `app`, and a plain `postgres` host could resolve to another stack's database. App has **no published host port**. PostgreSQL is only on the internal backend network. Compose does not create the NPM network; it must exist before `up`.
 
 Services use read-only roots, writable data volumes and bounded tmpfs, dropped capabilities, `no-new-privileges`, rotated logs and resource limits. The image runs as UID/GID `1001:1001` with tini as PID 1. PostgreSQL runs as `70:70`. App and PostgreSQL restart unless stopped; migrations are one-shot. Connect PostgreSQL directly or use session-mode pooling: servers hold a PostgreSQL advisory runtime lease, which transaction-mode pooling would break.
 
@@ -105,7 +105,7 @@ docker compose up -d --wait
 docker compose ps --all
 ```
 
-PostgreSQL initialization creates separate non-superuser owner and app roles and the application schema. If initialization fails (for example `Invalid generated credential (hex expected)` in `docker compose logs postgres`), the data volume is left half-initialized: PostgreSQL restarts, reports healthy and skips initialization, but the roles are missing. On a **new, empty** deployment only, fix the secrets, run `docker compose down --volumes` and start again. `migrate` upgrades that schema as owner, and only successful completion allows app to start. Sign in at your HTTPS origin as `admin` with the password used to generate the bootstrap hash.
+PostgreSQL initialization creates separate non-superuser owner and app roles and the application schema. If initialization fails (for example `Invalid generated credential (hex expected)` in `docker compose logs ontotator_postgres`), the data volume is left half-initialized: PostgreSQL restarts, reports healthy and skips initialization, but the roles are missing. On a **new, empty** deployment only, fix the secrets, run `docker compose down --volumes` and start again. `migrate` upgrades that schema as owner, and only successful completion allows app to start. Sign in at your HTTPS origin as `admin` with the password used to generate the bootstrap hash.
 
 After confirming admin exists and can sign in, remove `ONTOTATOR_ADMIN_PASSWORD_HASH_FILE` from app's environment in your **deployment copy** of the Compose configuration. Recreate ontotator_app with that revised configuration while the hash file still exists:
 
@@ -115,7 +115,7 @@ docker compose up -d --wait --force-recreate ontotator_app
 
 Confirm sign-in still works, then remove `secrets/app/admin-password-hash` using the host's privileged file tools. Keep the environment-setting removal in your deployment configuration for future upgrades. The existing account ignores bootstrap content, but secret-file resolution happens before account bootstrap: deleting the file while its `_FILE` setting remains breaks a restart. Do not replace it with an empty setting or empty hash file.
 
-`/livez` reports the HTTP process is alive. `/readyz` checks database reachability, schema equality to the image's migration head and ontology readiness, including failures affecting project pins. Docker health uses `/readyz`. A new empty server can be ready before its first ontology/project is added. Inspect `docker compose logs --tail 100 ontotator_app migrate postgres` when startup or readiness fails; keep operational logs private.
+`/livez` reports the HTTP process is alive. `/readyz` checks database reachability, schema equality to the image's migration head and ontology readiness, including failures affecting project pins. Docker health uses `/readyz`. A new empty server can be ready before its first ontology/project is added. Inspect `docker compose logs --tail 100 ontotator_app migrate ontotator_postgres` when startup or readiness fails; keep operational logs private.
 
 ## Users, ontologies and projects
 
@@ -210,7 +210,7 @@ test -n "$data_volume"
 helper_image="$(docker inspect --format '{{ .Config.Image }}' "$app_container")"
 test -n "$helper_image"
 printf '%s\n' "$helper_image" > "$backup_dir/image-reference.txt"
-docker compose exec -T postgres pg_dump --username=ontotator_bootstrap --dbname=ontotator --format=custom > "$backup_dir/database.dump"
+docker compose exec -T ontotator_postgres pg_dump --username=ontotator_bootstrap --dbname=ontotator --format=custom > "$backup_dir/database.dump"
 docker run --rm --network none --read-only --user 0:0 --security-opt no-new-privileges \
     --mount "type=volume,src=$data_volume,dst=/source,readonly" \
     --entrypoint tar "$helper_image" --numeric-owner --create --file=- --directory=/source . > "$backup_dir/data.tar"
@@ -240,7 +240,7 @@ restore_compose=(docker compose --project-name "$restore_project" --env-file "$r
 test -z "$("${restore_compose[@]}" ps --all --quiet)"
 test -z "$(docker volume ls --quiet --filter "label=com.docker.compose.project=$restore_project")"
 "${restore_compose[@]}" config --quiet
-"${restore_compose[@]}" up -d --wait postgres
+"${restore_compose[@]}" up -d --wait ontotator_postgres
 "${restore_compose[@]}" create ontotator_app
 restore_app="$("${restore_compose[@]}" ps --all --quiet ontotator_app)"
 test -n "$restore_app"
@@ -249,8 +249,8 @@ test -n "$restore_volume"
 docker run --rm -i --network none --read-only --user 0:0 --security-opt no-new-privileges \
     --mount "type=volume,src=$restore_volume,dst=/restore" \
     --entrypoint tar "$ONTOTATOR_IMAGE" --numeric-owner --same-owner --preserve-permissions --extract --file=- --directory=/restore < "$backup_dir/data.tar"
-"${restore_compose[@]}" exec -T postgres pg_restore --username=ontotator_bootstrap --dbname=ontotator --clean --if-exists --exit-on-error < "$backup_dir/database.dump"
-"${restore_compose[@]}" exec -T postgres psql --username=ontotator_bootstrap --dbname=ontotator --set=ON_ERROR_STOP=1 \
+"${restore_compose[@]}" exec -T ontotator_postgres pg_restore --username=ontotator_bootstrap --dbname=ontotator --clean --if-exists --exit-on-error < "$backup_dir/database.dump"
+"${restore_compose[@]}" exec -T ontotator_postgres psql --username=ontotator_bootstrap --dbname=ontotator --set=ON_ERROR_STOP=1 \
     --command="SELECT nspname, pg_get_userbyid(nspowner) AS owner FROM pg_namespace WHERE nspname = 'ontotator';"
 ```
 

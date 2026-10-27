@@ -81,6 +81,9 @@ def test_builds_pushes_both_tags_and_prints_digest_reference(publish):
         "docker push ghcr.io/janpower/ontotator:0.4.0",
         "docker push ghcr.io/janpower/ontotator:latest",
     ]
+    assert docker[3].startswith(
+        "docker buildx imagetools inspect ghcr.io/janpower/ontotator:0.4.0 "
+    )
     assert f"ONTOTATOR_IMAGE=ghcr.io/janpower/ontotator@{DIGEST}" in result.stdout
     assert "stub-token" not in result.stdout + result.stderr
 
