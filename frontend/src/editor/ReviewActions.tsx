@@ -274,14 +274,15 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
       )}
 
       {target.is_unknown && <p role="alert">Unknown terms cannot be submitted, including as unresolved. Reject this proposal or replace it with a valid term.</p>}
-      {/* 4 Action Buttons: a quiet ruled grid; the chosen outcome is filled. */}
+      {/* 4 Action Buttons: a quiet ruled grid; the chosen outcome is filled. Read-only: the head badge names the decision. */}
+      {!readOnly && <>
       <div className="decision-grid">
         <Button
           type="button"
           variant="secondary" className="decision-btn decision-btn--confirmed"
           aria-pressed={pressed("confirmed")}
           onClick={() => handleOutcomeClick("confirmed")}
-          disabled={readOnly || target.is_obsolete || target.is_unknown}
+          disabled={target.is_obsolete || target.is_unknown}
           title="Confirm proposal as-is (Key: 1)"
         >
           <span className="decision-btn__label"><IconCheck />Confirm</span>
@@ -292,7 +293,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
           type="button"
           variant="secondary" className="decision-btn decision-btn--rejected"
           aria-pressed={pressed("rejected")}
-          disabled={readOnly} onClick={() => handleOutcomeClick("rejected")}
+          onClick={() => handleOutcomeClick("rejected")}
           title="Reject proposal (Key: 2)"
         >
           <span className="decision-btn__label"><IconClose />Reject</span>
@@ -302,7 +303,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
         <Button
           type="button"
           variant="secondary" className="decision-btn decision-btn--changed" data-repair="edit-proposal"
-          disabled={readOnly || !(onAdoptAndEdit || (currentDecision?.outcome === "changed" && onEditReplacement))}
+          disabled={!(onAdoptAndEdit || (currentDecision?.outcome === "changed" && onEditReplacement))}
           aria-pressed={pressed("changed")}
           onClick={() => {
             if (currentDecision?.outcome === "changed" && currentDecision.replacement?.annotation_id && onEditReplacement) {
@@ -327,7 +328,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
           type="button"
           variant="secondary" className="decision-btn decision-btn--uncertain"
           aria-pressed={pressed("uncertain")}
-          disabled={readOnly} onClick={() => handleOutcomeClick("uncertain")}
+          onClick={() => handleOutcomeClick("uncertain")}
           title="Mark proposal as unresolved; reviewer note required (Key: 4)"
         >
           <span className="decision-btn__label"><IconQuestion />Unresolved</span>
@@ -341,7 +342,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
           <Button
             type="button"
             size="sm"
-            disabled={readOnly} onClick={handleClearDecision}
+            onClick={handleClearDecision}
             title="Reset decision for this proposal (back to open)"
           >
             <IconUndo />
@@ -349,6 +350,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
           </Button>
         </div>
       )}
+      </>}
 
       {/* Changed Outcome Card with Direct Edit Shortcut */}
       {currentDecision?.outcome === "changed" && (
@@ -388,7 +390,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
         </div>
       )}
 
-      <div className="review-actions__note">
+      {(!readOnly || note.trim()) && <div className="review-actions__note">
         <Textarea rows={3} id={noteId} ref={noteInput} label="Reviewer note" aria-label="Reviewer note"
           required={needsNote} readOnly={readOnly} value={note}
           error={noteInvalid ? "A reviewer note is required for an unresolved decision." : undefined}
@@ -405,7 +407,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
             onDecide({ outcome: "uncertain", replacement: undefined, note: note.trim() });
           }}>Save decision</Button>
         </div>}
-      </div>
+      </div>}
       </div>
 
       {/* Rarely needed while working: at the very bottom of the pane, collapsed, opens downwards (R-17). */}

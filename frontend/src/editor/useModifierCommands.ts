@@ -10,8 +10,6 @@ export interface ModifierCommandDeps {
   mutate: (annotationId: string, payload: ModifierPayload) => Promise<Draft>;
   /** Current segments of a finding's modifier (undefined when absent). */
   segmentsOf: (annotationId: string, termId: string) => readonly Seg[] | undefined;
-  /** Polite status line. */
-  announce: (message: string) => void;
   reportError: (error: unknown) => void;
 }
 
@@ -19,7 +17,7 @@ export interface ModifierCommandDeps {
 export interface LinkSpanMode { annotationId: string; termId: string; term: string; finding: string }
 
 /** The modifier commands of the editor (C3), the Undo toast of a removal and the link-a-span mode. */
-export function useModifierCommands({ mutate, segmentsOf, announce, reportError }: ModifierCommandDeps) {
+export function useModifierCommands({ mutate, segmentsOf, reportError }: ModifierCommandDeps) {
   const { toast, show, dismiss } = useToast();
   const [linkSpan, setLinkSpan] = useState<LinkSpanMode | null>(null);
   const run = (annotationId: string, payload: ModifierPayload) =>
@@ -35,8 +33,10 @@ export function useModifierCommands({ mutate, segmentsOf, announce, reportError 
       onAction: () => { void add(annotationId, termId, old).catch(() => undefined); } });
   };
   const removeSpan = async (annotationId: string, termId: string, term: string) => {
+    const old = segmentsOf(annotationId, termId) ?? [];
     await setSegments(annotationId, termId, []);
-    announce(`Removed the text span of ${term}.`);
+    show({ message: `Removed the text span of ${term}`, actionLabel: "Undo", undo: true,
+      onAction: () => { void setSegments(annotationId, termId, old).catch(() => undefined); } });
   };
   /** R3: the standalone modifier finding `sourceId` becomes a modifier of `targetId` (one mutation, keyed on the target). */
   const convert = (sourceId: string, targetId: string, linkSpan: boolean) =>

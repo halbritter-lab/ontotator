@@ -26,10 +26,10 @@ it("keeps proposal inspection useful but prevents notes, decisions and replaceme
   const command = vi.spyOn(api, "applyCommand"), decide = vi.spyOn(api, "recordDecision");
   render(<CaseScreen view={response.view} workspaceId="ws" onClose={vi.fn()} readOnly />);
   fireEvent.click(Array.from(document.querySelectorAll(".sidebar .doc-item")).find(node => node.textContent?.includes("HP:2"))!);
-  const note = screen.getByRole("textbox", { name: "Reviewer note" }) as HTMLInputElement;
-  expect(note.readOnly).toBe(true);
-  for (const name of [/^Confirm/, /^Reject/, /Edit & Replace/, /^Unresolved/]) {
-    expect((screen.getByRole("button", { name }) as HTMLButtonElement).disabled).toBe(true);
+  // Read-only: no decision buttons and no empty reviewer note (#48 N-18).
+  expect(screen.queryByRole("textbox", { name: "Reviewer note" })).toBeNull();
+  for (const name of [/^Confirm/, /^Reject/, /Edit & Replace/, /^Unresolved/, /Reset decision/]) {
+    expect(screen.queryByRole("button", { name })).toBeNull();
   }
   expect(screen.queryByRole("button", { name: /Assign replacement from draft/ })).toBeNull();
   fireEvent.keyDown(document.querySelector(".text-container")!, { key: "1" });
@@ -62,10 +62,8 @@ it("keeps a submitted workspace readable while disabling submission and new find
   const submit = vi.spyOn(api, "submitWorkspace");
   render(<CaseScreen view={view()} workspaceId="ws" onClose={vi.fn()} readOnly />);
   expect(screen.getByText("Submitted. The project lead can reopen it for changes.")).toBeDefined();
-  expect((screen.getByRole("button", { name: /Finish & Submit Case/ }) as HTMLButtonElement).disabled).toBe(true);
-  const add = screen.getByRole("button", { name: /Add finding without a text span/i }) as HTMLButtonElement;
-  expect(add.disabled).toBe(true);
-  fireEvent.click(add);
+  expect(screen.queryByRole("button", { name: /Finish & Submit Case/ })).toBeNull();
+  expect(screen.queryByRole("button", { name: /Add finding without a text span/i })).toBeNull();
   fireEvent.keyDown(document.querySelector(".text-container")!, { key: "1" });
   expect(command).not.toHaveBeenCalled();
   expect(submit).not.toHaveBeenCalled();

@@ -1751,7 +1751,10 @@ describe("CaseScreen integration", () => {
     expect(within(history).getByText("fresh-exact-submission")).toBeDefined();
     expect(within(history).queryByRole("textbox")).toBeNull();
     fireEvent.click(within(history.querySelector(".modal-actions") as HTMLElement).getByRole("button", { name: "Close" }));
-    expect(screen.getByRole("button", { name: /Finish & Submit/ })).toHaveProperty("disabled", true);
+    // Read-only: no edit controls; the status names the submission instead of "Saved" (#48 N-18).
+    expect(screen.queryByRole("button", { name: /Finish & Submit/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add finding without a text span" })).toBeNull();
+    expect(document.querySelector(".status-badge")!.textContent).toMatch(/^Submitted /);
   });
 
   it("labels every profile axis and opens a finding with the keyboard", () => {
@@ -2855,6 +2858,17 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
     expect(await screen.findByText("Removed Severe from Seizure")).toBeDefined();
     fireEvent.keyDown(document.body, { key: "z", ctrlKey: true });
     await waitFor(() => expect(payloads(apply)[2]).toEqual({ command: "add_modifier", annotation_id: "seizure", term_id: "HP:0012828", segments: [pos("schwere")] }));
+  });
+
+  it("“Remove text span” shows an Undo toast that restores the span", async () => {
+    const { container, apply } = await setup(modView(SEVERE_ON_SEIZURE));
+    fireEvent.click(container.querySelector('[data-list-key="annotation:seizure"]')!);
+    fireEvent.click(await screen.findByRole("button", { name: "Actions, Severe" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Remove text span" }));
+    await waitFor(() => expect(payloads(apply)[0]).toEqual({ command: "set_modifier_segments", annotation_id: "seizure", term_id: "HP:0012828", segments: [] }));
+    expect(await screen.findByText("Removed the text span of Severe")).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(payloads(apply)[1]).toEqual({ command: "set_modifier_segments", annotation_id: "seizure", term_id: "HP:0012828", segments: [pos("schwere")] }));
   });
 
   it("Change term never offers a modifier term", async () => {

@@ -1288,7 +1288,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     mutate: (annotationId, payload) => mutateAnnotationAndSyncDecision(annotationId, () => enqueueMutation({ ...payload })),
     segmentsOf: (annotationId, termId) => latestDraft.current.annotations?.find(a => a.annotation.annotation_id === annotationId)
       ?.annotation.modifiers?.find(m => m.term_id === termId)?.segments,
-    announce: message => announceCarried(message),
     reportError: error => reportError(error),
   });
   // A read-only case has no link-a-span mode (the mode may have started before the case became read-only).
@@ -1429,6 +1428,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     deriveCarriedStates(carriedInputs, latestDraft.current.round_input_resolutions ?? [], latestDraft.current.annotations ?? [])
       .find(state => state.input.input_id === inputId);
   const carriedReadOnly: CarriedReadOnly = !readOnly ? false : display !== null ? "older" : held ? "paused" : "submitted";
+  const submittedAt = carriedReadOnly === "submitted" ? submissions.at(-1)?.created_at : undefined;
   const showCarriedOriginal = (state: CarriedState) =>
     setOriginalRoundInput(carriedInputs.find(input => input.input_id === state.input.input_id) ?? null);
 
@@ -3362,13 +3362,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             className={`status-badge ${
               statusIsError
                 ? "status-error"
-                : statusText === "Saved"
+                : statusText === "Saved" || submittedAt
                 ? "status-saved"
                 : "status-saving"
             }`}
           >
             <span className="status-dot" aria-hidden="true" />
-            {statusText}
+            {/* A submitted task has nothing left to save: say when it was submitted. */}
+            {submittedAt ? <>Submitted <time dateTime={submittedAt} title={fullTimestamp(submittedAt)}>{formatTime(submittedAt)}</time></> : statusText}
           </span>
 
           <IconButton label="Keyboard shortcuts" icon={<IconKeyboard />} onClick={openShortcutHelp}
@@ -3387,13 +3388,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             </Button>
           )}
 
-          <SubmitControl
+          {/* Read-only (submitted, paused, an older version): no edit controls. */}
+          {!readOnly && <SubmitControl
             onSubmit={() => { void handleSubmitWorkspace(); }}
-            disabled={readOnly || submitPending}
+            disabled={submitPending}
             pending={submitPending}
-            openCount={readOnly ? null : openItems.length}
+            openCount={openItems.length}
             onNextOpen={goToNextOpenItem}
-          />
+          />}
         </div>
       </Toolbar>
 
@@ -3605,14 +3607,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               <div className="sidebar-header sidebar-header--actions">
                 {/* Confirmed proposals stay in the proposal list: in review this section holds only the annotator's own findings. */}
                 <span>{isReviewLike(view.key.mode) ? "Your own findings" : "Findings"} ({visibleAnnotations.length})</span>
-                <Button
+                {!readOnly && <Button
                   type="button"
                   size="sm"
-                  disabled={readOnly || !!spanlessBlockedReason} onClick={handleStartSpanless}
+                  disabled={!!spanlessBlockedReason} onClick={handleStartSpanless}
                   title="Create new annotation via ontology search"
                 >
                   Add finding without a text span
-                </Button>
+                </Button>}
               </div>
               {isReviewLike(view.key.mode) && (() => {
                 const proposals = completionResults.filter(s => reviewTargets.some(t => t.annotation_id === s.annotation.annotation_id && t.version === s.version)).length;
@@ -3623,6 +3625,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               {spanlessBlockedReason && <p className="field-hint">{spanlessBlockedReason}</p>}
               {legacySubmissionHint && <p className="field-hint">{legacySubmissionHint}</p>}
               {carriedActive && <CarriedProgress text={carried.progress} showNext={carried.openKeys.size > 0} onNext={() => { goToUnchecked(1); }} />}
+              {readOnly && carriedListOrder.length === 0 && <p className="field-hint">No findings in this text.</p>}
               <ul className="doc-list">
                 {carriedListOrder.map(listKey => {
                   if (listKey.startsWith("input:")) {
