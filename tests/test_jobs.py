@@ -142,6 +142,32 @@ def test_the_worker_thread_runs_queued_jobs(tmp_path: Path) -> None:
     assert not worker.alive
 
 
+def test_a_new_worker_fails_jobs_whose_owner_died(tmp_path: Path) -> None:
+    db = _db(tmp_path)
+    dead, alive = JobQueue(db, HANDLERS), JobQueue(db, HANDLERS)
+    orphan = dead.claim(dead.enqueue("echo", {"value": 1}, actor=Actor.cli()), "w1")
+    owned = alive.claim(alive.enqueue("echo", {"value": 2}, actor=Actor.cli()), "w2")
+    assert orphan is not None and owned is not None
+    # The process dies: its session (and the job lock) ends without a finish.
+    dead._held.pop(orphan.id).invalidate()
+
+    worker = Worker(JobQueue(db, HANDLERS), "w3", interval=0.05)
+    worker.start()
+    try:
+        deadline = time.monotonic() + 5
+        while dead.get(orphan.id).status == "running" and time.monotonic() < deadline:  # type: ignore[union-attr]
+            time.sleep(0.05)
+    finally:
+        worker.stop()
+    failed = dead.get(orphan.id)
+    assert failed is not None and failed.status == "failed"
+    assert failed.error == "Interrupted: the process running it stopped."
+    # A job whose owner still holds its lock is left alone and finishes normally.
+    assert alive.get(owned.id).status == "running"  # type: ignore[union-attr]
+    assert alive.run(owned, "w2").status == "succeeded"
+    assert JobQueue(db, HANDLERS).reclaim() == 0
+
+
 def test_the_server_runs_a_worker_while_it_is_up(tmp_path: Path) -> None:
     app = create_app(
         AppConfig(

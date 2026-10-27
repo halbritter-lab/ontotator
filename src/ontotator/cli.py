@@ -938,6 +938,8 @@ def _run_job(db: Database, kind: str, payload: dict[str, Any], *, wait: bool) ->
         job = queue.get(job_id)
         while job is not None and job.status in ("queued", "running"):
             time.sleep(0.5)
+            # A server killed mid-job leaves it running; fail it instead of waiting forever.
+            queue.reclaim()
             job = queue.get(job_id)
     assert job is not None
     if job.status != "succeeded":

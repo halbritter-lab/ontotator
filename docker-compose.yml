@@ -87,7 +87,8 @@ services:
     mem_limit: 2g
     cpus: 2.0
     pids_limit: 256
-    stop_grace_period: 35s
+    # uvicorn's 30 s graceful shutdown plus the job worker's 30 s join.
+    stop_grace_period: 70s
     # /readyz healthcheck is inherited from the verified image.
     # Prefixed service name: NPM and other stacks on the shared network may have an app.
     networks: [backend, npm_proxy_network]

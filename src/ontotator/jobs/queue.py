@@ -3,6 +3,10 @@
 A job is claimed with ``FOR UPDATE SKIP LOCKED``, so two workers never take
 the same one. CLI commands enqueue a job and run it inline with
 :meth:`JobQueue.claim`, which also works while the server is stopped.
+
+While a job runs, its claimer holds a session advisory lock on the job id
+(taken in the claim transaction). A job still ``running`` whose lock is free
+lost its process (deploy, SIGKILL); :meth:`JobQueue.reclaim` marks it failed.
 """
 
 from __future__ import annotations
@@ -14,11 +18,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import Row, func, insert, select, text, update
+from sqlalchemy import Connection, Row, func, insert, select, text, update
 
 from ontotator.auth.audit import Actor
 from ontotator.domain.errors import DomainError
 from ontotator.storage.database import Database
+from ontotator.storage.lease import _discard
 from ontotator.storage.tables import JobRow
 
 if TYPE_CHECKING:
@@ -115,6 +120,9 @@ class JobQueue:
         self.db = db
         self.handlers = handlers
         self.context = context or JobContext(db=db, data_dir=db.data_dir)
+        # Claimed job id -> the session holding its advisory lock until ``run`` ends.
+        self._held: dict[int, Connection] = {}
+        self._held_guard = threading.Lock()
 
     def enqueue(
         self,
@@ -144,17 +152,75 @@ class JobQueue:
 
     def claim_next(self, worker: str) -> Job | None:
         """The oldest queued job nobody else is claiming, now running."""
-        with self.db.transaction() as conn:
-            row = conn.execute(_CLAIM_NEXT, {"worker": worker}).one_or_none()
-        return _job(row) if row is not None else None
+        return self._claim(_CLAIM_NEXT, {"worker": worker})
 
     def claim(self, job_id: int, worker: str) -> Job | None:
         """Claim only this job, if it is still queued and not being claimed."""
-        with self.db.transaction() as conn:
-            row = conn.execute(
-                _CLAIM_ONE, {"worker": worker, "id": job_id}
-            ).one_or_none()
-        return _job(row) if row is not None else None
+        return self._claim(_CLAIM_ONE, {"worker": worker, "id": job_id})
+
+    def _claim(self, statement: Any, params: dict[str, Any]) -> Job | None:
+        conn = self.db.engine.connect()
+        try:
+            with conn.begin():
+                row = conn.execute(statement, params).one_or_none()
+                if row is not None:
+                    # A session lock outlives this commit, so no reclaim sees
+                    # the job running without its owner.
+                    conn.execute(select(func.pg_advisory_lock(row.id)))
+        except BaseException:
+            _discard(conn)
+            raise
+        if row is None:
+            conn.close()
+            return None
+        with self._held_guard:
+            self._held[row.id] = conn
+        return _job(row)
+
+    def _release(self, job_id: int) -> None:
+        with self._held_guard:
+            conn = self._held.pop(job_id, None)
+        if conn is None:
+            return
+        try:
+            conn.execute(select(func.pg_advisory_unlock(job_id)))
+            conn.commit()
+        except Exception:
+            _discard(conn)  # closing the session releases its lock
+            logger.warning("Could not unlock job %s.", job_id, exc_info=True)
+        else:
+            conn.close()
+
+    def reclaim(self) -> int:
+        """Mark failed every running job whose owner session is gone."""
+        failed = 0
+        conn = self.db.engine.connect().execution_options(isolation_level="AUTOCOMMIT")
+        try:
+            running = conn.execute(
+                select(JobRow.id).where(JobRow.status == "running")
+            ).scalars()
+            for job_id in list(running):
+                if not conn.execute(select(func.pg_try_advisory_lock(job_id))).scalar():
+                    continue  # its owner still runs it
+                try:
+                    failed += conn.execute(
+                        update(JobRow)
+                        .where(JobRow.id == job_id, JobRow.status == "running")
+                        .values(
+                            status="failed",
+                            error="Interrupted: the process running it stopped.",
+                            finished_at=func.now(),
+                        )
+                    ).rowcount
+                finally:
+                    conn.execute(select(func.pg_advisory_unlock(job_id)))
+        except BaseException:
+            _discard(conn)
+            raise
+        conn.close()
+        if failed:
+            logger.warning("Marked %d interrupted job(s) failed.", failed)
+        return failed
 
     def get(self, job_id: int) -> Job | None:
         with self.db.transaction() as conn:
@@ -165,6 +231,12 @@ class JobQueue:
 
     def run(self, job: Job, worker: str) -> Job:
         """Run a claimed job's handler and record its outcome."""
+        try:
+            return self._run(job, worker)
+        finally:
+            self._release(job.id)
+
+    def _run(self, job: Job, worker: str) -> Job:
         try:
             handler = self.handlers.get(job.kind)
             if handler is None:
@@ -246,6 +318,10 @@ class Worker:
             self._thread.join(timeout)
 
     def _loop(self) -> None:
+        try:
+            self.queue.reclaim()
+        except Exception:
+            logger.error("Could not reclaim interrupted jobs.", exc_info=True)
         while not self._stop.is_set():
             try:
                 job = self.queue.claim_next(self.name)
