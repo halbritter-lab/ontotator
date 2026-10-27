@@ -856,9 +856,9 @@ ul.task-counts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space
   animation: toast-in 150ms ease;
 }
 @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-/* One line (F13): the message is cut with an ellipsis; its full text is in the title. */
+/* The buttons stay on the row; a long message wraps instead of being cut (R-6). */
 .ui-toast > * { flex: none; }
-.ui-toast > .ui-toast-message { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ui-toast > .ui-toast-message { flex: 0 1 auto; min-width: 0; overflow-wrap: anywhere; }
 .ui-toast-note { color: var(--border); }
 .ui-toast .btn,
 .ui-toast .btn-quiet { color: var(--on-accent); }
@@ -888,7 +888,6 @@ ul.task-counts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space
 @media (max-width: 699px) {
   .ui-toast-region { bottom: calc(var(--space-3) + var(--toast-offset, 0px)); }
   .ui-toast { flex-wrap: wrap; max-width: calc(100vw - var(--space-6)); }
-  .ui-toast > .ui-toast-message { white-space: normal; }
 }
 @media (prefers-reduced-motion: reduce) {
   .ui-toast { animation: none; }

@@ -3412,9 +3412,11 @@ export interface components {
         };
         /**
          * ConsolidationProgressView
-         * @description Open and total groups of the row's active consolidation round.
+         * @description The row's active consolidation round with its open and total groups.
          */
         ConsolidationProgressView: {
+            /** Round Id */
+            round_id: string;
             /** Open */
             open: number;
             /** Total */

@@ -56,7 +56,8 @@ export function AssignmentChip({ item, caseId, menu, onChanged, link, onNavigate
     // Submitted work counts: nothing to change; its name opens the person's layer, else the chip opens the history.
     ? (menu.onHistory && !link ? [{ id: "history", label: "Open history", onSelect: menu.onHistory }] : [])
     : [
-      ...(assignment ? [{ id: "reassign", label: "Reassign to someone else…", description: menu.review ? `${name} can no longer continue.`
+      // D1: a consolidation is not reassigned; removing it frees the text for "Consolidate…" with someone else.
+      ...(assignment && item.task !== "review" ? [{ id: "reassign", label: "Reassign to someone else…", description: menu.review ? `${name} can no longer continue.`
         : `They start fresh ${menu.mode === "scratch" ? "from scratch" : "from proposals"}. ${name} can no longer continue; the draft stays in the history.`, onSelect: () => setDialog("reassign") }] : []),
       ...(!menu.review ? [{ id: "remove", label: "Remove (draft is discarded)", description: "Frees the slot.", onSelect: () => setDialog("remove") }]
         : assignment ? [{ id: "remove", label: "Remove assignment…", onSelect: () => setDialog("revoke") }] : []),

@@ -10551,6 +10551,10 @@
       },
       "ConsolidationProgressView": {
         "properties": {
+          "round_id": {
+            "type": "string",
+            "title": "Round Id"
+          },
           "open": {
             "type": "integer",
             "title": "Open"
@@ -10563,11 +10567,12 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
+          "round_id",
           "open",
           "total"
         ],
         "title": "ConsolidationProgressView",
-        "description": "Open and total groups of the row's active consolidation round."
+        "description": "The row's active consolidation round with its open and total groups."
       },
       "ConsolidationResultView": {
         "properties": {

@@ -161,7 +161,7 @@ it("measures again when the selection bar's slide-in ends", async () => {
   await act(async () => { vi.advanceTimersByTime(50); });
   expect(screen.getByRole("status").style.getPropertyValue("--toast-offset")).toBe("120px");
 });
-it("the undo toast stays on one line", () => {
+it("the undo toast keeps its buttons on the row and wraps a long message (R-6)", () => {
   const css = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../../src/styles/components.css"), "utf8");
   const style = document.head.appendChild(document.createElement("style"));
   style.textContent = css;
@@ -172,8 +172,8 @@ it("the undo toast stays on one line", () => {
     const message = toast.querySelector<HTMLElement>(".ui-toast-message")!;
     expect(getComputedStyle(toast).flexWrap).toBe("nowrap");
     expect(getComputedStyle(toast).maxWidth).toBe("min(50vw, 40rem)");
-    expect(getComputedStyle(message).whiteSpace).toBe("nowrap");
-    expect(getComputedStyle(message).textOverflow).toBe("ellipsis");
+    expect(getComputedStyle(message).whiteSpace).not.toBe("nowrap");
+    expect(getComputedStyle(message).textOverflow).not.toBe("ellipsis");
     expect(message.getAttribute("title")).toBe("fr of case-0101: Review off");
   } finally { style.remove(); }
 });
