@@ -130,7 +130,7 @@ test("1440×900: both texts show at least 15 lines and the rail shows four decis
   await expect(submitButton(page)).toBeInViewport({ ratio: 1 });
   expect(await page.evaluate(() => [document.documentElement.scrollTop, document.querySelector(".translation-review")!.scrollTop])).toEqual([0, 0]);
   const crumb = page.getByRole("navigation", { name: "Breadcrumb" }).locator('[aria-current="page"]');
-  await expect(crumb).toHaveText(/^failed-translation\W+Translation review \(de\)$/);
+  await expect(crumb).toHaveText(/^failed-translation de, Translation review$/);
   await expect(crumb).toHaveAttribute("title", `Assignment ${s.assignments["failed-translation"]}`);
   await expect(page.getByRole("link", { name: "Back to my tasks", exact: true })).toHaveCount(0);
   // Coupling is offered beside the editable translation too, unchecked by default.
@@ -279,7 +279,7 @@ test("keyboard only: 1, Ctrl+Enter, Enter, Enter opens the next task", async ({ 
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(new RegExp(`#/tasks/${s.assignments["second-translation"]}$`));
   await expect(target(page)).toHaveValue(s.texts["second-translation"]);
-  await expect(page.getByRole("navigation", { name: "Breadcrumb" }).locator('[aria-current="page"]')).toHaveText(/^second-translation\W+Translation review \(de\)$/);
+  await expect(page.getByRole("navigation", { name: "Breadcrumb" }).locator('[aria-current="page"]')).toHaveText(/^second-translation de, Translation review$/);
   // Four activations: 1, Ctrl+Enter, Enter, Enter (spec A.10).
 });
 
