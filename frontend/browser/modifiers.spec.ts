@@ -133,6 +133,16 @@ test("+ Add modifier… shows Cohort term; Mild and Severe show Two severities; 
   expect(axe.violations, JSON.stringify(axe.violations, null, 2)).toEqual([]);
 });
 
+test("a modifier hit can become the finding itself (some name a finding, e.g. Stillbirth)", async ({ page }) => {
+  const s = await open(page);
+  await startAttach(page, s, "schwere", "Severe");
+  const created = commandResponse(page, "create_annotation");
+  await page.getByRole("button", { name: "Use Severe as the finding" }).click();
+  expect((await created).ok()).toBeTruthy();
+  await expect(banner(page)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Turn into modifier…" })).toBeVisible();
+});
+
 test("Esc in the attach mode discards the mark and leaves focus in the text after it", async ({ page }) => {
   const s = await open(page);
   await startAttach(page, s, "schwere", "Severe");

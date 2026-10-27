@@ -138,4 +138,16 @@ describe("modifierWarnings", () => {
       { annotationId: "a", kind: "exclusive-modifiers", key: "exclusive:onset", labels: [], exclusiveClass: "onset" },
     ]);
   });
+
+  it("warns first for a modifier term as the finding's own term (R3), also from a server pair", () => {
+    const own = withModifiers("x", ["HP:0040283"]);
+    own.annotation.term_id = "HP:0012828";
+    expect(modifierWarnings([own], info)).toEqual([
+      { annotationId: "x", kind: "modifier-as-finding", key: "term:HP:0012828", labels: ["Severe"] },
+      { annotationId: "x", kind: "cohort-modifier", key: "cohort:HP:0040283", labels: ["Frequent"] },
+    ]);
+    expect(modifierWarnings([withModifiers("a", [])], info, [{ annotationId: "a", axis: "term:HP:0031796" }])).toEqual([
+      { annotationId: "a", kind: "modifier-as-finding", key: "term:HP:0031796", labels: ["Recurrent"] },
+    ]);
+  });
 });

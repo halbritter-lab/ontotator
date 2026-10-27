@@ -70,15 +70,10 @@ export function addedHeading(own: boolean, addedBy: string | null | undefined): 
   return addedBy ? `Added by ${personName(addedBy)}` : "Added findings";
 }
 
-/** A standalone modifier finding (S18): "Ana Weber marked a modifier as a finding. Severe can only describe another finding." */
+/** A modifier term as a finding (S18): allowed, as some name a finding (Stillbirth); otherwise it is attached or left out. */
 export function standaloneWarning(present: readonly ConsolidationPersonView[], term: string): string {
-  return `${namesOf(present)} marked a modifier as a finding. ${term} can only describe another finding.`;
+  return `${namesOf(present)} used the modifier term ${term} as a finding. Keep it only if it names the finding itself; otherwise attach it to a finding.`;
 }
-
-export const standaloneResult = (modifier: string) =>
-  `Result: no finding of its own. ${modifier} goes to the finding you attach it to, or is not in the result.`;
-
-export const NO_ATTACH_TARGET = "No resolved finding in this sentence yet.";
 
 export const REOPEN_EDITED_WARNING = "Reopening drops your edit from the editor.";
 

@@ -26,6 +26,8 @@ export interface AttachModePanelProps {
   showCancel?: boolean;
   /** An extra line (M7's convert mode). */
   note?: ReactNode;
+  /** New mark: create the finding with this modifier term as its own term (some name a finding, e.g. Stillbirth). */
+  onUseAsFinding?: () => void;
 }
 
 /** Copy of the attach mode in one place (spec "Attach mode" 4, 7–9). */
@@ -33,6 +35,7 @@ export const attachCopy = {
   banner: (term: string) => `Attach ${term}: click its finding in the list or in the text (↑ ↓ Enter in the list). Esc cancels.`,
   noNearest: "No finding in this sentence. Choose one in the findings list or in the text.",
   noFindings: (term: string) => `${term} is a modifier. Create the finding first, then add ${term} under Modifiers.`,
+  useAsFinding: (term: string) => `Use ${term} as the finding`,
   replaceLine: (finding: string, term: string, quote: string) => `${finding} already has ${term} (“${quote}”). Attaching replaces its text span.`,
   targetName: (term: string, finding: string) => `Attach ${term} to ${finding}`,
   attached: (term: string, finding: string) => `Attached ${term} to ${finding}. Next: mark more text, or add another modifier with “+ Add modifier…”.`,
@@ -49,7 +52,7 @@ export const attachCopy = {
 
 /** The inspector while the attach mode is on (a labelled region "Attach Severe"). The banner over the text owns the
  * instruction and the one Cancel (Esc); the inspector only offers the nearest target. */
-export function AttachModePanel({ termLabel, termId, markQuote, nearest, focused, existing, noFindings, onAttach, onReplace, onCancel, showCancel = false, note }: AttachModePanelProps): JSX.Element {
+export function AttachModePanel({ termLabel, termId, markQuote, nearest, focused, existing, noFindings, onAttach, onReplace, onCancel, showCancel = false, note, onUseAsFinding }: AttachModePanelProps): JSX.Element {
   const enter = <span aria-hidden="true"> <Kbd>Enter</Kbd></span>;
   const ok = useRef<HTMLButtonElement>(null);
   useEffect(() => { if (noFindings) ok.current?.focus({ preventScroll: true }); }, [noFindings]);
@@ -57,7 +60,8 @@ export function AttachModePanel({ termLabel, termId, markQuote, nearest, focused
     return <section className="detail-pane" aria-label={`Attach ${termLabel}`}>
       <div className="detail-section mod-attach-panel">
         <p>{attachCopy.noFindings(termLabel)}</p>
-        <div className="mod-attach-actions"><Button ref={ok} variant="primary" onClick={onCancel}>OK</Button></div>
+        <div className="mod-attach-actions"><Button ref={ok} variant="primary" onClick={onCancel}>OK</Button>
+          {onUseAsFinding && <Button onClick={onUseAsFinding}>{attachCopy.useAsFinding(termLabel)}</Button>}</div>
       </div>
     </section>;
   }
@@ -79,6 +83,7 @@ export function AttachModePanel({ termLabel, termId, markQuote, nearest, focused
           : there && markQuote
             ? <Button variant="primary" onClick={() => onAttach(target.annotationId)}>Link “{markQuote}” to {termLabel}{enter}</Button>
             : <Button variant="primary" onClick={() => onAttach(target.annotationId)}>Attach to {target.term}{enter}</Button>)}
+        {onUseAsFinding && <Button onClick={onUseAsFinding}>{attachCopy.useAsFinding(termLabel)}</Button>}
         {showCancel && <Button aria-keyshortcuts="Escape" onClick={onCancel}>Cancel<span aria-hidden="true"> <Kbd>Esc</Kbd></span></Button>}
       </div>
     </div>

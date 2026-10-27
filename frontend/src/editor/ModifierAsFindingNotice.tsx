@@ -9,11 +9,11 @@ export interface ModifierAsFindingNoticeProps {
   onTurn: () => void;
 }
 
-/** R3: old or imported data with a modifier term as a finding; the submit stays blocked until it is turned into a modifier. */
+/** R3: a modifier term as the finding's own term. Allowed (some name a finding, e.g. Stillbirth); the submit warns. */
 export function ModifierAsFindingNotice({ term, readOnly, onTurn }: ModifierAsFindingNoticeProps) {
   return (
     <InlineMessage tone="warning">
-      <p>{term} is a modifier. Turn it into a modifier of another finding.</p>
+      <p>{term} is a modifier term. Keep it only if it names the finding itself; otherwise turn it into a modifier of another finding.</p>
       {!readOnly && <Button type="button" size="sm" data-turn-into-modifier onClick={onTurn}>Turn into modifier…</Button>}
     </InlineMessage>
   );

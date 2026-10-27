@@ -634,19 +634,16 @@ describe("SearchPanel: modifier roles (finding modifiers)", () => {
     expect(options()[2].querySelector(".candidate-role")).toBeNull();
   });
 
-  it("Change term: modifier hits are aria-disabled with the reason and Enter skips them", async () => {
+  it("Change term: modifier hits stay usable with a warning reason (some name a finding)", async () => {
     const onSelectCandidate = vi.fn();
     const input = renderPanel(vi.fn().mockResolvedValue(roleHits), { assignMode: "change", onSelectCandidate });
     fireEvent.change(input, { target: { value: "s" } });
     await waitFor(() => expect(options()).toHaveLength(3));
-    expect(options()[0].getAttribute("aria-disabled")).toBe("true");
-    expect(options()[1].getAttribute("aria-disabled")).toBe("true");
-    expect(options()[0].textContent).toContain("Modifier — add it under Modifiers instead.");
-    expect(activeId(input)).toBe(options()[2].id);
+    expect(options()[0].getAttribute("aria-disabled")).not.toBe("true");
+    expect(options()[0].textContent).toContain("Modifier term — use it only if it names the finding itself; otherwise add it under Modifiers.");
+    expect(activeId(input)).toBe(options()[0].id);
     fireEvent.keyDown(input, { key: "Enter" });
-    expect(onSelectCandidate).toHaveBeenCalledWith(expect.objectContaining({ term_id: "HP:0001250" }), "s-r");
-    fireEvent.click(options()[0]);
-    expect(onSelectCandidate).toHaveBeenCalledTimes(1);
+    expect(onSelectCandidate).toHaveBeenCalledWith(expect.objectContaining({ term_id: "HP:0012828" }), "s-r");
   });
 
   it("a new mark reports a modifier hit through onPickModifier", async () => {
@@ -736,8 +733,8 @@ describe("SearchPanel: modifier roles (finding modifiers)", () => {
     });
 
     it("lists only unusable hits without the keys line", async () => {
-      const input = renderPanel(vi.fn().mockResolvedValue({ search_id: "s-m", candidates: [hit("HP:0012828", "Severe", { role: "modifier" })] }), { assignMode: "change" });
-      fireEvent.change(input, { target: { value: "severe" } });
+      const input = renderPanel(vi.fn().mockResolvedValue({ search_id: "s-m", candidates: [hit("HP:0000123", "Old", { role: "modifier", obsolete: true })] }), { assignMode: "change" });
+      fireEvent.change(input, { target: { value: "old" } });
       await waitFor(() => expect(options()).toHaveLength(1));
       expect(document.querySelector(".search-hint")!.textContent).toBe("1 term");
     });

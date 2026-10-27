@@ -449,37 +449,23 @@ describe("GroupCard, modifiers", () => {
     const seizureKept = group("g-seiz", ["partial"], [member("seiz-b", BEN, "HP:0001250", "Seizure", [modSpan("Krampfanfälle")])],
       { state: "keep", annotation_ids: ["cons-seiz"] });
 
-    it("explains the card and resolves only with Attach or Not in result", () => {
+    it("warns, keeps the usual actions (a modifier term may name a finding) and offers Attach", () => {
       const value = standalone();
       const { props } = renderCard(value, { ...mod, groups: [value, seizureKept] });
-      expect(screen.getByText(/Ana Weber marked a modifier as a finding\. Severe can only describe another finding\./)).toBeTruthy();
-      expect(result()).toBe("Result: no finding of its own. Severe “schwere” goes to the finding you attach it to, or is not in the result.");
-      for (const name of ["Keep", "Keep Ana Weber's finding", "Edit values…", "Other term…"]) expect(screen.queryByRole("button", { name })).toBeNull();
+      expect(screen.getByText(/Ana Weber used the modifier term Severe as a finding\. Keep it only if it names the finding itself; otherwise attach it to a finding\./)).toBeTruthy();
       expect(screen.getByRole("button", { name: "Not in result" })).toBeTruthy();
-      expect(screen.queryByRole("button", { name: "Edit in editor…" })).toBeNull();
-      expect(props.onResolve).not.toHaveBeenCalled();
       fireEvent.click(screen.getByRole("button", { name: "Attach to a finding…" }));
       fireEvent.click(screen.getByRole("menuitem", { name: "Seizure (HP:0001250), “Krampfanfälle”" }));
       expect(props.onResolve).toHaveBeenCalledWith({ input_ids: ["sev-a"], action: "leave_out", attach_to: "cons-seiz" },
         "Severe “schwere” to Seizure (HP:0001250), “Krampfanfälle”");
+      fireEvent.click(screen.getByRole("button", { name: /^Keep/ }));
+      expect(props.onResolve).toHaveBeenLastCalledWith(expect.objectContaining({ input_ids: ["sev-a"], action: "keep" }), expect.any(String));
     });
 
-    it("drops the axis and whole-finding rows, which mean nothing for a modifier", () => {
-      const value = standalone();
-      renderCard(value, { ...mod, groups: [value, seizureKept] });
-      expect(screen.getByRole("row", { name: /Term/ })).toBeTruthy();
-      expect(screen.queryByRole("row", { name: /Assertion/ })).toBeNull();
-      expect(screen.queryByRole("row", { name: /Whole finding/ })).toBeNull();
-    });
-
-    it("without a resolved finding in the sentence, Attach is unavailable with the reason", () => {
+    it("without a resolved finding in the sentence, Attach is not offered", () => {
       const value = standalone();
       const { props } = renderCard(value, { ...mod, groups: [value, { ...seizureKept, state: "open", annotation_ids: [] }] });
-      const attach = screen.getByRole("button", { name: "Attach to a finding…" });
-      expect(attach.getAttribute("aria-disabled")).toBe("true");
-      expect(document.getElementById(attach.getAttribute("aria-describedby")!)?.textContent).toBe("No resolved finding in this sentence yet.");
-      fireEvent.click(attach);
-      expect(props.onResolve).not.toHaveBeenCalled();
+      expect(screen.queryByRole("button", { name: "Attach to a finding…" })).toBeNull();
       fireEvent.click(screen.getByRole("button", { name: "Not in result" }));
       expect(props.onResolve).toHaveBeenCalledWith({ input_ids: ["sev-a"], action: "leave_out" }, "not in result");
     });

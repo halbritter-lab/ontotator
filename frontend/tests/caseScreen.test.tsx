@@ -2782,6 +2782,15 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
     expect(payloads(apply)).toEqual([]);
   });
 
+  it("Use Severe as the finding creates it on the mark (a modifier term may name a finding)", async () => {
+    const { container, apply } = await setup(modView(SEIZURE_HYPO));
+    await startAttach(container);
+    fireEvent.click(screen.getByRole("button", { name: "Use Severe as the finding" }));
+    await waitFor(() => expect(payloads(apply)).toHaveLength(1));
+    expect(payloads(apply)[0]).toMatchObject({ command: "create_annotation", term_id: "HP:0012828", segments: [pos("schwere")] });
+    await waitFor(() => expect(container.querySelector(".attach-mention-banner")).toBeNull());
+  });
+
   it("Link a text span: the next selection sends set_modifier_segments; Esc returns to the chip", async () => {
     const { container, apply } = await setup(modView([["seizure", "HP:0001250", "Krampfanfälle", [{ term_id: "HP:0031796" }]]]));
     fireEvent.click(container.querySelector('[data-list-key="annotation:seizure"]')!);
@@ -2881,14 +2890,14 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
     await waitFor(() => expect(payloads(apply)[1]).toEqual({ command: "set_modifier_segments", annotation_id: "seizure", term_id: "HP:0012828", segments: [pos("schwere")] }));
   });
 
-  it("Change term never offers a modifier term", async () => {
+  it("Change term offers a modifier term with the warning reason", async () => {
     const { container } = await setup(modView(SEIZURE_HYPO));
     fireEvent.click(container.querySelector('[data-list-key="annotation:seizure"]')!);
     fireEvent.click(await screen.findByRole("button", { name: /Change term/ }));
     fireEvent.change(screen.getByRole("combobox", { name: "Search term" }), { target: { value: "schwer" } });
     const option = (await screen.findAllByRole("option"))[0];
-    expect(option.getAttribute("aria-disabled")).toBe("true");
-    expect(option.textContent).toContain("Modifier — add it under Modifiers instead.");
+    expect(option.getAttribute("aria-disabled")).not.toBe("true");
+    expect(option.textContent).toContain("Modifier term — use it only if it names the finding itself; otherwise add it under Modifiers.");
   });
 
   it("Change term offers Modifiers only and the mod: prefix, as the new-mark search (M-3)", async () => {
@@ -2967,7 +2976,7 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
     });
     const startConvert = async (container: HTMLElement) => {
       fireEvent.click(container.querySelector('[data-list-key="annotation:sev"]')!);
-      expect(await screen.findByText("Severe is a modifier. Turn it into a modifier of another finding.")).toBeDefined();
+      expect(await screen.findByText("Severe is a modifier term. Keep it only if it names the finding itself; otherwise turn it into a modifier of another finding.")).toBeDefined();
       fireEvent.click(screen.getByRole("button", { name: "Turn into modifier…" }));
       await screen.findByRole("region", { name: "Attach Severe" });
     };
@@ -3043,14 +3052,15 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
       expect(container.querySelector(".pending-quote")!.textContent).toBe("“Wochen”");
     });
 
-    it("blocks the submit; “Go to Severe” focuses “Turn into modifier…”", async () => {
+    it("only warns at submit; “Go to Severe” focuses “Turn into modifier…”", async () => {
       const view = modView(STANDALONE);
       await setup(view);
       fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/ }));
       const dialog = await screen.findByRole("dialog", { name: "Submit case" });
       const item = await waitFor(() => dialog.querySelector<HTMLElement>('[data-open-item="modifier-as-finding"]')!);
-      expect(item.textContent).toContain("Severe is a modifier. Turn it into a modifier of another finding.");
-      expect(within(dialog).getByText("Turn 1 modifier used as a finding into a modifier before submitting.")).toBeDefined();
+      expect(item.closest("[data-modifier-warnings]")).not.toBeNull();
+      expect(item.textContent).toContain("Severe is a modifier term. Keep it only if it names the finding itself.");
+      expect(within(dialog).getByRole("checkbox", { name: "Submit with 1 modifier warning" })).toBeDefined();
       fireEvent.click(within(item).getByRole("button", { name: "Go to Severe" }));
       await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Turn into modifier…" })));
     });

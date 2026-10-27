@@ -37,7 +37,7 @@ export interface SearchPanelProps {
   languageHint?: string;
   /** "modifier": the "+ Add modifier…" search (label "Search modifier", hits only under MODIFIER_ROOTS). */
   mode?: "finding" | "modifier";
-  /** "change": a modifier hit cannot become the finding's term (spec "Attach mode" 10). */
+  /** "change": a modifier hit may become the finding's term; its reason line warns (spec "Attach mode" 10). */
   assignMode?: "new" | "change" | "modifier";
   /** New mark: a modifier hit is reported here instead of being assigned (attach mode, E-a). */
   onPickModifier?: (candidate: SearchCandidate, searchId?: string) => void;
@@ -45,8 +45,8 @@ export interface SearchPanelProps {
   modifierFilter?: boolean;
 }
 
-/** Reason line of a modifier hit in "Change term". */
-export const MODIFIER_IN_CHANGE = "Modifier — add it under Modifiers instead.";
+/** Reason line of a modifier hit in "Change term" and the tree: allowed, but usually a modifier (some name a finding, e.g. Stillbirth). */
+export const MODIFIER_IN_CHANGE = "Modifier term — use it only if it names the finding itself; otherwise add it under Modifiers.";
 const isModifierHit = (c: SearchCandidate) => c.role === "modifier" || c.role === "cohort";
 
 export const SEARCH_DEBOUNCE_MS = 250;
@@ -188,7 +188,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   useShortcutHint(["↓ / ↑", "Enter"], "Move through term hits; add the active hit", { group: "Finding" });
 
   const isUsable = (c: SearchCandidate): boolean =>
-    canAssign && c.obsolete !== true && !(assignMode === "change" && isModifierHit(c));
+    canAssign && c.obsolete !== true;
   const hasQuery = queryInput.trim() !== "";
   const searching = hasQuery && (debouncing || (state.isLoading && state.query === queryInput));
   const failed = hasQuery && !searching && !!state.error && state.query === queryInput;
