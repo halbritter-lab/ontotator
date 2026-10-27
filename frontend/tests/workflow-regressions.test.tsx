@@ -730,7 +730,8 @@ it("displays replacement term link in sidebar and allows deselecting so no term 
 
   // 1. Sidebar shows "Ersetzt durch: HP:0003" with link
   const replLink = screen.getByRole("button", { name: /^(Replaced by|Ersetzt durch):.*HP:0003/i });
-  expect(replLink).toBeDefined();
+  // Not inside the role="button" proposal row (axe nested-interactive).
+  expect(replLink.closest('[role="button"]')).toBeNull();
 
   // 2. Clicking the replacement link in the sidebar selects the replacement annotation (AnnotationPanel opens)
   fireEvent.click(replLink);

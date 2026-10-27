@@ -3469,9 +3469,42 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                     // M-5: in the attach mode an open or confirmed proposal is a target row (roving tab stop, ↑ ↓ Enter).
                     const attachEntry = attachActive && attachModifier ? attachTargets.find(target => target.proposal === t) : undefined;
                     const attachHere = !!attachEntry && attachFocusId === attachEntry.annotationId;
+                    // The "Replaced by" links sit in a list item after the row: a role="button" row may hold no buttons.
+                    const replacedBy = dec?.outcome === "changed" ? (() => {
+                      const replSnap = (draft.annotations ?? []).find(
+                        (a) => a.annotation.annotation_id === dec.replacement?.annotation_id
+                      );
+                      const replTermId = replSnap?.annotation.term_id ?? dec.replacement?.annotation_id ?? "";
+                      const replLabel = replSnap ? termLabel(replSnap.annotation.layer_id, replTermId) : null;
+                      const displayText = replLabel ? `${replLabel} (${replTermId})` : replTermId;
+                      const splitOffs = splitOffsOf(t, dec.replacement?.annotation_id);
+                      if (splitOffs.length) return (
+                        <>
+                          Replaced by {splitOffs.length + 1} findings, <strong>{displayText}</strong>:{" "}
+                          {[replSnap, ...splitOffs].map((snap, index) => snap && <React.Fragment key={snap.annotation.annotation_id}>
+                            {index > 0 && " "}
+                            <Button type="button" size="sm" title="Jump to this finding in the draft" onClick={() => {
+                              selectListKey(`annotation:${snap.annotation.annotation_id}`, true);
+                            }}>“{firstQuoteOf(snap)}”</Button>
+                          </React.Fragment>)}
+                        </>
+                      );
+                      return (
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => {
+                            if (dec.replacement?.annotation_id) selectListKey(`annotation:${dec.replacement.annotation_id}`, true);
+                          }}
+                          title="Jump to replacement annotation in draft"
+                        >
+                          Replaced by: <strong>{displayText}</strong>
+                        </Button>
+                      );
+                    })() : null;
                     return (
+                      <React.Fragment key={refKey(t)}>
                       <li
-                        key={refKey(t)}
                         data-list-key={`target:${refKey(t)}`}
                         className={`doc-item ${isSelected && !attachEntry ? "selected" : ""} ${isResolved ? "doc-item--resolved" : ""}${attachEntry ? " mod-target" : ""}${attachHere ? " mod-target--active" : ""}`}
                         role="button"
@@ -3506,44 +3539,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                         </div>
                         <div className="doc-meta">
                           {dec?.outcome === "changed" ? (
-                            (() => {
-                              const replSnap = (draft.annotations ?? []).find(
-                                (a) => a.annotation.annotation_id === dec.replacement?.annotation_id
-                              );
-                              const replTermId = replSnap?.annotation.term_id ?? dec.replacement?.annotation_id ?? "";
-                              const replLabel = replSnap ? termLabel(replSnap.annotation.layer_id, replTermId) : null;
-                              const displayText = replLabel ? `${replLabel} (${replTermId})` : replTermId;
-                              const splitOffs = splitOffsOf(t, dec.replacement?.annotation_id);
-                              if (splitOffs.length) return (
-                                <div className="doc-meta__line">
-                                  Replaced by {splitOffs.length + 1} findings, <strong>{displayText}</strong>:{" "}
-                                  {[replSnap, ...splitOffs].map((snap, index) => snap && <React.Fragment key={snap.annotation.annotation_id}>
-                                    {index > 0 && " "}
-                                    <Button type="button" size="sm" title="Jump to this finding in the draft" onClick={(e) => {
-                                      e.stopPropagation();
-                                      selectListKey(`annotation:${snap.annotation.annotation_id}`, true);
-                                    }}>“{firstQuoteOf(snap)}”</Button>
-                                  </React.Fragment>)}
-                                  {" "}<AiBadge provenance={t.provenance} source={sourceForTarget(t)} />
-                                </div>
-                              );
-                              return (
-                                <div className="doc-meta__line">
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      if (dec.replacement?.annotation_id) selectListKey(`annotation:${dec.replacement.annotation_id}`, true);
-                                    }}
-                                    title="Jump to replacement annotation in draft"
-                                  >
-                                    Replaced by: <strong>{displayText}</strong>
-                                  </Button>
-                                  {" "}<AiBadge provenance={t.provenance} source={sourceForTarget(t)} />
-                                </div>
-                              );
-                            })()
+                            <AiBadge provenance={t.provenance} source={sourceForTarget(t)} />
                           ) : dec?.outcome === "rejected" ? (
                             <>
                               <span className="doc-meta__note">Proposal rejected</span>
@@ -3562,6 +3558,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                         {entryAuthorOf(t.annotation_id) && <div className="doc-meta">{entryAuthorOf(t.annotation_id)}</div>}
                         {attachHere && <div className="mod-attach-here" aria-hidden="true">Attach {attachModifier!.termLabel} here, as your copy <Kbd>Enter</Kbd></div>}
                       </li>
+                      {replacedBy && <li className={`doc-item doc-item--resolved doc-meta doc-item--replaced-by${isSelected ? " selected" : ""}`}>{replacedBy}</li>}
+                      </React.Fragment>
                     );
                   })}
                 </ul>

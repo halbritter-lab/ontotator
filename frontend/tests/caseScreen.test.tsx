@@ -3277,9 +3277,12 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
       view.draft.evidence!.push({ version: "ev-1", mention: { evidence_id: "ev-split", segments: [pos("Muskelhypotonie")] } } as never);
       view.draft.decisions = [{ decision_id: "d0", target, outcome: "changed", replacement: { annotation_id: "seizure", version: "seizure-v1" }, reviewer_id: "ann" }] as never;
       const { container } = await setup(view, severeHits, false);
+      // The links follow the row: a role="button" row holds no buttons (axe nested-interactive).
       const row = container.querySelector<HTMLElement>('[data-list-key^="target:"]')!;
-      expect(row.textContent).toContain("Replaced by 2 findings");
-      fireEvent.click(within(row).getByRole("button", { name: "“Muskelhypotonie”" }));
+      expect(within(row).queryAllByRole("button")).toHaveLength(0);
+      const links = row.nextElementSibling as HTMLElement;
+      expect(links.textContent).toContain("Replaced by 2 findings");
+      fireEvent.click(within(links).getByRole("button", { name: "“Muskelhypotonie”" }));
       await waitFor(() => expect(container.querySelector('[data-list-key="annotation:split"]')?.classList.contains("selected")).toBe(true));
     });
 
