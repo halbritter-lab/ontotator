@@ -229,6 +229,16 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
     else onSelectCandidate(candidate, state.searchId ?? undefined);
   };
 
+  // Enter pressed while the search for this query was pending: add the active hit once its answer arrives.
+  const queuedEnter = useRef<string | null>(null);
+  useEffect(() => {
+    if (queuedEnter.current === null || searching) return;
+    const query = queuedEnter.current;
+    queuedEnter.current = null;
+    if (resultsCurrent && query === queryInput && shownActive >= 0) addCandidate(candidates[shownActive]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searching, resultsCurrent, queryInput]);
+
   const handleQueryChange = (val: string) => {
     userTyped.current = true;
     const start = val.trimStart();
@@ -272,7 +282,8 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
           if (shownActive >= 0) addCandidate(candidates[shownActive]);
           return;
         }
-        // A pending or stale search runs now; its hits need a second Enter.
+        // A pending or stale search runs now; its active hit is added when it answers.
+        if (hasQuery) queuedEnter.current = queryInput;
         if (state.isLoading && !debouncing && state.query === queryInput) return;
         retry();
         return;
