@@ -3470,14 +3470,16 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                         key={refKey(t)}
                         data-list-key={`target:${refKey(t)}`}
                         className={`doc-item ${isSelected && !attachEntry ? "selected" : ""} ${isResolved ? "doc-item--resolved" : ""}${attachEntry ? " mod-target" : ""}${attachHere ? " mod-target--active" : ""}`}
-                        {...(attachEntry ? {
-                          role: "button", tabIndex: attachHere ? 0 : -1, "aria-label": attachCopy.targetName(attachModifier!.termLabel, attachEntry.term),
-                          onKeyDown: (event: React.KeyboardEvent<HTMLLIElement>) => {
-                            if (event.target !== event.currentTarget) return;
-                            if (event.key === "Enter" || event.key === " ") { event.preventDefault(); void attachTo(attachEntry.annotationId); }
-                            else if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); moveAttachFocus(event.key === "ArrowDown" ? 1 : -1); }
-                          },
-                        } : {})}
+                        role="button"
+                        // Like FindingRow: every row is a tab stop; attach mode keeps a roving one (the active target).
+                        tabIndex={attachEntry && !attachHere ? -1 : 0}
+                        aria-pressed={attachEntry ? undefined : isSelected}
+                        aria-label={attachEntry ? attachCopy.targetName(attachModifier!.termLabel, attachEntry.term) : undefined}
+                        onKeyDown={(event: React.KeyboardEvent<HTMLLIElement>) => {
+                          if (event.target !== event.currentTarget) return;
+                          if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.currentTarget.click(); }
+                          else if (attachEntry && (event.key === "ArrowDown" || event.key === "ArrowUp")) { event.preventDefault(); moveAttachFocus(event.key === "ArrowDown" ? 1 : -1); }
+                        }}
                         onClick={() => {
                           if (attachEntry) { void attachTo(attachEntry.annotationId); return; }
                           const targetKey = refKey(t);
