@@ -374,9 +374,6 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
         </InlineMessage>
       )}
 
-      {/* The active hit (the first usable one by default); with none usable, the first hit for reference (spec F4.2). */}
-      {expanded && <SearchDetail hit={candidates[shownActive >= 0 ? shownActive : 0]} />}
-
       {expanded && (
         <ul ref={listRef} id={listboxId} role="listbox" aria-label="Terms" className="candidate-list">
           {candidates.map((cand, index) => {
@@ -411,8 +408,8 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
                 </div>
                 {match && <div className="candidate-match" title={cand.match_kind}>{match}</div>}
                 {cand.definition && (
-                  // Clamped visually; the full definition stays in the option for screen readers.
-                  <div className="candidate-def">{cand.definition}</div>
+                  // Clamped to two lines; the full definition stays in the option (screen readers) and its tooltip (#21).
+                  <div className="candidate-def" title={cand.definition}>{cand.definition}</div>
                 )}
                 {assignMode === "change" && isModifierHit(cand) && <span className="candidate-reason">{MODIFIER_IN_CHANGE}</span>}
                 {cand.obsolete && (
@@ -433,18 +430,3 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
     </div>
   );
 };
-
-/** Fixed-height area above the hits with the active hit in full; a visual duplicate of the active option.
- * Label and code are drawn from data attributes (CSS generated content), so the option stays the only
- * element with that text: text queries and find-in-page land on the hit, not on its duplicate. */
-const SearchDetail: React.FC<{ hit: SearchCandidate }> = ({ hit }) => (
-  <div className="search-detail" data-search-detail aria-hidden="true">
-    <p className="search-detail__head">
-      <span className="search-detail__label" data-text={hit.label} />{" "}
-      <span className="search-detail__code" data-text={hit.term_id} />
-    </p>
-    <p>{hit.definition || "No definition."}</p>
-    {matchLine(hit) && hit.matched_term && <p className="search-detail__match">Matched: {hit.matched_term}</p>}
-    {hit.obsolete && <p className="warning-badge">Obsolete term (assignment not allowed)</p>}
-  </div>
-);

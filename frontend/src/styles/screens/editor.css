@@ -1264,39 +1264,6 @@
   visibility: visible;
 }
 
-/* The active hit in full, between the hint and the list; its height never depends on the content. */
-.search-detail {
-  box-sizing: border-box;
-  height: calc(5 * var(--leading-sm) + 2 * var(--space-2));
-  margin-top: var(--space-2);
-  padding: var(--space-2);
-  overflow-y: auto;
-  background: var(--surface-sunken);
-  border-radius: var(--radius-sm);
-  font-size: var(--size-sm);
-  line-height: var(--leading-sm);
-}
-
-.search-detail p {
-  margin: 0;
-}
-
-/* Label and code come from data-text, so the hit's option keeps the only DOM copy of that text. */
-.search-detail__label::before,
-.search-detail__code::before {
-  content: attr(data-text);
-}
-
-.search-detail__label {
-  font-weight: var(--weight-strong);
-}
-
-.search-detail__code {
-  font-family: var(--font-mono);
-  font-size: var(--size-xs);
-  color: var(--text-muted);
-}
-
 /* Term search combobox: the field row, the hint line and the active hit. */
 
 .search-field-row {
@@ -1361,10 +1328,6 @@
   .candidate-card[aria-selected="true"] {
     outline: var(--focus-width) solid Highlight;
     outline-offset: calc(-1 * var(--focus-width));
-  }
-
-  .search-detail {
-    border: 1px solid CanvasText;
   }
 }
 

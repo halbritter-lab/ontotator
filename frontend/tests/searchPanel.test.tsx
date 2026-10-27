@@ -331,73 +331,11 @@ describe("SearchPanel", () => {
     expect(document.querySelector(".is-clamped")).toBeNull();
   });
 
-  describe("detail area", () => {
-    const detail = () => document.querySelector<HTMLElement>("[data-search-detail]");
-
-    it("detail area shows the active hit and follows ↓", async () => {
-      const longDefinition = "A seizure is an intermittent abnormality of nervous system physiology. ".repeat(6).trim();
-      const searchOntology = vi.fn().mockResolvedValue({ search_id: "s", candidates: [
-        hit("HP:0001250", "Seizure", { definition: longDefinition }),
-        hit("HP:0001324", "Muscle weakness", { matched_term: "Muscle weakness", match_kind: "hasExactSynonym", label: "Weakness" }),
-        hit("HP:0002373", "Febrile seizure", { definition: undefined }),
-      ] });
-      const input = renderPanel(searchOntology);
-      fireEvent.change(input, { target: { value: "seizure" } });
-      await waitFor(() => expect(activeId(input)).toBe(options()[0].id));
-      const box = detail()!;
-      expect(box.classList.contains("search-detail")).toBe(true);
-      expect(box.getAttribute("aria-hidden")).toBe("true");
-      const head = () => [".search-detail__label", ".search-detail__code"]
-        .map((selector) => detail()!.querySelector(selector)!.getAttribute("data-text"));
-      expect(head()).toEqual(["Seizure", "HP:0001250"]);
-      // The duplicate holds no text node with the label: text queries find only the option.
-      expect(screen.getByText("Seizure").closest("[role=option]")).not.toBeNull();
-      expect(box.textContent).toContain(longDefinition);
-      expect(box.textContent).not.toContain("Matched");
-      // The full definition also stays in the option for screen readers.
-      expect(options()[0].querySelector(".candidate-def")!.textContent).toBe(longDefinition);
-      // Between the hint and the list.
-      const panel = document.querySelector(".search-panel")!;
-      const order = Array.from(panel.querySelectorAll(".search-hint, [data-search-detail], [role=listbox]"));
-      expect(order.map((el) => el.className)).toEqual(["search-hint", "search-detail", "candidate-list"]);
-
-      fireEvent.keyDown(input, { key: "ArrowDown" });
-      expect(head()).toEqual(["Weakness", "HP:0001324"]);
-      expect(detail()!.querySelector(".search-detail__match")!.textContent).toBe("Matched: Muscle weakness");
-
-      fireEvent.keyDown(input, { key: "ArrowDown" });
-      expect(head()).toEqual(["Febrile seizure", "HP:0002373"]);
-      expect(detail()!.textContent).toContain("No definition.");
-      // A row without a definition has no definition line.
-      expect(options()[2].querySelector(".candidate-def")).toBeNull();
-    });
-
-    it("shows the first hit and its obsolete note when no hit can be active", async () => {
-      const input = renderPanel(vi.fn().mockResolvedValue(threeHits), { canAssign: false });
-      fireEvent.change(input, { target: { value: "seizure" } });
-      await waitFor(() => expect(options()).toHaveLength(3));
-      expect(activeId(input)).toBeNull();
-      expect(detail()!.querySelector(".search-detail__label")!.getAttribute("data-text")).toBe("Obsolete seizure");
-      expect(detail()!.textContent).toContain("Obsolete term (assignment not allowed)");
-    });
-
-    it("no detail area without hits, while searching or on error", async () => {
-      let resolve: (value: unknown) => void = () => {};
-      const searchOntology = vi.fn()
-        .mockImplementationOnce(() => new Promise((r) => { resolve = r; }))
-        .mockRejectedValueOnce(new Error("boom"));
-      const input = renderPanel(searchOntology);
-      expect(detail()).toBeNull();
-      fireEvent.change(input, { target: { value: "xyz" } });
-      expect(screen.getByRole("status").textContent).toBe("Searching…");
-      expect(detail()).toBeNull();
-      await act(async () => { resolve({ search_id: "s", candidates: [] }); });
-      await screen.findByText(/No terms match/);
-      expect(detail()).toBeNull();
-      fireEvent.change(input, { target: { value: "abc" } });
-      await screen.findByRole("alert");
-      expect(detail()).toBeNull();
-    });
+  it("shows no detail area that repeats the active hit (#21)", async () => {
+    const input = renderPanel(vi.fn().mockResolvedValue(threeHits));
+    fireEvent.change(input, { target: { value: "seizure" } });
+    await waitFor(() => expect(options()).toHaveLength(3));
+    expect(document.querySelector("[data-search-detail]")).toBeNull();
   });
 
   it("marks the current term with an icon and text, not a glyph", async () => {
