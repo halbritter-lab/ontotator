@@ -42,8 +42,10 @@
 .translation-checks-calm { color: var(--text-muted); }
 .translation-checks-toggle .translation-checks-chevron { transition: transform 0.15s ease-out; }
 .translation-checks-toggle[aria-expanded="true"] .translation-checks-chevron { transform: rotate(90deg); }
-.translation-check-details { max-width: 1080px; max-height: 40vh; overflow: auto; padding: var(--space-3) var(--space-5) var(--space-4); background: var(--surface-raised); }
+.translation-check-details { max-height: 40vh; overflow: auto; padding: var(--space-3) var(--space-5) var(--space-4); background: var(--surface-raised); }
 .translation-check-details[hidden] { display: none; }
+/* The band spans the full width up to the rail; only its reading content keeps a measure (R-23). */
+.translation-check-details > * { max-width: 1080px; }
 .translation-check-list { margin: var(--space-1) 0 0; padding-left: var(--space-5); }
 .translation-check-list li + li { margin-top: var(--space-1); }
 .translation-check-detail { color: inherit; }
@@ -63,7 +65,8 @@
 .translation-column-head { margin-bottom: var(--space-2); }
 /* Every head: the title on the first line (level across the columns), the column's controls on a second line. */
 .translation-texts .translation-column-head { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-1); min-height: 28px; }
-.translation-texts .translation-column-head .translation-column-title { min-height: 28px; display: flex; align-items: center; }
+/* A flex title drops the space before the language tag: the gap keeps "Source 🇬🇧 en" apart (R-23). */
+.translation-texts .translation-column-head .translation-column-title { min-height: 28px; display: flex; align-items: center; gap: var(--space-2); }
 .translation-texts .translation-column-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); }
 .translation-texts .translation-column-head .form-group { margin: 0; }
 .translation-texts .translation-column-head .form-checkbox-row { min-height: 28px; font-size: var(--size-md); line-height: var(--leading-md); }
@@ -73,7 +76,7 @@
 /* Coupling notes and the pair line: one wrapping line below the panes, spanning the text columns. */
 .translation-column-hint { display: flex; flex-wrap: wrap; gap: 0 var(--space-3); margin: var(--space-2) 0 0; color: var(--text-muted); font-size: var(--size-sm); line-height: var(--leading-sm); }
 .translation-column-title { margin: 0; font-family: var(--font-sans); font-size: var(--size-md); line-height: var(--leading-md); font-weight: var(--weight-strong); color: var(--text); }
-.translation-column-subtitle { margin-left: var(--space-2); font-weight: var(--weight-regular); color: var(--text-muted); }
+.translation-column-subtitle { font-weight: var(--weight-regular); color: var(--text-muted); }
 .translation-column-note { flex: none; margin: var(--space-2) 0 0; color: var(--text-muted); font-size: var(--size-sm); line-height: var(--leading-sm); }
 .translation-text,
 .translation-review .translation-diff,
@@ -117,6 +120,7 @@
 .translation-submit-reason { align-self: stretch; max-width: 44rem; color: var(--text); }
 .translation-submit-reason p { margin: 0; }
 .translation-submit-reason .review-issues { margin-top: var(--space-2); }
+.translation-text-changed-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-2); }
 
 .review-form { min-width: 0; margin: 0; padding: 0; border: 0; }
 .review-decisions { display: grid; gap: var(--space-2); min-width: 0; margin: 0 0 var(--space-4); padding: 0; border: 0; }

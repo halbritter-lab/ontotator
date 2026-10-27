@@ -22,7 +22,7 @@ export const categoryLabels: Readonly<Record<ClinicalCategory, string>> = {
 
 export const issueMessages: Readonly<Record<IssueCode, string>> = {
   TEXT_EMPTY: "The proposed text must not be empty.",
-  TEXT_CHANGED: "Accepted unchanged needs text equal to the reviewed text.",
+  TEXT_CHANGED: "You edited the text. Choose Accepted with corrections, or undo your edits.",
   CLINICAL_CHANGE_NOT_ALLOWED: "Accepted unchanged cannot include a clinical change.",
   TEXT_UNCHANGED: "Accepted with corrections needs changed text.",
   CLINICAL_CHANGE_REQUIRED: "A query or rejection needs a clinical change.",

@@ -852,6 +852,22 @@ it("names a replaced Accepted unchanged and drops the note once the reviewer pic
   fireEvent.change(input, { target: { value: "Übersetzt." } });
   expect(radio("Query").checked).toBe(true);
 });
+it("offers a way out when Accepted unchanged meets edited text", async () => {
+  setup();
+  const input = await screen.findByRole("textbox", { name: "Translation (de)" }) as HTMLTextAreaElement;
+  fireEvent.change(input, { target: { value: "Übersetzt!" } });
+  fireEvent.click(radio("Accepted unchanged"));
+  expect(screen.getAllByText("You edited the text. Choose Accepted with corrections, or undo your edits.").length).toBeGreaterThan(0);
+  fireEvent.click(screen.getByRole("button", { name: "Undo my edits" }));
+  expect(input.value).toBe("Übersetzt.");
+  expect(radio("Accepted unchanged").checked).toBe(true);
+  expect(screen.queryByRole("button", { name: "Undo my edits" })).toBeNull();
+  fireEvent.change(input, { target: { value: "Übersetzt!" } });
+  fireEvent.click(radio("Accepted unchanged"));
+  fireEvent.click(screen.getByRole("button", { name: "Choose Accepted with corrections" }));
+  expect(radio("Accepted with corrections").checked).toBe(true);
+  expect(input.value).toBe("Übersetzt!");
+});
 it("treats a stored decision as chosen by the user after reload", async () => {
   setup(reviewWorkspace({ draft: { revision: 6, text: "Übersetzt.", form: { decision: "accepted_corrected", clinical_change: false } } }));
   const input = await screen.findByRole("textbox", { name: "Translation (de)" });
