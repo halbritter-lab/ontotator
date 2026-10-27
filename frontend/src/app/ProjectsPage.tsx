@@ -59,8 +59,9 @@ export function ProjectsPage({ projects, currentKey, onNavigate }: ProjectsPageP
   const openTasks = useOpenTasks(projects.length > 0);
   const needle = search.trim().toLocaleLowerCase();
   const shown = projects.filter(item => `${item.name} ${item.project_key}`.toLocaleLowerCase().includes(needle));
-  const link = (destination: Route, text: string, primary = false) => <a href={routeHref(destination)}
-    className={`btn btn-sm ${primary ? "btn-primary" : "btn-secondary"}`}
+  // Quiet buttons: a filled primary "Open" in every row competes with itself (#47 A-19).
+  const link = (destination: Route, text: string) => <a href={routeHref(destination)}
+    className="btn btn-sm btn-secondary"
     onClick={(event: MouseEvent<HTMLAnchorElement>) => {
       if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
       event.preventDefault();
@@ -84,7 +85,7 @@ export function ProjectsPage({ projects, currentKey, onNavigate }: ProjectsPageP
     } },
     { id: "tasks", header: "Your open tasks", cell: item => openTasks === null ? "–" : String(openTasks[item.project_key] ?? 0) },
     { id: "action", header: "Action", cell: item => <span className="projects-page__actions">
-      {link(projectDestination(item), "Open", true)}
+      {link(projectDestination(item), "Open")}
       {item.can_manage && link({ name: "projectSettings", key: item.project_key }, "Settings")}
     </span> },
   ];

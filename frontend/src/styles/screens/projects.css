@@ -2,7 +2,9 @@
 .projects-page .form-group { margin-bottom: var(--space-4); }
 .projects-page__name { font-weight: var(--weight-strong); overflow-wrap: anywhere; }
 .projects-page__current { display: inline-flex; align-items: center; gap: var(--space-1); margin-inline-start: var(--space-2); color: var(--accent); font-size: var(--size-sm); font-weight: var(--weight-strong); }
-.projects-page__actions { display: inline-flex; flex-wrap: wrap; gap: var(--space-2); }
+/* Open and Settings stay on one line at 1280 px with long names (#47 A-19); the Project cells keep the row's background. */
+.projects-page__actions { display: inline-flex; flex-wrap: nowrap; gap: var(--space-2); white-space: nowrap; }
+.projects-table tbody th[scope="row"] { background: transparent; font-weight: var(--weight-regular); }
 .projects-table tr.projects-table__row--current > :first-child { box-shadow: inset 3px 0 0 var(--accent); }
 
 @media (max-width: 699px) {

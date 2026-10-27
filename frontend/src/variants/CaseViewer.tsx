@@ -187,8 +187,9 @@ export function CaseViewer({ projectKey, caseId, variant, show, annotations, com
   const layerLabel = layers.entries?.find(entry => entry.ref && layerKey(entry.ref) === selection)?.label ?? ref?.label ?? '';
   return <section className={`case-viewer${compareOpen ? " case-comparing" : ""}`} aria-label="Case viewer">
     <TextViewToolbar projectKey={projectKey} caseId={detail.case_id} language={current.language} documents={documents} onNavigate={onNavigate}>
-      <VersionSelect caseDetail={detail} value={current.document_id} onChange={id => move(id)} />
-      <ShowSelect entries={layers.entries ?? []} value={selection} otherLabel={ref?.label} onChange={key => move(current.document_id, key)} />
+      {/* Small visible labels (#47 X-15); the selects keep their aria-label as the name. */}
+      <label className="text-view-field"><span>Language and version</span><VersionSelect caseDetail={detail} value={current.document_id} onChange={id => move(id)} /></label>
+      <label className="text-view-field"><span>Show</span><ShowSelect entries={layers.entries ?? []} value={selection} otherLabel={ref?.label} onChange={key => move(current.document_id, key)} /></label>
       {access.allowed && <Button ref={compareButton} size="sm" aria-expanded={compareOpen} onClick={() => compareOpen ? closeComparison() : setCompareIdentity(identity)}>Compare</Button>}
       <SubmissionHistory projectKey={projectKey} caseId={caseId} documentId={current.document_id} language={current.language} version={current.version}
         username={username} canManage={access.canManage} onNavigate={onNavigate} documents={documents} />
