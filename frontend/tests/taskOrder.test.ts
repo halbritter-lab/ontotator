@@ -5,7 +5,7 @@ import { nextOpenTask, orderTasks } from "../src/app/caseOrder";
 
 const task = (assignment_id: number, overrides: Partial<TaskSummary> = {}): TaskSummary => ({
   assignment_id,
-  workflow_revision: 0, held: false,
+  workflow_revision: 0, held: false, report_answered: false,
   project_key: "project-a",
   project_name: "Project A",
   document_id: `document-${assignment_id}`,

@@ -71,6 +71,15 @@ def get_report(
     )
 
 
+@router.post("/problem-reports/{report_id}/seen")
+def mark_seen(
+    report_id: str, request: Request, principal: PrincipalDep
+) -> ProblemReportView:
+    return ProblemReportService(request.app.state.repo.db).mark_seen(
+        get_access(request), report_id
+    )
+
+
 @router.get("/problem-reports/{report_id}/pause-candidates")
 def pause_candidates(
     report_id: str, request: Request, principal: PrincipalDep

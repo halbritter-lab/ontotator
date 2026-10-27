@@ -134,6 +134,9 @@ class TaskSummary:
     # ``assignment.reopen`` audit event); None for other statuses.
     reopened_at: datetime | None = None
     reopen_reason: str | None = None
+    # R-26: a lead answered one of the owner's reports on this task since the
+    # owner last opened it.
+    report_answered: bool = False
 
 
 def _assignments() -> Select[tuple[object, ...]]:
@@ -1035,11 +1038,17 @@ class AssignmentService:
             ]
 
     def my_tasks(self, user_id: int) -> List[TaskSummary]:
+        from ontotator.application.problem_report_views import answered
         from ontotator.application.translation_reviews import (
             failed_translation_checks,
         )
         from ontotator.authz.visibility import qualifying_assignment
         from ontotator.domain.variants import resolve_translation_lineage
+        from ontotator.storage.workflow_tables import (
+            ProblemReportEventRow,
+            ProblemReportRow,
+            ProblemReportStateRow,
+        )
 
         query = (
             select(
@@ -1132,6 +1141,47 @@ class AssignmentService:
                 if reopened
                 else {}
             )
+            reports = {
+                r.report_id: r
+                for r in conn.execute(
+                    select(
+                        ProblemReportRow.report_id,
+                        ProblemReportRow.assignment_id,
+                        ProblemReportStateRow.reporter_seen_at,
+                    )
+                    .join(
+                        ProblemReportStateRow,
+                        ProblemReportStateRow.report_id == ProblemReportRow.report_id,
+                    )
+                    .where(
+                        ProblemReportRow.reporter_id == user_id,
+                        ProblemReportRow.assignment_id.in_(
+                            [r["assignment_id"] for r in rows]
+                        ),
+                    )
+                )
+            }
+            events: dict[str, list[Any]] = {}
+            for event in conn.execute(
+                select(
+                    ProblemReportEventRow.report_id,
+                    ProblemReportEventRow.actor_id,
+                    ProblemReportEventRow.action,
+                    ProblemReportEventRow.details,
+                    ProblemReportEventRow.created_at,
+                ).where(
+                    ProblemReportEventRow.report_id.in_(list(reports)),
+                    ProblemReportEventRow.actor_id != user_id,
+                )
+            ):
+                events.setdefault(event.report_id, []).append(event)
+            answered_tasks = {
+                r.assignment_id
+                for rid, r in reports.items()
+                if answered(
+                    events.get(rid, []), user_id, r.assignment_id, r.reporter_seen_at
+                )
+            }
             result = []
             for row in rows:
                 source = target = None
@@ -1153,6 +1203,7 @@ class AssignmentService:
                         source_language=source,
                         target_language=target,
                         failed_check_count=failed,
+                        report_answered=row["assignment_id"] in answered_tasks,
                         **(
                             {
                                 "reopened_at": reopen.at,

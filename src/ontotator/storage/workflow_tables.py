@@ -175,6 +175,8 @@ class ProblemReportStateRow(Base):
     state: Mapped[str]
     revision: Mapped[int] = mapped_column(BigInteger)
     resolution: Mapped[str | None]
+    # When the reporter last opened the report (drives "Answer to your report").
+    reporter_seen_at: Mapped[datetime | None]
 
 
 class TaskHoldRow(Base):

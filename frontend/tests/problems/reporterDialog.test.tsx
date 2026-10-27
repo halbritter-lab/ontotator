@@ -379,3 +379,29 @@ describe("reporter confirm discard rule", () => {
     expect(screen.getByRole("dialog", { name: "Problems with Task 4" })).toBeTruthy();
   });
 });
+
+describe("read-only task and lead answers (#49 R-20, R-26)", () => {
+  it("names the entry Text problems on a submitted task and opens on the reports, the form second", async () => {
+    setup({ assignment: task({ status: "submitted" }) });
+    await waitFor(() => expect(api.listTaskProblemReports).toHaveBeenCalled());
+    await act(async () => undefined);
+    fireEvent.click(screen.getByRole("button", { name: /^Text problems/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Problems with Task 4" });
+    expect(within(dialog).getByText("You have not reported a problem with this text.")).toBeTruthy();
+    fireEvent.click(footer().getByRole("button", { name: "New report" }));
+    expect(screen.getByRole("dialog", { name: "New problem report" })).toBeTruthy();
+  });
+
+  it("marks an answered report seen once the reporter has it in front of them", async () => {
+    const answered = report({ answered: true });
+    const seen = vi.spyOn(api, "markProblemReportSeen").mockResolvedValue({ ...answered, answered: false });
+    setup({ reports: [answered] });
+    await waitFor(() => expect(api.listTaskProblemReports).toHaveBeenCalled());
+    await act(async () => undefined);
+    expect(seen).not.toHaveBeenCalled();
+    fireEvent.click(entry());
+    await waitFor(() => expect(seen).toHaveBeenCalledWith(answered.report_id));
+    await act(async () => undefined);
+    expect(seen).toHaveBeenCalledTimes(1);
+  });
+});

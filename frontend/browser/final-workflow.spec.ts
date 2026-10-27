@@ -248,7 +248,9 @@ test('corrected-text private carry preserves submitted history through a reporte
     const submitted = await value<Opened>(author.page, `/api/v1/assignments/${task.id}/open`, 'POST');
     const carriedId = submitted.assignment.last_submission_id!;
     await viewSubmittedResult(author.page);
-    await author.page.getByRole('button', { name: /^Report a text problem/ }).click();
+    // A submitted task: "Text problems" opens on the reports, the form second (#49 R-20).
+    await author.page.getByRole('button', { name: /^Text problems/ }).click();
+    await author.page.getByRole('dialog', { name: `Problems with Task ${task.id}`, exact: true }).getByRole('button', { name: 'New report', exact: true }).click();
     const form = author.page.getByRole('dialog', { name: 'New problem report', exact: true });
     await form.getByRole('textbox', { name: /What is the problem\?/ }).fill('Review the corrected clinical context before continuing.');
     await form.getByRole('button', { name: 'Report and pause my task', exact: true }).click();

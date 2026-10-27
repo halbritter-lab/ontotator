@@ -163,6 +163,7 @@ export function MyTasks({ project, status, projects, onNavigate, username }: MyT
     </> },
     { id: "status", header: "Status", cell: task => <>
       <StatusBadge status={task.status}>{assignmentStatusLabels[task.status]}</StatusBadge>
+      {task.report_answered && <StatusBadge tone="info">Answer to your report</StatusBadge>}
       {task.held && <><StatusBadge tone="warning">Paused</StatusBadge><p>{task.hold_reason ?? "A project problem needs attention."}</p></>}
       {reopenNotice(task) && <p>{reopenNotice(task)}</p>}
     </> },

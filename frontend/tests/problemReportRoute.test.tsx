@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { api, type DocumentRowsPage, type ProblemReportView, type ProjectSummary } from '../src/api/client';
+import { api, ApiError, type DocumentRowsPage, type ProblemReportView, type ProjectSummary } from '../src/api/client';
 import { App } from '../src/App';
 import { routeHref, type Route } from '../src/app/router';
 import { deferred } from './projectFixtures';
@@ -27,8 +27,11 @@ it('answers a project member without management authority with "Problem report n
   window.history.replaceState(null, '', '#/projects/p%2Fkey/problem-reports/report-1');
   vi.spyOn(api, 'listProjects').mockResolvedValue([{ ...project, can_manage: false, roles: ['annotator'] }]);
   vi.spyOn(api, 'listMyTasks').mockReturnValue(new Promise(() => {}));
+  // Not the viewer's report: the server refuses it like an unknown one.
+  const seen = vi.spyOn(api, 'markProblemReportSeen').mockRejectedValue(new ApiError(404, 'Not found', 'REPORT_NOT_FOUND'));
   render(<App user={testUser('owner')} />);
   const heading = await screen.findByRole('heading', { name: 'Problem report not found or no access' });
+  expect(seen).toHaveBeenCalledWith('report-1');
   expect(screen.queryByRole('heading', { name: 'You do not have access to this page.' })).toBeNull();
   expect(screen.queryByRole('region', { name: 'Authorized report detail' })).toBeNull();
   fireEvent.click(within(heading.parentElement!).getByRole('link', { name: 'My tasks' }));

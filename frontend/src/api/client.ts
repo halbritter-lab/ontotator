@@ -1069,6 +1069,11 @@ export class ApiClient {
     return this.request(`/api/v1/problem-reports/${encodeURIComponent(reportId)}`, { method: "GET" });
   }
 
+  /** The reporter opened their report: clears "Answer to your report"; returns the fresh view. */
+  async markProblemReportSeen(reportId: string): Promise<ProblemReportView> {
+    return this.request(`/api/v1/problem-reports/${encodeURIComponent(reportId)}/seen`, { method: "POST" });
+  }
+
   async listPauseCandidates(reportId: string): Promise<PauseCandidate[]> {
     return this.request(`/api/v1/problem-reports/${encodeURIComponent(reportId)}/pause-candidates`, { method: "GET" });
   }
