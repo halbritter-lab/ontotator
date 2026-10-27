@@ -95,13 +95,42 @@ blockquote.report-text {
   flex: none;
 }
 
-/* Lead report page: one intent per block, stacked. */
-.toolbar.lead-decide { display: grid; gap: var(--space-3); align-items: start; }
+/* Lead report page: the report as a case file on the left, one decision card on the right (stacked below 1000 px). */
+.lead-report-layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: var(--space-6); align-items: start; margin-top: var(--space-4); }
+@media (max-width: 999px) { .lead-report-layout { grid-template-columns: minmax(0, 1fr); } }
+.lead-report-main { display: grid; gap: var(--space-5); min-width: 0; }
+.lead-report-main > section { display: grid; gap: var(--space-3); }
+.lead-report-header { display: grid; gap: var(--space-2); }
+.lead-report-header h1 { margin: 0; }
+.lead-report-eyebrow, .lead-report-meta { margin: 0; color: var(--text-muted); }
+.lead-report-eyebrow { font-size: var(--size-sm); line-height: var(--leading-sm); }
+.lead-report-meta { font-size: var(--size-md); }
+blockquote.lead-report-quote { margin-top: var(--space-2); border-left-color: var(--border-strong); font-size: var(--size-reading); line-height: var(--leading-reading); }
+.lead-report-subhead { margin: 0; font-family: inherit; font-size: var(--size-md); line-height: var(--leading-md); font-weight: var(--weight-strong); color: var(--text-muted); }
+.problem-report-technical { color: var(--text-muted); font-size: var(--size-sm); }
+
+.lead-decision-card { display: grid; gap: var(--space-4); padding: var(--space-4) var(--space-5); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-raised); min-width: 0; }
+.lead-decision-card > h2 { margin: 0; }
+.lead-decision-card .report-facts { font-size: var(--size-md); gap: var(--space-2) var(--space-4); }
+.lead-decision-card .report-facts dt { font-weight: normal; }
+.lead-fact-note { margin: 0; color: var(--text-muted); font-size: var(--size-sm); }
+.lead-other-pause { margin: var(--space-1) 0 0; }
+.lead-outcome { display: grid; gap: var(--space-2); justify-items: start; }
+
+/* The decision actions: the primary first, then one row per further decision. */
+.toolbar.lead-decide { display: grid; gap: var(--space-3); align-items: start; padding-top: var(--space-4); border-top: 1px solid var(--border); }
+.lead-primary { display: grid; gap: var(--space-3); justify-items: start; }
+.lead-primary .form-group { margin: 0; justify-self: stretch; }
+.lead-rule { width: 100%; margin: 0; border: 0; border-top: 1px solid var(--border); }
+.lead-decide-other { margin: 0; font-size: var(--size-md); line-height: var(--leading-md); font-weight: var(--weight-strong); color: var(--text-muted); }
+.lead-intents { list-style: none; margin: 0; padding: 0; }
+.lead-intents > li { padding: var(--space-3) 0; border-top: 1px solid var(--border); }
+.lead-intents > li:first-child { border-top: 0; padding-top: 0; }
+.lead-intents > li:last-child { padding-bottom: 0; }
 .lead-intent { display: grid; gap: var(--space-1); justify-items: start; }
 .lead-intent > div:empty { display: none; }
-.lead-intent-line { margin: 0; color: var(--text-muted); }
-.lead-holds { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-1); }
+.lead-intent > div:not(:empty) { justify-self: stretch; margin-top: var(--space-2); }
+.lead-intent-line { margin: 0; color: var(--text-muted); font-size: var(--size-sm); line-height: var(--leading-sm); }
 @media (max-width: 699px) {
-  .lead-intent { justify-items: stretch; }
+  .lead-intent, .lead-primary { justify-items: stretch; }
 }
-.lead-decide-other { margin: 0 0 var(--space-1); font-weight: 600; }

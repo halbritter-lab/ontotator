@@ -74,7 +74,12 @@ export function reportStateFact(r: ProblemReportView, now?: Date): string {
 
 /** "Task 4, ann-0004, accepted-translation, de"; with a display name (leads) "Task 4, Ana Weber (ann-0004), …". */
 export function taskLabel(t: TaskIdentity & { case_id: string; language: string }): string {
-  return `Task ${t.assignment_id}, ${ownerName(t)}, ${textLabel(t)}`;
+  return `Task ${t.assignment_id}, ${taskOwnerText(t)}`;
+}
+
+/** The owner and text of a task without its number: "Ana Weber (ann-0004), accepted-translation de". */
+export function taskOwnerText(t: TaskIdentity & { case_id: string; language: string }): string {
+  return `${ownerName(t)}, ${textLabel(t)}`;
 }
 
 /** Running-text reference: "Task 4 (ann-0004)"; with a display name "Task 4, Ana Weber (ann-0004)" (never nested parentheses). */
@@ -218,7 +223,10 @@ function stateReason(r: ProblemReportView): string | null {
   return null;
 }
 
-/** Labels, consequence lines and unavailability reasons of the lead intents. */
+/**
+ * Labels, consequence lines and unavailability reasons of the lead intents. The page shows only the available ones;
+ * the reason still guards a confirmation that was open when the intent became unavailable.
+ */
 export function intentState(r: ProblemReportView): Record<Intent, { label: string; consequence: string; unavailable: string | null }> {
   const active = activeHolds(r);
   const blockedByState = stateReason(r);
@@ -227,51 +235,39 @@ export function intentState(r: ProblemReportView): Record<Intent, { label: strin
   const otherReportPauses = holdsOf(r).some(h => h.assignment_id === r.assignment_id && (h.other_active_holds?.length ?? 0) > 0);
   const stayedState = r.state === "resolved" ? "The report stays closed." : r.state === "withdrawn" ? "The report stays withdrawn." : "The report stays open.";
   return {
-    // R-16: the common outcome, one step and one outcome text.
+    // R-16: the common outcome, one step, the answer to the reporter in the same card.
     resume_close: {
-      label: `Close and resume ${paused}…`,
-      consequence: `Lets ${paused} continue and records your outcome for ${reporterName(r)}.`,
+      label: `Close and resume ${paused}`,
+      consequence: `Lets ${paused} continue and closes the report.`,
       unavailable: blockedByState ?? (active.length ? null : "No task is paused by this report."),
     },
     close: {
-      label: active.length ? "Close report (pauses stay)" : "Close report",
-      consequence: `Records your outcome for ${reporterName(r)}. ${active.length ? `${paused} ${stays}.` : "No task is paused by this report."}`,
+      label: active.length ? "Close, keep paused…" : "Close report…",
+      consequence: active.length ? `${paused} ${stays}.` : `Records your answer for ${reporterName(r)}.`,
       unavailable: blockedByState,
     },
     release: {
-      label: "Release pause…",
-      consequence: `Lets the selected tasks continue. ${stayedState} Pauses from other reports stay.`,
+      // A closed report that still pauses tasks has this one step left: it names the tasks.
+      label: r.state === "open" ? "Release pause…" : `Release pause on ${paused}…`,
+      consequence: `Lets ${r.state === "open" ? "the selected tasks" : paused} continue. ${stayedState}`,
       unavailable: active.length ? null : "No task is paused by this report.",
     },
     pause: {
       label: "Pause other tasks…",
-      consequence: "Stops work on related tasks. Their owners see only your reason, not this report.",
+      consequence: "Owners see your reason, not this report.",
       unavailable: blockedByState,
     },
     restart: {
       label: "Agree empty restart…",
-      consequence: `Starts Task ${r.assignment_id} again with an empty round and closes this report. Earlier rounds stay in the history. The final result does not change.`,
+      consequence: `Task ${r.assignment_id} starts with an empty round; the report closes.`,
       unavailable: blockedByState ?? (otherReportPauses ? `Task ${r.assignment_id} is also paused by another report. Release that pause first.` : null),
     },
     reopen: {
       label: "Reopen report…",
-      consequence: "Makes the report open again. Nothing is paused again.",
+      consequence: "Makes it open again; nothing is paused again.",
       unavailable: r.state === "open" ? "The report is open." : null,
     },
   };
-}
-
-/** The computed summary sentence under the lead page's state list. */
-export function leadSummary(r: ProblemReportView): string {
-  if (r.state === "withdrawn") return "The reporter withdrew this report. Nothing is paused by it.";
-  const n = activeHolds(r).length;
-  if (r.state === "open") {
-    return n
-      ? `${n} ${plural(n, "task", "tasks")} paused by this report. The report is open.`
-      : "Nothing is paused by this report. The report is open until you close it.";
-  }
-  if (!n) return "Nothing left to decide.";
-  return `${n} ${plural(n, "task is", "tasks are")} paused by this report. The report is closed; release ${plural(n, "the pause", "the pauses")} when work can continue.`;
 }
 
 /** Success message after a lead action: what changed and what did not, from the views before and after. */

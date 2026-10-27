@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import type { FinalSelectionSummary } from "../../src/api/client";
 import { finalResultLabel } from "../../src/problems/LeadStatePanel";
-import { answerNotice, conflictReasonText, historyItems, intentState, leadOutcome, leadSummary, reportStateBadge, reportStateFact, reportTitle, taskLabel, taskRef, toolbarEntry, yourTaskFact } from "../../src/problems/labels";
+import { answerNotice, conflictReasonText, historyItems, intentState, leadOutcome, reportStateBadge, reportStateFact, reportTitle, taskLabel, taskRef, toolbarEntry, yourTaskFact } from "../../src/problems/labels";
 import { event, hold, report } from "./fixtures";
 
 const T = "2026-10-18T10:05:00Z";
@@ -82,24 +82,23 @@ describe("problem report labels", () => {
   });
   it("intent_availability", () => {
     const open = intentState(report({ viewer_is_lead: true }));
-    expect(open.close.label).toBe("Close report (pauses stay)");
-    expect(open.close.consequence).toBe("Records your outcome for ann-0004. Task 4 stays paused until you release it.");
+    expect(open.resume_close.label).toBe("Close and resume Task 4");
+    expect(open.close.label).toBe("Close, keep paused…");
+    expect(open.close.consequence).toBe("Task 4 stays paused until you release it.");
+    expect(open.release.label).toBe("Release pause…");
+    expect(intentState(report({ viewer_is_lead: true, state: "resolved" })).release).toEqual({ label: "Release pause on Task 4…", consequence: "Lets Task 4 continue. The report stays closed.", unavailable: null });
     expect(open.reopen.unavailable).toBe("The report is open.");
     const closed = intentState(report({ viewer_is_lead: true, state: "resolved", holds: [hold({ active: false })] }));
-    expect(closed.close.label).toBe("Close report");
+    expect(closed.close.label).toBe("Close report…");
+    expect(closed.close.consequence).toBe("Records your answer for ann-0004.");
     expect(closed.release.unavailable).toBe("No task is paused by this report.");
     expect(closed.pause.unavailable).toBe("The report is closed.");
-    expect(closed.reopen).toEqual({ label: "Reopen report…", consequence: "Makes the report open again. Nothing is paused again.", unavailable: null });
+    expect(closed.reopen).toEqual({ label: "Reopen report…", consequence: "Makes it open again; nothing is paused again.", unavailable: null });
     expect(intentState(report({ state: "withdrawn" })).restart.unavailable).toBe("The report is withdrawn.");
     const blocked = intentState(report({ viewer_is_lead: true, holds: [hold({ other_active_holds: [{ report_id: "r2" }] })] }));
     expect(blocked.restart.unavailable).toBe("Task 4 is also paused by another report. Release that pause first.");
   });
   it("summary_and_outcomes", () => {
-    expect(leadSummary(report({ state: "resolved" }))).toBe("1 task is paused by this report. The report is closed; release the pause when work can continue.");
-    expect(leadSummary(report({ holds: [hold({ active: false })] }))).toBe("Nothing is paused by this report. The report is open until you close it.");
-    expect(leadSummary(report())).toBe("1 task paused by this report. The report is open.");
-    expect(leadSummary(report({ state: "withdrawn", holds: [hold({ active: false })] }))).toBe("The reporter withdrew this report. Nothing is paused by it.");
-    expect(leadSummary(report({ state: "resolved", holds: [hold({ active: false })] }))).toBe("Nothing left to decide.");
     const before = report({ viewer_is_lead: true });
     const after = report({ viewer_is_lead: true, state: "resolved" });
     expect(leadOutcome("close", before, after)).toBe("Report closed. Task 4 is still paused by this report; release it when work can continue.");

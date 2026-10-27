@@ -79,7 +79,7 @@ function confirmWith(title: string, intentName: string | null, reason: string, c
   fireEvent.change(box.getAllByRole('textbox').pop()!, { target: { value: reason } });
   fireEvent.click(box.getByRole('button', { name: confirmLabel }));
 }
-const loaded = () => screen.findByRole('heading', { level: 1, name: 'Problem report' });
+const loaded = () => screen.findByRole('heading', { level: 1, name: 'case 7 en' });
 
 it('links back to Documents with exactly the documents query from the route', async () => {
   mockReport(); const navigate = vi.fn();
@@ -131,7 +131,7 @@ it.each(['resume', 'resolve'] as const)('records a %s in the Documents visit sta
   await loaded();
   expect(decided()).toEqual([]);
   if (kind === 'resume') confirmWith('Release pause', null, 'Done', 'Release pause');
-  else confirmWith('Close report', 'Close report (pauses stay)', 'Done', 'Close report');
+  else confirmWith('Close report', 'Close, keep paused…', 'Done', 'Close report');
   await screen.findByText(kind === 'resume' ? /Released the pause/ : /Report closed/);
   expect(decided()).toEqual(['case 7:en']);
 });
@@ -141,7 +141,7 @@ it('records no decision without the documents query, for other actions, or when 
   mockReport(); const apply = vi.spyOn(api, 'actOnProblemReport').mockResolvedValue({ ...report, revision: 3, state: 'resolved' });
   const view = render(<ProblemReportDetail projectKey="p/key" reportId="report-1" canManage onNavigate={vi.fn()} />);
   await loaded();
-  confirmWith('Close report', 'Close report (pauses stay)', 'Done', 'Close report');
+  confirmWith('Close report', 'Close, keep paused…', 'Done', 'Close report');
   await screen.findByText(/Report closed/);
   expect(decided()).toEqual([]);
   view.unmount();
@@ -156,7 +156,7 @@ it('records no decision without the documents query, for other actions, or when 
   expect(decided()).toEqual([]);
 
   apply.mockRejectedValue(new Error('Conflict'));
-  confirmWith('Close report', 'Close report (pauses stay)', 'Done', 'Close report');
+  confirmWith('Close report', 'Close, keep paused…', 'Done', 'Close report');
   await screen.findByText('Could not save. Nothing changed.');
   expect(decided()).toEqual([]);
 });
@@ -192,7 +192,7 @@ it('after a decision offers Back to Documents and Next decision under a segment 
   render(<ProblemReportDetail projectKey="p/key" reportId="report-1" canManage section="decide" documents={segment} onNavigate={navigate} />);
   await loaded();
   expect(screen.queryByRole('link', { name: /Next decision/ })).toBeNull();
-  confirmWith('Close report', 'Close report (pauses stay)', 'Done', 'Close report');
+  confirmWith('Close report', 'Close, keep paused…', 'Done', 'Close report');
   const outcome = (await screen.findByText(/Report closed/)).closest('.lead-outcome') as HTMLElement;
   expect(within(outcome).getByRole('link', { name: 'Back to Documents' }).getAttribute('href')).toBe(routeHref({ name: 'projectDocuments', key: 'p/key', ...segment }));
   const next = await within(outcome).findByRole('link', { name: 'Next decision: case-0102 de' });
@@ -209,7 +209,7 @@ it('offers no Next decision without a segment filter', async () => {
   mockReport(); vi.spyOn(api, 'actOnProblemReport').mockResolvedValue({ ...report, revision: 3, state: 'resolved' });
   render(<ProblemReportDetail projectKey="p/key" reportId="report-1" canManage documents={{ language: 'en', panel: 'case 7:en' }} onNavigate={vi.fn()} />);
   await loaded();
-  confirmWith('Close report', 'Close report (pauses stay)', 'Done', 'Close report');
+  confirmWith('Close report', 'Close, keep paused…', 'Done', 'Close report');
   await screen.findByText(/Report closed/);
   expect(api.listDocumentRows).toHaveBeenCalledTimes(1);
   expect(screen.queryByRole('link', { name: /Next decision/ })).toBeNull();

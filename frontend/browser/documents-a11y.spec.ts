@@ -356,7 +356,7 @@ test("Back from the report page and from the text view restores the Documents qu
 
   // Report page (the card's problem report banner) and back.
   await card.getByRole("link", { name: /^Open problem report, / }).click();
-  await expect(page.getByRole("heading", { name: "Problem report", level: 1 })).toBeVisible();
+  await expect(page.getByText(/^Problem report · /)).toBeVisible();
   await page.getByRole("link", { name: "Back to Documents" }).first().click();
   await documentsReady(page);
   expect(documentsQueryOf(page.url())).toEqual(query);

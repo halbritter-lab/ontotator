@@ -9,10 +9,10 @@ import { recordDecision } from "../documents/visitState";
 import { LeadConfirm, releasePreselection } from "../problems/LeadConfirms";
 import { LeadDecide } from "../problems/LeadDecide";
 import { finalResultLabel, LeadStatePanel } from "../problems/LeadStatePanel";
-import { intentState, leadOutcome, reporterName, taskRef, type Intent } from "../problems/labels";
+import { intentState, leadOutcome, reportStateBadge, reporterName, taskRef, type Intent } from "../problems/labels";
 import { ReportTimeline } from "../problems/ReportTimeline";
 import { useLeadReport } from "../problems/useLeadReport";
-import { Button, EmptyState, IconChevronLeft, InlineMessage, EmptyValue } from "../ui";
+import { Button, EmptyState, IconChevronLeft, InlineMessage, EmptyValue, StatusBadge } from "../ui";
 import { refKey } from "../variants/versionState";
 import { onSpaceActivate } from "../ui/spaceActivates";
 
@@ -147,57 +147,61 @@ export function ProblemReportDetail({ projectKey, reportId, canManage, action: r
     ...(report.submission ? { annotations: refKey({ kind: "submission", id: report.submission.submission_id }) } : {}),
     ...(documents ? { documents } : {}),
   };
-  const identity = [[report.case_id, report.language].filter(Boolean).join(" "), taskRef({ assignment_id: report.assignment_id, owner_label: report.reporter_label, owner: report.viewer_is_lead ? report.reporter : null }),
-    report.task ? TASK_TYPES[report.task] : null, report.round_ordinal != null ? `Round ${report.round_ordinal}` : null].filter(Boolean).join(", ");
-  const stateId = `${id}-state`, decideId = `${id}-decide`, historyId = `${id}-history`;
+  const reporterTask = taskRef({ assignment_id: report.assignment_id, owner_label: report.reporter_label, owner: report.viewer_is_lead ? report.reporter : null });
+  const eyebrow = ["Problem report", reporterTask, report.task ? TASK_TYPES[report.task] : null, report.round_ordinal != null ? `Round ${report.round_ordinal}` : null].filter(Boolean).join(" · ");
+  const badge = reportStateBadge(report);
+  const decideId = `${id}-decide`, historyId = `${id}-history`;
   const states = intentState(report);
+  const cardTitle = report.state === "open" ? "Decide" : (report.holds ?? []).some(h => h.active) ? "One step left" : "Decided";
 
   return <section className="problem-report-detail">
     {backLink}
-    <h1>Problem report</h1>
-    <p className="problem-report-identity">{identity}, {link(viewText, "View text")}</p>
-    <blockquote className="report-text">{report.reason}</blockquote>
-    <p className="problem-report-meta">Reported by {reporterName(report)}{report.created_at && <>, <Time iso={report.created_at} /></>}</p>
-    {report.submission && <p className="problem-report-meta">About the submitted result {report.submission.round_ordinal != null ? `Round ${report.submission.round_ordinal}` : "Initial submission"}, <Time iso={report.submission.recorded_at} /></p>}
+    <div className="lead-report-layout">
+      <div className="lead-report-main">
+        <header className="lead-report-header">
+          <p className="lead-report-eyebrow">{eyebrow}</p>
+          <h1>{textLabel(report)}</h1>
+          <p className="lead-report-meta"><StatusBadge tone={badge.tone}>{badge.text}</StatusBadge> Reported by {reporterName(report)}{report.created_at && <>, <Time iso={report.created_at} /></>} · {link(viewText, "View text")}</p>
+          {report.submission && <p className="lead-report-meta">About the submitted result {report.submission.round_ordinal != null ? `Round ${report.submission.round_ordinal}` : "Initial submission"}, <Time iso={report.submission.recorded_at} /></p>}
+          <blockquote className="report-text lead-report-quote">{report.reason}</blockquote>
+        </header>
 
-    <section aria-labelledby={stateId}>
-      <h2 id={stateId}>Current state</h2>
-      <LeadStatePanel report={report} final={final} reportLink={reportLink} />
-    </section>
+        <section aria-labelledby={historyId}>
+          <h2 id={historyId} className="lead-report-subhead">History</h2>
+          <ReportTimeline report={report} />
+        </section>
 
-    <section aria-labelledby={decideId}>
-      <h2 id={decideId} ref={decideHeading} tabIndex={-1}>Decide</h2>
-      {success && <div ref={successRef} tabIndex={-1} className="lead-outcome">
-        <InlineMessage tone="success">{success}</InlineMessage>
-        {link(back, "Back to Documents", "btn btn-secondary btn-sm")}
-        {next && documents && <> {link({ name: "projectDocuments", key: projectKey, ...documents,
-          panel: `${next.case_id}:${next.language}`, panel_stage: undefined, panel_tab: undefined }, `Next decision: ${textLabel(next)}`, "btn btn-secondary btn-sm")}</>}
-      </div>}
-      <LeadDecide report={report} open={open} focusTrigger={focusTrigger}
-        onOpen={openIntent}
-        onUnavailable={reason => { setAnnouncement(""); requestAnimationFrame(() => setAnnouncement(reason)); }}
-        renderConfirm={intent => <LeadConfirm key={intent} intent={intent} report={report} finalText={finalText} preselect={preselect}
-          lead={lead} requests={requests.current} unavailable={states[intent].unavailable} reportLink={reportLink}
-          onDone={done} onCancel={close} />} />
-    </section>
+        <details className="problem-report-technical">
+          <summary>Technical details</summary>
+          <dl className="report-facts">
+            <div><dt>Report ID</dt><dd>{report.report_id}</dd></div>
+            <div><dt>Reported round ID</dt><dd>{report.round_id ?? <EmptyValue />}</dd></div>
+            <div><dt>Current round ID</dt><dd>{report.current_round_id ?? <EmptyValue />}</dd></div>
+            <div><dt>Submission ID</dt><dd>{report.submission?.submission_id ?? report.submission_id ?? <EmptyValue />}</dd></div>
+            <div><dt>Document ID</dt><dd>{report.document_id}</dd></div>
+            {(report.holds ?? []).map(h => <div key={h.hold_id}><dt>Pause of Task {h.assignment_id}</dt><dd>{h.hold_id}</dd></div>)}
+            {(report.events ?? []).map(e => <div key={e.event_id}><dt>Event ({e.action})</dt><dd>{e.event_id}</dd></div>)}
+          </dl>
+        </details>
+      </div>
 
-    <section aria-labelledby={historyId}>
-      <h2 id={historyId}>History</h2>
-      <ReportTimeline report={report} />
-    </section>
-
-    <details className="problem-report-technical">
-      <summary>Technical details</summary>
-      <dl className="report-facts">
-        <div><dt>Report ID</dt><dd>{report.report_id}</dd></div>
-        <div><dt>Reported round ID</dt><dd>{report.round_id ?? <EmptyValue />}</dd></div>
-        <div><dt>Current round ID</dt><dd>{report.current_round_id ?? <EmptyValue />}</dd></div>
-        <div><dt>Submission ID</dt><dd>{report.submission?.submission_id ?? report.submission_id ?? <EmptyValue />}</dd></div>
-        <div><dt>Document ID</dt><dd>{report.document_id}</dd></div>
-        {(report.holds ?? []).map(h => <div key={h.hold_id}><dt>Pause of Task {h.assignment_id}</dt><dd>{h.hold_id}</dd></div>)}
-        {(report.events ?? []).map(e => <div key={e.event_id}><dt>Event ({e.action})</dt><dd>{e.event_id}</dd></div>)}
-      </dl>
-    </details>
+      <aside className="lead-decision-card" aria-labelledby={decideId}>
+        <h2 id={decideId} ref={decideHeading} tabIndex={-1}>{cardTitle}</h2>
+        {success && <div ref={successRef} tabIndex={-1} className="lead-outcome">
+          <InlineMessage tone="success">{success}</InlineMessage>
+          {link(back, "Back to Documents", "btn btn-secondary btn-sm")}
+          {next && documents && <> {link({ name: "projectDocuments", key: projectKey, ...documents,
+            panel: `${next.case_id}:${next.language}`, panel_stage: undefined, panel_tab: undefined }, `Next decision: ${textLabel(next)}`, "btn btn-secondary btn-sm")}</>}
+        </div>}
+        <LeadStatePanel report={report} final={final} reportLink={reportLink} />
+        <LeadDecide report={report} open={open} focusTrigger={focusTrigger}
+          onOpen={openIntent}
+          onUnavailable={reason => { setAnnouncement(""); requestAnimationFrame(() => setAnnouncement(reason)); }}
+          renderConfirm={intent => <LeadConfirm key={intent} intent={intent} report={report} finalText={finalText} preselect={preselect}
+            lead={lead} requests={requests.current} unavailable={states[intent].unavailable} reportLink={reportLink}
+            onDone={done} onCancel={close} onStart={intent === "resume_close" ? () => { setSuccess(null); setOpen("resume_close"); } : undefined} />} />
+      </aside>
+    </div>
     <p className="visually-hidden" role="status" aria-live="polite">{announcement}</p>
   </section>;
 }

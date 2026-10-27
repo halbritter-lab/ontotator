@@ -2,7 +2,7 @@ import type { FinalSelectionSummary, ProblemReportView, ReportHoldView } from ".
 import { personLabel, submissionLabel } from "../app/submissionLabels";
 import { Time } from "../app/Time";
 import { StatusBadge } from "../ui";
-import { leadSummary, reportStateBadge, reportStateFact, taskLabel } from "./labels";
+import { reportStateFact, taskOwnerText } from "./labels";
 import "./problems.css";
 
 /** "Annotation, Round 2, Ana Weber (ann-0004), 18 Oct, 10:00" (leads; else the pseudonym): the row's final result without language. */
@@ -43,59 +43,36 @@ function ReleasedHold({ report, hold }: { report: ProblemReportView; hold: Repor
   return <>Released (no record of who released it)</>;
 }
 
-/** The "Current state" facts of the lead page: report, paused tasks, final result, then the summary sentence. */
+/** The facts at the head of the decision card: the report (once decided), each task it paused, the final result. */
 export function LeadStatePanel({ report, final, reportLink }: {
   report: ProblemReportView;
   /** Final result of the report's text and language; undefined while loading, "error" when it could not be read. */
   final: FinalSelectionSummary | null | undefined | "error";
   reportLink: ReportLink;
 }): JSX.Element {
-  const badge = reportStateBadge(report);
-  const fact = reportStateFact(report);
-  const factRest = report.state === "open" ? "" : fact.slice(badge.text.length).trim();
   const holds = report.holds ?? [];
-  const active = holds.filter(h => h.active);
-  const released = holds.filter(h => !h.active);
-  const withdrawReason = [...(report.events ?? [])].reverse().find(e => e.action === "withdraw")?.reason;
+  const decided = report.state !== "open" && !holds.some(h => h.active);
   return <>
     <dl className="report-facts lead-state">
-      <div>
-        <dt>Report</dt>
+      {report.state !== "open" && <div><dt>Report</dt><dd>{reportStateFact(report)}</dd></div>}
+      {holds.map(hold => <div key={hold.hold_id}>
+        <dt>Task {hold.assignment_id}</dt>
         <dd>
-          <StatusBadge tone={badge.tone}>{badge.text}</StatusBadge>{factRest && <> {factRest}</>}
-          {report.state === "resolved" && report.resolution && <p className="report-text">Outcome: {report.resolution}</p>}
-          {report.state === "withdrawn" && withdrawReason && <p className="report-text">Reason: {withdrawReason}</p>}
+          {hold.active ? <><StatusBadge tone="warning">Paused</StatusBadge> since <Time iso={hold.created_at} /></> : <ReleasedHold report={report} hold={hold} />}
+          {hold.assignment_id !== report.assignment_id && <span className="lead-fact-note"> · {taskOwnerText(hold)}</span>}
+          {(hold.other_active_holds ?? []).map(other => <p key={other.report_id} className="lead-other-pause">
+            Also paused by another report {reportLink(other.report_id, "Open report")}
+          </p>)}
         </dd>
-      </div>
-      <div>
-        <dt>Paused tasks</dt>
-        <dd>
-          {!active.length && <p className="lead-none-paused">None paused now</p>}
-          <ul className="lead-holds">
-            {active.map(hold => <li key={hold.hold_id}>
-              {taskLabel(hold)} <StatusBadge tone="warning">Paused</StatusBadge> since <Time iso={hold.created_at} />
-              {(hold.other_active_holds ?? []).map(other => <p key={other.report_id} className="lead-other-pause">
-                Also paused by another report {reportLink(other.report_id, "Open report")}
-              </p>)}
-            </li>)}
-            {released.map(hold => <li key={hold.hold_id}>
-              {taskLabel(hold)} <ReleasedHold report={report} hold={hold} />
-              {(hold.other_active_holds ?? []).map(other => <p key={other.report_id} className="lead-other-pause">
-                Also paused by another report {reportLink(other.report_id, "Open report")}
-              </p>)}
-            </li>)}
-          </ul>
-        </dd>
-      </div>
+      </div>)}
       <div>
         <dt>Final result</dt>
         <dd>
           {final === undefined ? "Loading…" : final === "error" ? "Could not load the final result." : finalResultLabel(final)}
-          <p className="lead-final-note">Actions on this page never change it.</p>
+          <span className="lead-fact-note"> · never changed here</span>
         </dd>
       </div>
     </dl>
-    <p className="lead-summary">{leadSummary(report)}</p>
+    {decided && <p className="lead-fact-note">Nothing left to decide.</p>}
   </>;
 }
-

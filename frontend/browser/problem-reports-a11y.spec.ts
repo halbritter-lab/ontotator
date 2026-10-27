@@ -72,7 +72,7 @@ async function leadOnReport(page: Page) {
   const [report] = await fileReports(s.users.reporter, s.tasks.reporter, [REPORT_TEXT]);
   await loginExisting(page, s.users.lead);
   await page.goto(reportUrl(s, report.report_id));
-  await expect(page.getByRole("heading", { name: "Problem report", level: 1 })).toBeVisible();
+  await expect(page.getByText(/^Problem report · /)).toBeVisible();
   await expect(page.locator(".report-text").first()).toHaveText(REPORT_TEXT);
   return { s, report };
 }
@@ -80,8 +80,6 @@ async function leadOnReport(page: Page) {
 const decide = (page: Page) => page.getByRole("group", { name: "Decide on this report", exact: true });
 const intent = (page: Page, name: string) => decide(page).getByRole("button", { name, exact: true });
 const confirmBox = (page: Page, title: string) => page.getByRole("group", { name: title, exact: true });
-/** The lead page's polite live region. */
-const live = (page: Page) => page.locator('.problem-report-detail > p[role="status"]');
 const entry = (page: Page) => page.locator("button.problem-entry");
 const reportsDialog = (page: Page, task: number) => page.getByRole("dialog", { name: `Problems with Task ${task}`, exact: true });
 
@@ -108,16 +106,22 @@ test("keyboard only: Tab reaches the intents in order; Enter, Space, Escape and 
   const { s } = await leadOnReport(page);
   const task = s.tasks.reporter;
 
-  const close = intent(page, "Close report (pauses stay)");
+  const close = intent(page, "Close, keep paused…");
   const release = intent(page, "Release pause…");
   const pause = intent(page, "Pause other tasks…");
   const restart = intent(page, "Agree empty restart…");
   const reopen = intent(page, "Reopen report…");
 
-  // Tab from the back link (the first stop of the page body) into Decide; the intents follow each other.
+  // Only possible intents: Reopen is not offered on an open report (no disabled button).
+  await expect(reopen).toHaveCount(0);
+  // Tab from the back link (the first stop of the page body) into Decide: the answer, the primary, then the intents.
   await page.getByRole("link", { name: "Back to Documents" }).first().focus();
-  await tabTo(page, close);
-  for (const next of [release, pause, restart, reopen]) {
+  await tabTo(page, page.getByRole("textbox", { name: /^Answer to / }));
+  await page.keyboard.press("Tab");
+  await expect(decide(page).locator(".btn-primary")).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(close).toBeFocused();
+  for (const next of [release, pause, restart]) {
     await page.keyboard.press("Tab");
     await expect(next).toBeFocused();
   }
@@ -159,19 +163,8 @@ test("keyboard only: Tab reaches the intents in order; Enter, Space, Escape and 
     await expect(button).toBeFocused();
   }
 
-  // Reopen on an open report: focusable, aria-disabled; Enter opens nothing and announces the reason.
-  await page.keyboard.press("Tab");
-  await expect(reopen).toBeFocused();
-  await expect(reopen).toHaveAttribute("aria-disabled", "true");
-  await expect(reopen).toHaveAccessibleDescription(/The report is open\./);
-  await page.keyboard.press("Enter");
-  await expect(live(page)).toHaveText("The report is open.");
-  await expect(reopen).toHaveAttribute("aria-expanded", "false");
-  await expect(confirmBox(page, "Reopen report")).toHaveCount(0);
-  await expect(reopen).toBeFocused();
-
   // Close the report with the keyboard only: the outcome message takes focus.
-  for (let index = 0; index < 4; index += 1) await page.keyboard.press("Shift+Tab");
+  for (let index = 0; index < 3; index += 1) await page.keyboard.press("Shift+Tab");
   await expect(close).toBeFocused();
   await page.keyboard.press("Enter");
   const closeBox = confirmBox(page, "Close report");
@@ -205,7 +198,7 @@ test("lead page at 320 CSS px: no horizontal scroll; Decide buttons stacked full
     const inner = toolbar.getBoundingClientRect();
     const style = getComputedStyle(toolbar);
     const contentWidth = inner.width - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
-    return Array.from(toolbar.querySelectorAll(":scope > .lead-intent")).map(block => {
+    return Array.from(toolbar.querySelectorAll(".lead-intent")).map(block => {
       const button = block.querySelector("button")!.getBoundingClientRect();
       const line = block.querySelector(".lead-intent-line")!.getBoundingClientRect();
       return {
@@ -215,7 +208,10 @@ test("lead page at 320 CSS px: no horizontal scroll; Decide buttons stacked full
       };
     });
   });
-  expect(layout.map(item => item.label)).toEqual([`Close and resume Task ${s.tasks.reporter}…`, "Close report (pauses stay)", "Release pause…", "Pause other tasks…", "Agree empty restart…", "Reopen report…"]);
+  expect(layout.map(item => item.label)).toEqual(["Close, keep paused…", "Release pause…", "Pause other tasks…", "Agree empty restart…"]);
+  const primary = (await decide(page).locator(".btn-primary").boundingBox())!;
+  expect(primary.x + primary.width, "primary").toBeLessThanOrEqual(320);
+  await expect(decide(page).locator(".btn-primary")).toHaveText(`Close and resume Task ${s.tasks.reporter}`);
   for (const [index, item] of layout.entries()) {
     expect(item.right, item.label).toBeLessThanOrEqual(320);
     expect(item.height, item.label).toBeGreaterThanOrEqual(24);
@@ -366,7 +362,7 @@ test("axe: reporter dialog (list and new report views) and lead page (default an
     const lead = await context.newPage();
     await loginExisting(lead, s.users.lead);
     await lead.goto(reportUrl(s, report.report_id));
-    await expect(lead.getByRole("heading", { name: "Problem report", level: 1 })).toBeVisible();
+    await expect(lead.getByText(/^Problem report · /)).toBeVisible();
     await expect(lead.locator(".report-text").first()).toHaveText(REPORT_TEXT);
     await expect(lead.getByRole("heading", { level: 1 })).toHaveCount(1);
     expect(await axeViolations(lead, "main"), "lead page").toEqual([]);

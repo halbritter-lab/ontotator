@@ -494,14 +494,14 @@ test("ROWS: row actions within three clicks", async ({ page }) => {
   // Decide on report…: lands on Decide with focus: 3 (+ typing the outcome).
   clicks = counter(page);
   await clicks.click(rowAction(page, "Decide on report…", cases.report, "de"));
-  await expect(page.getByRole("heading", { name: "Problem report", level: 1 })).toBeVisible();
+  await expect(page.getByText(/^Problem report · /)).toBeVisible();
   await expect(page.getByRole("heading", { name: "Decide", level: 2 })).toBeFocused();
-  await clicks.click(page.getByRole("button", { name: "Close report (pauses stay)", exact: true }));
+  await clicks.click(page.getByRole("button", { name: "Close, keep paused…", exact: true }));
   const close = page.getByRole("group", { name: "Close report", exact: true });
   await close.getByRole("textbox", { name: /^Outcome for / }).fill("The second episode is in the source; the translation is fine.");
   await clicks.click(close.getByRole("button", { name: "Close report", exact: true }));
   expect(clicks.total).toBe(3);
-  await expect(page.getByRole("region", { name: "Current state" })).toContainText(/Report\s*Closed/);
+  await expect(page.locator(".lead-state")).toContainText(/Report\s*Closed/);
   await page.getByRole("link", { name: "Back to Documents" }).first().click();
   await documentsReady(page);
 
@@ -751,10 +751,10 @@ test("problem report shows Name (ann-…) to the lead", async ({ page }) => {
   const s = await leadScenario(page, "ROWS");
   await loginLead(page, s);
   await rowAction(page, "Decide on report…", s.cases!.report, "de").click();
-  await expect(page.getByRole("heading", { name: "Problem report", level: 1 })).toBeVisible();
+  await expect(page.getByText(/^Problem report · /)).toBeVisible();
   const reporter = person(s, "annotator");
   await expect(page.getByRole("region", { name: "History", exact: true })).toContainText(`${reporter} reported the problem.`);
-  await page.getByRole("button", { name: "Close report (pauses stay)", exact: true }).click();
+  await page.getByRole("button", { name: "Close, keep paused…", exact: true }).click();
   const close = page.getByRole("group", { name: "Close report", exact: true });
   await expect(close.getByRole("textbox", { name: new RegExp(`^Outcome for ${esc(reporter)}`) })).toBeVisible();
   await expect(close).toContainText(`${reporter} sees this in the report.`);

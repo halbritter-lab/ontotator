@@ -2165,7 +2165,7 @@ details.case-version-controls > .btn { vertical-align: bottom; }
 /* Display-only reanchor context preserves the annotation's existing fill and selection. */
 .run--context { outline: 1px dotted var(--focus-ring); outline-offset: 1px; }
 .reanchor-context { white-space: pre-wrap; overflow-wrap: anywhere; }
-.problem-report-detail { width: min(100%, 60rem); margin-inline: auto; padding: var(--space-4); box-sizing: border-box; }
+.problem-report-detail { width: min(100%, 72rem); margin-inline: auto; padding: var(--space-4); box-sizing: border-box; }
 .problem-report-detail form, .report-history { margin-block: var(--space-4); }
 .problem-report-detail fieldset { min-width: 0; }
 .report-history dd { margin-inline-start: 0; }
