@@ -46,6 +46,17 @@ it("lists the proposals as review targets", () => {
   expect(document.querySelectorAll('[data-list-key^="target:"]').length).toBe(3);
 });
 
+it("proposal rows are tab stops and Enter or Space selects them (N-2)", () => {
+  render(<CaseScreen view={proposalView()} workspaceId="ws-pc" onClose={vi.fn()} />);
+  const rows = Array.from(document.querySelectorAll<HTMLElement>('[data-list-key^="target:"]'));
+  expect(rows.map(row => [row.getAttribute("role"), row.tabIndex])).toEqual(rows.map(() => ["button", 0]));
+  fireEvent.keyDown(rows[1], { key: "Enter" });
+  expect(rows[1].getAttribute("aria-pressed")).toBe("true");
+  fireEvent.keyDown(rows[2], { key: " " });
+  expect(rows[2].classList.contains("selected")).toBe(true);
+  expect(rows[1].getAttribute("aria-pressed")).toBe("false");
+});
+
 it("J moves to the next proposal and 1 confirms it", async () => {
   const view = proposalView();
   const record = vi.spyOn(api, "recordDecision").mockImplementation(async (_id, envelope) => {

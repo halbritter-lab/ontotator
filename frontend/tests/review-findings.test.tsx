@@ -273,7 +273,7 @@ describe("A4/A5: review decisions and notes", () => {
     expect(decide.mock.calls[1][1].payload).toEqual(expect.objectContaining({ outcome: "rejected", note: "laterality differs" }));
 
     // Repeating the outcome moves on and saves nothing (F7); explicit zero resets while retaining the note.
-    fireEvent.click(screen.getByRole("button", { name: /Reject/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Reject/ }));
     await waitFor(() => expect(screen.queryByLabelText("Reviewer note")).toBeNull());
     expect(decide).toHaveBeenCalledTimes(2);
     fireEvent.keyDown(window, { key: "j" });
@@ -485,7 +485,7 @@ describe("Review cases", () => {
     view.draft = { ...view.draft, targets: view.targets };
     render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()} />);
     const list = screen.getByText(/Review Proposals \(3\)/).nextElementSibling as HTMLElement;
-    const items = within(list).getAllByRole("listitem").map((li) => li.textContent);
+    const items = Array.from(list.children).map((li) => li.textContent);
     expect(items[0]).toMatch(/“alpha”/);
     expect(items[1]).toMatch(/“gamma”/);
     expect(items[2]).toMatch(/Spanless/);

@@ -72,7 +72,7 @@ test("real backend: review, resume, reload and submit", async ({ page }) => {
   await page.locator(".doc-item").filter({ hasText: "HP:0001252" }).click();
   await expect(page.getByLabel(/Proposal details/i).getByText("Present", { exact: true })).toBeVisible();
   await expect(page.getByLabel(/Proposal details/i)).toContainText("Hypotonia");
-  await page.getByRole("button", { name: /Confirm/i }).first().click();
+  await page.getByRole("button", { name: /^Confirm/ }).first().click();
   await expect(page.locator(".status-badge")).toHaveAttribute("title", "Revision 1");
 
   // Back in My tasks the assignment is in progress; reopening resumes it without asking again.
@@ -82,7 +82,7 @@ test("real backend: review, resume, reload and submit", async ({ page }) => {
   await expect(page.locator(".sidebar-header").filter({ hasText: "Review Proposals (2)" })).toBeVisible();
   await expect(page.locator(".doc-item").filter({ hasText: "HP:0001252" })).toContainText(/confirmed/i);
   await page.locator(".doc-item").filter({ hasText: "HP:0001250" }).click();
-  await page.getByRole("button", { name: /Confirm/i }).first().click();
+  await page.getByRole("button", { name: /^Confirm/ }).first().click();
   await expect(page.locator(".status-badge")).toHaveAttribute("title", "Revision 2");
   await submitCase(page);
   // M-6: the submit opens the next task or My tasks; "View result" in the toast returns to the submitted case.

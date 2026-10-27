@@ -242,13 +242,13 @@ describe("E2E Release Flow - Origin-Neutral Review & Submission", () => {
 
     // 3. Select Human proposal: verify all 4 review actions are rendered identically
     fireEvent.click(screen.getAllByText("prop-human")[0]);
-    expect(screen.getByRole("button", { name: /Confirm|Bestätigen/i })).toBeDefined();
-    expect(screen.getByRole("button", { name: /Reject|Verwerfen/i })).toBeDefined();
-    expect(screen.getByRole("button", { name: /Edit|Ändern/i })).toBeDefined();
+    expect(screen.getByRole("button", { name: /^(Confirm|Bestätigen)/i })).toBeDefined();
+    expect(screen.getByRole("button", { name: /^(Reject|Verwerfen)/i })).toBeDefined();
+    expect(screen.getByRole("button", { name: /^(Edit|Ändern)/i })).toBeDefined();
     expect(screen.getByRole("button", { name: /Unresolved/i })).toBeDefined();
 
     // Confirm human proposal
-    fireEvent.click(screen.getByRole("button", { name: /Confirm|Bestätigen/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^(Confirm|Bestätigen)/i }));
     await waitFor(() => {
       expect(recordDecisionSpy).toHaveBeenCalledWith(
         "ws-e2e-token",
@@ -264,9 +264,9 @@ describe("E2E Release Flow - Origin-Neutral Review & Submission", () => {
 
     // 4. Confirming moved on to the open Tool proposal: verify the exact same 4 actions are present
     await waitFor(() => expect(document.querySelector('[data-list-key^="target:"][data-list-key*="prop-tool"]')?.classList.contains("selected")).toBe(true));
-    expect(screen.getByRole("button", { name: /Confirm|Bestätigen/i })).toBeDefined();
-    expect(screen.getByRole("button", { name: /Reject|Verwerfen/i })).toBeDefined();
-    expect(screen.getByRole("button", { name: /Edit|Ändern/i })).toBeDefined();
+    expect(screen.getByRole("button", { name: /^(Confirm|Bestätigen)/i })).toBeDefined();
+    expect(screen.getByRole("button", { name: /^(Reject|Verwerfen)/i })).toBeDefined();
+    expect(screen.getByRole("button", { name: /^(Edit|Ändern)/i })).toBeDefined();
     expect(screen.getByRole("button", { name: /Unresolved/i })).toBeDefined();
 
     // Unresolved is a reviewer decision: require a note before completing this target.

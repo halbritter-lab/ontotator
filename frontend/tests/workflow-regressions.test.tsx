@@ -202,7 +202,7 @@ it("reviews separate versions and exposes original clinical axes and evidence", 
  expect(within(screen.getByLabelText("Proposal details")).getByText("Absent")).toBeDefined();
  expect(rendered.container.querySelector('.run--marked')!.textContent).toBe("alpha");
  fireEvent.click(screen.getByText("HP:2"));
- fireEvent.click(screen.getByRole("button", { name: /Reject|Verwerfen/i }));
+ fireEvent.click(screen.getByRole("button", { name: /^(Reject|Verwerfen)/i }));
  await waitFor(() => expect(decide).toHaveBeenCalled());
  expect(decide.mock.calls[0][1].payload.target).toEqual({ annotation_id: "same", version: "v2" });
 });
@@ -261,7 +261,7 @@ it("keeps a repeated outcome explicit and resets only through zero", async () =>
  const decide = vi.spyOn(api, "recordDecision").mockResolvedValueOnce({ ...view.draft, revision: 1, decisions: [] });
  render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
  fireEvent.click(screen.getByText("HP:1"));
- const confirmBtn = screen.getByRole("button", { name: /Confirm|Bestätigen/ });
+ const confirmBtn = screen.getByRole("button", { name: /^(Confirm|Bestätigen)/ });
  expect(confirmBtn.getAttribute("aria-pressed")).toBe("true");
  // The repeated outcome moves on (F7): nothing is saved, the decision stays.
  fireEvent.click(confirmBtn);
@@ -683,7 +683,7 @@ it("hides markings of replaced or rejected review targets in text and grays them
 
   // 3. In sidebar: target1 has badge '✎ Ersetzt' and resolved styling
   expect(screen.getByText(/^(Replaced|Ersetzt)$/i)).toBeDefined();
-  expect(screen.getByRole("button", { name: /Replaced by:.*HP:0003|Ersetzt durch:.*HP:0003/i })).toBeDefined();
+  expect(screen.getByRole("button", { name: /^(Replaced by|Ersetzt durch):.*HP:0003/i })).toBeDefined();
 
   // 4. In sidebar: target2 has badge '✕ Verworfen' and resolved styling
   expect(screen.getByText(/^(Rejected|Verworfen)$/i)).toBeDefined();
@@ -729,7 +729,7 @@ it("displays replacement term link in sidebar and allows deselecting so no term 
   render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
 
   // 1. Sidebar shows "Ersetzt durch: HP:0003" with link
-  const replLink = screen.getByRole("button", { name: /Replaced by:.*HP:0003|Ersetzt durch:.*HP:0003/i });
+  const replLink = screen.getByRole("button", { name: /^(Replaced by|Ersetzt durch):.*HP:0003/i });
   expect(replLink).toBeDefined();
 
   // 2. Clicking the replacement link in the sidebar selects the replacement annotation (AnnotationPanel opens)
