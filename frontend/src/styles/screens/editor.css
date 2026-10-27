@@ -32,7 +32,7 @@
 
 .identity-name {
   display: inline-block;
-  max-width: 16ch;
+  max-width: 32ch;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
