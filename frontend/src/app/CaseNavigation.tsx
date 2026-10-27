@@ -74,26 +74,16 @@ export const CaseNavigation: React.FC<CaseNavigationProps> = ({
       />
 
       {total > 1 ? (
+        // Shows "2 of 5 ▾"; the native select lies over it (transparent) and lists the full names.
+        <span className="case-navigation__picker">
+        <span className="case-navigation__label" aria-hidden="true">{position} of {total} <span className="case-navigation__caret">▾</span></span>
         <Select id="case-navigation-select" label={null}
           aria-label="Select text"
-          className="form-select-sm"
+          className="form-select-sm case-navigation__select"
           value={currentNavigationId ?? currentDocumentId}
           onChange={handleSelect}
           disabled={disabled}
           title={currentDocumentId}
-          style={{
-            borderTop: "none",
-            borderBottom: "none",
-            borderLeft: "1px solid var(--border)",
-            borderRight: "1px solid var(--border)",
-            borderRadius: 0,
-            background: "transparent",
-            fontWeight: 600,
-            fontSize: "0.82rem",
-            padding: "4px 24px 4px 10px",
-            cursor: "pointer",
-            maxWidth: 360,
-          }}
         >
           {documents.map((doc, index) => {
             const statusLabel = statusLabels[doc.status] ?? doc.status;
@@ -107,10 +97,11 @@ export const CaseNavigation: React.FC<CaseNavigationProps> = ({
             );
           })}
         </Select>
+        </span>
       ) : (
         // The document name is the page's h1; the id stays available on hover.
         <span className="case-navigation__label" title={currentDocumentId}>
-          Text {position} of {total}
+          {position} of {total}
         </span>
       )}
 

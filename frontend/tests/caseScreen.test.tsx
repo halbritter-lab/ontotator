@@ -334,20 +334,20 @@ describe("CaseScreen integration", () => {
       fireEvent.click(screen.getByRole("button", { name: /Finish & submit/ }));
       return screen.findByRole("dialog", { name: "Submit text" });
     };
+    /** "Submit with N warnings" acknowledges the listed warnings in one click (N = rows, not values). */
     const submitTicked = (dialog: HTMLElement, n: number) => {
-      fireEvent.click(within(dialog).getByRole("checkbox", { name: `Submit with ${n} unconfirmed value${n === 1 ? "" : "s"}` }));
-      fireEvent.click(within(dialog).getByRole("button", { name: "Submit text" }));
+      fireEvent.click(within(dialog).getByRole("button", { name: `Submit with ${n} warning${n === 1 ? "" : "s"}` }));
     };
     const statusOf = (dialog: HTMLElement) => dialog.querySelector("[data-submit-status]")!.textContent;
 
-    it("auto-resends once when the warning lists exactly the ticked values", async () => {
+    it("auto-resends once when the warning lists exactly the acknowledged values", async () => {
       const view = unconfirmedView();
       const submit = vi.spyOn(api, "submitWorkspace").mockRejectedValueOnce(axisWarning(view, ["experiencer"]))
         .mockResolvedValue(submissionOf(view) as any);
       const update = vi.spyOn(api, "applyCommand");
       render(<CaseScreen view={view} workspaceId="resend" onClose={vi.fn()} />);
       const dialog = await openSubmit();
-      expect(within(dialog).getByRole("heading", { name: "Unconfirmed values (1 finding)" })).toBeDefined();
+      expect(within(dialog).getByRole("heading", { name: "Values not chosen yet" })).toBeDefined();
       submitTicked(dialog, 1);
       await screen.findByRole("dialog", { name: "Text submitted" });
       expect(submit).toHaveBeenCalledTimes(2);
@@ -367,9 +367,10 @@ describe("CaseScreen integration", () => {
       submitTicked(dialog, 1);
       await waitFor(() => expect(statusOf(dialog)).toBe("The unconfirmed values changed. Check the list again."));
       expect(submit).toHaveBeenCalledTimes(1);
-      const box = within(dialog).getByRole("checkbox", { name: "Submit with 2 unconfirmed values" }) as HTMLInputElement;
-      expect(box.checked).toBe(false);
-      expect(within(dialog).getByText((_, el) => el?.classList.contains("unconfirmed-values__values") === true && el.textContent === "Betroffene Person (Experiencer): Patient, Zeitlicher Bezug (Temporality): Current")).toBeDefined();
+      // The list shows the server's values; acknowledging needs a new click.
+      expect(within(dialog).getByRole("button", { name: "Submit with 1 warning" })).toBeDefined();
+      expect(Array.from(dialog.querySelectorAll(".submit-item__value")).map(value => value.textContent))
+        .toEqual(["Betroffene Person (Experiencer): Patient", "Zeitlicher Bezug (Temporality): Current"]);
     });
 
     it("sends no acknowledgement when no rows remain", async () => {
@@ -377,7 +378,7 @@ describe("CaseScreen integration", () => {
       const submit = vi.spyOn(api, "submitWorkspace").mockResolvedValue(submissionOf(view) as any);
       render(<CaseScreen view={view} workspaceId="no-rows" onClose={vi.fn()} />);
       const dialog = await openSubmit();
-      expect(within(dialog).queryByRole("checkbox", { name: /unconfirmed values/ })).toBeNull();
+      expect(within(dialog).queryByRole("button", { name: /Submit with/ })).toBeNull();
       fireEvent.click(within(dialog).getByRole("button", { name: "Submit text" }));
       await screen.findByRole("dialog", { name: "Text submitted" });
       expect(submit).toHaveBeenCalledTimes(1);
@@ -419,16 +420,16 @@ describe("CaseScreen integration", () => {
       const apply = vi.spyOn(api, "applyCommand").mockResolvedValue(confirmed);
       render(<CaseScreen view={view} workspaceId="row-confirm" onClose={vi.fn()} />);
       const dialog = await openSubmit();
-      fireEvent.click(within(dialog).getByRole("button", { name: /^Confirm values of / }));
+      fireEvent.click(within(dialog).getByRole("button", { name: /^Confirm as shown: / }));
       await waitFor(() => expect(apply).toHaveBeenCalledTimes(1));
       expect((apply.mock.calls[0][1] as any).payload).toEqual(expect.objectContaining({ command: "set_axes",
         annotation_id: "pending-finding", axes_values: shown, chosen_axis_ids: ["assertion", "experiencer"] }));
-      await waitFor(() => expect(within(dialog).getByRole("status").textContent).toBe("All values are confirmed."));
-      expect(dialog.querySelector("[data-unconfirmed-values]")).toBeNull();
-      expect(document.activeElement).toBe(within(dialog).getByRole("button", { name: "Submit text" }));
+      await waitFor(() => expect(dialog.querySelector("[data-unconfirmed-values]")).toBeNull());
+      expect(within(dialog).getByRole("button", { name: "Submit text" }).getAttribute("aria-disabled")).toBeNull();
+      // Focus and "All values are confirmed." after the last row: covered in submitDialog.test.tsx.
     });
 
-    it("a second warning after the resend clears the checkbox without a third request", async () => {
+    it("a second warning after the resend shows the list again without a third request", async () => {
       const view = unconfirmedView();
       const renewed = { ...acknowledgementOf(view), policy_revision: 8, warning_digest: "renewed-server-digest" };
       const submit = vi.spyOn(api, "submitWorkspace").mockRejectedValueOnce(axisWarning(view, ["experiencer"]))
@@ -438,14 +439,10 @@ describe("CaseScreen integration", () => {
       render(<CaseScreen view={view} workspaceId="warning" onClose={vi.fn()} />);
       const dialog = await openSubmit();
       submitTicked(dialog, 1);
-      const box = within(dialog).getByRole("checkbox", { name: "Submit with 1 unconfirmed value" }) as HTMLInputElement;
       await waitFor(() => expect(statusOf(dialog)).toBe("The unconfirmed values changed. Check the list again."));
-      expect(box.checked).toBe(false);
       expect(submit).toHaveBeenCalledTimes(2);
       expect(screen.queryByRole("dialog", { name: "Text submitted" })).toBeNull();
-      fireEvent.click(box);
-      expect(statusOf(dialog)).toBe("");
-      fireEvent.click(within(dialog).getByRole("button", { name: "Submit text" }));
+      submitTicked(dialog, 1);
       await screen.findByRole("dialog", { name: "Text submitted" });
       expect(submit).toHaveBeenCalledTimes(3);
       expect(submit).toHaveBeenLastCalledWith("warning", expect.objectContaining({ payload: expect.objectContaining({ warning_acknowledgement: renewed }) }));
@@ -459,7 +456,7 @@ describe("CaseScreen integration", () => {
       const routeLeaveRef = { current: null as (() => Promise<boolean>) | null };
       render(<CaseScreen view={view} workspaceId="cancel-warning" onClose={vi.fn()} routeLeaveRef={routeLeaveRef} />);
       const dialog = await openSubmit();
-      submitTicked(dialog, 3);
+      submitTicked(dialog, 1);
       await waitFor(() => expect(statusOf(dialog)).toBe("The unconfirmed values changed. Check the list again."));
       fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
       await act(async () => { expect(await routeLeaveRef.current!()).toBe(true); });
@@ -565,7 +562,7 @@ describe("CaseScreen integration", () => {
     selectEditableFinding();
     fireEvent.change(screen.getByLabelText("Note"), { target: { value: "Clinical explanation" } });
     // N-8: an unsaved note is not drawn in the green "Saved" style.
-    const badge = screen.getByText("Annotation note changes not saved");
+    const badge = screen.getByText("Annotation note changes not saved").closest(".status-badge")!;
     expect(badge.classList.contains("status-saved")).toBe(false);
     expect(badge.classList.contains("status-saving")).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Clear selection" }));
@@ -1755,8 +1752,7 @@ describe("CaseScreen integration", () => {
     expect(screen.getByText("No previous submissions yet.")).toBeDefined();
     fireEvent.click(screen.getByRole("button", { name: /Finish & submit/ }));
     const confirm = await screen.findByRole("dialog", { name: "Submit text" });
-    fireEvent.click(within(confirm).getByRole("checkbox", { name: "Submit with 3 unconfirmed values" }));
-    fireEvent.click(within(confirm).getByRole("button", { name: "Submit text" }));
+    fireEvent.click(within(confirm).getByRole("button", { name: "Submit with 1 warning" }));
     const receipt = await screen.findByRole("dialog", { name: "Text submitted" });
     fireEvent.click(within(receipt).getByRole("button", { name: "Stay in text" }));
     expect(screen.queryByText("No previous submissions yet.")).toBeNull();
@@ -1769,7 +1765,7 @@ describe("CaseScreen integration", () => {
     // Read-only: no edit controls; the status names the submission instead of "Saved" (#48 N-18).
     expect(screen.queryByRole("button", { name: /Finish & submit/ })).toBeNull();
     expect(screen.queryByRole("button", { name: "Add finding without a text span" })).toBeNull();
-    expect(document.querySelector(".status-badge")!.textContent).toMatch(/^Submitted /);
+    expect(document.querySelector("[role=status].case-status")!.textContent).toMatch(/^Submitted /);
   });
 
   it("labels every profile axis and opens a finding with the keyboard", () => {
@@ -1871,8 +1867,7 @@ describe("CaseScreen integration", () => {
     render(<CaseScreen view={view} workspaceId="stale-policy" onClose={vi.fn()} onReload={reload} />);
     fireEvent.click(screen.getByRole("button", { name: /Finish & submit/ }));
     const dialog = await screen.findByRole("dialog", { name: "Submit text" });
-    fireEvent.click(within(dialog).getByRole("checkbox", { name: "Submit with 3 unconfirmed values" }));
-    fireEvent.click(within(dialog).getByRole("button", { name: "Submit text" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Submit with 1 warning" }));
     await screen.findByText(/Reload the case to load the current rules/);
     expect(screen.getAllByText(/Submission failed:/)).toHaveLength(1);
     expect(screen.queryByText(/highlighted values/)).toBeNull();
@@ -1900,7 +1895,7 @@ describe("CaseScreen integration", () => {
     render(<CaseScreen view={view} workspaceId="legacy-optional" onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /Finish & submit/ }));
     const dialog = await screen.findByRole("dialog", { name: "Submit text" });
-    expect(within(dialog).getByRole("button", { name: "Submit text" })).toHaveProperty("disabled", false);
+    expect(within(dialog).getByRole("button", { name: /^Submit (text|with)/ })).toHaveProperty("disabled", false);
   });
 
   it("escape_cancels_the_submit_dialog", async () => {
@@ -1979,7 +1974,7 @@ describe("CaseScreen integration", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: /Visibility for Phänotyp/i }));
     fireEvent.click(screen.getByRole("button", { name: /Finish & submit/i }));
     const dialog = await screen.findByRole("dialog", { name: "Submit text" });
-    expect(within(dialog).getByRole("heading", { name: "Unconfirmed values (1 finding)" })).toBeDefined();
+    expect(within(dialog).getByRole("heading", { name: "Values not chosen yet" })).toBeDefined();
     fireEvent.click(within(dialog.querySelector<HTMLElement>("[data-unconfirmed-row]")!).getByRole("button", { name: /^Go to / }));
     await waitFor(() => expect((document.activeElement as HTMLElement).closest('[data-axis-field="assertion"]')).not.toBeNull());
     expect((screen.getByRole("checkbox", { name: /Visibility for Phänotyp/i }) as HTMLInputElement).checked).toBe(true);
@@ -2319,7 +2314,7 @@ describe("CaseScreen integration", () => {
     const dialog = await screen.findByRole("dialog", { name: /Submit text/i });
     // The text check is the sentence above "Submit text", not a checkbox.
     expect(dialog.querySelectorAll('input[type="checkbox"]')).toHaveLength(0);
-    expect(within(dialog).getByText("Submitting confirms you checked the entire text for further findings.")).toBeDefined();
+    expect(dialog.querySelector("[data-submit-checked-text]")!.textContent).toMatch(/^Submitting also says you checked the whole text for further findings\./);
     expect(screen.queryByText(/Verified layers:/)).toBeNull();
   });
 
@@ -2475,7 +2470,7 @@ describe("CaseScreen integration", () => {
       const title = screen.getByRole("heading", { level: 1 });
       expect(title.textContent).toBe("accepted-translation de");
       expect(title.classList.contains("case-title")).toBe(true);
-      expect(screen.getByText("Text 1 of 1")).toBeDefined();
+      expect(screen.getByText("1 of 1")).toBeDefined();
       // Below 700 px the CSS hides a one-case navigation through this class.
       expect(title.parentElement!.classList.contains("app-title--single-case")).toBe(true);
       rendered.unmount();
@@ -2940,18 +2935,18 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
       return screen.findByRole("dialog", { name: "Submit text" });
     };
 
-    it("Two severities is listed, never blocks, and the ticked box submits with the acknowledgement in one action", async () => {
+    it("Two severities is listed, never blocks, and Submit with 1 warning submits with the acknowledgement in one action", async () => {
       const view = modView(MILD_SEVERE);
       await setup(view);
       const submit = vi.spyOn(api, "submitWorkspace")
         .mockRejectedValueOnce(modWarning(view, [{ rule: "exclusive_modifier_class", detail: { class: "severity" } }]))
         .mockResolvedValue(submitted(view) as never);
       const dialog = await openSubmit();
-      const section = await within(dialog).findByRole("region", { name: "Modifier warnings (1)" });
-      expect(section.textContent).toContain("Seizure: Two severities: Mild, Severe.");
+      const section = await within(dialog).findByRole("region", { name: "Modifier warnings" });
+      expect(section.querySelector(".submit-item__what strong")!.textContent).toBe("Seizure");
+      expect(section.textContent).toContain("Two severities: Mild, Severe.");
       expect(within(dialog).queryByText(/Turn .* before submitting/)).toBeNull();
-      fireEvent.click(within(dialog).getByRole("checkbox", { name: "Submit with 1 modifier warning" }));
-      fireEvent.click(within(dialog).getByRole("button", { name: "Submit text" }));
+      fireEvent.click(within(dialog).getByRole("button", { name: "Submit with 1 warning" }));
       await screen.findByRole("dialog", { name: "Text submitted" });
       expect(submit).toHaveBeenCalledTimes(2);
       expect((submit.mock.calls[1][1] as any).payload.warning_acknowledgement).toEqual(
@@ -2964,13 +2959,12 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
       const submit = vi.spyOn(api, "submitWorkspace").mockRejectedValue(modWarning(view, [
         { rule: "exclusive_modifier_class", detail: { class: "severity" } }, { rule: "cohort_modifier", detail: { term_id: "HP:0040283" } }]));
       const dialog = await openSubmit();
-      fireEvent.click(within(dialog).getByRole("checkbox", { name: "Submit with 1 modifier warning" }));
-      fireEvent.click(within(dialog).getByRole("button", { name: "Submit text" }));
+      fireEvent.click(within(dialog).getByRole("button", { name: "Submit with 1 warning" }));
       await waitFor(() => expect(dialog.querySelector("[data-submit-status]")!.textContent).toBe("The warnings changed. Check the list again."));
       expect(submit).toHaveBeenCalledTimes(1);
-      const box = within(dialog).getByRole("checkbox", { name: "Submit with 2 modifier warnings" }) as HTMLInputElement;
-      expect(box.checked).toBe(false);
-      expect(within(dialog).getByRole("region", { name: "Modifier warnings (2)" }).textContent).toContain("Seizure: HP:0040283 is a cohort term.");
+      // The extra pair is listed and counted; acknowledging it needs a new click.
+      expect(within(dialog).getByRole("button", { name: "Submit with 2 warnings" })).toBeDefined();
+      expect(within(dialog).getByRole("region", { name: "Modifier warnings" }).textContent).toContain("HP:0040283 is a cohort term.");
       // No unconfirmed values row comes from the modifier pairs.
       expect(dialog.querySelector("[data-unconfirmed-values]")).toBeNull();
     });
@@ -3075,7 +3069,7 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
       const item = await waitFor(() => dialog.querySelector<HTMLElement>('[data-open-item="modifier-as-finding"]')!);
       expect(item.closest("[data-modifier-warnings]")).not.toBeNull();
       expect(item.textContent).toContain("Severe is a modifier term. Keep it only if it names the finding itself.");
-      expect(within(dialog).getByRole("checkbox", { name: "Submit with 1 modifier warning" })).toBeDefined();
+      expect(within(dialog).getByRole("button", { name: "Submit with 1 warning" })).toBeDefined();
       fireEvent.click(within(item).getByRole("button", { name: "Go to Severe" }));
       await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Turn into modifier…" })));
     });

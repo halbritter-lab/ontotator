@@ -1,10 +1,10 @@
-import { useEffect, useId, useRef, useState, type RefObject } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
 import { api, type AssignmentView, type ProblemReportView } from "../api/client";
 import { ErrorNotice } from "../admin/ErrorNotice";
 import { ownPauseActive, ReporterReportCard, type ReporterConfirm } from "../problems/ReporterReportCard";
 import { reportTitle, toolbarEntry } from "../problems/labels";
 import { useTaskReports } from "../problems/useTaskReports";
-import { Button, Dialog, IconWarning, InlineMessage } from "../ui";
+import { Button, Dialog, IconWarning, InlineMessage, type MenuItem } from "../ui";
 import { ProblemReportForm } from "./ProblemReportForm";
 import "../problems/problems.css";
 
@@ -13,10 +13,12 @@ import "../problems/problems.css";
  * a new report, resume and withdraw. Mounted by the annotation editor and the translation review screen.
  * On a submitted (read-only) task the entry reads "Text problems" and opens on the reports, the form second.
  */
-export function TaskProblemActions({ assignment, onSaveBeforeReport, onRefresh, readOnly = assignment.status === "submitted" }: {
+export function TaskProblemActions({ assignment, onSaveBeforeReport, onRefresh, readOnly = assignment.status === "submitted", renderEntry }: {
   assignment: AssignmentView; onSaveBeforeReport: () => Promise<void>; onRefresh: (assignment: AssignmentView) => void;
   /** The editor's read-only state (the task's status can lag behind a submit in the same editor). */
   readOnly?: boolean;
+  /** Places the entry as a menu item (the editor's "More" menu) instead of the toolbar button. */
+  renderEntry?: (item: MenuItem) => ReactNode;
 }): JSX.Element {
   const { reports, error, reload, put } = useTaskReports(assignment, onRefresh);
   const [open, setOpen] = useState(false), [view, setView] = useState<"list" | "form">("list");
@@ -75,11 +77,12 @@ export function TaskProblemActions({ assignment, onSaveBeforeReport, onRefresh, 
   const leadActed = (reports ?? []).some(r => r.state === "open" && r.withdrawable === false);
 
   return <>
-    <Button size="sm" className="problem-entry" onClick={openDialog}>
+    {renderEntry ? renderEntry({ id: "problems", label: `${readOnly ? "Text problems" : "Report a text problem…"}${entry.badge ? ` (${entry.badge})` : ""}`, onSelect: openDialog })
+    : <Button size="sm" className="problem-entry" onClick={openDialog}>
       {readOnly ? "Text problems" : "Report a text problem"}
       {entry.badge && <> <span className="problem-badge" aria-hidden="true">{entry.paused && <IconWarning />}{entry.badge}</span></>}
       <span className="visually-hidden"> {entry.accessibleSuffix}</span>
-    </Button>
+    </Button>}
     {open && view === "form" && <ProblemReportForm assignment={assignment} onSaveBeforeReport={onSaveBeforeReport} onBusyChange={setBusy}
       onAssignmentReload={onRefresh}
       onCancel={() => { if (reports?.length) setView("list"); else close(); }}

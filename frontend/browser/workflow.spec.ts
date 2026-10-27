@@ -90,7 +90,7 @@ test("real backend: review, resume, reload and submit", async ({ page }) => {
 
   await expect(page.getByRole("button", { name: /Download export/i })).toHaveCount(0);
   await page.reload();
-  await expect(page.getByText("Submitted. The project lead can reopen it for changes.")).toBeVisible();
+  await expect(page.getByText("Read-only. The project lead can reopen it for changes.")).toBeVisible();
   // A submitted task shows no submit control.
   await expect(page.getByRole("button", { name: /^Finish & submit/ })).toHaveCount(0);
   await page.goto(`${LAUNCH_URL}#/?project=browser-fixture-workflow`);

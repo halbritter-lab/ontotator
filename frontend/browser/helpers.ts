@@ -84,7 +84,7 @@ export async function openCase(page: Page, options: { task?: "annotate" | "revie
   const projectKey = projectFilter ?? selected.project_key;
   const assignment = tasks.find(row => row.project_key === projectKey && row.document_id === documentId && row.task === task)!;
   await page.locator(`a[href="#/tasks/${assignment.assignment_id}"]`).click();
-  await expect(page.locator(".status-badge")).toBeVisible();
+  await expect(page.locator(".case-toolbar [role=status]")).toBeVisible();
 }
 
 /**
@@ -99,18 +99,13 @@ export async function importPackage(page: Page, _scenario: string, projectKey: s
   await expect(page.locator("#project-select")).toHaveValue(projectKey);
 }
 
-/** "Finish & submit text" (or "Finish & submit (n open)"), acknowledge open values and confirm. */
+/** "Finish & submit text" (or "Finish & submit (n open)"), then "Submit text" or "Submit with N warnings". */
 export async function submitCase(page: Page) {
   await page.getByRole("button", { name: /^Finish & submit/ }).click();
   const dialog = page.getByRole("dialog", { name: "Submit text" });
   await expect(dialog).toBeVisible();
-  const submit = dialog.getByRole("button", { name: /^Submit text$/ });
-  // Unconfirmed values (defaults or empty) are acknowledged in one tick; the dialog resends once.
-  const acknowledgement = dialog.getByRole("checkbox", { name: /^Submit with \d+ unconfirmed values?$/ });
-  if (await acknowledgement.isVisible()) {
-    await expect(submit).toBeDisabled();
-    await acknowledgement.check();
-  }
+  // Open values (defaults or empty) are warnings: one click acknowledges them; the dialog resends once.
+  const submit = dialog.getByRole("button", { name: /^(Submit text|Submit with \d+ warnings?)$/ });
   // The successful submit (the first answer may be the unconfirmed-values warning). A toast of an earlier submit
   // can still be on screen, so the toast alone does not prove this one.
   const accepted = page.waitForResponse(r => r.request().method() === "POST" && /\/workspaces\/[^/]+\/submit$/.test(new URL(r.url()).pathname) && r.ok());
@@ -128,7 +123,13 @@ export async function expectSubmitted(page: Page) {
 /** The toast's "View result": back to the submitted task, read-only. */
 export async function viewSubmittedResult(page: Page) {
   await page.locator(".ui-toast").getByRole("button", { name: "View result", exact: true }).click();
-  await expect(page.getByText("Submitted. The project lead can reopen it for changes.")).toBeVisible();
+  await expect(page.getByText("Read-only. The project lead can reopen it for changes.")).toBeVisible();
+}
+
+/** Chooses ``name`` in the editor header's "More" menu (S5: the rarer task actions live there). */
+export async function moreAction(page: Page, name: string | RegExp) {
+  await page.getByRole("button", { name: "More actions", exact: true }).click();
+  await page.getByRole("menuitem", { name }).click();
 }
 
 /** Select document text by UTF-16 offsets and fire the mouseup the editor listens to. */

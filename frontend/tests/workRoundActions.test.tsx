@@ -85,7 +85,8 @@ it("opens the newly created exact round from the real task editor controls", asy
   const create = vi.spyOn(api, "startWorkRound").mockResolvedValue({ ...round, state: "editable", workflow_revision: 4 });
   const open = vi.spyOn(api, "openWorkRound").mockResolvedValue({ ...workspaceFixture(), workspace_id: "exact-workspace", view: { ...workspaceFixture().view, key: { ...workspaceFixture().view.key, round_id: "round-exact" } } });
   render(<TaskEditor assignmentId={1} user={{ username: "alice", display_name: "Alice", pseudonym: "alice", is_system_admin: false, csrf_token: "csrf" }} onNavigate={vi.fn()} routeLeaveRef={{ current: null }} leaveGuardRef={{ current: null }} />);
-  fireEvent.click(await screen.findByRole("button", { name: "Work rounds" }));
+  fireEvent.click(await screen.findByRole("button", { name: "More actions" }));
+  fireEvent.click(screen.getByRole("menuitem", { name: "Work rounds" }));
   fireEvent.click(await screen.findByRole("radio", { name: /Earlier submission/ }));
   fireEvent.click(screen.getByRole("button", { name: "Continue from this submission" }));
   await waitFor(() => expect(create).toHaveBeenCalledWith(1, expect.objectContaining({ kind: "carry_forward", source_submission_ids: ["exact-source"], expected_workflow_revision: 3 })));

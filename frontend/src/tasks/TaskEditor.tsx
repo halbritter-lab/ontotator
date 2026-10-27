@@ -173,16 +173,16 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
   const roundTitle = roundInfo ? roundIdentity(roundInfo) : undefined;
   return <TaskGuidelines assignment={assignment} readOnly={workspace.read_only || assignment.held}>{guidelines => <>{submittedElsewhere && <InlineMessage tone="info">Another session submitted this task. Your editor has been reloaded read-only.</InlineMessage>}
     {!!taskError && <><ErrorNotice error={taskError} /><Button onClick={() => { void loadTasks(); }}>Retry task list</Button></>}
+    {/* "Report a text problem" sits in the header's "More" menu; its dialogs stay mounted here. */}
+    <TaskProblemActions assignment={assignment} readOnly={workspace.read_only} onSaveBeforeReport={async () => { await saveBeforeReportRef.current?.(); }} onRefresh={value => {
+      setWorkspace(current => current ? { ...current, assignment: value } : current); void loadTasks();
+    }} renderEntry={problemItem => <>
     <CaseErrorBoundary key={`${workspace.workspace_id}:${revision}`} onBackToDashboard={back} backLabel="Back to my tasks" onReload={() => { void load(); }}>
-    <CaseScreen view={workspace.view} workspaceId={workspace.workspace_id} annotatorName={user.display_name}
-      taskActions={<><Button size="sm" onClick={() => {
+    <CaseScreen view={workspace.view} workspaceId={workspace.workspace_id} annotatorName={user.display_name} userPseudonym={user.pseudonym}
+      menuItems={[{ id: "rounds", label: "Work rounds", onSelect: () => {
         // Save pending edits first: the dialog tells an untouched round from one with saved work.
         void (saveBeforeReportRef.current?.() ?? Promise.resolve()).catch(() => undefined).then(() => { if (active.current) setRoundDialogOpen(true); });
-      }}>Work rounds</Button>
-        {guidelines.button}
-        <TaskProblemActions assignment={assignment} readOnly={workspace.read_only} onSaveBeforeReport={async () => { await saveBeforeReportRef.current?.(); }} onRefresh={value => {
-          setWorkspace(current => current ? { ...current, assignment: value } : current); void loadTasks();
-        }} /></>}
+      } }, problemItem, ...(guidelines.item ? [guidelines.item] : [])]}
       roundInputs={roundInputs} roundKind={roundInfo?.kind} roundActive={roundInfo?.active} roundBadge={roundBadge} roundTitle={roundTitle}
       roundOrdinal={roundInfo?.round_ordinal} documentVersion={roundInfo?.document_version}
       held={assignment.held} holdReason={assignment.hold_reason} saveBeforeReportRef={saveBeforeReportRef}
@@ -202,6 +202,7 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
         void loadTasks();
       }} />
   </CaseErrorBoundary>
+    </>} />
   {roundDialogOpen && <WorkRoundsDialog assignment={assignment} currentRoundId={workspace.view.key.round_id ?? undefined}
     documentLabel={{ textId: assignment.document_id, language: roundInfo?.document_language ?? workspace.view.document.language }} onClose={() => setRoundDialogOpen(false)} onOpen={openRound}
     onReload={() => { setRoundDialogOpen(false); void load(); }} onCreate={async request => {

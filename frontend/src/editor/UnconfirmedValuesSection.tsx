@@ -1,8 +1,7 @@
 import { useId, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "../ui/Button";
-import { TermName } from "./TermName";
-import { Fragment } from "react";
 import { AxisValue } from "../ui/AxisValue";
+import { SubmitGroup } from "./SubmitGroup";
 import type { UnconfirmedRow } from "./unconfirmedValues";
 
 export interface UnconfirmedValuesSectionProps {
@@ -19,18 +18,15 @@ export interface UnconfirmedValuesSectionProps {
 const isConfirmable = (row: UnconfirmedRow) => row.confirmableAxisIds.length > 0;
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
-/** "Unconfirmed values" in the Submit dialog (spec F2): one row per finding, confirmable in place. */
+/** "Values not chosen yet" in the Submit dialog (spec F2, S4): one row per finding, "Confirm as shown" in place. */
 export function UnconfirmedValuesSection({
   rows, confirmUnavailableReason, onConfirmValues, onGoTo, onEmpty,
 }: UnconfirmedValuesSectionProps) {
-  const headingId = useId();
   const reasonId = useId();
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
   const [failed, setFailed] = useState<ReadonlySet<string>>(new Set());
   const [running, setRunning] = useState(false);
   const [status, setStatus] = useState<{ text: string; count: number } | null>(null);
-  const [hadRows, setHadRows] = useState(rows.length > 0);
-  if (rows.length > 0 && !hadRows) setHadRows(true);
   // Rows after each await: "Confirm all" and the focus effect read the current list, not the render's.
   const latestRows = useRef(rows);
   latestRows.current = rows;
@@ -50,7 +46,7 @@ export function UnconfirmedValuesSection({
     const still = pending ? rows.find(row => row.annotationId === pending.id) : undefined;
     if (pending && (!still || !isConfirmable(still))) {
       focusAfter.current = null;
-      if (rows.length > 0) announce(`Confirmed ${pending.term}. ${rows.length} left.`);
+      announce(rows.length > 0 ? `Confirmed ${pending.term}. ${rows.length} left.` : `Confirmed ${pending.term}. All values are confirmed.`);
       const next = rows.slice(pending.index).find(row => isConfirmable(row) && row.annotationId !== pending.id)
         ?? rows.slice(0, pending.index).reverse().find(isConfirmable);
       const button = next ? confirmButtons.current.get(next.annotationId) : undefined;
@@ -102,76 +98,65 @@ export function UnconfirmedValuesSection({
       {status && <span key={status.count}>{status.text}</span>}
     </div>
   );
-  if (rows.length === 0) {
-    return <>
-      {hadRows && <p role="status" className="unconfirmed-values__done">All values are confirmed.</p>}
-      {live}
-    </>;
-  }
+  if (rows.length === 0) return live;
 
   const confirmable = rows.filter(isConfirmable);
-  const findings = plural(rows.length, "finding", "findings");
   return <>
-    <section className="unconfirmed-values" aria-labelledby={headingId} data-unconfirmed-values>
-      <div className="unconfirmed-values__header">
-        <h3 id={headingId}>Unconfirmed values ({findings})</h3>
-        {confirmable.length > 0 && (
-          <Button ref={confirmAllButton} type="button" variant="secondary" size="sm"
-            aria-disabled={unavailable || running ? true : undefined}
-            aria-describedby={unavailable ? reasonId : undefined}
-            onClick={() => { void confirmAll(); }}>
-            Confirm all ({confirmable.length})
-          </Button>
-        )}
-      </div>
-      <p className="unconfirmed-values__intro">
-        These values were filled in from defaults or are empty. Confirm them here, or go to the finding to change them.
-      </p>
-      {confirmable.length > 0 && (
-        <p className="unconfirmed-values__note">“Confirm all” confirms the default values shown below for all listed findings.</p>
+    <SubmitGroup heading="Values not chosen yet" data-unconfirmed-values
+      // "Confirm all" only where it saves clicks: two or more rows with values shown by default.
+      action={confirmable.length > 1 && (
+        <Button ref={confirmAllButton} type="button" variant="secondary" size="sm"
+          aria-disabled={unavailable || running ? true : undefined}
+          aria-describedby={unavailable ? reasonId : undefined}
+          onClick={() => { void confirmAll(); }}>
+          Confirm all as shown ({confirmable.length})
+        </Button>
       )}
-      {unavailable && <p id={reasonId} className="form-hint">{confirmUnavailableReason}</p>}
-      <ul className="unconfirmed-values__list">
-        {rows.map(row => {
-          const isBusy = busy.has(row.annotationId);
-          const isFailed = failed.has(row.annotationId) && !isBusy;
-          const blocked = unavailable || running || isBusy;
-          return (
-            <li key={row.annotationId} className="unconfirmed-values__row" data-unconfirmed-row={row.annotationId}>
-              <div className="unconfirmed-values__term">
-                <TermName termId={row.termId} label={row.term !== row.termId ? row.term : null} />
-              </div>
-              {row.quote && <div className="unconfirmed-values__quote">{row.quote}</div>}
-              <div className="unconfirmed-values__values">{row.values.map((value, index) => <Fragment key={value.axisId}>{index > 0 && ", "}{value.axisLabel}: <AxisValue value={value.value} /></Fragment>)}</div>
-              <div className="unconfirmed-values__actions">
-                {isBusy && <span className="unconfirmed-values__busy">Confirming…</span>}
-                {isFailed && <span className="unconfirmed-values__error">Could not confirm. Try again.</span>}
-                {isConfirmable(row) && (
-                  <Button
-                    ref={element => {
-                      if (element) confirmButtons.current.set(row.annotationId, element);
-                      else confirmButtons.current.delete(row.annotationId);
-                    }}
-                    type="button" variant="secondary" size="sm"
-                    aria-label={isFailed ? `Retry confirming values of ${row.term}` : `Confirm values of ${row.term}`}
-                    aria-disabled={blocked ? true : undefined}
-                    aria-describedby={unavailable ? reasonId : undefined}
-                    onClick={() => { void confirmOne(row); }}>
-                    {isFailed ? "Retry" : "Confirm"}
-                  </Button>
-                )}
-                <Button type="button" size="sm" aria-label={`Go to ${row.term}`}
-                  aria-disabled={isBusy ? true : undefined}
-                  onClick={() => { if (!isBusy) onGoTo(row); }}>
-                  Go to
+      note={unavailable && <p id={reasonId} className="submit-item__line">{confirmUnavailableReason}</p>}>
+      {rows.map(row => {
+        const isBusy = busy.has(row.annotationId);
+        const isFailed = failed.has(row.annotationId) && !isBusy;
+        const blocked = unavailable || running || isBusy;
+        return (
+          <li key={row.annotationId} className="submit-item" data-unconfirmed-row={row.annotationId}>
+            <span className="submit-item__what">
+              <strong>{row.term}</strong>
+              {row.quote && <> <span className="submit-item__quote">“{row.quote}”</span></>}
+            </span>
+            <span className="submit-item__actions">
+              {isBusy && <span className="submit-item__line">Confirming…</span>}
+              {isFailed && <span className="submit-item__error">Could not confirm. Try again.</span>}
+              {/* Only values shown by default can be confirmed; an empty value ("Not specified") is chosen in the finding. */}
+              {isConfirmable(row) && (
+                <Button
+                  ref={element => {
+                    if (element) confirmButtons.current.set(row.annotationId, element);
+                    else confirmButtons.current.delete(row.annotationId);
+                  }}
+                  type="button" variant="secondary" size="sm"
+                  aria-label={isFailed ? `Retry confirming ${row.term} as shown` : `Confirm as shown: ${row.term}`}
+                  aria-disabled={blocked ? true : undefined}
+                  aria-describedby={unavailable ? reasonId : undefined}
+                  onClick={() => { void confirmOne(row); }}>
+                  {isFailed ? "Retry" : "Confirm as shown"}
                 </Button>
-              </div>
-              {row.reason && <div className="unconfirmed-values__reason">{row.reason}</div>}
-            </li>
-          );
-        })}
-      </ul>
-    </section>
+              )}
+              <Button type="button" size="sm" aria-label={`Go to ${row.term}`}
+                aria-disabled={isBusy ? true : undefined}
+                onClick={() => { if (!isBusy) onGoTo(row); }}>
+                Go to
+              </Button>
+            </span>
+            <span className="submit-item__values">
+              {row.values.map(value => <span key={value.axisId} className="submit-item__value" title={value.axisLabel}>
+                <span className="visually-hidden">{value.axisLabel}: </span><AxisValue value={value.value} />
+              </span>)}
+            </span>
+            {row.reason && <span className="submit-item__line">{row.reason}</span>}
+          </li>
+        );
+      })}
+    </SubmitGroup>
     {live}
   </>;
 }

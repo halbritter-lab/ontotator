@@ -1,73 +1,68 @@
-/* Submit dialog: "Unconfirmed values" section (annotator acceptance spec F2). Tokens only. */
+/* Submit dialog (S4): one summary line, a box with the open items in groups, each row with its own actions. Tokens only. */
 
-.unconfirmed-values {
-  display: grid;
-  gap: var(--space-2);
+.submit-summary {
   margin: 0 0 var(--space-3);
-  padding: var(--space-3);
-  border: 1px solid var(--notice-warning-border);
-  border-radius: var(--radius-sm);
-  background: var(--notice-warning-fill);
-  color: var(--notice-warning-text);
+  font-size: var(--size-base);
 }
 
-.unconfirmed-values__header {
+.submit-open {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  max-height: 50dvh;
+  overflow-y: auto;
+}
+
+.submit-group + .submit-group {
+  margin-top: var(--space-2);
+}
+
+.submit-group__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-}
-
-.unconfirmed-values__header h3 {
-  margin: 0;
-  font-size: var(--size-md);
-}
-
-.unconfirmed-values__intro,
-.unconfirmed-values__note {
-  margin: 0;
-  font-size: var(--size-sm);
-}
-
-.unconfirmed-values__note {
-  font-weight: var(--weight-strong);
-}
-
-.unconfirmed-values__list {
-  max-height: 50dvh;
-  overflow-y: auto;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface-raised);
-  color: var(--text);
-}
-
-.unconfirmed-values__row {
-  display: grid;
-  gap: var(--space-1);
-  padding: var(--space-2) var(--space-3);
+  margin-top: var(--space-2);
+  padding-bottom: var(--space-1);
   border-bottom: 1px solid var(--border);
 }
 
-.unconfirmed-values__row:last-child {
-  border-bottom: 0;
-}
-
-.unconfirmed-values__quote {
-  font-family: var(--font-serif);
+.submit-group__header h3 {
+  margin: 0;
   font-size: var(--size-sm);
-  color: var(--text-muted);
-}
-
-.unconfirmed-values__values {
-  font-size: var(--size-sm);
+  line-height: var(--leading-sm);
   font-weight: var(--weight-strong);
+  color: var(--warning);
 }
 
-.unconfirmed-values__actions {
+.submit-group__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.submit-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-1) var(--space-3);
+  align-items: center;
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--border);
+}
+
+.submit-item:first-child {
+  border-top: 0;
+}
+
+.submit-item > :not(.submit-item__actions) {
+  grid-column: 1;
+}
+
+.submit-item__actions {
+  grid-column: 2;
+  grid-row: 1 / span 3;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -75,49 +70,44 @@
   gap: var(--space-2);
 }
 
-.unconfirmed-values__busy,
-.unconfirmed-values__reason {
+.submit-item__what {
+  font-size: var(--size-md);
+}
+
+.submit-item__what strong,
+.submit-item__what .term-name {
+  font-weight: var(--weight-strong);
+}
+
+.submit-item__quote,
+.submit-item__line {
+  margin: 0;
   font-size: var(--size-sm);
+  line-height: var(--leading-sm);
   color: var(--text-muted);
 }
 
-.unconfirmed-values__error {
+.submit-item__values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  font-size: var(--size-sm);
+  line-height: var(--leading-sm);
+}
+
+.submit-item__value .axis-value {
+  border: 1px solid var(--border);
+}
+
+.submit-item__error {
   font-size: var(--size-sm);
   color: var(--danger);
 }
 
-.unconfirmed-values__done {
-  margin: 0 0 var(--space-3);
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--notice-success-border);
-  border-radius: var(--radius-sm);
-  background: var(--success-light);
-  color: var(--notice-success-text);
-  font-weight: var(--weight-strong);
-}
-
-.submit-ack {
-  margin: 0 0 var(--space-2);
-}
-
 @media (forced-colors: active) {
-  .unconfirmed-values,
-  .unconfirmed-values__list,
-  .unconfirmed-values__row,
-  .unconfirmed-values__done {
+  .submit-open,
+  .submit-item,
+  .submit-group__header {
     border-color: CanvasText;
   }
-}
-
-/* "Modifier warnings ({m})" (finding modifiers, R10, R12): the box of "Unconfirmed values". */
-.modifier-warnings__heading {
-  margin: 0;
-  font-size: var(--size-md);
-}
-
-.modifier-warnings__row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
 }

@@ -1,7 +1,7 @@
 import { expect, test, type Browser, type Locator, type Page } from '@playwright/test';
 import type { components } from '../src/api/generated';
 import { activityLines, documentsReady, documentsScenario, openCardHistory, openDecisionBlock, openTextCard, rowCell, textRow } from './documentsHelpers';
-import { authenticatedRequest, loginExisting, selectText, submitCase, viewSubmittedResult } from './helpers';
+import { authenticatedRequest, loginExisting, moreAction, selectText, submitCase, viewSubmittedResult } from './helpers';
 
 type Assignment = components['schemas']['AssignmentView'];
 type Submission = components['schemas']['SubmissionHistorySummary'];
@@ -72,7 +72,7 @@ test('ordinary human carry-forward stays private, then exact consolidation is ex
     const secondResult = await value<Opened>(other.page, `/api/v1/assignments/${second.id}/open`, 'POST');
     const secondId = secondResult.assignment.last_submission_id!;
     await viewSubmittedResult(author.page);
-    await author.page.getByRole('button', { name: 'Work rounds', exact: true }).click();
+    await moreAction(author.page, 'Work rounds');
     const rounds = workRounds(author.page);
     const created = author.page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith(`/assignments/${first.id}/rounds`));
     await continueFrom(rounds, initialId);
@@ -235,7 +235,7 @@ test('corrected-text private carry preserves submitted history through a reporte
     const assigned = await value<{ created: Assignment[]; refused: unknown[] }>(page, `${root(s)}/assignments`, 'POST', { task: 'annotate', rows: [{ document_id: corrected.document_id, username: s.users.reviewer }], confirm_language: false });
     expect(assigned.refused).toEqual([]); const task = assigned.created[0];
     await author.page.goto(`/#/tasks/${task.id}`);
-    await author.page.getByRole('button', { name: 'Work rounds', exact: true }).click();
+    await moreAction(author.page, 'Work rounds');
     const rounds = workRounds(author.page);
     const carryResponse = author.page.waitForResponse(response => response.request().method() === 'POST'
       && new URL(response.url()).pathname === `/api/v1/assignments/${task.id}/rounds`, { timeout: 60_000 });
@@ -252,7 +252,7 @@ test('corrected-text private carry preserves submitted history through a reporte
     const carriedId = submitted.assignment.last_submission_id!;
     await viewSubmittedResult(author.page);
     // A submitted task: "Text problems" opens on the reports, the form second (#49 R-20).
-    await author.page.getByRole('button', { name: /^Text problems/ }).click();
+    await moreAction(author.page, /^Text problems/);
     await author.page.getByRole('dialog', { name: `Problems with Task ${task.id}`, exact: true }).getByRole('button', { name: 'New report', exact: true }).click();
     const form = author.page.getByRole('dialog', { name: 'New problem report', exact: true });
     await form.getByRole('textbox', { name: /What is the problem\?/ }).fill('Review the corrected clinical context before continuing.');
@@ -270,7 +270,7 @@ test('corrected-text private carry preserves submitted history through a reporte
     expect((await restarted).ok()).toBeTruthy();
     await expect(page.getByText(new RegExp(`^Task ${task.id} restarted with `))).toBeVisible();
     await author.page.reload();
-    await expect(author.page.locator('button.problem-entry')).toBeVisible();
+    await expect(author.page.getByRole('button', { name: 'More actions', exact: true })).toBeVisible();
     await expect(author.page.locator('.sidebar .doc-item')).toHaveCount(0);
     const fresh = await value<Opened>(author.page, `/api/v1/assignments/${task.id}/open`, 'POST');
     expect(fresh.assignment.last_submission_id).toBeNull();

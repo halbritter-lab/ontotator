@@ -24,7 +24,7 @@ test("defaulted warning reveals a hidden result and an explicit axis confirmatio
   await expect(proposal).not.toContainText("Defaults to confirm");
   await page.getByRole("button", { name: /^Finish & submit/ }).click();
   const submitDialog = page.getByRole("dialog", { name: "Submit text" });
-  await expect(submitDialog.getByRole("heading", { name: /^Unconfirmed values/ })).toHaveCount(0);
+  await expect(submitDialog.getByRole("heading", { name: "Values not chosen yet", exact: true })).toHaveCount(0);
   await submitDialog.getByRole("button", { name: "Cancel", exact: true }).click();
   // An unresolved proposal keeps its defaults open.
   await proposal.click();
@@ -34,8 +34,9 @@ test("defaulted warning reveals a hidden result and an explicit axis confirmatio
   await expect(proposal).toContainText("Unresolved");
   await expect(proposal).toContainText("Defaults to confirm");
   await page.getByRole("button", { name: /^Finish & submit/ }).click();
-  await expect(submitDialog.getByRole("heading", { name: "Unconfirmed values (1 finding)", exact: true })).toBeVisible();
-  // The section lists each finding with unconfirmed values and its own "Go to" action.
+  await expect(submitDialog.getByRole("heading", { name: "Values not chosen yet", exact: true })).toBeVisible();
+  await expect(submitDialog.locator("[data-unconfirmed-row]")).toHaveCount(1);
+  // The group lists each finding with values not chosen yet and its own "Go to" action.
   await submitDialog.getByRole("button", { name: "Go to Hypotonia", exact: true }).click();
   await expect(page.getByRole("checkbox", { name: "Visibility for Hidden findings" })).toBeChecked();
   await expect(page.getByLabel("Proposal details")).toBeFocused();
@@ -49,7 +50,7 @@ test("defaulted warning reveals a hidden result and an explicit axis confirmatio
   await expect(page.getByText("Defaults are not confirmed until you confirm them or choose another value.")).toHaveCount(0);
   await page.getByRole("button", { name: /^Finish & submit/ }).click();
   await expect(submitDialog).toBeVisible();
-  await expect(submitDialog.getByRole("heading", { name: /^Unconfirmed values/ })).toHaveCount(0);
+  await expect(submitDialog.getByRole("heading", { name: "Values not chosen yet", exact: true })).toHaveCount(0);
 });
 
 test("repeated outcome keys keep decisions and zero resets without losing the note", async ({ page }) => {
@@ -256,8 +257,7 @@ test("stale rules recover to an actionable evidence repair at desktop and narrow
     await page.getByRole("button", { name: /^Finish & submit/ }).click();
     const dialog = page.getByRole("dialog", { name: "Submit text", exact: true });
     // The finding's empty values are acknowledged too, so the stale rule is what the server answers.
-    await dialog.getByRole("checkbox", { name: /^Submit with \d+ unconfirmed values?$/ }).check();
-    await dialog.getByRole("button", { name: "Submit text", exact: true }).click();
+    await dialog.getByRole("button", { name: /^Submit with \d+ warnings?$/ }).click();
     await expect(page.getByText(/Submission failed:/)).toHaveCount(1);
     await expect(page.getByText(/Reload the case to load the current rules/)).toBeVisible();
     await page.getByRole("button", { name: "Reload current rules", exact: true }).click();
@@ -267,7 +267,7 @@ test("stale rules recover to an actionable evidence repair at desktop and narrow
       await expect(dialog).toBeVisible();
       await expect(dialog.getByText(/Use Add mention to select supporting text/)).toBeVisible();
       await expect(dialog).toContainText("This project requires a text span for findings.");
-      // The open item's "Go to" (the Unconfirmed values row has its own).
+      // The open item's "Go to" (the values row has its own).
       await dialog.locator("[data-open-item]").getByRole("button", { name: "Go to Hypotonia", exact: true }).click();
       await expect(page.getByRole("button", { name: "Add mention", exact: true })).toBeFocused();
       await expect(page.getByLabel("Note", { exact: true })).not.toHaveAttribute("required", "");
@@ -418,7 +418,7 @@ test("a lead enables optional reasons and an annotator creates, clears and submi
     await annotator.reload();
     await annotator.getByRole("button", { name: /^Finish & submit/ }).click();
     const readiness = annotator.getByRole("dialog", { name: "Submit text" });
-    await expect(readiness.getByText("1 finding needs attention", { exact: true })).toBeVisible();
+    await expect(readiness.getByRole("heading", { name: "Findings that need attention", exact: true })).toBeVisible();
     await readiness.screenshot({ path: "../.superpowers/sdd/2026-10-17-phase0-priorities/submission-current-rules-repair.png" });
     await expect(readiness).toContainText("This project requires a text span for findings.");
     await readiness.locator("[data-open-item]").getByRole("button", { name: "Go to Hypotonia", exact: true }).click();

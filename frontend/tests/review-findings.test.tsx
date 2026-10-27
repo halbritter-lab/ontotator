@@ -408,9 +408,9 @@ describe("Submit", () => {
     expect(screen.getAllByRole("button", { name: /Submit text/i })).toHaveLength(1);
     fireEvent.click(screen.getByRole("button", { name: /Finish & submit/i }));
     const dialog = await screen.findByRole("dialog", { name: /Submit text/i });
-    expect(dialog.textContent).toMatch(/1 annotation in this text/);
+    expect(dialog.textContent).toContain("1 finding, nothing open.");
     const confirm = within(dialog).getByRole("button", { name: /^Submit text$/i }) as HTMLButtonElement;
-    expect(dialog.textContent).toContain("Submitting confirms you checked the entire text for further findings.");
+    expect(dialog.textContent).toContain("Submitting also says you checked the whole text for further findings. Afterwards only the project lead can reopen it.");
     expect(confirm.getAttribute("aria-disabled")).toBeNull();
     fireEvent.click(confirm);
     await waitFor(() => expect(submit).toHaveBeenCalled());
@@ -422,7 +422,9 @@ describe("Submit", () => {
     render(<CaseScreen view={reviewView()} workspaceId="ws" onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /Finish & submit/i }));
     const dialog = await screen.findByRole("dialog", { name: /Submit text/i });
-    expect(dialog.textContent).toMatch(/0 of 1 review proposal decided/);
+    expect(dialog.textContent).toContain("0 findings. 1 thing is still open:");
+    const group = within(dialog).getByRole("region", { name: "Proposals not decided" });
+    expect(group.textContent).toContain("Accept, reject or mark unresolved.");
     expect(within(dialog).getByRole("button", { name: /^Submit text$/i }).getAttribute("aria-disabled")).toBe("true");
   });
 });
@@ -435,12 +437,12 @@ describe("Review cases", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: /^Submit text$/i }));
   };
 
-  it("counts confirmed proposals among the annotations that will be submitted", async () => {
+  it("counts confirmed proposals among the findings that will be submitted", async () => {
     const own = proposal("own", "o-v1", "HP:0003");
     render(<CaseScreen view={reviewView([confirmed], [own], own.evidence)} workspaceId="ws" onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /Finish & submit/i }));
     const dialog = await screen.findByRole("dialog", { name: /Submit text/i });
-    expect(dialog.textContent).toMatch(/2 annotations will be submitted \(1 confirmed proposal, 1 saved finding\)/);
+    expect(dialog.textContent).toContain("2 findings, nothing open.");
   });
 
   it("offers the next case including zero proposals after submitting a review", async () => {

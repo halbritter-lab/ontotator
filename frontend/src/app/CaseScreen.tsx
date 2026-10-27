@@ -102,11 +102,11 @@ import { attachCandidates, findingDescription, modifierDisplayId, modifierMarks,
 import { Toast } from "../ui/Toast";
 import { type MentionDisplay, type SelectionPayload } from "../spans/adapter";
 import { markColourSlot } from "../editor/markColours";
-import { IconCheck, IconClose, IconKeyboard, IconPencil, IconQuestion, IconRetry } from "../ui/icons";
+import { IconCheck, IconClose, IconMore, IconPencil, IconQuestion, IconRetry } from "../ui/icons";
+import { MenuButton, type MenuItem } from "../ui/MenuButton";
 import { isNegated } from "../editor/negation";
 import { Dialog } from "../ui/Dialog";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
-import { IconButton } from "../ui/IconButton";
 import { openShortcutHelp, ShortcutHelpHost } from "../ui/ShortcutHelp";
 import { isTextEntryTarget, isTypingTarget, useShortcut, useShortcutHint } from "../ui/shortcuts";
 import { CaseNavigation } from "./CaseNavigation";
@@ -212,7 +212,10 @@ export interface CaseScreenProps {
   /** The logged-in user's display name, shown with the pseudonym. */
   annotatorName?: string;
   leaveGuardRef?: React.MutableRefObject<((proceed: () => void) => void) | null>;
-  taskActions?: React.ReactNode;
+  /** Rarer task actions (work rounds, text problems, guidelines) for the header's "More" menu. */
+  menuItems?: MenuItem[];
+  /** The logged-in user's pseudonym: "as …" is shown only when the work is saved under another one. */
+  userPseudonym?: string;
   /** The guidelines update notice (tasks/TaskGuidelines), shown below the toolbar. */
   guidelineNotice?: React.ReactNode;
   held?: boolean;
@@ -248,7 +251,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   onSubmitted,
   annotatorName,
   leaveGuardRef,
-  readOnly: serverReadOnly = false, routeLeaveRef, assignmentNavigation, onReadonlyRequired, versionContext, taskActions, guidelineNotice, held = false, holdReason, saveBeforeReportRef, roundInputs = NO_ROUND_INPUTS, roundKind, roundActive = true, roundBadge, roundTitle, documentVersion, roundOrdinal,
+  readOnly: serverReadOnly = false, routeLeaveRef, assignmentNavigation, onReadonlyRequired, versionContext, menuItems = [], userPseudonym, guidelineNotice, held = false, holdReason, saveBeforeReportRef, roundInputs = NO_ROUND_INPUTS, roundKind, roundActive = true, roundBadge, roundTitle, documentVersion, roundOrdinal,
 }) => {
   const versionIdentity = JSON.stringify([versionContext?.username, versionContext?.assignmentId, versionContext?.canBrowseVersions, workspaceId, view.key]);
   const [acceptedSubmission, setAcceptedSubmission] = useState<{ identity: string; value: Submission } | null>(null);
@@ -387,9 +390,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   // "Finish & submit" was clicked and waits for pending saves before it validates.
   const [submitPending, setSubmitPending] = useState(false);
   const [axisWarning, setAxisWarning] = useState<AxisWarning | null>(null);
-  const [axisWarningAcknowledged, setAxisWarningAcknowledged] = useState(false);
-  /** The (finding, axis) pairs listed when "Submit with {n} unconfirmed values" was ticked. */
-  const [ackSeen, setAckSeen] = useState<ReadonlySet<string> | null>(null);
   /** Polite status of the submit dialog, e.g. after the server listed other values. */
   const [submitStatus, setSubmitStatusState] = useState<{ text: string; count: number } | null>(null);
   /** A new `count` per announcement, so the same text after a resend is read again. */
@@ -473,6 +473,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const rootRef = useRef<HTMLDivElement>(null);
   // At ≤700 px the editor shows one pane at a time; marking text does not switch panes on its own.
   const panesLayout = useMediaQuery("(max-width: 700px)");
+  // Below 1024 px the header keeps one bar: "Next open item" moves into "More", the mode text hides.
+  const narrowHeader = useMediaQuery("(max-width: 1023px)");
   // Back to the text after a cancelled new finding: runs after the text pane re-rendered its runs,
   // so the caret lands in the current text nodes (offset null: focus only).
   const [textFocusRequest, setTextFocusRequest] = useState<{ offset: number | null } | null>(null);
@@ -2646,8 +2648,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const openReviewTargets = reviewTargets.filter(
     (t) => !(draft.decisions ?? []).some((d) => refKey(d.target) === refKey(t)),
   );
-  // Confirmed proposals are submitted as they are, next to the draft's own annotations.
-  const confirmedCount = (draft.decisions ?? []).filter((d) => d.outcome === "confirmed").length;
 
   const completionResults = resultSnapshots(draft, view.available_inputs ?? []);
   /** A finding whose term is a modifier or cohort term (R3, old or imported data). */
@@ -2692,13 +2692,15 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const findingRef = (snapshot: AnnotationSnapshot) => {
     const target = reviewTargetOf(snapshot);
     return { annotationId: snapshot.annotation.annotation_id, term: snapshotTerm(snapshot),
-      ...(target ? { targetKey: refKey(target) } : {}), evidenceId: firstEvidenceId(snapshot) };
+      ...(target ? { targetKey: refKey(target) } : {}), evidenceId: firstEvidenceId(snapshot), quote: firstQuote(snapshot) };
   };
   /** Segments of the snapshot's first mark: the draft's evidence for own findings, the snapshot's for proposals. */
   const firstSegments = (snapshot: AnnotationSnapshot) => {
     const own = reviewTargetOf(snapshot) ? undefined : allEvidenceMap[snapshot.annotation.evidence_refs?.[0]?.evidence_id ?? ""];
     return (own ?? snapshot.evidence?.[0])?.mention.segments ?? [];
   };
+  /** The first mark, 40 code points, for the Submit dialog rows; "" for spanless findings. */
+  const firstQuote = (snapshot: AnnotationSnapshot) => { const segments = firstSegments(snapshot); return segments.length ? quoteSegments(view.document.text, segments, 40) : ""; };
   const currentServerPairs = axisWarning && axisWarning.acknowledgement.draft_revision === draft.revision ? axisWarning.warnings : [];
   // F2: the Submit dialog's "Unconfirmed values" rows, computed locally; a current server warning adds its pairs.
   const unconfirmed = unconfirmedRows({
@@ -2707,7 +2709,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     targetKeyOf: snapshot => { const target = reviewTargetOf(snapshot); return target ? refKey(target) : undefined; },
     editableLayerIds,
     term: snapshotTerm,
-    quote: snapshot => { const segments = firstSegments(snapshot); return segments.length ? quoteSegments(view.document.text, segments, 40) : ""; },
+    quote: firstQuote,
     evidenceId: firstEvidenceId,
     serverPairs: currentServerPairs.filter(pair => !isModifierWarningKey(pair.axis)),
   });
@@ -2716,22 +2718,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     (snapshot, termId) => termLabel.info(snapshot.annotation.layer_id, termId), currentServerPairs);
   /** Every acknowledged pair: unconfirmed values (as the server lists them) and modifier warnings. */
   const unconfirmedPairs = new Set([...(view.require_chosen_axes ? [] : rowPairs(unconfirmed)), ...modifierWarningPairs(modifierWarningList)]);
-  const pairsKey = [...unconfirmedPairs].sort().join(",");
-  const setAcknowledged = (checked: boolean) => {
-    setAxisWarningAcknowledged(checked);
-    setAckSeen(checked ? unconfirmedPairs : null);
-    setSubmitStatus(null);
-  };
-  // A value the user did not see when ticking the acknowledgement unticks it.
-  useEffect(() => {
-    if (!axisWarningAcknowledged || !ackSeen) return;
-    if ([...unconfirmedPairs].some(pair => !ackSeen.has(pair))) {
-      setAxisWarningAcknowledged(false);
-      setAckSeen(null);
-      setSubmitStatus(changedStatus([...unconfirmedPairs].filter(pair => !ackSeen.has(pair))));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pairsKey]);
   /** "Confirm" of a row: one set_axes with the finding's current values; false when nothing was confirmed. */
   const confirmUnconfirmedRow = async (row: UnconfirmedRow): Promise<boolean> => {
     const snapshot = (latestDraft.current.annotations ?? []).find(candidate => candidate.annotation.annotation_id === row.annotationId);
@@ -2771,7 +2757,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     unconfirmed: unconfirmedEntries,
     openTargets: isReviewLike(view.key.mode) ? openReviewTargets.map(target => {
       const snapshot = (view.available_inputs ?? []).find(s => s.annotation.annotation_id === target.annotation_id && s.version === target.version);
-      return { key: refKey(target), term: snapshot ? snapshotTerm(snapshot) : target.annotation_id, evidenceId: snapshot ? firstEvidenceId(snapshot) : undefined };
+      return { key: refKey(target), term: snapshot ? snapshotTerm(snapshot) : target.annotation_id, evidenceId: snapshot ? firstEvidenceId(snapshot) : undefined,
+        quote: snapshot ? firstQuote(snapshot) : undefined };
     }) : [],
     modifierWarnings: modifierWarningList.map(warning => {
       const snapshot = completionResults.find(candidate => candidate.annotation.annotation_id === warning.annotationId);
@@ -2894,16 +2881,16 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     }
 
     if (blockInvalidUnresolvedNotes()) return;
-    setAxisWarning(null); setAxisWarningAcknowledged(false);
-    setAckSeen(null); setSubmitStatus(null);
+    setAxisWarning(null); setSubmitStatus(null);
     setSubmitDialogOpen(true);
   };
 
   // Step 2: submit from the dialog; submitting confirms the entire text was checked.
-  const confirmSubmit = async () => {
+  // `acknowledgedClick`: "Submit with N warnings" acknowledges exactly the warnings the dialog lists.
+  const confirmSubmit = async (acknowledgedClick: boolean) => {
     const rowsRemain = unconfirmed.length > 0;
     if (readOnlyRef.current || submittingWorkspace.current || (rowsRemain && view.require_chosen_axes)) return;
-    if (unconfirmedPairs.size > 0 && !axisWarningAcknowledged) return;
+    if (unconfirmedPairs.size > 0 && !acknowledgedClick) return;
     if (blockInvalidUnresolvedNotes() || submissionIssues.length || unresolvedReanchorCount || pendingCarriedCount) return;
     if (isReviewLike(view.key.mode)) {
       const missingTargets = reviewTargets.filter((t) => !(latestDraft.current.decisions ?? []).some(d => refKey(d.target) === refKey(t)));
@@ -2915,9 +2902,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       }
     }
     submittingWorkspace.current = true;
-    // The values the user saw when submitting; a warning listing exactly these is acknowledged at once (D1).
+    // The warnings the user saw when submitting; a server warning listing exactly these is acknowledged at once (D1).
     const expected = unconfirmedPairs;
-    const acknowledged = unconfirmedPairs.size > 0 && axisWarningAcknowledged;
+    const acknowledged = unconfirmedPairs.size > 0 && acknowledgedClick;
     const held = acknowledged ? axisWarning?.acknowledgement : undefined;
     try {
       const submitEnvelope = (expectedRevision: number, acknowledgement?: AxisWarning["acknowledgement"]) => ({
@@ -2942,7 +2929,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           // rejected edit, which would incorrectly prevent later navigation.
           if (!warning) throw error;
           const answered = new Set(warning.warnings.map(item => pairKey(item.annotationId, item.axis)));
-          // D1: the user ticked exactly these values; resend once with the fresh acknowledgement.
+          // D1: the user acknowledged exactly these warnings; resend once with the fresh acknowledgement.
           if (acknowledged && sameSet(answered, expected)) {
             resend ??= submitEnvelope(expectedRevision, warning.acknowledgement);
             try { return await api.submitWorkspace(workspaceId, resend).catch(assignmentFailure); }
@@ -2957,8 +2944,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       });
       if ("axisWarning" in submission) {
         setAxisWarning(submission.axisWarning);
-        setAxisWarningAcknowledged(false);
-        setAckSeen(null);
         const answered = new Set(submission.axisWarning.warnings.map(item => pairKey(item.annotationId, item.axis)));
         setSubmitStatus(changedStatus([...answered].filter(pair => !expected.has(pair)).concat([...expected].filter(pair => !answered.has(pair)))));
         setSubmitDialogOpen(true);
@@ -3347,15 +3332,16 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           <LanguageTag code={view.document.language} />
           <span
             title={roundTitle ?? (roundKind !== "consolidation" && !isCarryKind(roundKind) ? badge.title : undefined)}
-            className={`badge ${badge.className}`}
+            className="case-mode"
           >
             {roundKind === "consolidation" ? modeBadge("review").label : roundKind === "text_change" ? TEXT_CHANGE_ORIGIN : isCarryKind(roundKind) ? roundBadge ?? "Review carried findings" : badge.label}
           </span>
           {consolidationAssignmentId ? <a className="btn btn-secondary btn-sm" href={routeHref({ name: "task", assignmentId: consolidationAssignmentId })} onKeyDown={onSpaceActivate}>Back to consolidation</a> : null}
           {/* The display name has a bounded width (full text in the title), so the header
               does not need another line; the pseudonym is never shortened. */}
+          {/* "as …" only when the work is saved under another pseudonym than the user's own (the shell names the user). */}
           <span
-            className="badge identity-badge"
+            className={userPseudonym === view.key.annotator_id ? "visually-hidden" : "badge identity-badge"}
             data-testid="annotator-identity"
             title={`${annotatorName ? `${annotatorName} (${view.key.annotator_id})` : view.key.annotator_id}: your annotations and decisions are saved under this pseudonym`}
           >
@@ -3371,27 +3357,18 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           </span>
         </div>
         <div className="app-actions">
-          <span
+          {/* Submitted: the status sits where the submit button stands, so the text sheet does not move (#25). */}
+          {serverReadOnly || submittedAt ? <span role="status" className="case-status">
+            <StatusBadge status="submitted" title={serverReadOnly ? "Read-only. The project lead can reopen it for changes." : undefined}>Submitted{submittedAt && <> <time dateTime={submittedAt} title={fullTimestamp(submittedAt)}>{formatTime(submittedAt)}</time></>}</StatusBadge>
+            {serverReadOnly && <span className="case-status__note">Read-only. The project lead can reopen it for changes.</span>}
+          </span> : <span
             role="status"
             title={`Revision ${draft.revision}`}
-            className={`status-badge ${
-              statusIsError
-                ? "status-error"
-                : statusText === "Saved" || submittedAt
-                ? "status-saved"
-                : "status-saving"
-            }`}
+            className={`status-badge ${statusIsError ? "status-error" : statusText === "Saved" ? "status-saved" : "status-saving"}`}
           >
             <span className="status-dot" aria-hidden="true" />
-            {/* A submitted task has nothing left to save: say when it was submitted. */}
-            {submittedAt ? <>Submitted <time dateTime={submittedAt} title={fullTimestamp(submittedAt)}>{formatTime(submittedAt)}</time></> : statusText}
-          </span>
-
-          <IconButton label="Keyboard shortcuts" icon={<IconKeyboard />} onClick={openShortcutHelp}
-            variant="quiet" size="sm" title="Keyboard shortcuts (?)" />
-          {taskActions}
-          {/* In the actions row, where the submit button stands in editable tasks: the text starts at the same height (#25). */}
-          {serverReadOnly && <InlineMessage tone="info">Submitted. The project lead can reopen it for changes.</InlineMessage>}
+            <span className="status-badge__text">{statusText}</span>
+          </span>}
           {held && <InlineMessage tone="warning">Task paused: {holdReason ?? "A project problem needs attention."} Saved work remains readable. Your local input is kept.</InlineMessage>}
 
           {queueState === "error" && (
@@ -3405,13 +3382,19 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             </Button>
           )}
 
+          <MenuButton label="More actions" buttonLabel="More" icon={<IconMore />} items={[
+            ...menuItems,
+            // Below 1024 px "Next open item" leaves the bar for this menu.
+            ...(narrowHeader && !readOnly && openItems.length > 0 ? [{ id: "next-open", label: "Next open item", onSelect: goToNextOpenItem }] : []),
+            { id: "shortcuts", label: "Keyboard shortcuts (?)", onSelect: openShortcutHelp },
+          ]} />
           {/* Read-only (submitted, paused, an older version): no edit controls. */}
           {!readOnly && <SubmitControl
             onSubmit={() => { void handleSubmitWorkspace(); }}
             disabled={submitPending}
             pending={submitPending}
             openCount={openItems.length}
-            onNextOpen={goToNextOpenItem}
+            onNextOpen={narrowHeader ? undefined : goToNextOpenItem}
           />}
         </div>
       </Toolbar>
@@ -4117,29 +4100,19 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
       <SubmitCaseDialog
         open={submitDialogOpen}
-        documentId={view.document.document_id}
-        reviewMode={isReviewLike(view.key.mode)}
-        resultCount={completionResults.length}
-        confirmedCount={confirmedCount}
-        unresolvedDecisionCount={(draft.decisions ?? []).filter(d => d.outcome === "uncertain").length}
-        savedFindingsCount={(draft.annotations ?? []).length}
-        reviewTargetCount={reviewTargets.length}
-        openReviewTargetCount={openReviewTargets.length}
-        pendingReanchorCount={pendingReanchorItems.length}
-        unresolvedReanchorCount={unresolvedReanchorCount}
+        textName={assignmentNavigation ? taskText(assignmentNavigation.current) : view.document.document_id}
+        findingCount={isReviewLike(view.key.mode) ? completionResults.length : (draft.annotations ?? []).length}
         items={openItems}
         unconfirmed={unconfirmed}
         requireChosenAxes={view.require_chosen_axes === true}
         confirmUnavailableReason={confirmUnavailableReason}
         onConfirmValues={confirmUnconfirmedRow}
-        acknowledged={axisWarningAcknowledged}
-        setAcknowledged={setAcknowledged}
         submitStatus={submitStatus}
         saving={queueState === "saving"}
         readOnly={readOnly}
         onGoTo={goToOpenItem}
         onGoToRow={goToRow}
-        onConfirm={() => { void confirmSubmit(); }}
+        onConfirm={acknowledged => { void confirmSubmit(acknowledged); }}
         onCancel={() => setSubmitDialogOpen(false)}
       />
 

@@ -2,14 +2,15 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api, type AssignmentView, type GuidelineNotice } from "../api/client";
 import { routeHref } from "../app/router";
 import { GuidelineReader } from "../guidelines/GuidelineReader";
-import { Button, Drawer, IconBook, InlineMessage } from "../ui";
+import { Button, Drawer, IconBook, InlineMessage, type MenuItem } from "../ui";
 import { onSpaceActivate } from "../ui/spaceActivates";
 
 export interface TaskGuidelinesProps {
   assignment: AssignmentView;
   /** The task's real read-only state (submitted, held, read-only round): no notice and nothing recorded. */
   readOnly: boolean;
-  children: (parts: { button: ReactNode; notice: ReactNode; drawer: ReactNode }) => ReactNode;
+  /** `item`: the same entry for a "More" menu (the editor header), null without guidelines. */
+  children: (parts: { button: ReactNode; item: MenuItem | null; notice: ReactNode; drawer: ReactNode }) => ReactNode;
   /**
    * Only where no other part of the screen reloads the task metadata on window focus (the translation
    * review's lead-correction mode has no problem reporter): the focus reload then also re-reads the task
@@ -88,7 +89,8 @@ export function TaskGuidelines({ assignment, readOnly, children, onRefresh }: Ta
   }, [projectKey, offered]);
 
   const openDrawer = (version: number) => {
-    toolbar.current = button.current?.parentElement ?? toolbar.current;
+    // Opened from a menu: focus returns to the menu's button (the focused element when the menu closed).
+    toolbar.current = (button.current ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null))?.parentElement ?? toolbar.current;
     setDrawer({ open: true, version });
     setLatestSeen(seen => ({ key: projectKey, version: Math.max(version, seen?.key === projectKey ? seen.version ?? 0 : 0) }));
   };
@@ -101,6 +103,9 @@ export function TaskGuidelines({ assignment, readOnly, children, onRefresh }: Ta
       aria-label={`Guidelines v${current}, open the project guidelines${isNew ? ", updated" : ""}`}>
       Guidelines v{current}{isNew && <> <span className="task-guidelines-badge">New</span></>}
     </Button>;
+
+  const itemPart: MenuItem | null = current === null ? null
+    : { id: "guidelines", label: `Guidelines v${current}${isNew ? " (new)" : ""}`, onSelect: () => openDrawer(current) };
 
   const shown = !readOnly && current !== null && notice?.key === projectKey ? notice.value : null;
   const noticePart = shown && <GuidelineNoticeMessage notice={shown} onRead={() => { setNotice(null); openDrawer(shown.to_version); }} onClose={() => setNotice(null)} />;
@@ -117,7 +122,7 @@ export function TaskGuidelines({ assignment, readOnly, children, onRefresh }: Ta
     </div>
   </Drawer>;
 
-  return <>{children({ button: buttonPart, notice: noticePart || null, drawer: drawerPart || null })}</>;
+  return <>{children({ button: buttonPart, item: itemPart, notice: noticePart || null, drawer: drawerPart || null })}</>;
 }
 
 function GuidelineNoticeMessage({ notice, onRead, onClose }: { notice: GuidelineNotice; onRead: () => void; onClose: () => void }): JSX.Element {

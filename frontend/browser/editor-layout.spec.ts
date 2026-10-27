@@ -2,7 +2,7 @@ import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { guidelineScenario, loginGuidelineUser } from "./guidelineHelpers";
-import { loginExisting, selectText } from "./helpers";
+import { loginExisting, moreAction, selectText } from "./helpers";
 
 /**
  * Editor layout (editor spec sections 6, 8 and 10; plan F10): dialogs keep Close reachable
@@ -102,7 +102,7 @@ for (const size of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) 
     await expect(original).toBeHidden();
 
     // Work rounds.
-    await page.getByRole("button", { name: "Work rounds", exact: true }).click();
+    await moreAction(page, "Work rounds");
     const rounds = page.getByRole("dialog", { name: /^Work rounds\W/ });
     await expect(rounds.getByText("Round 2", { exact: true }).first()).toBeVisible();
     await expectCloseInView(page, rounds, "Close");
@@ -114,7 +114,7 @@ for (const size of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) 
     await page.getByRole("button", { name: /^Finish & submit/ }).click();
     const submit = page.getByRole("dialog", { name: "Submit text", exact: true });
     await expectCloseInView(page, submit, "Cancel");
-    await expect(submit.locator(".modal-actions").getByRole("button", { name: "Submit text", exact: true })).toBeInViewport({ ratio: 1 });
+    await expect(submit.locator(".modal-actions").getByRole("button", { name: /^(Submit text|Submit with \d+ warnings?)$/ })).toBeInViewport({ ratio: 1 });
     await evidence(page, `submit-${size.width}`);
     await submit.locator(".modal-actions").getByRole("button", { name: "Cancel", exact: true }).click();
     await expect(submit).toBeHidden();
@@ -330,7 +330,8 @@ test.describe("half-width editor", () => {
     mkdirSync(halfEvidenceDir(), { recursive: true });
     await page.screenshot({ path: resolve(halfEvidenceDir(), `${name}.png`) });
   }
-  const guidelines = (page: Page) => page.getByRole("button", { name: /^Guidelines v1, open the project guidelines/ });
+  // "Guidelines v1" sits in the header's "More" menu (S5).
+  const guidelines = (page: Page) => ({ click: () => moreAction(page, /^Guidelines v1/) });
   const guidelinesPanel = (page: Page) => page.getByRole("complementary", { name: "Guidelines v1", exact: true });
 
   /** The first paragraph's first characters lie inside the visible text pane and the viewport, on top. */

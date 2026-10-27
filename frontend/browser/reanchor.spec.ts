@@ -60,7 +60,8 @@ test('re-creates a Unicode finding, dismisses with reason, reloads and submits w
   await panel(page).locator(':scope > details > summary').click();
   await page.getByRole('button',{name:/^Finish & submit/}).click();
   const blocked=page.getByRole('dialog',{name:'Submit text',exact:true});
-  await expect(blocked).toContainText('2 findings after text correction still pending');
+  await expect(blocked.getByRole('heading',{name:'Findings after text correction',exact:true})).toBeVisible();
+  await expect(blocked.locator('[data-open-item="reanchor"]')).toHaveCount(2);
   await expect(blocked).toContainText('Re-create or dismiss 2 findings after text correction before submitting.');
   await expect(blocked.getByRole('button',{name:'Submit text',exact:true})).toBeDisabled();
   // Each pending item has its own "Go to" action; the first leads to the first pending row.
@@ -213,7 +214,8 @@ async function nativeAcrossExpiry(page:Page,s:Scenario,button:Locator,method:'po
 }
 
 for(const width of [1280,1024,600])test(`real pending contexts preserve producer data, owned scroll and transient native selection at ${width}`,async({page})=>{
-  await page.setViewportSize({width,height:900});const s=await scenario(page);await ready(page,s);
+  // 700 px high: the one-bar header (S5) leaves room enough at 900 for the context to fit without scrolling.
+  await page.setViewportSize({width,height:700});const s=await scenario(page);await ready(page,s);
   const before=await workspace(page,s),writes=writesSince(page);
   expect(before.view.key.mode).toBe('proposal_check');
   const response=await authenticatedRequest(page,documentPath(s,'reanchor-items'));expect(response.ok()).toBeTruthy();

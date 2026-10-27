@@ -1,23 +1,21 @@
-import { useId } from "react";
 import { Button } from "../ui/Button";
 import type { OpenItem } from "./openItems";
-import "./submitDialog.css";
+import { SubmitGroup } from "./SubmitGroup";
 
-/** The Submit dialog's "Modifier warnings ({m})" list (R10, R12): acknowledgeable, never blocking. */
+/** The Submit dialog's "Modifier warnings" group (R3, R10, R12): acknowledged with "Submit with N warnings", never blocking. */
 export function ModifierWarningsSection({ items, onGoTo }: { items: readonly OpenItem[]; onGoTo: (item: OpenItem) => void }) {
-  const headingId = useId();
   if (items.length === 0) return null;
   return (
-    <section className="unconfirmed-values" aria-labelledby={headingId} data-modifier-warnings>
-      <h3 id={headingId} className="modifier-warnings__heading">Modifier warnings ({items.length})</h3>
-      <ul className="unconfirmed-values__list">
-        {items.map(item => (
-          <li key={item.key} className="unconfirmed-values__row modifier-warnings__row" data-open-item={item.kind}>
-            <span>{item.term}: {item.line}</span>
-            <Button type="button" size="sm" onClick={() => onGoTo(item)}>Go to {item.term}</Button>
-          </li>
-        ))}
-      </ul>
-    </section>
+    <SubmitGroup heading="Modifier warnings" data-modifier-warnings>
+      {items.map(item => (
+        <li key={item.key} className="submit-item" data-open-item={item.kind}>
+          <span className="submit-item__what"><strong>{item.term}</strong>{item.quote && <> <span className="submit-item__quote">“{item.quote}”</span></>}</span>
+          <span className="submit-item__actions">
+            <Button type="button" size="sm" aria-label={`Go to ${item.term}`} onClick={() => onGoTo(item)}>Go to</Button>
+          </span>
+          <span className="submit-item__line">{item.line}</span>
+        </li>
+      ))}
+    </SubmitGroup>
   );
 }

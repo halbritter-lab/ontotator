@@ -167,9 +167,9 @@ it.each(["open", "submitted"] as const)("after a submit with a %s neighbor opens
   fireEvent.click(await screen.findByRole("button", { name: /Finish & submit text/ }));
   const submit = await screen.findByRole("dialog", { name: "Submit text" });
   // The finding's empty assertion is an unconfirmed value (the server warns for empty axes too).
-  fireEvent.click(within(submit).getByRole("checkbox", { name: "Submit with 1 unconfirmed value" }));
-  expect(within(submit).getByRole("button", { name: "Submit text" })).toHaveProperty("disabled", false);
-  fireEvent.click(within(submit).getByRole("button", { name: "Submit text" }));
+  const acknowledge = within(submit).getByRole("button", { name: "Submit with 1 warning" });
+  expect(acknowledge).toHaveProperty("disabled", false);
+  fireEvent.click(acknowledge);
   // No second modal: the next open task opens by itself; a submitted neighbour is skipped.
   if (status === "open") {
     await waitFor(() => expect(open).toHaveBeenLastCalledWith(4));
@@ -193,7 +193,7 @@ it("reloads a task read-only after another session submitted it, with a visible 
   render(<App user={testUser("alice")} />);
   await editFinding();
   await screen.findByText(/Another session submitted this task/);
-  await screen.findByText("Submitted. The project lead can reopen it for changes.");
+  await screen.findByText("Read-only. The project lead can reopen it for changes.");
   expect(open).toHaveBeenCalledTimes(2);
   expect(screen.queryByRole("button", { name: /Add finding without a text span/ })).toBeNull();
   expect(command).toHaveBeenCalledTimes(1);

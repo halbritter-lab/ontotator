@@ -225,12 +225,15 @@ describe("task guidelines in the task screens", () => {
   }
   const before = (a: HTMLElement, b: HTMLElement) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
 
-  it("is placed before Report a text problem in both task screens", async () => {
+  it("sits in the editor's More menu after the text problems, and before Report a text problem in the translation review", async () => {
     annotationTask();
-    const report = await screen.findByRole("button", { name: /^Report a text problem/ });
-    const guidelines = await screen.findByRole("button", { name: /^Guidelines v3, open the project guidelines/ });
-    expect(before(guidelines, report)).toBe(true);
-    expect(before(screen.getByRole("button", { name: "Work rounds" }), guidelines)).toBe(true);
+    await screen.findByRole("heading", { level: 1 });
+    fireEvent.click(await screen.findByRole("button", { name: "More actions" }));
+    await waitFor(() => expect(screen.getAllByRole("menuitem").map(item => item.textContent))
+      .toEqual(["Work rounds", "Report a text problem…", "Guidelines v3", "Keyboard shortcuts (?)"]));
+    expect(screen.queryByRole("button", { name: /^Guidelines v3, open the project guidelines/ })).toBeNull();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Guidelines v3" }));
+    expect(await screen.findByRole("heading", { level: 2, name: "Guidelines v3" })).toBeDefined();
     cleanup();
     translationTask();
     await screen.findByRole("textbox", { name: "Translation (de)" });

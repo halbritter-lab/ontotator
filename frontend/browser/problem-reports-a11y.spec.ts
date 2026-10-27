@@ -80,7 +80,9 @@ async function leadOnReport(page: Page) {
 const decide = (page: Page) => page.getByRole("group", { name: "Decide on this report", exact: true });
 const intent = (page: Page, name: string) => decide(page).getByRole("button", { name, exact: true });
 const confirmBox = (page: Page, title: string) => page.getByRole("group", { name: title, exact: true });
-const entry = (page: Page) => page.locator("button.problem-entry");
+/** The editor's "More actions" button: its menu holds the text-problem item; focus returns here. */
+const entry = (page: Page) => page.getByRole("button", { name: "More actions", exact: true });
+const problemItem = (page: Page, name: string) => page.getByRole("menuitem", { name, exact: true });
 const reportsDialog = (page: Page, task: number) => page.getByRole("dialog", { name: `Problems with Task ${task}`, exact: true });
 
 /** Press Tab until ``target`` has focus (at most ``limit`` times); returns the visited stops. */
@@ -256,11 +258,9 @@ test("reporter dialog at 390 x 844: a full-height sheet, the footer Close stays 
   await page.goto(`/#/tasks/${task}`);
   await expect(page.locator(".text-container")).toBeVisible();
   await expect(entry(page)).toBeVisible();
-  // The toolbar entry keeps its text at this width (never icon-only).
-  await expect(entry(page)).toContainText("Report a text problem");
-  await expect(entry(page).locator(".problem-badge")).toHaveText(/^Paused\W+6 open$/);
-
+  // The menu item carries its text and the badge at this width.
   await entry(page).click();
+  await problemItem(page, "Report a text problem… (Paused, 6 open)").click();
   const dialog = reportsDialog(page, task);
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole("article")).toHaveCount(6);
@@ -323,20 +323,13 @@ test("axe: reporter dialog (list and new report views) and lead page (default an
   const task = s.tasks.reporter;
   const [report] = await fileReports(s.users.reporter, task, [REPORT_TEXT]);
 
-  // Reporter: toolbar entry name carries the visible text and the pause.
+  // Reporter: the menu item name carries the visible text and the pause.
   await loginExisting(page, s.users.reporter);
   await page.goto(`/#/tasks/${task}`);
   await expect(page.locator(".text-container")).toBeVisible();
-  await expect(entry(page)).toHaveAccessibleName("Report a text problem Task paused, 1 open report");
-  await expect(entry(page)).toHaveAccessibleName(/Report a text problem/);
-  await expect(entry(page)).toHaveAccessibleName(/Task paused/);
-  await expect(entry(page).locator(".problem-badge")).toHaveText(/^Paused\W+1 open$/);
-  // The badge's shape is decorative.
-  const icons = await entry(page).locator("svg").evaluateAll(svgs => svgs.map(svg => svg.closest('[aria-hidden="true"]') !== null || svg.getAttribute("aria-hidden") === "true"));
-  expect(icons.length).toBeGreaterThan(0);
-  for (const hidden of icons) expect(hidden).toBe(true);
-
   await entry(page).click();
+  // The menu item has no icon (the old badge's decorative svg check is gone).
+  await problemItem(page, "Report a text problem… (Paused, 1 open)").click();
   const dialog = reportsDialog(page, task);
   await expect(dialog.getByRole("heading", { name: REPORT_TEXT, level: 3 })).toBeFocused();
   await expect(dialog.getByRole("article", { name: REPORT_TEXT })).toBeVisible();
