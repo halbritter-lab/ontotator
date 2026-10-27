@@ -324,3 +324,20 @@ export function standaloneText(group: ConsolidationGroupView, text: string): str
   const label = base.term_label || base.term_id;
   return base.spans.length ? labelWithQuote(label, passage(text, base.spans)) : label;
 }
+
+/**
+ * The stored decision of a decided group (R-2): its result line and the term and axis values it took, as choices
+ * that mark the kept cells. Read from the view, so it holds after a reload and in read-only views.
+ */
+export function storedResult(group: ConsolidationGroupView, text: string): { line: ResultText; choices: Choices } | null {
+  const result = group.result;
+  if (!result) return null;
+  const axes = axesOf(group);
+  const parts: ResultPart[] = [{ text: termLabel(result) },
+    ...axes.map(axis => ({ text: axisOptionLabel(result.axes[axis]), axis: result.axes[axis] || null }))];
+  const modifiers = (result.modifiers ?? []).map(viewOf);
+  if (hasModifiers(group) || modifiers.length) parts.push({ text: modifiers.length ? `modifiers: ${setText(modifiers, text)}` : "no modifiers" });
+  const finding = parts.map(part => part.text).join(", ");
+  const choices: Choices = Object.fromEntries([["term", result.term_id], ...axes.flatMap(axis => result.axes[axis] ? [[axis, result.axes[axis]]] : [])]);
+  return { line: { finding, parts, saved: `Result: 1 finding, ${finding}`, notTaken: null }, choices };
+}

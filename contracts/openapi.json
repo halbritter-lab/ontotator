@@ -10271,6 +10271,16 @@
               }
             ],
             "title": "Attached To"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConsolidationResultView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -10558,6 +10568,46 @@
         ],
         "title": "ConsolidationProgressView",
         "description": "Open and total groups of the row's active consolidation round."
+      },
+      "ConsolidationResultView": {
+        "properties": {
+          "term_id": {
+            "type": "string",
+            "title": "Term Id"
+          },
+          "term_label": {
+            "type": "string",
+            "title": "Term Label"
+          },
+          "layer_id": {
+            "type": "string",
+            "title": "Layer Id"
+          },
+          "axes": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Axes"
+          },
+          "modifiers": {
+            "items": {
+              "$ref": "#/components/schemas/ConsolidationModifierView"
+            },
+            "type": "array",
+            "title": "Modifiers",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "term_id",
+          "term_label",
+          "layer_id",
+          "axes"
+        ],
+        "title": "ConsolidationResultView"
       },
       "ConsolidationView": {
         "properties": {

@@ -3301,6 +3301,7 @@ export interface components {
             annotation_ids: string[];
             /** Attached To */
             attached_to?: string | null;
+            result?: components["schemas"]["ConsolidationResultView"] | null;
         };
         /**
          * ConsolidationMark
@@ -3418,6 +3419,24 @@ export interface components {
             open: number;
             /** Total */
             total: number;
+        };
+        /** ConsolidationResultView */
+        ConsolidationResultView: {
+            /** Term Id */
+            term_id: string;
+            /** Term Label */
+            term_label: string;
+            /** Layer Id */
+            layer_id: string;
+            /** Axes */
+            axes: {
+                [key: string]: string;
+            };
+            /**
+             * Modifiers
+             * @default []
+             */
+            modifiers: components["schemas"]["ConsolidationModifierView"][];
         };
         /** ConsolidationView */
         ConsolidationView: {

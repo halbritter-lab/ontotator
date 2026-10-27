@@ -64,6 +64,14 @@ class ConsolidationMemberView(_View):
     modifiers: list[ConsolidationModifierView] = []
 
 
+class ConsolidationResultView(_View):
+    term_id: str
+    term_label: str
+    layer_id: str
+    axes: dict[str, str]
+    modifiers: list[ConsolidationModifierView] = []
+
+
 class ConsolidationGroupView(_View):
     group_id: str  # sha256 of the sorted input ids, first 16 hex
     kinds: list[str]
@@ -83,6 +91,8 @@ class ConsolidationGroupView(_View):
     annotation_ids: list[str] = []
     # A left-out standalone modifier attached to this cons-… finding (S18).
     attached_to: str | None = None
+    # The finding the decision kept (R-2); None while open or left out.
+    result: ConsolidationResultView | None = None
 
 
 class ConsolidationView(_View):
@@ -142,7 +152,8 @@ def read_consolidation(
         return labels[(layer_id, term_id)]
 
     members = [m for group in data["groups"] for m in group["members"]]
-    for member in [*members, *data["added"]]:
+    results = [g["result"] for g in data["groups"] if g.get("result")]
+    for member in [*members, *data["added"], *results]:
         member["term_label"] = label(member["layer_id"], member["term_id"])
         for modifier in member["modifiers"]:
             modifier["term_label"] = label(member["layer_id"], modifier["term_id"])

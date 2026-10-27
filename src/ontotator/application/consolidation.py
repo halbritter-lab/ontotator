@@ -54,7 +54,7 @@ from ontotator.domain.review import ReviewDecision
 from ontotator.domain.serialization import decode_snapshot
 from ontotator.domain.work_rounds import WorkRoundView
 from ontotator.domain.workspace import Submission
-from ontotator.ontology.modifiers import TermRoles, modifier_layers
+from ontotator.ontology.modifiers import NO_TERM_ROLES, TermRoles, modifier_layers
 from ontotator.storage.repository import Repository, _key_str
 from ontotator.storage.tables import (
     DocumentRow,
@@ -569,7 +569,7 @@ def _group_view(
                 "modifiers": _modifiers(annotation, roles),
             }
         )
-    state = _state(targets, content)
+    state = _state(targets, content, roles)
     return {
         "group_id": consolidation_group_id(inputs),
         "kinds": sorted(group.kinds),
@@ -584,7 +584,9 @@ def _group_view(
 
 
 def _state(
-    targets: Mapping[tuple[str, str], Annotation], content: _Content
+    targets: Mapping[tuple[str, str], Annotation],
+    content: _Content,
+    roles: TermRoles = NO_TERM_ROLES,
 ) -> dict[str, Any]:
     """State, note, flag, edit and resulting annotations of one group.
 
@@ -636,6 +638,18 @@ def _state(
     resulting = {
         d.replacement.annotation_id for d in decided if d.replacement is not None
     } | {d.target.annotation_id for d in decided if d.outcome == "confirmed"}
+    # R-2: what the decision kept, readable after a reload and in read-only views.
+    result = next(
+        (
+            annotations.get(d.replacement.annotation_id)
+            if d.replacement is not None
+            else annotations.get(d.target.annotation_id)
+            or targets.get((d.target.annotation_id, d.target.version))
+            for d in decided
+            if d.replacement is not None or d.outcome == "confirmed"
+        ),
+        None,
+    )
     return {
         "state": state,
         "edited": edited,
@@ -643,6 +657,15 @@ def _state(
         "guidelines_unclear": any(m.guidelines_unclear for m in marks),
         "annotation_ids": sorted(resulting),
         "attached_to": next((m.attached_to for m in marks if m.attached_to), None),
+        "result": None
+        if result is None
+        else {
+            "term_id": result.term_id,
+            "term_label": result.term_id,
+            "layer_id": result.layer_id,
+            "axes": {k: v for k, v in result.axes_values.items() if v},
+            "modifiers": _modifiers(result, roles),
+        },
     }
 
 

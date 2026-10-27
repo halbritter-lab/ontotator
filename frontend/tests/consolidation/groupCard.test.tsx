@@ -54,6 +54,17 @@ describe("GroupCard", () => {
     }, "Hypotonia (HP:0001252), Absent, Patient, Current");
   });
 
+  it("a decided group shows what was kept without this session's summary, also read-only (R-2)", () => {
+    const decided = hypotoniaThree({ state: "choose", annotation_ids: ["cons-1"],
+      result: { term_id: "HP:0001252", term_label: "Hypotonia", layer_id: "phenotype", axes: { assertion: "absent", experiencer: "patient", temporality: "current" }, modifiers: [] } });
+    renderCard(decided, { people: THREE, readOnly: true });
+    expect(screen.getByRole("button", { expanded: true }).textContent).toContain("decided: Hypotonia (HP:0001252), Absent, Patient, Current");
+    expect(result()).toBe("Result: 1 finding, Hypotonia (HP:0001252), Absent, Patient, Current");
+    const assertion = screen.getByRole("rowheader", { name: "Assertion" }).closest("tr")!;
+    expect(within(assertion).getAllByText("kept")).toHaveLength(1);
+    expect(within(assertion).getByText("kept").closest("td")!.textContent).toContain("Absent");
+  });
+
   it("agreed rows are one grey line", () => {
     renderCard(hypotoniaThree(), { people: THREE });
     const cells = [...document.querySelectorAll(".cons-agreed")].filter(cell => cell.textContent === "Patient (all agree)");

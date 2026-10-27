@@ -65,6 +65,7 @@ export function ComparisonTable({ name, group, people, rows, readOnly = false, b
               onPress={id => onChoose(row.id, id)} />
             : <span className="cons-value">
               {row.kind === "axis" ? <AxisValue value={cell.value} /> : cell.display}
+              {readOnly && row.conflict && cell.chosen && <span className="cons-tag">kept</span>}
               {row.conflict && !readOnly && <button type="button" className="cons-take" aria-pressed={cell.chosen} aria-disabled={busy || undefined}
                 aria-label={`Take ${cell.display} from ${personName(names[index].label)} for ${row.label}`}
                 onClick={() => { if (!busy) onChoose(row.id, cell.value); }}><IconCheck /></button>}

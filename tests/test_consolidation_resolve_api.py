@@ -278,6 +278,11 @@ def test_choose_takes_axes_from_two_people(cons):
         True,
     )
     assert after["edited"] is False
+    # R-2: the read names what was kept, without the session that decided it.
+    assert after["result"]["term_id"] == HYPOTONIA
+    assert after["result"]["term_label"] != HYPOTONIA
+    assert after["result"]["axes"]["assertion"] == "absent"
+    assert after["result"]["axes"]["temporality"] == "historical"
 
 
 def test_leave_out_records_reject_decisions_only(cons):

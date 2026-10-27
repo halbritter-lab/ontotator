@@ -20,7 +20,7 @@ import { Button, Checkbox, InlineConfirm, MenuButton, Select, Textarea } from ".
 import { IconUndo, IconWarning } from "../ui/icons";
 import { ComparisonTable } from "./ComparisonTable";
 import { axisLabel, groupStatus, labelWithQuote, keepLabel, namesOf, NO_ATTACH_TARGET, NOT_IN_RESULT, partialText, REOPEN_EDITED_WARNING, standaloneResult, standaloneWarning } from "./consolidationText";
-import { absentPeople, attachCandidates, choicesComplete, choose, comparisonRows, groupName, hasKind, isStandalone, memberSets, needsTerm, presentPeople, resolvePayload, resultLine, standaloneText, type Choices, type OtherTerm } from "./groupModel";
+import { absentPeople, attachCandidates, choicesComplete, choose, comparisonRows, groupName, hasKind, isStandalone, memberSets, needsTerm, presentPeople, resolvePayload, resultLine, standaloneText, storedResult, type Choices, type ComparisonRow, type OtherTerm } from "./groupModel";
 import { crossLinks, setText, type ModifierView } from "./modifierSets";
 import { ResultLine } from "./ResultLine";
 import { TermPicker, useTermSearch } from "./TermPicker";
@@ -171,6 +171,8 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
   [group.group_id, allGroups, people, text]);
   const inputIds = group.members.map(member => member.input_id);
   const status = groupStatus(group, conflicts);
+  const stored = useMemo(() => (open ? null : storedResult(group, text)), [open, group, text]);
+  const decidedText = props.summary ?? stored?.line.finding;
   const extras = () => ({ ...(note.trim() ? { note: note.trim() } : {}), ...(flag ? { guidelines_unclear: true } : {}) });
 
   const resolve = (payload: Omit<ConsolidationResolvePayload, "input_ids">, summary: string, staged = { choices, otherTerm }) => {
@@ -194,7 +196,7 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
     <button ref={props.toggleRef} type="button" className="cons-group-toggle" aria-expanded={expanded} onClick={props.onExpand}>
       {open && conflicts > 0 && <span className="cons-conflict"><IconWarning /><span className="visually-hidden">Conflict</span></span>}
       <span className="cons-group-title">{name}</span>{" "}
-      <span className={open ? "cons-group-state" : "cons-group-done"}>{status}{!open && props.summary && props.summary !== status ? `: ${props.summary}` : ""}</span>
+      <span className={open ? "cons-group-state" : "cons-group-done"}>{status}{!open && decidedText && decidedText !== status ? `: ${decidedText}` : ""}</span>
       {group.edited && <>{" "}<span className="cons-tag">edited in editor</span></>}
       {group.guidelines_unclear && <>{" "}<span className="cons-tag">flagged</span></>}
     </button>
@@ -225,8 +227,8 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
 
   // A standalone modifier has no axes and cannot be taken as a finding: its table keeps term, text and notes.
   // M-7d: no "Whole finding" shortcut row; a choice per row stages the same result.
-  const tableRows = rows.filter(row => row.kind !== "whole" && !(standalone && row.kind === "axis"));
-  const table = (tableReadOnly: boolean) => <ComparisonTable name={name} group={group} people={people} rows={tableRows} readOnly={tableReadOnly}
+  const shownRows = (all: readonly ComparisonRow[]) => all.filter(row => row.kind !== "whole" && !(standalone && row.kind === "axis"));
+  const table = (tableReadOnly: boolean, tableRows = shownRows(rows)) => <ComparisonTable name={name} group={group} people={people} rows={tableRows} readOnly={tableReadOnly}
     busy={busy} onChoose={onChoose} />;
 
   const crossLinkHints = links.map(link => <p key={`${link.personId}-${link.groupId}-${link.termLabel}`} className="cons-muted cons-crosslink">
@@ -294,7 +296,8 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
     {readOnly && group.guidelines_unclear && <p className="cons-note-text">Flagged: guidelines unclear</p>}
     {attached.map(value => <p key={value.group_id} className="cons-note-text">
       {`Attached modifier: ${standaloneText(value, text)} from ${namesOf(presentPeople(value, people))}`}</p>)}
-    {table(true)}
+    {stored && <ResultLine line={stored.line} />}
+    {table(true, shownRows(comparisonRows(group, people, text, stored?.choices ?? {})))}
     {!readOnly && <>
       {confirmReopen ? <InlineConfirm title="Reopen this group?" message={REOPEN_EDITED_WARNING} confirmLabel="Reopen" busy={busy}
         onCancel={() => setConfirmReopen(false)} onConfirm={() => { void props.onReopen().then(() => setConfirmReopen(false)); }} />
