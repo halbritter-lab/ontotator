@@ -743,7 +743,7 @@ it("shows an unknown text and an empty decision filter with Show all texts", asy
   fireEvent.click(screen.getByRole("link", { name: "Show all texts" }));
   expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p" });
   unmount();
-  mockRows(page([]));
+  mockRows(page([], { bar: { ...page([]).bar, all: 3 } }));
   renderPage({ query: { decision: "all" } });
   expect(await screen.findByRole("heading", { name: "Nothing needs your decision" })).toBeTruthy();
   expect(screen.getByRole("link", { name: "Show all texts" })).toBeTruthy();
