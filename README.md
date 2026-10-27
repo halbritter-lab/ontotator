@@ -8,7 +8,7 @@ The server stores accounts, sessions, projects and annotations in PostgreSQL, wi
 
 This repository ships a Docker image and a Compose contract for PostgreSQL, schema migrations and the application. Your deployment repository supplies the host, DNS, HTTPS certificates and reverse proxy (for example Nginx Proxy Manager). The production application has no published host port.
 
-Follow the [operations guide](docs/operations.md) for building with the private `ontospan` dependency, separate service secrets, first start, users and projects, upgrades, backups and offline administrator recovery. Copy [docker/env.example](docker/env.example) to a private `.env` and replace its image and network settings; the example contains no production credentials. Deploy a verified image digest.
+Follow the [operations guide](docs/operations.md) for building with the private `ontospan` dependency, separate service secrets, first start, users and projects, upgrades, backups and offline administrator recovery. Copy [.env.docker.template](.env.docker.template) to a private `.env.docker`, link it as `.env` and replace its image and network settings; the template contains no production credentials. Deploy a verified image digest.
 
 ## Try a disposable development stack
 

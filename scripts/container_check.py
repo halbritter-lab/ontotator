@@ -26,9 +26,9 @@ def readiness_matches(status: int, body: dict, check: str, expected: bool) -> bo
 
 
 def production_has_private_app(config: dict) -> bool:
-    return "app" in config.get("services", {}) and not config["services"]["app"].get(
-        "ports"
-    )
+    return "ontotator_app" in config.get("services", {}) and not config["services"][
+        "ontotator_app"
+    ].get("ports")
 
 
 def docker_failure(stderr: str) -> str:
@@ -336,6 +336,7 @@ def main() -> int:
                 "ONTOTATOR_IMAGE": args.image or "ontotator-dev:local",
                 "ONTOTATOR_PUBLIC_ORIGIN": "https://container-check.invalid",
                 "ONTOTATOR_TRUSTED_PROXIES": "127.0.0.1",
+                "NPM_SHARED_NETWORK_NAME": "container-check-npm",
             }
             production = run(
                 [

@@ -1,4 +1,5 @@
-# Deploy behind an external HTTPS proxy joined to the edge network.
+# Deploy behind Nginx Proxy Manager on its shared external network; NPM forwards to
+# http://ontotator_app:8000. See docs/operations.md.
 x-runtime: &runtime
   restart: unless-stopped
   read_only: true
@@ -11,7 +12,7 @@ x-runtime: &runtime
       max-file: "3"
 
 services:
-  postgres:
+  ontotator_postgres:
     <<: *runtime
     image: postgres:16.15-alpine3.24@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
     user: "70:70"
@@ -43,14 +44,14 @@ services:
     command: [db, upgrade]
     restart: "no"
     environment:
-      ONTOTATOR_MIGRATION_DATABASE_URL: postgresql://ontotator_owner@postgres:5432/ontotator
+      ONTOTATOR_MIGRATION_DATABASE_URL: postgresql://ontotator_owner@ontotator_postgres:5432/ontotator
       ONTOTATOR_MIGRATION_DATABASE_PASSWORD_FILE: /run/secrets/owner-password
     volumes:
       - ./secrets/migrate:/run/secrets:ro
     tmpfs:
       - /tmp:size=64m,mode=1777
     depends_on:
-      postgres:
+      ontotator_postgres:
         condition: service_healthy
     mem_limit: 512m
     cpus: 1.0
@@ -60,7 +61,7 @@ services:
       disable: true
     networks: [backend]
 
-  app:
+  ontotator_app:
     <<: *runtime
     image: ${ONTOTATOR_IMAGE:?Set the verified image}
     init: false # The image already runs tini as PID 1.
@@ -69,7 +70,7 @@ services:
       ONTOTATOR_PUBLIC_ORIGIN: ${ONTOTATOR_PUBLIC_ORIGIN:?Set the public HTTPS origin}
       ONTOTATOR_TRUSTED_PROXIES: ${ONTOTATOR_TRUSTED_PROXIES:?Set the exact proxy peer addresses}
       ONTOTATOR_WORKERS: ${ONTOTATOR_WORKERS:-2}
-      ONTOTATOR_DATABASE_URL: postgresql://ontotator_app@postgres:5432/ontotator
+      ONTOTATOR_DATABASE_URL: postgresql://ontotator_app@ontotator_postgres:5432/ontotator
       ONTOTATOR_DATABASE_PASSWORD_FILE: /run/secrets/app-password
       ONTOTATOR_ADMIN_PASSWORD_HASH_FILE: /run/secrets/admin-password-hash
       ONTOTATOR_DATA_DIR: /data
@@ -79,7 +80,7 @@ services:
     tmpfs:
       - /tmp:size=256m,mode=1777
     depends_on:
-      postgres:
+      ontotator_postgres:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
@@ -88,14 +89,16 @@ services:
     pids_limit: 256
     stop_grace_period: 35s
     # /readyz healthcheck is inherited from the verified image.
-    networks: [edge, backend]
+    # Prefixed service name: NPM and other stacks on the shared network may have an app.
+    networks: [backend, npm_proxy_network]
 
 volumes:
   postgres-data:
   ontotator-data:
 
 networks:
-  edge:
-    name: ${ONTOTATOR_EDGE_NETWORK:-ontotator-edge}
   backend:
     internal: true
+  npm_proxy_network:
+    external: true
+    name: ${NPM_SHARED_NETWORK_NAME:?Set the external Nginx Proxy Manager network}

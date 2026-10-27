@@ -31,10 +31,14 @@ def test_unavailable_probe_requires_http_and_boolean_evidence(status, body, expe
 @pytest.mark.parametrize(
     ("config", "expected"),
     [
-        ({"services": {"app": {}}}, True),
-        ({"services": {"app": {"ports": []}}}, True),
+        ({"services": {"ontotator_app": {}}}, True),
+        ({"services": {"ontotator_app": {"ports": []}}}, True),
         (
-            {"services": {"app": {"ports": [{"target": 8000, "published": "8000"}]}}},
+            {
+                "services": {
+                    "ontotator_app": {"ports": [{"target": 8000, "published": "8000"}]}
+                }
+            },
             False,
         ),
         ({"services": {}}, False),
