@@ -104,3 +104,4 @@ blockquote.report-text {
 @media (max-width: 699px) {
   .lead-intent { justify-items: stretch; }
 }
+.lead-decide-other { margin: 0 0 var(--space-1); font-weight: 600; }

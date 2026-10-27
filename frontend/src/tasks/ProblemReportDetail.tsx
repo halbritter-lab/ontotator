@@ -18,7 +18,7 @@ import { onSpaceActivate } from "../ui/spaceActivates";
 
 const TASK_TYPES = { annotate: "Annotation", review: "Consolidation", translation_review: "Translation review" } as const;
 /** Actions that settle the row the lead came from (Documents shows it as decided). */
-const DECIDING: readonly Intent[] = ["close", "release", "restart"];
+const DECIDING: readonly Intent[] = ["resume_close", "close", "release", "restart"];
 
 /** The next row under the Documents segment (or decision) filter the lead came from, same rule as on Documents. */
 async function nextDecision(projectKey: string, documents: ProjectDocumentsQuery, currentKey: string): Promise<DocumentRowView | null> {

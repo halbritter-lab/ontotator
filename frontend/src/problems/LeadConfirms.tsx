@@ -8,7 +8,7 @@ import type { ReportLink } from "./LeadStatePanel";
 import type { LeadReportState } from "./useLeadReport";
 
 const ACTIONS: Record<Intent, ProblemActionRequest["action"]> = {
-  close: "resolve", release: "resume", pause: "extend_hold", restart: "restart", reopen: "reopen",
+  resume_close: "resume", close: "resolve", release: "resume", pause: "extend_hold", restart: "restart", reopen: "reopen",
 };
 
 const plural = (n: number, one: string, many: string): string => (n === 1 ? one : many);
@@ -69,6 +69,7 @@ export function LeadConfirm({ intent, report, finalText, preselect = [], lead, r
   const ids = (): number[] => {
     if (intent === "restart") return [report.assignment_id];
     if (intent === "release") return selected.filter(value => activeHolds.some(h => h.assignment_id === value));
+    if (intent === "resume_close") return activeHolds.map(h => h.assignment_id);
     if (intent === "pause") return selected;
     return [];
   };
@@ -83,16 +84,19 @@ export function LeadConfirm({ intent, report, finalText, preselect = [], lead, r
     if (intent === "restart" && !agreed) { setAgreeError(`Confirm that you agreed the restart with ${reporter}.`); invalid = true; }
     if (!text) { setReasonError("Enter a reason."); reasonRef.current?.focus(); invalid = true; }
     if (invalid) return;
-    const action = ACTIONS[intent];
-    const key = JSON.stringify([report.report_id, report.revision, action, text, chosen]);
-    let requestId = requests.get(key);
-    if (!requestId) { requestId = crypto.randomUUID(); requests.set(key, requestId); }
+    // `request_id` per request content: a Retry replays a step that already applied instead of applying it twice.
+    const send = (view: ProblemReportView, action: ProblemActionRequest["action"], ids: number[]) => {
+      const key = JSON.stringify([view.report_id, view.revision, action, text, ids]);
+      let requestId = requests.get(key);
+      if (!requestId) { requestId = crypto.randomUUID(); requests.set(key, requestId); }
+      return api.actOnProblemReport(view.report_id, { request_id: requestId, expected_revision: view.revision, action, reason: text, assignment_ids: ids });
+    };
     writing.current = true; setBusy(true); setOutcome(null); setNotice(null);
     try {
-      const after = await api.actOnProblemReport(report.report_id, {
-        request_id: requestId, expected_revision: report.revision, action, reason: text, assignment_ids: chosen,
-      });
-      if (alive.current) onDone(intent, report, after, intent === "release" ? chosen : undefined);
+      let after = await send(report, ACTIONS[intent], chosen);
+      // "Close and resume": release the pauses, then close with the same outcome text.
+      if (intent === "resume_close") after = await send(after, "resolve", []);
+      if (alive.current) onDone(intent, report, after, intent === "release" || intent === "resume_close" ? chosen : undefined);
     } catch (failure) {
       if (!alive.current) return;
       const code = errorCode(failure);
@@ -146,6 +150,14 @@ export function LeadConfirm({ intent, report, finalText, preselect = [], lead, r
 
   let title: string, message: ReactNode, confirmLabel: string, body: ReactNode, tone: "primary" | "danger" = "primary";
   switch (intent) {
+    case "resume_close": {
+      const paused = activeHolds.map(h => `Task ${h.assignment_id}`);
+      title = `Close and resume ${paused.join(", ")}`;
+      message = `${paused.join(", ")} can continue and the report closes. Pauses from other reports stay.`;
+      confirmLabel = "Close and resume";
+      body = reasonField(`Outcome for ${reporter}`, 4, `${reporter} sees this in the report.`);
+      break;
+    }
     case "close": {
       title = "Close report";
       const paused = activeHolds.map(h => `Task ${h.assignment_id}`);

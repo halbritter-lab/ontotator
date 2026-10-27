@@ -154,7 +154,7 @@ test("report, resume with a reason, lead sees it and closes, reporter sees Close
     await expect(decide(lead.page).getByRole("button", { name: "Close report", exact: true })).toBeVisible();
     await leadAct(lead.page, /^Close report$/, "Close report", new RegExp(`Outcome for ${leadSees(s, "reporter").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`),
       "Fixed in the source text; no change needed.", "Close report",
-      "Report closed. No task was paused by it. The final result did not change.");
+      "Report closed. No task is paused by it any more. The final result did not change.");
     await expect(reportState(lead.page)).toContainText(`Closed by ${s.users.lead} (${s.labels.lead}, you)`);
   } finally {
     await lead.close();
