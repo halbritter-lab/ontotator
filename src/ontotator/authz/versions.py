@@ -414,7 +414,7 @@ def _final_entry(
         return TextLayerEntry(
             kind="final",
             ref=None,
-            label="Final result (not yet accepted)",
+            label="Final result",
             state="not_accepted",
             available=False,
             reason="Not accepted yet.",
