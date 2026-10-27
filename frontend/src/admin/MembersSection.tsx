@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { api, ApiError, type Member, type MemberCandidate } from "../api/client";
-import { Button, Checkbox, ConfirmDialog, DataTable, EmptyState, InlineMessage, StatusBadge, TextInput, type Column, type StatusTone } from "../ui";
+import { Button, Checkbox, ConfirmDialog, DataTable, EmptyState, InlineMessage, StatusBadge, TextInput, type Column, type StatusTone, EmptyValue } from "../ui";
 import { ErrorNotice } from "./ErrorNotice";
 import { labelFor, roleLabels, taskLabels } from "../app/labels";
 import { personLabel } from "../app/identity";
@@ -101,7 +101,7 @@ function MemberEditor({ projectKey, isSystemAdmin }: MembersSectionProps): JSX.E
     { id: "person", header: "Person", cell: member => personLabel(member) },
     { id: "username", header: "Username", cell: member => member.username },
     { id: "status", header: "Status", cell: member => member.account && accountBadges[member.account] ? <StatusBadge tone={accountBadges[member.account][1]}>{accountBadges[member.account][0]}</StatusBadge> : member.account ? "Active" : "" },
-    { id: "languages", header: "Languages", cell: member => member.languages.join(", ") || "None" },
+    { id: "languages", header: "Languages", cell: member => member.languages.join(", ") || <EmptyValue /> },
     ...roles.map(role => ({ id: role, header: roleLabels[role], cell: (member: Member) => <Checkbox id={`${id}-${member.username}-${role}`} label={<span className="visually-hidden">{member.username}: {roleLabels[role]}</span>} checked={member.roles.includes(role)} disabled={blocked || member.account === "anonymised"} title={member.account === "anonymised" ? anonymisedTitle : undefined} onChange={event => {
       if (blocked) return;
       if (event.target.checked) { void change(member.username, [...member.roles, role], false); return; }

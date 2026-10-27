@@ -13,6 +13,7 @@ import { routeHref, type PanelStage, type ProjectDocumentsQuery, type Route } fr
 import { IconBot, IconBotOff, IconCheck } from "../ui/icons";
 import { onSpaceActivate } from "../ui/spaceActivates";
 import { StatusBadge } from "../ui/StatusBadge";
+import { EmptyValue } from "../ui/EmptyValue";
 import {
   decisionCategoryLabels,
   issueAriaLabel,
@@ -225,7 +226,7 @@ export function finalLabel(row: DocumentRowView, final: FinalSelectionSummary, o
 }
 
 export function FinalCell({ row }: { row: DocumentRowView }): JSX.Element {
-  if (!row.final) return <span className="documents-final documents-final--none">None</span>;
+  if (!row.final) return <span className="documents-final documents-final--none"><EmptyValue /></span>;
   return (
     <span className="documents-final">
       <IconCheck className="documents-final-icon" />

@@ -4,7 +4,7 @@ import { personLabel } from "../app/identity";
 import { formatTime } from "../app/submissionLabels";
 import { readGuidelineFile, type GuidelineKind } from "../guidelines/fileChecks";
 import { formatGuidelineDay, GuidelineReader, withdrawnNote } from "../guidelines/GuidelineReader";
-import { Button, DataTable, Dialog, GuidelineDocument, InlineMessage, TextInput, type Column } from "../ui";
+import { Button, DataTable, Dialog, GuidelineDocument, InlineMessage, TextInput, type Column, EmptyValue } from "../ui";
 import { ErrorNotice } from "./ErrorNotice";
 import "../guidelines/guidelines.css";
 
@@ -148,10 +148,10 @@ function GuidelinesEditor({ projectKey }: { projectKey: string }): JSX.Element {
 
   const columns: Column<GuidelineSummary>[] = [
     { id: "version", header: "Version", rowHeader: true, cell: item => `v${item.version}` },
-    { id: "file", header: "File", cell: item => item.withdrawn ? "—" : item.filename ?? "—" },
+    { id: "file", header: "File", cell: item => item.withdrawn ? <EmptyValue /> : item.filename ?? <EmptyValue /> },
     { id: "note", header: "Change note", cell: item => withdrawnNote(item) ?? item.change_note ?? "" },
     { id: "published", header: "Published", cell: published },
-    { id: "seen", header: "Seen by", cell: item => !item.withdrawn && item.reach ? `Seen by ${item.reach.opened} of ${item.reach.members} task members` : "—" },
+    { id: "seen", header: "Seen by", cell: item => !item.withdrawn && item.reach ? `Seen by ${item.reach.opened} of ${item.reach.members} task members` : <EmptyValue /> },
     { id: "actions", header: "Actions", cell: item => item.withdrawn ? null : <div className="guidelines-row-actions">
       <Button size="sm" aria-label={`Read v${item.version}`} onClick={() => setReading(item.version)}>Read</Button>
       {item.version !== current?.version && <Button size="sm" onClick={() => { void republish(item.version); }}>Republish v{item.version}…</Button>}

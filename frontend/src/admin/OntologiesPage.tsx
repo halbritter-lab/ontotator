@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError, type AdminOntology, type OntologyUploadResult } from "../api/client";
 import { routeHref, type Route } from "../app/router";
-import { Button, DataTable, EmptyState, Field, InlineMessage, Toolbar, type Column } from "../ui";
+import { Button, DataTable, EmptyState, Field, InlineMessage, Toolbar, type Column, EmptyValue } from "../ui";
 import { ErrorNotice } from "./ErrorNotice";
 import { formatDateTime } from "../app/labels";
 
@@ -79,8 +79,8 @@ export function OntologiesPage({ onNavigate }: OntologiesPageProps): JSX.Element
     { id: "filename", header: "File name", cell: item => item.filename, sortValue: item => item.filename },
     { id: "kind", header: "Kind", cell: item => item.kind },
     { id: "prefix", header: "Prefix", cell: item => item.prefix },
-    { id: "release", header: "Release", cell: item => item.release ?? "—" },
-    { id: "language", header: "Language", cell: item => item.language ?? "—" },
+    { id: "release", header: "Release", cell: item => item.release ?? <EmptyValue /> },
+    { id: "language", header: "Language", cell: item => item.language ?? <EmptyValue /> },
     { id: "sha", header: "SHA-256", cell: item => <><code title={item.sha256}>{item.sha256.slice(0, 12)}</code>{" "}<Button size="sm" aria-label={`Copy SHA-256 for ${item.filename}`} disabled={copying !== null} onClick={() => { void copy(item); }}>Copy</Button></> },
     { id: "uploaded", header: "Uploaded at", cell: item => <time dateTime={item.uploaded_at}>{formatDateTime(item.uploaded_at)}</time> },
     { id: "projects", header: "Pinned by", cell: item => item.projects.length ? <ul className="pinned-projects">{item.projects.map(key => {
