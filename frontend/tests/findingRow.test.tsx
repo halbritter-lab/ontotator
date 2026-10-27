@@ -76,7 +76,9 @@ describe("FindingRow in convert mode (E-c)", () => {
   it("the source row reads “Becomes a modifier of the finding you choose” and is no target", () => {
     const { container } = render(<ul><FindingRow snapshot={snapshot(1)} selected termLabel={() => "Severe"} showLayer={false} axes={[]}
       defaulted={false} onActivate={vi.fn()} convertSource /></ul>);
-    const li = container.querySelector("li")!;
+    // The list holds a plain list item with the row button inside (axe "list").
+    expect(container.querySelector("li")!.getAttribute("role")).toBeNull();
+    const li = container.querySelector("li > [role=button]")!;
     expect(li.textContent).toContain("Becomes a modifier of the finding you choose");
     expect(li.getAttribute("aria-label")).toBeNull();
     expect(li.className).not.toContain("mod-target");

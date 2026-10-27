@@ -1643,7 +1643,7 @@
 }
 
 /* A replaced proposal's "Replaced by" links continue its row in their own list item. */
-.doc-item:has(+ .doc-item--replaced-by) {
+.doc-list-row:has(+ .doc-item--replaced-by) > .doc-item {
   border-bottom: none;
   padding-bottom: 0;
 }
@@ -2225,6 +2225,17 @@ details.case-version-controls > .btn { vertical-align: bottom; }
    sidebar lists. It never takes the findings list's height: it scrolls on its own. */
 .my-submissions { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
 .my-submissions > li { overflow-wrap: anywhere; }
+.my-submissions__pending { color: var(--text-muted); }
+
+/* Submit dialog summary (#51: tokens instead of inline values). */
+.submit-summary { margin: var(--space-2) 0 var(--space-3); padding-left: var(--space-5); font-size: var(--size-md); }
+.submit-summary__open { color: var(--danger); }
+.submit-open-items { padding-left: var(--space-5); }
+
+/* Case screen render error (CaseErrorBoundary). */
+.case-error { max-width: 40rem; margin: var(--space-6) auto; padding: var(--space-6); }
+.case-error__detail { color: var(--text-muted); }
+.case-error__actions { display: flex; gap: var(--space-2); margin-top: var(--space-4); }
 .sidebar > .submission-history { flex: none; max-height: 40%; overflow-y: auto; }
 
 /* Narrow screens: the header and the wrapping case toolbar scroll away with the shell, and the
@@ -2553,6 +2564,12 @@ details.case-version-controls > .btn { vertical-align: bottom; }
   background: var(--surface-raised);
   overflow: hidden;
   flex-shrink: 0;
+}
+
+.case-navigation > .btn-icon {
+  border: none;
+  border-radius: 0;
+  padding: var(--space-1) var(--space-3);
 }
 
 .case-navigation__label {

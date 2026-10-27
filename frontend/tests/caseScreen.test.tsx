@@ -3352,7 +3352,7 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
       // The links follow the row: a role="button" row holds no buttons (axe nested-interactive).
       const row = container.querySelector<HTMLElement>('[data-list-key^="target:"]')!;
       expect(within(row).queryAllByRole("button")).toHaveLength(0);
-      const links = row.nextElementSibling as HTMLElement;
+      const links = row.closest("li")!.nextElementSibling as HTMLElement;
       expect(links.textContent).toContain("Replaced by 2 findings");
       fireEvent.click(within(links).getByRole("button", { name: "“Muskelhypotonie”" }));
       await waitFor(() => expect(container.querySelector('[data-list-key="annotation:split"]')?.classList.contains("selected")).toBe(true));

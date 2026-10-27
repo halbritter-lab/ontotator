@@ -32,9 +32,8 @@ test("Turn into modifier… converts the standalone Severe onto Seizure", async 
   await expect(panel).toContainText("The standalone finding Severe is then deleted; its text “schwere” goes with the modifier.");
   const target = page.getByRole("button", { name: "Attach Severe to Seizure" });
   await expect(target).toBeFocused();
-  // The findings rows are `li role="button"` in a `ul` since before modifiers (list, aria-allowed-role): known, not checked here.
   const axe = await new AxeBuilder({ page }).include(".attach-mention-banner").include(".inspector-pane").include(".doc-list")
-    .disableRules(["list", "aria-allowed-role"]).analyze();
+    .analyze();
   expect(axe.violations, JSON.stringify(axe.violations, null, 2)).toEqual([]);
 
   const converted = page.waitForResponse(r => r.url().endsWith("/commands") && r.request().method() === "POST"

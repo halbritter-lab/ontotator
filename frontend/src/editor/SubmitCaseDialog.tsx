@@ -116,7 +116,7 @@ export function SubmitCaseDialog({
           Cancel
         </Button>
       </>}>
-      <ul style={{ margin: "8px 0 12px", paddingLeft: 18, fontSize: "0.9rem" }}>
+      <ul className="submit-summary">
         {(reviewMode ? resultCount : savedFindingsCount) === 0 ? (
           <li>You are submitting no findings for this text.</li>
         ) : reviewMode ? (
@@ -129,12 +129,12 @@ export function SubmitCaseDialog({
             ].filter(Boolean).join(", ")})
           </li>
         ) : (
-          <li>{plural(savedFindingsCount, "annotation")} in this case</li>
+          <li>{plural(savedFindingsCount, "annotation")} in this text</li>
         )}
         {reviewMode && reviewTargetCount > 0 && (
           <li>
             {reviewTargetCount - openReviewTargetCount} of {plural(reviewTargetCount, "review proposal")} decided
-            {openReviewTargetCount > 0 && <strong style={{ color: "var(--danger)" }}> – {openReviewTargetCount} still open</strong>}
+            {openReviewTargetCount > 0 && <strong className="submit-summary__open"> – {openReviewTargetCount} still open</strong>}
           </li>
         )}
         {pendingReanchorCount > 0 && <li>{plural(unresolvedReanchorCount, "finding")} after text correction still pending</li>}
@@ -142,7 +142,7 @@ export function SubmitCaseDialog({
       {items.length > 0 && <InlineMessage tone={blocking ? "error" : "warning"}>
         <p>{summaryLine(items)}</p>
         {firstCarried && <Button variant="secondary" size="sm" onClick={() => onGoTo(firstCarried)}>Go to first unchecked</Button>}
-        <ul style={{ paddingLeft: 18 }}>
+        <ul className="submit-open-items">
           {listed.map(item => <li key={item.key} data-open-item={item.kind}>
             <strong>{item.term}</strong> <span>{item.line}</span>{" "}
             <Button size="sm" onClick={() => onGoTo(item)}>Go to {item.term}</Button>

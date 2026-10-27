@@ -264,7 +264,6 @@
 
 .cons-group-expanded {
   background: var(--accent-light);
-  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .cons-group-line {

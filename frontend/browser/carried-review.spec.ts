@@ -313,13 +313,11 @@ test("keyboard only: N selects, Go to focuses Mark as checked, C checks; axe has
   const section = carriedSection(page);
   await expect(section.getByRole("button", { name: "Mark as checked", exact: true })).toBeVisible();
 
-  // Axe (WCAG 2.x A/AA) on the editor with the carried section open. The "list" rule is off for
-  // the whole editor only: finding rows have been `<li role="button">` in `ul.doc-list` since
-  // before this plan (reported separately); the carried section itself is checked with every rule.
+  // Axe (WCAG 2.x A/AA) on the editor with the carried section open, and the carried section with every rule.
   const describe = (results: Awaited<ReturnType<AxeBuilder["analyze"]>>) =>
     results.violations.flatMap(v => v.nodes.map(n => `${v.id} ${n.target.join(" ")}: ${n.failureSummary ?? ""}`));
   const wcag = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
-  expect(describe(await new AxeBuilder({ page }).include("main").withTags(wcag).disableRules(["list"]).analyze())).toEqual([]);
+  expect(describe(await new AxeBuilder({ page }).include("main").withTags(wcag).analyze())).toEqual([]);
   expect(describe(await new AxeBuilder({ page }).include(".carried-section").analyze())).toEqual([]);
 
   // Toolbar submit → dialog → "Go to Seizure", by keyboard.

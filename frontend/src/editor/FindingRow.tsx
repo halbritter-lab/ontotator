@@ -60,8 +60,9 @@ export function FindingRow({ snapshot: annSnap, selected: isSelected, termLabel,
   const findingName = termLabel(layerId, termId) ?? termId;
   const className = ["doc-item", isSelected && !attachTarget && "selected", attachTarget && "mod-target", attachTarget?.active && "mod-target--active"]
     .filter(Boolean).join(" ");
+  // The button sits inside the list item: a list may only hold list items (axe "list").
   return (
-    <li
+    <li className="doc-list-row"><div
       data-list-key={`annotation:${annSnap.annotation.annotation_id}`}
       className={className}
       role="button"
@@ -103,6 +104,6 @@ export function FindingRow({ snapshot: annSnap, selected: isSelected, termLabel,
         </div>)}
       </dl>}
       {children}
-    </li>
+    </div></li>
   );
 }

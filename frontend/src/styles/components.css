@@ -775,6 +775,9 @@ ul.task-counts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space
 .segment { border-bottom: 2px solid transparent; }
 .segment[aria-current="page"] { border-bottom-color: currentColor; text-decoration: underline; font-weight: var(--weight-strong); }
 .target-min { min-width: 24px; min-height: 24px; }
+/* Ontologies "Pinned by": each project link a 24 px target (axe target-size). */
+.pinned-projects { margin: 0; padding: 0; list-style: none; }
+.pinned-projects a { display: inline-flex; align-items: center; min-height: 24px; }
 @media (prefers-reduced-motion: reduce) {
   .disclosure-chevron { transition: none; }
   .data-table-expanded > td { animation: none; }

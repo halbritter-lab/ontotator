@@ -20,13 +20,14 @@ export function PlaceholderRow({ state, termLabel, termText, instruction, select
 }): JSX.Element {
   const badge = checkStateBadge(state.variant);
   const dismissed = state.variant === "dismissed";
-  const onKeyDown = (event: KeyboardEvent<HTMLLIElement>) => {
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
     onActivate();
   };
+  // The button sits inside the list item: a list may only hold list items (axe "list").
   return (
-    <li
+    <li className="doc-list-row"><div
       role="button"
       tabIndex={0}
       aria-pressed={selected}
@@ -47,6 +48,6 @@ export function PlaceholderRow({ state, termLabel, termText, instruction, select
         {linkedTo && <p className="carried-placeholder__note">Linked to {linkedTo}</p>}
         {state.unchecked && instruction && <p className="carried-instruction">{instruction}</p>}
       </div>
-    </li>
+    </div></li>
   );
 }

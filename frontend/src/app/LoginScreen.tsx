@@ -250,7 +250,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ notice, overlay = fals
     );
   }
   return (
-    <main className="session-lost" aria-label="Log in">
+    <main className="session-lost" aria-label={view === "code" ? "Set your password" : "Log in"}>
       {card}
     </main>
   );
