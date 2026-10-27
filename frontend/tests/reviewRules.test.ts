@@ -70,10 +70,10 @@ describe("translation review English labels", () => {
     });
   });
 
-  it("covers all eight issue codes and preserves the specified rationale message", () => {
+  it("covers all nine issue codes and preserves the specified rationale message", () => {
     expect(Object.keys(issueMessages).sort()).toEqual([
       "TEXT_EMPTY", "TEXT_CHANGED", "CLINICAL_CHANGE_NOT_ALLOWED", "TEXT_UNCHANGED",
-      "CLINICAL_CHANGE_REQUIRED", "CATEGORY_REQUIRED", "RATIONALE_REQUIRED", "CATEGORIES_WITHOUT_CHANGE",
+      "CLINICAL_CHANGE_REQUIRED", "CATEGORY_REQUIRED", "RATIONALE_REQUIRED", "CHECK_RATIONALE_REQUIRED", "CATEGORIES_WITHOUT_CHANGE",
     ].sort());
     expect(issueMessages.RATIONALE_REQUIRED).toBe("A clinical change needs a rationale.");
     for (const message of Object.values(issueMessages)) expect(message).toMatch(/\S/);
@@ -85,5 +85,12 @@ describe("textDiffers", () => {
     expect(textDiffers("a\nb", "a\r\nb")).toBe(false);
     expect(textDiffers("a\u00e9", "\ufeffae\u0301")).toBe(false);
     expect(textDiffers("a", "b")).toBe(true);
+  });
+  it("accepting despite a failed automatic check needs a rationale (R-12)", () => {
+    expect(checkReview(unchanged, "A", "A", true)).toEqual(["CHECK_RATIONALE_REQUIRED"]);
+    expect(checkReview({ decision: "accepted_corrected", clinical_change: false }, "A", "B", true)).toEqual([]);
+    expect(checkReview({ ...unchanged, rationale: "Units are correct." }, "A", "A", true)).toEqual([]);
+    expect(checkReview(unchanged, "A", "A")).toEqual([]);
+    expect(issueMessages.CHECK_RATIONALE_REQUIRED).toMatch(/automatic check failed/);
   });
 });

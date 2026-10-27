@@ -431,7 +431,7 @@ class TranslationReviewService:
                 conn, access, assignment_id, structural=True
             )
             self._editable(assignment)
-            variant, _, _, variants = self._context(assignment)
+            variant, ancestor, _, variants = self._context(assignment)
             draft = self._draft(conn, assignment, pid, variant)
             if draft.revision != expected_revision:
                 raise RevisionConflict()
@@ -452,7 +452,12 @@ class TranslationReviewService:
                 raise DomainError(
                     "REVIEW_INVALID", {"issues": [LEAD_CORRECTION_DECISION]}
                 )
-            issues = check_review(form, machine_text=machine, proposed_text=draft.text)
+            issues = check_review(
+                form,
+                machine_text=machine,
+                proposed_text=draft.text,
+                failed_checks=bool(failed_translation_checks(ancestor.translation)),
+            )
             if issues:
                 raise DomainError("REVIEW_INVALID", {"issues": issues})
             before = variant.translation_status

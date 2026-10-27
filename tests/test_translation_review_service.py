@@ -108,7 +108,8 @@ def save(env, decision="accepted_unchanged", text="Übersetzt", **form):
         env.ids["alice"],
         expected_revision=workspace.draft.revision,
         text=text,
-        form={"decision": decision, "clinical_change": False, **form},
+        # The fixture's version failed a check: accepting it unchanged needs a reason.
+        form={"decision": decision, "clinical_change": False, "rationale": "Checked.", **form},
     )
 
 
@@ -159,7 +160,7 @@ def test_open_exact_text_source_checks_comparisons_and_raw_revision_draft(review
 @pytest.mark.parametrize(
     "decision,clinical,text,categories,rationale,status,created",
     [
-        ("accepted_unchanged", False, "Übersetzt", [], None, "accepted", False),
+        ("accepted_unchanged", False, "Übersetzt", [], "Checked.", "accepted", False),
         ("accepted_corrected", False, "Korrigiert", [], None, "reviewed", True),
         ("query", True, "Übersetzt", ["source"], "Question", "reviewed", False),
         ("rejected", True, "Übersetzt", ["value"], "Wrong", "reviewed", False),
@@ -269,7 +270,11 @@ def test_submitted_open_does_not_create_or_reset_draft_and_consumed_revision_sur
             insert(TranslationReviewDraftRow).values(
                 assignment_id=env.ids["alice"],
                 text="Übersetzt",
-                form={"decision": "accepted_unchanged", "clinical_change": False},
+                form={
+                    "decision": "accepted_unchanged",
+                    "clinical_change": False,
+                    "rationale": "Checked.",
+                },
                 revision=rev + 1,
             )
         )
@@ -450,7 +455,9 @@ def test_two_corrected_submits_serialize_to_one_child_and_one_stale_refusal(revi
 
 def test_invalid_form_changes_nothing(review_env):
     env = review_env
-    rev = save(env, "accepted_unchanged", "changed", clinical_change=True)
+    rev = save(
+        env, "accepted_unchanged", "changed", clinical_change=True, rationale=None
+    )
     with pytest.raises(DomainError) as raised:
         env.service.submit(
             env.accesses["alice"], env.ids["alice"], expected_revision=rev

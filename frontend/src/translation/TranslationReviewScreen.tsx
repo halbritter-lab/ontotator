@@ -145,7 +145,7 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
   const record = submitted ?? (immutableReadOnly ? workspace.submitted_record : null);
   const readOnly = immutableReadOnly || submitted !== null || held; readOnlyRef.current = readOnly;
   const text = record?.proposed_text ?? draft.text, rawForm = record ? recordForm(record) : draft.form;
-  const form = typedForm(rawForm), issues = form ? checkReview(form, workspace.text, text) : [];
+  const form = typedForm(rawForm), issues = form ? checkReview(form, workspace.text, text, workspace.failed_checks.length > 0) : [];
   const comparison = comparisonOpen ? workspace.comparisons.find(row => row.variant.document_id === comparisonId) : undefined;
   const comparisonName = (row: ReviewWorkspace["comparisons"][number]) => `${row.variant.external_id} ${row.variant.language}`;
   /** The editable translation is shown: it is the fixed leader and its pairing waits for a recompute (spec 2.2, 2.3). */
@@ -382,7 +382,7 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
     && saveState === "saved" && !saver.current?.hasUnsavedChanges;
   const submit = async (cause?: SourceObligationView): Promise<boolean> => {
     const currentForm = typedForm(draftRef.current.form);
-    if (operation.current || readOnlyRef.current || !currentForm || checkReview(currentForm, workspace.text, draftRef.current.text).length || !nonblank(qualification)
+    if (operation.current || readOnlyRef.current || !currentForm || checkReview(currentForm, workspace.text, draftRef.current.text, workspace.failed_checks.length > 0).length || !nonblank(qualification)
       || (cause && !['accepted_unchanged', 'accepted_corrected'].includes(currentForm.decision))) return false;
     operation.current = true; setBusy(true); setError(null); setServerIssues([]);
     try {
@@ -677,7 +677,8 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
       {submitButton}
     </div>}
     {form && <ConfirmDialog focusConfirm open={confirming} title="Submit this review?" confirmLabel="Submit review" cancelLabel="Keep editing" busy={busy}
-      message={<SubmitSummary decision={form.decision} clinical={form.clinical_change} categories={form.categories ?? []} rationale={form.rationale} />}
+      message={<SubmitSummary decision={form.decision} clinical={form.clinical_change} categories={form.categories ?? []} rationale={form.rationale}
+        failedChecks={form.decision === "accepted_unchanged" ? workspace.failed_checks.map(check => check.code) : []} />}
       onCancel={() => setConfirming(false)} onConfirm={() => { void submit(); }} />}
     {leave && <Dialog open title={leave.kind === "logout" ? "Unsaved changes" : "Changes not saved"} onClose={busy ? undefined : () => closeLeave(false)} footer={<>
       <Button disabled={busy} onClick={() => closeLeave(false)}>Cancel</Button>

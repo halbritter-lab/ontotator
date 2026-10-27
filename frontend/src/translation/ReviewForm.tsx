@@ -33,12 +33,12 @@ const categories = Object.keys(categoryLabels) as ClinicalCategory[];
  * | Decision                  | Clinically relevant change | Categories            | Rationale                 |
  * | ------------------------- | -------------------------- | --------------------- | ------------------------- |
  * | none                      | hidden                     | hidden                | hidden                    |
- * | Accepted unchanged        | hidden (*)                 | hidden (*)            | shown, optional (**)      |
+ * | Accepted unchanged        | hidden (*)                 | hidden (*)            | optional (**)             |
  * | Accepted with corrections | checkbox                   | when ticked, required | optional, required ticked |
  * | Query / Rejected          | fact line (always yes)     | shown, required       | shown, required           |
  *
  * (*) Shown while a stored draft sets it, so a value that blocks submission can be cleared.
- * (**) The hint asks for a note when automatic checks failed.
+ * (**) Required when automatic checks failed (R-12).
  * The rationale also stays visible whenever it holds text.
  */
 export function ReviewForm({ value, issues, onChange, onChooseDecision, failedCheckCount = 0, autoNote = null, readOnly = false, decisions = allDecisions }: ReviewFormProps) {

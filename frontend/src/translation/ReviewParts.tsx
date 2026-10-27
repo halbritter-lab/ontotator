@@ -93,10 +93,13 @@ const excerpt = (text: string, limit = 160) => {
 };
 
 /** Body of the submit confirmation: what is decided and what follows. */
-export function SubmitSummary({ decision, clinical, categories, rationale }: {
+export function SubmitSummary({ decision, clinical, categories, rationale, failedChecks = [] }: {
   decision: ReviewDecisionCode; clinical: boolean; categories: readonly ClinicalCategory[]; rationale: string | null | undefined;
+  /** Failed automatic checks of an accepted translation (R-12). */
+  failedChecks?: readonly string[];
 }): JSX.Element {
   return <div className="review-confirm">
+    {failedChecks.length > 0 && <p><strong>{checkBandText(failedChecks)}.</strong></p>}
     <dl className="review-summary-list">
       <div><dt>Decision</dt><dd>{decisionLabels[decision]}</dd></div>
       <div><dt>Clinically relevant change</dt><dd>{clinical ? `Yes: ${categoryList(categories)}` : "No"}</dd></div>

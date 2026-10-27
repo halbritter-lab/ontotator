@@ -26,7 +26,11 @@ class ReviewForm(BaseModel):
 
 
 def check_review(
-    form: ReviewForm, *, machine_text: str, proposed_text: str
+    form: ReviewForm,
+    *,
+    machine_text: str,
+    proposed_text: str,
+    failed_checks: bool = False,
 ) -> list[str]:
     """Return all issues in policy order, comparing canonical texts without mutation."""
     proposed = canonical_text(proposed_text)
@@ -50,6 +54,13 @@ def check_review(
         issues.append("CATEGORY_REQUIRED")
     if form.clinical_change and not (form.rationale or "").strip():
         issues.append("RATIONALE_REQUIRED")
+    # R-12: accepting unchanged despite a failed automatic check needs a reason.
+    elif (
+        failed_checks
+        and form.decision == "accepted_unchanged"
+        and not (form.rationale or "").strip()
+    ):
+        issues.append("CHECK_RATIONALE_REQUIRED")
     if not form.clinical_change and form.categories:
         issues.append("CATEGORIES_WITHOUT_CHANGE")
     return issues

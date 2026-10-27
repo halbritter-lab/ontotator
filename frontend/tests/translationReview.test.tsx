@@ -132,6 +132,8 @@ it.each<ReviewDecisionCode>(["accepted_unchanged", "accepted_corrected", "query"
   await screen.findByRole("textbox", { name: "Translation (de)" }); vi.useFakeTimers();
   fireEvent.click(screen.getByRole("radio", { name: decisionLabels[decision] }));
   if (decision === "accepted_corrected") fireEvent.change(screen.getByRole("textbox", { name: "Translation (de)" }), { target: { value: text } });
+  // The fixture failed an automatic check: accepting it unchanged needs a rationale (R-12).
+  if (decision === "accepted_unchanged") fireEvent.change(screen.getByRole("textbox", { name: "Rationale" }), { target: { value: "Units checked" } });
   if (clinical) {
     expect(screen.queryByRole("checkbox", { name: "Clinically relevant change" })).toBeNull();
     fireEvent.click(screen.getByRole("checkbox", { name: "Number or unit" }));
@@ -676,6 +678,7 @@ it("works with coupling off and while busy", async () => {
   vi.useFakeTimers();
   submit.mockReturnValue(new Promise(() => {}));
   fireEvent.click(radio("Accepted unchanged"));
+  fireEvent.change(screen.getByRole("textbox", { name: "Rationale" }), { target: { value: "Units checked" } });
   await clock();
   await act(async () => { fireEvent.click(submitButton()); });
   await act(async () => { fireEvent.click(within(screen.getByRole("dialog", { name: "Submit this review?" })).getByRole("button", { name: "Submit review" })); });
@@ -732,10 +735,15 @@ it("always lists Ctrl+Enter in help; it explains a blocked submit and otherwise 
   expect(document.activeElement?.textContent).toBe("Choose a decision to submit.");
   vi.useFakeTimers();
   fireEvent.click(screen.getByRole("radio", { name: "Accepted unchanged" })); await clock();
+  // R-12: the failed check blocks an unchanged accept until the rationale says why.
+  expect(submitButton().getAttribute("aria-disabled")).toBe("true");
+  expect(screen.getByText(issueMessages.CHECK_RATIONALE_REQUIRED)).toBeDefined();
+  fireEvent.change(screen.getByRole("textbox", { name: "Rationale" }), { target: { value: "Units checked" } }); await clock();
   expect(submitButton().getAttribute("aria-disabled")).toBeNull();
   (document.activeElement as HTMLElement | null)?.blur();
   fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
   const dialog = screen.getByRole("dialog", { name: "Submit this review?" });
+  expect(dialog.textContent).toContain("1 automatic check failed: Units added in translation.");
   expect(dialog.textContent).toContain(decisionConsequences.accepted_unchanged);
   expect(dialog.textContent).toContain("A submitted review cannot be changed later.");
   fireEvent.keyDown(dialog, { key: "Escape" });
@@ -1105,6 +1113,7 @@ const taskSummary = (assignment_id: number, overrides: Partial<TaskSummary> = {}
 async function submitAcceptedUnchanged() {
   await screen.findByRole("textbox", { name: "Translation (de)" }); vi.useFakeTimers();
   fireEvent.click(screen.getByRole("radio", { name: decisionLabels.accepted_unchanged }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Rationale" }), { target: { value: "Units checked" } });
   await clock();
   await confirmSubmit();
   await clock(0);

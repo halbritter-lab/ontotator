@@ -72,7 +72,7 @@ describe("translation review labels", () => {
   });
   it("selects the rationale hint", () => {
     expect(rationaleHint("accepted_unchanged", false, 0)).toBe("Optional.");
-    expect(rationaleHint("accepted_unchanged", false, 2)).toBe("Optional. Say why the flagged difference is correct.");
+    expect(rationaleHint("accepted_unchanged", false, 2)).toBe("Required: an automatic check failed. Say why the flagged difference is correct.");
     expect(rationaleHint("accepted_corrected", false, 2)).toBe("Optional.");
     expect(rationaleHint(undefined, false, 1)).toBe("Optional.");
     expect(rationaleHint("query", true, 0)).toBe("Required for a clinically relevant change.");

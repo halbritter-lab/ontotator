@@ -2,7 +2,7 @@
 export type ReviewDecisionCode = "accepted_unchanged" | "accepted_corrected" | "query" | "rejected";
 export type ClinicalCategory = "omission" | "addition" | "assertion" | "value" | "anatomy" | "terminology" | "source";
 export type IssueCode = "TEXT_EMPTY" | "TEXT_CHANGED" | "CLINICAL_CHANGE_NOT_ALLOWED" | "TEXT_UNCHANGED"
-  | "CLINICAL_CHANGE_REQUIRED" | "CATEGORY_REQUIRED" | "RATIONALE_REQUIRED" | "CATEGORIES_WITHOUT_CHANGE";
+  | "CLINICAL_CHANGE_REQUIRED" | "CATEGORY_REQUIRED" | "RATIONALE_REQUIRED" | "CHECK_RATIONALE_REQUIRED" | "CATEGORIES_WITHOUT_CHANGE";
 
 export interface ReviewForm {
   readonly decision: ReviewDecisionCode;
@@ -23,7 +23,8 @@ export function textDiffers(machineText: string, text: string): boolean {
   return canonicalText(text) !== canonicalText(machineText);
 }
 
-export function checkReview(form: ReviewForm, machineText: string, proposedText: string): IssueCode[] {
+/** `failedChecks`: the version failed an automatic check, so accepting it unchanged needs a rationale (R-12). */
+export function checkReview(form: ReviewForm, machineText: string, proposedText: string, failedChecks = false): IssueCode[] {
   const proposed = canonicalText(proposedText);
   const changed = proposed !== canonicalText(machineText);
   const issues: IssueCode[] = [];
@@ -44,6 +45,7 @@ export function checkReview(form: ReviewForm, machineText: string, proposedText:
   const hasCategories = (form.categories?.length ?? 0) > 0;
   if (form.clinical_change && !hasCategories) issues.push("CATEGORY_REQUIRED");
   if (form.clinical_change && pythonWhitespaceOnly.test(form.rationale ?? "")) issues.push("RATIONALE_REQUIRED");
+  else if (failedChecks && form.decision === "accepted_unchanged" && pythonWhitespaceOnly.test(form.rationale ?? "")) issues.push("CHECK_RATIONALE_REQUIRED");
   if (!form.clinical_change && hasCategories) issues.push("CATEGORIES_WITHOUT_CHANGE");
   return issues;
 }

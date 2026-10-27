@@ -62,6 +62,23 @@ def test_shared_vectors_cover_every_decision_and_issue():
     }
 
 
+def test_accepting_unchanged_despite_a_failed_check_needs_a_rationale():
+    form = ReviewForm(decision="accepted_unchanged", clinical_change=False)
+    assert check_review(
+        form, machine_text="A", proposed_text="A", failed_checks=True
+    ) == ["CHECK_RATIONALE_REQUIRED"]
+    assert not check_review(form, machine_text="A", proposed_text="A")
+    reasoned = form.model_copy(update={"rationale": "Units are correct."})
+    assert not check_review(
+        reasoned, machine_text="A", proposed_text="A", failed_checks=True
+    )
+    # A correction is the reviewer's answer to the check.
+    corrected = ReviewForm(decision="accepted_corrected", clinical_change=False)
+    assert not check_review(
+        corrected, machine_text="A", proposed_text="B", failed_checks=True
+    )
+
+
 def test_texts_are_compared_canonically():
     machine = "R\u00e9sum\u00e9\nA"
     proposed = "\ufeff\ufeffRe\u0301sume\u0301\r\nA"

@@ -154,7 +154,11 @@ def test_no_change_resolves_only_exact_displayed_source_edge(review_env, correct
         followup.id,
         expected_revision=opened.draft.revision,
         text=opened.text,
-        form={"decision": "accepted_unchanged", "clinical_change": False},
+        form={
+            "decision": "accepted_unchanged",
+            "clinical_change": False,
+            "rationale": "Checked.",
+        },
     )
     (last,) = service.obligations(env.accesses["alice"], followup.id)
     finished = service.resolve(

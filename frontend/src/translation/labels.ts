@@ -27,6 +27,7 @@ export const issueMessages: Readonly<Record<IssueCode, string>> = {
   CLINICAL_CHANGE_REQUIRED: "A query or rejection needs a clinical change.",
   CATEGORY_REQUIRED: "A clinical change needs a category.",
   RATIONALE_REQUIRED: "A clinical change needs a rationale.",
+  CHECK_RATIONALE_REQUIRED: "An automatic check failed. Say in the rationale why you accept the translation unchanged.",
   CATEGORIES_WITHOUT_CHANGE: "Categories need a clinical change.",
 };
 
@@ -63,7 +64,7 @@ export const clinicalChangeFacts: Readonly<Record<"query" | "rejected", string>>
 /** Hint under "Rationale"; it asks for a note when Accepted unchanged overrides failed checks. */
 export function rationaleHint(decision: ReviewDecisionCode | undefined, clinical: boolean, failedCheckCount: number): string {
   if (clinical) return "Required for a clinically relevant change.";
-  if (decision === "accepted_unchanged" && failedCheckCount > 0) return "Optional. Say why the flagged difference is correct.";
+  if (decision === "accepted_unchanged" && failedCheckCount > 0) return "Required: an automatic check failed. Say why the flagged difference is correct.";
   return "Optional.";
 }
 
