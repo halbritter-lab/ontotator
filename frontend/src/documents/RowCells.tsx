@@ -28,6 +28,7 @@ import {
 import { isActiveRow, shortName, stageText, versionMarkerText, waitingOnText, type StageName } from "./stageLabels";
 import { annotationState, finalizationState, translationState } from "./textCard/cardModel";
 import { LanguageFlag } from "../ui/LanguageTag";
+import { StageSymbol, type StageTone } from "../ui/StageCell";
 
 /** Longest ID shown in full in a cell; longer IDs get a middle ellipsis with the full value in `title`. */
 export const ID_DISPLAY_MAX = 24;
@@ -390,24 +391,41 @@ export function stageCellText(row: DocumentRowView, stage: StageName): string {
 }
 
 /**
+ * Glyph and tone of a row's stage cell. A running consolidation belongs to Finalization ("◐ consolidating …"); the
+ * Annotation cell is complete then once every planned submission is in. "waiting" always has its ○.
+ */
+function rowStageGlyph(row: DocumentRowView, stage: StageName, state: string): { symbol: string; tone: StageTone } {
+  const cell = row.stages?.[stage];
+  if (!cell || (!isActiveRow(row) && stage !== "review")) return { symbol: "", tone: cell?.tone ?? "none" };
+  const annotation = row.stages?.annotation;
+  if (annotation?.state === "consolidating") {
+    const { submitted, total } = annotation.detail;
+    if (stage === "final") return { symbol: "◐", tone: "running" };
+    if (stage === "annotation" && (submitted == null || total == null || submitted >= total)) return { symbol: "✓", tone: "done" };
+  }
+  if (stage === "final" && state === "waiting") return { symbol: "○", tone: "waiting" };
+  return { symbol: stageText(stage, cell, row).symbol, tone: cell.tone };
+}
+
+/**
  * One stage cell of the row on one line: glyph, the card's short state and a short "who" in grey, cut with an
  * ellipsis; `title` holds the full text. Rows outside the plan are muted (VD1). The Annotation cell adds the robot icon.
  */
 export function RowStageCell({ row, stage }: { row: DocumentRowView; stage: StageName }): JSX.Element {
-  const cell = row.stages?.[stage];
-  const outside = !isActiveRow(row) && stage !== "review";
-  const symbol = cell && !outside ? stageText(stage, cell, row).symbol : "";
   const people = stagePeople(row, stage);
   const state = stageCellText(row, stage);
+  const { symbol, tone } = rowStageGlyph(row, stage, state);
   // X5: findings flagged "guidelines unclear" in the submitted consolidation.
   const flagged = stage === "final" && (row.flagged_unclear ?? 0) > 0 ? `${row.flagged_unclear} flagged` : "";
   const who = [people, flagged].filter(Boolean).join(", ");
-  const full = who ? `${state} (${who})` : state;
-  const className = ["documents-status", "stage-cell", `stage-cell--${cell?.tone ?? "none"}`, !isActiveRow(row) && "stage-cell--muted"].filter(Boolean).join(" ");
+  // Annotators named in the cell have not submitted yet; "(Ben)" after "1 of 2 submitted" read like Ben had.
+  const suffix = !who ? "" : stage === "annotation" ? ` · open: ${who}` : ` (${who})`;
+  const full = state + suffix;
+  const className = ["documents-status", "stage-cell", `stage-cell--${tone}`, !isActiveRow(row) && "stage-cell--muted"].filter(Boolean).join(" ");
   return <span className="documents-status-cell">
     <span className={className} title={full}>
-      {symbol && <><span className="stage-cell-symbol" aria-hidden="true">{symbol}</span>{" "}</>}
-      {state}{who && <span className="documents-status-who">{` (${who})`}</span>}
+      {symbol && <><StageSymbol symbol={symbol} />{" "}</>}
+      {state}{suffix && <span className="documents-status-who">{suffix}</span>}
     </span>
     {stage === "annotation" && <ProposalsIcon row={row} />}
   </span>;

@@ -628,7 +628,7 @@ it("renders the new table with stage columns", async () => {
   expect(within(decision).getByRole("button", { name: "Accept result…, case-107 de" })).toBeTruthy();
   const running = rowHeader("case-106 de").closest("tr")!;
   expect(running.textContent).toContain("1 of 2 submitted");
-  expect(running.textContent).toContain("(Tom Reis)");
+  expect(running.textContent).toContain("1 of 2 submitted · open: Tom Reis");
   expect(running.textContent).toContain("Ana Weber, Tom Reis");
   // No group disclosure, no Plan / Owner columns.
   expect(screen.queryByRole("button", { name: /^case-107, / })).toBeNull();

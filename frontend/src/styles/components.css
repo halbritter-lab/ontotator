@@ -907,6 +907,7 @@ ul.task-counts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space
 .stage-cell { display: inline-flex; flex-direction: column; gap: 2px; min-width: 0; }
 .stage-cell-status { font-weight: var(--weight-strong); white-space: nowrap; }
 .stage-cell-symbol { display: inline-block; min-width: 1em; text-align: center; }
+.stage-cell-symbol svg { width: 0.8em; height: 0.8em; vertical-align: -0.08em; }
 .stage-cell-detail { color: var(--text-muted); font-size: var(--size-sm); line-height: var(--leading-sm); overflow-wrap: anywhere; }
 .stage-cell--none .stage-cell-status,
 .stage-cell--undecided .stage-cell-status,

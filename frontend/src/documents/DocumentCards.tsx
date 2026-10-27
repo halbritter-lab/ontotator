@@ -18,6 +18,7 @@ import { documentsGroupId, documentsRowId, LastActivityCell, NewBadge, RowOpenLi
 import { StagePopover } from "./StagePopover";
 import { isActiveRow, stageText, waitingOnText, type StageName } from "./stageLabels";
 import { LanguageFlag } from "../ui/LanguageTag";
+import { StageSymbol } from "../ui/StageCell";
 
 export interface DocumentCardsProps {
   page: DocumentRowsPage;
@@ -86,7 +87,7 @@ function StageLine({ row, stage, title, sourceLanguage, projectKey, onOpenPanel,
   const flagged = stage === "final" ? row.flagged_unclear ?? 0 : 0;
   const flagId = useId();
   const describedBy = [text.detail && detailId, flagged > 0 && flagId].filter(Boolean).join(" ");
-  const status = <span className="stage-cell-status">{text.symbol && <><span className="stage-cell-symbol" aria-hidden="true">{text.symbol}</span>{" "}</>}{text.word}</span>;
+  const status = <span className="stage-cell-status">{text.symbol && <><StageSymbol symbol={text.symbol} />{" "}</>}{text.word}</span>;
   const openDetails = () => {
     setOpen(false);
     if (anchor.current) onOpenPanel?.(row, { stage, opener: anchor.current });

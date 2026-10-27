@@ -12,13 +12,24 @@ it("symbol is aria-hidden and the word carries the meaning", () => {
   const { container } = render(<StageCell symbol="◐" word="In progress" detail="Tom Reis" tone="running" />);
   const cell = container.firstElementChild as HTMLElement;
   const symbol = cell.querySelector(".stage-cell-symbol")!;
-  expect(symbol.textContent).toBe("◐");
+  expect(symbol.querySelector("svg circle")).not.toBeNull();
   expect(symbol.getAttribute("aria-hidden")).toBe("true");
-  expect(cell.querySelector(".stage-cell-status")?.textContent).toBe("◐ In progress");
+  expect(cell.querySelector(".stage-cell-status")?.textContent).toBe(" In progress");
   expect(cell.querySelector(".stage-cell-detail")?.textContent).toBe("Tom Reis");
   const exposed = cell.cloneNode(true) as HTMLElement;
   exposed.querySelectorAll("[aria-hidden=true]").forEach((node) => node.remove());
   expect(exposed.textContent?.trim()).toBe("In progressTom Reis");
+});
+
+it("draws ○ ◐ ● as SVG circles of one size and keeps other glyphs as text", () => {
+  for (const symbol of ["○", "◐", "●"]) {
+    const { container, unmount } = render(<StageCell symbol={symbol} word="x" tone="waiting" />);
+    expect(container.querySelector(".stage-cell-symbol svg")?.getAttribute("viewBox")).toBe("0 0 16 16");
+    unmount();
+  }
+  const { container } = render(<StageCell symbol="✓" word="Final" tone="done" />);
+  expect(container.querySelector(".stage-cell-symbol")?.textContent).toBe("✓");
+  expect(css).toMatch(/\.stage-cell-symbol svg \{[^}]*width: 0\.8em; height: 0\.8em/);
 });
 
 it("omits the second line without detail", () => {
