@@ -17,10 +17,10 @@ export function ReportAnswerNotice({ projectKey, reportId, held, onNavigate }: {
   }, [reportId]);
   if (!report?.answered) return null;
   const route: Route = { name: "projectProblemReport", key: projectKey, reportId };
-  return <InlineMessage tone="info"><span>{answerNotice(report, held)}</span>
+  return <InlineMessage tone="info"><span>{answerNotice(report, held)}{" "}
     <a href={routeHref(route)} onClick={event => {
       if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       event.preventDefault(); onNavigate(route);
-    }}>Open the answer</a>
+    }}>Open the answer</a></span>
   </InlineMessage>;
 }

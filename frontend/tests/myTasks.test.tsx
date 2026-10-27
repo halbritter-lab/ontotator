@@ -148,11 +148,11 @@ describe("My tasks component", () => {
     const rows = await screen.findAllByTestId("task-row");
     // The row keeps only the badge; the sentence opens from its info button.
     expect(rows[0].textContent).not.toContain("reopened this task");
-    expect(within(rows[2]).queryByRole("button", { name: "Why reopened" })).toBeNull();
-    fireEvent.click(within(rows[0]).getByRole("button", { name: "Why reopened" }));
+    expect(within(rows[2]).queryByRole("button", { name: "Reopened, why" })).toBeNull();
+    fireEvent.click(within(rows[0]).getByRole("button", { name: "Reopened, why" }));
     expect((await screen.findByRole("dialog", { name: "Why reopened" })).textContent).toMatch(/The project lead reopened this task on .+\. Reason: Check the onset\./);
-    fireEvent.click(within(rows[0]).getByRole("button", { name: "Why reopened" }));
-    fireEvent.click(within(rows[1]).getByRole("button", { name: "Why reopened" }));
+    fireEvent.click(within(rows[0]).getByRole("button", { name: "Reopened, why" }));
+    fireEvent.click(within(rows[1]).getByRole("button", { name: "Reopened, why" }));
     expect((await screen.findByRole("dialog", { name: "Why reopened" })).textContent).toBe("The project lead reopened this task. No reason given.");
   });
 

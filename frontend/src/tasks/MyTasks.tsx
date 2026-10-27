@@ -6,7 +6,7 @@ import { assignmentStatusLabels, formatDateTime, reopenNotice, roleLabels, taskL
 import { taskText } from "../app/identity";
 import { failedChecksTitle } from "../translation/labels";
 import { IconInfo, IconWarning } from "../ui/icons";
-import { Button, DataTable, EmptyState, IconButton, InlineMessage, Popover, Select, StatusBadge, tabId, Tabs, type Column } from "../ui";
+import { Button, DataTable, EmptyState, InlineMessage, Popover, Select, StatusBadge, tabId, Tabs, type Column } from "../ui";
 import { LanguageText } from "../ui/LanguageTag";
 import { AssignedDate } from "../ui/AssignedDate";
 import { onSpaceActivate } from "../ui/spaceActivates";
@@ -63,14 +63,14 @@ export function memberHint(members: Pick<ProjectSummary, "name" | "roles">[]): s
 
 const answerRoute = (task: TaskSummary, reportId: string): Route => ({ name: "projectProblemReport", key: task.project_key, reportId });
 
-/** "Reopened" with an info button whose popover says when and why (#34): the row stays one badge high. */
+/** The "Reopened" badge itself opens a popover with when and why (#34): the row stays one badge high. */
 function ReopenedInfo({ notice }: { notice: string }): JSX.Element {
   const [open, setOpen] = useState(false);
   const anchor = useRef<HTMLButtonElement>(null);
   const id = useId();
   return <>
-    <IconButton ref={anchor} size="sm" variant="quiet" className="task-reopen-info" icon={<IconInfo />} label="Why reopened"
-      aria-expanded={open} aria-controls={open ? id : undefined} onClick={() => setOpen(value => !value)} />
+    <button ref={anchor} type="button" className="task-reopen-info" aria-label="Reopened, why" aria-expanded={open} aria-controls={open ? id : undefined}
+      onClick={() => setOpen(value => !value)}><StatusBadge status="reopened">{assignmentStatusLabels.reopened} <IconInfo /></StatusBadge></button>
     <Popover open={open} anchorRef={anchor} label="Why reopened" width={320} onClose={() => setOpen(false)}>
       <p id={id}>{notice}</p>
     </Popover>
@@ -185,8 +185,7 @@ export function MyTasks({ project, status, projects, onNavigate, username }: MyT
       {failedChecks(task) > 0 && <span className="task-check-flag"><IconWarning /> {failedChecksTitle(failedChecks(task))}</span>}
     </> },
     { id: "status", header: "Status", cell: task => <>
-      <StatusBadge status={task.status}>{assignmentStatusLabels[task.status]}</StatusBadge>
-      {reopenNotice(task) && <ReopenedInfo notice={reopenNotice(task)!} />}
+      {reopenNotice(task) ? <ReopenedInfo notice={reopenNotice(task)!} /> : <StatusBadge status={task.status}>{assignmentStatusLabels[task.status]}</StatusBadge>}
       {task.report_answered && (task.answered_report_id ? <a className="task-answer-link" href={routeHref(answerRoute(task, task.answered_report_id))} onClick={event => {
         if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
         event.preventDefault(); onNavigate(answerRoute(task, task.answered_report_id!));
