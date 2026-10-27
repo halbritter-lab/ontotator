@@ -7,7 +7,10 @@ pytest_plugins = ("test_assignment_round_open_api", "problem_report_team")
 
 def _answered(client, task_id: int) -> bool:
     tasks = client.get("/api/v1/me/tasks").json()
-    return next(t for t in tasks if t["assignment_id"] == task_id)["report_answered"]
+    task = next(t for t in tasks if t["assignment_id"] == task_id)
+    # The badge links the answered report; no answer, no link.
+    assert (task["answered_report_id"] is not None) is task["report_answered"]
+    return task["report_answered"]
 
 
 def test_lead_answer_shows_until_the_reporter_opens_the_report(team):
@@ -23,6 +26,13 @@ def test_lead_answer_shows_until_the_reporter_opens_the_report(team):
     assert _answered(team.bob, team.bob_task.id) is False
     act(team.lead, rid, 3, "resolve", "Source fixed")
     assert _answered(team.bob, team.bob_task.id) is True
+    tasks = team.bob.get("/api/v1/me/tasks").json()
+    assert (
+        next(t for t in tasks if t["assignment_id"] == team.bob_task.id)[
+            "answered_report_id"
+        ]
+        == rid
+    )
     assert team.bob.get(f"/api/v1/problem-reports/{rid}").json()["answered"] is True
     # The lead's own view never carries the reporter's flag.
     assert team.lead.get(f"/api/v1/problem-reports/{rid}").json()["answered"] is False

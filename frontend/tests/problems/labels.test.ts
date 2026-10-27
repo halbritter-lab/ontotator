@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import type { FinalSelectionSummary } from "../../src/api/client";
 import { finalResultLabel } from "../../src/problems/LeadStatePanel";
-import { conflictReasonText, historyItems, intentState, leadOutcome, leadSummary, reportStateBadge, reportStateFact, reportTitle, taskLabel, taskRef, toolbarEntry, yourTaskFact } from "../../src/problems/labels";
+import { answerNotice, conflictReasonText, historyItems, intentState, leadOutcome, leadSummary, reportStateBadge, reportStateFact, reportTitle, taskLabel, taskRef, toolbarEntry, yourTaskFact } from "../../src/problems/labels";
 import { event, hold, report } from "./fixtures";
 
 const T = "2026-10-18T10:05:00Z";
@@ -126,4 +126,14 @@ it("names the final result's author with display name and pseudonym for leads", 
     selected_by: "lead-0002", kind: "annotation" as const, round_ordinal: 2, author_label: "ann-0004", is_mine: false, recorded_at: null };
   expect(finalResultLabel({ ...base, author: { pseudonym: "ann-0004", display_name: "Ana Weber", is_me: false } } as FinalSelectionSummary)).toBe("Round 2, Ana Weber (ann-0004)");
   expect(finalResultLabel(base as FinalSelectionSummary)).toBe("Round 2, ann-0004");
+});
+
+describe("answerNotice (#18)", () => {
+  it("names the outcome and says the reporter can continue unless the task stays paused", () => {
+    expect(answerNotice(report({ state: "resolved", resolution: "Source fixed." }), false)).toBe("Your problem report was answered: Source fixed. You can continue.");
+    const released = report({ events: [event({ action: "resume", actor_label: "lead-0002", reason: null })] });
+    expect(answerNotice(released, false)).toBe("Your problem report was answered: lead-0002 released the pause on your task. You can continue.");
+    const paused = report({ events: [event({ action: "extend_hold", actor_label: "lead-0002", reason: "Waiting for the source" })] });
+    expect(answerNotice(paused, true)).toBe("Your problem report was answered: Waiting for the source.");
+  });
 });

@@ -7224,6 +7224,8 @@ export interface components {
              * @default false
              */
             report_answered: boolean;
+            /** Answered Report Id */
+            answered_report_id?: string | null;
         };
         /** TemplateInfo */
         TemplateInfo: {

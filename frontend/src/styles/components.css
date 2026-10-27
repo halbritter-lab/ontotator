@@ -725,6 +725,8 @@ ul.task-counts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space
 .task-check-flag { display: flex; align-items: center; gap: var(--space-1); color: var(--warning); font-size: var(--size-sm); }
 .task-reopen-info { color: var(--accent); border-radius: 50%; vertical-align: middle; }
 .task-reopen-info[aria-expanded="true"] { background: var(--accent-light); border-color: var(--accent); }
+.task-answer-link { text-decoration: none; }
+.task-answer-link .status-pill { text-decoration: underline; text-underline-offset: 2px; }
 
 /* Keeps a row's action column in view while the rest of a wide table scrolls. */
 .data-table--pin-end :is(th, td:not([colspan])):last-child { position: sticky; right: 0; background: var(--surface); box-shadow: inset 1px 0 var(--border); }

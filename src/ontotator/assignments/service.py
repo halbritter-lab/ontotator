@@ -137,6 +137,9 @@ class TaskSummary:
     # R-26: a lead answered one of the owner's reports on this task since the
     # owner last opened it.
     report_answered: bool = False
+    # The answered report to open (the latest answered one), for the
+    # "Answer to your report" link.
+    answered_report_id: str | None = None
 
 
 def _assignments() -> Select[tuple[object, ...]]:
@@ -1175,13 +1178,20 @@ class AssignmentService:
                 )
             ):
                 events.setdefault(event.report_id, []).append(event)
-            answered_tasks = {
-                r.assignment_id
-                for rid, r in reports.items()
+            answered_tasks: dict[int, str] = {}
+            # Latest answer first, so each task links its newest answered report.
+            for rid, r in sorted(
+                reports.items(),
+                key=lambda item: (
+                    max((e.created_at for e in events.get(item[0], [])), default=None)
+                    or datetime.min.replace(tzinfo=UTC)
+                ),
+                reverse=True,
+            ):
                 if answered(
                     events.get(rid, []), user_id, r.assignment_id, r.reporter_seen_at
-                )
-            }
+                ):
+                    answered_tasks.setdefault(r.assignment_id, rid)
             result = []
             for row in rows:
                 source = target = None
@@ -1204,6 +1214,7 @@ class AssignmentService:
                         target_language=target,
                         failed_check_count=failed,
                         report_answered=row["assignment_id"] in answered_tasks,
+                        answered_report_id=answered_tasks.get(row["assignment_id"]),
                         **(
                             {
                                 "reopened_at": reopen.at,
