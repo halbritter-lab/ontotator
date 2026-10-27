@@ -80,7 +80,7 @@ const documentsUrl = (s: ProblemReportScenario, query = "") => `/#/projects/${en
 /** Open the lead page of ``report`` and wait for its text. */
 async function openLeadPage(page: Page, s: ProblemReportScenario, report: ProblemReport, text = REPORT_TEXT) {
   await page.goto(reportUrl(s, report.report_id));
-  await expect(page.getByRole("heading", { name: "Problem report", level: 1 })).toBeVisible();
+  await expect(page.getByText(/^Problem report · /)).toBeVisible();
   await expect(page.locator(".report-text").first()).toHaveText(text);
 }
 
@@ -97,13 +97,14 @@ function hashQueryOf(url: string): string[] {
 }
 
 const detail = (page: Page) => page.locator(".problem-report-detail");
-/** The ``<dd>`` of fact ``term`` ("Report" / "Paused tasks" / "Final result") on the lead page. */
+/** The ``<dd>`` of fact ``term`` ("Report" / "Task 4" / "Final result") in the lead page's decision card. */
 const fact = (page: Page, term: string) =>
   detail(page).locator(".report-facts > div").filter({ has: page.locator("dt", { hasText: new RegExp(`^${term}$`) }) }).locator("dd");
 const decide = (page: Page) => page.getByRole("group", { name: "Decide on this report", exact: true });
 const group = (scope: Locator | Page, title: string) => scope.getByRole("group", { name: title, exact: true });
 const outcome = (page: Page) => page.locator(".lead-outcome");
 const history = (page: Page) => page.getByRole("region", { name: "History", exact: true });
+const cardTitle = (page: Page, title: string) => page.getByRole("heading", { level: 2, name: title, exact: true });
 
 /** Open intent ``intent`` in Decide and return its confirmation (heading focused). */
 async function openIntent(page: Page, intent: string | RegExp, title: string): Promise<Locator> {
@@ -145,14 +146,17 @@ test("close while paused: Documents shows the orphaned pause, Resume task releas
   await openLeadPage(page, s, report);
 
   // Close while the reporter's task is paused: the pause stays.
-  await expect(fact(page, "Paused tasks")).toContainText(new RegExp(`Task ${task}\\W+${esc(asLeadSees(s, "reporter"))}`));
-  const close = await openIntent(page, "Close report (pauses stay)", "Close report");
+  await expect(fact(page, `Task ${task}`)).toContainText("Paused since");
+  const close = await openIntent(page, "Close, keep paused…", "Close report");
   await expect(close).toContainText(`Task ${task} stays paused. Release it separately with Release pause.`);
   await close.getByRole("textbox", { name: new RegExp(`^Outcome for ${esc(asLeadSees(s, "reporter"))}`) }).fill("Source corrected; continue later.");
   await close.getByRole("button", { name: "Close report", exact: true }).click();
   await expect(outcome(page)).toContainText(`Report closed. Task ${task} is still paused by this report; release it when work can continue.`);
   await expect(fact(page, "Report")).toContainText(`Closed by ${leadSelf(s)}`);
-  await expect(page.locator(".lead-summary")).toHaveText("1 task is paused by this report. The report is closed; release the pause when work can continue.");
+  // Closed while paused: one step left, the release is the primary; nothing else but Reopen.
+  await expect(cardTitle(page, "One step left")).toBeVisible();
+  await expect(decide(page).locator(".btn-primary")).toHaveText(`Release pause on Task ${task}…`);
+  await expect(decide(page).getByRole("button")).toHaveText([`Release pause on Task ${task}…`, "Reopen report…"]);
 
   // Documents: the row needs a decision as "Problem report or paused task".
   await openDocuments(page, s, "?decision=report-or-pause");
@@ -164,15 +168,17 @@ test("close while paused: Documents shows the orphaned pause, Resume task releas
   await rowAction(page, "Resume task…", caseId, "de").click();
 
   // The report page opens "Release pause" with the reporter's task preselected; nothing was sent yet.
-  await expect(page.getByRole("heading", { name: "Problem report", level: 1 })).toBeVisible();
+  await expect(page.getByText(/^Problem report · /)).toBeVisible();
   const release = group(page, "Release pause");
   await expect(release).toBeVisible();
   await expect(release.getByRole("checkbox", { name: new RegExp(`^Task ${task}\\W`) })).toBeChecked();
-  await expect(fact(page, "Paused tasks")).toContainText("Paused");
+  await expect(fact(page, `Task ${task}`)).toContainText("Paused");
   await release.getByRole("textbox", { name: /^Reason/ }).fill("Source corrected; continue the annotation.");
   await release.getByRole("button", { name: "Release pause", exact: true }).click();
   await expect(outcome(page)).toContainText(new RegExp(`Released the pause on Task ${task}\\W+${esc(asLeadSees(s, "reporter"))}\\. The report is still closed\\.`));
-  await expect(page.locator(".lead-summary")).toHaveText("Nothing left to decide.");
+  await expect(cardTitle(page, "Decided")).toBeVisible();
+  await expect(detail(page).getByText("Nothing left to decide.", { exact: true })).toBeVisible();
+  await expect(decide(page).getByRole("button")).toHaveText(["Reopen report…"]);
 
   // Back in Documents: the row is decided, has no problem issue, and the report is listed as Closed.
   await page.getByRole("link", { name: "Back to Documents" }).first().click();
@@ -211,7 +217,7 @@ test("restart is refused while another report pauses the task, succeeds after th
   const finalLine = fact(page, "Final result");
   for (const part of final.label_parts) await expect(finalLine).toContainText(part);
   await expect(finalLine).not.toContainText("None");
-  await expect(finalLine).toContainText("Actions on this page never change it.");
+  await expect(finalLine).toContainText("never changed here");
 
   // Meanwhile the reporter files a second report: it pauses the same task.
   const other = await fileReport(s.users.reporter, task, OTHER_REPORT_TEXT);
@@ -224,14 +230,17 @@ test("restart is refused while another report pauses the task, succeeds after th
   await confirmRestart(restart, asLeadSees(s, "reporter"), "Agreed with the reporter: start over.");
   await expect(restart).toContainText(`Task ${task} is also paused by another report. Nothing changed. Release that pause first.`);
   await expect(outcome(page)).toHaveCount(0);
-  await expect(fact(page, "Report")).toHaveText("Open");
-  await expect(fact(page, "Paused tasks")).toContainText("Also paused by another report");
+  await expect(fact(page, "Report")).toHaveCount(0);
+  await expect(cardTitle(page, "Decide")).toBeVisible();
+  await expect(fact(page, `Task ${task}`)).toContainText("Also paused by another report");
+  // The open confirmation stays and explains; no "Unavailable: …" line in the card.
   await expect(decide(page).getByRole("button", { name: "Agree empty restart…" })).toHaveAttribute("aria-disabled", "true");
-  await expect(decide(page)).toContainText(`Unavailable: Task ${task} is also paused by another report. Release that pause first.`);
+  await expect(restart).toContainText(`Task ${task} is also paused by another report. Release that pause first.`);
+  await expect(decide(page)).not.toContainText("Unavailable:");
 
   // "Open report" leads to the other report; release its pause there.
   await restart.getByRole("link", { name: "Open report", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Problem report", level: 1 })).toBeVisible();
+  await expect(page.getByText(/^Problem report · /)).toBeVisible();
   await expect(page.locator(".report-text").first()).toHaveText(OTHER_REPORT_TEXT);
   const release = await openIntent(page, "Release pause…", "Release pause");
   await expect(release.getByRole("checkbox", { name: new RegExp(`^Task ${task}\\W`) })).toBeChecked();
@@ -243,7 +252,7 @@ test("restart is refused while another report pauses the task, succeeds after th
 
   // Back on the first report: the restart now succeeds and the final result is unchanged.
   await openLeadPage(page, s, report);
-  await expect(fact(page, "Paused tasks")).not.toContainText("Also paused by another report");
+  await expect(fact(page, `Task ${task}`)).not.toContainText("Also paused by another report");
   restart = await openIntent(page, "Agree empty restart…", restartTitle(task));
   for (const part of final.label_parts) await expect(restart.getByRole("listitem").filter({ hasText: /^Final result stays: / })).toContainText(part);
   await confirmRestart(restart, asLeadSees(s, "reporter"), "Agreed with the reporter: start over.");
@@ -263,7 +272,7 @@ test("restart, reopen, restart again: the second confirmation and the history na
   expect(n).toBeGreaterThanOrEqual(1);
   await loginExisting(page, s.users.lead);
   await openLeadPage(page, s, report);
-  await expect(page.locator(".problem-report-identity")).toContainText(`Round ${n}`);
+  await expect(page.locator(".lead-report-eyebrow")).toContainText(`Round ${n}`);
 
   // First restart: the reported round is the current one.
   let restart = await openIntent(page, "Agree empty restart…", restartTitle(task));
@@ -276,11 +285,12 @@ test("restart, reopen, restart again: the second confirmation and the history na
   await reopen.getByRole("textbox", { name: /^Reason/ }).fill("The new round shows the same problem.");
   await reopen.getByRole("button", { name: "Reopen report", exact: true }).click();
   await expect(outcome(page)).toContainText("Report reopened. No task was paused again.");
-  await expect(fact(page, "Report")).toHaveText("Open");
-  await expect(fact(page, "Paused tasks")).toContainText("None paused now");
+  await expect(fact(page, "Report")).toHaveCount(0);
+  await expect(fact(page, `Task ${task}`)).toContainText("Restarted");
+  await expect(fact(page, `Task ${task}`)).not.toContainText("Paused");
 
   // Second restart: names the round the first restart created, not the reported one.
-  await expect(page.locator(".problem-report-identity")).toContainText(`Round ${n}`);
+  await expect(page.locator(".lead-report-eyebrow")).toContainText(`Round ${n}`);
   restart = await openIntent(page, "Agree empty restart…", restartTitle(task));
   await expect(restart).toContainText(`Round ${n + 1} is abandoned and kept; Round ${n + 2} starts empty.`);
   await expect(restart).not.toContainText(`Round ${n} is abandoned`);
@@ -306,7 +316,7 @@ test("restart of a translation review keeps the old draft in the history; the re
   const report = await fileReport(s.users.reporter, task);
   await loginExisting(page, s.users.lead);
   await openLeadPage(page, s, report);
-  await expect(page.locator(".problem-report-identity")).toContainText("Translation review");
+  await expect(page.locator(".lead-report-eyebrow")).toContainText("Translation review");
 
   const restart = await openIntent(page, "Agree empty restart…", restartTitle(task));
   await expect(restart).toContainText("The current translation draft is kept in the report history; the text and form start fresh.");
@@ -359,7 +369,7 @@ test("the back link restores the full Documents query (decision, panel, page)", 
   const query = hashQueryOf(page.url());
   expect(query).toEqual(["decision=report-or-pause", `panel=${open}`]);
   await area.locator(".text-card-banner").getByRole("link", { name: /^Open problem report, / }).click();
-  await expect(page.getByRole("heading", { name: "Problem report", level: 1 })).toBeVisible();
+  await expect(page.getByText(/^Problem report · /)).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`/problem-reports/${esc(report.report_id)}\\?`));
   const back = page.getByRole("link", { name: "Back to Documents" }).first();
   await back.click();
@@ -370,7 +380,7 @@ test("the back link restores the full Documents query (decision, panel, page)", 
   // A deep link carrying a page number keeps it too (a legacy documents_open becomes the text card).
   await page.goto(reportUrl(s, report.report_id,
     `?${new URLSearchParams([["documents_decision", "report-or-pause"], ["documents_open", open], ["documents_page", "2"]])}`));
-  await expect(page.getByRole("heading", { name: "Problem report", level: 1 })).toBeVisible();
+  await expect(page.getByText(/^Problem report · /)).toBeVisible();
   const deepBack = page.getByRole("link", { name: "Back to Documents" }).first();
   await expect(deepBack).toHaveAttribute("href", /decision=report-or-pause/);
   await expect(deepBack).toHaveAttribute("href", /page=2/);
@@ -380,7 +390,7 @@ test("the back link restores the full Documents query (decision, panel, page)", 
 
   // Without a Documents query the back link falls back to the report's text and language.
   await page.goto(reportUrl(s, report.report_id));
-  await expect(page.getByRole("heading", { name: "Problem report", level: 1 })).toBeVisible();
+  await expect(page.getByText(/^Problem report · /)).toBeVisible();
   await page.getByRole("link", { name: "Back to Documents" }).first().click();
   await expect(page).toHaveURL(/\/documents\?/);
   expect(hashQueryOf(page.url())).toEqual([`case=${caseId}`, "language=de"]);

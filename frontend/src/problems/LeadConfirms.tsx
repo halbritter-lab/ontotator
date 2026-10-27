@@ -3,7 +3,7 @@ import { api, ApiError, type PauseCandidate, type ProblemActionRequest, type Pro
 import { personLabel } from "../app/submissionLabels";
 import { Time } from "../app/Time";
 import { Button, Checkbox, InlineConfirm, InlineMessage, Textarea, TextInput, type InlineConfirmOutcome } from "../ui";
-import { historyItems, reporterName, taskLabel, type Intent } from "./labels";
+import { historyItems, intentState, reporterName, taskLabel, type Intent } from "./labels";
 import type { ReportLink } from "./LeadStatePanel";
 import type { LeadReportState } from "./useLeadReport";
 
@@ -12,6 +12,8 @@ const ACTIONS: Record<Intent, ProblemActionRequest["action"]> = {
 };
 
 const plural = (n: number, one: string, many: string): string => (n === 1 ? one : many);
+/** Sent when the lead leaves the answer of "Close and resume" empty: the server records a reason for every action. */
+export const DEFAULT_RESUME_ANSWER = "Report closed; your task can continue.";
 const errorCode = (failure: unknown): string | undefined => failure instanceof ApiError ? failure.code : undefined;
 function detailNumber(failure: unknown, key: string): number | null {
   if (!(failure instanceof ApiError) || !failure.details || typeof failure.details !== "object") return null;
@@ -42,10 +44,15 @@ export interface LeadConfirmProps {
   reportLink: ReportLink;
   onDone: (intent: Intent, before: ProblemReportView, after: ProblemReportView, released?: number[]) => void;
   onCancel: () => void;
+  /** Called when a request starts ("Close and resume" keeps its form on the page while it is in use). */
+  onStart?: () => void;
 }
 
-/** The InlineConfirm of one lead intent (Close, Release pause, Pause other tasks, Agree empty restart, Reopen). */
-export function LeadConfirm({ intent, report, finalText, preselect = [], lead, requests, unavailable, reportLink, onDone, onCancel }: LeadConfirmProps): JSX.Element {
+/**
+ * The InlineConfirm of one lead intent (Close, Release pause, Pause other tasks, Agree empty restart, Reopen); for
+ * "Close and resume" the inline form of the decision card: an optional answer and the primary button, no second step.
+ */
+export function LeadConfirm({ intent, report, finalText, preselect = [], lead, requests, unavailable, reportLink, onDone, onCancel, onStart }: LeadConfirmProps): JSX.Element {
   const id = useId();
   const reporter = reporterName(report);
   const [reason, setReason] = useState("");
@@ -77,7 +84,7 @@ export function LeadConfirm({ intent, report, finalText, preselect = [], lead, r
   const submit = async () => {
     if (writing.current) return;
     if (unavailable) return;
-    const text = reason.trim();
+    const text = reason.trim() || (intent === "resume_close" ? DEFAULT_RESUME_ANSWER : "");
     const chosen = ids();
     let invalid = false;
     if ((intent === "release" || intent === "pause") && !chosen.length) { setSelectionError("Choose at least one task."); invalid = true; }
@@ -91,7 +98,7 @@ export function LeadConfirm({ intent, report, finalText, preselect = [], lead, r
       if (!requestId) { requestId = crypto.randomUUID(); requests.set(key, requestId); }
       return api.actOnProblemReport(view.report_id, { request_id: requestId, expected_revision: view.revision, action, reason: text, assignment_ids: ids });
     };
-    writing.current = true; setBusy(true); setOutcome(null); setNotice(null);
+    writing.current = true; setBusy(true); setOutcome(null); setNotice(null); onStart?.();
     try {
       const after = await send(report, ACTIONS[intent], chosen);
       if (intent === "resume_close") {
@@ -112,7 +119,8 @@ export function LeadConfirm({ intent, report, finalText, preselect = [], lead, r
         const items = fresh ? historyItems(fresh) : [];
         setConflictText(items.length > 1 ? items[items.length - 1]!.sentence : "");
         setOutcome({ kind: "conflict", changedBy: newest ? personLabel(newest.actor_label, newest.actor_label === fresh?.viewer_label, newest.actor) : null, changedAt: newest?.created_at ?? null,
-          onReview: () => { setOutcome(null); void lead.reload(); } });
+          // The inline "Close and resume" form lets go of the page after a review: it shows again only while possible.
+          onReview: () => { setOutcome(null); void lead.reload(); if (intent === "resume_close") onCancel(); } });
       } else if (code === "TASK_HELD") {
         const task = detailNumber(failure, "assignment_id") ?? report.assignment_id;
         // The other pause may be newer than this page: read it from a fresh view.
@@ -153,16 +161,28 @@ export function LeadConfirm({ intent, report, finalText, preselect = [], lead, r
   const selectionAlert = selectionError && <p id={`${id}-selection-error`} className="field-hint field-hint-error" role="alert">{selectionError}</p>;
   const noticeBlock = notice && <InlineMessage tone="error">{notice}</InlineMessage>;
 
+  if (intent === "resume_close") {
+    const conflict = outcome?.kind === "conflict" ? outcome : null;
+    const failed = outcome?.kind === "error" ? outcome : null;
+    return <div className="lead-primary">
+      <Textarea ref={reasonRef} id={`${id}-reason`} label={`Answer to ${reporter}`} rows={3} hint={`Optional. ${reporter} sees it with the task.`}
+        value={reason} readOnly={busy} onChange={event => setReason(event.target.value)} />
+      {conflict && <InlineMessage tone="error">
+        <p>This report changed since you opened it. Nothing was saved.{conflictText && <> {conflictText}</>}
+          {conflict.changedBy && conflict.changedAt && <> Changed by {conflict.changedBy} at <Time iso={conflict.changedAt} />.</>}</p>
+        <Button size="sm" onClick={conflict.onReview}>Review again</Button>
+      </InlineMessage>}
+      {failed && <InlineMessage tone="error"><p>Could not save. Nothing changed.</p><Button size="sm" onClick={failed.onRetry}>Retry</Button></InlineMessage>}
+      {outcome?.kind === "session" && <InlineMessage tone="error">Your session ended. Nothing was saved. Sign in and try again.</InlineMessage>}
+      {noticeBlock}
+      {!conflict && <Button variant="primary" loading={busy} aria-disabled={unavailable ? true : undefined}
+        onClick={() => { void submit(); }}>{intentState(report).resume_close.label}</Button>}
+      <p className="visually-hidden" role="status">{busy ? "Saving…" : ""}</p>
+    </div>;
+  }
+
   let title: string, message: ReactNode, confirmLabel: string, body: ReactNode, tone: "primary" | "danger" = "primary";
   switch (intent) {
-    case "resume_close": {
-      const paused = activeHolds.map(h => `Task ${h.assignment_id}`);
-      title = `Close and resume ${paused.join(", ")}`;
-      message = `${paused.join(", ")} can continue and the report closes. Pauses from other reports stay.`;
-      confirmLabel = "Close and resume";
-      body = reasonField(`Outcome for ${reporter}`, 4, `${reporter} sees this in the report.`);
-      break;
-    }
     case "close": {
       title = "Close report";
       const paused = activeHolds.map(h => `Task ${h.assignment_id}`);

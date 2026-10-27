@@ -377,7 +377,7 @@ test("S12 Resume task opens the report with the pause preselected; releasing it 
   await expect(rowCell(textRow(page, caseId, "de"), "annotation")).toContainText("⏸");
   await rowAction(page, "Resume task…", caseId, "de").click();
 
-  await expect(page.getByRole("heading", { name: "Problem report", level: 1 })).toBeVisible();
+  await expect(page.getByText(/^Problem report · /)).toBeVisible();
   const release = page.getByRole("group", { name: "Release pause", exact: true });
   await expect(release).toBeVisible();
   await expect(release.getByRole("checkbox", { name: new RegExp(`^Task ${assignments.de}${SEP}`) })).toBeChecked();

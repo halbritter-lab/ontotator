@@ -100,13 +100,14 @@ async function reportOf(page: Page, s: ProblemReportScenario): Promise<ProblemRe
 async function openLeadPage(page: Page, s: ProblemReportScenario) {
   const report = await reportOf(page, s);
   await page.goto(`/#/projects/${encodeURIComponent(s.project)}/problem-reports/${encodeURIComponent(report.report_id)}`);
-  await expect(page.getByRole("heading", { name: "Problem report", level: 1 })).toBeVisible();
+  await expect(page.getByText(/^Problem report · /)).toBeVisible();
   await expect(page.locator(".report-text").first()).toHaveText(REPORT_TEXT);
 }
 
 const decide = (page: Page) => page.getByRole("group", { name: "Decide on this report", exact: true });
 const reportState = (page: Page) => fact(page.locator(".problem-report-detail"), "Report");
-const pausedTasks = (page: Page) => fact(page.locator(".problem-report-detail"), "Paused tasks");
+const taskFact = (page: Page, task: number) => fact(page.locator(".problem-report-detail"), `Task ${task}`);
+const cardTitle = (page: Page, title: string) => page.getByRole("heading", { level: 2, name: title, exact: true });
 
 /** Open intent ``label`` on the lead page, fill its reason and confirm with ``confirm``; waits for the outcome. */
 async function leadAct(page: Page, intent: RegExp, title: string, reasonLabel: RegExp, reason: string, confirm: string | RegExp, outcome: string) {
@@ -148,11 +149,11 @@ test("report, resume with a reason, lead sees it and closes, reporter sees Close
   const lead = await actor(browser, s.users.lead);
   try {
     await openLeadPage(lead.page, s);
-    await expect(pausedTasks(lead.page)).toContainText(`Resumed by reporter ${leadSees(s, "reporter")}`);
-    await expect(pausedTasks(lead.page)).toContainText('"upsi"');
+    await expect(taskFact(lead.page, task)).toContainText(`Resumed by reporter ${leadSees(s, "reporter")}`);
+    await expect(taskFact(lead.page, task)).toContainText('"upsi"');
     await expect(lead.page.getByRole("region", { name: "History", exact: true })).toContainText("upsi");
-    await expect(decide(lead.page).getByRole("button", { name: "Close report", exact: true })).toBeVisible();
-    await leadAct(lead.page, /^Close report$/, "Close report", new RegExp(`Outcome for ${leadSees(s, "reporter").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`),
+    await expect(decide(lead.page).getByRole("button", { name: "Close report…", exact: true })).toBeVisible();
+    await leadAct(lead.page, /^Close report…$/, "Close report", new RegExp(`Outcome for ${leadSees(s, "reporter").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`),
       "Fixed in the source text; no change needed.", "Close report",
       "Report closed. No task is paused by it any more. The final result did not change.");
     await expect(reportState(lead.page)).toContainText(`Closed by ${s.users.lead} (${s.labels.lead}, you)`);
@@ -196,11 +197,13 @@ test("withdraw an untouched report, lead reopens it: Open, no withdraw, task sta
   try {
     await openLeadPage(lead.page, s);
     await expect(reportState(lead.page)).toContainText("Withdrawn");
-    await expect(lead.page.locator(".lead-summary")).toHaveText("The reporter withdrew this report. Nothing is paused by it.");
+    await expect(cardTitle(lead.page, "Decided")).toBeVisible();
+    await expect(lead.page.getByText("Nothing left to decide.", { exact: true })).toBeVisible();
     await leadAct(lead.page, /^Reopen report…$/, "Reopen report", /^Reason/, "Please keep this open until the source is checked.",
       "Reopen report", "Report reopened. No task was paused again.");
-    await expect(reportState(lead.page)).toHaveText("Open");
-    await expect(lead.page.locator(".lead-summary")).toHaveText("Nothing is paused by this report. The report is open until you close it.");
+    await expect(reportState(lead.page)).toHaveCount(0);
+    await expect(cardTitle(lead.page, "Decide")).toBeVisible();
+    await expect(decide(lead.page).getByRole("button")).toHaveText(["Close report…", "Pause other tasks…", "Agree empty restart…"]);
   } finally {
     await lead.close();
   }
