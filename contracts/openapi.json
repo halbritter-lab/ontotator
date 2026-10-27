@@ -14693,6 +14693,23 @@
           },
           "open_tasks": {
             "$ref": "#/components/schemas/OpenTasksView"
+          },
+          "account": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "active",
+                  "inactive",
+                  "anonymised",
+                  "setup_pending"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account"
           }
         },
         "type": "object",

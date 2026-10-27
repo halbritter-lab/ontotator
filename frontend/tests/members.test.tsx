@@ -28,6 +28,27 @@ describe("project members", () => {
     expect(api.adminListUsers).not.toHaveBeenCalled();
   });
 
+  it("marks inactive, anonymised and setup-pending accounts and removes a member through Remove…", async () => {
+    vi.mocked(api.listMembers).mockResolvedValue([
+      { ...members[0], account: "inactive" },
+      { ...members[1], account: "active" },
+      { username: "anonymised-9", display_name: "Anonymised user", pseudonym: "ann-9", languages: [], roles: ["annotator"], account: "anonymised" },
+      { username: "frank", display_name: "Frank", pseudonym: "ann-3", languages: [], roles: ["annotator"], account: "setup_pending" },
+    ]);
+    render(<MembersSection projectKey="p" isSystemAdmin={false} />);
+    expect(await screen.findByText("Inactive")).toBeDefined();
+    expect(screen.getByText("Anonymised")).toBeDefined(); expect(screen.getByText("Setup pending")).toBeDefined(); expect(screen.getByText("Active")).toBeDefined();
+    const anonymised = screen.getByRole("checkbox", { name: "anonymised-9: Annotator" }) as HTMLInputElement;
+    expect(anonymised.disabled).toBe(true); expect(anonymised.title).toContain("Remove…");
+    expect((screen.getByRole("checkbox", { name: "alice: Annotator" }) as HTMLInputElement).disabled).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Remove Anonymised user from the project" }));
+    expect(screen.getByRole("dialog", { name: "Remove Anonymised user from the project?" })).toBeDefined();
+    expect(api.setMemberRoles).not.toHaveBeenCalled();
+    await confirmRemoval("Remove from project");
+    expect(api.setMemberRoles).toHaveBeenCalledWith("p", "anonymised-9", [], false);
+    await waitFor(() => expect(screen.queryByRole("checkbox", { name: "anonymised-9: Annotator" })).toBeNull());
+  });
+
   it("shows LAST_LEAD inline without optimistically removing the role", async () => {
     vi.mocked(api.setMemberRoles).mockRejectedValue(new ApiError(409, "Cannot remove", "LAST_LEAD"));
     render(<MembersSection projectKey="p" isSystemAdmin={false} />);

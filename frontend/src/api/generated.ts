@@ -4802,6 +4802,8 @@ export interface components {
             /** Languages */
             languages: string[];
             open_tasks?: components["schemas"]["OpenTasksView"];
+            /** Account */
+            account?: ("active" | "inactive" | "anonymised" | "setup_pending") | null;
         };
         /**
          * MemberCandidate

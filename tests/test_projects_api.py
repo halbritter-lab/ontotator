@@ -802,3 +802,37 @@ def test_a_lead_finds_colleagues_by_name_and_others_only_by_exact_match(app):
     ]
     annotator = logged_in(app, "markus")
     assert annotator.get(path, params={"q": "mar"}).status_code == 403
+
+
+def test_leads_see_the_account_status_of_members(app):
+    admin = logged_in(app, "root", system_admin=True)
+    create_project(app, admin)
+    lead = logged_in(app, "lead", projects={"phenotypes": ["lead"]})
+    logged_in(app, "gina", projects={"phenotypes": ["annotator"]}, assignments=[])
+    created = admin.post(
+        "/api/v1/admin/users/", json={"username": "frank", "display_name": "Frank"}
+    )
+    assert created.status_code == 200, created.text
+    added = lead.put(
+        "/api/v1/projects/phenotypes/members/frank", json={"roles": ["annotator"]}
+    )
+    assert added.status_code == 200, added.text
+    assert added.json()["account"] == "setup_pending"
+    assert (
+        admin.patch("/api/v1/admin/users/gina", json={"active": False}).status_code
+        == 200
+    )
+
+    members = lead.get("/api/v1/projects/phenotypes/members").json()
+
+    assert {m["username"]: m["account"] for m in members} == {
+        "frank": "setup_pending",
+        "gina": "inactive",
+        "lead": "active",
+        "root": "active",
+    }
+    annotator = logged_in(
+        app, "alice", projects={"phenotypes": ["annotator"]}, assignments=[]
+    )
+    seen = annotator.get("/api/v1/projects/phenotypes/members").json()
+    assert {m["account"] for m in seen} == {None}
