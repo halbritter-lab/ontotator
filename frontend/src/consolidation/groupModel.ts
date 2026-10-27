@@ -131,9 +131,10 @@ export function comparisonRows(group: ConsolidationGroupView, people: readonly C
     row("term", "term", "Term", needsTerm(group), member => member.term_id, member => member.term_label || member.term_id),
     ...axesOf(group).map(axis => row("axis", axis, axisLabel(axis), group.differing_axes.includes(axis),
       member => member.axes[axis] ?? "", member => axisOptionLabel(member.axes[axis]))),
-    // Keyed by member: identical spans may differ in their note, which comes with the span.
+    // Keyed by member: identical spans may differ in their note, which comes with the span. "Overlapping" needs two spans (R-9).
     row("text", "text", "Text", !!group.span_conflict, member => member.input_id,
-      member => member.spans.length ? quoted(passage(text, member.spans)) : "No text span", group.span_conflict ? null : OVERLAPPING),
+      member => member.spans.length ? quoted(passage(text, member.spans)) : "No text span",
+      group.span_conflict || members.filter(member => member.spans.length).length < 2 ? null : OVERLAPPING),
   ];
   const modifiers = modifiersRow(group, people, text, choices);
   if (modifiers) rows.push(modifiers);
