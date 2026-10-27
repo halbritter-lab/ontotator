@@ -75,6 +75,19 @@ describe("Values block", () => {
     expect(current.closest(".axis-option")!.classList.contains("is-default")).toBe(false);
   });
 
+  it("an empty axis keeps “Not specified” unfilled: it is no confirmed choice (#33)", () => {
+    const base = props({}, []);
+    base.annotation!.annotation.axes_values = { assertion: "present", experiencer: null, temporality: "current" } as never;
+    const { container } = render(<AnnotationPanel {...base} />);
+    const empty = screen.getByRole("radio", { name: "Not specified (no value chosen)" }) as HTMLInputElement;
+    expect(empty.checked).toBe(true);
+    expect(empty.closest(".axis-option")!.classList.contains("is-unset")).toBe(true);
+    // A chosen value elsewhere leaves that axis's "Not specified" a plain, unchecked segment.
+    const other = container.querySelector<HTMLInputElement>('[data-axis-field="temporality"] input[value=""]')!;
+    expect(other.checked).toBe(false);
+    expect(other.closest(".axis-option")!.classList.contains("is-unset")).toBe(false);
+  });
+
   it("shows the Default tag in the label cell and keeps ' (default)' in the radio's accessible name", () => {
     const { container } = render(<AnnotationPanel {...props({}, ["assertion", "experiencer"])} />);
     expect(screen.getByRole("radio", { name: "Present (default)" })).toBeDefined();
