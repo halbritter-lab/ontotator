@@ -141,7 +141,11 @@ describe("users administration", () => {
     vi.mocked(api.adminCreateUser).mockRejectedValue(new ApiError(422, "Already used", "USERNAME_TAKEN"));
     render(<UsersPage currentUser={currentUser} />); await load(); await fillCreate(); fireEvent.click(newForm().getByRole("button", { name: "Create user" }));
     await screen.findByText("This username is already taken. Choose another username.");
-    expect((newForm().getByLabelText("Username (required)") as HTMLInputElement).value).toBe("bea");
+    const username = newForm().getByLabelText("Username (required)") as HTMLInputElement;
+    expect(username.value).toBe("bea");
+    // The refusal sits at its field, not in a notice below the form.
+    expect(username.getAttribute("aria-invalid")).toBe("true"); expect(username.getAttribute("aria-describedby")).toContain("new-username-error");
+    expect(document.activeElement).toBe(username); expect(screen.getAllByText("This username is already taken. Choose another username.")).toHaveLength(1);
   });
 
   it("keeps edits after session expiry without adding another login dialog", async () => {
