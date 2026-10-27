@@ -64,7 +64,7 @@ export function annotationState(row: DocumentRowView): State {
 }
 
 /** "18 Oct" of an ISO time; null when there is none. */
-function dayMonth(iso: string | null | undefined): string | null {
+export function dayMonth(iso: string | null | undefined): string | null {
   if (!iso) return null;
   const date = new Date(iso);
   return Number.isNaN(date.getTime()) ? null : `${date.getDate()} ${MONTHS[date.getMonth()]}`;

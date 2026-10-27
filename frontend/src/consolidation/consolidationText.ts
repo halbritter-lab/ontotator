@@ -1,5 +1,7 @@
 /** English copy of the consolidation view (acceptance fixes spec "WP-E Frontend", X12, X14, U14). */
 import type { ConsolidationGroupView, ConsolidationPersonView, ConsolidationView } from "../api/client";
+import type { PathSegment } from "../ui/StagePath";
+import { dayMonth } from "../documents/textCard/cardModel";
 import { personName } from "./lanes";
 
 const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
@@ -14,8 +16,13 @@ export function headerTitle(view: Pick<ConsolidationView, "case_id" | "language"
   return `${readOnly ? "Consolidation of" : "Consolidate"} ${view.case_id} ${view.language} v${view.document_version}`;
 }
 
-/** Finalization state on the text path. */
-export const finalizationState = (open: number, total: number) => `consolidating, ${open} of ${total} groups open`;
+/** Finalization step on the text path, from the round and final state like the Documents table (X-8): accepted, then
+ *  submitted (the lead accepts it), else the open groups. */
+export function finalizationState(open: number, total: number, submitted: boolean, acceptedAt?: string | null, lead = false): Pick<PathSegment, "state" | "tone"> {
+  if (acceptedAt) { const day = dayMonth(acceptedAt); return { state: day ? `accepted ${day}` : "accepted", tone: "done" }; }
+  if (submitted) return lead ? { state: "ready to accept", tone: "now" } : { state: "submitted, waiting for the lead", tone: "later" };
+  return { state: `consolidating, ${open} of ${total} groups open`, tone: "now" };
+}
 
 export const OVERLAPPING = "(overlapping, comes with the chosen finding)";
 

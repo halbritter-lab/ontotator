@@ -266,6 +266,9 @@ describe("ConsolidationScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: "Submit consolidation" }));
     fireEvent.click(within(screen.getByRole("dialog", { name: "Submit consolidation?" })).getByRole("button", { name: "Submit" }));
     await screen.findByText("Consolidation submitted. The lead then accepts the result.");
+    const path = screen.getByRole("navigation", { name: "Text path" }).textContent;
+    expect(path).toContain("submitted, waiting for the lead");
+    expect(path).not.toContain("needs work now");
     expect(screen.queryByText("Ready to submit")).toBeNull();
     expect(screen.queryByRole("button", { name: /^Undo/ })).toBeNull();
   });
@@ -304,9 +307,18 @@ describe("ConsolidationScreen", () => {
     await renderScreen({ group: "g-dd" });
     expect(expandedTitle()).toBe("Delayed development");
     expect(screen.getByText("This consolidation was submitted. You see its final state.")).toBeTruthy();
+    expect(screen.getByRole("navigation", { name: "Text path" }).textContent).toContain("ready to accept");
     for (const name of [/^Submit/, /^Change/, "Not in result", "Open in full editor"]) expect(screen.queryByRole("button", { name })).toBeNull();
     expect(screen.queryByLabelText("Guidelines unclear here")).toBeNull();
     expect(api.openWorkRound).not.toHaveBeenCalled();
+  });
+
+  it("reads accepted on the path once the lead chose the final result (X-8)", async () => {
+    load({ ...decidedView(), read_only: true, read_only_reason: "submitted", workspace_id: null, accepted_at: "2026-10-27T10:00:00" });
+    await renderScreen({ assignmentId: 42 });
+    const path = screen.getByRole("navigation", { name: "Text path" }).textContent;
+    expect(path).toContain("accepted 27 Oct");
+    expect(path).not.toContain("consolidating");
   });
 
   it("offers no action while an input is withdrawn", async () => {

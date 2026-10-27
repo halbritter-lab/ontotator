@@ -10646,6 +10646,18 @@
             ],
             "title": "Read Only Reason"
           },
+          "accepted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accepted At"
+          },
           "case_id": {
             "type": "string",
             "title": "Case Id"

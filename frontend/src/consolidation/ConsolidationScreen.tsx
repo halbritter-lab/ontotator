@@ -293,7 +293,8 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
         <StagePath segments={[
           { id: "translation", title: "Translation", state: "done", tone: "done" },
           { id: "annotation", title: "Annotation", state: `${view.people.length} submitted`, tone: "done" },
-          { id: "finalization", title: "Finalization", state: finalizationState(open, groups.length), tone: "now" },
+          { id: "finalization", title: "Finalization", ...finalizationState(open, groups.length, submitted || view.read_only_reason === "submitted",
+            view.accepted_at, props.assignmentId === undefined || !!isLead) },
         ]} />
         <h1 id="cons-title" className="cons-title"><LanguageText text={headerTitle(view, readOnly && !submitted)} code={view.language} /></h1>
         {/* B5-6: the tools as a quiet row under the title (mockup 02 B). M-7a: one way into the full editor, same tab. */}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fieldsToDecide, groupStatus, headerTitle, partialText, submittedText, summaryText } from "../../src/consolidation/consolidationText";
+import { fieldsToDecide, finalizationState, groupStatus, headerTitle, partialText, submittedText, summaryText } from "../../src/consolidation/consolidationText";
 import type { ConsolidationGroupView } from "../../src/api/client";
 import { attachCandidates, choicesComplete, choose, comparisonRows, groupName, resolvePayload, resultLine, standaloneText, takeFinding, type Choices } from "../../src/consolidation/groupModel";
 import { NO_MODIFIERS } from "../../src/consolidation/modifierSets";
@@ -33,6 +33,13 @@ describe("consolidation copy", () => {
   it("says who accepts the result after submitting", () => {
     expect(submittedText(true)).toBe("Consolidation submitted. Accept the result in Documents.");
     expect(submittedText(false)).toBe("Consolidation submitted. The lead then accepts the result.");
+  });
+
+  it("derives the Finalization step from round and final state, not the open groups (X-8)", () => {
+    expect(finalizationState(2, 5, false)).toEqual({ state: "consolidating, 2 of 5 groups open", tone: "now" });
+    expect(finalizationState(0, 5, true)).toEqual({ state: "submitted, waiting for the lead", tone: "later" });
+    expect(finalizationState(0, 5, true, null, true)).toEqual({ state: "ready to accept", tone: "now" });
+    expect(finalizationState(0, 5, true, "2026-10-27T10:00:00", true)).toEqual({ state: "accepted 27 Oct", tone: "done" });
   });
 });
 

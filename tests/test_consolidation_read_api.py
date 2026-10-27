@@ -24,7 +24,7 @@ from test_final_panel_api import (
     span_of,
     submit_findings,
 )
-from work_plan_support import assign, doc, plan_env
+from work_plan_support import assign, doc, plan_env, select_final
 
 from ontotator.application.consolidation import (
     _Content,
@@ -173,9 +173,22 @@ def test_lead_is_refused_before_submit_and_reads_after(cons):
     assert all(g["annotation_ids"] for g in body["groups"])
     anno = pseudonym(env, "anno")
     assert body["people"][0]["label"] == f"Anne Notator ({anno})"
+    assert body["accepted_at"] is None
     own = cons.adj.get(url(cons.round.round_id))
     assert own.status_code == 200, own.text
     assert own.json()["read_only_reason"] == "submitted"
+
+
+def test_accepted_at_once_the_lead_chose_the_final(cons):
+    env = cons.env
+    assert cons.adj.get(url(cons.round.round_id)).json()["accepted_at"] is None
+    adj_access, adj_actor = _access(env, "adj", "adjudicator")
+    reviewer = ScopedRepository(env.db, adj_access, adj_actor)
+    output = _submit_consolidation(
+        env.app.state.ontology_registry, reviewer, cons.round
+    )
+    select_final(env, doc("c1", "en"), output.submission_id)
+    assert cons.adj.get(url(cons.round.round_id)).json()["accepted_at"]
 
 
 def test_other_members_and_unknown_rounds_get_round_not_found(cons):
