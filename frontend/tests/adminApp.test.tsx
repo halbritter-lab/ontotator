@@ -133,7 +133,7 @@ it("refreshes authoritative project navigation after creation and a saved name",
   fireEvent.change(screen.getByLabelText(/^Project key/), { target: { value: "requested-key" } });
   fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: "Requested name" } });
   fireEvent.click(screen.getByRole("button", { name: "Create project" }));
-  await screen.findByRole("heading", { name: "Project settings" });
+  await screen.findByRole("heading", { level: 1, name: /· Settings$/ });
   expect(window.location.hash).toBe("#/projects/p%2Fkey/settings/people");
   await screen.findByRole("heading", { name: "Research" });
   // A new project opens on People; the name is under General (B6-1).
@@ -156,7 +156,7 @@ it("loads ontology administration only on its route and follows actual pinned-pr
   expect(api.adminListUsers).not.toHaveBeenCalled(); expect(api.adminListOntologies).not.toHaveBeenCalled();
   expect(api.getProjectSettings).not.toHaveBeenCalled(); expect(api.listOntologies).not.toHaveBeenCalled();
   link("Ontologies"); await screen.findByText("hp.json");
-  link("p/key"); await screen.findByRole("heading", { name: "Project settings" });
+  link("p/key"); await screen.findByRole("heading", { level: 1, name: /· Settings$/ });
   expect(api.getProjectSettings).toHaveBeenCalledWith("p/key");
 });
 

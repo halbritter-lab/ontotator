@@ -45,17 +45,136 @@
   margin-block: var(--space-4) 0;
 }
 
-/* Radio options with a description: the description goes on its own line under the label. */
-.settings-radio-group .form-checkbox-row:has(.field-hint) {
+/* The page title reads as an eyebrow ("{project} · Settings"); the tabs and cards carry the structure. */
+.settings-title {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--size-sm);
+  line-height: var(--leading-sm);
+  font-weight: var(--weight-regular);
+  color: var(--text-muted);
+}
+
+/* Settings redesign (variant A): one card per topic with a short title, the controls and one hint line. */
+.settings-card {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+}
+
+.settings-card + .settings-card,
+.settings-card + .settings-section-actions,
+.settings-card + .guidelines-versions {
+  margin-block-start: var(--space-4);
+}
+
+.settings-card > fieldset,
+.settings-card > details[open] {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.settings-card .form-group {
+  margin-bottom: 0;
+}
+
+.settings-card-title {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-sans);
+  font-size: var(--size-md);
+  line-height: var(--leading-md);
+  font-weight: var(--weight-strong);
+  color: var(--text);
+}
+
+legend.settings-card-title {
+  margin-block-end: var(--space-3);
+}
+
+summary.settings-card-title {
+  cursor: pointer;
+}
+
+.settings-card-hint,
+.settings-card-text,
+.settings-card-list {
+  margin: 0;
+}
+
+.settings-card-hint {
+  font-size: var(--size-sm);
+  line-height: var(--leading-sm);
+  color: var(--text-muted);
+}
+
+/* "Why?": the rule text behind the hint opens in place. */
+.settings-why {
+  display: inline;
+}
+
+.settings-why > summary {
+  display: inline;
+  cursor: pointer;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.settings-why-text {
+  display: grid;
+  gap: var(--space-1);
+  margin-block-start: var(--space-1);
+  max-width: 75ch;
+}
+
+.settings-why-text p {
+  margin: 0;
+}
+
+/* Fields side by side in one card (Annotators per text beside the two rules). */
+.settings-card-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-6);
   align-items: flex-start;
 }
 
-.settings-radio-group .form-checkbox-row:has(.field-hint) input {
-  margin-block-start: 3px;
+.settings-radio-group {
+  display: grid;
+  gap: var(--space-1);
 }
 
-.settings-radio-group .form-checkbox-row .field-hint {
+.settings-option-note {
+  color: var(--text-muted);
+  font-size: var(--size-sm);
+}
+
+.settings-eyebrow {
   display: block;
+  font-family: var(--font-sans);
+  font-size: var(--size-sm);
+  line-height: var(--leading-sm);
+  font-weight: var(--weight-regular);
+  color: var(--text-muted);
+}
+
+.settings-section-title {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--size-md);
+  line-height: var(--leading-md);
+  font-weight: var(--weight-strong);
+  color: var(--text-muted);
 }
 
 /* P9: a section receives focus programmatically when its address opens; the container itself shows no ring. */

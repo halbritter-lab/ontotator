@@ -132,11 +132,13 @@ describe("settings section addresses", () => {
   it("section Guidelines renders GuidelinesSection", async () => {
     render(<ProjectSettingsPage projectKey={settings.project_key} currentUser={currentUser} section="guidelines" />);
     const section = await screen.findByRole("region", { name: "Guidelines" });
-    expect(within(section).getByRole("heading", { level: 2, name: "Guidelines" })).toBeDefined();
-    expect(await within(section).findByText(/^v1, guide-v1\.md/)).toBeDefined();
-    expect(within(section).getByLabelText("Guideline file (.md or .txt, up to 256 KB)")).toBeDefined();
+    expect(await within(section).findByRole("heading", { level: 2, name: "In force Guidelines v1" })).toBeDefined();
+    expect(within(section).getByText(/^guide-v1\.md · /)).toBeDefined();
+    // The upload form opens only on "Publish a new version" while a version is in force.
+    expect(within(section).queryByLabelText("Guideline file (.md or .txt, up to 256 KB)")).toBeNull();
+    fireEvent.click(within(section).getByRole("button", { name: "Publish a new version" }));
+    expect(within(section).getByLabelText("Guideline file (.md or .txt, up to 256 KB)")).toBe(document.activeElement);
     expect(api.listGuidelines).toHaveBeenCalledWith(settings.project_key);
-    expect(within(section).getAllByRole("heading", { level: 2, name: "Guidelines" })).toHaveLength(1);
   });
 
   it("shows the section of its address", async () => {
@@ -496,7 +498,8 @@ describe("project settings sections", () => {
   it("General names what the languages do and where the description shows (D4, P4)", async () => {
     renderSettings("general");
     expect(await screen.findByRole("combobox", { name: /^Languages of the texts/ })).toBeDefined();
-    expect(screen.getByText(/An import refuses texts in other languages\. Empty: any language\./)).toBeDefined();
+    expect(screen.getByText("Empty: any language.")).toBeDefined();
+    expect(screen.getByText("An import refuses texts in other languages.")).toBeDefined();
     expect(screen.getByText("Shown under the project name on Projects.")).toBeDefined();
   });
 });
@@ -540,15 +543,17 @@ describe("workflow settings", () => {
     const form = screen.getByRole("form", { name: "Workflow" });
     expect(document.activeElement).toBe(form);
     expect(within(form).getAllByRole("heading", { level: 2 }).map(heading => heading.textContent)).toEqual(["New imports", "Texts with tool proposals", "Annotation and consolidation"]);
-    const group = within(form).getByRole("radiogroup", { name: "When texts are imported" });
-    expect(within(group).getAllByRole("radio").map(radio => radio.closest("label")!.textContent)).toEqual(["Plan review and annotation for every translation", "Do not plan anything (plan texts on Documents)"]);
+    const group = within(form).getByRole("radiogroup", { name: "New imports" });
+    expect(within(group).getAllByRole("radio").map(radio => radio.closest("label")!.textContent)).toEqual(["Plan review and annotation for every translation", "Plan nothing; I plan texts on Documents"]);
     expect(within(group).getByRole("radio", { name: "Plan review and annotation for every translation" })).toHaveProperty("checked", true);
-    expect(within(form).getByText("Applies to texts imported from now on. Single texts can be changed on Documents (Plan…); those changes stay.")).toBeTruthy();
-    fireEvent.click(within(group).getByRole("radio", { name: "Do not plan anything (plan texts on Documents)" }));
+    expect(group.getAttribute("aria-describedby")).toBeTruthy();
+    expect(document.getElementById(group.getAttribute("aria-describedby")!)!.textContent).toBe("For texts imported from now on.");
+    expect(within(form).getByText("Single texts can be changed on Documents (Plan…); those changes stay.").closest("details")!.querySelector("summary")!.textContent).toBe("Why?");
+    fireEvent.click(within(group).getByRole("radio", { name: "Plan nothing; I plan texts on Documents" }));
     const count = within(form).getByRole("spinbutton", { name: /Annotators per text/ });
     expect(count).toHaveProperty("min", "1");
     expect(count).toHaveProperty("max", "5");
-    expect(within(form).getByText("An upper limit per text when you assign; fewer is fine.")).toBeTruthy();
+    expect(within(form).getByText("Upper limit; fewer is fine.")).toBeTruthy();
     fireEvent.change(count, { target: { value: "3" } });
     vi.mocked(api.updateProjectSettings).mockResolvedValue({ ...settings, import_plan: "nothing", annotations_per_text: 3 });
     fireEvent.click(within(form).getByRole("button", { name: "Save changes" }));
@@ -587,12 +592,13 @@ describe("workflow settings", () => {
     vi.mocked(api.getProjectSettings).mockResolvedValue({ ...settings, tool_proposal_mode: "proposals" });
     renderSettings("workflow");
     const form = await screen.findByRole("form", { name: "Workflow" });
-    const group = within(form).getByRole("radiogroup", { name: "Annotators work" });
-    expect(within(group).getByRole("radio", { name: /From the proposals/ })).toHaveProperty("checked", true);
-    expect(within(group).getByText("They confirm, reject or correct each proposal and add what the tool missed.")).toBeTruthy();
-    expect(within(group).getByText("They start from the plain text and do not see the proposals.")).toBeTruthy();
-    expect(within(form).getByText("The project default. A text's plan can override it until work on that text has started.")).toBeTruthy();
-    fireEvent.click(within(group).getByRole("radio", { name: /From scratch/ }));
+    const group = within(form).getByRole("radiogroup", { name: "Texts with tool proposals" });
+    const proposals = within(group).getByRole("radio", { name: "Annotators work from the proposals" });
+    expect(proposals).toHaveProperty("checked", true);
+    expect(document.getElementById(proposals.getAttribute("aria-describedby")!)!.textContent).toBe("confirm, reject, correct, add");
+    expect(within(group).getByText("proposals hidden")).toBeTruthy();
+    expect(within(form).getByText("Project default; a text's plan can override it until work starts.")).toBeTruthy();
+    fireEvent.click(within(group).getByRole("radio", { name: "Annotators start from scratch" }));
     vi.mocked(api.updateProjectSettings).mockResolvedValue({ ...settings, tool_proposal_mode: "scratch" });
     fireEvent.click(within(form).getByRole("button", { name: "Save changes" }));
     await within(form).findByText("Workflow saved.");
@@ -600,8 +606,8 @@ describe("workflow settings", () => {
   });
 
   it("the translation gate, annotators per text and the consolidator rule follow in that order (D3)", async () => {
-    const gateLabel = "Wait for an accepted translation review before annotating";
-    const consolidatorLabel = "The consolidator of a text may not be one of its annotators";
+    const gateLabel = "Annotate only after the translation review is accepted";
+    const consolidatorLabel = "Consolidator must not be one of the text's annotators";
     const view = renderSettings("annotation");
     const annotation = await screen.findByRole("form", { name: "Annotation" });
     expect(within(annotation).queryByRole("checkbox", { name: gateLabel })).toBeNull();
@@ -614,14 +620,14 @@ describe("workflow settings", () => {
     const form = screen.getByRole("form", { name: "Workflow" });
     const gate = within(form).getByRole("checkbox", { name: gateLabel });
     expect(gate).toHaveProperty("checked", true);
-    expect(within(form).getByText("Native source texts are never held back. The Assign dialog can override this for one assignment.")).toBeTruthy();
-    const tools = within(form).getByRole("radiogroup", { name: "Annotators work" });
+    expect(within(form).getByText("Native source texts are never held back by the translation review; the Assign dialog can override this for one assignment.")).toBeTruthy();
+    const tools = within(form).getByRole("radiogroup", { name: "Texts with tool proposals" });
     const count = within(form).getByRole("spinbutton", { name: /Annotators per text/ });
     const consolidator = within(form).getByRole("checkbox", { name: consolidatorLabel });
-    expect(tools.compareDocumentPosition(gate) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(gate.compareDocumentPosition(count) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(count.compareDocumentPosition(consolidator) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(within(form).getByText("Checked when you assign consolidation.")).toBeTruthy();
+    expect(tools.compareDocumentPosition(count) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(count.compareDocumentPosition(gate) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(gate.compareDocumentPosition(consolidator) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(form).getByText("The consolidator rule is checked when you assign consolidation.")).toBeTruthy();
     fireEvent.click(gate);
     fireEvent.click(consolidator);
     fireEvent.click(within(form).getByRole("button", { name: "Save changes" }));
@@ -630,7 +636,7 @@ describe("workflow settings", () => {
 
   it("names the consolidator rule in D2 words", async () => {
     renderSettings("workflow");
-    expect(await screen.findByRole("checkbox", { name: "The consolidator of a text may not be one of its annotators" })).toBeTruthy();
+    expect(await screen.findByRole("checkbox", { name: "Consolidator must not be one of the text's annotators" })).toBeTruthy();
     expect(screen.queryByText(/adjudicator/i)).toBeNull();
   });
 });

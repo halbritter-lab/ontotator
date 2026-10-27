@@ -59,6 +59,24 @@ const anyGuidelinesButton = (page: Page) => page.locator("button.task-guidelines
 const drawer = (page: Page, version: number) => page.getByRole("complementary", { name: `Guidelines v${version}`, exact: true });
 const fileInput = (page: Page) => page.getByLabel("Guideline file (.md or .txt, up to 256 KB)", { exact: true });
 const notSeenLine = (page: Page) => page.locator(".guidelines-not-seen");
+const PUBLISH_HINT = "Everyone sees a notice in their next task. Published versions cannot be edited, only withdrawn.";
+/** The in-force card of Settings › Guidelines shows ``version`` from ``file``. */
+async function expectInForce(page: Page, version: number, file: string, options?: { timeout?: number }) {
+  await expect(page.getByRole("heading", { name: `In force Guidelines v${version}`, level: 2, exact: true })).toBeVisible(options);
+  await expect(page.locator(".guidelines-in-force-file")).toContainText(new RegExp(`^${file.replace(".", "\\.")} · `));
+}
+/** Open the publish form (it opens by itself while nothing is in force). */
+async function openPublish(page: Page) {
+  const open = page.getByRole("button", { name: "Publish a new version", exact: true });
+  await expect(open.or(fileInput(page)).first()).toBeVisible();
+  if (await open.count()) await open.click();
+  await expect(fileInput(page)).toBeVisible();
+}
+/** Choose ``item`` from the "More…" menu of version ``version`` inside ``scope``. */
+async function moreAction(page: Page, scope: Locator, version: number, item: string) {
+  await scope.getByRole("button", { name: `More actions, v${version}`, exact: true }).click();
+  await page.getByRole("menuitem", { name: item, exact: true }).click();
+}
 
 /** Go to ``url``; reload when the page already shows it (a same-hash goto keeps the stale view). */
 async function visit(page: Page, url: string) {
@@ -73,13 +91,11 @@ async function openTask(page: Page, s: GuidelineScenario, task: "annotate-1" | "
 /** Lead on Settings › Guidelines: choose ``file`` (and a note), check the preview facts, publish as ``version``. */
 async function publish(page: Page, s: GuidelineScenario, file: "v1.md" | "v2.md", version: number, note = "") {
   await visit(page, settingsUrl(s));
-  await expect(page.getByRole("heading", { name: "Guidelines", level: 2, exact: true })).toBeVisible();
+  await openPublish(page);
   await fileInput(page).setInputFiles(s.files[file]);
   if (note) await page.getByLabel("What changed? (optional)").fill(note);
   await expect(page.getByRole("region", { name: `Preview of ${file}`, exact: true })).toBeVisible();
-  await expect(page.getByText(`Will be published as v${version}.`, { exact: true })).toBeVisible();
-  await expect(page.getByText("Annotators and reviewers see a notice the next time they open a task.", { exact: true })).toBeVisible();
-  await expect(page.getByText("Earlier versions stay readable. Published versions cannot be changed; a version can only be withdrawn.", { exact: true })).toBeVisible();
+  await expect(page.getByText(PUBLISH_HINT, { exact: true })).toBeVisible();
   await page.getByRole("button", { name: `Publish as v${version}`, exact: true }).click();
   const success = page.locator(".guidelines-success");
   await expect(success).toContainText(`Published v${version}. Annotators and reviewers see the update notice when they next open a task.`);
@@ -166,9 +182,10 @@ test("EMPTY: publish v1, read it in a task, publish v2, review under v2, export 
   try {
     // 1. Lead: empty state, then publish v1 (.md) with its preview.
     await visit(page, settingsUrl(s));
-    await expect(page.getByText("No guidelines yet. Upload a .md or .txt file. Annotators and reviewers will find it in every task.", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "No guidelines yet", level: 2, exact: true })).toBeVisible();
+    await expect(page.getByText("Annotators and reviewers find them in every task.", { exact: true })).toBeVisible();
     await publish(page, s, "v1.md", 1);
-    await expect(page.locator(".guidelines-current-facts")).toContainText(/v1\W+v1\.md\W/);
+    await expectInForce(page, 1, "v1.md");
     await evidence(page, "lead-published-v1");
 
     // 2. Ana: first-exposure notice, drawer (no script run, no image request), submit.
@@ -207,12 +224,14 @@ test("EMPTY: publish v1, read it in a task, publish v2, review under v2, export 
 
     // 3. Lead: Ana left "Not yet seen by"; Ben is still listed.
     await visit(page, settingsUrl(s));
+    // The names open on demand.
+    await notSeenLine(page).getByText("who not yet?", { exact: true }).click();
     await expect(notSeenLine(page)).toContainText(s.display_names.ben);
     await expect(notSeenLine(page)).not.toContainText(s.display_names.ana);
 
     // 4. Lead publishes v2 with a change note.
     await publish(page, s, "v2.md", 2, V2_NOTE);
-    await expect(page.locator(".guidelines-current-note")).toHaveText(V2_NOTE);
+    await expect(page.locator(".guidelines-facts dd").nth(1)).toHaveText(V2_NOTE);
 
     // 5. Ana's next task shows "Guidelines updated to v2" once, not on the following visit.
     await openTask(ana.page, s, "annotate-2");
@@ -303,7 +322,7 @@ test("EMPTY: publish v1, read it in a task, publish v2, review under v2, export 
 
     // 8. Lead withdraws v2: the task button disappears; Documents shows "Guidelines v2 (withdrawn)".
     await visit(page, settingsUrl(s));
-    await page.locator(".guidelines-current-actions").getByRole("button", { name: "Withdraw v2…", exact: true }).click();
+    await moreAction(page, page.locator(".guidelines-current-actions"), 2, "Withdraw v2…");
     const withdraw = page.getByRole("dialog", { name: "Withdraw v2?", exact: true });
     await expect(withdraw).toContainText("The text, file name and change note of v2 are deleted and can no longer be read or exported.");
     await expect(withdraw).toContainText("No guideline is in force until you publish a new version. v1 does not come back automatically.");
@@ -332,15 +351,16 @@ test("EMPTY: publish v1, read it in a task, publish v2, review under v2, export 
     // 9. Lead republishes v1: its text fills the publish form for review and becomes v3.
     await visit(page, settingsUrl(s));
     const versions = page.getByRole("table", { name: "Guideline versions" });
-    await expect(versions.getByRole("button", { name: "Republish v2…" })).toHaveCount(0);
-    await versions.getByRole("button", { name: "Republish v1…", exact: true }).click();
+    // Withdrawn v2 has no actions; v1 offers Republish under More….
+    await expect(versions.getByRole("button", { name: "More actions, v2" })).toHaveCount(0);
+    await moreAction(page, versions, 1, "Republish v1…");
     const preview = page.locator(".guidelines-preview");
     await expect(preview).toBeFocused();
     await expect(preview.getByRole("heading", { name: "Annotation guideline" })).toBeVisible();
     await expect(page.getByLabel("What changed? (optional)")).toHaveValue("Republished v1");
     await page.getByRole("button", { name: "Publish as v3", exact: true }).click();
     await expect(page.locator(".guidelines-success")).toContainText("Published v3.");
-    await expect(page.locator(".guidelines-current-facts")).toContainText(/^v3\W+v1\.md/);
+    await expectInForce(page, 3, "v1.md");
     await evidence(page, "lead-republished-v1");
   } finally {
     await Promise.all([ana.close(), ben.close()]);
@@ -351,7 +371,8 @@ test("PUBLISHED: refused files show the server messages", async ({ page }) => {
   const s = await guidelineScenario(page, "PUBLISHED");
   await loginGuidelineUser(page, s, "lead");
   await visit(page, settingsUrl(s));
-  await expect(page.locator(".guidelines-current-facts")).toContainText(/v1\W+v1\.md\W/);
+  await expectInForce(page, 1, "v1.md");
+  await openPublish(page);
 
   // The server refuses the same files with these codes; the UI shows their messages (admin/errors.ts).
   const refusal = async (file: "big.txt" | "bad.pdf", mimeType: string) => {
@@ -390,14 +411,15 @@ test("PUBLISHED: Publish and Discard stay above a long preview and stick while i
   const s = await guidelineScenario(page, "PUBLISHED");
   await loginGuidelineUser(page, s, "lead");
   await visit(page, settingsUrl(s));
-  await expect(page.locator(".guidelines-current-facts")).toContainText(/v1\W+v1\.md\W/, { timeout: 20_000 });
+  await expectInForce(page, 1, "v1.md", { timeout: 20_000 });
+  await openPublish(page);
   const paragraphs = Array.from({ length: 120 }, (_, index) => `Paragraph ${index + 1}: annotate what the text states about the patient.`);
   await fileInput(page).setInputFiles({ name: "long.md", mimeType: "text/markdown", buffer: Buffer.from(`# Long guideline\n\n${paragraphs.join("\n\n")}\n`) });
   const preview = page.getByRole("region", { name: "Preview of long.md", exact: true });
   await expect(preview).toBeVisible();
   const publishButton = page.getByRole("button", { name: "Publish as v2", exact: true });
   // The consequences come before Publish (#47 A-24); the actions come before the preview.
-  const facts = page.getByText("Will be published as v2.", { exact: true });
+  const facts = page.getByText(PUBLISH_HINT, { exact: true });
   expect(await facts.evaluate((element, button) => !!(element.compareDocumentPosition(button!) & Node.DOCUMENT_POSITION_FOLLOWING), await publishButton.elementHandle())).toBe(true);
   await publishButton.scrollIntoViewIfNeeded();
   await expect(publishButton).toBeInViewport();
@@ -414,7 +436,8 @@ test("PUBLISHED: Publish and Discard stay above a long preview and stick while i
   });
   expect(Math.abs(metrics.bar - metrics.main), `the action bar is stuck to the top of the scroll area: ${JSON.stringify(metrics)}`).toBeLessThanOrEqual(1);
   await expect(preview.getByText("Paragraph 120:", { exact: false })).toBeInViewport();
-  await expect(page.getByText("Will be published as v2.", { exact: true })).not.toBeInViewport();
+  // The hint line sits in the sticky bar, so it stays with the buttons.
+  await expect(facts).toBeInViewport();
   await expect(publishButton).toBeInViewport();
   mkdirSync(resolve(test.info().config.rootDir, "../../build/acceptance-fixes/evidence"), { recursive: true });
   await page.screenshot({ path: resolve(test.info().config.rootDir, "../../build/acceptance-fixes/evidence/d1-guidelines-sticky-actions.png") });

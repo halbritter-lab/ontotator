@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { api, type OntologyInfo, type ProjectPin, type ProjectSettings, type TaskProfile } from "../api/client";
 import { Checkbox, InlineMessage, Select, TextInput } from "../ui";
 import { ErrorNotice } from "./ErrorNotice";
+import { SettingsCard } from "./SettingsCard";
 
 export type PinDraft = Omit<ProjectPin, "allowed_roots"> & { rootsText: string };
 export const draftPins = (pins: ProjectPin[]): Record<string, PinDraft> => Object.fromEntries(pins.map(pin => [pin.ontology_id, { ontology_id: pin.ontology_id, sha256: pin.sha256, t1_profile: pin.t1_profile, rootsText: (pin.allowed_roots ?? []).join(", ") }]));
@@ -115,12 +116,12 @@ export type ToolProposalMode = "proposals" | "scratch";
 export interface WorkflowDraft { import_plan: ProjectSettings["import_plan"]; annotations_per_text: number; tool_proposal_mode: ToolProposalMode; annotate_accepted_translations_only: boolean; adjudicator_not_annotator: boolean }
 export const workflowOf = (settings: ProjectSettings): WorkflowDraft => ({ import_plan: settings.import_plan ?? "review_and_annotate_translations", annotations_per_text: settings.annotations_per_text ?? 1, tool_proposal_mode: settings.tool_proposal_mode ?? "proposals", annotate_accepted_translations_only: settings.annotate_accepted_translations_only ?? true, adjudicator_not_annotator: settings.adjudicator_not_annotator });
 const toolProposalOptions: { value: ToolProposalMode; label: string; help: string }[] = [
-  { value: "proposals", label: "From the proposals", help: "They confirm, reject or correct each proposal and add what the tool missed." },
-  { value: "scratch", label: "From scratch", help: "They start from the plain text and do not see the proposals." },
+  { value: "proposals", label: "Annotators work from the proposals", help: "confirm, reject, correct, add" },
+  { value: "scratch", label: "Annotators start from scratch", help: "proposals hidden" },
 ];
 const importPlanOptions: { value: WorkflowDraft["import_plan"]; label: string }[] = [
   { value: "review_and_annotate_translations", label: "Plan review and annotation for every translation" },
-  { value: "nothing", label: "Do not plan anything (plan texts on Documents)" },
+  { value: "nothing", label: "Plan nothing; I plan texts on Documents" },
 ];
 
 /**
@@ -146,37 +147,37 @@ export function WorkflowFields({ projectKey, value, saved, onChange, disabled }:
   }, [projectKey, target, lowered]);
   const rows = lowered && over?.target === target ? over.rows : null;
   return <>
-    <h2 className="settings-subheading">New imports</h2>
-    <div className="form-group">
-      <div id={`${prefix}-plan-label`} className="form-label">When texts are imported</div>
-      <div role="radiogroup" aria-labelledby={`${prefix}-plan-label`} aria-describedby={`${prefix}-plan-hint`} className="settings-radio-group">
+    <SettingsCard id={`${prefix}-plan`} title="New imports" hint="For texts imported from now on."
+      why="Single texts can be changed on Documents (Plan…); those changes stay.">
+      <div role="radiogroup" aria-labelledby={`${prefix}-plan-title`} aria-describedby={`${prefix}-plan-hint`} className="settings-radio-group">
         {importPlanOptions.map(option => <label key={option.value} className="form-checkbox-row">
           <input type="radio" name={`${prefix}-import-plan`} value={option.value} checked={value.import_plan === option.value} disabled={disabled} onChange={() => onChange({ ...value, import_plan: option.value })} />
           <span>{option.label}</span>
         </label>)}
       </div>
-      <div id={`${prefix}-plan-hint`} className="field-hint">Applies to texts imported from now on. Single texts can be changed on Documents (Plan…); those changes stay.</div>
-    </div>
-    <h2 className="settings-subheading">Texts with tool proposals</h2>
-    <div className="form-group">
-      <div id={`${prefix}-tools-label`} className="form-label">Annotators work</div>
-      <div role="radiogroup" aria-labelledby={`${prefix}-tools-label`} aria-describedby={`${prefix}-tools-hint`} className="settings-radio-group">
+    </SettingsCard>
+    <SettingsCard id={`${prefix}-tools`} title="Texts with tool proposals" hint="Project default; a text's plan can override it until work starts.">
+      <div role="radiogroup" aria-labelledby={`${prefix}-tools-title`} aria-describedby={`${prefix}-tools-hint`} className="settings-radio-group">
         {toolProposalOptions.map(option => <label key={option.value} className="form-checkbox-row">
           <input type="radio" name={`${prefix}-tool-proposals`} value={option.value} checked={value.tool_proposal_mode === option.value} disabled={disabled}
             aria-describedby={`${prefix}-tools-${option.value}`} onChange={() => onChange({ ...value, tool_proposal_mode: option.value })} />
-          <span>{option.label}<span id={`${prefix}-tools-${option.value}`} className="field-hint">{option.help}</span></span>
+          <span>{option.label} <small id={`${prefix}-tools-${option.value}`} className="settings-option-note" aria-hidden="true">{option.help}</small></span>
         </label>)}
       </div>
-      <div id={`${prefix}-tools-hint`} className="field-hint">The project default. A text's plan can override it until work on that text has started.</div>
-    </div>
-    <h2 className="settings-subheading">Annotation and consolidation</h2>
-    <Checkbox id={`${prefix}-translation-gate`} label="Wait for an accepted translation review before annotating"
-      hint="Native source texts are never held back. The Assign dialog can override this for one assignment."
-      checked={value.annotate_accepted_translations_only} disabled={disabled} onChange={event => onChange({ ...value, annotate_accepted_translations_only: event.target.checked })} />
-    <TextInput id={`${prefix}-annotations`} label="Annotators per text" type="number" min={1} max={5} step={1} required hint="An upper limit per text when you assign; fewer is fine." value={Number.isFinite(target) ? String(target) : ""} disabled={disabled}
-      onChange={event => onChange({ ...value, annotations_per_text: event.target.value === "" ? Number.NaN : Number(event.target.value) })} />
-    {rows !== null && <p role="status" className="field-hint">{rows > 0 ? `${rows} ${rows === 1 ? "row has" : "rows have"} more annotators than the new limit. Nobody is removed.` : "Nobody is removed."}</p>}
-    <Checkbox id={`${prefix}-consolidator`} label="The consolidator of a text may not be one of its annotators" hint="Checked when you assign consolidation."
-      checked={value.adjudicator_not_annotator} disabled={disabled} onChange={event => onChange({ ...value, adjudicator_not_annotator: event.target.checked })} />
+    </SettingsCard>
+    <SettingsCard title="Annotation and consolidation"
+      why={<><p>Native source texts are never held back by the translation review; the Assign dialog can override this for one assignment.</p><p>The consolidator rule is checked when you assign consolidation.</p></>}>
+      <div className="settings-card-row">
+        <TextInput id={`${prefix}-annotations`} label="Annotators per text" type="number" min={1} max={5} step={1} required hint="Upper limit; fewer is fine." value={Number.isFinite(target) ? String(target) : ""} disabled={disabled}
+          onChange={event => onChange({ ...value, annotations_per_text: event.target.value === "" ? Number.NaN : Number(event.target.value) })} />
+        <div>
+          <Checkbox id={`${prefix}-translation-gate`} label="Annotate only after the translation review is accepted"
+            checked={value.annotate_accepted_translations_only} disabled={disabled} onChange={event => onChange({ ...value, annotate_accepted_translations_only: event.target.checked })} />
+          <Checkbox id={`${prefix}-consolidator`} label="Consolidator must not be one of the text's annotators"
+            checked={value.adjudicator_not_annotator} disabled={disabled} onChange={event => onChange({ ...value, adjudicator_not_annotator: event.target.checked })} />
+        </div>
+      </div>
+      {rows !== null && <p role="status" className="field-hint">{rows > 0 ? `${rows} ${rows === 1 ? "row has" : "rows have"} more annotators than the new limit. Nobody is removed.` : "Nobody is removed."}</p>}
+    </SettingsCard>
   </>;
 }

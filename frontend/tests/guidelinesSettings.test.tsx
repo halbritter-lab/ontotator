@@ -30,8 +30,22 @@ function choose(file: File) { fireEvent.change(fileInput(), { target: { files: [
 const markdown = (text = "# Hello\n\nWorld", name = "new.md") => new File([text], name, { type: "text/markdown" });
 const versionsTable = () => screen.getByRole("table", { name: "Guideline versions" });
 function row(version: number) {
-  return within(versionsTable()).getAllByRole("row").find(item => within(item).queryByRole("rowheader")?.textContent === `v${version}`)!;
+  return within(versionsTable()).getAllByRole("row").find(item => new RegExp(`^v${version}\\b`).test(within(item).queryByRole("rowheader")?.textContent ?? ""))!;
 }
+const inForce = () => screen.getByRole("region", { name: /^In force/ });
+/** Wait for the in-force card of version `version`. */
+const loaded = (version = 3) => screen.findByRole("heading", { level: 2, name: `In force Guidelines v${version}` });
+/** Open "More…" of version `version` in `scope` and return the menu's item labels. */
+function openMore(scope: HTMLElement, version: number): string[] {
+  fireEvent.click(within(scope).getByRole("button", { name: `More actions, v${version}` }));
+  return screen.getAllByRole("menuitem").map(item => item.textContent ?? "");
+}
+function more(scope: HTMLElement, version: number, item: string) {
+  openMore(scope, version);
+  fireEvent.click(screen.getByRole("menuitem", { name: item }));
+}
+/** Open the publish form while a version is in force. */
+function openPublish() { fireEvent.click(screen.getByRole("button", { name: "Publish a new version" })); }
 
 describe("guideline file checks", () => {
   it("checks type, size and emptiness on file choice with the server messages", async () => {
@@ -49,7 +63,8 @@ describe("guideline file checks", () => {
     await expect(readGuidelineFile(new File(["Plain"], "guide.txt"))).resolves.toEqual({ text: "Plain", kind: "text" });
 
     renderSection();
-    await screen.findByText(/^v3, guide-v3\.md/);
+    await loaded();
+    openPublish();
     choose(new File(["x"], "guide.pdf"));
     expect(await screen.findByText("Upload a .md or .txt file.")).toBeDefined();
     expect(fileInput().getAttribute("aria-invalid")).toBe("true");
@@ -65,42 +80,52 @@ describe("guideline file checks", () => {
 describe("Settings › Guidelines", () => {
   it("shows the empty state with the upload", async () => {
     renderSection(guidelineListing([]));
-    expect(await screen.findByText("No guidelines yet. Upload a .md or .txt file. Annotators and reviewers will find it in every task.")).toBeDefined();
-    expect(screen.getByRole("heading", { level: 2, name: "Guidelines" })).toBeDefined();
+    // Nothing published yet: the upload form shows at once, without a "Publish a new version" step.
+    expect(await screen.findByRole("heading", { level: 2, name: "No guidelines yet" })).toBeDefined();
+    expect(screen.getByText("Annotators and reviewers find them in every task.")).toBeDefined();
     expect(fileInput().getAttribute("accept")).toContain(".md");
-    expect(screen.getByLabelText("What changed? (optional)")).toBeDefined();
-    expect(screen.getByText("Shown to annotators and reviewers with the update notice.")).toBeDefined();
+    expect(screen.queryByLabelText("What changed? (optional)")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Discard" })).toBeNull();
     expect(screen.queryByRole("table")).toBeNull();
     expect(screen.queryByText(/No guideline is in force/)).toBeNull();
     choose(markdown());
     expect(await screen.findByRole("button", { name: "Publish as v1" })).toBeDefined();
+    expect(screen.getByLabelText("What changed? (optional)")).toBeDefined();
+    expect(screen.getByText("Shown with the update notice.")).toBeDefined();
   });
 
-  it("previews the chosen file with size and Will be published as v4", async () => {
+  it("opens the publish form on click and previews the chosen file with size", async () => {
     renderSection();
-    await screen.findByText(/^v3, guide-v3\.md/);
+    await loaded();
+    expect(screen.queryByLabelText("Guideline file (.md or .txt, up to 256 KB)")).toBeNull();
+    openPublish();
+    expect(screen.getByRole("heading", { level: 2, name: "Publish v4" })).toBeDefined();
+    expect(document.activeElement).toBe(fileInput());
+    expect(screen.queryByRole("button", { name: "Publish a new version" })).toBeNull();
     choose(markdown("# Hello\n\n" + "w".repeat(2048)));
     const preview = await screen.findByRole("region", { name: "Preview of new.md" });
     expect(await within(preview).findByRole("heading", { name: "Hello" })).toBeDefined();
     expect(screen.getByText("new.md, 2 KB")).toBeDefined();
-    expect(screen.getByText("Will be published as v4.")).toBeDefined();
-    expect(screen.getByText("Annotators and reviewers see a notice the next time they open a task.")).toBeDefined();
-    expect(screen.getByText("Earlier versions stay readable. Published versions cannot be changed; a version can only be withdrawn.")).toBeDefined();
+    expect(screen.getByText("Everyone sees a notice in their next task. Published versions cannot be edited, only withdrawn.")).toBeDefined();
     expect(screen.getByRole("button", { name: "Publish as v4" }).className).toContain("btn-primary");
+    // Discard drops the file and closes the form again.
     fireEvent.click(screen.getByRole("button", { name: "Discard" }));
     expect(screen.queryByRole("region", { name: "Preview of new.md" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Publish as v4" })).toBeNull();
+    expect(screen.queryByLabelText("Guideline file (.md or .txt, up to 256 KB)")).toBeNull();
+    expect(screen.getByRole("button", { name: "Publish a new version" })).toBeDefined();
   });
 
   it("puts Publish and Discard after the facts and above the preview", async () => {
     renderSection();
-    await screen.findByText(/^v3, guide-v3\.md/);
+    await loaded();
+    openPublish();
     choose(markdown("# Hello\n\n" + "Long text. ".repeat(500)));
     const preview = await screen.findByRole("region", { name: "Preview of new.md" });
     const publish = screen.getByRole("button", { name: "Publish as v4" });
     const discard = screen.getByRole("button", { name: "Discard" });
-    const order = [fileInput(), screen.getByLabelText("What changed? (optional)"), screen.getByText("new.md, 5 KB"),
-      screen.getByText("Will be published as v4."), screen.getByText(/Published versions cannot be changed/), publish, discard, preview];
+    const order = [fileInput(), screen.getByText("new.md, 5 KB"), screen.getByLabelText("What changed? (optional)"),
+      screen.getByText(/Published versions cannot be edited/), publish, discard, preview];
     for (let index = 1; index < order.length; index += 1) {
       expect(order[index - 1].compareDocumentPosition(order[index]) & Node.DOCUMENT_POSITION_FOLLOWING, `element ${index} follows ${index - 1}`).toBeTruthy();
     }
@@ -113,27 +138,28 @@ describe("Settings › Guidelines", () => {
 
   it("publishes with the change note and focuses the success message", async () => {
     renderSection();
-    await screen.findByText(/^v3, guide-v3\.md/);
+    await loaded();
+    openPublish();
     const file = markdown();
     choose(file);
-    fireEvent.change(screen.getByLabelText("What changed? (optional)"), { target: { value: "  Fixed a typo " } });
+    fireEvent.change(await screen.findByLabelText("What changed? (optional)"), { target: { value: "  Fixed a typo " } });
     vi.mocked(api.listGuidelines).mockResolvedValue(guidelineListing([guidelineSummary(4), ...three().versions]));
     fireEvent.click(await screen.findByRole("button", { name: "Publish as v4" }));
     const message = await screen.findByText("Published v4. Annotators and reviewers see the update notice when they next open a task.");
     expect(api.publishGuideline).toHaveBeenCalledWith(KEY, { file, changeNote: "Fixed a typo", expectedLatestVersion: 3 });
     await waitFor(() => expect(document.activeElement?.contains(message)).toBe(true));
     expect(api.listGuidelines).toHaveBeenCalledTimes(2);
-    expect(await screen.findByText(/^v4, guide-v4\.md/)).toBeDefined();
-    expect((screen.getByLabelText("What changed? (optional)") as HTMLInputElement).value).toBe("");
+    expect(await loaded(4)).toBeDefined();
+    expect(screen.queryByLabelText("What changed? (optional)")).toBeNull();
     expect(screen.queryByRole("button", { name: /^Publish as/ })).toBeNull();
   });
 
   it("keeps file and note on a version conflict and reloads the list", async () => {
     renderSection(guidelineListing([]));
-    await screen.findByText(/^No guidelines yet/);
+    await screen.findByRole("heading", { name: "No guidelines yet" });
     const file = markdown();
     choose(file);
-    fireEvent.change(screen.getByLabelText("What changed? (optional)"), { target: { value: "First" } });
+    fireEvent.change(await screen.findByLabelText("What changed? (optional)"), { target: { value: "First" } });
     vi.mocked(api.publishGuideline).mockRejectedValueOnce(conflict());
     vi.mocked(api.listGuidelines).mockResolvedValue(guidelineListing([guidelineSummary(1)]));
     fireEvent.click(await screen.findByRole("button", { name: "Publish as v1" }));
@@ -153,7 +179,8 @@ describe("Settings › Guidelines", () => {
     const pending = deferred<ReturnType<typeof guidelineSummary>>();
     vi.mocked(api.publishGuideline).mockReturnValue(pending.promise);
     renderSection();
-    await screen.findByText(/^v3, guide-v3\.md/);
+    await loaded();
+    openPublish();
     choose(markdown());
     const publish = await screen.findByRole("button", { name: "Publish as v4" });
     fireEvent.click(publish); fireEvent.click(publish);
@@ -163,19 +190,21 @@ describe("Settings › Guidelines", () => {
 
   it("lists versions newest first with Seen by and Read", async () => {
     renderSection(guidelineListing([guidelineSummary(3, { not_seen: [] }), guidelineSummary(2, { reach: { notified: 0, opened: 2, members: 6 } }), guidelineSummary(1)]));
-    expect(await screen.findByText(`v3, guide-v3.md, 18 KB, published 13 Oct, 14:02 by Jana Popp (ann-0002)`)).toBeDefined();
-    // The current-version summary and the v3 row of the table.
-    expect(screen.getAllByText("Seen by 4 of 6 task members").filter(line => !line.closest("table"))).toHaveLength(1);
-    expect(within(row(3)).getByText("Seen by 4 of 6 task members")).toBeDefined();
+    await loaded();
+    // The in-force card: file and size beside the title, then Published, What changed and Seen by.
+    const card = inForce();
+    expect(within(card).getByText("guide-v3.md · 18 KB")).toBeDefined();
+    expect(Array.from(card.querySelectorAll("dt")).map(item => item.textContent)).toEqual(["Published", "What changed", "Seen by"]);
+    expect(Array.from(card.querySelectorAll("dd")).map(item => item.textContent)).toEqual(["13 Oct, 14:02 by Jana Popp (ann-0002)", "Change 3", "4 of 6 task members"]);
     expect(screen.queryByText(/^Not yet seen by/)).toBeNull();
     const table = versionsTable();
-    expect(screen.getByRole("heading", { level: 2, name: "Versions" })).toBeDefined();
-    expect(within(table).getAllByRole("columnheader").map(cell => cell.textContent)).toEqual(["Version", "File", "Change note", "Published", "Seen by", "Actions"]);
-    expect(within(table).getAllByRole("rowheader").map(cell => cell.textContent)).toEqual(["v3", "v2", "v1"]);
-    expect(within(row(2)).getByText("guide-v2.md")).toBeDefined();
+    expect(screen.getByRole("heading", { level: 2, name: "All versions" })).toBeDefined();
+    expect(within(table).getAllByRole("columnheader").map(cell => cell.textContent)).toEqual(["Version", "Published", "What changed", "Seen by", "Actions"]);
+    expect(within(table).getAllByRole("rowheader").map(cell => cell.textContent)).toEqual(["v3 In force", "v2", "v1"]);
     expect(within(row(2)).getByText("Change 2")).toBeDefined();
-    expect(within(row(2)).getByText("Seen by 2 of 6 task members")).toBeDefined();
-    expect(within(row(2)).getByText(/^12 Oct, 14:02/)).toBeDefined();
+    expect(within(row(2)).getByText("2 of 6")).toBeDefined();
+    expect(within(row(3)).getByText("4 of 6")).toBeDefined();
+    expect(within(row(2)).getByText("12 Oct, 14:02")).toBeDefined();
 
     fireEvent.click(within(row(2)).getByRole("button", { name: "Read v2" }));
     const reader = await screen.findByRole("region", { name: "Reading v2" });
@@ -188,23 +217,25 @@ describe("Settings › Guidelines", () => {
     expect(screen.queryByRole("region", { name: /^Reading/ })).toBeNull();
   });
 
-  it("shows not-seen names with notified and and n more as a disclosure after 10", async () => {
+  it("shows the not-seen names, with notified, only on demand", async () => {
     const people = Array.from({ length: 12 }, (_, index) => {
       const number = String(index + 1).padStart(2, "0");
       return { person: { pseudonym: `ann-00${number}`, display_name: `Person ${number}`, is_me: false }, notified: index === 0 };
     });
     renderSection(guidelineListing([guidelineSummary(3, { not_seen: people }), guidelineSummary(2)]));
     const line = await screen.findByText(/^Not yet seen by:/);
-    expect(line.textContent).toBe(`Not yet seen by: Person 01 (ann-0001, notified), ${people.slice(1, 10).map(entry => `${entry.person.display_name} (${entry.person.pseudonym})`).join(", ")}`);
-    const summary = screen.getByText("and 2 more");
-    expect(summary.tagName).toBe("SUMMARY");
-    expect(summary.closest("details")?.textContent).toContain("Person 11 (ann-0011), Person 12 (ann-0012)");
+    expect(line.textContent).toBe(`Not yet seen by: Person 01 (ann-0001, notified), ${people.slice(1).map(entry => `${entry.person.display_name} (${entry.person.pseudonym})`).join(", ")}`);
+    const details = line.closest("details")!;
+    expect(details.open).toBe(false);
+    expect(details.querySelector("summary")!.textContent).toBe("who not yet?");
   });
 
   it("withdraw dialog for the current version adds the no-guideline sentence", async () => {
     renderSection();
-    await screen.findByText(/^v3, guide-v3\.md/);
-    fireEvent.click(screen.getAllByRole("button", { name: "Withdraw v3…" })[0]);
+    await loaded();
+    // Withdraw sits behind More…, in the card and in the table.
+    expect(screen.queryByRole("button", { name: /^Withdraw/ })).toBeNull();
+    more(inForce(), 3, "Withdraw v3…");
     const dialog = await screen.findByRole("dialog", { name: "Withdraw v3?" });
     expect(within(dialog).getByText("The text, file name and change note of v3 are deleted and can no longer be read or exported. The version number, who published it and when stay; results made under v3 keep showing “Guidelines v3 (withdrawn)”. This cannot be undone.")).toBeDefined();
     expect(within(dialog).getByText("No guideline is in force until you publish a new version. v2 does not come back automatically.")).toBeDefined();
@@ -218,8 +249,8 @@ describe("Settings › Guidelines", () => {
 
   it("withdraw dialog for an older version has no such sentence", async () => {
     renderSection();
-    await screen.findByText(/^v3, guide-v3\.md/);
-    fireEvent.click(within(row(2)).getByRole("button", { name: "Withdraw v2…" }));
+    await loaded();
+    more(row(2), 2, "Withdraw v2…");
     const dialog = await screen.findByRole("dialog", { name: "Withdraw v2?" });
     expect(within(dialog).getByText(/^The text, file name and change note of v2 are deleted/)).toBeDefined();
     expect(within(dialog).queryByText(/No guideline is in force/)).toBeNull();
@@ -228,8 +259,8 @@ describe("Settings › Guidelines", () => {
   it("withdraw keeps the reason on conflict and focuses v4 withdrawn. on success", async () => {
     const four = guidelineListing([guidelineSummary(4), ...three().versions]);
     renderSection(four);
-    await screen.findByText(/^v4, guide-v4\.md/);
-    fireEvent.click(screen.getAllByRole("button", { name: "Withdraw v4…" })[0]);
+    await loaded(4);
+    more(row(4), 4, "Withdraw v4…");
     const dialog = await screen.findByRole("dialog", { name: "Withdraw v4?" });
     fireEvent.change(within(dialog).getByLabelText("Reason (optional)"), { target: { value: " Wrong file " } });
     vi.mocked(api.withdrawGuideline).mockRejectedValueOnce(conflict());
@@ -250,8 +281,8 @@ describe("Settings › Guidelines", () => {
 
   it("sends no reason when the reason is blank", async () => {
     renderSection();
-    await screen.findByText(/^v3, guide-v3\.md/);
-    fireEvent.click(within(row(1)).getByRole("button", { name: "Withdraw v1…" }));
+    await loaded();
+    more(row(1), 1, "Withdraw v1…");
     const dialog = await screen.findByRole("dialog", { name: "Withdraw v1?" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Withdraw v1" }));
     await screen.findByText("v1 withdrawn.");
@@ -260,10 +291,10 @@ describe("Settings › Guidelines", () => {
 
   it("withdrawn rows show — and the Withdrawn {date} by {person}: {reason} note without Read or Withdraw", async () => {
     renderSection(guidelineListing([guidelineSummary(3), withdrawnGuideline(2, "Wrong file"), withdrawnGuideline(1)]));
-    await screen.findByText(/^v3, guide-v3\.md/);
+    await loaded();
     const withdrawn = row(2);
     const cells = within(withdrawn).getAllByRole("cell").map(cell => cell.textContent);
-    expect(cells.slice(0, 4)).toEqual(["—not set", "Withdrawn 21 Oct by Jana Popp (ann-0002): Wrong file", "12 Oct, 14:02 by Jana Popp (ann-0002)", "—not set"]);
+    expect(cells.slice(0, 3)).toEqual(["12 Oct, 14:02", "Withdrawn 21 Oct by Jana Popp (ann-0002): Wrong file", "—not set"]);
     expect(within(withdrawn).queryByRole("button")).toBeNull();
     expect(within(row(1)).getByText("Withdrawn 21 Oct by Jana Popp (ann-0002)")).toBeDefined();
     expect(within(row(1)).queryByRole("button")).toBeNull();
@@ -272,9 +303,10 @@ describe("Settings › Guidelines", () => {
   it("shows No guideline is in force when the current version is withdrawn", async () => {
     renderSection(guidelineListing([withdrawnGuideline(4), guidelineSummary(3)]));
     expect(await screen.findByText("No guideline is in force. v4 was withdrawn on 21 Oct by Jana Popp (ann-0002). Publish a new version, or republish an earlier version from the list below.")).toBeDefined();
-    // No current-version summary; only the v3 row of the table states its reach.
-    expect(screen.getAllByText(/^Seen by \d/).map(line => line.closest("table"))).toEqual([versionsTable()]);
-    expect(screen.queryByText(/^No guidelines yet/)).toBeNull();
+    // No in-force card; the publish form is open at once.
+    expect(screen.queryByRole("region", { name: /^In force/ })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "No guidelines yet" })).toBeNull();
+    expect(screen.getByRole("heading", { level: 2, name: "Publish v5" })).toBeDefined();
     choose(markdown());
     expect(await screen.findByRole("button", { name: "Publish as v5" })).toBeDefined();
     fireEvent.click(within(row(3)).getByRole("button", { name: "Read v3" }));
@@ -292,9 +324,10 @@ describe("Settings › Guidelines", () => {
   it("Republish fills the publish form with an earlier version's text for review", async () => {
     renderSection(guidelineListing([withdrawnGuideline(4), guidelineSummary(3), withdrawnGuideline(2), guidelineSummary(1)]));
     await screen.findByText(/^No guideline is in force/);
-    expect(within(row(4)).queryByRole("button", { name: /^Republish/ })).toBeNull();
-    expect(within(row(2)).queryByRole("button", { name: /^Republish/ })).toBeNull();
-    fireEvent.click(within(row(3)).getByRole("button", { name: "Republish v3…" }));
+    // Withdrawn rows have no actions at all.
+    expect(within(row(4)).queryByRole("button")).toBeNull();
+    expect(within(row(2)).queryByRole("button")).toBeNull();
+    more(row(3), 3, "Republish v3…");
     const preview = await screen.findByRole("region", { name: "Preview of guide-v3.md" });
     expect(api.getGuideline).toHaveBeenCalledWith(KEY, 3);
     expect(await within(preview).findByText("Annotate negations.")).toBeDefined();
@@ -310,9 +343,10 @@ describe("Settings › Guidelines", () => {
 
   it("offers Republish for older versions but not for the one in force", async () => {
     renderSection();
-    await screen.findByText(/^v3, guide-v3\.md/);
-    expect(within(row(3)).queryByRole("button", { name: /^Republish/ })).toBeNull();
-    expect(within(row(2)).getByRole("button", { name: "Republish v2…" })).toBeDefined();
+    await loaded();
+    expect(openMore(row(3), 3)).toEqual(["Withdraw v3…"]);
+    fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
+    expect(openMore(row(2), 2)).toEqual(["Republish v2…", "Withdraw v2…"]);
   });
 
   it("shows the load error with a retry", async () => {
@@ -320,6 +354,6 @@ describe("Settings › Guidelines", () => {
     renderSection();
     expect(await screen.findByText("Network down")).toBeDefined();
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
-    expect(await screen.findByText(/^v3, guide-v3\.md/)).toBeDefined();
+    expect(await loaded()).toBeDefined();
   });
 });

@@ -81,7 +81,7 @@ test("page titles share the left padding", async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1, name: "My tasks", exact: true })).toBeVisible();
   const tasks = await left();
   await page.goto(`/#/projects/${encodeURIComponent(s.project)}/settings`);
-  await expect(page.getByRole("heading", { level: 1, name: "Project settings", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /· Settings$/ })).toBeVisible();
   const settings = await left();
   expect(Math.abs(tasks - documents)).toBeLessThanOrEqual(1);
   expect(Math.abs(settings - documents)).toBeLessThanOrEqual(1);

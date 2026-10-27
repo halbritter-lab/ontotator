@@ -4,11 +4,11 @@ import { personLabel } from "../app/identity";
 import { formatTime } from "../app/submissionLabels";
 import { readGuidelineFile, type GuidelineKind } from "../guidelines/fileChecks";
 import { formatGuidelineDay, GuidelineReader, withdrawnNote } from "../guidelines/GuidelineReader";
-import { Button, DataTable, Dialog, GuidelineDocument, InlineMessage, TextInput, type Column, EmptyValue } from "../ui";
+import { Button, DataTable, Dialog, GuidelineDocument, IconMore, InlineMessage, MenuButton, StatusBadge, TextInput, type Column, EmptyValue } from "../ui";
 import { ErrorNotice } from "./ErrorNotice";
+import { SettingsHint } from "./SettingsCard";
 import "../guidelines/guidelines.css";
 
-const NOT_SEEN_SHOWN = 10;
 type NotSeen = NonNullable<GuidelineSummary["not_seen"]>[number];
 type Chosen = { file: File; text: string; kind: GuidelineKind };
 
@@ -48,6 +48,8 @@ function GuidelinesEditor({ projectKey }: { projectKey: string }): JSX.Element {
   const [reason, setReason] = useState("");
   const [withdrawing, setWithdrawing] = useState(false);
   const [withdrawError, setWithdrawError] = useState<unknown>();
+  // The publish form opens on "Publish a new version" (or by itself while nothing is in force).
+  const [publishOpen, setPublishOpen] = useState(false);
   const writing = useRef(false);
   const fileRead = useRef(0);
   const successRef = useRef<HTMLDivElement>(null);
@@ -55,6 +57,7 @@ function GuidelinesEditor({ projectKey }: { projectKey: string }): JSX.Element {
   const focusPreview = useRef(false);
   const readerRef = useRef<HTMLElement>(null);
   const focusSuccess = useRef(false);
+  const focusFile = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -83,7 +86,7 @@ function GuidelinesEditor({ projectKey }: { projectKey: string }): JSX.Element {
   };
   const discard = () => {
     fileRead.current++;
-    setChosen(null); setFileError(null); setNote(""); setPublishError(undefined); setFileKey(value => value + 1);
+    setChosen(null); setFileError(null); setNote(""); setPublishError(undefined); setFileKey(value => value + 1); setPublishOpen(false);
   };
   // Withdrawn texts are deleted, so only a version whose text still exists can be republished: its text
   // fills the publish form as a new file, for review before "Publish as vN".
@@ -98,6 +101,7 @@ function GuidelinesEditor({ projectKey }: { projectKey: string }): JSX.Element {
       const file = new File([document.body], name, { type: document.kind === "markdown" ? "text/markdown" : "text/plain" });
       setFileKey(value => value + 1);
       setNote(`Republished v${version}`);
+      setPublishOpen(true);
       focusPreview.current = true;
       setChosen({ file, text: document.body, kind: document.kind });
     } catch (failure: unknown) {
@@ -146,78 +150,85 @@ function GuidelinesEditor({ projectKey }: { projectKey: string }): JSX.Element {
   const targetIsCurrent = target !== null && current?.version === target.version;
   const previous = target ? versions.find(item => item.version < target.version && !item.withdrawn) ?? null : null;
 
+  const formOpen = publishOpen || chosen !== null || (listing !== null && !current);
+  useEffect(() => { if (publishOpen && focusFile.current) { focusFile.current = false; document.getElementById(`${id}-file`)?.focus(); } }, [publishOpen, id]);
+  const moreItems = (item: GuidelineSummary) => [
+    ...(item.version !== current?.version ? [{ id: "republish", label: `Republish v${item.version}…`, onSelect: () => { void republish(item.version); } }] : []),
+    { id: "withdraw", label: `Withdraw v${item.version}…`, onSelect: () => openWithdraw(item.version) },
+  ];
+  const more = (item: GuidelineSummary, size?: "md") => <MenuButton label={`More actions, v${item.version}`} buttonLabel="More…" icon={<IconMore />} size={size} items={moreItems(item)} />;
+
   const columns: Column<GuidelineSummary>[] = [
-    { id: "version", header: "Version", rowHeader: true, cell: item => `v${item.version}` },
-    { id: "file", header: "File", cell: item => item.withdrawn ? <EmptyValue /> : item.filename ?? <EmptyValue /> },
-    { id: "note", header: "Change note", cell: item => withdrawnNote(item) ?? item.change_note ?? "" },
-    { id: "published", header: "Published", cell: published },
-    { id: "seen", header: "Seen by", cell: item => !item.withdrawn && item.reach ? `Seen by ${item.reach.opened} of ${item.reach.members} task members` : <EmptyValue /> },
-    { id: "actions", header: "Actions", cell: item => item.withdrawn ? null : <div className="guidelines-row-actions">
+    { id: "version", header: "Version", rowHeader: true, cell: item => <>v{item.version}{item.version === current?.version && <> <StatusBadge tone="success">In force</StatusBadge></>}</> },
+    { id: "published", header: "Published", cell: item => formatTime(item.created_at) },
+    { id: "note", header: "What changed", cell: item => withdrawnNote(item) ?? item.change_note ?? "" },
+    { id: "seen", header: "Seen by", cell: item => !item.withdrawn && item.reach ? `${item.reach.opened} of ${item.reach.members}` : <EmptyValue /> },
+    { id: "actions", header: <span className="visually-hidden">Actions</span>, align: "end", cell: item => item.withdrawn ? null : <div className="guidelines-row-actions">
       <Button size="sm" aria-label={`Read v${item.version}`} onClick={() => setReading(item.version)}>Read</Button>
-      {item.version !== current?.version && <Button size="sm" onClick={() => { void republish(item.version); }}>Republish v{item.version}…</Button>}
-      <Button size="sm" onClick={() => openWithdraw(item.version)}>Withdraw v{item.version}…</Button>
+      {more(item)}
     </div> },
   ];
 
   const notSeen = current?.not_seen ?? [];
   return <div className="guidelines-settings">
-    <h2>Guidelines</h2>
     {success && <div ref={successRef} tabIndex={-1} className="guidelines-success"><InlineMessage tone="success" onDismiss={() => setSuccess(null)}>{success}</InlineMessage></div>}
     {loadError !== undefined && <><ErrorNotice error={loadError} /><Button onClick={reload}>Try again</Button></>}
     {listing === null ? loadError === undefined && <InlineMessage tone="info">Loading guidelines…</InlineMessage> : <>
-      {current ? <div className="guidelines-current">
-        <p className="guidelines-current-facts">{`v${current.version}, ${current.filename ?? "—"}, ${formatSize(current.size_bytes)}, published ${published(current)}`}</p>
-        {current.change_note && <p className="guidelines-current-note">{current.change_note}</p>}
-        {current.reach && <p>Seen by {current.reach.opened} of {current.reach.members} task members</p>}
-        {notSeen.length > 0 && <div className="guidelines-not-seen">
-          <p>{`Not yet seen by: ${notSeen.slice(0, NOT_SEEN_SHOWN).map(notSeenLabel).join(", ")}`}</p>
-          {notSeen.length > NOT_SEEN_SHOWN && <details>
-            <summary>and {notSeen.length - NOT_SEEN_SHOWN} more</summary>
-            <p>{notSeen.slice(NOT_SEEN_SHOWN).map(notSeenLabel).join(", ")}</p>
-          </details>}
-        </div>}
-        <div className="guidelines-current-actions">
-          <Button onClick={() => setReading(current.version)}>Read v{current.version}</Button>
-          <Button onClick={() => openWithdraw(current.version)}>Withdraw v{current.version}…</Button>
+      {current ? <section className="settings-card guidelines-in-force" aria-labelledby={`${id}-current`}>
+        <div className="guidelines-in-force-head">
+          <div className="guidelines-in-force-name">
+            <h2 id={`${id}-current`} className="guidelines-card-title"><span className="settings-eyebrow">In force</span> Guidelines v{current.version}</h2>
+            <span className="guidelines-in-force-file">{`${current.filename ?? "—"} · ${formatSize(current.size_bytes)}`}</span>
+          </div>
+          <div className="guidelines-current-actions">
+            <Button aria-label={`Read v${current.version}`} onClick={() => setReading(current.version)}>Read</Button>
+            {!formOpen && <Button variant="primary" onClick={() => { setSuccess(null); focusFile.current = true; setPublishOpen(true); }}>Publish a new version</Button>}
+            {more(current, "md")}
+          </div>
         </div>
-      </div>
-      : latestWithdrawn ? <InlineMessage tone="warning">{`No guideline is in force. v${listing.latest_version} was withdrawn on ${formatGuidelineDay(latestWithdrawn.at)} by ${personLabel(latestWithdrawn.by)}. Publish a new version${versions.some(item => !item.withdrawn) ? ", or republish an earlier version from the list below" : ""}.`}</InlineMessage>
-      : <p className="guidelines-empty">No guidelines yet. Upload a .md or .txt file. Annotators and reviewers will find it in every task.</p>}
+        <dl className="guidelines-facts">
+          <dt>Published</dt><dd>{published(current)}</dd>
+          {current.change_note && <><dt>What changed</dt><dd>{current.change_note}</dd></>}
+          {current.reach && <><dt>Seen by</dt><dd>{current.reach.opened} of {current.reach.members} task members{notSeen.length > 0 && <> <details className="guidelines-not-seen">
+            <summary>who not yet?</summary>
+            <span>{`Not yet seen by: ${notSeen.map(notSeenLabel).join(", ")}`}</span>
+          </details></>}</dd></>}
+        </dl>
+      </section>
+      : latestWithdrawn && <InlineMessage tone="warning">{`No guideline is in force. v${listing.latest_version} was withdrawn on ${formatGuidelineDay(latestWithdrawn.at)} by ${personLabel(latestWithdrawn.by)}. Publish a new version${versions.some(item => !item.withdrawn) ? ", or republish an earlier version from the list below" : ""}.`}</InlineMessage>}
 
-      <form className="guidelines-publish" aria-labelledby={`${id}-publish`} onSubmit={event => { void publish(event); }}>
-        <h3 id={`${id}-publish`}>Publish a new version</h3>
-        <TextInput key={fileKey} id={`${id}-file`} type="file" label="Guideline file (.md or .txt, up to 256 KB)" accept=".md,.markdown,.txt,text/markdown,text/plain"
-          error={fileError} onChange={event => { void choose(event.target.files?.[0]); }} />
-        <TextInput id={`${id}-note`} label="What changed? (optional)" hint="Shown to annotators and reviewers with the update notice." maxLength={280}
-          value={note} onChange={event => setNote(event.target.value)} />
+      {formOpen && <form className={`settings-card guidelines-publish${versions.length ? "" : " guidelines-publish--first"}`} aria-labelledby={`${id}-publish`} onSubmit={event => { void publish(event); }}>
+        <h2 id={`${id}-publish`} className="guidelines-card-title">{versions.length ? `Publish v${nextVersion}` : "No guidelines yet"}</h2>
+        {!versions.length && <SettingsHint>Annotators and reviewers find them in every task.</SettingsHint>}
+        <div className="guidelines-file">
+          <TextInput key={fileKey} id={`${id}-file`} type="file" label="Guideline file (.md or .txt, up to 256 KB)" accept=".md,.markdown,.txt,text/markdown,text/plain"
+            error={fileError} onChange={event => { void choose(event.target.files?.[0]); }} />
+        </div>
         {republishError !== undefined && <ErrorNotice error={republishError} />}
         {chosen && <>
           <p className="guidelines-file-facts">{`${chosen.file.name}, ${formatSize(chosen.file.size)}`}</p>
-          <div className="guidelines-facts">
-            <p><strong>Will be published as v{nextVersion}.</strong></p>
-            <p>Annotators and reviewers see a notice the next time they open a task.</p>
-            <p>Earlier versions stay readable. Published versions cannot be changed; a version can only be withdrawn.</p>
-          </div>
-          {/* The consequences come before Publish (#47 A-24); the action bar still sits above the preview and sticks to the
-              top while a long preview scrolls (finding 9). */}
-          <div className="guidelines-publish-bar">
-            <div className="guidelines-publish-actions">
-              <Button type="submit" variant="primary" loading={publishing}>Publish as v{nextVersion}</Button>
-              <Button aria-disabled={publishing || undefined} onClick={() => { if (!writing.current) discard(); }}>Discard</Button>
-            </div>
-            {publishError !== undefined && <ErrorNotice error={publishError} />}
-          </div>
-          <section ref={previewRef} className="guidelines-preview" aria-label={`Preview of ${chosen.file.name}`} tabIndex={0}>
-            <GuidelineDocument kind={chosen.kind} body={chosen.text} headingOffset={2} />
-          </section>
+          <TextInput id={`${id}-note`} label="What changed? (optional)" hint="Shown with the update notice." maxLength={280}
+            value={note} onChange={event => setNote(event.target.value)} />
         </>}
-      </form>
+        {/* The consequences come before Publish (#47 A-24); the action bar sits above the preview and sticks to the
+            top while a long preview scrolls (finding 9). */}
+        {(chosen || current) && <div className="guidelines-publish-bar">
+          {chosen && <SettingsHint>Everyone sees a notice in their next task. Published versions cannot be edited, only withdrawn.</SettingsHint>}
+          <div className="guidelines-publish-actions">
+            {chosen && <Button type="submit" variant="primary" loading={publishing}>Publish as v{nextVersion}</Button>}
+            <Button aria-disabled={publishing || undefined} onClick={() => { if (!writing.current) discard(); }}>Discard</Button>
+          </div>
+          {publishError !== undefined && <ErrorNotice error={publishError} />}
+        </div>}
+        {chosen && <section ref={previewRef} className="guidelines-preview" aria-label={`Preview of ${chosen.file.name}`} tabIndex={0}>
+          <GuidelineDocument kind={chosen.kind} body={chosen.text} headingOffset={2} />
+        </section>}
+      </form>}
 
       {versions.length > 0 && <section className="guidelines-versions" aria-labelledby={`${id}-versions`}>
-        <h2 id={`${id}-versions`}>Versions</h2>
+        <h2 id={`${id}-versions`} className="settings-section-title">All versions</h2>
         <DataTable label="Guideline versions" columns={columns} rows={versions} rowKey={item => String(item.version)} />
       </section>}
-
       {reading !== null && <section ref={readerRef} tabIndex={-1} className="guidelines-reading" aria-label={`Reading v${reading}`}>
         <GuidelineReader key={`${reading}-${generation}`} projectKey={projectKey} version={reading} currentVersion={current?.version ?? null} />
         <Button onClick={() => setReading(null)}>Close the reading view</Button>

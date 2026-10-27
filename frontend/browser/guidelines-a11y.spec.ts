@@ -200,16 +200,18 @@ test("axe has no violations on the drawer, Settings › Guidelines and the withd
     const leadPage = await lead.newPage();
     await loginGuidelineUser(leadPage, s, "lead");
     await leadPage.goto(`/#/projects/${encodeURIComponent(s.project)}/settings/guideline`);
-    await expect(leadPage.locator(".guidelines-current-facts")).toContainText(/v1\W+v1\.md\W/);
+    await expect(leadPage.getByRole("heading", { name: "In force Guidelines v1", level: 2, exact: true })).toBeVisible();
     await expect(leadPage.getByRole("table", { name: "Guideline versions" })).toBeVisible();
     expect(await axeViolations(leadPage, "main"), "Settings › Guidelines").toEqual([]);
-    // With a chosen file and its preview.
+    // With the publish form open, a chosen file and its preview.
+    await leadPage.getByRole("button", { name: "Publish a new version", exact: true }).click();
     await leadPage.getByLabel("Guideline file (.md or .txt, up to 256 KB)", { exact: true }).setInputFiles(s.files["v2.md"]);
     await expect(leadPage.getByRole("button", { name: "Publish as v2", exact: true })).toBeVisible();
     expect(await axeViolations(leadPage, "main"), "Settings › Guidelines with preview").toEqual([]);
     await evidence(leadPage, "axe-settings");
 
-    await leadPage.locator(".guidelines-current-actions").getByRole("button", { name: "Withdraw v1…", exact: true }).click();
+    await leadPage.locator(".guidelines-current-actions").getByRole("button", { name: "More actions, v1", exact: true }).click();
+    await leadPage.getByRole("menuitem", { name: "Withdraw v1…", exact: true }).click();
     const dialog = leadPage.getByRole("dialog", { name: "Withdraw v1?", exact: true });
     await expect(dialog).toBeVisible();
     await expect(dialog).toContainText("No guideline is in force until you publish a new version.");
