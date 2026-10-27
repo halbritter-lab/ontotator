@@ -89,6 +89,16 @@ export function summaryText(groups: readonly ConsolidationGroupView[], added = 0
   return `${plural(groups.length, "group", "groups")}, ${plural(findings, "finding", "findings")}, ${leftOut} ${NOT_IN_RESULT}`;
 }
 
+/** R-3: the open group's result repeats a term another group already keeps. */
+export function duplicateTermHint(term: string, others: readonly string[]): string {
+  return `${term} is already in the result (${others.map(quoted).join(", ")}). Keep adds a second ${term} finding.`;
+}
+
+/** R-3: terms the result holds more than once, in the submit summary. */
+export function duplicatesText(terms: readonly string[]): string | null {
+  return terms.length ? `More than one finding with the same term: ${terms.join(", ")}.` : null;
+}
+
 export const SUBMIT_LABEL = "Submit consolidation";
 
 export function submitReason(open: number): string {

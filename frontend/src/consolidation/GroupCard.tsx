@@ -19,8 +19,8 @@ import { useTermLabels } from "../editor/useTermLabels";
 import { Button, Checkbox, InlineConfirm, MenuButton, Select, Textarea } from "../ui";
 import { IconUndo, IconWarning } from "../ui/icons";
 import { ComparisonTable } from "./ComparisonTable";
-import { axisLabel, groupStatus, labelWithQuote, keepLabel, namesOf, NO_ATTACH_TARGET, NOT_IN_RESULT, partialText, REOPEN_EDITED_WARNING, standaloneResult, standaloneWarning } from "./consolidationText";
-import { absentPeople, attachCandidates, choicesComplete, choose, comparisonRows, groupName, hasKind, isStandalone, memberSets, needsTerm, presentPeople, resolvePayload, resultLine, standaloneText, storedResult, type Choices, type ComparisonRow, type OtherTerm } from "./groupModel";
+import { axisLabel, duplicateTermHint, groupStatus, labelWithQuote, keepLabel, namesOf, NO_ATTACH_TARGET, NOT_IN_RESULT, partialText, REOPEN_EDITED_WARNING, standaloneResult, standaloneWarning } from "./consolidationText";
+import { absentPeople, attachCandidates, choicesComplete, choose, comparisonRows, groupName, hasKind, isStandalone, memberSets, needsTerm, presentPeople, resolvePayload, resultLine, sameTermGroups, standaloneText, storedResult, type Choices, type ComparisonRow, type OtherTerm } from "./groupModel";
 import { crossLinks, setText, type ModifierView } from "./modifierSets";
 import { ResultLine } from "./ResultLine";
 import { TermPicker, useTermSearch } from "./TermPicker";
@@ -170,6 +170,8 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
     members: memberSets(value, people).map((set, index) => ({ ...set, termLabel: value.members[index].term_label || value.members[index].term_id })) })), text),
   [group.group_id, allGroups, people, text]);
   const inputIds = group.members.map(member => member.input_id);
+  const sameTerm = line.termId ? sameTermGroups(group, allGroups, line.termId) : [];
+  const termName = group.members.find(member => member.term_id === line.termId)?.term_label || otherTerm?.label || line.termId;
   const status = groupStatus(group, conflicts);
   const stored = useMemo(() => (open ? null : storedResult(group, text)), [open, group, text]);
   const decidedText = props.summary ?? stored?.line.finding;
@@ -262,6 +264,8 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
     {!readOnly && standalone && standaloneBody}
     {!readOnly && !standalone && <>
       <ResultLine line={line} staged={staged} />
+      {sameTerm.length > 0 && <p className="cons-partial"><IconWarning className="cons-conflict-mark" /><span className="visually-hidden">Warning: </span>
+        {duplicateTermHint(termName ?? "", sameTerm.map(other => groupName(other, text)))}</p>}
       {/* Note and flag go with the decision, so they come before Keep. */}
       {noteAndFlag(false)}
       {editing && workspace ? <EditValues group={group} workspace={workspace} text={text} busy={busy} onKeep={editValues} onCancel={() => setEditing(false)} />

@@ -54,6 +54,17 @@ describe("GroupCard", () => {
     }, "Hypotonia (HP:0001252), Absent, Patient, Current");
   });
 
+  it("hints when the result repeats a term another group already keeps (R-3)", () => {
+    const spanless = group("g-f", ["partial"], [member("in-f", TOM, "HP:0012378", "Fatigue", [])]);
+    const other = group("g-f2", ["partial"], [member("in-g", LUC, "HP:0012378", "Fatigue", [span("hypotonia")])], { state: "keep",
+      result: { term_id: "HP:0012378", term_label: "Fatigue", layer_id: "phenotype", axes: {}, modifiers: [] } });
+    renderCard(spanless, { groups: [other, spanless] });
+    expect(screen.getByText("Fatigue is already in the result (“hypotonia”). Keep adds a second Fatigue finding.")).toBeTruthy();
+    cleanup();
+    renderCard(spanless, { groups: [spanless] });
+    expect(screen.queryByText(/is already in the result/)).toBeNull();
+  });
+
   it("a decided group shows what was kept without this session's summary, also read-only (R-2)", () => {
     const decided = hypotoniaThree({ state: "choose", annotation_ids: ["cons-1"],
       result: { term_id: "HP:0001252", term_label: "Hypotonia", layer_id: "phenotype", axes: { assertion: "absent", experiencer: "patient", temporality: "current" }, modifiers: [] } });

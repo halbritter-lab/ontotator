@@ -7,6 +7,8 @@ import type { AxisWarning } from "./useConsolidation";
 export interface SummaryDialogProps {
   open: boolean;
   summary: string;
+  /** R-3: terms the result holds more than once ("More than one finding with the same term: Fatigue."). */
+  duplicates?: string | null;
   busy: boolean;
   warning: AxisWarning | null;
   error: unknown;
@@ -14,7 +16,7 @@ export interface SummaryDialogProps {
   onClose: () => void;
 }
 
-export function SummaryDialog({ open, summary, busy, warning, error, onSubmit, onClose }: SummaryDialogProps): JSX.Element {
+export function SummaryDialog({ open, summary, duplicates, busy, warning, error, onSubmit, onClose }: SummaryDialogProps): JSX.Element {
   const [acknowledged, setAcknowledged] = useState(false);
   const blocked = !!warning && !acknowledged;
   return <Dialog open={open} title="Submit consolidation?" onClose={busy ? undefined : onClose} footer={<>
@@ -24,6 +26,7 @@ export function SummaryDialog({ open, summary, busy, warning, error, onSubmit, o
   </>}>
     <p>The lead then accepts the result.</p>
     <p className="cons-summary">{summary}</p>
+    {duplicates && <InlineMessage tone="warning">{duplicates}</InlineMessage>}
     {warning && <>
       {(warning.count > 0 || !warning.modifiers) && <InlineMessage tone="warning">{warning.count === 1 ? "1 finding has" : `${warning.count || "Some"} findings have`} values that were filled in by default, not chosen. Check them before you submit.</InlineMessage>}
       {warning.modifiers > 0 && <InlineMessage tone="warning">{warning.modifiers === 1 ? "1 finding has" : `${warning.modifiers} findings have`} modifier warnings (cohort term or two of one kind).</InlineMessage>}

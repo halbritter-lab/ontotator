@@ -56,11 +56,33 @@ export function termLabel(member: Pick<ConsolidationMemberView, "term_id" | "ter
   return member.term_label && member.term_label !== member.term_id ? `${member.term_label} (${member.term_id})` : member.term_id;
 }
 
-/** Card name: the text excerpt of the default member ("muscular hypotonia"); the terms when it has no span. */
+/** Card name: the text excerpt of the default member ("muscular hypotonia"); the terms when it has no span, marked as
+ *  such so it stands apart from a group of the same term with a span (R-3). */
 export function groupName(group: ConsolidationGroupView, text: string): string {
   const base = group.members.find(member => member.input_id === group.keep_input_id) ?? group.members[0];
   if (base?.spans.length) return passage(text, base.spans);
-  return [...new Set(group.members.map(member => member.term_label || member.term_id))].join(" / ");
+  return `${[...new Set(group.members.map(member => member.term_label || member.term_id))].join(" / ")} (no text span)`;
+}
+
+/** Kept findings of a decided group: its result term, none while open or left out. */
+const keptTerm = (group: ConsolidationGroupView) => group.state === "open" || group.state === "leave_out" ? null : group.result ?? null;
+
+/** Other decided groups that already keep `termId` on the group's layer (R-3): keeping this group adds a second finding of it. */
+export function sameTermGroups(group: ConsolidationGroupView, groups: readonly ConsolidationGroupView[], termId: string): ConsolidationGroupView[] {
+  const layerId = group.members[0]?.layer_id;
+  return groups.filter(other => other.group_id !== group.group_id && keptTerm(other)?.term_id === termId && keptTerm(other)?.layer_id === layerId);
+}
+
+/** Term labels kept by more than one decided group, for the submit summary (R-3). */
+export function duplicateTerms(groups: readonly ConsolidationGroupView[]): string[] {
+  const counts = new Map<string, { label: string; count: number }>();
+  for (const group of groups) {
+    const kept = keptTerm(group);
+    if (!kept) continue;
+    const key = `${kept.layer_id} ${kept.term_id}`;
+    counts.set(key, { label: kept.term_label || kept.term_id, count: (counts.get(key)?.count ?? 0) + 1 });
+  }
+  return [...counts.values()].filter(entry => entry.count > 1).map(entry => entry.label);
 }
 
 export type RowKind = "term" | "axis" | "text" | "modifiers" | "note" | "whole";
@@ -224,6 +246,8 @@ export interface ResultPart { text: string; axis?: string | null }
 export interface ResultText {
   /** "Hypotonia (HP:0001252), Absent, Patient, Current". */
   finding: string;
+  /** The result's term id (live result line only). */
+  termId?: string;
   parts?: ResultPart[];
   saved: string;
   notTaken: string | null;
@@ -266,6 +290,7 @@ export function resultLine(group: ConsolidationGroupView, people: readonly Conso
   });
   return {
     finding,
+    termId,
     parts,
     saved: `Result: 1 finding, ${finding}`,
     notTaken: others.size ? `Not taken: ${[...others].map(([label, who]) => `${label} (${who.join(", ")})`).join(", ")}` : null,
