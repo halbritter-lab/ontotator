@@ -30,6 +30,8 @@ it("is a two-line button with the project and its accessible name", () => {
   expect(trigger.getAttribute("aria-label")).toBe("Project: First study, switch project");
   expect(trigger.querySelector(".project-switcher__label")?.textContent).toBe("Project");
   expect(trigger.querySelector(".project-switcher__name")?.textContent).toBe("First study");
+  // The name is clamped to two lines in CSS; the title keeps the full name.
+  expect(trigger.querySelector(".project-switcher__name")?.getAttribute("title")).toBe("First study");
   expect(trigger.getAttribute("aria-haspopup")).toBe("dialog");
   expect(trigger.getAttribute("aria-expanded")).toBe("false");
   expect(trigger.getAttribute("aria-keyshortcuts")).toBe("Alt+P");

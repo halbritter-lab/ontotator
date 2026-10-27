@@ -107,7 +107,7 @@ export function Shell({ user, projects, route, onNavigate, onLogout, breadcrumb,
       </ul>
     </section>}
     {current?.can_manage && <section className="shell-nav-group" aria-label="Current project sections">
-        <h2>{current.name}</h2>
+        <h2 title={current.name}>{current.name}</h2>
         <ul className="shell-nav-list">
           {documentsLink(current.project_key)}
           {link({ name: "projectProgress", key: current.project_key }, "Progress")}

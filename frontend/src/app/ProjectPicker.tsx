@@ -96,7 +96,7 @@ export function ProjectSwitcher({ projects, current, route, onNavigate, onChoose
       onClick={() => { if (open) close(); else show(); }}>
       <span className="project-switcher__text">
         <span className="project-switcher__label">Project</span>
-        <span className="project-switcher__name">{name}</span>
+        <span className="project-switcher__name" title={name}>{name}</span>
       </span>
       <span className="project-switcher__chevron" aria-hidden="true"><IconSortDown /></span>
     </button>
