@@ -25,7 +25,8 @@ describe("LanguagesField", () => {
     const input = screen.getByLabelText("Languages you can read") as HTMLInputElement;
     expect(input.id).toBe("languages");
     expect(input.value).toBe("");
-    expect(Array.from(input.list!.options).map((option) => option.value)).toEqual(["de", "en", "es", "fr", "it", "nl", "pt", "pl"]);
+    fireEvent.focus(input);
+    expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual(["de", "en", "es", "fr", "it", "nl", "pt", "pl"]);
     expect(state.onChange).not.toHaveBeenCalled();
     expect((screen.getByRole("button", { name: "Add language" }) as HTMLButtonElement).disabled).toBe(true);
   });
@@ -38,6 +39,19 @@ describe("LanguagesField", () => {
     expect(screen.getByRole("button", { name: "Remove de" })).toBeDefined();
     expect((screen.getByLabelText("Languages you can read") as HTMLInputElement).value).toBe("");
     expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("picks a suggestion by arrow keys and Enter; the list sits under the field and hides chosen codes", async () => {
+    const state = props({ value: ["en"] });
+    render(<LanguagesField {...state} />);
+    const user = userEvent.setup();
+    const input = screen.getByLabelText("Languages you can read");
+    await user.type(input, "e");
+    expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual(["es"]);
+    expect(screen.getByRole("listbox").closest(".suggest-field")?.contains(input)).toBe(true);
+    await user.keyboard("{ArrowDown}{Enter}");
+    expect(state.onChange).toHaveBeenCalledWith(["en", "es"]);
+    expect(screen.queryByRole("listbox")).toBeNull();
   });
 
   it("accepts a two-letter free entry through Add", async () => {

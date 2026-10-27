@@ -33,3 +33,4 @@ export * from "./AxisValue";
 export * from "./StagePath";
 export * from "./AssignedDate";
 export * from "./useDocumentTitle";
+export * from "./SuggestInput";

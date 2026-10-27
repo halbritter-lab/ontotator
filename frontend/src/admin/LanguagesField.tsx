@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { Button } from "../ui/Button";
 import { IconButton } from "../ui/IconButton";
-import { TextInput } from "../ui/TextInput";
+import { SuggestInput } from "../ui/SuggestInput";
 import { IconClose } from "../ui/icons";
 import { LanguageTag } from "../ui/LanguageTag";
 
@@ -30,9 +30,9 @@ export function LanguagesField({ id, label, value, onChange, disabled = false, h
     const code = text.trim().toLowerCase();
     return !code ? "" : /^[a-z]{2}$/.test(code) ? pendingCode : invalidCode;
   };
-  const commit = () => {
+  const commit = (text = draft) => {
     if (disabled) return;
-    const code = draft.trim().toLowerCase();
+    const code = text.trim().toLowerCase();
     if (code && !/^[a-z]{2}$/.test(code)) {
       setError(invalidCode);
       inputRef.current?.setCustomValidity(invalidCode);
@@ -47,8 +47,9 @@ export function LanguagesField({ id, label, value, onChange, disabled = false, h
   };
 
   return <div>
-    <TextInput ref={inputRef} id={id} label={label} value={draft} disabled={disabled}
-      list={`${id}-suggestions`} autoComplete="off" autoCapitalize="none" spellCheck={false}
+    <SuggestInput ref={inputRef} id={id} label={label} value={draft} disabled={disabled}
+      suggestions={commonLanguageCodes.filter(code => code.startsWith(draft.trim().toLowerCase()) && !value.includes(code)).map(code => ({ value: code }))}
+      onPick={code => commit(code)} autoCapitalize="none" spellCheck={false}
       hint={`${hint ? `${hint} ` : ""}Press Enter or Add to add a language.`} error={error}
       onChange={(event) => {
         setDraft(event.target.value);
@@ -57,7 +58,7 @@ export function LanguagesField({ id, label, value, onChange, disabled = false, h
         // requestSubmit; native validation prevents saving the old array.
         event.currentTarget.setCustomValidity(validityMessage(event.target.value));
       }}
-      onBlur={commit}
+      onBlur={() => commit()}
       onInvalid={(event) => setError(event.currentTarget.validationMessage)}
       onKeyDown={(event) => {
         if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
@@ -65,11 +66,8 @@ export function LanguagesField({ id, label, value, onChange, disabled = false, h
         event.stopPropagation();
         commit();
       }} />
-    <datalist id={`${id}-suggestions`}>
-      {commonLanguageCodes.map((code) => <option key={code} value={code} />)}
-    </datalist>
     <div className="toolbar">
-      <Button type="button" size="sm" disabled={disabled || !draft.trim()} onClick={commit}>Add language</Button>
+      <Button type="button" size="sm" disabled={disabled || !draft.trim()} onClick={() => commit()}>Add language</Button>
       {value.length > 0 && <ul className="language-tokens" aria-label={`${label}: selected languages`}>
         {value.map((code, index) => <li key={`${code}-${index}`} className="language-token">
           <LanguageTag code={code} />

@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { api, ApiError, type Member, type MemberCandidate } from "../api/client";
-import { Button, Checkbox, ConfirmDialog, DataTable, EmptyState, InlineMessage, StatusBadge, TextInput, type Column, type StatusTone, EmptyValue } from "../ui";
+import { Button, Checkbox, ConfirmDialog, DataTable, EmptyState, InlineMessage, StatusBadge, SuggestInput, type Column, type StatusTone, EmptyValue } from "../ui";
 import { ErrorNotice } from "./ErrorNotice";
 import { labelFor, roleLabels, taskLabels } from "../app/labels";
 import { personLabel } from "../app/identity";
@@ -127,8 +127,8 @@ function MemberEditor({ projectKey, isSystemAdmin }: MembersSectionProps): JSX.E
       if (!newRoles.length) { setError(new Error("Choose at least one role for the new member.")); return; }
       void change(username, newRoles, false, true);
     }}><fieldset disabled={blocked}><legend>Add member</legend>
-      <TextInput id={`${id}-username`} label="Username" hint="Type at least three letters of the name of someone from your projects, or the exact username or e-mail of anyone else." value={username} required autoFocus autoComplete="off" list={`${id}-suggestions`} onChange={event => typeUsername(event.target.value)} />
-      <datalist id={`${id}-suggestions`}>{suggestions.map(user => <option key={user.username} value={user.username}>{user.display_name} ({user.username})</option>)}</datalist>
+      <SuggestInput id={`${id}-username`} label="Username" hint="Type at least three letters of the name of someone from your projects, or the exact username or e-mail of anyone else." value={username} required autoFocus onChange={event => typeUsername(event.target.value)}
+        suggestions={suggestions.filter(user => user.username !== username).map(user => ({ value: user.username, label: user.display_name }))} onPick={typeUsername} />
       {roles.map(role => <Checkbox key={role} id={`${id}-new-${role}`} label={roleLabels[role]} aria-label={`New member: ${roleLabels[role]}`} checked={newRoles.includes(role)} onChange={event => setNewRoles(event.target.checked ? [...newRoles, role] : newRoles.filter(item => item !== role))} />)}
       <div className="settings-section-actions">
         <Button type="submit" variant="primary" loading={busy}>Add member</Button>
