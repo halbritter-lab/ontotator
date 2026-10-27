@@ -2611,12 +2611,32 @@ details.case-version-controls > .btn { vertical-align: bottom; }
   color: var(--text-muted);
 }
 
-/* The consolidate form's heading leads its fields: never weaker than the "Submissions to merge" legend (R-22). */
+/* The consolidate form: heading, then the intro, then the fields as labelled groups on one even rhythm. The heading
+   leads (R-22); the legend reads like the field labels below it, not like a second heading. */
+.detail-section.consolidation-launcher {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+}
+.detail-section.consolidation-launcher > * { margin: 0; }
+.detail-section.consolidation-launcher > :is(fieldset, .form-group) { justify-self: stretch; max-width: 32rem; }
 .detail-section.consolidation-launcher > h3 {
   font-size: var(--size-md);
   line-height: var(--leading-md);
   color: var(--text);
 }
+.detail-section.consolidation-launcher > p:not([class]) { color: var(--text-muted); font-size: var(--size-sm); line-height: var(--leading-sm); }
+.consolidation-launcher > fieldset { display: grid; gap: var(--space-1); min-width: 0; padding: 0; border: 0; }
+.consolidation-launcher > fieldset > legend {
+  margin-bottom: var(--space-1);
+  padding: 0;
+  font-size: var(--size-sm);
+  line-height: var(--leading-sm);
+  font-weight: var(--weight-strong);
+}
+.consolidation-launcher > fieldset .form-group { margin: 0; }
+/* A hint under the Consolidator field belongs to it, not to the next field. */
+.consolidation-launcher > .form-group + .cell-secondary { margin-top: calc(-1 * var(--space-2)); }
 
 .replacement-banner {
   display: flex;
