@@ -604,7 +604,8 @@ export class SpanEditor {
       const to = this._offsetOf(range.endContainer, range.endOffset);
       if (from === null || to === null) continue;
       const span = trimToVisible(this.text, from, to);
-      if (span) spans.push(span);
+      // A double click just after a word selects the "." alone: punctuation only is no mark (#23).
+      if (span && /[^\p{P}]/u.test(this.text.slice(span.start, span.end))) spans.push(span);
       this._caret = to;
     }
     selection.removeAllRanges();
