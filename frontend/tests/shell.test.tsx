@@ -213,6 +213,7 @@ describe("role-based shell", () => {
     render(<Shell {...props({ projects: [project("first", true), { ...project("second", true), name: "Second" }], route: { name: "projects" } })} />);
     expect(screen.getByRole("button", { name: "Project: Second, switch project" })).toBeDefined();
     expect(screen.getByRole("region", { name: "Current project sections" })).toBeDefined();
+    expect(screen.getByRole("heading", { name: "Second" }).getAttribute("title")).toBe("Second");
   });
 
   it("puts the switcher first inside Sections in the reading shell", async () => {
