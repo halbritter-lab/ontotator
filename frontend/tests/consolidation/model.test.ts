@@ -64,6 +64,13 @@ describe("comparison model", () => {
     expect(conflicting.cells).toHaveLength(3);
   });
 
+  it("a one-person group reads the text without the overlap suffix, spanless too (R-9)", () => {
+    const spanless = group("g-fatigue", ["partial"], [member("in-f", BEN, "HP:0012378", "Fatigue", [], { note: "Says tired." })]);
+    expect(rowOf(comparisonRows(spanless, [BEN], TEXT, {}), "text")).toMatchObject({ info: null, agreed: "No text span" });
+    const single = group("g-hypo1", ["partial"], [member("in-h", BEN, "HP:0001252", "Hypotonia", [span("hypotonia")])]);
+    expect(rowOf(comparisonRows(single, [BEN], TEXT, {}), "text")).toMatchObject({ info: null, agreed: "“hypotonia”" });
+  });
+
   it("notes never block", () => {
     const rows = comparisonRows(hypotoniaThree({}, { tom: { note: "Mild." }, mia: { note: "Negated." } }), THREE, TEXT, {});
     expect(rowOf(rows, "note")).toMatchObject({ conflict: false, agreed: null });
