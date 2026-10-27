@@ -585,6 +585,34 @@ def test_commit_rechecks_after_a_real_import_lock_wait(staged, change):
     assert admin.get(f"{BASE}/{upload['id']}").json()["status"] == "failed"
 
 
+def test_preview_parses_before_waiting_for_the_import_lock(staged, monkeypatch):
+    from test_admin_write_authority import _wait_for_database_lock
+
+    from ontotator.exchange import uploads
+    from ontotator.storage.repository import _lock_id
+
+    app, admin = staged
+    parses = []
+    real = uploads.read_sources
+    monkeypatch.setattr(
+        uploads, "read_sources", lambda *a: parses.append(a) or real(*a)
+    )
+    queued = _create(admin).json()
+    with app.state.repo.db.engine.begin() as holder:
+        holder.execute(select(func.pg_advisory_xact_lock(_lock_id("import"))))
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            pending = pool.submit(_run, app, queued["job_id"])
+            try:
+                _wait_for_database_lock(app, pending)
+                # A slow parse no longer holds the lock every import waits for.
+                assert len(parses) == 1
+            finally:
+                holder.commit()
+            job = pending.result(timeout=15)
+    assert job.status == "succeeded", job.error
+    assert len(parses) == 1  # the parse is reused under the lock
+
+
 def test_empty_sets_keep_original_tool_producers_in_import_audit(staged, tmp_path):
     app, admin = staged
     path = bundle(tmp_path / "empty.zip", [unit("doc", annotations=[])])
