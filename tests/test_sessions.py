@@ -19,6 +19,7 @@ from sqlalchemy import insert, text, update
 import ontotator.auth.sessions as sessions_module
 from ontotator.auth.accounts import AccountService
 from ontotator.auth.audit import Actor
+from ontotator.auth.login_attempts import client_address
 from ontotator.auth.sessions import SessionService
 from ontotator.domain.errors import LoginFailed
 from ontotator.storage.tables import LoginAttemptRow, PasswordCredentialRow
@@ -102,6 +103,32 @@ def test_five_failures_lock_the_name_from_that_address_for_the_window(
 
     services.clock.advance(minutes=15, seconds=1)
     services.sessions.login("alice", PASSWORD, client_ip="10.0.0.1")
+
+
+def test_client_address_groups_ipv6_by_64() -> None:
+    assert client_address("2001:db8:1:2:aaaa::1") == "2001:db8:1:2::/64"
+    assert client_address("10.0.0.1") == "10.0.0.1"
+    assert client_address("::ffff:10.0.0.1") == "::ffff:10.0.0.1"
+    assert client_address(None) == "unknown"
+    assert client_address("testclient") == "testclient"
+
+
+def test_failures_from_one_ipv6_64_share_one_lockout(services: Services) -> None:
+    for number in range(5):
+        with pytest.raises(LoginFailed):
+            services.sessions.login(
+                "alice",
+                "wrong password!",
+                client_ip=client_address(f"2001:db8:1:2::{number % 2 + 1}"),
+            )
+
+    with pytest.raises(LoginFailed):
+        services.sessions.login(
+            "alice", PASSWORD, client_ip=client_address("2001:db8:1:2::ffff")
+        )
+    services.sessions.login(
+        "alice", PASSWORD, client_ip=client_address("2001:db8:1:3::1")
+    )
 
 
 def test_many_failures_from_one_address_lock_that_address(services: Services) -> None:
