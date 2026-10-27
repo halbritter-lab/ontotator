@@ -1494,6 +1494,12 @@
   flex-basis: 100%;
 }
 
+/* A notice in the actions row (submitted, paused) is as high as the buttons beside it. */
+.app-actions > .notice {
+  margin: 0 0 0 var(--space-2);
+  padding: 4px 12px;
+}
+
 .app-actions .status-badge {
   margin-right: var(--space-2);
   padding-inline: 0;

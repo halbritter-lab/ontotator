@@ -28,6 +28,8 @@ export type AxisDefinition = components["schemas"]["AxisDefinition"];
 export interface AnnotationPanelProps {
   source?: EditorProposal;
   readOnly?: boolean;
+  /** No selection and nothing to select (a read-only text without findings): no empty-state ballast (#25). */
+  hideEmpty?: boolean;
   annotation: AnnotationSnapshot | null;
   allEvidence: Record<string, EvidenceSnapshot>;
   workspaceKey: WorkspaceKey;
@@ -96,6 +98,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
   annotation,
   source,
   readOnly = false,
+  hideEmpty = false,
   allEvidence,
   workspaceKey,
   searchManager,
@@ -164,6 +167,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
   }, [searchRequest]);
 
   if (!annotation) {
+    if (hideEmpty) return null;
     return (
       <div className="detail-pane">
         <div className="detail-section detail-empty">
