@@ -12,7 +12,9 @@ ROOT = Path(__file__).resolve().parents[1]
 DIGEST = "sha256:" + "a" * 64
 STUBS = {
     "gh": "echo stub-token",
-    "docker": 'if [[ "$1" == buildx ]]; then echo "${STUB_DIGEST}"; fi',
+    # The existence check (no --format) finds no tag unless STUB_EXISTS is set.
+    "docker": 'if [[ "$1" == buildx ]]; then [[ "$*" == *--format* ]] '
+    '&& echo "${STUB_DIGEST}" || [[ -n "${STUB_EXISTS:-}" ]]; fi',
 }
 
 
@@ -66,24 +68,23 @@ def publish(tmp_path):
     return run
 
 
-def test_builds_pushes_both_tags_and_prints_digest_reference(publish):
+def test_builds_scans_pushes_the_version_tag_and_prints_digest_reference(publish):
     result, calls = publish("0.4.0")
     assert result.returncode == 0, result.stderr
     docker = [call for call in calls if call.startswith("docker")]
-    assert docker[0].startswith(
-        "docker build --secret id=github_token,env=GITHUB_TOKEN"
-    )
     assert (
-        "-t ghcr.io/janpower/ontotator:0.4.0 -t ghcr.io/janpower/ontotator:latest"
-        in docker[0]
+        docker[0] == "docker buildx imagetools inspect ghcr.io/janpower/ontotator:0.4.0"
     )
-    assert docker[1:3] == [
-        "docker push ghcr.io/janpower/ontotator:0.4.0",
-        "docker push ghcr.io/janpower/ontotator:latest",
-    ]
-    assert docker[3].startswith(
-        "docker buildx imagetools inspect ghcr.io/janpower/ontotator:0.4.0 "
+    assert docker[1].startswith(
+        "docker build --load --secret id=github_token,env=GITHUB_TOKEN"
     )
+    assert docker[1].endswith("-t ghcr.io/janpower/ontotator:0.4.0 .")
+    assert docker[2].startswith("docker run --rm") and "aquasec/trivy" in docker[2]
+    assert docker[3] == "docker push ghcr.io/janpower/ontotator:0.4.0"
+    assert docker[4].startswith(
+        "docker buildx imagetools inspect ghcr.io/janpower/ontotator:0.4.0 --format"
+    )
+    assert not any(":latest" in call for call in docker)
     assert f"ONTOTATOR_IMAGE=ghcr.io/janpower/ontotator@{DIGEST}" in result.stdout
     assert "stub-token" not in result.stdout + result.stderr
 
@@ -108,6 +109,13 @@ def test_refuses_dirty_tree_before_building(publish):
     assert result.returncode == 1
     assert "uncommitted" in result.stderr
     assert calls == []
+
+
+def test_refuses_an_existing_tag_before_building(publish):
+    result, calls = publish("0.4.0", STUB_EXISTS="1")
+    assert result.returncode == 1
+    assert "already exists" in result.stderr
+    assert not any(call.startswith(("docker build ", "docker push")) for call in calls)
 
 
 def test_rejects_missing_digest(publish):
