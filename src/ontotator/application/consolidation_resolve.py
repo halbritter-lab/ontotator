@@ -25,9 +25,10 @@ event). ``input_ids`` must name exactly one group of the round
   group's layer. Modifiers (modifiers spec "Consolidation > Backend"):
   ``choice.modifiers`` is the explicit final list (validated like
   ``add_modifier``), omitted: the span member's; ``keep`` keeps the member's.
-  A standalone modifier group (``modifier_as_finding``) resolves only by
-  ``leave_out``, optionally with ``attach_to`` a resolved ``cons-…`` finding
-  that then gains the modifier (S18); reopening it detaches it again, and
+  A standalone modifier group (``modifier_as_finding``) resolves like any
+  group (a modifier term may name a finding, e.g. Stillbirth; submit warns)
+  or by ``leave_out`` with ``attach_to`` a resolved ``cons-…`` finding that
+  then gains the modifier (S18); reopening it detaches it again, and
   reopening the target also reopens it (S21 B).
 * **Annotate** changes note and flag on the decisions of a resolved group;
   annotations stay untouched, so every ``content_sha256`` stays valid.
@@ -649,9 +650,6 @@ class ConsolidationGroupService:
         other_term = None
         if choice.term_id not in item.group.terms and self.valid_term is not None:
             other_term = self.valid_term(key.project_key, layer_id, choice.term_id)
-        term_id = choice.term_id if choice.term_id in item.group.terms else other_term
-        if term_id is not None and item.roles.kind(layer_id, term_id) is not None:
-            raise DomainError("MODIFIER_AS_FINDING", {"term_id": term_id})
         if choice.modifiers is None:
             return other_term, None
         return other_term, self._modifiers(key, item, layer_id, choice.modifiers)
@@ -769,11 +767,6 @@ class ConsolidationGroupService:
             if group.kinds & _UNSETTLED_BY_KEEP or group.span_conflict:
                 raise _invalid("Choose the term, every differing value and the text")
             keep = members[group.members[group.keep]]
-            if "modifier_as_finding" in group.kinds:  # R3: attach or leave out
-                raise DomainError(
-                    "MODIFIER_AS_FINDING",
-                    {"term_id": keep.snapshot.annotation.term_id},
-                )
             return [(keep, keep.snapshot.annotation, item.input_ids)]
         choice = cmd.choice
         assert choice is not None

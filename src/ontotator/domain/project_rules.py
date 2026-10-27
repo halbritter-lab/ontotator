@@ -95,7 +95,6 @@ def rule_violations(
     *,
     at_submission: bool,
     enforce_spanless: bool = False,
-    modifier_findings: frozenset[str] = frozenset(),
     decided_defaults: frozenset[tuple[str, str]] = frozenset(),
 ) -> list[RuleViolation]:
     """Inspect snapshots without changing content or defaulted-axis provenance.
@@ -112,15 +111,6 @@ def rule_violations(
     for item in snapshots:
         annotation = item.annotation
         annotation_type = resolve_type(profile, annotation.layer_id, annotation.type_id)
-        if annotation.annotation_id in modifier_findings:
-            # Old data: a modifier term standing alone as a finding (R3).
-            violations.append(
-                RuleViolation(
-                    annotation.annotation_id,
-                    "modifier_as_finding",
-                    {"term_id": annotation.term_id},
-                )
-            )
         for ref in annotation.evidence_refs:
             evidence = evidence_by_id.get((ref.evidence_id, ref.version))
             if (
@@ -187,11 +177,21 @@ def rule_violations(
 def modifier_warnings(
     snapshots: Iterable[AnnotationSnapshot], roles: ModifierRoles
 ) -> list[RuleViolation]:
-    """Acknowledgeable modifier warnings (R10, R12), in snapshot then modifier order."""
+    """Acknowledgeable modifier warnings, in snapshot then modifier order: a
+    modifier term as the finding's own term (R3; some name a finding, e.g.
+    Stillbirth), then R10 and R12."""
     warnings: list[RuleViolation] = []
     for item in snapshots:
         annotation = item.annotation
         layer = annotation.layer_id
+        if roles.kind(layer, annotation.term_id) is not None:
+            warnings.append(
+                RuleViolation(
+                    annotation.annotation_id,
+                    "modifier_as_finding",
+                    {"term_id": annotation.term_id},
+                )
+            )
         classes: dict[str, int] = {}
         for modifier in annotation.modifiers:
             if roles.kind(layer, modifier.term_id) == "cohort":

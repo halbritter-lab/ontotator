@@ -541,11 +541,6 @@ class SubmissionService:
             rules,
             at_submission=True,
             enforce_spanless=True,
-            modifier_findings=frozenset(
-                s.annotation.annotation_id
-                for s in deduped_snaps
-                if roles.kind(s.annotation.layer_id, s.annotation.term_id) is not None
-            ),
             decided_defaults=decided_defaults,
         )
         if violations:

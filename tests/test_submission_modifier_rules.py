@@ -116,34 +116,30 @@ def _add(env: Any, *terms: str) -> None:
         env.run({"command": "add_modifier", "annotation_id": "a1", "term_id": term})
 
 
-def test_standalone_modifier_finding_blocks(
+def test_standalone_modifier_finding_warns(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     env = _modifier_env(tmp_path, monkeypatch)
-    with monkeypatch.context() as patched:
-        patched.setattr(
-            env.editor, "_refuse_modifier_as_finding", lambda *args, **kwargs: None
-        )
-        env.run(
-            {
-                "command": "create_annotation",
-                "annotation_id": "old",
-                "term_id": "HP:0012828",
-                "segments": [{"start": 25, "end": 32}],
-                "axes_values": AXES,
-            }
-        )
+    env.run(
+        {
+            "command": "create_annotation",
+            "annotation_id": "old",
+            "term_id": "HP:0012828",
+            "segments": [{"start": 25, "end": 32}],
+            "axes_values": AXES,
+        }
+    )
     refused = _refused(env)
-    assert refused.code == "PROJECT_RULE_VIOLATION"
-    assert refused.details == {
-        "violations": [
-            {
-                "annotation_id": "old",
-                "rule": "modifier_as_finding",
-                "detail": {"term_id": "HP:0012828"},
-            }
-        ]
-    }
+    assert refused.code == "AXIS_CONFIRMATION_WARNING"
+    assert refused.details["warnings"] == [
+        {
+            "annotation_id": "old",
+            "rule": "modifier_as_finding",
+            "detail": {"term_id": "HP:0012828"},
+        }
+    ]
+    submitted = _submit(env, refused.details["acknowledgement"])
+    assert "HP:0012828" in [s.annotation.term_id for s in submitted.snapshots]
 
 
 def test_cohort_modifier_warning_is_acknowledged(
