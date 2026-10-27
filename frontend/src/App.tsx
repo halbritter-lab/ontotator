@@ -20,6 +20,7 @@ import { ExportPage } from "./admin/ExportPage";
 import { ProjectsPage } from "./app/ProjectsPage";
 import { projectDestination } from "./app/ProjectPicker";
 import { ProblemReportDetail } from './tasks/ProblemReportDetail';
+import { ReporterReportPage } from "./problems/ReporterReportPage";
 import { GuidelinesPage } from "./guidelines/GuidelinesPage";
 import { ConsolidationScreen } from "./consolidation/ConsolidationScreen";
 import { Button, EmptyState, InlineMessage, Toast, useToast } from "./ui";
@@ -296,7 +297,8 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
       const canManage = !!projects.find(project => project.project_key === route.key)?.can_manage;
       content = projectContext?.identity !== projectIdentity ? <InlineMessage tone="info">Loading project access…</InlineMessage>
         : canManage ? <ProblemReportDetail key={JSON.stringify([user.username, route.key, route.reportId])} projectKey={route.key} reportId={route.reportId} canManage={canManage} action={route.action} section={route.section} documents={route.documents} onNavigate={go} />
-        : <NotFound title="Problem report not found or no access" onNavigate={go} />;
+        // A reporter's link to their own report; the server refuses everyone else's (REPORT_NOT_FOUND).
+        : <ReporterReportPage key={JSON.stringify([user.username, route.reportId])} reportId={route.reportId} onNavigate={go} />;
       break;
     }
     case "projectConsolidation": content = <ConsolidationScreen key={JSON.stringify([user.username, route.key, route.roundId])} projectKey={route.key}

@@ -51,9 +51,9 @@ it('reads immutable text without opening work and keeps Text only useful when la
 it('renders only the offered exact snapshot and real supported task IDs', async () => {
   const { CaseViewer } = await import('../src/variants/CaseViewer');
   vi.mocked(api.listMyTasks).mockResolvedValue([
-    { assignment_id: 99, workflow_revision: 0, held: false, project_key: 'pkg', project_name: 'P', document_id: 'target', language: 'de', task: 'translation_review', status: 'open', updated_at: '' },
-    { assignment_id: 7, workflow_revision: 0, held: false, project_key: 'pkg', project_name: 'P', document_id: 'target', language: 'de', task: 'annotate', status: 'submitted', updated_at: '' },
-    { assignment_id: 8, workflow_revision: 0, held: false, project_key: 'foreign', project_name: 'P', document_id: 'target', language: 'de', task: 'review', status: 'open', updated_at: '' },
+    { assignment_id: 99, workflow_revision: 0, held: false, report_answered: false, project_key: 'pkg', project_name: 'P', document_id: 'target', language: 'de', task: 'translation_review', status: 'open', updated_at: '' },
+    { assignment_id: 7, workflow_revision: 0, held: false, report_answered: false, project_key: 'pkg', project_name: 'P', document_id: 'target', language: 'de', task: 'annotate', status: 'submitted', updated_at: '' },
+    { assignment_id: 8, workflow_revision: 0, held: false, report_answered: false, project_key: 'foreign', project_name: 'P', document_id: 'target', language: 'de', task: 'review', status: 'open', updated_at: '' },
   ]);
   render(<CaseViewer {...props} annotations={refKey(ownRef)} />);
   await screen.findAllByText('HP:old');
@@ -130,7 +130,7 @@ it('clears task-list failure after a successful explicit retry', async () => {
   vi.mocked(api.listMyTasks).mockRejectedValueOnce(new ApiError(503, 'Task list offline'));
   render(<CaseViewer {...props} />);
   await screen.findByText('Task list offline');
-  vi.mocked(api.listMyTasks).mockResolvedValue([{ assignment_id: 7, workflow_revision: 0, held: false, project_key: 'pkg', project_name: 'P', document_id: 'target',
+  vi.mocked(api.listMyTasks).mockResolvedValue([{ assignment_id: 7, workflow_revision: 0, held: false, report_answered: false, project_key: 'pkg', project_name: 'P', document_id: 'target',
     language: 'de', task: 'annotate', status: 'open', updated_at: '' }]);
   fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
   await screen.findByRole('link', { name: 'Open my task' });

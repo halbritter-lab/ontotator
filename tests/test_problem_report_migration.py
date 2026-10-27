@@ -108,3 +108,24 @@ def test_0015_rejects_unknown_report_states(tmp_path):
     upgrade(url, "0015")
     with pytest.raises(IntegrityError), engine.begin() as conn:
         conn.execute(text(f"UPDATE {S}.problem_report_state SET state = 'closed'"))
+
+
+def test_0023_adds_an_unset_reporter_seen_at_to_existing_reports(tmp_path):
+    url = unmigrated_database_url(tmp_path / "reports-0023.db")
+    # 0020: the seed predates the annotation mode check of 0021.
+    upgrade(url, "0020")
+    engine = create_engine(url)
+    with engine.begin() as conn:
+        _seed(conn)
+    upgrade(url, "0023")
+    with engine.begin() as conn:
+        # NULL: a lead answer given before the upgrade still counts as unseen.
+        assert (
+            conn.execute(
+                text(f"SELECT reporter_seen_at FROM {S}.problem_report_state")
+            ).scalar_one()
+            is None
+        )
+        conn.execute(
+            text(f"UPDATE {S}.problem_report_state SET reporter_seen_at = now()")
+        )

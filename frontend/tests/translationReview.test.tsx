@@ -1122,7 +1122,7 @@ it("measures the bands and the pinned bar into inline custom properties", async 
 });
 
 const taskSummary = (assignment_id: number, overrides: Partial<TaskSummary> = {}): TaskSummary => ({
-  assignment_id, workflow_revision: 0, held: false, project_key: "proj", project_name: "Project",
+  assignment_id, workflow_revision: 0, held: false, report_answered: false, project_key: "proj", project_name: "Project",
   document_id: `document-${assignment_id}`, language: "de", task: "translation_review", status: "open",
   updated_at: "2026-10-20T12:00:00Z", ...overrides,
 });

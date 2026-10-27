@@ -1915,6 +1915,48 @@
         }
       }
     },
+    "/api/v1/problem-reports/{report_id}/seen": {
+      "post": {
+        "tags": [
+          "problem-reports"
+        ],
+        "summary": "Mark Seen",
+        "operationId": "mark_seen_api_v1_problem_reports__report_id__seen_post",
+        "parameters": [
+          {
+            "name": "report_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Report Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemReportView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/problem-reports/{report_id}/pause-candidates": {
       "get": {
         "tags": [
@@ -16778,6 +16820,11 @@
             },
             "type": "array",
             "title": "Holds"
+          },
+          "answered": {
+            "type": "boolean",
+            "title": "Answered",
+            "default": false
           }
         },
         "additionalProperties": false,
@@ -21412,6 +21459,11 @@
               }
             ],
             "title": "Reopen Reason"
+          },
+          "report_answered": {
+            "type": "boolean",
+            "title": "Report Answered",
+            "default": false
           }
         },
         "type": "object",

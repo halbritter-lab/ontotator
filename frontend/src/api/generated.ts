@@ -648,6 +648,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/problem-reports/{report_id}/seen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark Seen */
+        post: operations["mark_seen_api_v1_problem_reports__report_id__seen_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/problem-reports/{report_id}/pause-candidates": {
         parameters: {
             query?: never;
@@ -5547,6 +5564,11 @@ export interface components {
             viewer_is_lead: boolean;
             /** Holds */
             holds?: components["schemas"]["ReportHoldView"][];
+            /**
+             * Answered
+             * @default false
+             */
+            answered: boolean;
         };
         /** Profile */
         Profile: {
@@ -7193,6 +7215,11 @@ export interface components {
             reopened_at?: string | null;
             /** Reopen Reason */
             reopen_reason?: string | null;
+            /**
+             * Report Answered
+             * @default false
+             */
+            report_answered: boolean;
         };
         /** TemplateInfo */
         TemplateInfo: {
@@ -9323,6 +9350,37 @@ export interface operations {
         };
     };
     get_report_api_v1_problem_reports__report_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemReportView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_seen_api_v1_problem_reports__report_id__seen_post: {
         parameters: {
             query?: never;
             header?: never;

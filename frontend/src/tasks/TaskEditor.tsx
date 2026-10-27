@@ -150,7 +150,7 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
         onNavigate={onNavigate} workspaceView={workspace.read_only ? null : workspace.view} notice={guidelines.notice}
         headerActions={<>{guidelines.button}
           {/* Group commands save at once: nothing to save before a report. */}
-          <TaskProblemActions assignment={assignment} onSaveBeforeReport={async () => undefined} onRefresh={value => {
+          <TaskProblemActions assignment={assignment} readOnly={workspace.read_only} onSaveBeforeReport={async () => undefined} onRefresh={value => {
             setWorkspace(current => current ? { ...current, assignment: value } : current); void loadTasks();
           }} /></>} />
       {guidelines.drawer}
@@ -165,7 +165,7 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
     assignment_id: assignment.id, project_key: assignment.project_key, project_name: assignment.project_key,
     document_id: assignment.document_id, task: assignment.task, status: assignment.status,
     language: workspace.view.document.language, updated_at: assignment.updated_at,
-    workflow_revision: assignment.workflow_revision, held: assignment.held, hold_reason: assignment.hold_reason,
+    workflow_revision: assignment.workflow_revision, held: assignment.held, hold_reason: assignment.hold_reason, report_answered: false,
   };
   // Toolbar identity (spec section 7): short badge, full identity line as its title.
   const roundBadge = roundBadgeOf(roundInfo);
@@ -179,7 +179,7 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
         void (saveBeforeReportRef.current?.() ?? Promise.resolve()).catch(() => undefined).then(() => { if (active.current) setRoundDialogOpen(true); });
       }}>Work rounds</Button>
         {guidelines.button}
-        <TaskProblemActions assignment={assignment} onSaveBeforeReport={async () => { await saveBeforeReportRef.current?.(); }} onRefresh={value => {
+        <TaskProblemActions assignment={assignment} readOnly={workspace.read_only} onSaveBeforeReport={async () => { await saveBeforeReportRef.current?.(); }} onRefresh={value => {
           setWorkspace(current => current ? { ...current, assignment: value } : current); void loadTasks();
         }} /></>}
       roundInputs={roundInputs} roundKind={roundInfo?.kind} roundActive={roundInfo?.active} roundBadge={roundBadge} roundTitle={roundTitle}

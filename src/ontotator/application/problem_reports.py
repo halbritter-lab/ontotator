@@ -724,6 +724,29 @@ class ProblemReportService:
             project, fresh, _lead = self._readable(conn, access, report_id)
             return self._view(conn, report_id, fresh, project)
 
+    def mark_seen(self, access: Access, report_id: str) -> ProblemReportView:
+        """The reporter opened their report: clears "Answer to your report".
+
+        Only the reporter marks; anyone else gets REPORT_NOT_FOUND, leads too.
+        """
+        with self.db.transaction() as conn:
+            project, fresh, _lead = self._readable(conn, access, report_id)
+            reporter = conn.execute(
+                select(ProblemReportRow.reporter_id).where(
+                    ProblemReportRow.report_id == report_id
+                )
+            ).scalar_one()
+            if reporter != fresh.user_id:
+                raise DomainError("REPORT_NOT_FOUND")
+            conn.execute(
+                update(ProblemReportStateRow)
+                .where(ProblemReportStateRow.report_id == report_id)
+                .values(reporter_seen_at=datetime.now(UTC))
+            )
+            # The response is what the reporter now sees, a lead answer that
+            # arrived since their last load included.
+            return self._view(conn, report_id, fresh, project)
+
     def pause_candidates(self, access: Access, report_id: str) -> list[PauseCandidate]:
         """Tasks a lead may pause for this report; reporters get REPORT_NOT_FOUND."""
         with self.db.transaction() as conn:

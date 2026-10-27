@@ -149,6 +149,29 @@ class ProblemReportView(BaseModel):
     viewer_label: str = ""
     viewer_is_lead: bool = False
     holds: list[ReportHoldView] = Field(default_factory=list)
+    # Reporter only: a lead acted after the reporter last opened the report.
+    answered: bool = False
+
+
+def _ids(details: dict[str, Any]) -> list[int]:
+    return [i for i in details.get("assignment_ids") or [] if isinstance(i, int)]
+
+
+def visible_to_reporter(action: str, details: dict[str, Any], own: int) -> bool:
+    """Pauses and releases of other tasks stay hidden from the reporter."""
+    return action not in REPORTER_HIDDEN_UNLESS_OWN or own in _ids(details)
+
+
+def answered(
+    events: Iterable[Any], reporter_id: int, own: int, seen_at: datetime | None
+) -> bool:
+    """A visible event by someone else after the reporter last opened the report."""
+    return any(
+        e.actor_id != reporter_id
+        and visible_to_reporter(e.action, e.details, own)
+        and (seen_at is None or e.created_at > seen_at)
+        for e in events
+    )
 
 
 def _people(
@@ -194,10 +217,6 @@ def _tasks(conn: Connection, project_id: int, ids: Iterable[int]) -> dict[int, A
     }
 
 
-def _ids(details: dict[str, Any]) -> list[int]:
-    return [i for i in details.get("assignment_ids") or [] if isinstance(i, int)]
-
-
 def build_report_view(
     conn: Connection,
     report_id: str,
@@ -213,6 +232,7 @@ def build_report_view(
                 ProblemReportStateRow.state,
                 ProblemReportStateRow.revision,
                 ProblemReportStateRow.resolution,
+                ProblemReportStateRow.reporter_seen_at,
                 ProjectRow.project_key,
                 AssignmentRow.document_id,
                 AssignmentRow.task,
@@ -318,11 +338,7 @@ def build_report_view(
     for r in event_rows:
         ids = _ids(r.details)
         own_task = own in ids
-        if (
-            not viewer_is_lead
-            and r.action in REPORTER_HIDDEN_UNLESS_OWN
-            and not own_task
-        ):
+        if not viewer_is_lead and not visible_to_reporter(r.action, r.details, own):
             continue
         round_id: str | None = r.details.get("round_id")
         abandoned = (
@@ -466,6 +482,8 @@ def build_report_view(
         viewer_label=labels.get(viewer_id, ""),
         viewer_is_lead=viewer_is_lead,
         holds=holds,
+        answered=viewer_id == reporter_id
+        and answered(event_rows, reporter_id, own, row["reporter_seen_at"]),
     )
 
 

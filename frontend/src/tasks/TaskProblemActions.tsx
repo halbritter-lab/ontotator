@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type RefObject } from "react";
-import type { AssignmentView, ProblemReportView } from "../api/client";
+import { api, type AssignmentView, type ProblemReportView } from "../api/client";
 import { ErrorNotice } from "../admin/ErrorNotice";
 import { ownPauseActive, ReporterReportCard, type ReporterConfirm } from "../problems/ReporterReportCard";
 import { reportTitle, toolbarEntry } from "../problems/labels";
@@ -11,8 +11,13 @@ import "../problems/problems.css";
 /**
  * The editor's "Report a text problem" toolbar entry and its dialog: the reporter's own reports on this task,
  * a new report, resume and withdraw. Mounted by the annotation editor and the translation review screen.
+ * On a submitted (read-only) task the entry reads "Text problems" and opens on the reports, the form second.
  */
-export function TaskProblemActions({ assignment, onSaveBeforeReport, onRefresh }: { assignment: AssignmentView; onSaveBeforeReport: () => Promise<void>; onRefresh: (assignment: AssignmentView) => void }): JSX.Element {
+export function TaskProblemActions({ assignment, onSaveBeforeReport, onRefresh, readOnly = assignment.status === "submitted" }: {
+  assignment: AssignmentView; onSaveBeforeReport: () => Promise<void>; onRefresh: (assignment: AssignmentView) => void;
+  /** The editor's read-only state (the task's status can lag behind a submit in the same editor). */
+  readOnly?: boolean;
+}): JSX.Element {
   const { reports, error, reload, put } = useTaskReports(assignment, onRefresh);
   const [open, setOpen] = useState(false), [view, setView] = useState<"list" | "form">("list");
   const [busy, setBusy] = useState(false), [notice, setNotice] = useState<string | null>(null);
@@ -22,17 +27,27 @@ export function TaskProblemActions({ assignment, onSaveBeforeReport, onRefresh }
   const newReport = useRef<HTMLButtonElement>(null);
   const listLabel = useId();
   const entry = toolbarEntry(reports, assignment.held);
+  const marking = useRef(new Set<string>());
 
   const openDialog = () => {
     setNotice(null); setConfirm(null);
-    setView(reports && reports.length === 0 ? "form" : "list");
+    setView(!readOnly && reports && reports.length === 0 ? "form" : "list");
     setOpen(true);
     void reload(true);
   };
   const close = () => { setOpen(false); setConfirm(null); setNotice(null); };
 
   // No report (after the load on open): the dialog shows the new report view directly.
-  useEffect(() => { if (open && view === "list" && reports?.length === 0 && !busy) setView("form"); }, [open, view, reports, busy]);
+  useEffect(() => { if (!readOnly && open && view === "list" && reports?.length === 0 && !busy) setView("form"); }, [readOnly, open, view, reports, busy]);
+  // The listed reports are open in front of the reporter: a lead answer counts as seen (My tasks badge).
+  useEffect(() => {
+    if (!open || view !== "list") return;
+    for (const report of reports ?? []) {
+      if (!report.answered || marking.current.has(report.report_id)) continue;
+      marking.current.add(report.report_id);
+      api.markProblemReportSeen(report.report_id).then(put, () => undefined).finally(() => marking.current.delete(report.report_id));
+    }
+  }, [open, view, reports, put]);
   useEffect(() => {
     if (!focusReport) return;
     const target = headings.current.get(focusReport);
@@ -61,7 +76,7 @@ export function TaskProblemActions({ assignment, onSaveBeforeReport, onRefresh }
 
   return <>
     <Button size="sm" className="problem-entry" onClick={openDialog}>
-      Report a text problem
+      {readOnly ? "Text problems" : "Report a text problem"}
       {entry.badge && <> <span className="problem-badge" aria-hidden="true">{entry.paused && <IconWarning />}{entry.badge}</span></>}
       <span className="visually-hidden"> {entry.accessibleSuffix}</span>
     </Button>
@@ -104,6 +119,7 @@ export function TaskProblemActions({ assignment, onSaveBeforeReport, onRefresh }
           onConflict={() => { void reload(true); }}
           headingRef={element => { if (element) headings.current.set(report.report_id, element); else headings.current.delete(report.report_id); }} />)}
       </section>}
+      {readOnly && reports?.length === 0 && <p>You have not reported a problem with this text.</p>}
       {leadActed && <p className="field-hint">A project lead has acted on this report. Resume your task with a reason and ask a project lead to close it.</p>}
     </Dialog>}
   </>;
