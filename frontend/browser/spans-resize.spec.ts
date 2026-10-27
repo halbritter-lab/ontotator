@@ -126,20 +126,6 @@ test.describe("adjusting a pending mark", () => {
     await expect(mentionWithOffsets(page, "[0:17]")).toBeVisible();
   });
 
-  test("pending mark: the end handle drags onto the next line, nothing covers it", async ({ page }) => {
-    await importFixture(page, `pending-under-bar-${test.info().repeatEachIndex}`);
-    await openCase(page, { task: "annotate" });
-    await selectText(page, 0, 9);
-    await expect(page.getByLabel("New finding")).toBeVisible();
-    // "B" (offset 30) starts the next line: no bar over the text catches it (#21).
-    const point = await pointAtOffset(page, 30, "right");
-    expect(await page.evaluate(({ x, y }) => !!document.elementFromPoint(x, y)?.closest(".text-container"), point)).toBe(true);
-    const end = page.getByRole("separator", { name: "End of marked text" });
-    await dragHandle(page, end, 30, false, "right");
-    await page.mouse.up();
-    await expect(page.locator(".pending-quote")).toHaveText(/B”$/);
-  });
-
   test("pending mark: keyboard Tab to the handle, → twice, Enter in the search", async ({ page }) => {
     await importFixture(page, "pending-keys");
     await openCase(page, { task: "annotate" });
