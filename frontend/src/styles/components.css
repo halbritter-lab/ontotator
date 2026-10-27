@@ -650,6 +650,7 @@ a.shell-product { color: inherit; text-decoration: none; }
 .users-page .users-row--changed > td { background: var(--accent-light); }
 .ui-dialog.audit-history-dialog { width: calc(100vw - 2 * var(--space-4)); max-width: 1200px; }
 .audit-history-dialog .audit-when { white-space: nowrap; }
+.audit-history-dialog .audit-details { overflow-wrap: anywhere; }
 .shell-page .detail-section:first-child { padding-top: 0; }
 .shell-page .detail-section:last-child { border-bottom: 0; }
 .shell-page :not(td) > .toolbar { margin-block: var(--space-3); }

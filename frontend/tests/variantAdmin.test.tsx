@@ -296,7 +296,7 @@ it("loads explicit false annotation gate and saves its changed Workflow value", 
 });
 
 it("admin edits nullable qualification without adding it to new-user creation", async () => {
-  const user: AdminUser = { username: "reader", display_name: "Reader", email: null, pseudonym: "R", qualification: "Original", languages: ["de"], active: true, is_system_admin: false, projects: [], setup_pending: false, anonymised: false };
+  const user: AdminUser = { id: 3, username: "reader", display_name: "Reader", email: null, pseudonym: "R", qualification: "Original", languages: ["de"], active: true, is_system_admin: false, projects: [], setup_pending: false, anonymised: false };
   vi.spyOn(api, "adminListUsers").mockResolvedValue([user]);
   vi.spyOn(api, "adminUpdateUser").mockResolvedValue({ ...user, qualification: null });
   render(<UsersPage currentUser={{ ...currentUser, is_system_admin: true }} />);

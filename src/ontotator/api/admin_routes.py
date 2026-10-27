@@ -44,6 +44,7 @@ class NewMembership(BaseModel):
 
 
 class AdminUser(BaseModel):
+    id: int
     username: str
     display_name: str
     email: str | None
@@ -146,6 +147,7 @@ def admin_users(accounts: AccountService, users: list[User]) -> list[AdminUser]:
             }
     return [
         AdminUser(
+            id=user.id,
             username=user.username,
             display_name=user.display_name,
             email=user.email,

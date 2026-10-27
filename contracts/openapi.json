@@ -7786,6 +7786,10 @@
       },
       "AdminUser": {
         "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
           "username": {
             "type": "string",
             "title": "Username"
@@ -7867,6 +7871,7 @@
         },
         "type": "object",
         "required": [
+          "id",
           "username",
           "display_name",
           "email",
