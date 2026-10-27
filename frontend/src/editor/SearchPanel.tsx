@@ -47,6 +47,7 @@ export interface SearchPanelProps {
 
 /** Reason line of a modifier hit in "Change term" and the tree: allowed, but usually a modifier (some name a finding, e.g. Stillbirth). */
 export const MODIFIER_IN_CHANGE = "Modifier term — use it only if it names the finding itself; otherwise add it under Modifiers.";
+export const modifierAsFinding = (term: string) => `${term} is a modifier term. Keep it only if it names the finding itself.`;
 const isModifierHit = (c: SearchCandidate) => c.role === "modifier" || c.role === "cohort";
 
 export const SEARCH_DEBOUNCE_MS = 250;
@@ -412,6 +413,8 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
                   <div className="candidate-def" title={cand.definition}>{cand.definition}</div>
                 )}
                 {assignMode === "change" && isModifierHit(cand) && <span className="candidate-reason">{MODIFIER_IN_CHANGE}</span>}
+                {/* #23: said where the choice is made, before the attach mode starts. */}
+                {assignMode === "new" && isModifierHit(cand) && <span className="candidate-reason">{modifierAsFinding(cand.label)}</span>}
                 {cand.obsolete && (
                   <span className="warning-badge">
                     Obsolete term (assignment not allowed)

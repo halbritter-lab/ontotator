@@ -594,6 +594,15 @@ describe("SearchPanel: modifier roles (finding modifiers)", () => {
     expect(onSelectCandidate).not.toHaveBeenCalled();
   });
 
+  it("a new mark names a modifier hit as a modifier term in the list (#23)", async () => {
+    const input = renderPanel(vi.fn().mockResolvedValue(roleHits));
+    fireEvent.change(input, { target: { value: "s" } });
+    await waitFor(() => expect(options()).toHaveLength(3));
+    expect(options()[0].querySelector(".candidate-reason")!.textContent).toBe("Severe is a modifier term. Keep it only if it names the finding itself.");
+    expect(options()[1].querySelector(".candidate-reason")!.textContent).toBe("Frequent is a modifier term. Keep it only if it names the finding itself.");
+    expect(options()[2].querySelector(".candidate-reason")).toBeNull();
+  });
+
   it("modifier mode: own label and placeholder, request within the modifier roots", async () => {
     const searchOntology = vi.fn().mockResolvedValue(roleHits);
     const manager = new SearchManager({ searchOntology } as any);

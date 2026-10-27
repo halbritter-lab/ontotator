@@ -54,6 +54,23 @@ describe("SpanEditor Unicode adapter", () => {
     handle.destroy();
   });
 
+  it("a mouse selection of punctuation only marks nothing (#23)", () => {
+    const text = "No other complaints. Plan";
+    const select = vi.fn();
+    const handle = mountSpanEditor(container, text, [], select, vi.fn());
+    const node = container.querySelector(".run")!.firstChild!;
+    const pick = (start: number, end: number) => {
+      const range = document.createRange(); range.setStart(node, start); range.setEnd(node, end);
+      const selection = window.getSelection()!; selection.removeAllRanges(); selection.addRange(range);
+      container.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+    };
+    pick(19, 20);
+    expect(select).not.toHaveBeenCalled();
+    pick(9, 20);
+    expect(select).toHaveBeenLastCalledWith(expect.objectContaining({ segments: [{ start: 9, end: 20 }] }));
+    handle.destroy();
+  });
+
   it("Shift + arrow without marked text starts a selection at the caret and grows it (N-3)", () => {
     const text = "alpha beta gamma";
     const select = vi.fn();
