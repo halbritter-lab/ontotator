@@ -8,6 +8,7 @@ import { TaskEditor } from "./tasks/TaskEditor";
 import { MY_TASKS, parseRoute, routeHref, type NavigateOptions, type Route, type RouteLeaveGuard } from "./app/router";
 import { MyTasks } from "./tasks/MyTasks";
 import { landingProject, rememberProject } from "./app/lastProject";
+import { useSessionRestored } from "./app/useSessionRestored";
 import { ProfilePage } from "./me/ProfilePage";
 import { ErrorNotice } from "./admin/ErrorNotice";
 import { UsersPage } from "./admin/UsersPage";
@@ -176,6 +177,7 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
   requestRef.current = requestRoute;
 
   const projectsReady = !!baseUser && projectContext?.identity === projectIdentity;
+  useSessionRestored(() => { if (projectError) setRetry(value => value + 1); });
   useDocumentTitle(routeTitle(route,
     "key" in route && projectsReady ? projects.find(project => project.project_key === route.key) ?? null : undefined,
     crumbTask?.identity === taskIdentity ? crumbTask.task : null));

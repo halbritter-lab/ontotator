@@ -2,6 +2,7 @@ import { useEffect, useId, useState } from "react";
 import { api, type AssignmentView, type CreateRoundRequest, type RoundSourceView, type WorkRoundView } from "../api/client";
 import { Button, Dialog, InlineMessage } from "../ui";
 import { ErrorNotice } from "../admin/ErrorNotice";
+import { useSessionRestored } from "../app/useSessionRestored";
 import { WorkRoundActions, carryAvailability, replaceableRoundCandidate, useRoundStart } from "./WorkRoundActions";
 
 const noSources: readonly RoundSourceView[] = [];
@@ -34,6 +35,7 @@ export function WorkRoundsDialog({ assignment, onClose, onCreate, onOpen, onRelo
       }, failure => { if (active) setError(failure); });
     return () => { active = false; };
   }, [assignment.id, retry]);
+  useSessionRestored(() => { if (error !== undefined) setRetry(value => value + 1); });
   const sources = data?.sources ?? noSources;
   const control = useRoundStart(assignment, sources, onCreate);
   const available = data !== null && carryAvailability(assignment, data.rounds, data.sources, data.untouchedRoundId).kind === "available";

@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { api, ApiError, type AssignmentView, type DocumentRowView, type DocumentRowsPage, type PlanRowResult, type RowSubmissions } from "../src/api/client";
+import { api, ApiError, notifySessionRestored, type AssignmentView, type DocumentRowView, type DocumentRowsPage, type PlanRowResult, type RowSubmissions } from "../src/api/client";
 import type { AssignWorkDialogProps } from "../src/admin/AssignWorkDialog";
 import { DocumentsPage, type DocumentsPageProps } from "../src/admin/DocumentsPage";
 import type { ProjectDocumentsQuery, Route } from "../src/app/router";
@@ -351,6 +351,17 @@ it("keeps the rows and shows Could not refresh when a background refetch fails",
   expect(screen.getByRole("table", { name: "Documents" })).toBeTruthy();
   expect(screen.getByRole("tablist", { name: "Documents views" })).toBeTruthy();
   fireEvent.click(within(alert).getByRole("button", { name: "Retry" }));
+  await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+});
+
+it("reloads after the same user logs in again, so the session banners go (#13)", async () => {
+  mockRows(scenarioS1().page);
+  renderPage();
+  await screen.findByRole("table", { name: "Documents" });
+  vi.mocked(api.listDocumentRows).mockRejectedValueOnce(new Error("offline"));
+  act(() => { window.dispatchEvent(new Event("focus")); });
+  await screen.findByRole("alert");
+  act(() => notifySessionRestored());
   await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
 });
 

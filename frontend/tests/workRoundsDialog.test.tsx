@@ -1,6 +1,6 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { api, type AssignmentView, type RoundInputView, type RoundSourceView, type WorkRoundView } from "../src/api/client";
+import { api, AuthError, notifySessionRestored, type AssignmentView, type RoundInputView, type RoundSourceView, type WorkRoundView } from "../src/api/client";
 import { WorkRoundsDialog } from "../src/tasks/WorkRoundsDialog";
 import { RoundInputEvidenceDialog } from "../src/tasks/RoundInputEvidenceDialog";
 import { historical } from "./variantFixtures";
@@ -28,6 +28,16 @@ const dialog = () => screen.getByRole("dialog");
 const footer = () => within(dialog().querySelector<HTMLElement>(":scope > .modal-actions")!);
 
 describe("Work rounds dialog", () => {
+  it("loads again after the same user logs in again, so no session banner stays (#13)", async () => {
+    vi.spyOn(api, "listWorkRounds").mockRejectedValueOnce(new AuthError("Not authenticated", undefined, "NOT_AUTHENTICATED", 401)).mockResolvedValue(rounds);
+    vi.spyOn(api, "listRoundSources").mockResolvedValue([source]);
+    render(<WorkRoundsDialog assignment={assignment} onClose={vi.fn()} onCreate={vi.fn()} onOpen={vi.fn()} onReload={vi.fn()} />);
+    expect(await screen.findByText("Your session has ended. Please log in again.")).toBeDefined();
+    act(() => notifySessionRestored());
+    expect(await screen.findByRole("table", { name: "Rounds" })).toBeDefined();
+    expect(screen.queryByText("Your session has ended. Please log in again.")).toBeNull();
+  });
+
   it("names the text and explains rounds in one sentence", async () => {
     renderDialog();
     expect(screen.getByRole("dialog", { name: "Work rounds: case-12 de" })).toBeDefined();
