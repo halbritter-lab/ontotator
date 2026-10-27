@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api, type CurrentUser, type Profile, type ProjectSummary, type TaskSummary } from "./api/client";
-import { taskCrumbLabel } from "./app/labels";
+import { routeTitle, taskCrumbLabel } from "./app/labels";
 import { CaseViewer } from "./variants/CaseViewer";
 import { Shell } from "./app/Shell";
 import { NotFound } from "./app/NotFound";
@@ -23,7 +23,7 @@ import { ProblemReportDetail } from './tasks/ProblemReportDetail';
 import { ReporterReportPage } from "./problems/ReporterReportPage";
 import { GuidelinesPage } from "./guidelines/GuidelinesPage";
 import { ConsolidationScreen } from "./consolidation/ConsolidationScreen";
-import { Button, EmptyState, InlineMessage, Toast, useToast } from "./ui";
+import { Button, EmptyState, InlineMessage, Toast, useDocumentTitle, useToast } from "./ui";
 
 export interface AppProps { user?: CurrentUser | null; onLogout?: () => void }
 
@@ -176,6 +176,9 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
   requestRef.current = requestRoute;
 
   const projectsReady = !!baseUser && projectContext?.identity === projectIdentity;
+  useDocumentTitle(routeTitle(route,
+    "key" in route && projectsReady ? projects.find(project => project.project_key === route.key) ?? null : undefined,
+    crumbTask?.identity === taskIdentity ? crumbTask.task : null));
   useEffect(() => {
     if (!landing) return;
     if (route.name !== "tasks" || route.project !== undefined || route.status !== undefined || projectError) { setLanding(false); return; }

@@ -1,3 +1,5 @@
+import type { Route } from "./router";
+
 /** Plain-English presentation of workflow codes outside the editor. Codes stay the data; these are display only. */
 
 /** Readable fallback for codes without an explicit label: "ready_for_review" -> "Ready for review". */
@@ -22,6 +24,24 @@ export function taskCrumbLabel(task: { external_id?: string | null; document_id:
   // The consolidation view's title names the text already (B5-6): its crumb is the task alone.
   if (task.task === "review") return `${labelFor(taskLabels, task.task)} (${task.language})`;
   return `${task.external_id || task.document_id}, ${labelFor(taskLabels, task.task)} (${task.language})`;
+}
+
+const ROUTE_PAGES: Readonly<Record<Exclude<Route["name"], "task" | "projectCase">, string>> = {
+  tasks: "My tasks", me: "Profile", adminUsers: "Users", adminOntologies: "Ontologies", projectNew: "New project",
+  projects: "Projects", projectSettings: "Settings", projectDocuments: "Documents", projectProgress: "Progress",
+  projectExport: "Export", projectGuidelines: "Guidelines", projectProblemReport: "Problem report",
+  projectConsolidation: "Consolidation", notFound: "Page not found",
+};
+
+/**
+ * Browser title parts of a route, most specific first: "Documents", "Ward notes" (#9).
+ * `project` is undefined while unknown and null when it is not found or not accessible.
+ */
+export function routeTitle(route: Route, project?: { name: string } | null, task?: { external_id?: string | null; document_id: string; task: string } | null): string[] {
+  if (route.name === "task") return task ? [task.external_id || task.document_id, labelFor(taskLabels, task.task)] : ["Task"];
+  if ("key" in route && project === null) return ["Project not found"];
+  const page = route.name === "projectCase" ? route.caseId : ROUTE_PAGES[route.name];
+  return "key" in route ? [page, project?.name ?? route.key] : [page];
 }
 
 export const assignmentStatusLabels: Readonly<Record<"unassigned" | "open" | "in_progress" | "submitted" | "reopened", string>> = {
