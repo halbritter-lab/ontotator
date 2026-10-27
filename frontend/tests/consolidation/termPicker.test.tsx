@@ -40,6 +40,7 @@ describe("TermPicker", () => {
   it("keeps the English-only hint when the text's language is not loaded", async () => {
     renderPicker([{ language: "es", filenames: ["hp-es.babelon.tsv"], term_count: 18201 }]);
     await waitFor(() => expect(api.getPreferences).toHaveBeenCalled());
-    expect(await screen.findByText(NO_PREFILL_HINT)).toBeTruthy();
+    // With no hits the hint opens the "No terms match" line, so match the hint region, not one node.
+    await waitFor(() => expect(document.querySelector(".search-hint")?.textContent).toContain(NO_PREFILL_HINT));
   });
 });
