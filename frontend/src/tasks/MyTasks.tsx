@@ -1,12 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { api, onSessionRestored, type ProjectSummary, type TaskSummary } from "../api/client";
 import { routeHref, type NavigateOptions, type Route, type TaskStatusTab } from "../app/router";
 import { ErrorNotice } from "../admin/ErrorNotice";
 import { assignmentStatusLabels, formatDateTime, reopenNotice, roleLabels, taskLabels } from "../app/labels";
 import { taskText } from "../app/identity";
 import { failedChecksTitle } from "../translation/labels";
-import { IconWarning } from "../ui/icons";
-import { Button, DataTable, EmptyState, InlineMessage, Select, StatusBadge, tabId, Tabs, type Column } from "../ui";
+import { IconInfo, IconWarning } from "../ui/icons";
+import { Button, DataTable, EmptyState, IconButton, InlineMessage, Popover, Select, StatusBadge, tabId, Tabs, type Column } from "../ui";
 import { LanguageText } from "../ui/LanguageTag";
 import { AssignedDate } from "../ui/AssignedDate";
 import { onSpaceActivate } from "../ui/spaceActivates";
@@ -59,6 +59,20 @@ export function memberHint(members: Pick<ProjectSummary, "name" | "roles">[]): s
   if (members.length !== 1) return members.length ? "Your project leads assign texts; they appear here." : "When a project lead adds you to a project and assigns texts, they appear here.";
   const roles = members[0].roles.map(role => (roleLabels[role] ?? role).toLowerCase()).join(" and ");
   return `You are ${roles ? `${/^[aeiou]/.test(roles) ? "an" : "a"} ${roles}` : "a member"} in ${members[0].name}. Your project lead assigns texts; they appear here.`;
+}
+
+/** "Reopened" with an info button whose popover says when and why (#34): the row stays one badge high. */
+function ReopenedInfo({ notice }: { notice: string }): JSX.Element {
+  const [open, setOpen] = useState(false);
+  const anchor = useRef<HTMLButtonElement>(null);
+  const id = useId();
+  return <>
+    <IconButton ref={anchor} size="sm" variant="quiet" className="task-reopen-info" icon={<IconInfo />} label="Why reopened"
+      aria-expanded={open} aria-controls={open ? id : undefined} onClick={() => setOpen(value => !value)} />
+    <Popover open={open} anchorRef={anchor} label="Why reopened" width={320} onClose={() => setOpen(false)}>
+      <p id={id}>{notice}</p>
+    </Popover>
+  </>;
 }
 
 export function MyTasks({ project, status, projects, onNavigate, username }: MyTasksProps): JSX.Element {
@@ -170,9 +184,9 @@ export function MyTasks({ project, status, projects, onNavigate, username }: MyT
     </> },
     { id: "status", header: "Status", cell: task => <>
       <StatusBadge status={task.status}>{assignmentStatusLabels[task.status]}</StatusBadge>
+      {reopenNotice(task) && <ReopenedInfo notice={reopenNotice(task)!} />}
       {task.report_answered && <StatusBadge tone="info">Answer to your report</StatusBadge>}
       {task.held && <><StatusBadge tone="warning">Paused</StatusBadge><p>{task.hold_reason ?? "A project problem needs attention."}</p></>}
-      {reopenNotice(task) && <p>{reopenNotice(task)}</p>}
     </> },
     { id: "assigned", header: "Assigned", cell: task => <AssignedDate at={task.assigned_at} /> },
     { id: "changed", header: "Last change", cell: task => <time dateTime={task.updated_at}>{formatDateTime(task.updated_at)}</time> },

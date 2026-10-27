@@ -136,9 +136,14 @@ describe("My tasks component", () => {
       { ...task(4, "reopened"), reopened_at: "2026-10-26T09:00:00Z", reopen_reason: "Check the onset." }, task(5, "reopened"), task(3, "open")]);
     render(<MyTasks projects={[]} onNavigate={vi.fn()} />);
     const rows = await screen.findAllByTestId("task-row");
-    expect(rows[0].textContent).toMatch(/The project lead reopened this task on .+\. Reason: Check the onset\./);
-    expect(rows[1].textContent).toContain("The project lead reopened this task. No reason given.");
-    expect(rows[2].textContent).not.toContain("reopened this task");
+    // The row keeps only the badge; the sentence opens from its info button.
+    expect(rows[0].textContent).not.toContain("reopened this task");
+    expect(within(rows[2]).queryByRole("button", { name: "Why reopened" })).toBeNull();
+    fireEvent.click(within(rows[0]).getByRole("button", { name: "Why reopened" }));
+    expect((await screen.findByRole("dialog", { name: "Why reopened" })).textContent).toMatch(/The project lead reopened this task on .+\. Reason: Check the onset\./);
+    fireEvent.click(within(rows[0]).getByRole("button", { name: "Why reopened" }));
+    fireEvent.click(within(rows[1]).getByRole("button", { name: "Why reopened" }));
+    expect((await screen.findByRole("dialog", { name: "Why reopened" })).textContent).toBe("The project lead reopened this task. No reason given.");
   });
 
   it("shows pauses alongside underlying status and keeps saved work accessible", async () => {
