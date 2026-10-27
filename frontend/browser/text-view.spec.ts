@@ -60,7 +60,7 @@ test("the lead opens the proposals from the card, switches layers and compares",
   const final = select.locator("option", { hasText: "Final result" });
   // The visible label wraps the select, so toBeDisabled() would check the select; check the option itself.
   await expect(final).toHaveJSProperty("disabled", true);
-  await expect(final).toContainText("not yet accepted");
+  await expect(final).toHaveText("Final result (not accepted yet)");
 
   // Tom's layer: his correction (HP:0002133) and his confirmed p1; his rejected p2 is not a finding.
   await show(select, s.display_names.tom);
