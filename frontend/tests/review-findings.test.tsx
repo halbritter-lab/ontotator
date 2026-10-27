@@ -243,7 +243,7 @@ describe("A4/A5: review decisions and notes", () => {
     });
     const decide = vi.spyOn(api, "recordDecision");
     render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()} />);
-    fireEvent.click(screen.getByText("HP:0001", { selector: ".doc-list li:not(.doc-item--resolved) *" }));
+    fireEvent.click(screen.getByText("HP:0001", { selector: ".doc-list .doc-item:not(.doc-item--resolved) *" }));
     fireEvent.click(screen.getByRole("radio", { name: /Present/i }));
     await waitFor(() => expect(api.applyCommand).toHaveBeenCalled());
     await new Promise((r) => setTimeout(r, 0));
@@ -408,7 +408,7 @@ describe("Submit", () => {
     expect(screen.getAllByRole("button", { name: /Submit text/i })).toHaveLength(1);
     fireEvent.click(screen.getByRole("button", { name: /Finish & submit/i }));
     const dialog = await screen.findByRole("dialog", { name: /Submit text/i });
-    expect(dialog.textContent).toMatch(/1 annotation in this case/);
+    expect(dialog.textContent).toMatch(/1 annotation in this text/);
     const confirm = within(dialog).getByRole("button", { name: /^Submit text$/i }) as HTMLButtonElement;
     expect(dialog.textContent).toContain("Submitting confirms you checked the entire text for further findings.");
     expect(confirm.getAttribute("aria-disabled")).toBeNull();

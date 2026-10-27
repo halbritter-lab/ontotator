@@ -230,7 +230,7 @@ describe("Unconfirmed values section", () => {
     expect(screen.getByText("2 annotations will be submitted (1 confirmed proposal, 1 saved finding)")).toBeDefined();
     expect(screen.getByText("1 of 1 review proposal decided")).toBeDefined();
     rerender(<SubmitCaseDialog {...dialogProps({ savedFindingsCount: 1 })} />);
-    expect(screen.getByText("1 annotation in this case")).toBeDefined();
+    expect(screen.getByText("1 annotation in this text")).toBeDefined();
     rerender(<SubmitCaseDialog {...dialogProps({ savedFindingsCount: 0, unconfirmed: [] })} />);
     expect(screen.getByText("You are submitting no findings for this text.")).toBeDefined();
   });

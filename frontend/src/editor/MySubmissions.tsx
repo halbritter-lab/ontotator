@@ -69,7 +69,7 @@ export function MySubmissions({ assignmentId, projectKey, currentRound, document
             <Button type="button" variant="secondary" size="sm" loading={opening === row.submission_id}
               aria-label={`View ${submissionName(row)}`} onClick={() => { if (!opening) void view(row); }}>View</Button>
           </li>)}
-          {pending && <li style={{ color: "var(--text-muted)" }}>{`Round ${currentRound.ordinal}, not submitted yet`}</li>}
+          {pending && <li className="my-submissions__pending">{`Round ${currentRound.ordinal}, not submitted yet`}</li>}
         </ul>}
         {viewError != null && <ErrorNotice error={viewError} />}
       </>}

@@ -3470,7 +3470,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           {/* Narrow layout: attach mode opens on Findings, where the text pane's banner and its Cancel are out of sight. */}
           {panesLayout && attachActive && attachModifier && mobilePane === "list" && <div role="status" className="attach-mention-banner attach-mention-banner--list">
             <span>{attachCopy.banner(attachModifier.termLabel)}</span>
-            <button type="button" className="btn btn-secondary btn-sm" aria-keyshortcuts="Escape" onClick={cancelAttachModifier}>Cancel (Esc)</button>
+            <Button size="sm" aria-keyshortcuts="Escape" onClick={cancelAttachModifier}>Cancel (Esc)</Button>
           </div>}
           {/* Multi-layer controls (rendered only if >1 layer) */}
           <LayerControls
@@ -3543,7 +3543,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                     })() : null;
                     return (
                       <React.Fragment key={refKey(t)}>
-                      <li
+                      <li className="doc-list-row"><div
                         data-list-key={`target:${refKey(t)}`}
                         className={`doc-item ${isSelected && !attachEntry ? "selected" : ""} ${isResolved ? "doc-item--resolved" : ""}${attachEntry ? " mod-target" : ""}${attachHere ? " mod-target--active" : ""}`}
                         role="button"
@@ -3551,7 +3551,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                         tabIndex={attachEntry && !attachHere ? -1 : 0}
                         aria-pressed={attachEntry ? undefined : isSelected}
                         aria-label={attachEntry ? attachCopy.targetName(attachModifier!.termLabel, attachEntry.term) : undefined}
-                        onKeyDown={(event: React.KeyboardEvent<HTMLLIElement>) => {
+                        onKeyDown={(event: React.KeyboardEvent<HTMLDivElement>) => {
                           if (event.target !== event.currentTarget) return;
                           if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.currentTarget.click(); }
                           else if (attachEntry && (event.key === "ArrowDown" || event.key === "ArrowUp")) { event.preventDefault(); moveAttachFocus(event.key === "ArrowDown" ? 1 : -1); }
@@ -3597,7 +3597,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                         {t.layer_id && <ModifierLine modifiers={targetSnapshotOf(t)?.annotation.modifiers} layerId={t.layer_id} termLabel={termLabel} />}
                         {entryAuthorOf(t.annotation_id) && <div className="doc-meta">{entryAuthorOf(t.annotation_id)}</div>}
                         {attachHere && <div className="mod-attach-here" aria-hidden="true">Attach {attachModifier!.termLabel} here, as your copy <Kbd>Enter</Kbd></div>}
-                      </li>
+                      </div></li>
                       {replacedBy && <li className={`doc-item doc-item--resolved doc-meta doc-item--replaced-by${isSelected ? " selected" : ""}`}>{replacedBy}</li>}
                       </React.Fragment>
                     );

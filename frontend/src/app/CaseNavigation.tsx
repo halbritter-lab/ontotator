@@ -71,7 +71,6 @@ export const CaseNavigation: React.FC<CaseNavigationProps> = ({
         onClick={handlePrev}
         disabled={!hasPrev || disabled}
         title="Previous text (Alt + ←)"
-        style={{ border: "none", borderRadius: 0, padding: "4px 10px", fontSize: "0.95rem" }}
       />
 
       {total > 1 ? (
@@ -121,7 +120,6 @@ export const CaseNavigation: React.FC<CaseNavigationProps> = ({
         onClick={handleNext}
         disabled={!hasNext || disabled}
         title="Next text (Alt + →)"
-        style={{ border: "none", borderRadius: 0, padding: "4px 10px", fontSize: "0.95rem" }}
       />
     </div>
   );

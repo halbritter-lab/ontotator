@@ -80,9 +80,8 @@ test("two keys after marking attach Severe; a click on the mark attaches the nex
   await expect(target).toBeFocused();
   await expect(page.getByRole("region", { name: "Attach Severe" })).toContainText("Nearest in this sentence: Seizure · “Krampfanfälle”");
   await expect(runsOf(page, "ev-seizure").first()).toHaveClass(/run--framed/);
-  // The findings rows are `li role="button"` in a `ul` since before modifiers (list, aria-allowed-role): known, not checked here.
   const axe = await new AxeBuilder({ page }).include(".attach-mention-banner").include(".inspector-pane").include(".doc-list")
-    .disableRules(["list", "aria-allowed-role"]).analyze();
+    .analyze();
   expect(axe.violations, JSON.stringify(axe.violations, null, 2)).toEqual([]);
   await evidence(page, "modifiers-attach.png");
 

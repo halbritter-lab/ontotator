@@ -174,7 +174,8 @@ export function TextPane({ text, groups, people, selectedGroupId, onSelectGroup,
 
   return <section className="cons-text" aria-label="Clinical text">
     {toolbar && <div className="cons-text-toolbar">{toolbar}</div>}
-    <div className="cons-text-scroll">
+    {/* Scrollable, so keyboard users can reach it (axe scrollable-region-focusable). */}
+    <div className="cons-text-scroll" tabIndex={0} role="region" aria-label="Clinical text, scrollable">
       <div ref={root} className="cons-text-body" onMouseUp={readSelection} onKeyUp={readSelection}>
         {pieces.map(piece => {
           const value = chars.slice(piece.start, piece.end).join("");

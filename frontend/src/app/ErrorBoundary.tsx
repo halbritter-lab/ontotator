@@ -1,4 +1,5 @@
 import React from "react";
+import { Button } from "../ui/Button";
 
 export interface CaseErrorBoundaryProps {
   children: React.ReactNode;
@@ -31,20 +32,20 @@ export class CaseErrorBoundary extends React.Component<CaseErrorBoundaryProps, S
   render() {
     if (!this.state.error) return this.props.children;
     return (
-      <div role="alert" style={{ padding: 32, maxWidth: 640, margin: "40px auto" }}>
+      <div role="alert" className="case-error">
         <h1>Something went wrong while displaying this text.</h1>
-        <p style={{ color: "var(--text-muted)" }}>
+        <p className="case-error__detail">
           Changes that were already saved are kept on the server. Details: {this.state.error.message}
         </p>
-        <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+        <div className="case-error__actions">
           {this.props.onReload && (
-            <button type="button" className="btn btn-primary" onClick={() => this.reset(this.props.onReload!)}>
+            <Button variant="primary" onClick={() => this.reset(this.props.onReload!)}>
               Reload case
-            </button>
+            </Button>
           )}
-          <button type="button" className="btn btn-secondary" onClick={() => this.reset(this.props.onBackToDashboard)}>
+          <Button onClick={() => this.reset(this.props.onBackToDashboard)}>
             {this.props.backLabel ?? "Back to dashboard"}
-          </button>
+          </Button>
         </div>
       </div>
     );
