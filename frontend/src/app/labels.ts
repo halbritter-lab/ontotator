@@ -1,4 +1,5 @@
 import type { Route } from "./router";
+import { taskText } from "./identity";
 
 /** Plain-English presentation of workflow codes outside the editor. Codes stay the data; these are display only. */
 
@@ -19,11 +20,13 @@ export const taskLabels: Readonly<Record<"annotate" | "review" | "translation_re
   translation_review: "Translation review",
 };
 
-/** Breadcrumb name of a task: "failed-translation, Translation review (de)"; the document id when there is no external id. */
-export function taskCrumbLabel(task: { external_id?: string | null; document_id: string; task: string; language: string }): string {
+type TaskTextFields = Parameters<typeof taskText>[0] & { task: string };
+
+/** Breadcrumb name of a task: the heading's text name and the task, "failed-translation de, Translation review". */
+export function taskCrumbLabel(task: TaskTextFields): string {
   // The consolidation view's title names the text already (B5-6): its crumb is the task alone.
   if (task.task === "review") return `${labelFor(taskLabels, task.task)} (${task.language})`;
-  return `${task.external_id || task.document_id}, ${labelFor(taskLabels, task.task)} (${task.language})`;
+  return `${taskText(task)}, ${labelFor(taskLabels, task.task)}`;
 }
 
 const ROUTE_PAGES: Readonly<Record<Exclude<Route["name"], "task" | "projectCase">, string>> = {
@@ -37,8 +40,8 @@ const ROUTE_PAGES: Readonly<Record<Exclude<Route["name"], "task" | "projectCase"
  * Browser title parts of a route, most specific first: "Documents", "Ward notes" (#9).
  * `project` is undefined while unknown and null when it is not found or not accessible.
  */
-export function routeTitle(route: Route, project?: { name: string } | null, task?: { external_id?: string | null; document_id: string; task: string } | null): string[] {
-  if (route.name === "task") return task ? [task.external_id || task.document_id, labelFor(taskLabels, task.task)] : ["Task"];
+export function routeTitle(route: Route, project?: { name: string } | null, task?: TaskTextFields | null): string[] {
+  if (route.name === "task") return task ? [taskText(task), labelFor(taskLabels, task.task)] : ["Task"];
   if ("key" in route && project === null) return ["Project not found"];
   const page = route.name === "projectCase" ? route.caseId : ROUTE_PAGES[route.name];
   return "key" in route ? [page, project?.name ?? route.key] : [page];

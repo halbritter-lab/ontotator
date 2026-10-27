@@ -322,6 +322,7 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
   }
   return <Shell user={user} projects={projects} route={route} onNavigate={go} onLogout={logout}
     taskProject={taskProject?.identity === taskIdentity ? taskProject.key : undefined}
+    taskKind={crumbTask?.identity === taskIdentity ? crumbTask.task?.task : undefined}
     breadcrumb={route.name === "task" ? [
       { label: "My tasks", onClick: () => go(MY_TASKS) },
       { label: crumbTask?.identity === taskIdentity && crumbTask.task ? taskCrumbLabel(crumbTask.task) : "Task", title: `Assignment ${route.assignmentId}` },

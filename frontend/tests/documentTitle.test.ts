@@ -13,8 +13,8 @@ describe("browser title (#9)", () => {
   });
 
   it("names a task by its text and task type", () => {
-    expect(documentTitle(routeTitle({ name: "task", assignmentId: 4 }, undefined, { external_id: "W04-pulmonary", document_id: "d1", task: "annotate" })))
-      .toBe("W04-pulmonary · Annotation · Ontotator");
+    expect(documentTitle(routeTitle({ name: "task", assignmentId: 4 }, undefined, { external_id: "W04-pulmonary", document_id: "d1", task: "annotate", language: "de" })))
+      .toBe("W04-pulmonary de · Annotation · Ontotator");
     expect(documentTitle(routeTitle({ name: "task", assignmentId: 4 }, undefined, null))).toBe("Task · Ontotator");
   });
 });
