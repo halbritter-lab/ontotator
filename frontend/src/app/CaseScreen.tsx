@@ -91,7 +91,6 @@ import { useMediaQuery } from "../ui/useMediaQuery";
 import { SearchManager } from "../editor/searchState";
 import { TermName } from "../editor/TermName";
 import { TextPane } from "../editor/TextPane";
-import { PendingMarkBar } from "../editor/PendingMarkBar";
 import { Kbd } from "../ui/Kbd";
 import { TreeBrowser } from "../editor/TreeBrowser";
 import { useTermLabels } from "../editor/useTermLabels";
@@ -3756,11 +3755,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           resyncToken={textResyncToken}
           scrollRequest={textScrollRequest}
         />
-        {/* Attach mode: the banner owns the instruction and Cancel; Esc still cancels and discards. */}
-        {!panesLayout && !attachActive && pendingIsMarkedSpan && !readOnly && pendingAnnotation?.evidenceId && (
-          <PendingMarkBar textElement={leftTextElement} evidenceId={pendingAnnotation.evidenceId}
-            segmentsKey={JSON.stringify(pendingAnnotation.segments)} onDiscard={discardPending} />
-        )}
+        {/* Above 700 px nothing floats over the text (#21): the New finding panel holds the hint and the one Discard. */}
         {panesLayout && !attachActive && pendingIsMarkedSpan && !readOnly && mobilePane === "text" && (
           <div className="pending-bar" role="group" aria-label="New finding">
             <span className="pending-bar__text">New finding “{quoteSegments(view.document.text, pendingAnnotation!.segments, 40)}”</span>

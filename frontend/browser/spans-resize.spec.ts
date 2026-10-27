@@ -126,24 +126,18 @@ test.describe("adjusting a pending mark", () => {
     await expect(mentionWithOffsets(page, "[0:17]")).toBeVisible();
   });
 
-  test("pending mark: the end handle drags onto the next line under the mark bar", async ({ page }) => {
+  test("pending mark: the end handle drags onto the next line, nothing covers it", async ({ page }) => {
     await importFixture(page, `pending-under-bar-${test.info().repeatEachIndex}`);
     await openCase(page, { task: "annotate" });
     await selectText(page, 0, 9);
-    const bar = page.locator(".pending-mark-bar");
-    await expect(bar).toBeVisible();
-    // "B" (offset 30) starts the next line, right under the bar.
-    // The bar settles into place after the selection: poll until "B" lies under it.
-    await expect.poll(async () => {
-      const point = await pointAtOffset(page, 30, "right");
-      return page.evaluate(({ x, y }) => !!document.elementFromPoint(x, y)?.closest(".pending-mark-bar"), point);
-    }).toBe(true);
+    await expect(page.getByLabel("New finding")).toBeVisible();
+    // "B" (offset 30) starts the next line: no bar over the text catches it (#21).
+    const point = await pointAtOffset(page, 30, "right");
+    expect(await page.evaluate(({ x, y }) => !!document.elementFromPoint(x, y)?.closest(".text-container"), point)).toBe(true);
     const end = page.getByRole("separator", { name: "End of marked text" });
     await dragHandle(page, end, 30, false, "right");
-    await expect(bar).toHaveCSS("pointer-events", "none");
     await page.mouse.up();
     await expect(page.locator(".pending-quote")).toHaveText(/B”$/);
-    await expect(bar).toHaveCSS("pointer-events", "auto");
   });
 
   test("pending mark: keyboard Tab to the handle, → twice, Enter in the search", async ({ page }) => {
