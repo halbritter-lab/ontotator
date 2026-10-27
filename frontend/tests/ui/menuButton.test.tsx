@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
-import { MenuButton } from "../../src/ui/MenuButton";
+import { MenuButton, menuPosition } from "../../src/ui/MenuButton";
 import { useShortcut } from "../../src/ui/shortcuts";
 
 afterEach(cleanup);
@@ -79,4 +79,15 @@ it("items are not in the tab order", async () => {
   const { button } = setup();
   await user.click(button);
   for (const menuItem of screen.getAllByRole("menuitem")) expect(menuItem.getAttribute("tabindex")).toBe("-1");
+});
+
+it("opens below the trigger, flips above near the bottom and stays inside the viewport", () => {
+  const viewport = { width: 1000, height: 600 };
+  const menu = { width: 200, height: 150 };
+  expect(menuPosition({ top: 100, bottom: 130, right: 900 }, menu, viewport)).toEqual({ top: 134, left: 700 });
+  expect(menuPosition({ top: 540, bottom: 570, right: 900 }, menu, viewport)).toEqual({ top: 386, left: 700 });
+  expect(menuPosition({ top: 100, bottom: 130, right: 150 }, menu, viewport).left).toBe(4);
+  expect(menuPosition({ top: 100, bottom: 130, right: 1100 }, menu, viewport).left).toBe(796);
+  // No room either way: the side with more room, clamped into view.
+  expect(menuPosition({ top: 20, bottom: 50, right: 900 }, menu, { width: 1000, height: 160 }).top).toBe(6);
 });
