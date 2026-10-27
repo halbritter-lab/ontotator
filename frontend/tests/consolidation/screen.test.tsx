@@ -281,6 +281,15 @@ describe("ConsolidationScreen", () => {
     expect(screen.queryByRole("button", { name: /^Undo/ })).toBeNull();
   });
 
+  it("names a term kept by two groups in the submit summary (R-3)", async () => {
+    const fatigue = { term_id: "HP:0012378", term_label: "Fatigue", layer_id: "phenotype", axes: {}, modifiers: [] };
+    load(withGroup(withGroup(decidedView(), "g-hypo", { result: fatigue }), "g-micro", { result: fatigue }));
+    await renderScreen({ assignmentId: 42 });
+    fireEvent.click(screen.getByRole("button", { name: "Submit consolidation" }));
+    const dialog = screen.getByRole("dialog", { name: "Submit consolidation?" });
+    expect(within(dialog).getByText("More than one finding with the same term: Fatigue.")).toBeTruthy();
+  });
+
   it("submits after the summary, acknowledges an axis warning and offers the next task", async () => {
     load(decidedView());
     const warning = new ApiError(409, "Check values", "AXIS_CONFIRMATION_WARNING", {
@@ -295,6 +304,7 @@ describe("ConsolidationScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: "Submit consolidation" }));
     const dialog = screen.getByRole("dialog", { name: "Submit consolidation?" });
     expect(within(dialog).getByText("8 groups, 7 findings, 1 not in result")).toBeTruthy();
+    expect(within(dialog).queryByText(/same term/)).toBeNull();
     fireEvent.click(within(dialog).getByRole("button", { name: "Submit" }));
     await within(dialog).findByLabelText("I checked these values");
     expect(submit.mock.calls[0][1].payload).toEqual({ command: "submit_workspace", document_checked: true });

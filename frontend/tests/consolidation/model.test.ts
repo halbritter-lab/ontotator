@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { fieldsToDecide, finalizationState, groupStatus, headerTitle, partialText, submittedText, summaryText } from "../../src/consolidation/consolidationText";
+import { duplicatesText, fieldsToDecide, finalizationState, groupStatus, headerTitle, partialText, submittedText, summaryText } from "../../src/consolidation/consolidationText";
 import type { ConsolidationGroupView } from "../../src/api/client";
-import { attachCandidates, choicesComplete, choose, comparisonRows, groupName, resolvePayload, resultLine, standaloneText, takeFinding, type Choices } from "../../src/consolidation/groupModel";
+import { attachCandidates, choicesComplete, choose, comparisonRows, duplicateTerms, groupName, resolvePayload, resultLine, sameTermGroups, standaloneText, takeFinding, type Choices } from "../../src/consolidation/groupModel";
 import { NO_MODIFIERS } from "../../src/consolidation/modifierSets";
 import { textOrder } from "../../src/consolidation/GroupList";
 import { ANA, BEN, CEM, decidedView, exampleGroups, exampleView, group, hypotoniaThree, LUC, member, mild, MOD_PEOPLE, MOD_TEXT, modSpan, recurrent, seizure, severe, span, TEXT, THREE, TOM } from "./fixtures";
@@ -33,6 +33,11 @@ describe("consolidation copy", () => {
   it("says who accepts the result after submitting", () => {
     expect(submittedText(true)).toBe("Consolidation submitted. Accept the result in Documents.");
     expect(submittedText(false)).toBe("Consolidation submitted. The lead then accepts the result.");
+  });
+
+  it("names terms kept twice before submitting, nothing otherwise (R-3)", () => {
+    expect(duplicatesText([])).toBeNull();
+    expect(duplicatesText(["Fatigue"])).toBe("More than one finding with the same term: Fatigue.");
   });
 
   it("derives the Finalization step from round and final state, not the open groups (X-8)", () => {
@@ -145,6 +150,22 @@ describe("comparison model", () => {
 
   it("names the group by its text excerpt", () => {
     expect(groupName(hypotoniaThree(), TEXT)).toBe("muscular hypotonia");
+  });
+
+  it("names a spanless group by its term, marked as without a text span (R-3)", () => {
+    const spanless = group("g-f", ["partial"], [member("in-f", BEN, "HP:0012378", "Fatigue", [])]);
+    expect(groupName(spanless, TEXT)).toBe("Fatigue (no text span)");
+  });
+
+  it("finds other decided groups keeping the same term and lists duplicate terms (R-3)", () => {
+    const kept = (id: string, extra = {}) => group(id, ["partial"], [member(`in-${id}`, BEN, "HP:0012378", "Fatigue", [])], { state: "keep",
+      result: { term_id: "HP:0012378", term_label: "Fatigue", layer_id: "phenotype", axes: {}, modifiers: [] }, ...extra });
+    const first = kept("a"), second = kept("b"), left = kept("c", { state: "leave_out" });
+    const open = group("o", ["partial"], [member("in-o", BEN, "HP:0012378", "Fatigue", [span("hypotonia")])]);
+    expect(sameTermGroups(open, [first, left, open], "HP:0012378")).toEqual([first]);
+    expect(sameTermGroups(open, [first], "HP:0001252")).toEqual([]);
+    expect(duplicateTerms([first, left, open])).toEqual([]);
+    expect(duplicateTerms([first, second, left])).toEqual(["Fatigue"]);
   });
 
   it("never offers keep both", () => {

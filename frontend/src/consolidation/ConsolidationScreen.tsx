@@ -15,8 +15,8 @@ import { nextTaskLabel, remainingTasksText } from "../translation/labels";
 import { Button, ConfirmDialog, EmptyState, InlineMessage, MenuButton, Popover, Select, TextInput, Toast, useMediaQuery, useToast } from "../ui";
 import { useShortcut } from "../ui/shortcuts";
 import { StagePath } from "../ui/StagePath";
-import { addedHeading, finalizationState, headerTitle, READ_ONLY_REASONS, submittedText, summaryText } from "./consolidationText";
-import { groupName, termLabel } from "./groupModel";
+import { addedHeading, duplicatesText, finalizationState, headerTitle, READ_ONLY_REASONS, submittedText, summaryText } from "./consolidationText";
+import { duplicateTerms, groupName, termLabel } from "./groupModel";
 import { GroupList, textOrder } from "./GroupList";
 import { SubmitBar } from "./SubmitBar";
 import { SummaryDialog } from "./SummaryDialog";
@@ -345,7 +345,7 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
     {typing && <PassageForm text={view.text} anchorRef={addRef} onPick={pickPassage} onClose={() => setTyping(false)} />}
     {data.workspace && addTarget && <TermPicker open={adding} anchorRef={addRef} label="Add finding" workspace={data.workspace} layerId={addTarget.layerId}
       initialQuery={range ? prefillQuery(view.text, [range]) : undefined} onClose={() => setAdding(false)} onPick={(candidate, searchId) => { void addFinding(candidate, searchId); }} />}
-    <SummaryDialog open={dialog.open} summary={summaryText(groups, added.length)} busy={dialog.busy} warning={dialog.warning} error={dialog.error}
+    <SummaryDialog open={dialog.open} summary={summaryText(groups, added.length)} duplicates={duplicatesText(duplicateTerms(groups))} busy={dialog.busy} warning={dialog.warning} error={dialog.error}
       onSubmit={acknowledged => { void submit(acknowledged); }} onClose={() => setDialog({ open: false, busy: false, warning: null, error: null })} />
     <p className="visually-hidden" role="status" aria-live="polite">{announcement}</p>
     <ConfirmDialog open={reopeningAll.open} busy={reopeningAll.busy} title={`Reopen ${decidedCount} decided ${decidedCount === 1 ? "group" : "groups"}?`}
