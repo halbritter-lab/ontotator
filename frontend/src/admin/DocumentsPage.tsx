@@ -706,7 +706,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     plan={<><PlanChips row={panelRow} groupRevision={groupOf(panelRow.case_id)?.plan_revision ?? 1} saves={planSaves} size={narrow ? "card" : "table"} /><PlanRowNotice row={panelRow} saves={planSaves} /></>}
     stageActions={stage => <StageActions {...stageActionProps} row={panelRow} stage={stage} inCard />}
     steps={cardSteps(panelRow)}
-    planControl={step => <CardPlanSelect row={panelRow} step={step} groupRevision={groupOf(panelRow.case_id)?.plan_revision ?? 1} saves={planSaves} onChanged={reloadAfterAction} />}
+    planControl={step => <CardPlanSelect row={panelRow} step={step} groupRevision={groupOf(panelRow.case_id)?.plan_revision ?? 1} saves={planSaves} />}
     returnFocus={() => { const opener = panelOpenedKey.current === panelKey ? panelOpener.current : null; return opener?.isConnected ? opener : rowElement(panelKey, "header"); }}
     planRevision={planSaves.revisionOf(panelRow.case_id, groupOf(panelRow.case_id)?.plan_revision ?? 1)}
     notice={pendingPanel ? <InlineConfirm title="Discard your unsaved choice?" headingLevel={3}

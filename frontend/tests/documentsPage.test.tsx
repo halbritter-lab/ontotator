@@ -1288,7 +1288,7 @@ describe("plan chips on the page", () => {
     renderPage({ query: { panel: "case-0101:fr", panel_stage: "annotation" } });
     const card = await textCard("case-0101 fr");
     const mode = await within(card).findByRole("radiogroup", { name: "Annotation plan" });
-    const lock = "Fixed: Tom Reis has started from proposals. Remove all unsubmitted work to change it.";
+    const lock = "Fixed: Tom Reis has started from proposals. Remove the unsubmitted assignment below to change it.";
     for (const choice of within(mode).getAllByRole("radio") as HTMLInputElement[]) {
       expect(choice.getAttribute("aria-disabled")).toBe("true");
       expect(choice.disabled).toBe(false);
@@ -1297,25 +1297,17 @@ describe("plan chips on the page", () => {
     fireEvent.click(within(mode).getByRole("radio", { name: "From scratch" }));
     expect(api.patchWorkPlan).not.toHaveBeenCalled();
     expect((within(mode).getByRole("radio", { name: "From proposals" }) as HTMLInputElement).checked).toBe(true);
-    // The lock line offers the way out (#17.1): remove the unsubmitted assignment after a confirmation naming the loss.
-    vi.spyOn(api, "removeAssignment").mockResolvedValue({} as never);
-    const before = vi.mocked(api.listDocumentRows).mock.calls.length;
-    fireEvent.click(within(card).getByRole("button", { name: "Remove assignment…" }));
-    const confirm = await screen.findByRole("dialog", { name: "Remove assignment?" });
-    expect(within(confirm).getByText(/unsubmitted findings, notes and decisions on this text are lost/)).toBeTruthy();
-    fireEvent.click(within(confirm).getByRole("button", { name: "Remove" }));
-    await waitFor(() => expect(api.removeAssignment).toHaveBeenCalledWith(4));
-    await waitFor(() => expect(vi.mocked(api.listDocumentRows).mock.calls.length).toBeGreaterThan(before));
   });
 
-  it("a mode fixed by submitted work offers no removal", async () => {
+  it("a mode fixed by submitted work says so instead of asking to remove unsubmitted work (#17.1)", async () => {
     const fr = { ...planRow("case-0101", "fr", stepOf("assign_annotation")), proposal_count: 12, annotation_mode: { mode: "proposals" as const, source: "project" as const, locked: true, override: null, proposal_count: 12 },
       work: [work({ assignment_id: 4, document_id: "case-0101-fr", task: "annotate", status: "submitted", person: { pseudonym: "ann-0004", display_name: "Tom Reis", is_me: false } })] };
     mockRows(page([group("case-0101", [fr], { plan_revision: 2 })]));
     renderPage({ query: { panel: "case-0101:fr", panel_stage: "annotation" } });
     const card = await textCard("case-0101 fr");
-    await within(card).findByRole("radiogroup", { name: "Annotation plan" });
-    expect(within(card).queryByRole("button", { name: /Remove .*assignment…/ })).toBeNull();
+    const mode = await within(card).findByRole("radiogroup", { name: "Annotation plan" });
+    expect(document.getElementById(mode.getAttribute("aria-describedby")!)!.textContent)
+      .toBe("Fixed: Tom Reis has submitted work started from proposals, so the mode no longer changes.");
   });
 
   it("opens the upload dialog from the heading row", async () => {
