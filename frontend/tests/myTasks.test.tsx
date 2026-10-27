@@ -537,11 +537,12 @@ describe("My tasks guideline links", () => {
     vi.spyOn(api, "listMyTasks").mockResolvedValue([task(3, "open")]);
     vi.mocked(api.listGuidelines).mockResolvedValue(guidelineListing([guidelineSummary(1)]));
     render(<MyTasks projects={[]} onNavigate={vi.fn()} />);
-    expect((await screen.findByRole("link", { name: /^Project guidelines/ })).textContent).toBe("Project guidelines v1");
+    // All projects: the link names its project (#48 N-26).
+    expect((await screen.findByRole("link", { name: /^Project guidelines/ })).textContent).toMatch(/^Project guidelines v1, .+/);
     vi.mocked(api.listGuidelines).mockResolvedValue(guidelineListing([guidelineSummary(2), guidelineSummary(1)]));
     vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
     fireEvent(document, new Event("visibilitychange"));
-    await waitFor(() => expect(screen.getByRole("link", { name: /^Project guidelines/ }).textContent).toBe("Project guidelines v2"));
+    await waitFor(() => expect(screen.getByRole("link", { name: /^Project guidelines/ }).textContent).toMatch(/^Project guidelines v2, .+/));
     expect(api.listGuidelines).toHaveBeenCalledTimes(2);
   });
 

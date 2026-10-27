@@ -2861,6 +2861,15 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
     await waitFor(() => expect(payloads(apply)[2]).toEqual({ command: "add_modifier", annotation_id: "seizure", term_id: "HP:0012828", segments: [pos("schwere")] }));
   });
 
+  it("a selected finding's edge handles name the finding and their segment (#48 N-24)", async () => {
+    const { container } = await setup(modView(SEVERE_ON_SEIZURE));
+    fireEvent.click(container.querySelector('[data-list-key="annotation:seizure"]')!);
+    await waitFor(() => expect(container.querySelectorAll(".text-container .resize-handle").length).toBeGreaterThan(0));
+    const start = container.querySelector<HTMLElement>(".text-container .resize-handle--start")!;
+    expect(start.getAttribute("aria-label")).toBe("Start of Seizure mention");
+    expect(start.getAttribute("aria-valuetext")).toBe("“Krampfanfälle”");
+  });
+
   it("“Remove text span” shows an Undo toast that restores the span", async () => {
     const { container, apply } = await setup(modView(SEVERE_ON_SEIZURE));
     fireEvent.click(container.querySelector('[data-list-key="annotation:seizure"]')!);

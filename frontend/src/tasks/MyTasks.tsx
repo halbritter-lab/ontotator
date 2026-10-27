@@ -147,11 +147,12 @@ export function MyTasks({ project, status, projects, onNavigate, username }: MyT
   const guidelineLinks = [...options.keys()].filter(key => listedProjects.has(key) && guidelineVersions.has(key));
   const guidelineLink = (key: string) => {
     const route: Route = { name: "projectGuidelines", key };
+    // Without a project filter the list may mix projects: the link names its project.
     const name = tasks.find(task => task.project_key === key)?.project_name ?? key;
     return <a href={routeHref(route)} onClick={event => {
       if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
       event.preventDefault(); onNavigate(route);
-    }}>{`Project guidelines v${guidelineVersions.get(key)}${guidelineLinks.length > 1 ? `, ${name}` : ""}`}</a>;
+    }}>{`Project guidelines v${guidelineVersions.get(key)}${project === undefined ? `, ${name}` : ""}`}</a>;
   };
   const columns: Column<TaskSummary>[] = [
     { id: "text", header: "Text", cell: task => <LanguageText text={taskText(task)} code={task.language} /> },

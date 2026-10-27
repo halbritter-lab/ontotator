@@ -18,6 +18,7 @@ import { InlineMessage } from "../ui/InlineMessage";
 import { Kbd } from "../ui/Kbd";
 import { useCoalescedAxisChange } from "./useCoalescedAxisChange";
 import { useValuesLayout } from "./valuesLayout";
+import { quoteOf } from "./modifiers";
 
 export type AxesValues = Record<string, string | null>;
 export type Axes = AxesValues;
@@ -85,12 +86,9 @@ export interface AnnotationPanelProps {
   modifierNotice?: React.ReactNode;
 }
 
-/** Quote the text covered by codepoint segments; discontinuous parts are joined with " … ". */
+/** Quote the text covered by codepoint segments (`quoteOf`), cut at `maxLength`. */
 export function quoteSegments(text: string, segments: { start: number; end: number }[], maxLength = 160): string {
-  const chars = Array.from(text);
-  const quoted = segments
-    .map((seg) => chars.slice(Math.max(0, seg.start), Math.min(chars.length, seg.end)).join(""))
-    .join(" … ");
+  const quoted = quoteOf(text, segments);
   return quoted.length > maxLength ? `${quoted.slice(0, maxLength - 1)}…` : quoted;
 }
 

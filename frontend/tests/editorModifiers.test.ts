@@ -10,6 +10,7 @@ import {
   modifierMarks,
   MODIFIER_ROOTS,
   parseModifierDisplayId,
+  quoteOf,
   sentenceBounds,
   sortByLabel,
   type AttachFinding,
@@ -32,6 +33,15 @@ const INFO: Record<string, TermInfo> = {
 };
 const info = (termId: string) => INFO[termId];
 const slice = (text: string, [start, end]: [number, number]) => Array.from(text).slice(start, end).join("");
+
+describe("quoteOf", () => {
+  it("joins parts apart only by whitespace with that whitespace, other gaps with an ellipsis (#48 N-24)", () => {
+    const text = "No fever. Mild cough";
+    expect(quoteOf(text, [{ start: 0, end: 2 }, { start: 3, end: 8 }])).toBe("No fever");
+    expect(quoteOf(text, [{ start: 0, end: 2 }, { start: 15, end: 20 }])).toBe("No … cough");
+    expect(quoteOf(text, [{ start: 0, end: 1 }, { start: 1, end: 2 }])).toBe("No");
+  });
+});
 
 describe("sentenceBounds", () => {
   const text = "First one. Second one here! Third? Last";
