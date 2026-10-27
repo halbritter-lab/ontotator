@@ -62,7 +62,7 @@ def test_all_match_needs_identical_modifiers(tmp_path):
         "S19": (
             [found("x", SEVERE, "schwere")],
             [found("x", SEVERE, "schwere")],
-            False,
+            True,  # a unanimous modifier term is a match (A103)
         ),
         "S11": (
             [found("s", SEIZURE, "Krampfanfälle", modifier(SEVERE, "schwere"))],
