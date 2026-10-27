@@ -19,6 +19,8 @@ export type AxisWarning = {
   count: number;
   /** Findings with a modifier warning (cohort term or two of one kind, D-f). */
   modifiers: number;
+  /** Findings whose term is a modifier term (`modifier_as_finding`, #57). */
+  asFinding: number;
 };
 
 const MODIFIER_RULES = new Set(["modifier_as_finding", "cohort_modifier", "exclusive_modifier_class"]);
@@ -42,7 +44,9 @@ export function axisWarningOf(error: unknown): AxisWarning | null {
     || typeof acknowledgement.warning_digest !== "string" || !acknowledgement.warning_digest) return null;
   const warnings = (Array.isArray(error.details.warnings) ? error.details.warnings : []) as { annotation_id?: string; rule?: string }[];
   const modifiers = warnings.filter(warning => MODIFIER_RULES.has(warning?.rule ?? ""));
-  return { acknowledgement, count: warnings.length - modifiers.length, modifiers: new Set(modifiers.map(warning => warning.annotation_id)).size };
+  const findings = (rule: (name: string) => boolean) => new Set(modifiers.filter(warning => rule(warning.rule ?? "")).map(warning => warning.annotation_id)).size;
+  return { acknowledgement, count: warnings.length - modifiers.length, modifiers: findings(rule => rule !== "modifier_as_finding"),
+    asFinding: findings(rule => rule === "modifier_as_finding") };
 }
 
 const isConflict = (error: unknown) => error instanceof ApiError && error.status === 409;

@@ -22,7 +22,7 @@ import { SubmitBar } from "./SubmitBar";
 import { SummaryDialog } from "./SummaryDialog";
 import { newFindingTarget, TermPicker } from "./TermPicker";
 import { TextPane, type AddedFinding, type TextRange } from "./TextPane";
-import { useConsolidation } from "./useConsolidation";
+import { useConsolidation, type AxisWarning } from "./useConsolidation";
 import "./consolidation.css";
 import { LanguageText } from "../ui/LanguageTag";
 import { onSpaceActivate } from "../ui/spaceActivates";
@@ -116,7 +116,7 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
   const [typing, setTyping] = useState(false);
   const [announcement, setAnnouncement] = useState("");
   const [isLead, setIsLead] = useState<boolean | undefined>(props.lead);
-  const [dialog, setDialog] = useState<{ open: boolean; busy: boolean; error: unknown }>({ open: false, busy: false, error: null });
+  const [dialog, setDialog] = useState<{ open: boolean; busy: boolean; warning: AxisWarning | null; error: unknown }>({ open: false, busy: false, warning: null, error: null });
   const [submitted, setSubmitted] = useState(false);
   const [nextTask, setNextTask] = useState<NextTask | null>(null);
   const [reopeningAll, setReopeningAll] = useState({ open: false, busy: false });
@@ -248,15 +248,14 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
     api.listMyTasks().then(tasks => setNextTask({ kind: "ready", ...nextOpenTask(tasks, props.assignmentId!, props.projectKey) }),
       error => setNextTask({ kind: "error", error }));
   };
-  const submit = async () => {
+  // One dialog: Submit sends without acknowledgement; warnings from the server are listed in it, and only
+  // "Submit with N warnings" acknowledges exactly those (a changed warning set is shown again).
+  const submit = async (acknowledged: boolean) => {
     setDialog(current => ({ ...current, busy: true, error: null }));
     try {
-      let result = await data.submit();
-      // One confirm step: the summary's Submit also acknowledges the advisory value and modifier warnings, which the
-      // group cards already flag (the consolidator decided every value there).
-      if (result.kind === "warning") result = await data.submit(result.warning.acknowledgement);
-      if (result.kind === "warning") throw new Error("The consolidation changed while submitting. Submit again.");
-      setDialog({ open: false, busy: false, error: null });
+      const result = await data.submit(acknowledged && dialog.warning ? dialog.warning.acknowledgement : undefined);
+      if (result.kind === "warning") { setDialog(current => ({ ...current, busy: false, warning: result.warning })); return; }
+      setDialog({ open: false, busy: false, warning: null, error: null });
       // A submitted round has nothing left to undo.
       dismiss(); setLastDecision(null);
       setSubmitted(true);
@@ -313,7 +312,7 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
           ]} />}
         </div>}
       </div>
-      {!readOnly && <div ref={submitRef} className="cons-header-progress"><SubmitBar open={open} total={groups.length} onSubmit={() => setDialog({ open: true, busy: false, error: null })}
+      {!readOnly && <div ref={submitRef} className="cons-header-progress"><SubmitBar open={open} total={groups.length} onSubmit={() => setDialog({ open: true, busy: false, warning: null, error: null })}
         onNextOpen={() => { const next = nextOpenAfter(groups, selected); if (next) select(next, true); }} /></div>}
     </header>
     {props.notice}
@@ -350,8 +349,8 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
     {typing && <PassageForm text={view.text} anchorRef={addRef} onPick={pickPassage} onClose={() => setTyping(false)} />}
     {data.workspace && addTarget && <TermPicker open={adding} anchorRef={addRef} label="Add finding" workspace={data.workspace} layerId={addTarget.layerId}
       initialQuery={range ? prefillQuery(view.text, [range]) : undefined} onClose={() => setAdding(false)} onPick={(candidate, searchId) => { void addFinding(candidate, searchId); }} />}
-    <SummaryDialog open={dialog.open} summary={summaryText(groups, added.length)} duplicates={duplicatesText(duplicateTerms(groups))} busy={dialog.busy} error={dialog.error}
-      onSubmit={() => { void submit(); }} onClose={() => setDialog({ open: false, busy: false, error: null })} />
+    <SummaryDialog open={dialog.open} summary={summaryText(groups, added.length)} duplicates={duplicatesText(duplicateTerms(groups))} busy={dialog.busy} warning={dialog.warning} error={dialog.error}
+      onSubmit={acknowledged => { void submit(acknowledged); }} onClose={() => setDialog({ open: false, busy: false, warning: null, error: null })} />
     <p className="visually-hidden" role="status" aria-live="polite">{announcement}</p>
     <ConfirmDialog open={reopeningAll.open} busy={reopeningAll.busy} title={`Reopen ${decidedCount} decided ${decidedCount === 1 ? "group" : "groups"}?`}
       message="Back to the start: groups where everyone agreed are taken over again, every other group opens without a preselection. The submissions and this consolidation stay. You can undo this right after."
