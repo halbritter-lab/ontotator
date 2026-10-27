@@ -4,7 +4,7 @@ import { Button, Checkbox, ConfirmDialog, DataTable, Dialog, EmptyState, IconMor
 import { CodeOnceDialog } from "./CodeOnceDialog";
 import { ErrorNotice } from "./ErrorNotice";
 import { LanguagesField } from "./LanguagesField";
-import { formatDateTime, formatShortDateTime, labelFor, roleLabels } from "../app/labels";
+import { formatDateTime, formatShortDateTime, humanize, labelFor, roleLabels, taskLabels } from "../app/labels";
 
 export interface UsersPageProps {
   currentUser: CurrentUser;
@@ -21,7 +21,7 @@ type History = { username: string; events: AuditEvent[] | null; error?: unknown 
 const auditActions: Readonly<Record<string, string>> = {
   "user.bootstrap": "First administrator created",
   "user.create": "Account created",
-  "user.reset_code": "Reset code issued",
+  "user.reset_code": "New sign-in code issued",
   "user.password_set": "Password set",
   "user.recovered": "Password recovered offline",
   "user.active": "Activation changed",
@@ -31,15 +31,64 @@ const auditActions: Readonly<Record<string, string>> = {
   "user.anonymise": "Personal data erased",
   "project.member_add": "Roles added",
   "project.member_remove": "Roles removed",
+  "project.create": "Project created",
+  "project.update": "Project settings changed",
+  "project.import": "Texts imported",
+  "project.export_download": "Export downloaded",
+  "project.final_export_requested": "Final export requested",
+  "project.final_selection": "Final selection changed",
+  "project.translation_review_export": "Translation reviews exported",
+  "assignment.create": "Task assigned",
+  "assignment.distribute": "Tasks distributed",
+  "assignment.language_override": "Language rule overridden",
+  "assignment.reassign": "Task reassigned",
+  "assignment.reopen": "Task reopened",
+  "assignment.revoke": "Task revoked",
+  "assignment.unreviewed_translation": "Assigned with an unreviewed translation",
+  "guideline.upload": "Guideline uploaded",
+  "guideline.withdraw": "Guideline withdrawn",
+  "ontology.add": "Ontology added",
+  "problem.report": "Problem reported",
+  "round.create": "Consolidation round started",
+  "text_change.auto_carry": "Text change carried over automatically",
+  "text_change.carry": "Text change carried over",
+  "text_change.move": "Text change moved",
+  "text_change.resolve": "Text change resolved",
+  "translation.accept_external_review": "External translation review accepted",
+  "translation.correction_requested": "Translation correction requested",
+  "translation.lead_correction_started": "Lead correction of a translation started",
+  "translation.review": "Translation reviewed",
+  "translation.source_reviewed": "Source text reviewed",
+  "upload.preview": "Upload checked",
+  "variant.discard": "Variant discarded",
+  "variant.reanchor": "Variant re-anchored",
+  "variant.status_override": "Variant status overridden",
+  "work_plan.import": "Work plan imported",
+  "work_plan.update": "Work plan changed",
 };
-/** Plain words for the audit details people need; other details as compact JSON. */
+const auditValue = (key: string, value: unknown): string =>
+  key === "task" && typeof value === "string" ? labelFor(taskLabels, value)
+    : Array.isArray(value) ? value.map(item => auditValue(key, item)).join(", ")
+      : typeof value === "boolean" ? (value ? "yes" : "no")
+        : value !== null && typeof value === "object" ? JSON.stringify(value) : String(value);
+/** Plain words for the audit details people need; any other details as "Key: value" text. */
 export function auditDetails(event: AuditEvent): string {
   const details = event.details as Record<string, unknown>;
   if (Array.isArray(details.roles)) return details.roles.map(role => labelFor(roleLabels, String(role))).join(", ");
   if (typeof details.active === "boolean") return details.active ? "Activated" : "Deactivated";
   if (typeof details.is_system_admin === "boolean") return details.is_system_admin ? "Granted" : "Withdrawn";
   if (Array.isArray(details.fields)) return details.fields.join(", ");
-  return Object.keys(details).length ? JSON.stringify(details) : "";
+  if (typeof details.purpose === "string" && Object.keys(details).length === 1) return `${humanize(details.purpose)} code`;
+  return Object.entries(details).map(([key, value]) => `${humanize(key)}: ${auditValue(key, value)}`).join("; ");
+}
+/** "user:lena" is the person; "cli:jan-p" is an operator on the server's command line. */
+export function auditActor(actor: string): string {
+  const [kind, name] = actor.includes(":") ? [actor.slice(0, actor.indexOf(":")), actor.slice(actor.indexOf(":") + 1)] : ["", actor];
+  if (kind === "user") return name;
+  if (kind === "cli") return `Command line (${name})`;
+  if (kind === "system") return "System";
+  if (kind === "recovery") return `Offline recovery (${name})`;
+  return actor;
 }
 
 const codeLabel = (user: AdminUser) => user.setup_pending ? "New setup code" : "Reset code";
@@ -278,13 +327,13 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
     {confirmation && <ConfirmDialog open title={confirmation.kind === "admin" ? "Change administrator role" : `Deactivate ${confirmation.username}`} message="This logs the user out everywhere." confirmLabel={confirmation.kind === "admin" ? "Save changes" : "Deactivate"} tone={confirmation.kind === "deactivate" ? "danger" : "primary"} busy={busy} onCancel={() => setConfirmation(null)} onConfirm={() => { void update(confirmation.username, confirmation.change, confirmation.fromEdit); }} />}
     {reissue && <ConfirmDialog open title={`Issue a new ${reissue.setup_pending ? "setup" : "reset"} code for ${reissue.display_name || reissue.username}?`} message={reissue.setup_pending ? "The current setup code stops working." : "Any unused code stops working. The current password keeps working until the new code is used."} confirmLabel={codeLabel(reissue)} busy={busy} onCancel={() => setReissue(null)} onConfirm={() => { void issueReset(reissue); }} />}
     {code && <CodeOnceDialog open {...code} onClose={closeCode} />}
-    {history && <Dialog open title={`History of ${history.username}`} size="lg" onClose={() => setHistory(null)} closeOnBackdrop>
+    {history && <Dialog open title={`History of ${history.username}`} size="lg" className="audit-history-dialog" onClose={() => setHistory(null)} closeOnBackdrop>
       {history.events === null ? <InlineMessage tone="info">Loading history…</InlineMessage> : history.error !== undefined ? <ErrorNotice error={history.error} /> :
         <DataTable label="History" rows={history.events} rowKey={event => `${event.at}-${event.action}-${event.target_id}-${JSON.stringify(event.details)}`} empty={<EmptyState title="No recorded changes." />} columns={[
-          { id: "at", header: "When", cell: event => <time dateTime={event.at}>{formatDateTime(event.at)}</time> },
-          { id: "actor", header: "By", cell: event => event.actor },
+          { id: "at", header: "When", cell: event => <time className="audit-when" dateTime={event.at} title={formatDateTime(event.at)}>{formatShortDateTime(event.at)}</time> },
+          { id: "actor", header: "By", cell: event => auditActor(event.actor) },
           { id: "action", header: "What", cell: event => labelFor(auditActions, event.action) },
-          { id: "target", header: "Whom", cell: event => event.target_id },
+          { id: "target", header: "Whom", cell: event => event.target_type === "user" ? event.target_id : `${humanize(event.target_type)} ${event.target_id}` },
           { id: "project", header: "Project", cell: event => event.project_key ?? "" },
           { id: "details", header: "Details", cell: auditDetails },
         ]} />}

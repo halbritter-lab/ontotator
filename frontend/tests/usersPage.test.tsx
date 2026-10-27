@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, ApiError, AuthError, type AdminUser, type CodeResponse, type CreatedUser, type CurrentUser } from "../src/api/client";
-import { auditDetails, UsersPage } from "../src/admin/UsersPage";
+import { auditActor, auditDetails, UsersPage } from "../src/admin/UsersPage";
 import { formatDateTime, formatShortDateTime } from "../src/app/labels";
 
 const currentUser: CurrentUser = { username: "root", display_name: "Root", pseudonym: "ann-root", is_system_admin: true, csrf_token: "csrf" };
@@ -244,6 +244,7 @@ describe("account status, projects at creation, history and erasure", () => {
     vi.spyOn(api, "adminUserAudit").mockResolvedValue([
       { at: "2026-10-20T08:00:00Z", actor: "user:root", action: "project.member_add", target_type: "user", target_id: "alex", project_key: "study-one", details: { username: "alex", roles: ["adjudicator"] } },
       { at: "2026-10-19T08:00:00Z", actor: "cli:ops", action: "user.create", target_type: "user", target_id: "alex", project_key: null, details: { pseudonym: "ann-alex", system_admin: false } },
+      { at: "2026-10-18T08:00:00Z", actor: "user:alex", action: "assignment.create", target_type: "assignment", target_id: "115", project_key: "study-one", details: { task: "annotate" } },
     ]);
     render(<UsersPage currentUser={currentUser} />); await load();
     more("alex", "History");
@@ -251,6 +252,11 @@ describe("account status, projects at creation, history and erasure", () => {
     await within(dialog).findByText("Roles added");
     expect(within(dialog).getByText("Consolidator")).toBeTruthy();
     expect(within(dialog).getByText("Account created")).toBeTruthy();
+    expect(within(dialog).getByText("Command line (ops)")).toBeTruthy();
+    expect(within(dialog).getByText("Task assigned")).toBeTruthy();
+    expect(within(dialog).getByText("Assignment 115")).toBeTruthy();
+    expect(within(dialog).getByText("Task: Annotation")).toBeTruthy();
+    expect(within(dialog).getByText(formatShortDateTime("2026-10-18T08:00:00Z"))).toBeTruthy();
     expect(api.adminUserAudit).toHaveBeenCalledWith("alex");
   });
 
@@ -282,5 +288,14 @@ describe("account status, projects at creation, history and erasure", () => {
     expect(auditDetails({ ...base, details: { active: false } })).toBe("Deactivated");
     expect(auditDetails({ ...base, details: { fields: ["email"] } })).toBe("email");
     expect(auditDetails({ ...base, details: {} })).toBe("");
+    expect(auditDetails({ ...base, details: { purpose: "setup" } })).toBe("Setup code");
+    expect(auditDetails({ ...base, details: { task: "annotate", user_id: 4, document_id: "case-1", ok: true } })).toBe("Task: Annotation; User id: 4; Document id: case-1; Ok: yes");
+  });
+
+  it("words audit actors", () => {
+    expect(auditActor("user:lena")).toBe("lena");
+    expect(auditActor("cli:jan-p")).toBe("Command line (jan-p)");
+    expect(auditActor("system:bootstrap")).toBe("System");
+    expect(auditActor("odd")).toBe("odd");
   });
 });
