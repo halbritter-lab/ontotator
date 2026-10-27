@@ -506,9 +506,9 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
             })}
           </div>
         )}
+        {/* Inside the section, so the hint keeps the pane's inset (#21). */}
+        {detachLastBlockedReason && <p className="field-hint">{detachLastBlockedReason}</p>}
       </div>
-
-      {detachLastBlockedReason && <p className="field-hint">{detachLastBlockedReason}</p>}
 
       {/* 4. Delete finding */}
       <div className="detail-section delete-section">

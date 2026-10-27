@@ -369,7 +369,7 @@ describe("ReviewActions: modifiers of a proposal (DN-9 A)", () => {
       currentDecision={null} draftAnnotations={[]} onDecide={vi.fn()} />);
     const chips = [...container.querySelectorAll(".axis-list .axis-value")];
     expect(chips.map(chip => [chip.textContent, chip.className])).toEqual([["Absent", "axis-value axis-value--absent"], ["Patient", "axis-value axis-value--patient"]]);
-    expect(chips[1].parentElement!.querySelector(".badge")!.textContent).toBe("Defaulted");
+    expect(chips[1].parentElement!.querySelector(".axis-default-tag")!.textContent).toBe("Defaulted");
   });
   it("makes each quote of a multi-mention proposal a button that shows its mention (F5)", () => {
     const show = vi.fn();
