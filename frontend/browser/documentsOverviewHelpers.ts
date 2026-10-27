@@ -83,7 +83,8 @@ export interface CellText {
 /** Assert a one-line stage cell through its `title` ("{state}" or "{state} ({who})"); without `who` any who passes. */
 export async function expectStage(cell: Locator, expected: CellText): Promise<void> {
   const part = (value: string | RegExp) => (typeof value === "string" ? esc(value) : value.source);
-  const who = expected.who === undefined ? String.raw`(?: \(.*\))?` : expected.who === "" ? "" : String.raw` \(${part(expected.who)}\)`;
+  // Open annotators follow " · open: " (R-8); other cells keep the people in parentheses.
+  const who = expected.who === undefined ? String.raw`(?: \(.*\)| · open: .*)?` : expected.who === "" ? "" : String.raw`(?: \((?:${part(expected.who)})\)| · open: (?:${part(expected.who)}))`;
   await expect(cell.locator(".stage-cell")).toHaveAttribute("title", new RegExp(`^${part(expected.state)}${who}$`));
 }
 

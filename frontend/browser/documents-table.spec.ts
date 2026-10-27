@@ -114,7 +114,7 @@ test("S0 synthetic-accepted: the final is on old text after v2 corrected it; en 
   expect(await hasDecisionEdge(de)).toBe(true);
   await expect(de.getByRole("rowheader")).toContainText("v2 corrected");
   await expect(rowCell(de, "finalization")).toContainText("Final is on old text");
-  await expect(rowCell(de, "annotation")).toContainText(new RegExp(`\\d+ of \\d+ submitted \\(${ann}\\)`));
+  await expect(rowCell(de, "annotation")).toContainText(new RegExp(`\\d+ of \\d+ submitted · open: ${ann}`));
   await expect(rowCell(de, "waiting")).toHaveText("You");
   await expect(rowCell(de, "next").getByRole("button").first()).toHaveAccessibleName(textNamePattern("Review changes…, ", caseId, "de"));
 
@@ -252,7 +252,7 @@ test("S4 case-0305 fr: two independent translations, each annotated in its own r
   await expect(rowBox(page, caseId, "fr")).toBeVisible();
   const fr = textRow(page, caseId, "fr");
   await expect(fr.getByRole("rowheader")).toContainText("2 translations");
-  await expect(rowCell(fr, "annotation")).toContainText(new RegExp(`submitted \\(${esc(names["ann-0001"])}, ${esc(names["ann-0002"])}\\)`));
+  await expect(rowCell(fr, "annotation")).toContainText(new RegExp(`submitted · open: ${esc(names["ann-0001"])}, ${esc(names["ann-0002"])}`));
   await expect(rowCell(fr, "finalization")).toContainText("waiting");
 
   const card = await openCardHistory(page, caseId, "fr");
@@ -286,7 +286,7 @@ test("S6 case-0390 de: open problem report with a paused task", async ({ page })
   expect(await hasDecisionEdge(de)).toBe(true);
   // One line: the pause glyph, the card's state and who is paused; the full text (with the reason) is in the title.
   await expect(rowCell(de, "annotation")).toContainText("⏸");
-  await expect(rowCell(de, "annotation")).toContainText(`(${names["ann-0001"]})`);
+  await expect(rowCell(de, "annotation")).toContainText(`open: ${names["ann-0001"]}`);
   await expect(rowCell(de, "next").getByRole("button").first()).toHaveAccessibleName(textNamePattern("Decide on report…, ", caseId, "de"));
   await expect(documentsTab(page, "Needs your decision", 1)).toBeVisible();
   void reason;
