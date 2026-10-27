@@ -7,7 +7,7 @@ import { GuidelinesSection } from "./GuidelinesSection";
 import { hiddenCount, HiddenAxisValuesField } from "./HiddenAxisValuesField";
 import { LanguagesField } from "./LanguagesField";
 import { MembersSection } from "./MembersSection";
-import { draftPins, PinFields, ProfileUpload, serializePins, T1_PROFILE_LABELS, WorkflowFields, workflowOf, type UploadedProfile } from "./projectFields";
+import { draftPins, PinFields, ProfileUpload, serializePins, ANNOTATION_SCHEME_LABELS, WorkflowFields, workflowOf, type UploadedProfile } from "./projectFields";
 import { axisOptionLabel } from "../editor/axisLabels";
 export interface ProjectSettingsPageProps {
   projectKey: string;
@@ -265,7 +265,7 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved,
         <p>Layers: {model.profile.layers.map(layer => layer.label).join(", ")}.</p>
         <InlineMessage tone="info">The ontology cannot change once work has been submitted. Start a new project for another ontology version.</InlineMessage>
         <details className="settings-advanced"><summary>Technical details</summary>
-          <ul>{model.pins.map(pin => <li key={pin.ontology_id}>{pin.ontology_id} {pin.release}: file checksum (SHA-256) <code>{pin.sha256}</code>; branches: {(pin.allowed_roots ?? []).join(", ") || "every term"}; checks: {T1_PROFILE_LABELS[pin.t1_profile] ?? pin.t1_profile}</li>)}</ul>
+          <ul>{model.pins.map(pin => <li key={pin.ontology_id}>{pin.ontology_id} {pin.release}: file checksum (SHA-256) <code>{pin.sha256}</code>; branches: {(pin.allowed_roots ?? []).join(", ") || "every term"}; annotation scheme: {ANNOTATION_SCHEME_LABELS[pin.t1_profile] ?? pin.t1_profile}</li>)}</ul>
           <ul aria-label="Current profile layers">{model.profile.layers.map(layer => <li key={layer.layer_id}>{layer.label} ({layer.layer_id})</li>)}</ul>
         </details>
       </> : <>

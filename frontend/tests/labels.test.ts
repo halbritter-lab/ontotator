@@ -11,7 +11,7 @@ describe("workflow labels", () => {
     expect(roleLabels.lead).toBe("Lead");
     expect(jobStatusLabels.succeeded).toBe("Finished");
     expect(uploadStatusLabels.ready).toBe("Ready to import");
-    expect(uploadKindLabels.t1).toBe("Ontospan bundle (T1)");
+    expect(uploadKindLabels.t1).toBe("Ontospan bundle");
   });
 
   it("humanizes unknown codes instead of showing snake case", () => {

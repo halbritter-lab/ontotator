@@ -5,7 +5,8 @@ import { ErrorNotice } from "./ErrorNotice";
 
 export type PinDraft = Omit<ProjectPin, "allowed_roots"> & { rootsText: string };
 export const draftPins = (pins: ProjectPin[]): Record<string, PinDraft> => Object.fromEntries(pins.map(pin => [pin.ontology_id, { ontology_id: pin.ontology_id, sha256: pin.sha256, t1_profile: pin.t1_profile, rootsText: (pin.allowed_roots ?? []).join(", ") }]));
-export const emptyPin = (id: string): PinDraft => ({ ontology_id: id, sha256: "", t1_profile: "generic", rootsText: "" });
+// The HPO ontology gets the HPO phenotype scheme by default (#5); every other ontology the generic one.
+export const emptyPin = (id: string): PinDraft => ({ ontology_id: id, sha256: "", t1_profile: id.toUpperCase() === "HP" ? "hpo-phenotype" : "generic", rootsText: "" });
 export const serializePins = (ids: string[], pins: Record<string, PinDraft>): ProjectPin[] => ids.map(id => {
   const pin = pins[id] ?? emptyPin(id);
   return { ontology_id: id, sha256: pin.sha256, allowed_roots: pin.rootsText.split(",").map(root => root.trim()).filter(Boolean), t1_profile: pin.t1_profile };
@@ -25,14 +26,15 @@ export function preselectOnlyVersions(ids: string[], ontologies: OntologyInfo[],
   return next;
 }
 
-/** Checks named in plain words (Settings › Ontology › Advanced, M2 D8). */
-export const T1_PROFILE_LABELS: Readonly<Record<ProjectPin["t1_profile"], string>> = {
-  generic: "General checks",
-  "hpo-phenotype": "HPO phenotype checks (findings and modifiers)",
+/** The annotation scheme of an ontology in plain words (the API field is `t1_profile`, #5). */
+export const ANNOTATION_SCHEME_LABELS: Readonly<Record<ProjectPin["t1_profile"], string>> = {
+  "hpo-phenotype": "HPO phenotype (fixed qualifiers, modifiers)",
+  generic: "Generic (free qualifiers)",
 };
+const SCHEME_HINT = "HPO phenotype: fixed qualifiers with closed value lists and HPO modifier terms. Generic: qualifiers as the profile defines them.";
 
 /**
- * One fieldset per ontology: the file (version), the allowed roots and the T1 profile. `plain` (Settings, D8 B): the
+ * One fieldset per ontology: the file (version), the allowed roots and the annotation scheme. `plain` (Settings, D8 B): the
  * version stays visible, roots and checks go under "Advanced" with plain labels.
  */
 export function PinFields({ ids, ontologies, value, onChange, disabled, plain = false }: {
@@ -46,9 +48,8 @@ export function PinFields({ ids, ontologies, value, onChange, disabled, plain = 
     const roots = <TextInput id={`${prefix}-${index}-roots`} label={plain ? `Limit ${id} terms to these branches` : `Allowed roots for ${id}`}
       hint={plain ? "Term codes separated by commas, for example HP:0000118. Empty: every term." : "Comma-separated CURIEs; leave empty to allow all roots."}
       value={pin.rootsText} onChange={event => change({ rootsText: event.target.value })} />;
-    const checks = <Select id={`${prefix}-${index}-t1`} label={plain ? `Checks for ${id}` : `T1 profile for ${id}`} value={pin.t1_profile} onChange={event => change({ t1_profile: event.target.value as ProjectPin["t1_profile"] })}>
-      {plain ? (Object.keys(T1_PROFILE_LABELS) as ProjectPin["t1_profile"][]).map(option => <option key={option} value={option}>{T1_PROFILE_LABELS[option]}</option>)
-        : <><option value="generic">generic</option><option value="hpo-phenotype">hpo-phenotype</option></>}
+    const checks = <Select id={`${prefix}-${index}-t1`} label={`Annotation scheme for ${id}`} hint={SCHEME_HINT} value={pin.t1_profile} onChange={event => change({ t1_profile: event.target.value as ProjectPin["t1_profile"] })}>
+      {(Object.keys(ANNOTATION_SCHEME_LABELS) as ProjectPin["t1_profile"][]).map(option => <option key={option} value={option}>{ANNOTATION_SCHEME_LABELS[option]}</option>)}
     </Select>;
     return <fieldset key={id} disabled={disabled}><legend>{id}</legend>
       {/* The short SHA-256 keeps the select narrow; the hint (the select's description) and each option's title carry the full value. */}

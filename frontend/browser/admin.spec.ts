@@ -100,7 +100,7 @@ async function createProjectThroughUi(page: Page): Promise<ProjectSetup> {
   expect(sha).toMatch(/^[0-9a-f]{64}$/);
   await versions.selectOption(sha!);
   await page.getByLabel("Allowed roots for HP", { exact: true }).fill("HP:0000118");
-  await page.getByLabel("T1 profile for HP", { exact: true }).selectOption("hpo-phenotype");
+  await page.getByLabel("Annotation scheme for HP", { exact: true }).selectOption("hpo-phenotype");
   await page.getByRole("button", { name: "Create project", exact: true }).click();
   // A new project opens its settings on People (M-8a, B6-1).
   await expect(page).toHaveURL(new RegExp(`#/projects/${key}/settings/people$`));
