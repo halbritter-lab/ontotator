@@ -105,8 +105,8 @@ test("the lead assigns two annotations from proposals, both work with J/K and 1â
   const row = cardRow(page, CASE, "en");
   await expect(robotIcon(row, 3)).toBeVisible();
 
-  // A row click selects the text and opens its card on Annotation.
-  await row.getByRole("cell").nth(1).click();
+  // A double click opens the text's card on Annotation.
+  await row.getByRole("cell").nth(1).dblclick();
   let card = textCard(page, CASE, "en");
   await expect(card).toBeVisible();
   await expect(cardSegment(card, "Annotation")).toHaveAttribute("aria-current", "step");
