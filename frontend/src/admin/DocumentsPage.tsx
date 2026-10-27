@@ -55,6 +55,7 @@ import { clearVisits, recordDecision, rememberShown, retainedKeys, rowBadges, ty
 import { notifyFinalSelectionChanged } from "../variants/finalSelectionState";
 import { AssignWorkDialog, type AssignWorkDialogProps } from "./AssignWorkDialog";
 import { ErrorNotice } from "./ErrorNotice";
+import { useSessionRestored } from "../app/useSessionRestored";
 import { UploadPanel } from "./UploadPanel";
 import { onSpaceActivate } from "../ui/spaceActivates";
 import { reviewLanguages, translationStatusLabels } from "./variantMetadata";
@@ -198,9 +199,10 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   const [inventoryError, setInventoryError] = useState<unknown>();
   useEffect(() => {
     let active = true;
+    setSettingsError(undefined);
     void api.getProjectSettings(projectKey).then(value => { if (active) setSettings(value); }, failure => { if (active) setSettingsError(failure); });
     return () => { active = false; };
-  }, [projectKey]);
+  }, [projectKey, revision]);
   useEffect(() => {
     let active = true;
     setInventoryError(undefined);
@@ -301,6 +303,8 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   const latestReload = useRef(rows.reload);
   latestReload.current = rows.reload;
   const refreshAll = () => { rows.reload(); setRevision(value => value + 1); notifyDocumentsChanged(); };
+  // After a same-user re-login every load runs again, so no "session ended" banner stays.
+  useSessionRestored(refreshAll);
   /** Refetch after an own action; the navigation counter reloads too ("documents-changed"). */
   const reloadAfterAction = () => { latestReload.current(); notifyDocumentsChanged(); };
   // Assign dialog: one row (task preselected) or the selected cases (selection bar).
