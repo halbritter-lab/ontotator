@@ -196,13 +196,14 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
     return true;
   };
   const undoLast = () => {
-    if (!lastDecision) return;
+    if (!lastDecision) return false;
     const group = lastDecision;
     setRestoring(group.group_id);
     void reopen(group);
   };
-  // Not in text fields (the shortcut scope "screen" leaves typing targets alone).
-  useShortcut(["Ctrl+z", "Meta+z"], undoLast, { scope: "screen", description: "Undo the last decision", group: "Consolidation", enabled: !!lastDecision && !readOnly });
+  // Not in text fields (the shortcut scope "screen" leaves typing targets alone). Listed in "?" while the view is
+  // editable (R-25); without a decision to undo the key passes through.
+  useShortcut(["Ctrl+z", "Meta+z"], undoLast, { scope: "screen", description: "Undo the last decision", group: "Consolidation", enabled: !readOnly });
   const annotate = (group: ConsolidationGroupView, payload: ConsolidationAnnotatePayload) => { setLastDecision(null); return data.annotate(group.group_id, payload); };
   // R-10 "re-merge": every decided group open again without preselection, matches taken over again; one Undo.
   const decidedCount = groups.filter(group => group.state !== "open" && group.state !== "auto").length;

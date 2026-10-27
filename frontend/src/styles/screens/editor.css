@@ -2511,6 +2511,13 @@ details.case-version-controls > .btn { vertical-align: bottom; }
   color: var(--text-muted);
 }
 
+/* The consolidate form's heading leads its fields: never weaker than the "Submissions to merge" legend (R-22). */
+.detail-section.consolidation-launcher > h3 {
+  font-size: var(--size-md);
+  line-height: var(--leading-md);
+  color: var(--text);
+}
+
 .replacement-banner {
   display: flex;
   align-items: center;

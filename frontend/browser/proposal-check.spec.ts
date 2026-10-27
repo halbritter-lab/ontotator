@@ -151,7 +151,7 @@ test("the lead assigns two annotations from proposals, both work with J/K and 1â
   await expect(cardSegment(card, "Finalization")).toContainText("ready to compare");
   await card.getByRole("button", { name: "Consolidateâ€¦", exact: true }).click();
   const launcher = card.getByRole("region", { name: "Consolidate submitted results", exact: true });
-  await launcher.getByLabel("Consolidation reviewer", { exact: true }).selectOption(s.users.lead);
+  await launcher.getByLabel("Consolidator", { exact: true }).selectOption(s.users.lead);
   const started = page.waitForResponse(r => r.request().method() === "POST" && /\/projects\/[^/]+\/consolidations$/.test(r.url()));
   await launcher.getByRole("button", { name: "Start consolidation", exact: true }).click();
   const { round } = await (await started).json() as { round: { assignment_id: number } };

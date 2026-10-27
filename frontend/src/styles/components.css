@@ -1079,6 +1079,8 @@ ul.task-counts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space
 /* Stage path: arrow segments of a text's path; the tone is also given in words (visually hidden). */
 .stage-path { display: flex; gap: 2px; margin: 0; padding: 0; list-style: none; }
 .stage-path > li { display: flex; flex: 1 1 0; min-width: 0; }
+/* The step that needs work now gets more room, so its state ("consolidating, 3 of 12 groups open") wraps less (R-19). */
+.stage-path > li:has(> .stage-path-seg--now) { flex-grow: 2; }
 .stage-path-seg {
   display: flex;
   flex: 1 1 auto;

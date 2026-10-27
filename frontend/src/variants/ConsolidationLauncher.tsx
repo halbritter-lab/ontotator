@@ -88,8 +88,8 @@ function ConsolidationContent(props: Props): JSX.Element {
   const getsRole = !!chosen?.self && !chosen.member?.roles.includes('adjudicator');
   /** Why Start is unavailable, shown inline (never a silent disabled button). */
   const missing = ongoing ? ongoingText : selectedIds.length < 2 ? 'Select at least two submissions.'
-    : !chosen ? 'Choose a reviewer.'
-      : missingLanguage && !confirmLanguage ? `Confirm the reviewer despite missing ${language}.` : null;
+    : !chosen ? 'Choose a consolidator.'
+      : missingLanguage && !confirmLanguage ? `Confirm the consolidator despite missing ${language}.` : null;
   useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
   useEffect(() => {
     if (!open) return;
@@ -119,31 +119,31 @@ function ConsolidationContent(props: Props): JSX.Element {
       if (active.current) setError(failure instanceof ApiError && failure.code === 'ROUND_INPUT_STALE'
         ? new Error('Selected submissions are no longer current. Refresh submission history and choose the exact inputs again.')
         : failure instanceof ApiError && failure.code === 'ROUND_ACTIVE'
-          ? new Error(ongoingText ?? 'The reviewer already has a consolidation in progress on this text.')
+          ? new Error(ongoingText ?? 'The consolidator already has a consolidation in progress on this text.')
           : failure);
     } finally { writing.current = false; if (active.current) setBusy(false); }
   };
   if (!open) return <Button size="sm" onClick={() => setOpen(true)}>Consolidate results</Button>;
   const membersHref = routeHref({ name: 'projectSettings', key: projectKey, section: 'people' });
-  return <section className="detail-section" aria-label="Consolidate submitted results"><h3>Consolidate submitted results</h3>
-    <p>Select at least two exact results on this text and a reviewer. The reviewer creates a separate result; the original submissions remain in history.</p>
+  return <section className="detail-section consolidation-launcher" aria-label="Consolidate submitted results"><h3>Consolidate submitted results</h3>
+    <p>Select at least two submissions on this text and a consolidator. The consolidator creates a separate result; the original submissions remain in history.</p>
     {loadError != null && <><ErrorNotice error={loadError} /><Button onClick={() => setAttempt(value => value + 1)}>Reload reviewer tasks</Button></>}
-    {!current && loadError == null && <InlineMessage tone="info">Loading reviewers and tasks…</InlineMessage>}
+    {!current && loadError == null && <InlineMessage tone="info">Loading consolidators and tasks…</InlineMessage>}
     {current && !created && <>
       <fieldset disabled={busy}><legend>Submissions to merge</legend>{eligibleRows.map(row => <Checkbox key={row.submission_id}
         id={`${fieldId}-${encodeURIComponent(row.submission_id)}`} label={row.label ?? `${row.author_label}, ${formatDateTime(row.created_at)}`}
         data-submission-id={row.submission_id} checked={selected.has(row.submission_id)} onChange={event => setSelected(previous => {
           const next = new Set(previous); if (event.target.checked) next.add(row.submission_id); else next.delete(row.submission_id); return next;
         })} />)}</fieldset>
-      <Select id={`${fieldId}-reviewer`} label="Consolidation reviewer" value={chosen ? reviewer : ''} disabled={busy}
-        onChange={event => { setReviewer(event.target.value); setConfirmLanguage(false); }}><option value="">Choose a reviewer</option>
+      <Select id={`${fieldId}-reviewer`} label="Consolidator" value={chosen ? reviewer : ''} disabled={busy}
+        onChange={event => { setReviewer(event.target.value); setConfirmLanguage(false); }}><option value="">Choose a consolidator</option>
         {candidates.map(row => <option key={row.username} value={row.username} disabled={row.reason !== null}>
           {row.reason ? `${row.label} — ${row.reason}` : row.label}
         </option>)}
       </Select>
       {getsRole && <p className="cell-secondary">You will get the Consolidator role for this project.</p>}
       {noConsolidator && <p className="cell-secondary">No member has the Consolidator role yet. Give it in <a href={membersHref}>Settings → People</a>.</p>}
-      {missingLanguage && <Checkbox id={`${fieldId}-language`} label={`Assign this reviewer despite missing ${language} in their profile`} checked={confirmLanguage} disabled={busy} onChange={event => setConfirmLanguage(event.target.checked)} />}
+      {missingLanguage && <Checkbox id={`${fieldId}-language`} label={`Assign this consolidator despite missing ${language} in their profile`} checked={confirmLanguage} disabled={busy} onChange={event => setConfirmLanguage(event.target.checked)} />}
       <Textarea id={`${fieldId}-reason`} label="Consolidation reason (optional)" value={reason} disabled={busy} onChange={event => setReason(event.target.value)} />
       {error != null && <><ErrorNotice error={error} /><Button disabled={busy} onClick={() => { setError(undefined); setAttempt(value => value + 1); }}>Reload reviewer tasks</Button></>}
       {missing && <p id={`${fieldId}-missing`} className="action-reason">{missing}</p>}

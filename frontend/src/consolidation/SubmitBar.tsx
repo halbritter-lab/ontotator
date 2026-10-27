@@ -1,7 +1,7 @@
 /**
  * Progress card of the consolidation view (X12, B5-5, B5-6 mockup 02 variant B): the count, a meter and the main
  * action. While groups are open "Next open group" is primary and Submit stays focusable with `aria-disabled` and a
- * reason; once every group is decided the card turns green, reads "Ready to submit" and Submit is the one primary.
+ * visible reason under it; once every group is decided the card turns green, reads "Ready to submit" and Submit is the one primary.
  */
 import { useId } from "react";
 import { Button } from "../ui";
@@ -31,6 +31,6 @@ export function SubmitBar({ open, total, onSubmit, onNextOpen }: SubmitBarProps)
       <Button variant="primary" onClick={onNextOpen}>Next open group</Button>
       <Button aria-disabled aria-describedby={reasonId} onClick={() => undefined}>{SUBMIT_LABEL}</Button>
     </div>
-    <p id={reasonId} className="visually-hidden">{submitReason(open)}</p>
+    <p id={reasonId} className="cons-muted">{submitReason(open)}</p>
   </div>;
 }

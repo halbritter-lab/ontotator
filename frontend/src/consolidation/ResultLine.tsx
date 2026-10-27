@@ -10,7 +10,7 @@ export function ResultLine({ line, staged = false }: { line: { saved: string; no
   return <p className="cons-result" aria-live="polite">
     {line.parts ? <>Result: 1 finding, {line.parts.map((part, index) => <Fragment key={index}>{index > 0 && ", "}
       {part.axis !== undefined ? <AxisValue value={part.axis} /> : part.text}</Fragment>)}</> : line.saved}
-    {staged && <> <strong>Not saved yet.</strong></>}
+    {staged && <>. <strong>Not saved yet.</strong></>}
     {line.notTaken && <><br /><span className="cons-muted">{line.notTaken}</span></>}
   </p>;
 }

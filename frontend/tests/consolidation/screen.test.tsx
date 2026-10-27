@@ -173,6 +173,14 @@ describe("ConsolidationScreen", () => {
     expect(within(help).queryByText("Undo the last plan change")).toBeNull();
   });
 
+  it("lists the Undo shortcut in the help before the first decision (R-25)", async () => {
+    load(exampleView());
+    await renderScreen();
+    fireEvent.keyDown(window, { key: "?" });
+    const help = await screen.findByRole("dialog", { name: "Keyboard shortcuts" });
+    expect(within(help).getByText("Undo the last decision")).toBeTruthy();
+  });
+
   it("shows header actions (guidelines, problem report) next to the title", async () => {
     load(exampleView());
     await renderScreen({ headerActions: <button type="button">Report a text problem</button> });

@@ -25,17 +25,17 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
-const reviewerSelect = () => screen.getByLabelText('Consolidation reviewer') as HTMLSelectElement;
+const reviewerSelect = () => screen.getByLabelText('Consolidator') as HTMLSelectElement;
 const options = () => within(reviewerSelect()).getAllByRole('option').map(option => option.textContent);
 
 async function openForm(extra: Partial<Parameters<typeof ConsolidationLauncher>[0]> = {}) {
   render(<ConsolidationLauncher {...props} defaultOpen defaultSelected={['first', 'second']} {...extra} />);
-  await screen.findByLabelText('Consolidation reviewer');
+  await screen.findByLabelText('Consolidator');
 }
 
 it('lists You (Mia Kühn) first, then the members with the Consolidator role', async () => {
   await openForm();
-  expect(options()).toEqual(['Choose a reviewer', 'You (Mia Kühn)', 'Luc Martin (ann-0004)', 'Rita Rev (rev-0009)']);
+  expect(options()).toEqual(['Choose a consolidator', 'You (Mia Kühn)', 'Luc Martin (ann-0004)', 'Rita Rev (rev-0009)']);
   expect(screen.queryByText(/No member has the Consolidator role yet/)).toBeNull();
 });
 
@@ -84,7 +84,7 @@ it('disables people who annotated this text with the reason, while the consolida
 it('explains a project without adjudicators and links Settings → People', async () => {
   vi.mocked(api.listMembers).mockResolvedValue([lead, reader]);
   await openForm();
-  expect(options()).toEqual(['Choose a reviewer', 'You (Mia Kühn)']);
+  expect(options()).toEqual(['Choose a consolidator', 'You (Mia Kühn)']);
   const note = screen.getByText(/No member has the Consolidator role yet\. Give it in/);
   expect(note.textContent).toBe('No member has the Consolidator role yet. Give it in Settings → People.');
   expect(within(note).getByRole('link', { name: 'Settings → People' }).getAttribute('href')).toBe('#/projects/p/settings/people');
@@ -96,8 +96,8 @@ it('keeps the missing-language confirmation and reuses an existing review assign
   fireEvent.change(reviewerSelect(), { target: { value: 'rita' } });
   const start = screen.getByRole('button', { name: 'Start consolidation' });
   expect(start.getAttribute('aria-disabled')).toBe('true');
-  expect(document.getElementById(start.getAttribute('aria-describedby')!)!.textContent).toBe('Confirm the reviewer despite missing de.');
-  fireEvent.click(screen.getByRole('checkbox', { name: 'Assign this reviewer despite missing de in their profile' }));
+  expect(document.getElementById(start.getAttribute('aria-describedby')!)!.textContent).toBe('Confirm the consolidator despite missing de.');
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Assign this consolidator despite missing de in their profile' }));
   fireEvent.click(start);
   await screen.findByText(/Consolidation assigned to Rita Rev/);
   expect(api.startConsolidation).toHaveBeenCalledWith('p', expect.objectContaining({ reviewer: 'rita', confirm_language: true, expected_workflow_revision: 7 }));
@@ -118,11 +118,11 @@ it('a consolidator with a consolidation in progress gets Continue instead of Sta
 
 it('requires at least two selected inputs and a reviewer', async () => {
   const view = render(<ConsolidationLauncher {...props} defaultOpen />);
-  await screen.findByLabelText('Consolidation reviewer');
+  await screen.findByLabelText('Consolidator');
   expect(screen.getByText('Select at least two submissions.')).toBeTruthy();
   fireEvent.click(screen.getByRole('checkbox', { name: 'Reader 1, Round 1' }));
   fireEvent.click(screen.getByRole('checkbox', { name: 'Reader 2, Round 1' }));
-  expect(screen.getByText('Choose a reviewer.')).toBeTruthy();
+  expect(screen.getByText('Choose a consolidator.')).toBeTruthy();
   view.rerender(<ConsolidationLauncher {...props} rows={[rows[0]]} defaultOpen />);
   fireEvent.change(reviewerSelect(), { target: { value: 'luc' } });
   expect(screen.getByRole('button', { name: 'Start consolidation' }).getAttribute('aria-disabled')).toBe('true');
@@ -144,7 +144,7 @@ it('opens behind Consolidate results without defaultOpen and lists only inputs o
   render(<ConsolidationLauncher {...props} rows={[...rows, { ...rows[0], submission_id: 'foreign', document_id: 'other' }]} />);
   expect(api.listMembers).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Consolidate results' }));
-  await screen.findByLabelText('Consolidation reviewer');
+  await screen.findByLabelText('Consolidator');
   expect(screen.getAllByRole('checkbox')).toHaveLength(2);
   expect(screen.queryByText(/first|second|foreign/)).toBeNull();
 });
