@@ -1,12 +1,16 @@
 /** The comparison table of one group (spec §3, mockup variant B): people as columns, fields as rows. */
 import type { ConsolidationGroupView, ConsolidationPersonView } from "../api/client";
 import { AxisValue } from "../ui/AxisValue";
+import { COHORT_TAG } from "../editor/modifiers";
+import "../editor/modifiers.css";
 import { IconBot, IconCheck, IconWarning } from "../ui/icons";
 import { allAgree, type ComparisonRow, type ModifierToggleCell, peopleOf } from "./groupModel";
 import { personName } from "./lanes";
 import { LaneKey } from "./TextPane";
 
 const TOOL_PROPOSAL = "From a tool proposal";
+/** The role tag of a cohort term ("Occasional [Cohort term]"), as in the term search. */
+const COHORT = <> <span className="candidate-role">{COHORT_TAG}</span></>;
 
 export interface ComparisonTableProps {
   /** The group name (text excerpt) for the caption. */
@@ -25,7 +29,7 @@ export interface ComparisonTableProps {
 function ModifierList({ owner, toggles, interactive, busy, onPress }: { owner: string; toggles: readonly ModifierToggleCell[]; interactive: boolean;
   busy: boolean; onPress: (id: string) => void }): JSX.Element {
   return <ul className="cons-mod-list" aria-label={`Modifiers of ${owner}`}>{toggles.map(toggle => <li key={toggle.id}><span className="cons-value">
-    <span>{toggle.label}{toggle.majority && ` ${toggle.majority}`}{toggle.cohort && <> <span className="cons-tag">Cohort term</span></>}
+    <span>{toggle.label}{toggle.majority && ` ${toggle.majority}`}{toggle.cohort && COHORT}
       {toggle.otherText && <> <span className="cons-muted">other text chosen</span></>}</span>
     {interactive && <button type="button" className="cons-take" aria-pressed={toggle.pressed} aria-disabled={busy || undefined} aria-label={toggle.name}
       onClick={() => { if (!busy) onPress(toggle.id); }}><IconCheck /></button>}
@@ -51,12 +55,12 @@ export function ComparisonTable({ name, group, people, rows, readOnly = false, b
       {/* B5-2: an agreed value stands under every person, so agreement is obvious; a narrow table shows it once across. */}
       {row.agreed !== null && members.length > 1 && row.cells.map(cell => <td key={cell.inputId} className="cons-agreed cons-agreed-each">
         {row.kind === "modifiers" && cell.toggles?.some(toggle => toggle.cohort)
-          ? cell.toggles.map((toggle, index) => <span key={toggle.id}>{index > 0 && ", "}{toggle.label}{toggle.cohort && <> <span className="cons-tag">Cohort term</span></>}</span>)
+          ? cell.toggles.map((toggle, index) => <span key={toggle.id}>{index > 0 && ", "}{toggle.label}{toggle.cohort && COHORT}</span>)
           : row.kind === "axis" ? <AxisValue value={cell.value || null} /> : cell.display}
       </td>)}
       {row.agreed !== null || row.info !== null
         ? <td colSpan={members.length} className={row.agreed !== null && members.length > 1 ? "cons-agreed cons-agreed-once" : "cons-agreed"}>{row.kind === "modifiers" && row.cells[0].toggles?.some(toggle => toggle.cohort)
-          ? <>{row.cells[0].toggles.map((toggle, index) => <span key={toggle.id}>{index > 0 && ", "}{toggle.label}{toggle.cohort && <> <span className="cons-tag">Cohort term</span></>}</span>)}{allAgree(members)}</>
+          ? <>{row.cells[0].toggles.map((toggle, index) => <span key={toggle.id}>{index > 0 && ", "}{toggle.label}{toggle.cohort && COHORT}</span>)}{allAgree(members)}</>
           : row.kind === "axis" && row.agreed !== null ? <><AxisValue value={row.cells[0].value || null} />{allAgree(members)}</>
           : row.agreed ?? `${row.cells[0].display} ${row.info}`}</td>
         : row.cells.map((cell, index) => <td key={cell.inputId}>
