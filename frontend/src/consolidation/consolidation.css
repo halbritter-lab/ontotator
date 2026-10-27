@@ -168,6 +168,8 @@
   font-size: var(--size-reading);
   line-height: 2.2;
   white-space: pre-wrap;
+  /* Room for the last line's lanes and frames (the marks' 16 px padding), so a text that fits never scrolls. */
+  padding-block-end: 16px;
 }
 
 .cons-mark {
