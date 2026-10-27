@@ -1552,9 +1552,18 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   /** Delete; a deleted carried finding becomes its placeholder row, selected with "Dismiss with reason…" focused. */
   const deleteAnnotation = async (annotationId: string) => {
     const homes = carried.byHome.get(annotationId) ?? [];
+    // Focus moves to the next finding row, else the previous one, not to <body> (#18).
+    const rowKeys = [...sidebarScrollRef.current?.querySelectorAll<HTMLElement>('[data-list-key^="annotation:"]') ?? []].map(row => row.dataset.listKey);
+    const index = rowKeys.indexOf(`annotation:${annotationId}`);
+    const neighbour = index < 0 ? undefined : rowKeys[index + 1] ?? rowKeys[index - 1];
     await handleDeleteAnnotation(annotationId);
     const after = homes.length ? carriedStateNow(homes[0].input.input_id) : undefined;
-    if (!after || after.homeId) return;
+    if (!after || after.homeId) {
+      if (neighbour && (!document.activeElement || document.activeElement === document.body)) {
+        [...sidebarScrollRef.current?.querySelectorAll<HTMLElement>("[data-list-key]") ?? []].find(row => row.dataset.listKey === neighbour)?.focus();
+      }
+      return;
+    }
     const key = `input:${after.input.input_id}`;
     selectListKey(key);
     setFocusRequest({ key, find: root => root.querySelector<HTMLElement>("[data-carried-dismiss]") });

@@ -132,3 +132,55 @@ it("md_dialog_is_a_full_height_sheet_below_700px", () => {
   expect(block?.[1]).toMatch(/height: calc\(100dvh - 2 \* var\(--space-4\)\)/);
   expect(block?.[1]).toMatch(/max-width: none/);
 });
+it("focus_goes_to_main_when_the_trigger_is_gone_after_close (#18)", async () => {
+  function Page() {
+    const [state, setState] = useState<"closed" | "open" | "done">("closed");
+    return <main id="main" tabIndex={-1}>
+      {state !== "done" && <button onClick={() => setState("open")}>Remove row</button>}
+      <Dialog open={state === "open"} title="Remove"><button onClick={() => setState("done")}>Yes</button></Dialog>
+    </main>;
+  }
+  render(<Page />);
+  screen.getByRole("button", { name: "Remove row" }).focus();
+  fireEvent.click(screen.getByRole("button", { name: "Remove row" }));
+  fireEvent.click(screen.getByRole("button", { name: "Yes" }));
+  await Promise.resolve();
+  expect(document.activeElement).toBe(screen.getByRole("main"));
+});
+it("return_focus_is_asked_again_once_a_rerendered_trigger_exists (#18)", async () => {
+  function Page() {
+    const [name, setName] = useState<string | null>("old");
+    const [open, setOpen] = useState(false);
+    return <>
+      <button key={name} onClick={() => setOpen(true)}>{`More for ${name}`}</button>
+      {open && <Dialog open title="Rename" returnFocus={() => screen.queryByRole("button", { name: "More for new" })}>
+        <button onClick={() => { setName("new"); setOpen(false); }}>Rename</button>
+      </Dialog>}
+    </>;
+  }
+  render(<Page />);
+  screen.getByRole("button", { name: "More for old" }).focus();
+  fireEvent.click(screen.getByRole("button", { name: "More for old" }));
+  fireEvent.click(screen.getByRole("button", { name: "Rename" }));
+  await Promise.resolve();
+  expect(document.activeElement).toBe(screen.getByRole("button", { name: "More for new" }));
+});
+it("a_nested_confirm_closing_with_its_parent_returns_focus_to_the_parent_trigger (#18)", async () => {
+  function Page() {
+    const [step, setStep] = useState<"none" | "assign" | "confirm">("none");
+    return <>
+      <button onClick={() => setStep("assign")}>Assign…</button>
+      <Dialog open={step !== "none"} title="Assign">
+        <button onClick={() => setStep("confirm")}>Assign</button>
+        <ConfirmDialog open={step === "confirm"} title="Sure?" message="" confirmLabel="Assign anyway" onCancel={() => setStep("assign")} onConfirm={() => setStep("none")} />
+      </Dialog>
+    </>;
+  }
+  render(<Page />);
+  screen.getByRole("button", { name: "Assign…" }).focus();
+  fireEvent.click(screen.getByRole("button", { name: "Assign…" }));
+  fireEvent.click(screen.getByRole("button", { name: "Assign" }));
+  fireEvent.click(screen.getByRole("button", { name: "Assign anyway" }));
+  await Promise.resolve();
+  expect(document.activeElement).toBe(screen.getByRole("button", { name: "Assign…" }));
+});

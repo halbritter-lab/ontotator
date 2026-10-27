@@ -178,6 +178,13 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
 
   const projectsReady = !!baseUser && projectContext?.identity === projectIdentity;
   useSessionRestored(() => { if (projectError) setRetry(value => value + 1); });
+  // A navigation that left focus nowhere (the next task after a submit) starts at the page's main region (#18).
+  const shownRoute = useRef(route);
+  useEffect(() => {
+    if (shownRoute.current === route) return;
+    shownRoute.current = route;
+    if (!document.activeElement || document.activeElement === document.body) document.getElementById("main")?.focus();
+  }, [route]);
   useDocumentTitle(routeTitle(route,
     "key" in route && projectsReady ? projects.find(project => project.project_key === route.key) ?? null : undefined,
     crumbTask?.identity === taskIdentity ? crumbTask.task : null));

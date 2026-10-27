@@ -21,7 +21,7 @@ export interface DialogProps {
   footer?: ReactNode;
   /**
    * Focus target when the dialog closes, asked at close time (e.g. the row the panel shows now); null or a
-   * missing element falls back to the element focused when the dialog opened.
+   * missing element falls back to the element focused when the dialog opened, then to the page's main region.
    */
   returnFocus?: () => HTMLElement | null | undefined;
   children: ReactNode;
@@ -44,6 +44,29 @@ function isRendered(element: HTMLElement): boolean {
 function focusableElements(element: HTMLElement): HTMLElement[] {
   return Array.from(element.querySelectorAll<HTMLElement>('a[href],button,input:not([type="hidden"]),select,textarea,[tabindex],[contenteditable="true"]'))
     .filter((item) => item.tabIndex >= 0 && !item.matches(":disabled") && !item.closest('[hidden],[inert],[aria-hidden="true"]') && isRendered(item));
+}
+
+type FocusCandidate = () => HTMLElement | null | undefined;
+const focusable = (element: HTMLElement | null | undefined): element is HTMLElement =>
+  !!element && element !== document.body && element.isConnected && !element.closest("[inert]");
+let closing: FocusCandidate[] = [];
+/**
+ * Second chance once the closing commit is complete (#18): the trigger may have been re-rendered (a renamed row),
+ * or a nested dialog closed with its parent. If focus fell to <body>, the first candidate still on the page
+ * wins (dialogs in closing order), else the page's main region.
+ */
+function restoreFocusAfterCommit(candidates: FocusCandidate[]): void {
+  if (!closing.length) queueMicrotask(() => {
+    const queued = closing;
+    closing = [];
+    if (activeDialogs.length || (document.activeElement && document.activeElement !== document.body)) return;
+    for (const candidate of queued) {
+      const element = candidate();
+      if (focusable(element)) { element.focus(); return; }
+    }
+    document.getElementById("main")?.focus();
+  });
+  closing.push(...candidates);
 }
 
 /** Makes every sibling of `element` and of each of its ancestors `inert`; returns the elements it changed. */
@@ -101,10 +124,9 @@ export function Dialog({ open, title, heading, onClose, closeOnBackdrop = false,
       const wasTop = activeDialogs.at(-1) === element;
       activeDialogs.splice(activeDialogs.indexOf(element), 1);
       if (!activeDialogs.length) document.body.style.overflow = originalOverflow;
-      if (!wasTop) return;
-      const target = returnTarget.current?.();
-      if (target?.isConnected && !target.closest("[inert]")) target.focus();
-      else if (previous?.isConnected && !previous.closest("[inert]")) previous.focus();
+      const candidates: FocusCandidate[] = [() => returnTarget.current?.(), () => previous];
+      if (wasTop) candidates.map((candidate) => candidate()).find(focusable)?.focus();
+      restoreFocusAfterCommit(candidates);
     };
   }, [open]);
 
