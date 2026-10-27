@@ -346,6 +346,12 @@
   background: var(--accent-light);
 }
 
+/* Inline chips: an inline-block chip gets spaces around it in its accessible text ("Present , Patient", R-18). */
+.cons-result .axis-value {
+  display: inline;
+  white-space: nowrap;
+}
+
 /* Comparison table: a conflicting row has the warning mark, a tint and a check per person; never colour alone. */
 .cons-compare {
   width: 100%;

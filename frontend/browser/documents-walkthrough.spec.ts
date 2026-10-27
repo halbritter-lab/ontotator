@@ -292,7 +292,7 @@ test("step 10: Compare results… → agreement 5 of 7 → Consolidate… → An
   if (await open.count()) await clicks.count(open);
   const launcher = panel.getByRole("region", { name: "Consolidate submitted results", exact: true });
   await expect(launcher).toBeVisible();
-  const reviewer = launcher.getByLabel("Consolidation reviewer", { exact: true });
+  const reviewer = launcher.getByLabel("Consolidator", { exact: true });
   await expect(reviewer).toBeVisible({ timeout: 30_000 });
   // The compared submissions on the current text, preselected and named "{person} · Round 1 · {time}" (no codes).
   const boxes = launcher.getByRole("checkbox");

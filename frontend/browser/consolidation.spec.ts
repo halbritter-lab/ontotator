@@ -72,7 +72,7 @@ test("a lead without the Consolidator role consolidates the 8-group example in 6
   const block = await openDecisionBlock(page, s.case_id, "en");
   await block.getByRole("button", { name: "Consolidate…", exact: true }).click();
   const launcher = area.getByRole("region", { name: "Consolidate submitted results", exact: true });
-  await launcher.getByLabel("Consolidation reviewer", { exact: true }).selectOption(s.users.lead);
+  await launcher.getByLabel("Consolidator", { exact: true }).selectOption(s.users.lead);
   const started = page.waitForResponse(r => r.request().method() === "POST" && /\/projects\/[^/]+\/consolidations$/.test(r.url()));
   await launcher.getByRole("button", { name: "Start consolidation", exact: true }).click();
   const response = await started;

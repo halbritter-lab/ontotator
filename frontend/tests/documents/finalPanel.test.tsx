@@ -218,7 +218,7 @@ describe("choose", () => {
     expect(onDirtyChange).toHaveBeenLastCalledWith(true);
     expect(within(block()).queryByRole("button", { name: "Consolidate results" })).toBeNull();
     expect(within(block()).getByRole("region", { name: "Consolidate submitted results" })).toBeTruthy();
-    await screen.findByLabelText("Consolidation reviewer");
+    await screen.findByLabelText("Consolidator");
     const inputs = within(block()).getAllByRole("checkbox");
     expect(inputs.map(input => input.closest("label, .form-check, div")!.textContent)).toEqual([
       `Ana Weber, Round 1, ${time("2026-10-20T12:01:00Z")}`, `Tom Reis, Round 1, ${time("2026-10-20T13:30:00Z")}`,
@@ -227,7 +227,7 @@ describe("choose", () => {
     // Another decision on the page (the same event) is not a started consolidation.
     act(() => { notifyFinalSelectionChanged("p"); });
     expect(onConsolidationStarted).not.toHaveBeenCalled();
-    fireEvent.change(screen.getByLabelText("Consolidation reviewer"), { target: { value: "rev" } });
+    fireEvent.change(screen.getByLabelText("Consolidator"), { target: { value: "rev" } });
     fireEvent.click(screen.getByRole("button", { name: "Start consolidation" }));
     await waitFor(() => expect(onConsolidationStarted).toHaveBeenCalledWith(expect.objectContaining({ case_id: "case-112" }),
       expect.objectContaining({ round_id: "r-9", assignment_id: 9 }), { self: false, roleGranted: false }));

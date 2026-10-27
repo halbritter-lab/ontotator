@@ -112,7 +112,7 @@ test('ordinary human carry-forward stays private, then exact consolidation is ex
     for (const box of await launcher.getByRole('checkbox').all()) await box.uncheck();
     await launcher.locator(`input[data-submission-id="${carriedId}"]`).check();
     await launcher.locator(`input[data-submission-id="${secondId}"]`).check();
-    await launcher.getByLabel('Consolidation reviewer').selectOption(s.users.consolidator);
+    await launcher.getByLabel('Consolidator', { exact: true }).selectOption(s.users.consolidator);
     // One request: POST /projects/{key}/consolidations (acceptance fixes WP-B, T3).
     const launched = page.waitForResponse(r => r.request().method() === 'POST' && /\/projects\/[^/]+\/consolidations$/.test(r.url()));
     await launcher.getByRole('button', { name: 'Start consolidation', exact: true }).click();
@@ -292,7 +292,7 @@ test('a lead without the Consolidator role consolidates as You, and full agreeme
   await expect(block.getByRole('button', { name: /^Accept result/ })).toHaveCount(0);
   await block.getByRole('button', { name: 'Consolidate…', exact: true }).click();
   const launcher = area.getByRole('region', { name: 'Consolidate submitted results', exact: true });
-  const reviewer = launcher.getByLabel('Consolidation reviewer', { exact: true });
+  const reviewer = launcher.getByLabel('Consolidator', { exact: true });
   await expect(reviewer.locator('option').nth(1)).toHaveText(/^You( \(.+\))?$/);
   await expect(launcher.getByText('No member has the Consolidator role yet. Give it in Settings → People.', { exact: true })).toBeVisible();
   await expect(launcher.getByRole('link', { name: 'Settings → People', exact: true })).toHaveAttribute('href', `#/projects/${encodeURIComponent(s.project)}/settings/people`);
