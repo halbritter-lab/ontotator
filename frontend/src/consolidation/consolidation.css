@@ -54,10 +54,8 @@
   min-width: 0;
 }
 
-/* The arrow steps keep their content width, never stretched. */
-.cons-heading > .stage-path > li { flex: 0 0 auto; }
-.cons-heading > .stage-path .stage-path-seg { min-width: 11.5rem; }
-.cons-heading > .stage-path .stage-path-state { white-space: nowrap; }
+/* Three equal steps of a fixed total width: a long state wraps to a second line instead of widening its step. */
+.cons-heading > nav { width: min(100%, 36rem); }
 
 .cons-header-progress { width: 340px; max-width: 100%; }
 @media (max-width: 760px) {
