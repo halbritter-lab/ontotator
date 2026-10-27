@@ -630,7 +630,7 @@ describe("Shortcuts and error handling", () => {
     const Boom = () => { throw new Error("kaputt"); };
     const back = vi.fn();
     render(<CaseErrorBoundary onBackToDashboard={back}><Boom /></CaseErrorBoundary>);
-    expect(screen.getByText(/Something went wrong while displaying this case/)).toBeDefined();
+    expect(screen.getByText(/Something went wrong while displaying this text/)).toBeDefined();
     fireEvent.click(screen.getByRole("button", { name: /Back to dashboard/i }));
     expect(back).toHaveBeenCalled();
     err.mockRestore();
