@@ -1130,6 +1130,11 @@
   border-bottom: 1px solid var(--border);
 }
 
+/* Hints under a section header (result count, spanless reason) line up with the rows. */
+.sidebar-section > .field-hint {
+  padding-inline: var(--cell-pad-x);
+}
+
 .doc-item,
 .reference-item {
   padding: var(--cell-pad-y) var(--cell-pad-x);
@@ -2326,6 +2331,9 @@ details.case-version-controls > .btn { vertical-align: bottom; }
   background: var(--surface-raised);
   color: var(--text-muted);
   font-weight: 500;
+}
+/* The focus ring wins over the dashed outline. */
+.values-section .axis-option.is-unset:has(input:checked):not(:has(input:focus-visible)) {
   outline: 1px dashed var(--border-strong);
   outline-offset: -3px;
 }

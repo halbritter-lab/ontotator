@@ -3633,7 +3633,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               {spanlessBlockedReason && <p className="field-hint">{spanlessBlockedReason}</p>}
               {legacySubmissionHint && <p className="field-hint">{legacySubmissionHint}</p>}
               {carriedActive && <CarriedProgress text={carried.progress} showNext={carried.openKeys.size > 0} onNext={() => { goToUnchecked(1); }} />}
-              {readOnly && carriedListOrder.length === 0 && <p className="field-hint">No findings in this text.</p>}
+              {readOnly && carriedListOrder.length === 0 && <p className="field-hint">{isReviewLike(view.key.mode) ? "No own findings." : "No findings in this text."}</p>}
               <ul className="doc-list">
                 {carriedListOrder.map(listKey => {
                   if (listKey.startsWith("input:")) {
