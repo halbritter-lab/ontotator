@@ -80,3 +80,10 @@ export function formatDateTime(value: string | number | Date): string {
   const date = value instanceof Date ? value : new Date(value);
   return Number.isNaN(date.getTime()) ? String(value) : dateTime.format(date);
 }
+
+/** Why and when a reopened task was reopened (My tasks and the editor); null for other statuses. */
+export function reopenNotice(task: { status: string; reopened_at?: string | null; reopen_reason?: string | null }): string | null {
+  if (task.status !== "reopened") return null;
+  const when = task.reopened_at ? ` on ${formatDateTime(task.reopened_at)}` : "";
+  return `The project lead reopened this task${when}. ${task.reopen_reason ? `Reason: ${task.reopen_reason}` : "No reason given."}`;
+}
