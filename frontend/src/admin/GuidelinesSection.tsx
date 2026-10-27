@@ -221,7 +221,7 @@ function GuidelinesEditor({ projectKey }: { projectKey: string }): JSX.Element {
           {publishError !== undefined && <ErrorNotice error={publishError} />}
         </div>}
         {chosen && <section ref={previewRef} className="guidelines-preview" aria-label={`Preview of ${chosen.file.name}`} tabIndex={0}>
-          <GuidelineDocument kind={chosen.kind} body={chosen.text} headingOffset={2} />
+          <GuidelineDocument kind={chosen.kind} body={chosen.text} headingOffset={1} />
         </section>}
       </form>}
 

@@ -170,3 +170,8 @@
 .guidelines-reading:focus {
   outline: none;
 }
+
+/* Read and More… sit at the row's end, as the header is right-aligned. */
+.guidelines-row-actions {
+  justify-content: flex-end;
+}
