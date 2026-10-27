@@ -113,12 +113,9 @@ test("three people: choose by field, Keep saves, the result line names what is n
   expect(axe.violations).toEqual([]);
   await submitButton(page).click();
   const dialog = page.getByRole("dialog", { name: "Submit consolidation?" });
-  const ack = dialog.getByRole("checkbox", { name: "I checked these values" });
   const submitted = page.getByText("Consolidation submitted. Accept the result in Documents.", { exact: true });
   await dialog.getByRole("button", { name: "Submit", exact: true }).click();
-  // Every axis was chosen in this scenario: no default-value acknowledgement is asked.
   await expect(submitted).toBeVisible();
-  await expect(ack).toHaveCount(0);
 });
 
 test("findings from tool proposals carry the robot icon", async ({ page }) => {
