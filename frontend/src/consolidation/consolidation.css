@@ -294,8 +294,12 @@
 }
 
 .cons-group-title {
+  display: inline-block;
   font-weight: var(--weight-strong);
 }
+/* One naming scheme: text excerpts ("generalized hypotonia") show in sentence case like the term names of spanless groups
+   ("Generalized hypotonia (no text span)"); the excerpt itself stays as written for quotes and screen readers. */
+.cons-group-title::first-letter { text-transform: uppercase; }
 
 .cons-group-resolved .cons-group-toggle,
 .cons-group-state,
