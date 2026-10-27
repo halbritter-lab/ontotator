@@ -26,9 +26,9 @@ def readiness_matches(status: int, body: dict, check: str, expected: bool) -> bo
 
 
 def production_has_private_app(config: dict) -> bool:
-    return "app" in config.get("services", {}) and not config["services"]["app"].get(
-        "ports"
-    )
+    return "ontotator_app" in config.get("services", {}) and not config["services"][
+        "ontotator_app"
+    ].get("ports")
 
 
 def docker_failure(stderr: str) -> str:

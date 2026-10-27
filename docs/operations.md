@@ -4,7 +4,7 @@ This guide describes the image and Compose files in this repository. Commands ru
 
 ## Deployment boundary
 
-`docker-compose.yml` provides PostgreSQL, a one-shot `migrate` service and `app`. TLS, DNS, host provisioning and the reverse proxy belong to the host. Like Phentrieve, the stack runs behind Nginx Proxy Manager (NPM): app joins NPM's existing external Docker network (`NPM_SHARED_NETWORK_NAME`, for example `npm_default`) under the network alias `ontotator_app`, so NPM forwards to `http://ontotator_app:8000` without colliding with another stack's `app`. App has **no published host port**. PostgreSQL is only on the internal backend network. Compose does not create the NPM network; it must exist before `up`.
+`docker-compose.yml` provides PostgreSQL, a one-shot `migrate` service and the app service `ontotator_app` (in the development stack it is `app`). TLS, DNS, host provisioning and the reverse proxy belong to the host. Like Phentrieve, the stack runs behind Nginx Proxy Manager (NPM): `ontotator_app` joins NPM's existing external Docker network (`NPM_SHARED_NETWORK_NAME`, for example `npm_default`), so NPM forwards to `http://ontotator_app:8000`; the prefixed service name avoids clashing with other stacks (NPM itself names its service `app`). App has **no published host port**. PostgreSQL is only on the internal backend network. Compose does not create the NPM network; it must exist before `up`.
 
 Services use read-only roots, writable data volumes and bounded tmpfs, dropped capabilities, `no-new-privileges`, rotated logs and resource limits. The image runs as UID/GID `1001:1001` with tini as PID 1. PostgreSQL runs as `70:70`. App and PostgreSQL restart unless stopped; migrations are one-shot. Connect PostgreSQL directly or use session-mode pooling: servers hold a PostgreSQL advisory runtime lease, which transaction-mode pooling would break.
 
@@ -107,28 +107,28 @@ docker compose ps --all
 
 PostgreSQL initialization creates separate non-superuser owner and app roles and the application schema. If initialization fails (for example `Invalid generated credential (hex expected)` in `docker compose logs postgres`), the data volume is left half-initialized: PostgreSQL restarts, reports healthy and skips initialization, but the roles are missing. On a **new, empty** deployment only, fix the secrets, run `docker compose down --volumes` and start again. `migrate` upgrades that schema as owner, and only successful completion allows app to start. Sign in at your HTTPS origin as `admin` with the password used to generate the bootstrap hash.
 
-After confirming admin exists and can sign in, remove `ONTOTATOR_ADMIN_PASSWORD_HASH_FILE` from app's environment in your **deployment copy** of the Compose configuration. Recreate app with that revised configuration while the hash file still exists:
+After confirming admin exists and can sign in, remove `ONTOTATOR_ADMIN_PASSWORD_HASH_FILE` from app's environment in your **deployment copy** of the Compose configuration. Recreate ontotator_app with that revised configuration while the hash file still exists:
 
 ```bash
-docker compose up -d --wait --force-recreate app
+docker compose up -d --wait --force-recreate ontotator_app
 ```
 
 Confirm sign-in still works, then remove `secrets/app/admin-password-hash` using the host's privileged file tools. Keep the environment-setting removal in your deployment configuration for future upgrades. The existing account ignores bootstrap content, but secret-file resolution happens before account bootstrap: deleting the file while its `_FILE` setting remains breaks a restart. Do not replace it with an empty setting or empty hash file.
 
-`/livez` reports the HTTP process is alive. `/readyz` checks database reachability, schema equality to the image's migration head and ontology readiness, including failures affecting project pins. Docker health uses `/readyz`. A new empty server can be ready before its first ontology/project is added. Inspect `docker compose logs --tail 100 app migrate postgres` when startup or readiness fails; keep operational logs private.
+`/livez` reports the HTTP process is alive. `/readyz` checks database reachability, schema equality to the image's migration head and ontology readiness, including failures affecting project pins. Docker health uses `/readyz`. A new empty server can be ready before its first ontology/project is added. Inspect `docker compose logs --tail 100 ontotator_app migrate postgres` when startup or readiness fails; keep operational logs private.
 
 ## Users, ontologies and projects
 
 Run administrative commands inside app; they inherit its application-role database configuration and `/data`. They act directly on the database and audit the CLI operator. No SMTP service is used. Setup/reset codes are printed once: give them to the user out of band. Setup codes last 24 hours; reset codes last 2 hours. Codes are groups of four letters and digits without look-alikes (no I, L, O, U); case, spaces and hyphens do not matter when typed.
 
 ```bash
-docker compose exec app ontotator admin users create alice --display-name 'Alice A.'
-docker compose exec app ontotator admin users reset-code alice
-docker compose exec app ontotator admin users deactivate alice
-docker compose exec app ontotator admin users activate alice
-docker compose exec app ontotator admin users list
-docker compose exec app ontotator admin users edit alice --email alice@example.org --languages de,en
-docker compose exec app ontotator admin audit --user alice --since 2026-10-01
+docker compose exec ontotator_app ontotator admin users create alice --display-name 'Alice A.'
+docker compose exec ontotator_app ontotator admin users reset-code alice
+docker compose exec ontotator_app ontotator admin users deactivate alice
+docker compose exec ontotator_app ontotator admin users activate alice
+docker compose exec ontotator_app ontotator admin users list
+docker compose exec ontotator_app ontotator admin users edit alice --email alice@example.org --languages de,en
+docker compose exec ontotator_app ontotator admin audit --user alice --since 2026-10-01
 ```
 
 `users list` shows e-mail, setup state ("setup pending" until the setup code is redeemed) and projects. `admin audit` prints the audit trail newest first (`--project`, `--limit`, `--json` for JSONL). To erase a person's data on request (GDPR Art. 17), deactivate the account, then run `ontotator admin users anonymise alice --confirm alice` (or use Anonymise on the Users page). It cannot be undone.
@@ -143,34 +143,34 @@ Stage inputs on writable tmpfs, then register them into persistent storage. Stre
 
 ```bash
 stage_file() {
-    docker compose exec -T app python -c 'import sys; from pathlib import Path; Path(sys.argv[1]).write_bytes(sys.stdin.buffer.read())' "$2" < "$1"
+    docker compose exec -T ontotator_app python -c 'import sys; from pathlib import Path; Path(sys.argv[1]).write_bytes(sys.stdin.buffer.read())' "$2" < "$1"
 }
 stage_file ./hp.json /tmp/hp.json
 stage_file ./hp-de.babelon.tsv /tmp/hp-de.babelon.tsv
-docker compose exec app ontotator admin ontologies add /tmp/hp.json /tmp/hp-de.babelon.tsv
-docker compose exec app ontotator admin ontologies list
+docker compose exec ontotator_app ontotator admin ontologies add /tmp/hp.json /tmp/hp-de.babelon.tsv
+docker compose exec ontotator_app ontotator admin ontologies list
 stage_file ./profile.json /tmp/profile.json
 ```
 
 Replace `ONTOLOGY_SHA256` with the full hash printed for the ontology JSON; the task profile must define ontology id `hp` and the intended layers. [smoke-profile.json](../tests/fixtures/smoke-profile.json) illustrates the JSON structure with synthetic fixtures; supply your own release identity, hash and protocol. See the [scientific workflow](scientific-workflow.md) for protocol guidance. Workers discover uploaded ontologies on use; no restart is needed for a new upload.
 
 ```bash
-docker compose exec app ontotator admin projects create ward-7 --name 'Ward 7' --profile /tmp/profile.json --pin hp=ONTOLOGY_SHA256 --allowed-roots hp=HP:0000118 --t1-profile hp=hpo-phenotype
-docker compose exec app ontotator admin projects add-member ward-7 alice --role annotator
-docker compose exec app ontotator admin projects members ward-7
+docker compose exec ontotator_app ontotator admin projects create ward-7 --name 'Ward 7' --profile /tmp/profile.json --pin hp=ONTOLOGY_SHA256 --allowed-roots hp=HP:0000118 --t1-profile hp=hpo-phenotype
+docker compose exec ontotator_app ontotator admin projects add-member ward-7 alice --role annotator
+docker compose exec ontotator_app ontotator admin projects members ward-7
 ```
 
-To remove that membership later, use `docker compose exec app ontotator admin projects remove-member ward-7 alice --role annotator`. Membership changes end the user's sessions. Project roles are `lead`, `annotator` and `consolidator` (stored and shown in the API as `adjudicator`, which the CLI also accepts); repeat `--role` to assign several.
+To remove that membership later, use `docker compose exec ontotator_app ontotator admin projects remove-member ward-7 alice --role annotator`. Membership changes end the user's sessions. Project roles are `lead`, `annotator` and `consolidator` (stored and shown in the API as `adjudicator`, which the CLI also accepts); repeat `--role` to assign several.
 
 Import T1 documents/proposals and export submissions/edit logs, then copy outputs off the container. Choose fresh output filenames: existing outputs are refused.
 
 ```bash
 stage_file ./proposals.zip /tmp/proposals.zip
-docker compose exec app ontotator admin import ward-7 /tmp/proposals.zip
-docker compose exec app ontotator admin export ward-7 /tmp/results.zip
-docker compose exec -T app cat /tmp/results.zip > ./results.zip
-docker compose exec app ontotator admin export-edit-log ward-7 /tmp/edits.jsonl
-docker compose exec -T app cat /tmp/edits.jsonl > ./edits.jsonl
+docker compose exec ontotator_app ontotator admin import ward-7 /tmp/proposals.zip
+docker compose exec ontotator_app ontotator admin export ward-7 /tmp/results.zip
+docker compose exec -T ontotator_app cat /tmp/results.zip > ./results.zip
+docker compose exec ontotator_app ontotator admin export-edit-log ward-7 /tmp/edits.jsonl
+docker compose exec -T ontotator_app cat /tmp/edits.jsonl > ./edits.jsonl
 ```
 
 `docker compose cp` cannot copy out of app's `/tmp` either: it reads the container filesystem, not the tmpfs mount, and reports that the file is missing. Stream outputs out with `exec -T ... cat` in Bash, never through PowerShell redirection. Imports/exports are jobs, awaited by default; `--no-wait` queues them for a server worker. `/tmp` is ephemeral and limited to 256 MiB. For larger files use a provisioned private directory on `/data` or a deployment-managed writable staging mount, then clean up staged files after copying. Imported blobs and job outputs in persistent storage must remain with the database backup. Keep clinical exports private.
@@ -185,7 +185,7 @@ docker compose up -d --wait
 docker compose ps --all
 ```
 
-Compose runs the new image's `migrate` before the new app. For upgrades that cannot tolerate concurrent old workers, stop app first. Confirm migration exited successfully and app becomes ready before resuming access.
+Compose runs the new image's `migrate` before the new app. For upgrades that cannot tolerate concurrent old workers, stop ontotator_app first. Confirm migration exited successfully and app becomes ready before resuming access.
 
 Migrations are forward-only. `/readyz` refuses any schema differing from the image's head, including a newer database paired with an older image. An image downgrade alone is not a database rollback. Restore the matching pre-upgrade database and data snapshot with its matching image when rollback is required.
 
@@ -202,8 +202,8 @@ set -euo pipefail
 umask 077
 backup_dir=/private/backup/RECOVERY_POINT
 mkdir "$backup_dir" # parent must exist; refuses an existing recovery point
-docker compose stop app
-app_container="$(docker compose ps --all --quiet app)"
+docker compose stop ontotator_app
+app_container="$(docker compose ps --all --quiet ontotator_app)"
 test -n "$app_container"
 data_volume="$(docker inspect --format '{{range .Mounts}}{{if and (eq .Destination "/data") (eq .Type "volume")}}{{.Name}}{{end}}{{end}}' "$app_container")"
 test -n "$data_volume"
@@ -217,7 +217,7 @@ docker run --rm --network none --read-only --user 0:0 --security-opt no-new-priv
 test -s "$backup_dir/database.dump"
 test -s "$backup_dir/data.tar"
 (cd "$backup_dir" && sha256sum database.dump data.tar image-reference.txt > SHA256SUMS)
-docker compose up -d --wait app
+docker compose up -d --wait ontotator_app
 ```
 
 Run the block in the source deployment directory (or set `COMPOSE_PROJECT_NAME` and the same `--file`/`--env-file` options) so every `docker compose` command addresses the source project. Keep the spaces in `{{ .Config.Image }}`: the Docker CLI on Windows turns a space-free `{{.Config.Image}}` passed from Git Bash into the literal `.Config.Image`. In Git Bash also set `MSYS_NO_PATHCONV=1`, otherwise container paths such as `/source` are rewritten into Windows paths. `image-reference.txt` holds the reference app was started with; it identifies the image only if `.env` pins a digest. The final `up` also reruns the one-shot `migrate`, which finds the schema current. The volume is resolved from app's actual `/data` mount, never guessed from a project name. The archive helper uses the same verified image, has no network, reads the source volume read-only and records numeric owners. If any command fails, app stays stopped; investigate before releasing the maintenance restriction. Keep deployed Compose settings, ontology release identities and protected role credentials with this recovery record. `pg_dump` does not back up role passwords. Protect backups as clinical data. Bash streams binary data safely; older PowerShell versions may corrupt native binary redirection.
@@ -241,8 +241,8 @@ test -z "$("${restore_compose[@]}" ps --all --quiet)"
 test -z "$(docker volume ls --quiet --filter "label=com.docker.compose.project=$restore_project")"
 "${restore_compose[@]}" config --quiet
 "${restore_compose[@]}" up -d --wait postgres
-"${restore_compose[@]}" create app
-restore_app="$("${restore_compose[@]}" ps --all --quiet app)"
+"${restore_compose[@]}" create ontotator_app
+restore_app="$("${restore_compose[@]}" ps --all --quiet ontotator_app)"
 test -n "$restore_app"
 restore_volume="$(docker inspect --format '{{range .Mounts}}{{if and (eq .Destination "/data") (eq .Type "volume")}}{{.Name}}{{end}}{{end}}' "$restore_app")"
 test -n "$restore_volume"
@@ -278,9 +278,9 @@ Recovery is an offline, application-role CLI operation. Stop **all** app instanc
 On the Linux host make the file owner `1001:1001`, mode `0600`, with a private parent directory. It contains a hash, never plaintext. Use an absolute path to a regular file, not a symlink. After applying the bootstrap environment cleanup above:
 
 ```bash
-docker compose stop app
-docker compose run --rm --no-deps -v /absolute/private/recovery.json:/run/recovery.json:ro app admin recover-admin --input /run/recovery.json
-docker compose up -d --wait app
+docker compose stop ontotator_app
+docker compose run --rm --no-deps -v /absolute/private/recovery.json:/run/recovery.json:ro ontotator_app admin recover-admin --input /run/recovery.json
+docker compose up -d --wait ontotator_app
 ```
 
 Recovery audits operator/reason and ends all sessions for that administrator. Confirm login with the new password, then remove the recovery file according to host policy. Keep PostgreSQL reachable during recovery. Never give app owner/bootstrap database credentials.
