@@ -141,6 +141,22 @@ def test_an_expired_or_foreign_code_is_refused(services: Services) -> None:
     assert str(foreign.value) == str(unknown.value) == str(expired.value)
 
 
+def test_an_unknown_code_is_refused_without_hashing(
+    services: Services, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    services.accounts.create_user(ADMIN, "alice", "Alice")
+    import ontotator.auth.accounts as accounts_module
+
+    def no_hash(_: str) -> str:
+        raise AssertionError("hash_password ran for an unknown code")
+
+    monkeypatch.setattr(accounts_module, "hash_password", no_hash)
+    with pytest.raises(DomainError) as unknown:
+        services.accounts.redeem_code("alice", "not-a-code", PASSWORD)
+
+    assert _code(unknown) == "CODE_INVALID"
+
+
 def test_a_reset_code_lives_two_hours_and_replaces_older_code(
     services: Services,
 ) -> None:

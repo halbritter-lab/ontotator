@@ -743,7 +743,6 @@ class AccountService:
             check_password_rules(username.strip(), new_password)
         except PasswordRuleError as exc:
             raise _password_rules(exc) from None
-        new_hash = hash_password(new_password)
         now = self._now()
         with self.db.transaction() as conn:
             try:
@@ -773,6 +772,8 @@ class AccountService:
                 .where(OneTimeCodeRow.id == row.id)
                 .values(used_at=now)
             )
+            # Hashed only after the code checks: a made-up code costs no Argon2 (#58).
+            new_hash = hash_password(new_password)
             self._set_password(conn, user.id, new_hash, now, reason="password_set")
             record_audit(
                 conn,
