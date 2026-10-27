@@ -213,6 +213,7 @@ test("an annotator working from scratch never sees proposals", async ({ page }) 
   const show = page.getByRole("combobox", { name: "Show", exact: true });
   await expect(show).toBeVisible({ timeout: 30_000 });
   const proposals = show.locator("option", { hasText: "Tool proposals (3)" });
-  await expect(proposals).toBeDisabled();
+  // toBeDisabled() would follow the enclosing <label> to the (enabled) select.
+  await expect(proposals).toHaveJSProperty("disabled", true);
   await expect(proposals).toContainText("Hidden while you annotate from scratch");
 });
