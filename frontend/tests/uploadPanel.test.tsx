@@ -240,3 +240,8 @@ it("commits the chosen plan with the upload", async () => {
     plan_cases: [{ case_id: "case-1", language: "de", review: false, annotate: false }],
   }));
 });
+it("explains an unreadable archive in words and hides the preview counts", () => {
+  render(<UploadPreview plan={{ ...plan, committable: false, errors: [{ code: "invalid_archive", unit: "bad.pdf", message: "cannot decode ZIP archive: File is not a zip file" }] }} />);
+  expect(screen.getByRole("heading", { name: "The archive could not be read. Check the ZIP file." })).toBeTruthy();
+  expect(screen.queryByText(/documents added/)).toBeNull();
+});

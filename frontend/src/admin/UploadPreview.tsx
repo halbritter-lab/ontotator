@@ -3,6 +3,7 @@ import { InlineMessage } from "../ui";
 import { plural } from "../app/labels";
 import { originLabels, translationStatusLabels } from "./variantMetadata";
 import { UploadWorkPlan, type UploadWorkPlanProps } from "./UploadWorkPlan";
+import { ERROR_MESSAGES } from "./errors";
 
 /** `workPlan` adds the "Work plan" step (before Import) when the preview carries a work plan. */
 export function UploadPreview({ plan, workPlan }: { plan: ImportPlan; workPlan?: Omit<UploadWorkPlanProps, "workPlan"> }): JSX.Element {
@@ -10,12 +11,12 @@ export function UploadPreview({ plan, workPlan }: { plan: ImportPlan; workPlan?:
   for (const issue of plan.errors ?? []) grouped.set(issue.code, [...(grouped.get(issue.code) ?? []), issue]);
   return <section className="detail-section" aria-label="Upload preview">
     <h3>Preview</h3>
-    <p>{plural(plan.counts?.documents_added ?? 0, "document")} added, {plan.counts?.documents_skipped ?? 0} unchanged, {plural(plan.documents_only?.length ?? 0, "document")} without proposals, {plural(plan.proposal_sets?.length ?? 0, "proposal set")}, {plural(plan.counts?.proposals ?? 0, "proposal")}, {plan.normalised_count} with normalized text</p>
+    {plan.committable && <p>{plural(plan.counts?.documents_added ?? 0, "document")} added, {plan.counts?.documents_skipped ?? 0} unchanged, {plural(plan.documents_only?.length ?? 0, "document")} without proposals, {plural(plan.proposal_sets?.length ?? 0, "proposal set")}, {plural(plan.counts?.proposals ?? 0, "proposal")}, {plan.normalised_count} with normalized text</p>}
     {!!plan.variants?.length && <div className="data-table-scroll"><table className="data-table density-compact"><caption>Variants</caption><thead><tr><th scope="col">External ID</th><th scope="col">Language</th><th scope="col">Version</th><th scope="col">Origin</th><th scope="col">Source</th><th scope="col">Planned status</th><th scope="col">Failed checks</th></tr></thead><tbody>{plan.variants.map(variant => <tr key={JSON.stringify([variant.external_id, variant.language, variant.version])}>
       <td>{variant.external_id}</td><td>{variant.language}</td><td>{variant.version}</td><td>{originLabels[variant.origin]}</td><td>{variant.derived_from ? `${variant.derived_from}${variant.derived_in_upload ? " (in this upload)" : ""}` : "—"}</td><td title={variant.status_reason ?? undefined}>{variant.status ? translationStatusLabels[variant.status] : "—"}</td><td>{variant.failed_checks.length ? <ul>{variant.failed_checks.map(code => <li key={code}>{code}</li>)}</ul> : "None"}</td>
     </tr>)}</tbody></table></div>}
     {!plan.committable && <InlineMessage tone="error"><strong>This upload cannot be imported.</strong>
-      {[...grouped].map(([code, issues]) => <section key={code}><h4>{code}</h4><ul>{issues.map((issue, index) => <li key={index}>{issue.unit}{issue.annotation_id ? `, ${issue.annotation_id}` : ""}: {issue.message}</li>)}</ul></section>)}
+      {[...grouped].map(([code, issues]) => <section key={code}><h4>{ERROR_MESSAGES[code] ?? code}</h4><ul>{issues.map((issue, index) => <li key={index}>{issue.unit}{issue.annotation_id ? `, ${issue.annotation_id}` : ""}: {issue.message}</li>)}</ul></section>)}
       {!!plan.collisions?.length && <ul>{plan.collisions.map((item, index) => <li key={index}>{item.document_id}: the uploaded text differs from the stored text (stored <code title={item.existing_sha256}>{item.existing_sha256.slice(0, 12)}</code>, uploaded <code title={item.new_sha256}>{item.new_sha256.slice(0, 12)}</code>)</li>)}</ul>}
     </InlineMessage>}
     {!!plan.duplicates?.length && <section><h4>Duplicates</h4><ul>{plan.duplicates.map((item, index) => <li key={index}>{item.document_id}: {item.same_text_as.length ? `same text as ${item.same_text_as.join(", ")}` : "duplicate input"}</li>)}</ul></section>}

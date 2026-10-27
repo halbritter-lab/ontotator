@@ -97,7 +97,7 @@ def test_a_failing_handler_marks_the_job_failed(tmp_path: Path) -> None:
     done = queue.run(job, "w1")
 
     assert done.status == "failed"
-    assert done.error == "RuntimeError: boom"
+    assert done.error == "RuntimeError (details in the server log)"
     assert done.result is None
     assert queue.get(job_id) == done
 

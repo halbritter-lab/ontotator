@@ -171,12 +171,15 @@ class JobQueue:
                 raise LookupError(f"no handler for job kind '{job.kind}'")
             result = handler(job, self.context)
         except Exception as exc:
-            logger.warning("Job %s (%s) failed: %s", job.id, job.kind, exc)
+            logger.warning("Job %s (%s) failed: %s", job.id, job.kind, exc, exc_info=True)
             self._finish(
                 job.id,
                 worker,
                 status="failed",
-                error=f"{type(exc).__name__}: {exc}",
+                # Unexpected exceptions can carry server paths; only the log keeps them.
+                error=f"{type(exc).__name__}: {exc}"
+                if isinstance(exc, DomainError)
+                else f"{type(exc).__name__} (details in the server log)",
                 result={"error": {"code": exc.code, "details": exc.details}}
                 if isinstance(exc, StructuredJobError)
                 else None,

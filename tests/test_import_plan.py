@@ -334,3 +334,15 @@ def test_empty_sets_retain_source_actor_labels_for_import_audit(tmp_path):
     units, _issues = read(tmp_path, annotations=[])
     assert units[0].set is None
     assert units[0].source_actors == (TOOL,)
+
+
+def test_an_unreadable_archive_names_the_upload_not_the_stored_blob(tmp_path):
+    blob = tmp_path / "blobs" / "50" / "5053be3a"
+    blob.parent.mkdir(parents=True)
+    blob.write_bytes(b"%PDF-1.7 not a zip")
+    units, issues = read_t1_upload(
+        blob, {"hp": PIN}, hpo_profile(), filename="bad.pdf"
+    )
+    assert units == []
+    assert [(i.code, i.unit) for i in issues] == [("invalid_archive", "bad.pdf")]
+    assert str(tmp_path) not in issues[0].message and "blobs" not in issues[0].message

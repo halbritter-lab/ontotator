@@ -309,9 +309,14 @@ def _report_issues(
     report: ontospan.ValidationReport,
     label: str,
     annotations: Sequence[ontospan.Annotation] = (),
+    path: Path | None = None,
 ) -> list[Issue]:
     result = []
     for issue in report.issues:
+        where = issue.path
+        if path is not None:
+            # The reader reports the stored blob path; users must see their file name.
+            where = where.replace(str(path), label)
         match = re.search(r"annotation_set\.annotations\[(\d+)\]", issue.path)
         index = int(match[1]) if match else None
         annotation_id = (
@@ -324,7 +329,7 @@ def _report_issues(
                 code=issue.code,
                 unit=label,
                 annotation_id=annotation_id,
-                message=f"{issue.path}: {issue.message}",
+                message=issue.message if where == label else f"{where}: {issue.message}",
                 severity=issue.level,
             )
         )
@@ -364,12 +369,12 @@ def read_t1_upload(
                     manifest_bytes = archive.read("manifest.json")
             manifest_sha256 = hashlib.sha256(manifest_bytes).hexdigest()
     except ontospan.FormatError:
-        return [], _report_issues(report, label)
+        return [], _report_issues(report, label, path=path)
     if ontologies is not None:
         # The first pass checks format only; the complete check below replaces
         # its explicitly unchecked-hierarchy warning.
         report.issues = [i for i in report.issues if i.code != "hierarchy_not_checked"]
-    issues = _report_issues(report, label)
+    issues = _report_issues(report, label, path=path)
     result: list[IncomingUnit] = []
     for raw, source_label in zip(delivered, labels, strict=True):
         doc = document_from_unit(raw)
