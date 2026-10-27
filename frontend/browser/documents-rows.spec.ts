@@ -45,14 +45,15 @@ test("the page itself does not scroll", async ({ page }) => {
   expect(scrollHeight).toBeLessThanOrEqual(innerHeight + 1);
 });
 
-test("768 px without horizontal scroll", async ({ page }) => {
+test("narrow windows keep Last activity: the table scrolls sideways, not the page (#8)", async ({ page }) => {
   await page.setViewportSize({ width: 768, height: 900 });
   await rowsPage(page);
+  await expect(documentsTable(page).getByRole("columnheader", { name: "Last activity" })).toBeVisible();
   const widths = await documentsTable(page).evaluate(table => {
     const wrapper = table.parentElement!;
-    return { scroll: wrapper.scrollWidth, client: wrapper.clientWidth, page: document.documentElement.scrollWidth, view: window.innerWidth };
+    return { overflow: getComputedStyle(wrapper).overflowX, page: document.documentElement.scrollWidth, view: window.innerWidth };
   });
-  expect(widths.scroll).toBeLessThanOrEqual(widths.client);
+  expect(widths.overflow).toBe("auto");
   expect(widths.page).toBeLessThanOrEqual(widths.view);
 });
 
