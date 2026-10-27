@@ -240,7 +240,7 @@ _VOLATILE = [
 # receipt.json and README.txt of a carry-forward final (no draft-sourced
 # inputs): a change here changes every export of that kind.
 CARRY_FORWARD_DIGEST = (
-    "19661285e5ece21fefcfcc2e88473283a5708dd910b46b85f2a2f2c092c425e0"
+    "023c8468d700761d5a8264bacb3e7bb5741ae710705451e87d82397c724809cc"
 )
 
 

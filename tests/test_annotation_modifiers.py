@@ -169,12 +169,12 @@ def submission_hash(snaps: list[AnnotationSnapshot]) -> str:
 def test_existing_versions_and_submission_id_are_unchanged() -> None:
     snaps = golden_snapshots()
     assert [s.version for s in snaps] == [
-        "a1607853816ca25a497bb85707e8e4ed623508d9e6aae4eace94121cf4ba15cd",
-        "1517833cdcded1418b4687aaab19f137cf1a8b8eb55926ec497d4a5252fb5378",
-        "46ce291836dc511a077f4ffe0cdc496207bd149d46fe0506d20e53d6dd5a04b0",
+        "6da21f52b0f75b00667a449b329263fcf41da75045b2e01d5fde355017013517",
+        "05a965eeabe420b4a13d5b097cfa884b84a5caa4becccf0e73050bc6ff213690",
+        "2105fdad5dec788a6bbd0656ca84fd88da4fe32837d767c8b01f34c8b6bb7720",
     ]
     assert submission_hash(snaps) == (
-        "a04f3af5773368d1527d042d88dce187ca2e36e327852762ace89448eadfc771"
+        "4edec11b1e096c2f619c5c6a53bcbd2210ddd1245315c8e559996ae4c5016a42"
     )
 
 

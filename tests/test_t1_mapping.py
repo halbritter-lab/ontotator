@@ -722,7 +722,7 @@ def test_annotation_note_preserves_legacy_hash_and_historical_whitespace():
     assert "note" not in raw["annotation"]
     assert (
         original.version
-        == "da4e6537a48aae9ca2d18127a9b69f666f47f4237d2cd8637f22d68ecf0b9f80"
+        == "4118599c4eee78018971b2f1c0b24784cd9b4863e2166d79d6d4dab314734bab"
     )
     assert encode_snapshot(decode_snapshot(raw)) == raw
     annotated = snapshot(

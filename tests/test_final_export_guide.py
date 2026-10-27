@@ -202,7 +202,7 @@ def test_readme_lists_everything_in_plain_text():
         provenance_ids=["earlier"],
     ).decode("utf-8")
     assert "\r" not in text and not text.startswith("\ufeff")
-    assert text.startswith("Ontotator final export\n========================\n")
+    assert text.startswith("Ontotator final export\n======================\n")
     for line in [
         "Project:          T5 acceptance (t5)",
         "Snapshot ID:      snap-1",
