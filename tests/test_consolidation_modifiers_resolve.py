@@ -153,13 +153,19 @@ def test_edit_values_may_add_a_modifier_nobody_had(subset):
         ([mod(SEIZURE)], None, "MODIFIER_NOT_ALLOWED"),
         ([mod(SEVERE), mod(SEVERE, "schwere")], None, "DUPLICATE_MODIFIER"),
         ([mod("HP:9999999")], None, "UNKNOWN_TERM"),
-        (None, SEVERE, "MODIFIER_AS_FINDING"),
     ],
 )
 def test_invalid_choices_are_refused(subset, modifiers, term_id, code):
     item = group_of(subset, SEIZURE)
     refused(mutate(subset, "resolve", choose(item, modifiers, term_id=term_id)), code)
     assert group_of(subset, SEIZURE)["state"] == "open"
+
+
+def test_a_modifier_term_may_be_chosen(subset):
+    """A modifier term may name a finding (Stillbirth): accepted, submit warns."""
+    item = group_of(subset, SEIZURE)
+    draft = ok(mutate(subset, "resolve", choose(item, None, term_id=SEVERE)))
+    assert result(subset, item, draft).term_id == SEVERE
 
 
 def test_modifiers_default_to_the_span_member(tmp_path):
@@ -367,14 +373,14 @@ def test_attach_is_refused_on_other_spans_and_other_groups(standalone):
         ),
         "INVALID_RESOLUTION",
     )
-    refused(
+    ok(
         mutate(
             standalone,
             "resolve",
             {"input_ids": inputs(group_of(standalone, SEVERE)), "action": "keep"},
-        ),
-        "MODIFIER_AS_FINDING",
+        )
     )
+    assert group_of(standalone, SEVERE)["state"] != "open"
 
 
 def test_reopen_of_the_attached_group_detaches_the_modifier(standalone):

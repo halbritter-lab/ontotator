@@ -839,9 +839,6 @@ class EditingService:
             term_id = self._primary_term_id(services[target_layer], cmd.term_id)
         else:
             term_id = self._validate_term_for_layer(services[target_layer], cmd.term_id)
-        self._refuse_modifier_as_finding(
-            draft, profile, pins, target_layer, services, term_id
-        )
 
         if (cmd.source_annotation_id or cmd.source_version) and source is None:
             raise DomainError(
@@ -987,9 +984,6 @@ class EditingService:
             )
 
         term_id = self._validate_term_for_layer(services[layer_id], cmd.term_id)
-        self._refuse_modifier_as_finding(
-            draft, profile, pins, layer_id, services, term_id
-        )
         # The finding keeps its modifiers.
         updated_ann = existing.annotation.model_copy(update={"term_id": term_id})
         new_snap = snapshot(updated_ann, existing.evidence, doc, profile)
@@ -1394,20 +1388,6 @@ class EditingService:
         if isinstance(service, Exception):
             raise service
         return classifier_of(service)
-
-    def _refuse_modifier_as_finding(
-        self,
-        draft: Draft,
-        profile: TaskProfile,
-        pins: Mapping[str, Pin] | None,
-        layer_id: str,
-        services: dict[str, OntologyService | Exception],
-        term_id: str,
-    ) -> None:
-        """No new standalone modifiers (R3)."""
-        classifier = self._classifier(draft, profile, pins, layer_id, services)
-        if classifier is not None and classifier.kind(term_id) is not None:
-            raise DomainError("MODIFIER_AS_FINDING", {"term_id": term_id})
 
     @staticmethod
     def _draft_annotation(draft: Draft, annotation_id: str) -> AnnotationSnapshot:

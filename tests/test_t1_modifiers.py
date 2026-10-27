@@ -13,6 +13,7 @@ import pytest
 from modifier_fixtures import (
     MOD_PATH,
     MOD_PIN,
+    MOD_SHA,
     create_modifier_project,
     modifier_profile,
 )
@@ -39,7 +40,12 @@ from ontotator.domain.profiles import AxisDefinition
 from ontotator.domain.review import ReviewTargetSet
 from ontotator.domain.workspace import MutationEnvelope, Submission, WorkspaceKey
 from ontotator.exchange.jobs import HANDLERS
-from ontotator.exchange.t1 import document_from_unit, layers_for, unit_to_proposals
+from ontotator.exchange.t1 import (
+    Pin,
+    document_from_unit,
+    layers_for,
+    unit_to_proposals,
+)
 from ontotator.jobs.queue import Job, JobQueue
 from ontotator.storage.database import Database
 from ontotator.storage.repository import Repository
@@ -132,7 +138,9 @@ def _duplicate() -> dict[str, Any]:
 @pytest.mark.parametrize(
     ("build", "code"),
     [
-        (_standalone, "modifier_as_annotation"),
+        # A modifier term only warns (it may name a finding, e.g. Stillbirth);
+        # MOD_PIN's allowed root Phenotypic abnormality still refuses Severe.
+        (_standalone, "outside_allowed_roots"),
         (_not_a_modifier, "not_a_modifier"),
         (_duplicate, "duplicate_modifier"),
     ],
@@ -149,6 +157,30 @@ def test_invalid_modifiers_refuse_the_import(
     assert job.error is not None
     assert "T1_INVALID" in job.error and code in job.error
     assert Repository(db).list_annotations_for_document(PROJECT, DOC) == []
+
+
+def test_a_modifier_term_finding_imports_with_a_warning_without_allowed_roots(
+    tmp_path: Path,
+) -> None:
+    db = database_for(tmp_path / "open.db")
+    pin = Pin(sha256=MOD_SHA, t1_profile="hpo-phenotype")
+    create_modifier_project(db, PROJECT, pin=pin)
+    layers = [
+        layer.model_dump(mode="json")
+        for layer in layers_for(modifier_profile(), {"hp": pin})
+    ]
+    target = tmp_path / "unit.json"
+    target.write_bytes(
+        ontospan.dump_json(unit(DOC, annotations=[_standalone()], layer_data=layers))
+    )
+
+    job = run_import(db, target, PROJECT)
+
+    assert job.status == "succeeded", job.error
+    assert job.result is not None
+    assert job.result["warning_counts"]["modifier_as_annotation"] == 1
+    [proposal] = Repository(db).list_annotations_for_document(PROJECT, DOC)
+    assert proposal.annotation.term_id == SEVERE
 
 
 def test_family_member_is_refused_where_the_profile_hides_it() -> None:

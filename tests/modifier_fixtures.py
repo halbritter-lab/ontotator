@@ -40,7 +40,10 @@ def modifier_profile() -> TaskProfile:
 
 
 def create_modifier_project(
-    db: Database, key: str = "mods", registry: OntologyRegistry | None = None
+    db: Database,
+    key: str = "mods",
+    registry: OntologyRegistry | None = None,
+    pin: Pin = MOD_PIN,
 ) -> None:
     """Store hp-modifiers.json (and its German file) and create a project
     pinning MOD_PIN; an app's ``registry`` learns the file."""
@@ -53,5 +56,5 @@ def create_modifier_project(
         # No app: modifier terms classify through this registry (D-a).
         install_service_source(store.registry.get_service)
     ScopedRepository(db, ADMIN_ACCESS, OPERATOR).create_project(
-        key, "Modifiers", None, modifier_profile(), {"hp": MOD_PIN}
+        key, "Modifiers", None, modifier_profile(), {"hp": pin}
     )

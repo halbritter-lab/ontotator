@@ -380,22 +380,20 @@ def test_reference_layer_is_read_only(env: Env) -> None:
     assert refused.value.code == "REFERENCE_LAYER_READ_ONLY"
 
 
-def test_create_and_set_term_refuse_modifier_terms(env: Env) -> None:
-    refused = env.refused(
-        {"command": "create_annotation", "annotation_id": "a1", "term_id": SEVERE}
+def test_create_and_set_term_accept_modifier_terms(env: Env) -> None:
+    """A modifier term may name a finding (Stillbirth): accepted, submit warns."""
+    draft = env.run(
+        {
+            "command": "create_annotation",
+            "annotation_id": "a0",
+            "term_id": SEVERE,
+            "segments": [seg(SCHWERE)],
+        }
     )
-    assert (refused.code, refused.details) == (
-        "MODIFIER_AS_FINDING",
-        {"term_id": SEVERE},
-    )
+    assert finding(draft, "a0").term_id == SEVERE
     env.seizure()
-    refused = env.refused(
-        {"command": "set_term", "annotation_id": "a1", "term_id": FREQUENT}
-    )
-    assert (refused.code, refused.details) == (
-        "MODIFIER_AS_FINDING",
-        {"term_id": FREQUENT},
-    )
+    draft = env.run({"command": "set_term", "annotation_id": "a1", "term_id": FREQUENT})
+    assert finding(draft).term_id == FREQUENT
 
 
 def test_set_term_keeps_modifiers(env: Env) -> None:
@@ -440,7 +438,7 @@ def test_adoption(env: Env, monkeypatch: pytest.MonkeyPatch) -> None:
     )
     assert modifiers(draft, "own") == [{"term_id": SEVERE}]
     sources[:] = [standalone]
-    refused = env.refused(
+    draft = env.run(
         {
             "command": "create_annotation",
             "annotation_id": "own-2",
@@ -450,7 +448,7 @@ def test_adoption(env: Env, monkeypatch: pytest.MonkeyPatch) -> None:
             "source_version": standalone.version,
         }
     )
-    assert refused.code == "MODIFIER_AS_FINDING"
+    assert finding(draft, "own-2").term_id == SEVERE
 
 
 def test_delete_removes_the_modifiers(env: Env) -> None:
@@ -508,19 +506,15 @@ def test_commands_uncheck_the_layer_and_repoint_consolidation_decisions(
 
 
 def _old_standalone(env: Env, monkeypatch: pytest.MonkeyPatch) -> None:
-    """A standalone Severe finding as old data (the command refuses it now)."""
-    with monkeypatch.context() as patched:
-        patched.setattr(
-            env.editor, "_refuse_modifier_as_finding", lambda *args, **kwargs: None
-        )
-        env.run(
-            {
-                "command": "create_annotation",
-                "annotation_id": "old",
-                "term_id": SEVERE,
-                "segments": [seg(SCHWERE)],
-            }
-        )
+    """A standalone Severe finding."""
+    env.run(
+        {
+            "command": "create_annotation",
+            "annotation_id": "old",
+            "term_id": SEVERE,
+            "segments": [seg(SCHWERE)],
+        }
+    )
 
 
 @pytest.mark.parametrize("link_span", [True, False])
