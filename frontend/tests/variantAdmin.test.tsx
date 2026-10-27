@@ -233,6 +233,7 @@ it("retains an unsaved translation gate when another settings section is saved",
   const view = render(<ProjectSettingsPage projectKey="p" currentUser={currentUser} section="workflow" />);
   fireEvent.click(await screen.findByLabelText("Wait for an accepted translation review before annotating"));
   view.rerender(<ProjectSettingsPage projectKey="p" currentUser={currentUser} section="general" />);
+  fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: "Renamed" } });
   fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
   await screen.findByText("General saved.");
   view.rerender(<ProjectSettingsPage projectKey="p" currentUser={currentUser} section="workflow" />);

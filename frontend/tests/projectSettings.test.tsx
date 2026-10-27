@@ -272,6 +272,23 @@ describe("project settings sections", () => {
     expect(screen.getByRole("checkbox", { name: "Annotators must confirm every value before submitting" })).toHaveProperty("checked", true);
   });
 
+  it("enables Save only with unsaved edits and guards reload or tab close while any edit is unsaved", async () => {
+    const view = renderSettings("general");
+    const name = await screen.findByLabelText(/^Name/);
+    expect(saveIn("General")).toHaveProperty("disabled", true);
+    const clean = new Event("beforeunload", { cancelable: true }); window.dispatchEvent(clean); expect(clean.defaultPrevented).toBe(false);
+    fireEvent.change(name, { target: { value: "New name" } });
+    expect(saveIn("General")).toHaveProperty("disabled", false);
+    // An edit on another tab still counts.
+    view.show("annotation");
+    expect(saveIn("Annotation")).toHaveProperty("disabled", true);
+    const dirty = new Event("beforeunload", { cancelable: true }); window.dispatchEvent(dirty); expect(dirty.defaultPrevented).toBe(true);
+    view.show("general");
+    fireEvent.click(within(screen.getByRole("form", { name: "General" })).getByRole("button", { name: "Discard changes" }));
+    expect(saveIn("General")).toHaveProperty("disabled", true);
+    const discarded = new Event("beforeunload", { cancelable: true }); window.dispatchEvent(discarded); expect(discarded.defaultPrevented).toBe(false);
+  });
+
   it("preserves null clearing and false rule values in section-only PATCH bodies", async () => {
     const view = renderSettings("general");
     fireEvent.change(await screen.findByLabelText(/^Description/), { target: { value: " " } });
@@ -279,17 +296,20 @@ describe("project settings sections", () => {
     expect(api.updateProjectSettings).toHaveBeenCalledWith(settings.project_key, { name: "Research", description: null, languages: ["de"] });
     await screen.findByText("General saved.");
     view.show("annotation");
+    fireEvent.change(screen.getByRole("combobox", { name: "Findings that point to no text passage" }), { target: { value: "optional" } });
     fireEvent.click(saveIn("Annotation"));
     await screen.findByText("Annotation saved.");
-    expect(api.updateProjectSettings).toHaveBeenLastCalledWith(settings.project_key, { require_chosen_axes: false, contiguous_mentions_only: false, allow_spanless_findings: true, require_spanless_note: true, hidden_axis_values: {}, creation_defaults: {} });
+    expect(api.updateProjectSettings).toHaveBeenLastCalledWith(settings.project_key, { require_chosen_axes: false, contiguous_mentions_only: false, allow_spanless_findings: true, require_spanless_note: false, hidden_axis_values: {}, creation_defaults: {} });
   });
 
   it.each([
     ["prohibited", false, true], ["required", true, true], ["optional", true, false],
   ] as const)("persists the %s spanless mode through one setting", async (mode, allow, requireNote) => {
+    // Start from another mode, so choosing this one is an edit.
+    if (mode === "required") vi.mocked(api.getProjectSettings).mockResolvedValue({ ...settings, allow_spanless_findings: false });
     renderSettings("annotation");
     const control = await screen.findByRole("combobox", { name: "Findings that point to no text passage" });
-    expect((control as HTMLSelectElement).value).toBe("required");
+    expect((control as HTMLSelectElement).value).toBe(mode === "required" ? "prohibited" : "required");
     expect(within(control).getAllByRole("option").map(option => option.textContent)).toEqual(["Not allowed", "Allowed with a reason", "Allowed, reason optional"]);
     fireEvent.change(control, { target: { value: mode } });
     fireEvent.click(saveIn("Annotation"));
@@ -548,8 +568,9 @@ describe("workflow settings", () => {
     vi.mocked(api.getProjectSettings).mockResolvedValue({ ...settings, import_plan: "nothing", annotations_per_text: 2 });
     renderSettings("workflow");
     const form = await screen.findByRole("form", { name: "Workflow" });
+    fireEvent.change(within(form).getByRole("spinbutton", { name: /Annotators per text/ }), { target: { value: "3" } });
     fireEvent.click(within(form).getByRole("button", { name: "Save changes" }));
-    await waitFor(() => expect(api.updateProjectSettings).toHaveBeenCalledWith(settings.project_key, { ...WORKFLOW_BODY, import_plan: "nothing", annotations_per_text: 2 }));
+    await waitFor(() => expect(api.updateProjectSettings).toHaveBeenCalledWith(settings.project_key, { ...WORKFLOW_BODY, import_plan: "nothing", annotations_per_text: 3 }));
   });
 
   it("saves how annotators work on texts with tool proposals", async () => {
@@ -575,6 +596,7 @@ describe("workflow settings", () => {
     const annotation = await screen.findByRole("form", { name: "Annotation" });
     expect(within(annotation).queryByRole("checkbox", { name: gateLabel })).toBeNull();
     expect(within(annotation).queryByRole("checkbox", { name: consolidatorLabel })).toBeNull();
+    fireEvent.click(within(annotation).getByRole("checkbox", { name: "A finding must be one continuous passage" }));
     fireEvent.click(within(annotation).getByRole("button", { name: "Save changes" }));
     await screen.findByText("Annotation saved.");
     expect(vi.mocked(api.updateProjectSettings).mock.lastCall![1]).not.toHaveProperty("adjudicator_not_annotator");

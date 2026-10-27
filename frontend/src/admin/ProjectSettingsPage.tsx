@@ -119,6 +119,15 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved,
   };
   const dirtyParts = (target: SettingsSection) => SECTION_PARTS[target].filter(part => dirty[part]);
   const sectionDirty = dirtyParts(section).length > 0;
+  const anyDirty = Object.values(dirty).some(Boolean);
+  const anyDirtyRef = useRef(anyDirty);
+  anyDirtyRef.current = anyDirty;
+  // Reload or tab close: the browser's own prompt while any edit is unsaved (as Profile has).
+  useEffect(() => {
+    const warn = (event: BeforeUnloadEvent) => { if (anyDirtyRef.current) { event.preventDefault(); event.returnValue = ""; } };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, []);
 
   // Leave guard: only while the shown section has unsaved edits.
   useEffect(() => {
@@ -164,11 +173,11 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved,
   };
 
   /**
-   * One save model on every form (M-8d, D6 A): "Save changes", "Discard changes" while there is something to discard,
+   * One save model on every form (M-8d, D6 A): "Save changes" (enabled only with unsaved edits), "Discard changes" while there is something to discard,
    * and a status line ("Unsaved changes." / "{part} saved.").
    */
-  const saveBar = (part: Section, options: { disabled?: boolean } = {}) => <div className="settings-section-actions" role="group" aria-label={`${PART_LABELS[part]} save state`}>
-    <Button type="submit" variant="primary" disabled={options.disabled} loading={busy === part}>Save changes</Button>
+  const saveBar = (part: Section) => <div className="settings-section-actions" role="group" aria-label={`${PART_LABELS[part]} save state`}>
+    <Button type="submit" variant="primary" disabled={!dirty[part]} loading={busy === part}>Save changes</Button>
     {dirty[part] && <Button onClick={() => discard([part])}>Discard changes</Button>}
     {error?.section === part && <ErrorNotice error={error.error} />}
     {saved === part && <InlineMessage tone="success">{PART_LABELS[part]} saved.{dirty[part] ? " Newer changes remain unsaved." : ""}</InlineMessage>}
@@ -272,7 +281,7 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved,
             <fieldset disabled={busy !== null}><legend>Task profile</legend>
               <p className="field-hint">The layers, finding types and values annotators work with. Replace it with a profile file (JSON) only before work starts.</p>
               <ProfileUpload key={profileGeneration} label="Profile file (JSON)" onChange={setUploaded} disabled={busy !== null} />
-              {saveBar("Profile", { disabled: !uploaded })}
+              {saveBar("Profile")}
             </fieldset>
           </form>
         </details>
