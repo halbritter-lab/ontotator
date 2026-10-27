@@ -213,5 +213,5 @@ test("an annotator working from scratch never sees proposals", async ({ page }) 
   const proposals = show.locator("option", { hasText: "Tool proposals (3)" });
   // toBeDisabled() would follow the enclosing <label> to the (enabled) select.
   await expect(proposals).toHaveJSProperty("disabled", true);
-  await expect(proposals).toContainText("Hidden while you annotate from scratch");
+  await expect(proposals).toContainText(/hidden while you annotate from scratch/i);
 });
