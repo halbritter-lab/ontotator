@@ -66,6 +66,23 @@ describe("project creation", () => {
     expect(vi.mocked(api.createProject).mock.calls[0][0]).not.toHaveProperty("template");
   });
 
+  it("shows a refused key at the key field and focuses it", async () => {
+    vi.mocked(api.createProject).mockRejectedValue(new ApiError(409, "exists", "PROJECT_EXISTS"));
+    render(<ProjectNewPage onNavigate={vi.fn()} />);
+    fireEvent.change(await screen.findByLabelText(/^Built-in template/), { target: { value: "template" } });
+    fireEvent.change(screen.getByLabelText(/^Project key/), { target: { value: "ward-notes" } });
+    fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: "Research" } });
+    fireEvent.change(screen.getByLabelText(/^Ontology file for HP/), { target: { value: "a".repeat(64) } });
+    fireEvent.click(screen.getByRole("button", { name: "Create project" }));
+    const key = screen.getByLabelText(/^Project key/);
+    await waitFor(() => expect(key.getAttribute("aria-invalid")).toBe("true"));
+    expect(document.getElementById(key.getAttribute("aria-describedby")!.split(" ").pop()!)?.textContent).toBe("A project with this key already exists. Choose another key.");
+    expect(document.activeElement).toBe(key);
+    expect(screen.getAllByText("A project with this key already exists. Choose another key.")).toHaveLength(1);
+    fireEvent.change(key, { target: { value: "ward-notes-2" } });
+    expect(key.getAttribute("aria-invalid")).toBe("false");
+  });
+
   it("blocks native pending-language validation and duplicate submits", async () => {
     const pending = deferred<typeof settings>();
     vi.mocked(api.createProject).mockReturnValue(pending.promise);

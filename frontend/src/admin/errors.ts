@@ -257,3 +257,8 @@ function guidelineMessage(error: unknown): string | null {
   if (error.code === "GUIDELINE_NOTE_INVALID" && error.details.field === "reason") return "The reason must be one line of at most 280 characters.";
   return null;
 }
+
+/** The message of an API refusal with one of `codes`, so a form can show it at the field it concerns. */
+export function fieldError(error: unknown, codes: readonly string[]): string | undefined {
+  return error instanceof ApiError && error.code !== undefined && codes.includes(error.code) ? errorMessage(error) : undefined;
+}

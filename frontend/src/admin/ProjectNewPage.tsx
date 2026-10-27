@@ -3,6 +3,7 @@ import { api, type OntologyInfo, type TemplateInfo } from "../api/client";
 import type { Route } from "../app/router";
 import { Button, InlineMessage, Select, Textarea, TextInput } from "../ui";
 import { ErrorNotice } from "./ErrorNotice";
+import { fieldError } from "./errors";
 import { LanguagesField } from "./LanguagesField";
 import { PinFields, ProfileUpload, serializePins, type PinDraft, type UploadedProfile } from "./projectFields";
 
@@ -31,6 +32,10 @@ export function ProjectNewPage({ onNavigate }: { onNavigate: (route: Route) => v
     return () => { lifetime.current++; };
   }, [retry]);
   const ids = source === "template" ? metadata?.templates.find(item => item.id === template)?.required_ontology_ids ?? [] : uploaded?.ids ?? [];
+  const keyError = fieldError(error, ["PROJECT_EXISTS", "PROJECT_KEY_INVALID"]);
+  const keyInput = useRef<HTMLInputElement>(null);
+  // A refusal about the key moves focus to the key field, where its message is shown.
+  useEffect(() => { if (keyError) keyInput.current?.focus(); }, [error]); // eslint-disable-line react-hooks/exhaustive-deps
   const create = async () => {
     if (writing.current || !metadata || (source === "upload" && !uploaded)) return;
     const epoch = lifetime.current;
@@ -47,7 +52,7 @@ export function ProjectNewPage({ onNavigate }: { onNavigate: (route: Route) => v
     {loadError !== undefined && <><ErrorNotice error={loadError} /><Button onClick={() => setRetry(value => value + 1)}>Try again</Button></>}
     {metadata && <form onSubmit={event => { event.preventDefault(); if (event.currentTarget.reportValidity()) void create(); }}>
       <fieldset disabled={busy}><legend>Project</legend>
-        <TextInput id="new-project-key" label="Project key" value={key} onChange={event => setKey(event.target.value)} required pattern="[a-z0-9][a-z0-9-]{1,62}" minLength={2} maxLength={63} hint="Use 2–63 lower-case letters, digits or hyphens; start with a letter or digit." />
+        <TextInput ref={keyInput} id="new-project-key" label="Project key" value={key} error={keyError} onChange={event => { setKey(event.target.value); if (keyError) setError(undefined); }} required pattern="[a-z0-9][a-z0-9-]{1,62}" minLength={2} maxLength={63} hint="Use 2–63 lower-case letters, digits or hyphens; start with a letter or digit." />
         <TextInput id="new-project-name" label="Name" value={name} required onChange={event => setName(event.target.value)} />
         <Textarea id="new-project-description" label="Description" value={description} onChange={event => setDescription(event.target.value)} />
         <LanguagesField id="new-project-languages" label="Document languages" value={languages} onChange={setLanguages} disabled={busy} />
@@ -60,7 +65,7 @@ export function ProjectNewPage({ onNavigate }: { onNavigate: (route: Route) => v
         <PinFields ids={ids} ontologies={metadata.ontologies} value={pins} onChange={setPins} disabled={busy} />
         <Button type="submit" variant="primary" loading={busy} disabled={source === "upload" && uploaded === null}>Create project</Button>
       </fieldset>
-      {error !== undefined && <ErrorNotice error={error} />}
+      {error !== undefined && !keyError && <ErrorNotice error={error} />}
     </form>}
   </section>;
 }

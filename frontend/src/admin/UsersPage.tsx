@@ -3,6 +3,7 @@ import { api, ApiError, type AdminUser, type AdminUserPatch, type AuditEvent, ty
 import { Button, Checkbox, ConfirmDialog, DataTable, Dialog, EmptyState, IconMore, InlineMessage, MenuButton, TextInput, Toolbar, type Column, type MenuItem } from "../ui";
 import { CodeOnceDialog } from "./CodeOnceDialog";
 import { ErrorNotice } from "./ErrorNotice";
+import { fieldError } from "./errors";
 import { LanguagesField } from "./LanguagesField";
 import { formatDateTime, formatShortDateTime, humanize, labelFor, roleLabels, taskLabels } from "../app/labels";
 
@@ -160,6 +161,12 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
   const blocked = busy || loading || users === null || code !== null || confirmation !== null || erase !== null || reissue !== null;
   const pageBlocked = blocked || editing !== null || creating;
 
+  const usernameError = fieldError(createError, ["USERNAME_INVALID", "USERNAME_TAKEN"]);
+  const displayNameError = fieldError(createError, ["DISPLAY_NAME_INVALID"]);
+  const usernameInput = useRef<HTMLInputElement>(null);
+  const displayNameInput = useRef<HTMLInputElement>(null);
+  // A refusal about one field moves focus there, where its message is shown.
+  useEffect(() => { (usernameError ? usernameInput : displayNameError ? displayNameInput : null)?.current?.focus(); }, [createError]); // eslint-disable-line react-hooks/exhaustive-deps
   const createUser = async () => {
     if (writing.current || blocked) return;
     const epoch = lifetime.current;
@@ -298,8 +305,8 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
     </section>
     {creating && <Dialog open title="New user" onClose={busy ? undefined : () => setCreating(false)}>
       <form aria-label="New user" onSubmit={event => { event.preventDefault(); void createUser(); }}>
-        <TextInput id="new-username" label="Username" required minLength={3} maxLength={64} value={create.username} disabled={blocked} onChange={event => { setCreateError(undefined); setCreate({ ...create, username: event.target.value }); }} />
-        <TextInput id="new-name" label="Display name" required maxLength={120} value={create.display_name} disabled={blocked} onChange={event => { setCreateError(undefined); setCreate({ ...create, display_name: event.target.value }); }} />
+        <TextInput ref={usernameInput} id="new-username" label="Username" error={usernameError} required minLength={3} maxLength={64} value={create.username} disabled={blocked} onChange={event => { setCreateError(undefined); setCreate({ ...create, username: event.target.value }); }} />
+        <TextInput ref={displayNameInput} id="new-name" label="Display name" error={displayNameError} required maxLength={120} value={create.display_name} disabled={blocked} onChange={event => { setCreateError(undefined); setCreate({ ...create, display_name: event.target.value }); }} />
         <TextInput id="new-email" label="E-mail" type="email" value={create.email ?? ""} disabled={blocked} onChange={event => setCreate({ ...create, email: event.target.value })} />
         <LanguagesField id="new-languages" label="Languages" value={create.languages ?? []} disabled={blocked} onChange={languages => setCreate({ ...create, languages })} />
         <Checkbox id="new-admin" label="System administrator" checked={create.system_admin} disabled={blocked} onChange={event => setCreate({ ...create, system_admin: event.target.checked })} />
@@ -309,7 +316,7 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
             {projectRoles.map(role => <Checkbox key={role} id={`new-${project.project_key}-${role}`} label={roleLabels[role]} aria-label={`${project.name}: ${roleLabels[role]}`} checked={roleFor(project.project_key).includes(role)} onChange={event => toggleNewRole(project.project_key, role, event.target.checked)} />)}
           </div>)}
         </fieldset>}
-        {createError !== undefined && <ErrorNotice error={createError} />}
+        {createError !== undefined && !usernameError && !displayNameError && <ErrorNotice error={createError} />}
         <Toolbar label="New user actions"><Button disabled={busy} onClick={() => setCreating(false)}>Cancel</Button><Button type="submit" variant="primary" disabled={blocked}>Create user</Button></Toolbar>
       </form>
     </Dialog>}
