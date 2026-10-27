@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { duplicatesText, fieldsToDecide, finalizationState, groupStatus, headerTitle, partialText, submittedText, summaryText } from "../../src/consolidation/consolidationText";
+import { duplicatesText, fieldsToDecide, finalizationState, groupStatus, headerTitle, partialText, readOnlyText, submittedText, summaryText } from "../../src/consolidation/consolidationText";
 import type { ConsolidationGroupView } from "../../src/api/client";
 import { attachCandidates, choicesComplete, choose, comparisonRows, duplicateTerms, groupName, resolvePayload, resultLine, sameTermGroups, standaloneText, takeFinding, type Choices } from "../../src/consolidation/groupModel";
 import { NO_MODIFIERS } from "../../src/consolidation/modifierSets";
@@ -33,6 +33,15 @@ describe("consolidation copy", () => {
   it("says who accepts the result after submitting", () => {
     expect(submittedText(true)).toBe("Consolidation submitted. Accept the result in Documents.");
     expect(submittedText(false)).toBe("Consolidation submitted. The lead then accepts the result.");
+  });
+
+  it("words the read-only banner by state: accepted, submitted for the lead or the consolidator, else the reason", () => {
+    const submitted = { read_only_reason: "submitted" as const, accepted_at: null, consolidator: "Carla Consolidator (ann-0006)" };
+    expect(readOnlyText(submitted, true)).toBe("Submitted by Carla Consolidator. Read-only; accept it in Documents.");
+    expect(readOnlyText({ ...submitted, consolidator: null }, true)).toBe("Submitted by the consolidator. Read-only; accept it in Documents.");
+    expect(readOnlyText(submitted, false)).toBe("Submitted. Waiting for the lead.");
+    expect(readOnlyText({ ...submitted, accepted_at: "2026-10-27T10:00:00" }, false)).toBe("Accepted by the lead on 27 Oct. Read-only.");
+    expect(readOnlyText({ read_only_reason: "not_assigned", accepted_at: null, consolidator: null }, false)).toBe("This consolidation is no longer assigned to you. It is read-only.");
   });
 
   it("names terms kept twice before submitting, nothing otherwise (R-3)", () => {

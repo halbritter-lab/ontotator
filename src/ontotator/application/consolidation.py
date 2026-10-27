@@ -367,11 +367,9 @@ class ConsolidationReader:
             from_proposal = _from_tool_proposal(conn, pid, members)
             added = _added(members, content, defaults, found.roles)
             modifier_layer_ids = modifier_layers(profile, Repository._pins(conn, pid))
-            added_by = (
-                _people(conn, access, ["self"], {"self": item.annotator_id})[0]["label"]
-                if added
-                else None
-            )
+            consolidator = _people(
+                conn, access, ["self"], {"self": item.annotator_id}
+            )[0]["label"]
         return {
             "round_id": item.round_id,
             "workspace_id": None,  # filled by the route for the editable assignee
@@ -389,7 +387,8 @@ class ConsolidationReader:
                 for group in _groups(order, members)
             ],
             "added": added,
-            "added_by": added_by,
+            "added_by": consolidator if added else None,
+            "consolidator": consolidator,
             "workflow_revision": item.workflow_revision,
             "draft_revision": 0 if submitted else content.revision,
             "modifier_layer_ids": modifier_layer_ids,
