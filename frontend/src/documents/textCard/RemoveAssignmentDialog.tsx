@@ -28,6 +28,7 @@ export function RemoveAssignmentDialog({ assignmentId, name, caseId, onCancel, o
   return <ConfirmDialog open title="Remove assignment?" confirmLabel="Remove" tone="danger" busy={busy} onCancel={onCancel} onConfirm={() => { void remove(); }}
     message={<>
       <p>{`Remove ${name} from the annotation of ${caseId}? Their draft is discarded.`}</p>
+      <p>All their unsubmitted findings, notes and decisions on this text are lost. This cannot be undone.</p>
       {error && <InlineMessage tone="error">{error}</InlineMessage>}
     </>} />;
 }
