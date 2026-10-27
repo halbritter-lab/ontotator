@@ -33,4 +33,11 @@ describe("person lanes", () => {
     images.forEach((image, index) => expect(image).toContain(`var(--lane-${index + 1}-line)`));
     expect(new Set(images.map(image => image.replace(/--lane-\d-line/g, ""))).size).toBe(4);
   });
+
+  it("hands the first two lane styles to forced colours, where gradients vanish", () => {
+    const style = laneStyle([2, 4]) as Record<string, unknown>;
+    expect(style["--fc-line-a"]).toBe("dashed");
+    expect(style["--fc-line-b"]).toBe("double");
+    expect(laneStyle([1])).not.toHaveProperty("--fc-line-b");
+  });
 });
