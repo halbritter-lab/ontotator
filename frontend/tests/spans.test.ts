@@ -54,6 +54,35 @@ describe("SpanEditor Unicode adapter", () => {
     handle.destroy();
   });
 
+  it("Shift + arrow without marked text starts a selection at the caret and grows it (N-3)", () => {
+    const text = "alpha beta gamma";
+    const select = vi.fn();
+    const handle = mountSpanEditor(container, text, [{ evidence_id: "m", segments: [{ start: 6, end: 10 }] }], select, vi.fn());
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    // jsdom has no Selection.modify: grow the focus by one character per call.
+    const modify = vi.fn(function (this: Selection, _alter: string, direction: string) {
+      this.extend(this.focusNode!, this.focusOffset + (direction === "forward" ? 1 : -1));
+    });
+    Object.defineProperty(Selection.prototype, "modify", { configurable: true, value: modify });
+    try {
+      const press = (key: string, init: KeyboardEventInit = {}) => container.dispatchEvent(new KeyboardEvent("keydown", { key, shiftKey: true, bubbles: true, cancelable: true, ...init }));
+      expect(press("ArrowRight")).toBe(false);
+      expect(modify).toHaveBeenLastCalledWith("extend", "forward", "character");
+      container.dispatchEvent(new KeyboardEvent("keyup", { key: "Shift", bubbles: true }));
+      expect(select).toHaveBeenLastCalledWith(expect.objectContaining({ segments: [{ start: 0, end: 1 }] }));
+      // The next selection starts where the last one ended; Ctrl moves by words; an extent grows natively.
+      press("ArrowRight", { ctrlKey: true });
+      expect(modify).toHaveBeenLastCalledWith("extend", "forward", "word");
+      expect(selection.anchorOffset).toBe(1);
+      expect(press("ArrowRight")).toBe(true);
+      expect(modify).toHaveBeenCalledTimes(2);
+    } finally {
+      delete (Selection.prototype as { modify?: unknown }).modify;
+      handle.destroy();
+    }
+  });
+
   it.each(["", "one\n\n"])("renders exactly one zero-text marker for empty/trailing-separator text %j", text => {
     const handle = mountSpanEditor(container, text, [], vi.fn(), vi.fn(), undefined, undefined, [0]);
     expect(container.querySelectorAll("[data-paragraph]")).toHaveLength(1);

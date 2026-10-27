@@ -105,6 +105,7 @@ export class SpanEditor {
     this._onMouseOutBound = (e) => this._onHover(e, false);
     this._onClickBound = (e) => this._onClick(e);
     this._keySelecting = false;
+    this._caret = 0;
     this._onKeyDownBound = (e) => this._onKeyDown(e);
     this._onKeyUpBound = (e) => this._onKeyUp(e);
 
@@ -600,6 +601,7 @@ export class SpanEditor {
       if (from === null || to === null) continue;
       const span = trimToVisible(this.text, from, to);
       if (span) spans.push(span);
+      this._caret = to;
     }
     selection.removeAllRanges();
     if (!spans.length || !this.handlers.onPaint) return;
@@ -634,7 +636,28 @@ export class SpanEditor {
     if (handle && !["Control", "Shift", "Alt", "Meta"].includes(event.key)) this._flushKeyResize();
     if (event.shiftKey && /^(Arrow|Home$|End$|PageUp$|PageDown$)/.test(event.key)) {
       this._keySelecting = true;
+      if (!handle && event.key.startsWith("Arrow") && !event.altKey && !event.metaKey) this._startKeySelection(event);
     }
+  }
+
+  // Browsers only extend a selection that already has extent, so Shift + arrow with none
+  // starts one at the caret (else the end of the last selection, else the text start).
+  _startKeySelection(event) {
+    const selection = window.getSelection();
+    if (!selection?.modify) return;
+    const inside = selection.rangeCount > 0 && this.container.contains(selection.anchorNode)
+      && this.container.contains(selection.focusNode);
+    if (inside && !selection.isCollapsed) return;
+    if (!inside) {
+      const run = Array.from(this.container.querySelectorAll(".run")).find((node) =>
+        this._caret <= Number(node.dataset.start) + node.textContent.length);
+      if (!run?.firstChild) return;
+      selection.collapse(run.firstChild, Math.max(0, this._caret - Number(run.dataset.start)));
+    }
+    event.preventDefault();
+    const vertical = event.key === "ArrowUp" || event.key === "ArrowDown";
+    selection.modify("extend", event.key === "ArrowRight" || event.key === "ArrowDown" ? "forward" : "backward",
+      vertical ? "line" : event.ctrlKey ? "word" : "character");
   }
 
   _onKeyUp(event) {
