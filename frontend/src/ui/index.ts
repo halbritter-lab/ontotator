@@ -5,6 +5,7 @@ export * from "./Kbd";
 export * from "./StatusBadge";
 export * from "./InlineMessage";
 export * from "./EmptyState";
+export * from "./EmptyValue";
 export * from "./Toolbar";
 export * from "./Field";
 export * from "./TextInput";

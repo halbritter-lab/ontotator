@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import { api, ApiError, type AdminUser, type AdminUserPatch, type AuditEvent, type CodeResponse, type CreateUserRequest, type CurrentUser, type ProjectSummary } from "../api/client";
-import { Button, Checkbox, ConfirmDialog, DataTable, Dialog, EmptyState, IconMore, InlineMessage, MenuButton, TextInput, Toolbar, type Column, type MenuItem } from "../ui";
+import { Button, Checkbox, ConfirmDialog, DataTable, Dialog, EmptyState, IconMore, InlineMessage, MenuButton, TextInput, Toolbar, type Column, type MenuItem, EmptyValue } from "../ui";
 import { CodeOnceDialog } from "./CodeOnceDialog";
 import { ErrorNotice } from "./ErrorNotice";
 import { fieldError } from "./errors";
@@ -286,11 +286,11 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
     { id: "username", header: "Username", cell: user => user.username, sortValue: user => user.username },
     { id: "name", header: "Display name", cell: user => user.display_name },
     { id: "pseudonym", header: "Pseudonym", cell: user => user.pseudonym },
-    { id: "languages", header: "Languages", cell: user => user.languages.join(", ") || "None" },
-    { id: "projects", header: "Projects", cell: user => user.projects.length ? <ul>{user.projects.map(project => <li key={project.project_key} title={project.project_key}>{project.project_name || project.project_key}: {project.roles.map(role => labelFor(roleLabels, role)).join(", ")}</li>)}</ul> : "None" },
+    { id: "languages", header: "Languages", cell: user => user.languages.join(", ") || <EmptyValue /> },
+    { id: "projects", header: "Projects", cell: user => user.projects.length ? <ul>{user.projects.map(project => <li key={project.project_key} title={project.project_key}>{project.project_name || project.project_key}: {project.roles.map(role => labelFor(roleLabels, role)).join(", ")}</li>)}</ul> : <EmptyValue /> },
     { id: "admin", header: "Admin", cell: user => user.is_system_admin ? "Yes" : "No" },
     { id: "active", header: "Active", cell: user => user.anonymised ? "Anonymised" : user.active ? "Yes" : "No" },
-    { id: "setup", header: "Setup", cell: user => user.setup_pending ? "Pending" : user.anonymised ? "–" : "Done", sortValue: user => user.setup_pending ? 0 : 1 },
+    { id: "setup", header: "Setup", cell: user => user.setup_pending ? "Pending" : user.anonymised ? <EmptyValue /> : "Done", sortValue: user => user.setup_pending ? 0 : 1 },
     { id: "last-login", header: "Last login", cell: user => user.last_login_at ? <time dateTime={user.last_login_at} title={formatDateTime(user.last_login_at)}>{formatShortDateTime(user.last_login_at)}</time> : "Never", sortValue: user => user.last_login_at ?? "" },
     { id: "actions", header: "Actions", cell: user => user.anonymised ? <Toolbar label={`Actions for ${user.username}`}>
       <Button size="sm" disabled={pageBlocked} aria-label={`History of ${user.username}`} onClick={() => { void showHistory(user.username); }}>History</Button>

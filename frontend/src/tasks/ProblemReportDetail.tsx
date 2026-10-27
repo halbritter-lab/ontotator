@@ -12,7 +12,7 @@ import { finalResultLabel, LeadStatePanel } from "../problems/LeadStatePanel";
 import { intentState, leadOutcome, reporterName, taskRef, type Intent } from "../problems/labels";
 import { ReportTimeline } from "../problems/ReportTimeline";
 import { useLeadReport } from "../problems/useLeadReport";
-import { Button, EmptyState, IconChevronLeft, InlineMessage } from "../ui";
+import { Button, EmptyState, IconChevronLeft, InlineMessage, EmptyValue } from "../ui";
 import { refKey } from "../variants/versionState";
 import { onSpaceActivate } from "../ui/spaceActivates";
 
@@ -190,9 +190,9 @@ export function ProblemReportDetail({ projectKey, reportId, canManage, action: r
       <summary>Technical details</summary>
       <dl className="report-facts">
         <div><dt>Report ID</dt><dd>{report.report_id}</dd></div>
-        <div><dt>Reported round ID</dt><dd>{report.round_id ?? "None"}</dd></div>
-        <div><dt>Current round ID</dt><dd>{report.current_round_id ?? "None"}</dd></div>
-        <div><dt>Submission ID</dt><dd>{report.submission?.submission_id ?? report.submission_id ?? "None"}</dd></div>
+        <div><dt>Reported round ID</dt><dd>{report.round_id ?? <EmptyValue />}</dd></div>
+        <div><dt>Current round ID</dt><dd>{report.current_round_id ?? <EmptyValue />}</dd></div>
+        <div><dt>Submission ID</dt><dd>{report.submission?.submission_id ?? report.submission_id ?? <EmptyValue />}</dd></div>
         <div><dt>Document ID</dt><dd>{report.document_id}</dd></div>
         {(report.holds ?? []).map(h => <div key={h.hold_id}><dt>Pause of Task {h.assignment_id}</dt><dd>{h.hold_id}</dd></div>)}
         {(report.events ?? []).map(e => <div key={e.event_id}><dt>Event ({e.action})</dt><dd>{e.event_id}</dd></div>)}

@@ -2,7 +2,7 @@ import { useId, useState } from "react";
 import type { TranslationReviewRecord } from "../api/client";
 import { personLabel } from "../app/identity";
 import { submissionGuidelineLabel } from "../guidelines/submissionLabel";
-import { Button, IconCheck, IconChevronRight, IconWarning, StatusBadge } from "../ui";
+import { Button, IconCheck, IconChevronRight, IconWarning, StatusBadge, EmptyValue } from "../ui";
 import { allChecksLine, calmCheckText, categoryLabels, checkBandText, checkDeviationGuidance, checkExplanation, checkLabel, checkNoLocation, decisionConsequences, decisionLabels, formatReviewDate, translationStatusLabel } from "./labels";
 import type { ClinicalCategory, ReviewDecisionCode } from "./reviewRules";
 
@@ -78,7 +78,7 @@ export function ReviewSummary({ record, heading }: { record: TranslationReviewRe
     <dl className="review-summary-list">
       <div><dt>Decision</dt><dd>{decisionLabels[record.decision] ?? record.decision}</dd></div>
       <div><dt>Clinically relevant change</dt><dd>{record.clinical_change ? `Yes: ${categoryList(record.categories)}` : "No"}</dd></div>
-      <div><dt>Rationale</dt><dd className="review-summary-rationale">{record.rationale?.trim() ? record.rationale : "None given"}</dd></div>
+      <div><dt>Rationale</dt><dd className="review-summary-rationale">{record.rationale?.trim() ? record.rationale : <EmptyValue />}</dd></div>
       <div><dt>Status of the reviewed version</dt><dd>{translationStatusLabel(record.status_after)}</dd></div>
       <div><dt>Reviewer</dt><dd>{personLabel({ pseudonym: record.reviewer_pseudonym })}{record.reviewer_qualification ? `, ${record.reviewer_qualification}` : ""}</dd></div>
       <div><dt>Guidelines</dt><dd>{submissionGuidelineLabel(record.guideline_version, record.guideline_withdrawn, null).replace(/^Guidelines:? /, "")}</dd></div>

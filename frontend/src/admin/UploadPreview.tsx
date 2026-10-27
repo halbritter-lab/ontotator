@@ -1,5 +1,5 @@
 import type { ImportPlan } from "../api/client";
-import { InlineMessage } from "../ui";
+import { InlineMessage, EmptyValue } from "../ui";
 import { plural } from "../app/labels";
 import { originLabels, translationStatusLabels } from "./variantMetadata";
 import { UploadWorkPlan, type UploadWorkPlanProps } from "./UploadWorkPlan";
@@ -13,7 +13,7 @@ export function UploadPreview({ plan, workPlan }: { plan: ImportPlan; workPlan?:
     <h3>Preview</h3>
     {plan.committable && <p>{plural(plan.counts?.documents_added ?? 0, "document")} added, {plan.counts?.documents_skipped ?? 0} unchanged, {plural(plan.documents_only?.length ?? 0, "document")} without proposals, {plural(plan.proposal_sets?.length ?? 0, "proposal set")}, {plural(plan.counts?.proposals ?? 0, "proposal")}, {plan.normalised_count} with normalized text</p>}
     {!!plan.variants?.length && <div className="data-table-scroll"><table className="data-table density-compact"><caption>Variants</caption><thead><tr><th scope="col">External ID</th><th scope="col">Language</th><th scope="col">Version</th><th scope="col">Origin</th><th scope="col">Source</th><th scope="col">Planned status</th><th scope="col">Failed checks</th></tr></thead><tbody>{plan.variants.map(variant => <tr key={JSON.stringify([variant.external_id, variant.language, variant.version])}>
-      <td>{variant.external_id}</td><td>{variant.language}</td><td>{variant.version}</td><td>{originLabels[variant.origin]}</td><td>{variant.derived_from ? `${variant.derived_from}${variant.derived_in_upload ? " (in this upload)" : ""}` : "—"}</td><td title={variant.status_reason ?? undefined}>{variant.status ? translationStatusLabels[variant.status] : "—"}</td><td>{variant.failed_checks.length ? <ul>{variant.failed_checks.map(code => <li key={code}>{code}</li>)}</ul> : "None"}</td>
+      <td>{variant.external_id}</td><td>{variant.language}</td><td>{variant.version}</td><td>{originLabels[variant.origin]}</td><td>{variant.derived_from ? `${variant.derived_from}${variant.derived_in_upload ? " (in this upload)" : ""}` : <EmptyValue />}</td><td title={variant.status_reason ?? undefined}>{variant.status ? translationStatusLabels[variant.status] : <EmptyValue />}</td><td>{variant.failed_checks.length ? <ul>{variant.failed_checks.map(code => <li key={code}>{code}</li>)}</ul> : "None"}</td>
     </tr>)}</tbody></table></div>}
     {!plan.committable && <InlineMessage tone="error"><strong>This upload cannot be imported.</strong>
       {[...grouped].map(([code, issues]) => <section key={code}><h4>{ERROR_MESSAGES[code] ?? code}</h4><ul>{issues.map((issue, index) => <li key={index}>{issue.unit}{issue.annotation_id ? `, ${issue.annotation_id}` : ""}: {issue.message}</li>)}</ul></section>)}

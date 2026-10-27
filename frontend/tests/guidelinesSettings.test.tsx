@@ -263,7 +263,7 @@ describe("Settings › Guidelines", () => {
     await screen.findByText(/^v3, guide-v3\.md/);
     const withdrawn = row(2);
     const cells = within(withdrawn).getAllByRole("cell").map(cell => cell.textContent);
-    expect(cells.slice(0, 4)).toEqual(["—", "Withdrawn 21 Oct by Jana Popp (ann-0002): Wrong file", "12 Oct, 14:02 by Jana Popp (ann-0002)", "—"]);
+    expect(cells.slice(0, 4)).toEqual(["—not set", "Withdrawn 21 Oct by Jana Popp (ann-0002): Wrong file", "12 Oct, 14:02 by Jana Popp (ann-0002)", "—not set"]);
     expect(within(withdrawn).queryByRole("button")).toBeNull();
     expect(within(row(1)).getByText("Withdrawn 21 Oct by Jana Popp (ann-0002)")).toBeDefined();
     expect(within(row(1)).queryByRole("button")).toBeNull();
