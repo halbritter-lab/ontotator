@@ -239,3 +239,12 @@ it.each([
   expect(api.downloadJob).toHaveBeenCalledWith(8);
   expect(activations).toBe(expected);
 });
+it("a project without texts shows Nothing to export yet and no export action (#46)", async () => {
+  const onNavigate = vi.fn();
+  render(<ExportPage projectKey="p" currentUser={user} documentCount={0} onNavigate={onNavigate} />);
+  expect(screen.getByRole("heading", { name: "Nothing to export yet" })).toBeTruthy();
+  expect(screen.queryByRole("button")).toBeNull();
+  expect(api.finalExportPreflight).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("link", { name: "Go to Documents" }));
+  expect(onNavigate).toHaveBeenCalledWith({ name: "projectDocuments", key: "p" });
+});

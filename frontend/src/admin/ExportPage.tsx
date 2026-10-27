@@ -2,13 +2,20 @@ import { FinalExportPanel } from "./FinalExportPanel";
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError, type CurrentUser, type ExportKind } from "../api/client";
 import { saveDownload } from "../api/download";
-import { Button, InlineMessage, Toolbar } from "../ui";
+import { Button, EmptyState, InlineMessage, Toolbar } from "../ui";
+import { RouteLink } from "../documents/RowCells";
+import type { Route } from "../app/router";
 import { ErrorNotice } from "./ErrorNotice";
 import { ERROR_MESSAGES } from "./errors";
 import { useJob } from "./useJob";
 import { jobStatusLabels, labelFor } from "../app/labels";
 
-export interface ExportPageProps { projectKey: string; currentUser: CurrentUser }
+export interface ExportPageProps {
+  projectKey: string; currentUser: CurrentUser;
+  /** Texts in the project; 0 shows "Nothing to export yet" instead of the exports (#46). */
+  documentCount?: number;
+  onNavigate?: (route: Route) => void;
+}
 const jsonl = "JSONL file: one JSON record per line";
 const definitions = [
   { kind: "t1", title: "Annotation results", format: "ZIP of ontospan bundles",
@@ -56,7 +63,11 @@ function ExportFailure({ result, error }: { result: Record<string, unknown> | nu
   </InlineMessage>;
 }
 
-export function ExportPage({ projectKey, currentUser }: ExportPageProps): JSX.Element {
+export function ExportPage({ projectKey, currentUser, documentCount, onNavigate }: ExportPageProps): JSX.Element {
+  // shortcut: the count comes from the project list loaded with the session, so texts uploaded since then show only after a reload.
+  if (documentCount === 0) return <section><h1>Export</h1><EmptyState title="Nothing to export yet" action={
+    <RouteLink route={{ name: "projectDocuments", key: projectKey }} className="btn btn-secondary" onNavigate={onNavigate}>Go to Documents</RouteLink>
+  }>Exports become available once the project has texts and submitted results.</EmptyState></section>;
   return <section><h1>Export</h1><FinalExportPanel projectKey={projectKey} username={currentUser.username} /><h2>Research and individual exports</h2>{definitions.map((definition) => {
     const storageKey = `ontotator:export:${JSON.stringify([currentUser.username, projectKey, definition.kind])}`;
     return <ExportCard key={storageKey} projectKey={projectKey} storageKey={storageKey} lead={false} {...definition} />;

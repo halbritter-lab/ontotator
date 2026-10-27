@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, ApiError, notifySessionRestored, type ProjectSummary, type TaskSummary } from "../src/api/client";
-import { MyTasks } from "../src/tasks/MyTasks";
+import { memberHint, MyTasks } from "../src/tasks/MyTasks";
 import { guidelineListing, guidelineSummary, withdrawnGuideline } from "./projectFixtures";
 
 const project = (key: string, name: string, can_manage = false): ProjectSummary => ({
@@ -192,7 +192,7 @@ describe("My tasks component", () => {
     render(<MyTasks projects={[project("p", "Research", true), project("q", "Research", true)]} onNavigate={onNavigate} />);
     const link = await screen.findByRole("link", { name: "Go to Projects" });
     expect(screen.queryByRole("link", { name: /Go to Documents/ })).toBeNull();
-    expect(screen.getByText("You assign documents to people, yourself included, on a project's Documents page.")).toBeDefined();
+    expect(screen.getByText("You assign texts to people, yourself included, on a project's Documents page.")).toBeDefined();
     expect(link.className).toBe("btn btn-secondary");
     expect(link.getAttribute("href")).toBe("#/projects");
     fireEvent.click(link);
@@ -217,11 +217,19 @@ describe("My tasks component", () => {
     expect(screen.queryByRole("link", { name: /Go to Documents/ })).toBeNull();
   });
 
-  it("shows ordinary empty notice without inventing an assignment action", async () => {
+  it("tells a member who assigns texts and links to Projects, without an assignment action", async () => {
     vi.mocked(api.listMyTasks).mockResolvedValue([]);
-    render(<MyTasks projects={[project("p", "P")]} onNavigate={vi.fn()} />);
+    render(<MyTasks projects={[{ ...project("p", "Empty study"), roles: ["annotator"] }]} onNavigate={vi.fn()} />);
     await screen.findByText("No texts are assigned to you yet.");
+    expect(screen.getByText("You are an annotator in Empty study. Your project lead assigns texts; they appear here.")).toBeDefined();
+    expect(screen.getByRole("link", { name: "Go to Projects" }).getAttribute("href")).toBe("#/projects");
     expect(screen.queryByRole("link", { name: /Go to Documents/ })).toBeNull();
+  });
+
+  it("memberHint names role and project for one project, else stays general", () => {
+    expect(memberHint([{ name: "S", roles: ["adjudicator", "annotator"] }])).toBe("You are a consolidator and annotator in S. Your project lead assigns texts; they appear here.");
+    expect(memberHint([{ name: "S", roles: [] }])).toMatch(/^You are a member in S\./);
+    expect(memberHint([])).toBe("When a project lead adds you to a project and assigns texts, they appear here.");
   });
 
   it("keeps an empty raw route filter distinct from All my tasks", async () => {

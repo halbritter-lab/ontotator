@@ -169,6 +169,7 @@ it("shows No texts yet for an empty project and no access on refusal", async () 
   vi.mocked(api.getProgress).mockResolvedValueOnce({ ...progress, lede: { cases: 0, translations_to_review: 0, versions_to_annotate: 0, not_in_plan: 0, needs_decision: 0, to_assign: 0 }, workload: [] });
   const { unmount } = render(<ProgressPage projectKey="p" onNavigate={vi.fn()} />);
   await screen.findByText("No texts yet");
+  expect(screen.getByRole("link", { name: "Go to Documents" }).getAttribute("href")).toBe("#/projects/p/documents");
   expect(screen.queryByRole("list", { name: "Pipeline" })).toBeNull();
   unmount();
   vi.mocked(api.getProgress).mockRejectedValueOnce(new AuthError("Forbidden", undefined, "NOT_ALLOWED"));

@@ -765,6 +765,12 @@ it("shows the empty states per tab, for filters and for an empty project", async
   }
   renderPage();
   expect(await screen.findByText("Upload texts to start.")).toBeTruthy();
+  // An empty project offers only the upload, inside the empty state: no tabs, filters or selection (#46).
+  expect(screen.getAllByRole("button", { name: "Upload texts…" })).toHaveLength(1);
+  expect(screen.getByRole("button", { name: "Upload texts…" }).className).toContain("btn-primary");
+  expect(screen.queryByRole("tablist")).toBeNull();
+  expect(screen.queryByRole("toolbar", { name: "Document filters" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Select by case IDs…" })).toBeNull();
   cleanup();
   // The tab has rows, the filters exclude them: "No texts match these filters." with Clear all.
   mockRows(page([], { bar: { ...page([]).bar, all: 3 } }));

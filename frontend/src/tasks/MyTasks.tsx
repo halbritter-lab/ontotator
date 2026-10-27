@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, onSessionRestored, type ProjectSummary, type TaskSummary } from "../api/client";
 import { routeHref, type NavigateOptions, type Route, type TaskStatusTab } from "../app/router";
 import { ErrorNotice } from "../admin/ErrorNotice";
-import { assignmentStatusLabels, formatDateTime, reopenNotice, taskLabels } from "../app/labels";
+import { assignmentStatusLabels, formatDateTime, reopenNotice, roleLabels, taskLabels } from "../app/labels";
 import { taskText } from "../app/identity";
 import { failedChecksTitle } from "../translation/labels";
 import { IconWarning } from "../ui/icons";
@@ -53,6 +53,13 @@ const failedChecks = (task: Pick<TaskSummary, "task" | "failed_check_count">): n
 const projectLabel = (name: string, key: string): string => name === key ? name : `${name} (${key})`;
 
 /** Text label "case-0101 de"; servers without a case ID fall back to the document's external or internal ID. */
+
+/** Who assigns work to a member without a lead role: "You are an annotator in Empty study. Your project lead assigns texts; they appear here." */
+export function memberHint(members: Pick<ProjectSummary, "name" | "roles">[]): string {
+  if (members.length !== 1) return members.length ? "Your project leads assign texts; they appear here." : "When a project lead adds you to a project and assigns texts, they appear here.";
+  const roles = members[0].roles.map(role => roleLabels[role].toLowerCase()).join(" and ");
+  return `You are ${roles ? `${/^[aeiou]/.test(roles) ? "an" : "a"} ${roles}` : "a member"} in ${members[0].name}. Your project lead assigns texts; they appear here.`;
+}
 
 export function MyTasks({ project, status, projects, onNavigate, username }: MyTasksProps): JSX.Element {
   // A visit without a project filter reopens the last chosen project ("" = All my tasks), once per visit,
@@ -174,15 +181,16 @@ export function MyTasks({ project, status, projects, onNavigate, username }: MyT
       event.preventDefault(); onNavigate({ name: "task", assignmentId: task.assignment_id });
     }}>{task.held ? "View paused task" : taskActionLabels[task.status]}</a> },
   ];
-  // One entry: the project's Documents, or with several managed projects the Projects page (it lists them with their open decisions).
-  const emptyRoute: Route | null = managed.length === 1 ? { name: "projectDocuments", key: managed[0].project_key } : managed.length > 1 ? { name: "projects" } : null;
+  // One entry: the project's Documents, or with several managed projects (or none, as a member) the Projects page.
+  const members = projects.filter(item => project === undefined || item.project_key === project);
+  const emptyRoute: Route | null = managed.length === 1 ? { name: "projectDocuments", key: managed[0].project_key } : managed.length > 1 || members.length > 0 ? { name: "projects" } : null;
   const empty = <EmptyState title="No texts are assigned to you yet." action={emptyRoute &&
     <a className="btn btn-secondary" href={routeHref(emptyRoute)} onKeyDown={onSpaceActivate} onClick={event => {
       if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
       event.preventDefault();
       onNavigate(emptyRoute);
-    }}>{managed.length > 1 ? "Go to Projects" : "Go to Documents"}</a>
-  }>{managed.length > 0 && `You assign documents to people, yourself included, on ${managed.length > 1 ? "a project's" : "the"} Documents page.`}</EmptyState>;
+    }}>{emptyRoute.name === "projects" ? "Go to Projects" : "Go to Documents"}</a>
+  }>{managed.length > 0 ? `You assign texts to people, yourself included, on ${managed.length > 1 ? "a project's" : "the"} Documents page.` : memberHint(members)}</EmptyState>;
   const allRoute = tabRoute("all");
   const tabEmpty = <EmptyState title={activeTab.empty} action={<a className="btn btn-secondary" href={routeHref(allRoute)} onKeyDown={onSpaceActivate} onClick={event => {
     if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;

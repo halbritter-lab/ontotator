@@ -51,8 +51,8 @@ const EMPTY_TITLES: Readonly<Record<Exclude<TabId, "all">, string>> = {
 };
 
 /** Empty tab (spec "States and edge cases"); an empty All tab is an empty project. */
-export function TabEmptyState({ tab, projectKey, onNavigate }: { tab: TabId; projectKey: string; onNavigate: (route: Route) => void }): JSX.Element {
-  if (tab === "all") return <EmptyState title="No texts yet">Upload texts to start.</EmptyState>;
+export function TabEmptyState({ tab, projectKey, onNavigate, onUpload }: { tab: TabId; projectKey: string; onNavigate: (route: Route) => void; onUpload?: (variant: "primary") => JSX.Element }): JSX.Element {
+  if (tab === "all") return <EmptyState title="No texts yet" action={onUpload?.("primary")}>Upload texts to start.</EmptyState>;
   return <EmptyState title={EMPTY_TITLES[tab]}
     action={<RouteLink route={{ name: "projectDocuments", key: projectKey }} className="btn btn-secondary" onNavigate={onNavigate}>Show all texts</RouteLink>} />;
 }
