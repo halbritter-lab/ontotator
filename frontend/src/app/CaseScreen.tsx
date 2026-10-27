@@ -2382,7 +2382,12 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       : selectedAnnotation && !pendingAnnotation && editableLayerIds.includes(selectedAnnotation.annotation.layer_id)
         ? (selectedAnnotation.annotation.evidence_refs ?? []).map((r) => r.evidence_id)
         : [];
-  const resizableLabels = pendingEvidenceId ? { [pendingEvidenceId]: PENDING_HANDLE_LABELS } : undefined;
+  // The handles of a finding's mentions name the finding ("Start of Seizure mention").
+  const resizableLabels = pendingEvidenceId ? { [pendingEvidenceId]: PENDING_HANDLE_LABELS }
+    : selectedAnnotation ? Object.fromEntries(resizableEvidenceIds.map(id => {
+      const name = findingNameOf(selectedAnnotation);
+      return [id, { start: `Start of ${name} mention`, end: `End of ${name} mention` }];
+    })) : undefined;
 
   // --- Modifiers: attach mode (E-a), framing, link a text span -------------------------------------
   const ownerOfEvidence = (evidenceId: string) => visibleAnnotations.find(snapshot =>
@@ -3783,7 +3788,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 {Object.entries(selectedSource.annotation.axes_values ?? {}).map(([axis, value]) => <p key={axis}>{axis}: {value ?? "Not specified"}</p>)}
                 <h3>Mentions ({selectedSource.evidence.length})</h3>
                 {selectedSource.evidence.map(ev => <p key={ev.version}>
-                  {ev.mention.segments.map(seg => Array.from(view.document.text).slice(seg.start, seg.end).join("")).join(" … ")}
+                  {quoteOf(view.document.text, ev.mention.segments)}
                 </p>)}
               </div>
             </section>

@@ -233,7 +233,8 @@ export class SpanEditor {
       // A modifier segment is never resizable.
       if (!this.resizableIds.has(mention.mention_id) || mention.kind === "modifier") continue;
       normaliseSpans(mention.spans || []).forEach((span, index) => {
-        const base = { mentionId: mention.mention_id, index };
+        // A short segment gets thin handles, so they do not cover its few characters.
+        const base = { mentionId: mention.mention_id, index, text: this.text.slice(span.start, span.end), short: span.end - span.start <= 3 };
         starts.set(span.start, [...(starts.get(span.start) || []), { ...base, edge: "start", offset: span.start }]);
         ends.set(span.end, [...(ends.get(span.end) || []), { ...base, edge: "end", offset: span.end }]);
       });
@@ -264,7 +265,10 @@ export class SpanEditor {
     // The tooltip names what the label names: "End of marked text" -> "the end of the marked text".
     const subject = /^(?:Start|End) of (.+)$/.exec(label || "")?.[1];
     node.title = `Drag to move the ${handle.edge} of ${subject ? `the ${subject}` : "this mention"} (or focus it and use the arrow keys)`;
+    // The segment the handle edges, for screen readers ("“No fever”").
+    node.setAttribute("aria-valuetext", `“${handle.text}”`);
     if (handle.crowded) node.classList.add("resize-handle--crowded");
+    if (handle.short) node.classList.add("resize-handle--short");
     return node;
   }
 

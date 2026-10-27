@@ -699,6 +699,18 @@
   height: 0.8em;
 }
 
+/* A segment of up to three characters: a thin bar and a narrow grab area that leave its text readable. */
+
+.resize-handle--short::before {
+  left: -1px;
+  width: 2px;
+}
+
+.resize-handle--short::after {
+  left: -3px;
+  width: 6px;
+}
+
 .resize-handle:focus-visible {
   outline: none;
 }
@@ -728,6 +740,10 @@
   }
   .app-title {
     flex-wrap: wrap;
+  }
+  /* The title wraps here, so the name has room on its line (X-15). */
+  .identity-name {
+    max-width: 24ch;
   }
   .app-layout {
     --sidebar-width: 220px;
@@ -1432,6 +1448,12 @@
   display: flex;
   align-items: center;
   gap: var(--space-1);
+}
+
+/* The actions always take their own row, so the text starts at the same height in every task,
+   whichever buttons (guidelines badge, next open item) a task shows. */
+.case-toolbar > .app-actions {
+  flex-basis: 100%;
 }
 
 .app-actions .status-badge {

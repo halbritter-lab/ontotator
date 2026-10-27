@@ -12,7 +12,7 @@ import { findingAxes } from "./axisLabels";
 import { AxisValue } from "../ui/AxisValue";
 import type { AxisDefinition } from "./AnnotationPanel";
 import { ModifiersSection } from "./ModifiersSection";
-import type { TermInfo } from "./modifiers";
+import { quoteOf, type TermInfo } from "./modifiers";
 
 export type ReviewDecision = components["schemas"]["ReviewDecision"];
 export type ReviewDecisionOutcome = "confirmed" | "rejected" | "changed" | "uncertain";
@@ -239,7 +239,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
         {!!source?.annotation.modifiers?.length && <ModifiersSection readOnly finding={termLabel ?? target.term_id ?? target.annotation_id}
           modifiers={source.annotation.modifiers} text={documentText} termInfo={termInfo ?? (() => undefined)} />}
         {evidence.length ? evidence.map((ev, index) => {
-          const quote = ev.mention.segments.map(seg => Array.from(documentText).slice(seg.start, seg.end).join("")).join(" … ");
+          const quote = quoteOf(documentText, ev.mention.segments);
           // Several mentions or spans: each quote visits its own mark in the text.
           const visitable = onShowMention && (evidence.length > 1 || ev.mention.segments.length > 1);
           return <p className="review-actions__quote" key={`${ev.mention.evidence_id}:${ev.version}`}>

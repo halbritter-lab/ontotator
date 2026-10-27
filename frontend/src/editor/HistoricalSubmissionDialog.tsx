@@ -8,6 +8,7 @@ import { reanchorKey } from "../variants/ReanchorPanel";
 import { CarriedChecksReadOnly } from "./carried/CarriedChecksReadOnly";
 import { evidenceOf, type HistoricalSubmissionView } from "./historicalSubmission";
 import { TermName } from "./TermName";
+import { quoteOf } from "./modifiers";
 
 const refKey = (r: { annotation_id: string; version: string }) => JSON.stringify([r.annotation_id, r.version]);
 
@@ -70,7 +71,7 @@ export function HistoricalSubmissionDialog({ view, documentText, currentDocument
                   : "No axes"}
               </p>
               {typeof text === "string" && evidenceOf(view, snap).map(ev => <p key={`${ev.mention.evidence_id}:${ev.version}`}>
-                {ev.mention.segments.map(seg => Array.from(text).slice(seg.start, seg.end).join("")).join(" … ")}
+                {quoteOf(text, ev.mention.segments)}
               </p>)}
               <p className="annotation-note-history"><strong>Annotation note: </strong><span>{snap.annotation.note || "No annotation note."}</span></p>
             </div>

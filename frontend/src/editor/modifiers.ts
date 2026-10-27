@@ -96,10 +96,14 @@ export function attachCandidates(text: string, mark: Seg, findings: readonly Att
     .map(({ index: _index, ...candidate }) => candidate);
 }
 
-/** The text of segments, several joined by " … ". */
+/** The text of segments, several joined by " … "; parts apart only by whitespace keep that whitespace ("No fever"). */
 export function quoteOf(text: string, segments: readonly Seg[] = []): string {
   const chars = Array.from(text);
-  return segments.map((s) => chars.slice(s.start, s.end).join("")).join(" … ");
+  const part = (start: number, end: number) => chars.slice(Math.max(0, start), Math.min(chars.length, end)).join("");
+  return segments.map((s, index) => {
+    const gap = index === 0 ? "" : part(segments[index - 1].end, s.start);
+    return (gap.trim() ? " … " : gap) + part(s.start, s.end);
+  }).join("");
 }
 
 /** "Severe · “schwere”", "Recurrent", "Frequent · “oft” · Cohort term". */

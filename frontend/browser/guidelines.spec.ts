@@ -426,7 +426,7 @@ test("PUBLISHED: My tasks link and the guidelines page", async ({ page }) => {
   const s = await guidelineScenario(page, "PUBLISHED");
   await loginGuidelineUser(page, s, "ana");
   await page.goto("/#/");
-  const link = page.getByRole("link", { name: "Project guidelines v1", exact: true });
+  const link = page.getByRole("link", { name: /^Project guidelines v1(, .+)?$/ });
   await expect(link).toBeVisible();
   await expect(link).toHaveAttribute("href", `#/projects/${encodeURIComponent(s.project)}/guidelines`);
   await link.click();

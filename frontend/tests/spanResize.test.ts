@@ -51,6 +51,9 @@ describe("span editor resize handles", () => {
     expect(start.getAttribute("role")).toBe("separator");
     expect(start.getAttribute("aria-label")).toBe("Start of mention");
     expect(end.getAttribute("aria-label")).toBe("End of mention");
+    // The value names the segment the handle edges (#48 N-24).
+    expect(start.getAttribute("aria-valuetext")).toBe("“muscular”");
+    expect(start.classList.contains("resize-handle--short")).toBe(false);
     expect(start.tabIndex).toBe(0);
   });
 
