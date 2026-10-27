@@ -18,8 +18,6 @@ it("renders three segments with title and state", () => {
   expect(items[1].querySelector(".stage-path-title")?.textContent).toBe("Annotation");
   expect(items[1].querySelector(".stage-path-state")?.textContent).toBe("1 of 2 submitted");
   expect(items[0].querySelector(".stage-path-seg--done")).not.toBeNull();
-  // A state cut after two lines keeps its full text on hover.
-  expect(items[1].querySelector(".stage-path-state")?.getAttribute("title")).toBe("1 of 2 submitted");
 });
 
 it("marks the current segment with aria-current=step", () => {

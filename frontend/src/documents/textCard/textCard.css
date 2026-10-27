@@ -79,8 +79,6 @@
 @media (max-width: 699px) {
   .text-card.ui-dialog { position: fixed; inset: 0; width: 100%; max-width: none; max-height: 100dvh; border-radius: 0; }
   .text-card .ui-dialog-heading { padding-inline-end: calc(2 * 32px + var(--space-2)); }
-  .text-card .stage-path-title,
-  .text-card .stage-path-state { white-space: normal; word-break: normal; }
 }
 
 /* Activity: newest first, a stage tag per line, the filter chip, the stage's admin actions below */
