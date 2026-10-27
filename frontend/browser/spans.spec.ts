@@ -105,4 +105,16 @@ test.describe("Evidence Spans Proof & Verification", () => {
     expect(await allMarked.nth(0).textContent()).toBe("Hypotonia");
     expect(await allMarked.nth(1).textContent()).toBe("seizure");
   });
+
+  test("keyboard: Shift + ArrowRight in the text starts a selection, releasing Shift makes it a pending mark (#5)", async ({ page }) => {
+    await importFixture(page, "curator-spans-keys");
+    await openCase(page, { task: "annotate" });
+    await page.locator(".text-container").focus();
+    await page.keyboard.down("Shift");
+    for (let index = 0; index < 9; index += 1) await page.keyboard.press("ArrowRight");
+    expect(await page.evaluate(() => window.getSelection()?.toString())).toBe("Hypotonia");
+    await page.keyboard.up("Shift");
+    await expect(page.locator(".text-container .run--marked")).toHaveText(["Hypotonia"]);
+    await expect(page.locator(".inspector-pane").getByRole("button", { name: "Discard", exact: true })).toBeVisible();
+  });
 });

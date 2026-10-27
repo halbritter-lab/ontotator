@@ -288,22 +288,23 @@ test("repairing a historical spanless proposal collects a clinical reason withou
   const opened = await (await openedResponse).json();
   const source = opened.view.available_inputs.find((item: { annotation: { evidence_refs: unknown[] } }) => !item.annotation.evidence_refs?.length);
   const sourceBefore = JSON.stringify(source);
+  // N-4: proposals follow the text; the spanless source is listed last.
   const proposals = page.locator('.sidebar [data-list-key^="target:"]');
-  await proposals.first().click(); await page.keyboard.press("2"); await expect(proposals.first()).toContainText("Rejected");
+  await proposals.nth(1).click(); await page.keyboard.press("2"); await expect(proposals.nth(1)).toContainText("Rejected");
   // Rejecting moved on to the open proposal; go back to the rejected one.
-  await expect(proposals.nth(1)).toHaveClass(/\bselected\b/); await proposals.first().click();
+  await expect(proposals.first()).toHaveClass(/\bselected\b/); await proposals.nth(1).click();
   await page.getByRole("button", { name: /Edit & Replace/ }).click();
   const dialog = page.getByRole("dialog", { name: "Reason for no text span" });
   await dialog.getByLabel("Reason for no text span").fill("Specialist summary supports this finding");
   await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
-  await expect(proposals.first()).toContainText("Rejected");
+  await expect(proposals.nth(1)).toContainText("Rejected");
   await page.getByRole("button", { name: /Edit & Replace/ }).click();
   await expect(dialog.getByLabel("Reason for no text span")).toHaveValue("Specialist summary supports this finding");
   const copied = page.waitForResponse(r => r.url().endsWith("/commands") && r.request().postDataJSON().payload.command === "create_annotation");
   await dialog.getByRole("button", { name: "Create editable copy" }).click();
   await page.getByRole("button", { name: "Reset decision and edit copy" }).click();
   await expect(page.getByLabel("Reason for no text span")).toHaveValue("Specialist summary supports this finding");
-  await expect(proposals.first()).toContainText("open");
+  await expect(proposals.nth(1)).toContainText("open");
   const draft = await (await copied).json();
   const replacement = draft.annotations[0];
   const premature = await authenticatedRequest(page, `/api/v1/workspaces/${encodeURIComponent(opened.workspace_id)}/decisions`, "POST", {
@@ -312,9 +313,9 @@ test("repairing a historical spanless proposal collects a clinical reason withou
   });
   expect(premature.status()).toBe(422); expect((await premature.json()).code).toBe("MISSING_EVIDENCE");
   await page.getByRole("button", { name: "Add mention", exact: true }).click(); await selectText(page, 0, 9);
-  await expect(proposals.first()).toContainText("Replaced");
+  await expect(proposals.nth(1)).toContainText("Replaced");
   await expect(page.getByLabel("Note", { exact: true })).toHaveValue("Specialist summary supports this finding");
-  await proposals.nth(1).click(); await page.keyboard.press("2"); await expect(proposals.nth(1)).toContainText("Rejected");
+  await proposals.first().click(); await page.keyboard.press("2"); await expect(proposals.first()).toContainText("Rejected");
   const submitted = page.waitForResponse(r => r.url().endsWith("/submit") && r.request().method() === "POST" && r.ok());
   await submitCase(page);
   const submission = await (await submitted).json();
@@ -336,33 +337,34 @@ test("a project prohibiting spanless findings repairs a source only after suppor
   const opened = await (await openedResponse).json();
   const source = opened.view.available_inputs.find((item: { annotation: { evidence_refs: unknown[] } }) => !item.annotation.evidence_refs?.length);
   const sourceBefore = JSON.stringify(source);
+  // N-4: proposals follow the text; the spanless source is listed last.
   const proposals = page.locator('.sidebar [data-list-key^="target:"]');
-  await proposals.first().click(); await page.keyboard.press("2"); await expect(proposals.first()).toContainText("Rejected");
+  await proposals.nth(1).click(); await page.keyboard.press("2"); await expect(proposals.nth(1)).toContainText("Rejected");
   // Rejecting moved on to the open proposal; go back to the rejected one.
-  await expect(proposals.nth(1)).toHaveClass(/\bselected\b/); await proposals.first().click();
+  await expect(proposals.first()).toHaveClass(/\bselected\b/); await proposals.nth(1).click();
   const creates: unknown[] = [];
   page.on("request", request => { if (request.url().endsWith("/commands") && request.postDataJSON()?.payload?.command === "create_annotation") creates.push(request.postDataJSON()); });
   await page.getByRole("button", { name: /Edit & Replace/ }).click();
   await expect(page.getByText("Select supporting text to create an editable copy of this proposal. The current decision is kept until you confirm the replacement.")).toBeVisible();
   expect(creates).toHaveLength(0);
   await page.getByRole("button", { name: "Cancel (Esc)" }).click();
-  await expect(proposals.first()).toContainText("Rejected"); expect(creates).toHaveLength(0);
+  await expect(proposals.nth(1)).toContainText("Rejected"); expect(creates).toHaveLength(0);
   await page.getByRole("button", { name: /Edit & Replace/ }).click();
-  await proposals.nth(1).click();
+  await proposals.first().click();
   await expect(page.getByRole("button", { name: "Cancel (Esc)" })).toHaveCount(0);
-  await proposals.first().click(); await page.getByRole("button", { name: /Edit & Replace/ }).click();
+  await proposals.nth(1).click(); await page.getByRole("button", { name: /Edit & Replace/ }).click();
   const copied = page.waitForResponse(r => r.url().endsWith("/commands") && r.request().postDataJSON().payload.command === "create_annotation");
   await selectText(page, 0, 9);
   await expect(page.getByRole("button", { name: "Reset decision and edit copy" })).toBeVisible();
-  await page.keyboard.press("Escape"); await expect(proposals.first()).toContainText("Rejected"); expect(creates).toHaveLength(0);
+  await page.keyboard.press("Escape"); await expect(proposals.nth(1)).toContainText("Rejected"); expect(creates).toHaveLength(0);
   await selectText(page, 0, 9); await page.getByRole("button", { name: "Reset decision and edit copy" }).click();
   const copyResponse = await copied; expect(copyResponse.ok()).toBeTruthy();
   const copy = (await copyResponse.json()).annotations[0];
   expect(creates).toHaveLength(1);
   expect((creates[0] as { payload: { segments: unknown[] } }).payload.segments).toEqual([{ start: 0, end: 9 }]);
   expect(copy.annotation.note).toBeUndefined(); expect(copy.annotation.evidence_refs).toHaveLength(1);
-  await expect(proposals.first()).toContainText("Replaced");
-  await proposals.nth(1).click(); await page.keyboard.press("2"); await expect(proposals.nth(1)).toContainText("Rejected");
+  await expect(proposals.nth(1)).toContainText("Replaced");
+  await proposals.first().click(); await page.keyboard.press("2"); await expect(proposals.first()).toContainText("Rejected");
   await submitCase(page);
   const reopened = await authenticatedRequest(page, `/api/v1/assignments/${opened.assignment.id}/open`, "POST");
   expect(JSON.stringify((await reopened.json()).view.available_inputs.find((item: { version: string }) => item.version === source.version))).toBe(sourceBefore);
