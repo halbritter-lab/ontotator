@@ -53,6 +53,8 @@
 }
 
 @media (forced-colors: active) {
-  .progress-meter span { background: CanvasText; }
+  /* The track keeps its edge and the fill a system colour that survives forced colours (#25). */
+  .progress-meter { border: 1px solid CanvasText; }
+  .progress-meter span { forced-color-adjust: none; background: Highlight; }
   .progress-skeleton-bar { background: GrayText; }
 }
