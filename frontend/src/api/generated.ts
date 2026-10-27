@@ -3448,6 +3448,8 @@ export interface components {
             read_only: boolean;
             /** Read Only Reason */
             read_only_reason?: ("submitted" | "input_withdrawn" | "not_assigned") | null;
+            /** Accepted At */
+            accepted_at?: string | null;
             /** Case Id */
             case_id: string;
             /** Language */

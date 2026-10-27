@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 
 from fastapi import APIRouter, Request
@@ -102,6 +103,8 @@ class ConsolidationView(_View):
     read_only_reason: Literal["submitted", "input_withdrawn", "not_assigned"] | None = (
         None
     )
+    # When the lead accepted a final result for this text (submitted rounds).
+    accepted_at: datetime | None = None
     case_id: str
     language: str
     document_version: int

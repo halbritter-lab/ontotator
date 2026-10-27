@@ -55,6 +55,7 @@ from ontotator.domain.serialization import decode_snapshot
 from ontotator.domain.work_rounds import WorkRoundView
 from ontotator.domain.workspace import Submission
 from ontotator.ontology.modifiers import NO_TERM_ROLES, TermRoles, modifier_layers
+from ontotator.storage.final_tables import FinalSelectionRow
 from ontotator.storage.repository import Repository, _key_str
 from ontotator.storage.tables import (
     DocumentRow,
@@ -350,6 +351,18 @@ class ConsolidationReader:
                     DocumentRow.document_id == item.document_id,
                 )
             ).one()
+            # The Finalization step of the path: accepted once the lead chose a
+            # final result for this text.
+            accepted_at = (
+                conn.execute(
+                    select(FinalSelectionRow.selected_at).where(
+                        FinalSelectionRow.project_id == pid,
+                        FinalSelectionRow.document_id == item.document_id,
+                    )
+                ).scalar()
+                if submitted
+                else None
+            )
             people = _people(conn, access, order, found.authors)
             from_proposal = _from_tool_proposal(conn, pid, members)
             added = _added(members, content, defaults, found.roles)
@@ -364,6 +377,7 @@ class ConsolidationReader:
             "workspace_id": None,  # filled by the route for the editable assignee
             "read_only": reason is not None,
             "read_only_reason": reason,
+            "accepted_at": accepted_at,
             "case_id": document.case_id,
             "language": document.language,
             "document_version": document.version,
