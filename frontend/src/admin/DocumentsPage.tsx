@@ -313,7 +313,8 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       me: assignMe,
       consolidatorRule: page?.adjudicator_not_annotator ?? false,
       onClose: () => setAssignDialog(null),
-      onAssigned: message => { setAssignDialog(null); showToast({ message }); announce(message); refreshAll(); },
+      // The toast region announces the message; a second live region would say it twice (#47 A-25).
+      onAssigned: message => { setAssignDialog(null); showToast({ message }); refreshAll(); },
     });
   };
 
@@ -373,7 +374,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   const { toast, show: showToast, dismiss: dismissToast } = useToast();
   const planSaves = usePlanSaves({ projectKey, onAnnounce: announce, onChanged: () => reloadAfterAction(), showToast });
   // A finished import closes the upload dialog: the imported cases arrive in the reloaded rows with their plan.
-  const importDone = (message: string) => { setUploadOpen(false); showToast({ message }); announce(message); refreshAll(); };
+  const importDone = (message: string) => { setUploadOpen(false); showToast({ message }); refreshAll(); };
   // Each new rows page: drop local chip flags the server has caught up with; restore focus after a save.
   useEffect(() => {
     if (page) planSaves.refreshed(page.groups);
@@ -426,7 +427,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   const allSelected = allFiltered !== null && allFiltered.identity === filterIdentity && allFiltered.keys.length > 0 && allFiltered.keys.every(key => selection.keys.has(key));
   const selectAllLabel = filteredTotal > MAX_SELECTION
     ? `Select the first ${MAX_SELECTION} of ${filteredTotal} filtered cases`
-    : filteredTotal === 1 ? "Select the filtered case" : `Select all ${filteredTotal} filtered cases`;
+    : filteredTotal === 1 ? "Select the only filtered case" : `Select all ${filteredTotal} filtered cases`;
   const filters = useMemo(() => selectionFilters(request), [requestIdentity]); // eslint-disable-line react-hooks/exhaustive-deps
   const toggleAll = async () => {
     if (selectingAll) return;
@@ -478,7 +479,6 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
             onAction: () => selectCases(rest),
           } : {}),
         });
-        announce(message);
         refreshAll();
       },
     });
@@ -506,7 +506,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   // A refresh that drops the row (it left the filter or page) keeps the dialog on the row's last state.
   const textChangeRow = textChangeOnPage
     ?? (textChange && lastTextChangeRow.current && rowKeyOf(lastTextChangeRow.current) === textChange.rowKey ? lastTextChangeRow.current : null);
-  const textChangeDone = (message: string) => { setTextChange(null); showToast({ message }); announce(message); reloadAfterAction(); };
+  const textChangeDone = (message: string) => { setTextChange(null); showToast({ message }); reloadAfterAction(); };
   const textChangeDialog = !textChange || !textChangeRow ? null : textChange.kind === "handle" ? (() => {
     const step = (textChangeRow.steps ?? []).find(entry => entry.action === "handle_text_change" && entry.assignment_id === textChange.step.assignment_id) ?? textChange.step;
     // The paused task's report: the step's, the row's pause cause or a report on that assignment.
@@ -627,7 +627,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       // The lead consolidating themselves gets "Open consolidation" (and the role sentence) instead of the launcher's link.
       const toast = consolidationStartedToast(rowName(row), round.assignment_id, started);
       showToast({ message: toast.message, ...(toast.route ? { actionLabel: toast.actionLabel, onAction: () => onNavigate(toast.route!) } : {}) });
-      announce(toast.message); refreshAll();
+      refreshAll();
     }} /> : null;
   /** Admin actions per stage: the row panel's Activity and the cards' stage popover (A3). */
   const stageActionProps: Omit<StageActionsProps, "row" | "stage"> = {
@@ -795,6 +795,8 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       {rows.error != null && <InlineMessage tone="error">Could not refresh. <Button size="sm" onClick={rows.retry}>Retry</Button></InlineMessage>}
       <div className="documents-selection-tools">
         {page.groups.length > 0 && <Checkbox id="documents-select-all" className="checkbox-target" label={selectAllLabel} checked={allSelected}
+          // Some texts selected, not all filtered ones: mixed (announced "mixed", #47 A-20).
+          ref={element => { if (element) element.indeterminate = !allSelected && selection.keys.size > 0; }}
           aria-busy={selectingAll || undefined} onChange={() => { void toggleAll(); }} />}
         <Button size="sm" onClick={() => setIdsDialogOpen(true)}>Select by case IDs…</Button>
       </div>
