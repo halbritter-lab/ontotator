@@ -3130,6 +3130,19 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
       return { view, target };
     };
 
+    it("a proposal's modifier is marked in the text, listed in its row and framed while it is selected (#29)", async () => {
+      const { view } = reviewView([{ term_id: "HP:0012828", segments: [pos("schwere")] }], false);
+      const { container } = await setup(view, severeHits, false);
+      const row = container.querySelector<HTMLElement>('[data-list-key^="target:"]')!;
+      await waitFor(() => expect(row.querySelector(".mod-lines")?.textContent).toBe("Modifiers: Severe"));
+      const modRun = () => runsOf(container, "target:prop-seizure:prop-v:mod:prop-seizure:HP:0012828")[0];
+      expect(modRun().classList.contains("run--modifier")).toBe(true);
+      expect(modRun().title).toBe("Severe, modifier of Seizure");
+      expect(modRun().classList.contains("run--framed")).toBe(false);
+      fireEvent.click(row);
+      await waitFor(() => expect(modRun().classList.contains("run--framed")).toBe(true));
+    });
+
     it("adding a modifier to the copy records the deferred changed decision", async () => {
       const { view, target } = reviewView([], true);
       const decide = vi.spyOn(api, "recordDecision").mockImplementation(async () => structuredClone(view.draft));

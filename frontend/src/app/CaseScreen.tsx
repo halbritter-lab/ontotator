@@ -55,7 +55,7 @@ import {
 } from "../editor/autosave";
 import { newEvidenceId } from "../editor/ids";
 import { submissionHistoryLabel } from "../editor/submissionHistoryLabel";
-import { FindingRow } from "../editor/FindingRow";
+import { FindingRow, ModifierLine } from "../editor/FindingRow";
 import { SubmitCaseDialog } from "../editor/SubmitCaseDialog";
 import { SubmitControl } from "../editor/SubmitControl";
 import { collectOpenItems, nextOpenItem, type OpenItem } from "../editor/openItems";
@@ -2592,10 +2592,25 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     return [...(mentions ? (snapshot.annotation.evidence_refs ?? []).map(ref => ref.evidence_id) : []),
       ...(snapshot.annotation.modifiers ?? []).map(modifier => modifierDisplayId(annotationId, modifier.term_id))];
   };
+  /** A proposal's modifier segments, drawn like a finding's; framed while the proposal is selected. */
+  const proposalModifierMarks = reviewTargets.flatMap(t => {
+    const snap = targetSnapshotOf(t);
+    const outcome = decisionsMap[refKey(t)]?.outcome;
+    // Like targetMentions: a replaced or rejected proposal leaves the text.
+    if (!snap?.annotation.modifiers?.length || !layerSelection.visibleLayerIds.includes(snap.annotation.layer_id)
+      || outcome === "changed" || outcome === "rejected") return [];
+    return modifierMarks([{ annotationId: t.annotation_id, term: findingNameOf(snap), termId: snap.annotation.term_id,
+      colorIndex: markColourSlot({ termId: snap.annotation.term_id, layerId: snap.annotation.layer_id, kind: "target" }),
+      modifiers: snap.annotation.modifiers }], view.document.text, infoFor(snap.annotation.layer_id))
+      // The "target:" prefix makes a click select the proposal (handlePickMention).
+      .map(mark => ({ ...mark, evidence_id: `target:${t.annotation_id}:${t.version}:${mark.evidence_id}` }));
+  });
   const attachFramed = attachFocusId ?? attachNearest?.annotationId ?? null;
   const framedIds = attachActive ? (attachFramed ? framingIds(attachFramed, true) : [])
     : hoverFrameId ? framingIds(hoverFrameId, true)
-      : selectedAnnotationId ? framingIds(selectedAnnotationId, false) : [];
+      : selectedAnnotationId ? framingIds(selectedAnnotationId, false)
+        : selectedTarget ? proposalModifierMarks.map(mark => mark.evidence_id)
+          .filter(id => id.startsWith(`target:${selectedTarget.annotation_id}:${selectedTarget.version}:`)) : [];
   const handleHoverMentions = (ids: string[]) => {
     const owner = ids.map(id => parseModifierDisplayId(id)?.annotationId ?? ownerOfEvidence(id)?.annotation.annotation_id).find(Boolean);
     setHoverFrameId(owner ?? null);
@@ -3255,6 +3270,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         colorIndex: markColourSlot({ termId: ann.term_id, layerId: ann.layer_id, kind: "own" }), modifiers: ann.modifiers }],
       view.document.text, infoFor(ann.layer_id));
     }),
+    ...proposalModifierMarks,
     ...targetMentions.map(mention => {
       const proposal = attachActive && attachModifier ? targetOfEvidence(mention.evidence_id) : undefined;
       const entry = proposal && attachTargets.find(target => target.proposal === proposal);
@@ -3555,6 +3571,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                             </>
                           )}
                         </div>
+                        {t.layer_id && <ModifierLine modifiers={targetSnapshotOf(t)?.annotation.modifiers} layerId={t.layer_id} termLabel={termLabel} />}
                         {entryAuthorOf(t.annotation_id) && <div className="doc-meta">{entryAuthorOf(t.annotation_id)}</div>}
                         {attachHere && <div className="mod-attach-here" aria-hidden="true">Attach {attachModifier!.termLabel} here, as your copy <Kbd>Enter</Kbd></div>}
                       </li>
