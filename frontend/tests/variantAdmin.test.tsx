@@ -305,6 +305,8 @@ it("admin edits nullable qualification without adding it to new-user creation", 
   expect((field as HTMLInputElement).maxLength).toBe(200);
   fireEvent.change(field, { target: { value: "" } }); fireEvent.click(form.getByRole("button", { name: "Save changes" }));
   await waitFor(() => expect(api.adminUpdateUser).toHaveBeenCalledWith("reader", { qualification: null }));
+  await waitFor(() => expect(screen.queryByRole("form", { name: "Edit user" })).toBeNull());
+  fireEvent.click(screen.getByRole("button", { name: /^New user/ }));
   expect(within(screen.getByRole("form", { name: "New user" })).queryByLabelText("Qualification")).toBeNull();
 });
 

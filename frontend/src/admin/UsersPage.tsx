@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import { api, ApiError, type AdminUser, type AdminUserPatch, type AuditEvent, type CodeResponse, type CreateUserRequest, type CurrentUser, type ProjectSummary } from "../api/client";
-import { Button, Checkbox, ConfirmDialog, DataTable, Dialog, EmptyState, InlineMessage, TextInput, Toolbar, type Column } from "../ui";
+import { Button, Checkbox, ConfirmDialog, DataTable, Dialog, EmptyState, IconMore, InlineMessage, MenuButton, TextInput, Toolbar, type Column, type MenuItem } from "../ui";
 import { CodeOnceDialog } from "./CodeOnceDialog";
 import { ErrorNotice } from "./ErrorNotice";
 import { LanguagesField } from "./LanguagesField";
-import { formatDateTime, labelFor, roleLabels } from "../app/labels";
+import { formatDateTime, formatShortDateTime, labelFor, roleLabels } from "../app/labels";
 
 export interface UsersPageProps {
   currentUser: CurrentUser;
@@ -67,6 +67,7 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
   const [history, setHistory] = useState<History | null>(null);
   const [erase, setErase] = useState<{ username: string; typed: string; error?: unknown } | null>(null);
   const [reissue, setReissue] = useState<AdminUser | null>(null);
+  const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
   const lifetime = useRef(0);
   const generation = useRef(0);
@@ -108,7 +109,7 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
   const closeCode = () => { pendingCode.current = null; setCode(null); };
   const replaceUser = (user: AdminUser) => setUsers(rows => rows && (rows.some(row => row.username === user.username) ? rows.map(row => row.username === user.username ? user : row) : [...rows, user]));
   const blocked = busy || loading || users === null || code !== null || confirmation !== null || erase !== null || reissue !== null;
-  const pageBlocked = blocked || editing !== null;
+  const pageBlocked = blocked || editing !== null || creating;
 
   const createUser = async () => {
     if (writing.current || blocked) return;
@@ -117,7 +118,7 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
     try {
       const response = await api.adminCreateUser({ ...create, email: create.email?.trim() || null });
       if (epoch !== lifetime.current) return;
-      replaceUser(response.user); setCreate(emptyCreate()); showCode(response, "setup", response.user.username);
+      replaceUser(response.user); setCreate(emptyCreate()); setCreating(false); showCode(response, "setup", response.user.username);
     } catch (error: unknown) {
       if (epoch === lifetime.current) setCreateError(error);
     } finally {
@@ -194,6 +195,18 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
       if (epoch === lifetime.current) { writing.current = false; setBusy(false); }
     }
   };
+  // The menu cannot be disabled; its actions ignore a choice while the page is blocked.
+  const moreActions = (user: AdminUser): MenuItem[] => {
+    const act = (run: () => void) => () => { if (!pageBlocked) run(); };
+    const items: MenuItem[] = [];
+    if (user.active) items.push({ id: "code", label: codeLabel(user), onSelect: act(() => { setActionError(undefined); setReissue(user); }) });
+    if (user.username !== currentUser.username) items.push(user.active
+      ? { id: "deactivate", label: "Deactivate…", onSelect: act(() => setConfirmation({ username: user.username, change: { active: false }, kind: "deactivate", fromEdit: false })) }
+      : { id: "activate", label: "Activate", description: "Needed before a new code can be issued.", onSelect: act(() => { void update(user.username, { active: true }, false); }) });
+    items.push({ id: "history", label: "History", onSelect: act(() => { void showHistory(user.username); }) });
+    if (!user.active) items.push({ id: "anonymise", label: "Anonymise…", onSelect: act(() => setErase({ username: user.username, typed: "" })) });
+    return items;
+  };
   const roleFor = (key: string) => create.projects?.find(item => item.project_key === key)?.roles ?? [];
   const toggleNewRole = (key: string, role: string, on: boolean) => {
     const roles = on ? [...roleFor(key), role] : roleFor(key).filter(item => item !== role);
@@ -211,50 +224,46 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
     { id: "admin", header: "Admin", cell: user => user.is_system_admin ? "Yes" : "No" },
     { id: "active", header: "Active", cell: user => user.anonymised ? "Anonymised" : user.active ? "Yes" : "No" },
     { id: "setup", header: "Setup", cell: user => user.setup_pending ? "Pending" : user.anonymised ? "–" : "Done", sortValue: user => user.setup_pending ? 0 : 1 },
-    { id: "last-login", header: "Last login", cell: user => user.last_login_at ? <time dateTime={user.last_login_at}>{formatDateTime(user.last_login_at)}</time> : "Never", sortValue: user => user.last_login_at ?? "" },
+    { id: "last-login", header: "Last login", cell: user => user.last_login_at ? <time dateTime={user.last_login_at} title={formatDateTime(user.last_login_at)}>{formatShortDateTime(user.last_login_at)}</time> : "Never", sortValue: user => user.last_login_at ?? "" },
     { id: "actions", header: "Actions", cell: user => user.anonymised ? <Toolbar label={`Actions for ${user.username}`}>
       <Button size="sm" disabled={pageBlocked} aria-label={`History of ${user.username}`} onClick={() => { void showHistory(user.username); }}>History</Button>
     </Toolbar> : <Toolbar label={`Actions for ${user.username}`}>
-      <Button size="sm" disabled={pageBlocked || !user.active} title={user.active ? undefined : "Activate the account before issuing a new code."} aria-label={`${codeLabel(user)} for ${user.username}`} onClick={() => { setActionError(undefined); setReissue(user); }}>{codeLabel(user)}</Button>
       <Button size="sm" disabled={pageBlocked} aria-label={`Edit ${user.username}`} onClick={() => { setEditError(undefined); setEditing({ baseline: user, draft: { ...user, languages: [...user.languages] } }); }}>Edit</Button>
-      <Button size="sm" variant={user.active ? "danger" : "secondary"} disabled={pageBlocked || user.username === currentUser.username} title={user.username === currentUser.username ? "You cannot deactivate yourself." : undefined} aria-label={`${user.active ? "Deactivate" : "Activate"} ${user.username}`} onClick={() => {
-        if (user.active) setConfirmation({ username: user.username, change: { active: false }, kind: "deactivate", fromEdit: false });
-        else void update(user.username, { active: true }, false);
-      }}>{user.active ? "Deactivate" : "Activate"}</Button>
-      <Button size="sm" disabled={pageBlocked} aria-label={`History of ${user.username}`} onClick={() => { void showHistory(user.username); }}>History</Button>
-      {!user.active && <Button size="sm" variant="danger" disabled={pageBlocked} aria-label={`Anonymise ${user.username}`} onClick={() => setErase({ username: user.username, typed: "" })}>Anonymise…</Button>}
+      <MenuButton label={`More actions for ${user.username}`} buttonLabel="More…" icon={<IconMore />} items={moreActions(user)} />
     </Toolbar> },
   ];
   const query = filter.trim().toLowerCase();
   if (loadError instanceof ApiError && loadError.status === 403) return <section className="detail-section"><h1>Users</h1><InlineMessage tone="info">{accessMessage}</InlineMessage></section>;
-  return <div className="density-compact">
+  return <div className="users-page density-compact">
     <section className="detail-section">
       <h1>Users</h1>
-      <TextInput id="users-filter" label="Filter users" value={filter} onChange={event => setFilter(event.target.value)} />
-      <Toolbar label="Users actions"><Button disabled={busy || loading || !!code || !!confirmation || !!editing} onClick={() => { void refresh(lifetime.current); }}>Refresh users</Button></Toolbar>
+      <Toolbar label="Users actions">
+        <TextInput id="users-filter" label="Filter users" value={filter} onChange={event => setFilter(event.target.value)} />
+        <Button variant="primary" disabled={pageBlocked} onClick={() => { setCreateError(undefined); setCreating(true); }}>New user…</Button>
+        <Button disabled={busy || loading || !!code || !!confirmation || !!editing || creating} onClick={() => { void refresh(lifetime.current); }}>Refresh users</Button>
+      </Toolbar>
       {loading && <InlineMessage tone="info">Loading users…</InlineMessage>}
       {loadError !== undefined && <ErrorNotice error={loadError} />}
       {actionError !== undefined && <ErrorNotice error={actionError} />}
-      {users !== null && <DataTable label="Users" columns={columns} rows={users.filter(user => user.username.toLowerCase().includes(query) || user.display_name.toLowerCase().includes(query))} rowKey={user => user.username} empty={<EmptyState title={query ? "No matching users." : "No users to display."} />} />}
+      {users !== null && <DataTable label="Users" className="data-table--pin-end" columns={columns} rows={users.filter(user => user.username.toLowerCase().includes(query) || user.display_name.toLowerCase().includes(query))} rowKey={user => user.username} empty={<EmptyState title={query ? "No matching users." : "No users to display."} />} />}
     </section>
-    <section className="detail-section">
-      <h2>New user</h2>
+    {creating && <Dialog open title="New user" onClose={busy ? undefined : () => setCreating(false)}>
       <form aria-label="New user" onSubmit={event => { event.preventDefault(); void createUser(); }}>
-        <TextInput id="new-username" label="Username" required minLength={3} maxLength={64} value={create.username} disabled={pageBlocked} onChange={event => { setCreateError(undefined); setCreate({ ...create, username: event.target.value }); }} />
-        <TextInput id="new-name" label="Display name" required maxLength={120} value={create.display_name} disabled={pageBlocked} onChange={event => { setCreateError(undefined); setCreate({ ...create, display_name: event.target.value }); }} />
-        <TextInput id="new-email" label="E-mail" type="email" value={create.email ?? ""} disabled={pageBlocked} onChange={event => setCreate({ ...create, email: event.target.value })} />
-        <LanguagesField id="new-languages" label="Languages" value={create.languages ?? []} disabled={pageBlocked} onChange={languages => setCreate({ ...create, languages })} />
-        <Checkbox id="new-admin" label="System administrator" checked={create.system_admin} disabled={pageBlocked} onChange={event => setCreate({ ...create, system_admin: event.target.checked })} />
-        {projects.length > 0 && <fieldset className="new-user-projects" disabled={pageBlocked}><legend>Add to projects (optional)</legend>
+        <TextInput id="new-username" label="Username" required minLength={3} maxLength={64} value={create.username} disabled={blocked} onChange={event => { setCreateError(undefined); setCreate({ ...create, username: event.target.value }); }} />
+        <TextInput id="new-name" label="Display name" required maxLength={120} value={create.display_name} disabled={blocked} onChange={event => { setCreateError(undefined); setCreate({ ...create, display_name: event.target.value }); }} />
+        <TextInput id="new-email" label="E-mail" type="email" value={create.email ?? ""} disabled={blocked} onChange={event => setCreate({ ...create, email: event.target.value })} />
+        <LanguagesField id="new-languages" label="Languages" value={create.languages ?? []} disabled={blocked} onChange={languages => setCreate({ ...create, languages })} />
+        <Checkbox id="new-admin" label="System administrator" checked={create.system_admin} disabled={blocked} onChange={event => setCreate({ ...create, system_admin: event.target.checked })} />
+        {projects.length > 0 && <fieldset className="new-user-projects" disabled={blocked}><legend>Add to projects (optional)</legend>
           {projects.map(project => <div key={project.project_key} role="group" aria-label={project.name}>
             <span>{project.name}</span>
             {projectRoles.map(role => <Checkbox key={role} id={`new-${project.project_key}-${role}`} label={roleLabels[role]} aria-label={`${project.name}: ${roleLabels[role]}`} checked={roleFor(project.project_key).includes(role)} onChange={event => toggleNewRole(project.project_key, role, event.target.checked)} />)}
           </div>)}
         </fieldset>}
         {createError !== undefined && <ErrorNotice error={createError} />}
-        <Button type="submit" variant="primary" disabled={pageBlocked}>Create user</Button>
+        <Toolbar label="New user actions"><Button disabled={busy} onClick={() => setCreating(false)}>Cancel</Button><Button type="submit" variant="primary" disabled={blocked}>Create user</Button></Toolbar>
       </form>
-    </section>
+    </Dialog>}
     {editing && <Dialog open title={`Edit ${editing.baseline.username}`} onClose={busy || confirmation ? undefined : () => setEditing(null)}>
       <form aria-label="Edit user" onSubmit={event => { event.preventDefault(); saveEdit(); }}>
         <TextInput id="edit-name" label="Display name" required maxLength={120} value={editing.draft.display_name} disabled={busy || !!confirmation} onChange={event => edit({ display_name: event.target.value })} />
