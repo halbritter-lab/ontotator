@@ -221,23 +221,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
 
       <div className="detail-section review-actions__proposal" aria-label="Proposal details" tabIndex={-1}>
         <strong className="review-actions__term"><TermName termId={target.term_id ?? target.annotation_id} label={termLabel} /></strong>
-        <dl className="axis-list">
-          {(() => {
-            const rawAxes = target.axes_values ?? (target.axes && "values" in target.axes ? (target.axes as any).values : target.axes) ?? {};
-            const entries = findingAxes(rawAxes, axesConfig);
-            if (entries.length === 0) {
-              return <dd className="axis-list__empty">No axes defined</dd>;
-            }
-            return entries.map(({ id, label, value }) => (
-              <React.Fragment key={id}>
-                <dt>{label}</dt>
-                <dd><AxisValue value={value as string | null | undefined} /> {target.axes_defaulted?.includes(id) && <span className="badge">Defaulted</span>}</dd>
-              </React.Fragment>
-            ));
-          })()}
-        </dl>
-        {!!source?.annotation.modifiers?.length && <ModifiersSection readOnly finding={termLabel ?? target.term_id ?? target.annotation_id}
-          modifiers={source.annotation.modifiers} text={documentText} termInfo={termInfo ?? (() => undefined)} />}
+        {/* #20: the evidence and its source right under the term, before the values and modifiers. */}
         {evidence.length ? evidence.map((ev, index) => {
           const quote = quoteOf(documentText, ev.mention.segments);
           // Several mentions or spans: each quote visits its own mark in the text.
@@ -262,6 +246,23 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
             <>Source: <strong>unknown</strong></>
           )}
         </p>
+        <dl className="axis-list">
+          {(() => {
+            const rawAxes = target.axes_values ?? (target.axes && "values" in target.axes ? (target.axes as any).values : target.axes) ?? {};
+            const entries = findingAxes(rawAxes, axesConfig);
+            if (entries.length === 0) {
+              return <dd className="axis-list__empty">No axes defined</dd>;
+            }
+            return entries.map(({ id, label, value }) => (
+              <React.Fragment key={id}>
+                <dt>{label}</dt>
+                <dd><AxisValue value={value as string | null | undefined} /> {target.axes_defaulted?.includes(id) && <span className="axis-default-tag">Defaulted</span>}</dd>
+              </React.Fragment>
+            ));
+          })()}
+        </dl>
+        {!!source?.annotation.modifiers?.length && <ModifiersSection readOnly finding={termLabel ?? target.term_id ?? target.annotation_id}
+          modifiers={source.annotation.modifiers} text={documentText} termInfo={termInfo ?? (() => undefined)} />}
       </div>
       {!!target.axes_defaulted?.length && requireChosenAxes && <p className="field-hint" role="alert">This project requires every axis to be chosen. Defaulted values on this immutable proposal still block submission. Ask the project lead to resolve this rule conflict, or make a clinically justified replacement decision.</p>}
 

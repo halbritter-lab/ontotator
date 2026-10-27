@@ -1142,6 +1142,8 @@
 
 .inspector-pane {
   border-left: 1px solid var(--border);
+  /* One inset on both sides; the right one also keeps content off an overlay scrollbar (#20, #21). */
+  --cell-pad-x: var(--space-4);
 }
 
 .sidebar-header,
@@ -1729,12 +1731,7 @@
   padding: var(--space-4) var(--cell-pad-x);
 }
 
-/* The review fills the inspector pane so "Source and rules" sits at its very bottom (R-17). */
-.inspector-pane > .review-actions {
-  flex: 1 0 auto;
-  display: flex;
-  flex-direction: column;
-}
+/* "Source and rules" follows the decision directly, no gap above it (#20; was pinned to the bottom, R-17). */
 
 .review-actions__head {
   display: flex;
@@ -1794,6 +1791,24 @@
   margin: 0;
 }
 
+/* A defaulted proposal value: a quiet tag beside its value pill, the dashed "default" look of the Values block. */
+.axis-list .axis-default-tag {
+  display: inline-block;
+  padding: 0 var(--space-1);
+  border: 1px dashed var(--warning);
+  border-radius: var(--radius-sm);
+  color: var(--warning);
+  font-size: var(--size-xs);
+  line-height: var(--leading-xs);
+  vertical-align: middle;
+}
+
+/* The proposal's modifiers sit flush with its values, not in a box of their own. */
+.review-actions__proposal .mod-section {
+  padding: var(--space-1) 0 0;
+  border-bottom: 0;
+}
+
 .axis-list__empty {
   grid-column: 1 / -1;
   color: var(--text-muted);
@@ -1802,9 +1817,7 @@
 /* The quoted evidence is clinical text: it keeps the reading serif. */
 
 .review-actions__quote {
-  margin: 0 0 var(--space-2);
-  padding-left: var(--space-3);
-  border-left: 1px solid var(--border-strong);
+  margin: 0 0 var(--space-1);
   font-family: var(--font-serif);
   font-size: var(--size-base);
   line-height: var(--leading-base);
@@ -1821,7 +1834,7 @@
 .review-actions__quote-button:focus-visible { outline: var(--focus-width) solid var(--focus-ring); outline-offset: 2px; }
 
 .review-actions__origin {
-  margin: var(--space-3) 0;
+  margin: 0 0 var(--space-3);
   color: var(--text-muted);
   font-size: var(--size-xs);
   line-height: var(--leading-xs);
@@ -1934,7 +1947,6 @@
 }
 
 .review-actions__more {
-  margin-top: auto;
   font-size: var(--size-xs);
   line-height: var(--leading-xs);
 }

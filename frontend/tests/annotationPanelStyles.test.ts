@@ -49,8 +49,7 @@ it("the text card's grid for technical details never reaches the editor's Source
   expect(css).not.toMatch(/(^|[\s,}])\.technical-details\b/m);
 });
 
-it("pins Source and rules to the bottom of the inspector pane (R-17)", () => {
+it("lets Source and rules follow the decision without a gap (#20)", () => {
   const css = readFileSync(new URL("../src/styles/screens/editor.css", import.meta.url), "utf8");
-  expect(css).toMatch(/\.inspector-pane > \.review-actions \{[^}]*flex: 1 0 auto;[^}]*flex-direction: column;/);
-  expect(css).toMatch(/\.review-actions__more \{\s*margin-top: auto;/);
+  expect(css).not.toMatch(/\.review-actions__more \{[^}]*margin-top: auto;/);
 });
