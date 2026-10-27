@@ -1930,6 +1930,20 @@
   margin: var(--space-2) 0 0;
 }
 
+.review-actions__rules {
+  margin: var(--space-2) 0 0;
+  padding-inline-start: var(--space-5);
+}
+
+/* A 64-character version hash breaks anywhere instead of widening the pane. */
+.review-actions__version {
+  overflow-wrap: anywhere;
+}
+
+.replaced-by-label {
+  white-space: nowrap;
+}
+
 .review-actions .field-hint {
   margin-top: var(--space-1);
   color: var(--text-muted);

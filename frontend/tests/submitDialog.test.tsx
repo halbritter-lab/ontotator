@@ -225,6 +225,23 @@ describe("Unconfirmed values section", () => {
   const submitButton = () => screen.getByRole("button", { name: "Submit case" });
   const reasonOf = (button: HTMLElement) => document.getElementById(button.getAttribute("aria-describedby")!)?.textContent;
 
+  it("summarises with real plurals, drops zero parts and names a submission without findings (#48 N-20)", () => {
+    const { rerender } = render(<SubmitCaseDialog {...dialogProps({ reviewMode: true, resultCount: 2, confirmedCount: 1, savedFindingsCount: 1, reviewTargetCount: 1 })} />);
+    expect(screen.getByText("2 annotations will be submitted (1 confirmed proposal, 1 saved finding)")).toBeDefined();
+    expect(screen.getByText("1 of 1 review proposal decided")).toBeDefined();
+    rerender(<SubmitCaseDialog {...dialogProps({ savedFindingsCount: 1 })} />);
+    expect(screen.getByText("1 annotation in this case")).toBeDefined();
+    rerender(<SubmitCaseDialog {...dialogProps({ savedFindingsCount: 0, unconfirmed: [] })} />);
+    expect(screen.getByText("You are submitting no findings for this text.")).toBeDefined();
+  });
+
+  it("shows a blocked reason once, also after a click on Submit case", () => {
+    render(<SubmitCaseDialog {...dialogProps()} />);
+    fireEvent.click(submitButton());
+    expect(document.querySelectorAll("[data-submit-blocked-reason]")).toHaveLength(1);
+    expect(screen.getAllByText(/before submitting\.$/)).toHaveLength(1);
+  });
+
   it("lists one row per finding with term, quote, values and its actions", () => {
     render(<SubmitCaseDialog {...dialogProps()} />);
     expect(screen.getByRole("heading", { level: 3, name: "Unconfirmed values (3 findings)" })).toBeDefined();

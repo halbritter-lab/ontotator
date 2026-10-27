@@ -66,7 +66,7 @@ export function SubmitCaseDialog({
   saving, readOnly, onGoTo, onGoToRow, onConfirm, onCancel,
 }: SubmitCaseDialogProps) {
   const reasonId = useId();
-  const [announcement, setAnnouncement] = useState<{ text: string; count: number } | null>(null);
+  const [announcement, setAnnouncement] = useState<{ count: number } | null>(null);
   useEffect(() => { if (!open) setAnnouncement(null); }, [open]);
   const submitButton = useRef<HTMLButtonElement>(null);
   // No confirmable row left to focus: "Submit case".
@@ -92,7 +92,7 @@ export function SubmitCaseDialog({
   const submit = () => {
     if (blockedReason) {
       // Re-mounting the text makes screen readers read the same sentence again.
-      setAnnouncement(previous => ({ text: blockedReason, count: (previous?.count ?? 0) + 1 }));
+      setAnnouncement(previous => ({ count: (previous?.count ?? 0) + 1 }));
       return;
     }
     onConfirm();
@@ -117,21 +117,27 @@ export function SubmitCaseDialog({
         </Button>
       </>}>
       <ul style={{ margin: "8px 0 12px", paddingLeft: 18, fontSize: "0.9rem" }}>
-        {reviewMode ? (
+        {(reviewMode ? resultCount : savedFindingsCount) === 0 ? (
+          <li>You are submitting no findings for this text.</li>
+        ) : reviewMode ? (
           <li>
-            {resultCount} annotation(s) will be submitted
-            ({confirmedCount} confirmed proposal(s), {unresolvedDecisionCount} unresolved with reviewer flags, {savedFindingsCount} saved findings)
+            {plural(resultCount, "annotation")} will be submitted
+            ({[
+              confirmedCount && plural(confirmedCount, "confirmed proposal"),
+              unresolvedDecisionCount && `${unresolvedDecisionCount} unresolved with reviewer flags`,
+              savedFindingsCount && plural(savedFindingsCount, "saved finding"),
+            ].filter(Boolean).join(", ")})
           </li>
         ) : (
-          <li>{savedFindingsCount} annotation(s) in this case</li>
+          <li>{plural(savedFindingsCount, "annotation")} in this case</li>
         )}
-        {reviewMode && (
+        {reviewMode && reviewTargetCount > 0 && (
           <li>
-            {reviewTargetCount - openReviewTargetCount} of {reviewTargetCount} review proposal(s) decided
+            {reviewTargetCount - openReviewTargetCount} of {plural(reviewTargetCount, "review proposal")} decided
             {openReviewTargetCount > 0 && <strong style={{ color: "var(--danger)" }}> – {openReviewTargetCount} still open</strong>}
           </li>
         )}
-        {pendingReanchorCount > 0 && <li>{unresolvedReanchorCount} finding(s) after text correction still pending</li>}
+        {pendingReanchorCount > 0 && <li>{plural(unresolvedReanchorCount, "finding")} after text correction still pending</li>}
       </ul>
       {items.length > 0 && <InlineMessage tone={blocking ? "error" : "warning"}>
         <p>{summaryLine(items)}</p>
@@ -154,12 +160,12 @@ export function SubmitCaseDialog({
           checked={acknowledged} disabled={saving} onChange={event => setAcknowledged(event.target.checked)} />
       </div>}
       <p className="form-hint" data-submit-checked-text>Submitting confirms you checked the entire text for further findings.</p>
-      {blockedReason && <p id={reasonId} className="form-hint" data-submit-blocked-reason>{blockedReason}</p>}
+      {/* The reason is shown once; a click on the blocked button re-mounts it, so screen readers read it again. */}
+      <div aria-live="assertive" data-submit-announcer>
+        {blockedReason && <p key={announcement?.count ?? 0} id={reasonId} className="form-hint" data-submit-blocked-reason>{blockedReason}</p>}
+      </div>
       <div className="visually-hidden" aria-live="polite" data-submit-status>
         {submitStatus && <span key={submitStatus.count}>{submitStatus.text}</span>}
-      </div>
-      <div className="visually-hidden" aria-live="assertive" data-submit-announcer>
-        {announcement && <span key={announcement.count}>{announcement.text}</span>}
       </div>
     </Dialog>
   );

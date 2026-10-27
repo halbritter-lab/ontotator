@@ -362,8 +362,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
   const lastTargetIdRef = useRef<string | null>(null);
   /** U-2: what the last decision did; shown while the selection it made (`listKey`, null: none) is unchanged.
-   *  `decidedKey`: the proposal just decided, where K goes back to. */
-  const [advanceStatus, setAdvanceStatus] = useState<{ listKey: string | null; text: string; decidedKey: string } | null>(null);
+   *  `decidedKey`: the proposal just decided, where K goes back to; `decidedTerm` names it. */
+  const [advanceStatus, setAdvanceStatus] = useState<{ listKey: string | null; text: string; decidedKey: string; decidedTerm?: string } | null>(null);
   if (selectedTargetId) lastTargetIdRef.current = selectedTargetId;
   // A carried input without a finding on this text (placeholder row); exclusive with the others.
   const [selectedInputId, setSelectedInputId] = useState<string | null>(null);
@@ -872,10 +872,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         const ok = await askConfirm(
           error.state === "conflict" ? "Case was changed elsewhere" : "Changes not saved",
           error.state === "conflict"
-            ? `This case was changed in another window or session. ${pending} unsaved edit(s) in this window will be discarded.`
+            ? `This case was changed in another window or session. ${plural(pending, "unsaved edit")} in this window will be discarded.`
             : error.sessionEnded
-            ? `${SESSION_ENDED_MESSAGE} Leaving now discards ${pending} edit(s).`
-            : `${pending} edit(s) could not be saved because the server is unreachable. Leaving discards them.`,
+            ? `${SESSION_ENDED_MESSAGE} Leaving now discards ${plural(pending, "edit")}.`
+            : `${plural(pending, "edit")} could not be saved because the server is unreachable. Leaving discards them.`,
           "Discard edits and leave",
         );
         if (!ok) return false;
@@ -936,7 +936,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     if (pending > 0) {
       const ok = await askConfirm(
         "Reload case",
-        `Reloading loads the current server version. ${pending} unsaved edit(s) in this window will be discarded.`,
+        `Reloading loads the current server version. ${plural(pending, "unsaved edit")} in this window will be discarded.`,
         "Discard edits and reload",
       );
       if (!ok) return;
@@ -2129,16 +2129,17 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const snapshot = targetSnapshotOf(target);
     const segments = snapshot?.evidence?.[0]?.mention.segments ?? [];
     const quote = segments.length ? ` “${quoteSegments(view.document.text, segments, 40)}”` : "";
+    const decidedTerm = termLabel(target.layer_id, target.term_id ?? target.annotation_id) ?? target.term_id ?? target.annotation_id;
     const done = repeated ? `Already ${{ confirmed: "confirmed", rejected: "rejected", uncertain: "left unresolved" }[outcome]}.`
-      : `${{ confirmed: "Confirmed", rejected: "Rejected", uncertain: "Left unresolved" }[outcome]} ${termLabel(target.layer_id, target.term_id ?? target.annotation_id) ?? target.term_id ?? target.annotation_id}${quote}.`;
+      : `${{ confirmed: "Confirmed", rejected: "Rejected", uncertain: "Left unresolved" }[outcome]} ${decidedTerm}${quote}.`;
     if (next === undefined) {
       handleDeselectAll();
-      setAdvanceStatus({ listKey: null, text: `${done} Every proposal is decided.`, decidedKey: refKey(target) });
+      setAdvanceStatus({ listKey: null, text: `${done} Every proposal is decided.`, decidedKey: refKey(target), decidedTerm });
       document.querySelector<HTMLButtonElement>("[data-finish-submit]")?.focus();
       return;
     }
     selectProposal(reviewTargets[next]);
-    setAdvanceStatus({ listKey: `target:${refKey(reviewTargets[next])}`, text: `${done} Next open proposal: ${next + 1} of ${n}`, decidedKey: refKey(target) });
+    setAdvanceStatus({ listKey: `target:${refKey(reviewTargets[next])}`, text: `${done} Next open proposal: ${next + 1} of ${n}`, decidedKey: refKey(target), decidedTerm });
   };
 
   /** F7: the outcome the proposal already has moves on like a new decision; nothing is saved. */
@@ -3180,6 +3181,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     selectProposal(reviewTargets[index]);
   }, { ...shortcutOptions, enabled: isReviewLike(view.key.mode) && reviewTargets.length > 0,
     group: "Decisions", description: "Next / previous review proposal" });
+  useShortcutHint(["K"], "Right after a decision: back to the proposal just decided", {
+    group: "Decisions", enabled: isReviewLike(view.key.mode) && reviewTargets.length > 0 });
   const reviewShortcutOptions = { ...shortcutOptions, enabled: !readOnly && isReviewLike(view.key.mode) && !!selectedTarget, group: "Decisions" };
   useShortcut("1", () => {
     if (!selectedTarget || selectedTarget.is_obsolete || selectedTarget.is_unknown) return false;
@@ -3521,7 +3524,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                           }}
                           title="Jump to replacement annotation in draft"
                         >
-                          Replaced by: <strong>{displayText}</strong>
+                          <span className="replaced-by-label">Replaced by:</span> <strong>{displayText}</strong>
                         </Button>
                       );
                     })() : null;
@@ -3756,7 +3759,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               M2 M-2: a framed success strip with a check icon, spacing below, so it reads as a status. */}
           <div aria-live="polite" data-advance-status>
             {advanceStatus?.listKey === selectedListKey && <InlineMessage tone="success" live={false}>
-              <p className="advance-strip"><IconCheck />{advanceStatus.text}{advanceStatus.listKey && advanceStatus.decidedKey && <span aria-hidden="true"> <Kbd>K</Kbd> back</span>}</p>
+              <p className="advance-strip"><IconCheck />{advanceStatus.text}{advanceStatus.listKey && advanceStatus.decidedKey && <span aria-hidden="true"> <Kbd>K</Kbd>: back to {advanceStatus.decidedTerm}</span>}</p>
             </InlineMessage>}
           </div>
           {!readOnly && !pendingAnnotation && selectedReanchorItem && selectedAnnotation && <InlineMessage tone="warning">

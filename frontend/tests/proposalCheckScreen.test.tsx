@@ -142,7 +142,7 @@ it("1 and 2 move on to the next open proposal and name what was decided; the las
   // p-2 is decided already: the next open one is p-3.
   await waitFor(() => expect(selected()).toBe(2));
   const status = () => document.querySelector("[data-advance-status]")?.textContent;
-  expect(status()).toMatch(/^Confirmed .+\. Next open proposal: 3 of 3 K back$/);
+  expect(status()).toMatch(/^Confirmed .+\. Next open proposal: 3 of 3 K: back to .+$/);
   // M-2: a framed success strip with a check icon inside the permanent polite live region, no role of its own.
   const strip = document.querySelector("[data-advance-status]")!;
   expect(strip.getAttribute("aria-live")).toBe("polite");
@@ -197,12 +197,12 @@ it("a repeated outcome moves on like a new decision and saves nothing (F7)", asy
   fireEvent.click(rows()[0]);
   fireEvent.keyDown(window, { key: "1" });
   expect(selected()).toBe(2);
-  expect(status()).toBe("Already confirmed. Next open proposal: 3 of 3 K back");
+  expect(status()).toBe("Already confirmed. Next open proposal: 3 of 3 K: back to HP:0001252");
   // The button of the outcome the proposal already has does the same.
   fireEvent.click(rows()[1]);
   fireEvent.click(screen.getByRole("button", { name: /^Reject/ }));
   expect(selected()).toBe(2);
-  expect(status()).toBe("Already rejected. Next open proposal: 3 of 3 K back");
+  expect(status()).toBe("Already rejected. Next open proposal: 3 of 3 K: back to HP:0001250");
   expect(record).not.toHaveBeenCalled();
 });
 

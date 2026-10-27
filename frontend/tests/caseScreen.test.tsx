@@ -1942,6 +1942,7 @@ describe("CaseScreen integration", () => {
     fireEvent.keyDown(window, { key: "j" });
     fireEvent.keyDown(window, { key: "?" });
     expect(screen.getByText("Next / previous review proposal")).toBeDefined();
+    expect(screen.getByText("Right after a decision: back to the proposal just decided")).toBeDefined();
     expect(screen.getByText("Confirm selected proposal")).toBeDefined();
     expect(screen.getByText("Reject selected proposal")).toBeDefined();
     expect(screen.getByText("Adopt proposal as editable copy")).toBeDefined();

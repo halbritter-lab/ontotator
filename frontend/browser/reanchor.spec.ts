@@ -60,7 +60,7 @@ test('re-creates a Unicode finding, dismisses with reason, reloads and submits w
   await panel(page).locator(':scope > details > summary').click();
   await page.getByRole('button',{name:/^Finish & Submit/}).click();
   const blocked=page.getByRole('dialog',{name:'Submit case',exact:true});
-  await expect(blocked).toContainText('2 finding(s) after text correction still pending');
+  await expect(blocked).toContainText('2 findings after text correction still pending');
   await expect(blocked).toContainText('Re-create or dismiss 2 findings after text correction before submitting.');
   await expect(blocked.getByRole('button',{name:'Submit case',exact:true})).toBeDisabled();
   // Each pending item has its own "Go to" action; the first leads to the first pending row.
@@ -283,6 +283,7 @@ for(const width of [1280,1024,600])test(`real pending contexts preserve producer
     await page.locator('.sidebar [data-list-key^="target:"]').filter({hasText:'HP:0001252'}).click();
     // The source sits in the collapsed "Source and rules" details.
     await page.locator('.review-actions__more > summary').click();
+    await page.locator('.review-actions__more').getByText('Technical details',{exact:true}).click();
     const source=page.getByRole('region',{name:'Proposal source',exact:true});
     await expect(source).toContainText(`Carried over from version ${s.metadata.source_version}`);
     const actor=s.metadata.actors.find(value=>value.actor_id===offered.annotation.provenance.actor.actor_id)!;
