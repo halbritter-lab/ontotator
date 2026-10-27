@@ -35,6 +35,16 @@ describe("My tasks component", () => {
     expect(within(rows[1]).queryByText("Answer to your report")).toBeNull();
   });
 
+  it("links the answer badge to the answered report (#18)", async () => {
+    const onNavigate = vi.fn();
+    vi.mocked(api.listMyTasks).mockResolvedValue([{ ...task(3, "open"), report_answered: true, answered_report_id: "r-7" }]);
+    render(<MyTasks projects={[]} onNavigate={onNavigate} />);
+    const link = await screen.findByRole("link", { name: "Answer to your report" });
+    expect(link.getAttribute("href")).toBe(`#/projects/${task(3, "open").project_key}/problem-reports/r-7`);
+    fireEvent.click(link);
+    expect(onNavigate).toHaveBeenCalledWith({ name: "projectProblemReport", key: task(3, "open").project_key, reportId: "r-7" });
+  });
+
   it("lists real task metadata in server order and delegates opening through the callback", async () => {
     const onNavigate = vi.fn();
     render(<MyTasks projects={[]} onNavigate={onNavigate} />);

@@ -329,3 +329,10 @@ export function conflictReasonText(details: unknown): string | null {
   const reason = (details as { reason?: unknown }).reason;
   return typeof reason === "string" ? CONFLICT_REASONS[reason] ?? null : null;
 }
+
+/** The task's banner for an answered report (R-26): "Your problem report was answered: Source fixed. You can continue." */
+export function answerNotice(r: ProblemReportView, held: boolean): string {
+  const last = historyItems(r).at(-1);
+  const outcome = (r.state === "resolved" && r.resolution ? r.resolution : last?.quote ?? last?.sentence ?? reportStateFact(r)).trim().replace(/\.$/, "");
+  return `Your problem report was answered: ${outcome}.${held ? "" : " You can continue."}`;
+}

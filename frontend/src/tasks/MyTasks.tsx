@@ -61,6 +61,8 @@ export function memberHint(members: Pick<ProjectSummary, "name" | "roles">[]): s
   return `You are ${roles ? `${/^[aeiou]/.test(roles) ? "an" : "a"} ${roles}` : "a member"} in ${members[0].name}. Your project lead assigns texts; they appear here.`;
 }
 
+const answerRoute = (task: TaskSummary, reportId: string): Route => ({ name: "projectProblemReport", key: task.project_key, reportId });
+
 /** "Reopened" with an info button whose popover says when and why (#34): the row stays one badge high. */
 function ReopenedInfo({ notice }: { notice: string }): JSX.Element {
   const [open, setOpen] = useState(false);
@@ -185,7 +187,10 @@ export function MyTasks({ project, status, projects, onNavigate, username }: MyT
     { id: "status", header: "Status", cell: task => <>
       <StatusBadge status={task.status}>{assignmentStatusLabels[task.status]}</StatusBadge>
       {reopenNotice(task) && <ReopenedInfo notice={reopenNotice(task)!} />}
-      {task.report_answered && <StatusBadge tone="info">Answer to your report</StatusBadge>}
+      {task.report_answered && (task.answered_report_id ? <a className="task-answer-link" href={routeHref(answerRoute(task, task.answered_report_id))} onClick={event => {
+        if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+        event.preventDefault(); onNavigate(answerRoute(task, task.answered_report_id!));
+      }}><StatusBadge tone="info">Answer to your report</StatusBadge></a> : <StatusBadge tone="info">Answer to your report</StatusBadge>)}
       {task.held && <><StatusBadge tone="warning">Paused</StatusBadge><p>{task.hold_reason ?? "A project problem needs attention."}</p></>}
     </> },
     { id: "assigned", header: "Assigned", cell: task => <AssignedDate at={task.assigned_at} /> },

@@ -39,10 +39,25 @@
   vertical-align: bottom;
 }
 
-@media (max-width: 1279px) {
-  .identity-name {
-    max-width: 6ch;
-  }
+/* Below 16ch the name shrinks only as far as the header row really runs out of room (#18). */
+.app-title .identity-badge {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.25em;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.identity-badge strong {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.25em;
+  min-width: 0;
+}
+
+.identity-name {
+  flex: 0 1 auto;
+  min-width: 4ch;
 }
 
 /* App Main Layout */
@@ -1457,6 +1472,14 @@
   border-left: 1px solid var(--border);
   border-radius: 0;
   padding: 0 0 0 var(--space-3);
+}
+
+/* The title wraps below 1025 px: a wrapped badge starts its line, so no divider there (#25). */
+@media (max-width: 1024px) {
+  .app-title .identity-badge {
+    border-left: 0;
+    padding-left: 0;
+  }
 }
 
 .app-actions {

@@ -21480,6 +21480,17 @@
             "type": "boolean",
             "title": "Report Answered",
             "default": false
+          },
+          "answered_report_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answered Report Id"
           }
         },
         "type": "object",
