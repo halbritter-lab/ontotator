@@ -320,3 +320,64 @@ Same method and noise caveats as above (50 opens/searches, 100 commands,
 The remaining open statements are mostly not authorization: the proposal-check
 open opens the draft twice and re-reads the task profile and search conditions
 four times each. A real P9 run is still required.
+
+## P9 rerun 2026-10-27
+
+**Result: FAIL.** Every p95 target is missed, by a wider margin than on
+2026-10-15. Performance acceptance remains open.
+
+Source `integration/2026-10-27` at `2efbb38e` (includes the 2026-10-26
+profiling commits and the round 2 authorization memo); image
+`sha256:55c4f799150a889ed45624de73b1a26b2992f5a4239f1f8e936a67bd2d4eebc3`,
+built from that worktree. Docker Desktop 4.96.3, Engine 29.9.2, VM 12 CPUs /
+6,213,029,888 bytes; same host as above. Fresh dev Compose project with the
+image swapped in, verified limits: app 2 CPU / 2 GiB / 2 Uvicorn workers /
+256 PIDs / read-only root, PostgreSQL 1 CPU / 1 GiB / 256 PIDs / read-only
+root. HPO 2026-06-23, SHA256 `3b646565…fdbe87` (the release used above).
+`loadtest/seed.py` and the locustfile ran unchanged: 1,000 documents, 30
+annotators plus a synthetic lead, five annotators per text. 30 users, ramp 5/s,
+0.5–1.5 s think time, weights unchanged. Seeding exited 0 in 465 s; the
+one-minute warmup and the five-minute measurement both exited 1 (targets).
+
+The workload is the round 2 one, not the 2026-10-15 one: opens are
+`proposal_check` opens of the user's own assignments and every text has five
+annotators. The same limits, users, weights and duration make it the
+comparable acceptance test, but per-endpoint numbers are not directly
+comparable with the earlier tables.
+
+| Operation | Requests | Failures | p50 ms | p95 ms | p99 ms | Required p95 | Result |
+|---|---:|---:|---:|---:|---:|---:|---|
+| Search | 1,199 | 0 | 1,200 | 2,000 | 2,300 | <150 | FAIL |
+| Open | 558 | 0 | 2,900 | 4,500 | 5,200 | <300 | FAIL |
+| Write | 1,984 | 0 | 1,400 | 2,400 | 2,700 | <150 | FAIL |
+| Dashboard | 259 | 0 | 560 | 900 | 970 | <500 | FAIL |
+| Setup/login | 30 | 0 | 300 | 1,200 | 1,500 | — | — |
+
+4,030 requests, no failures, 13.45 requests/second (20.53 on 2026-10-15).
+`docker stats` every ~17 s during the measurement: app 193–209% CPU (the
+2-CPU limit, saturated throughout), 1.26–1.27 GiB memory; PostgreSQL 60–102%
+of its 1 CPU, 166–196 MiB. No swap or OOM. Evidence (logs, CSV/HTML, samples,
+profiles) is under the ignored `build/p9-20261027/`; the stack and volumes were
+removed afterwards.
+
+Diagnostic profile (not part of the measurement): `py-spy record --gil` on
+both workers for 40 s during a separate 30-user load. Shares of GIL-holding
+samples:
+
+1. SQLAlchemy/psycopg per-statement work: 73% inclusive (statement building,
+   cache keys, coercion, execute/prepare). SQL compilation itself is ~2%, lexical
+   search ~7%, pydantic ~2%. The app is CPU-bound on the number of statements,
+   not on any one query or on search.
+2. Authorization checks: 70% inclusive (`require_workable` 17%,
+   `require_document` 14%, the memo wrapper 20%, `active_for` 7%,
+   `require_annotation_gate`/`load_variants` 6%), spread over every endpoint.
+3. Commands: 33% of GIL time (`run_mutation` 25%, of which the pre-lock
+   checks `_before_workspace_locks` 9%); opens 19% (`open_draft` 7%); searches
+   ~20%, of which `save_search_event` (a write per search) is ~10%.
+4. PostgreSQL at 60–100% of its single CPU is close to becoming the next limit
+   once app CPU drops.
+
+The round 2 per-request reductions (25–40% fewer statements) are not enough:
+under load each request still runs tens of statements, each costing about a
+millisecond of Python CPU, and two saturated CPUs cannot serve 30 users
+within the targets. No resources, workload or thresholds were changed.
