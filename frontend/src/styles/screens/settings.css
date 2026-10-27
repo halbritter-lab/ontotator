@@ -115,7 +115,7 @@
 /* The project name takes the room; narrow role columns with centred boxes; long names cut to one line (full name in the title). */
 .new-user-projects-row { display: grid; grid-template-columns: minmax(0, 1fr) repeat(3, 6rem); align-items: center; gap: var(--space-2); min-height: 32px; }
 .new-user-projects-row > :not(:first-child) { justify-self: center; }
-.new-user-projects-filter { max-width: 20rem; }
+.new-user-projects input.new-user-projects-filter { max-width: 20rem; }
 .new-user-projects-row[aria-hidden="true"] { color: var(--text-muted); font-size: var(--size-sm); }
 .new-user-projects-row > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .new-user-projects-row .form-group { margin: 0; }
