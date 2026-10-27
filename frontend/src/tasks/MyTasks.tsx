@@ -57,7 +57,7 @@ const projectLabel = (name: string, key: string): string => name === key ? name 
 /** Who assigns work to a member without a lead role: "You are an annotator in Empty study. Your project lead assigns texts; they appear here." */
 export function memberHint(members: Pick<ProjectSummary, "name" | "roles">[]): string {
   if (members.length !== 1) return members.length ? "Your project leads assign texts; they appear here." : "When a project lead adds you to a project and assigns texts, they appear here.";
-  const roles = members[0].roles.map(role => roleLabels[role].toLowerCase()).join(" and ");
+  const roles = members[0].roles.map(role => (roleLabels[role] ?? role).toLowerCase()).join(" and ");
   return `You are ${roles ? `${/^[aeiou]/.test(roles) ? "an" : "a"} ${roles}` : "a member"} in ${members[0].name}. Your project lead assigns texts; they appear here.`;
 }
 
