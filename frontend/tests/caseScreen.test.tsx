@@ -2787,7 +2787,7 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
     await startAttach(container);
     fireEvent.click(screen.getByRole("button", { name: "Use Severe as the finding" }));
     await waitFor(() => expect(payloads(apply)).toHaveLength(1));
-    expect(payloads(apply)[0]).toMatchObject({ command: "create_annotation", term_id: "HP:0012828", segments: [pos("schwere")] });
+    expect(payloads(apply)[0]).toMatchObject({ command: "create_annotation", term_id: "HP:0012828", segments: [pos("schwere")], search_event_id: "s-sev" });
     await waitFor(() => expect(container.querySelector(".attach-mention-banner")).toBeNull());
   });
 

@@ -285,4 +285,12 @@ def test_only_identical_modifier_sets_are_taken_over(tmp_path):
         },
     )
     both = group_of(ns, SEVERE)
-    assert (both["state"], both["kinds"]) == ("open", ["modifier_as_finding"])
+    assert (both["state"], both["kinds"]) == ("auto", ["match"])  # A103
+    # The modifier term warns at the consolidation's submit.
+    from test_consolidation_submit_gating import submit
+
+    warned = submit(ns.adj, view(ns)["workspace_id"], revision(ns))
+    assert warned.json()["code"] == "AXIS_CONFIRMATION_WARNING", warned.text
+    assert [w["rule"] for w in warned.json()["details"]["warnings"]] == [
+        "modifier_as_finding"
+    ]

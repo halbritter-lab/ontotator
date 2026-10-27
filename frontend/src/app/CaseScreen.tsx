@@ -324,7 +324,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const [isAttachingMention, setIsAttachingMention] = useState(false);
   // Attach mode of a modifier hit chosen for the pending mark (E-a), or "Turn into modifier…" of a standalone
   // modifier finding `sourceId` (convert, E-c; `mark` = the source's first mention segments, there is no pending mark).
-  const [attachModifier, setAttachModifier] = useState<{ termId: string; termLabel: string; mode: "attach" }
+  const [attachModifier, setAttachModifier] = useState<{ termId: string; termLabel: string; mode: "attach"; searchId?: string }
     | { termId: string; termLabel: string; mode: "convert"; sourceId: string; mark: Seg[] } | null>(null);
   const convertSourceId = attachModifier?.mode === "convert" ? attachModifier.sourceId : null;
   /** The focused target row of the attach mode. */
@@ -2440,9 +2440,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   /** Hidden layers of the targets become visible: their rows render and take keyboard focus. */
   const showLayersOf = (targets: readonly AttachEntry[]) => setLayerSelection(previous => ({ ...previous, visibleLayerIds: [...new Set([
     ...previous.visibleLayerIds, ...targets.flatMap(target => draftAnnotationById.get(target.annotationId)?.annotation.layer_id ?? [])])] }));
-  const startAttach = (candidate: { term_id: string; label?: string | null }) => {
+  const startAttach = (candidate: { term_id: string; label?: string | null }, searchId?: string) => {
     showLayersOf(attachTargets);
-    setAttachModifier({ termId: candidate.term_id, termLabel: candidate.label ?? candidate.term_id, mode: "attach" });
+    setAttachModifier({ termId: candidate.term_id, termLabel: candidate.label ?? candidate.term_id, mode: "attach", searchId });
     setAttachFocusId(null); setAttachReplaceId(null);
     // At <=700 px the list pane holds the targets (the "Create the finding first" state stays in the details pane).
     if (panesLayout && attachTargets.length) setMobilePane("list");
@@ -3809,9 +3809,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               onAttach={annotationId => { void attachTo(annotationId); }}
               onReplace={annotationId => { void attachTo(annotationId, true); }}
               onUseAsFinding={attachModifier.mode === "attach" ? () => {
-                const { termId, termLabel: label } = attachModifier;
+                const { termId, termLabel: label, searchId } = attachModifier;
                 setAttachModifier(null); setAttachFocusId(null); setAttachReplaceId(null);
-                void createPendingAnnotation(termId, undefined, label);
+                void createPendingAnnotation(termId, searchId, label);
               } : undefined}
               onCancel={attachActive || attachModifier.mode === "convert" ? cancelAttachModifier : discardPending} />
           ) : pendingAnnotation ? (
