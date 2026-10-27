@@ -563,14 +563,13 @@ async function routeTenHits(page: Page) {
 }
 
 /** Tops of every hit row and of the search field relative to the list's top (↓ may scroll the active row
- * into view, which moves everything together), and the detail area's height. */
+ * into view, which moves everything together). */
 const listGeometry = (page: Page) => page.evaluate(() => {
   const list = document.querySelector('[role="listbox"][aria-label="Terms"]')!;
   const origin = list.getBoundingClientRect().top;
   return {
     field: document.querySelector("#search-input")!.getBoundingClientRect().top - origin,
     rows: Array.from(list.querySelectorAll('[role="option"]')).map(option => option.getBoundingClientRect().top - origin),
-    detail: document.querySelector("[data-search-detail]")?.getBoundingClientRect().height ?? null,
   };
 });
 
@@ -578,8 +577,6 @@ function expectSameGeometry(after: Awaited<ReturnType<typeof listGeometry>>, bef
   expect(Math.abs(after.field - before.field)).toBeLessThanOrEqual(0.5);
   expect(after.rows).toHaveLength(before.rows.length);
   after.rows.forEach((top, index) => expect(Math.abs(top - before.rows[index]), `row ${index}`).toBeLessThanOrEqual(0.5));
-  expect(after.detail).not.toBeNull();
-  expect(Math.abs(after.detail! - before.detail!)).toBeLessThanOrEqual(0.5);
 }
 
 /** Search ``LIST_QUERY`` in the focused field, press ↓ five times and check that nothing moved. */
@@ -589,12 +586,10 @@ async function expectStableRowsOnArrowDown(page: Page) {
   await search(page).fill(LIST_QUERY);
   await expect(hits(page).getByRole("option")).toHaveCount(10);
   await expect(activeHit(page)).toContainText("Abnormal finding 0");
-  await expect(page.locator("[data-search-detail]")).toContainText(LONG_DEFINITION);
   const before = await listGeometry(page);
   for (let step = 1; step <= 5; step += 1) {
     await page.keyboard.press("ArrowDown");
     await expect(activeHit(page)).toContainText(`Abnormal finding ${step}`);
-    await expect(page.locator("[data-search-detail] .search-detail__label")).toHaveAttribute("data-text", new RegExp(`^Abnormal finding ${step}( |$)`));
     expectSameGeometry(await listGeometry(page), before);
   }
 }
@@ -619,8 +614,8 @@ test("narrow inspector keeps rows constant", async ({ page }) => {
   const inspectorWidth = await page.locator(".inspector-pane").evaluate(element => element.getBoundingClientRect().width);
   expect(inspectorWidth).toBeLessThan(380);
   await expectStableRowsOnArrowDown(page);
-  // Nothing overflows horizontally: the rows, the detail area and the inspector fit their width.
-  const overflow = await page.locator(".inspector-pane").evaluate(pane => [pane, ...pane.querySelectorAll(".search-panel, .search-detail, .candidate-list, [role=option]")]
+  // Nothing overflows horizontally: the rows and the inspector fit their width.
+  const overflow = await page.locator(".inspector-pane").evaluate(pane => [pane, ...pane.querySelectorAll(".search-panel, .candidate-list, [role=option]")]
     .filter(element => element.scrollWidth > element.clientWidth + 1)
     .map(element => element.className || element.tagName));
   expect(overflow).toEqual([]);
@@ -637,11 +632,9 @@ test("axe has no violations with the combobox open and the Values block", async 
   await routeTenHits(page);
   await markAndWaitForHits(page, s, "loop-en", "seizure");
   expect(await violations()).toEqual([]);
-  // An active hit whose definition overflows the detail area: the area scrolls but is aria-hidden.
+  // An active hit with a long, clamped definition.
   await search(page).fill(LIST_QUERY);
-  await expect(page.locator("[data-search-detail]")).toContainText(LONG_DEFINITION);
-  const detailScrolls = await page.locator("[data-search-detail]").evaluate(element => element.scrollHeight > element.clientHeight);
-  expect(detailScrolls).toBe(true);
+  await expect(activeHit(page)).toContainText(LONG_DEFINITION);
   expect(await violations()).toEqual([]);
   await search(page).fill("seizure");
   await expect(activeHit(page)).toContainText("Seizure");
