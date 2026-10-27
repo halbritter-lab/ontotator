@@ -6,8 +6,9 @@ import { intentState, type Intent } from "./labels";
 export const INTENT_ORDER: readonly Intent[] = ["close", "release", "pause", "restart", "reopen"];
 
 /**
- * The "Decide" toolbar: five intents, each with its visible consequence line and, when open, its
- * confirmation directly below it. Unavailable intents stay focusable (`aria-disabled`) and announce why.
+ * The "Decide" toolbar: while the report is open and pauses a task, one primary "Close and resume …" (R-16), then
+ * under "Other decisions" the five intents; each with its visible consequence line and, when open, its confirmation
+ * directly below it. Unavailable intents stay focusable (`aria-disabled`) and announce why.
  */
 export function LeadDecide({ report, open, onOpen, onUnavailable, renderConfirm, focusTrigger }: {
   report: ProblemReportView;
@@ -22,12 +23,14 @@ export function LeadDecide({ report, open, onOpen, onUnavailable, renderConfirm,
   const state = intentState(report);
   const buttons = useRef(new Map<Intent, HTMLButtonElement>());
   useEffect(() => { if (focusTrigger) buttons.current.get(focusTrigger.intent)?.focus(); }, [focusTrigger]);
+  const primary = report.state === "open" && !state.resume_close.unavailable;
   return <Toolbar label="Decide on this report" className="lead-decide">
-    {INTENT_ORDER.map(intent => {
+    {(primary ? ["resume_close" as const, ...INTENT_ORDER] : INTENT_ORDER).map(intent => {
       const { label, consequence, unavailable } = state[intent];
       const lineId = `${id}-${intent}-line`, confirmId = `${id}-${intent}-confirm`;
       return <div key={intent} className="lead-intent">
-        <Button ref={element => { if (element) buttons.current.set(intent, element); else buttons.current.delete(intent); }}
+        {primary && intent === "close" && <p className="lead-decide-other">Other decisions</p>}
+        <Button variant={intent === "resume_close" ? "primary" : undefined} ref={element => { if (element) buttons.current.set(intent, element); else buttons.current.delete(intent); }}
           aria-expanded={open === intent} aria-controls={confirmId} aria-describedby={lineId}
           aria-disabled={unavailable ? true : undefined}
           onClick={() => { if (unavailable) onUnavailable(unavailable); else onOpen(intent); }}>{label}</Button>

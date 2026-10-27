@@ -133,7 +133,13 @@ describe("intents", () => {
   ];
   it.each(cases)("availability: %s", async (_name, over, expected) => {
     await setup({ view: leadReport(over) });
-    const buttons = within(screen.getByRole("group", { name: "Decide on this report" })).getAllByRole("button");
+    const all = within(screen.getByRole("group", { name: "Decide on this report" })).getAllByRole("button");
+    // R-16: an open report that pauses a task leads with one primary "Close and resume …"; the rest are "Other decisions".
+    const primary = !over.state && !over.holds;
+    expect(all[0]!.className.includes("btn-primary")).toBe(primary);
+    if (primary) expect(all[0]!.textContent).toBe("Close and resume Task 4…");
+    expect(screen.queryByText("Other decisions") !== null).toBe(primary);
+    const buttons = primary ? all.slice(1) : all;
     expect(buttons.map(b => b.textContent)).toEqual([over.holds ? "Close report" : "Close report (pauses stay)", "Release pause…", "Pause other tasks…", "Agree empty restart…", "Reopen report…"]);
     const names = ["close", "release", "pause", "restart", "reopen"];
     buttons.forEach((button, index) => {
@@ -187,6 +193,19 @@ describe("confirmations", () => {
     await waitFor(() => expect(document.activeElement?.contains(message)).toBe(true));
     expect(screen.getAllByRole("link", { name: /Back to Documents/ })).toHaveLength(2);
     expect(recordDecision).not.toHaveBeenCalled();
+  });
+
+  it("close and resume releases the pause, then closes with the same outcome text (R-16)", async () => {
+    const { act } = await setup();
+    act.mockResolvedValueOnce(leadReport({ revision: 2, holds: [hold({ active: false, release_action: "resume", released_by_label: "lead-0002" })] }))
+      .mockResolvedValueOnce(leadReport({ state: "resolved", revision: 3, resolution: "Text is fine", holds: [hold({ active: false, release_action: "resume", released_by_label: "lead-0002" })] }));
+    fireEvent.click(intent("Close and resume Task 4…"));
+    const box = within(confirmBox("Close and resume Task 4"));
+    fireEvent.change(box.getByRole("textbox", { name: /Outcome for ann-0004/ }), { target: { value: "Text is fine" } });
+    fireEvent.click(box.getByRole("button", { name: "Close and resume" }));
+    expect(await screen.findByText(/^Report closed\. Released the pause on .*Task 4.*\. The final result did not change\.$/)).toBeTruthy();
+    expect(act).toHaveBeenNthCalledWith(1, "r1", expect.objectContaining({ action: "resume", reason: "Text is fine", expected_revision: 1, assignment_ids: [4] }));
+    expect(act).toHaveBeenNthCalledWith(2, "r1", expect.objectContaining({ action: "resolve", reason: "Text is fine", expected_revision: 2, assignment_ids: [] }));
   });
 
   it("release preselects a single pause, counts the selection and requires one", async () => {

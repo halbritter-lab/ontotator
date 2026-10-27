@@ -210,7 +210,7 @@ export function toolbarEntry(reports: ProblemReportView[] | null, held: boolean)
   return { badge: null, paused: false, accessibleSuffix: "for this task" };
 }
 
-export type Intent = "close" | "release" | "pause" | "restart" | "reopen";
+export type Intent = "resume_close" | "close" | "release" | "pause" | "restart" | "reopen";
 
 function stateReason(r: ProblemReportView): string | null {
   if (r.state === "resolved") return "The report is closed.";
@@ -227,6 +227,12 @@ export function intentState(r: ProblemReportView): Record<Intent, { label: strin
   const otherReportPauses = holdsOf(r).some(h => h.assignment_id === r.assignment_id && (h.other_active_holds?.length ?? 0) > 0);
   const stayedState = r.state === "resolved" ? "The report stays closed." : r.state === "withdrawn" ? "The report stays withdrawn." : "The report stays open.";
   return {
+    // R-16: the common outcome, one step and one outcome text.
+    resume_close: {
+      label: `Close and resume ${paused}…`,
+      consequence: `Lets ${paused} continue and records your outcome for ${reporterName(r)}.`,
+      unavailable: blockedByState ?? (active.length ? null : "No task is paused by this report."),
+    },
     close: {
       label: active.length ? "Close report (pauses stay)" : "Close report",
       consequence: `Records your outcome for ${reporterName(r)}. ${active.length ? `${paused} ${stays}.` : "No task is paused by this report."}`,
@@ -274,12 +280,13 @@ export function leadOutcome(intent: Intent, before: ProblemReportView, after: Pr
   const stillState = after.state === "resolved" ? "The report is still closed." : after.state === "withdrawn" ? "The report is still withdrawn." : "The report is still open.";
   switch (intent) {
     case "close": {
-      if (!afterActive.length) return "Report closed. No task was paused by it. The final result did not change.";
+      if (!afterActive.length) return "Report closed. No task is paused by it any more. The final result did not change.";
       const tasks = joinList(afterActive.map(h => `Task ${h.assignment_id}`));
       return afterActive.length === 1
         ? `Report closed. ${tasks} is still paused by this report; release it when work can continue.`
         : `Report closed. ${tasks} are still paused by this report; release them when work can continue.`;
     }
+    case "resume_close":
     case "release": {
       const ids = released ?? activeHolds(before).filter(h => !afterActive.some(a => a.hold_id === h.hold_id)).map(h => h.assignment_id);
       const tasks = ids.map(id => holdsOf(after).find(h => h.assignment_id === id) ?? holdsOf(before).find(h => h.assignment_id === id) ?? { assignment_id: id, owner_label: "" });
@@ -288,6 +295,7 @@ export function leadOutcome(intent: Intent, before: ProblemReportView, after: Pr
         .filter(id => holdsOf(after).some(h => h.assignment_id === id && (h.other_active_holds?.length ?? 0) > 0))
         .map(id => ` Task ${id} is still paused by another report.`)
         .join("");
+      if (intent === "resume_close") return `Report closed. Released ${plural(ids.length, "the pause", "the pauses")} on ${refs}. The final result did not change.${elsewhere}`;
       return `Released ${plural(ids.length, "the pause", "the pauses")} on ${refs}. ${stillState}${elsewhere}`;
     }
     case "pause": {

@@ -104,7 +104,7 @@ async function axeViolations(page: Page, include: string): Promise<string[]> {
   return results.violations.flatMap(v => v.nodes.map(n => `${v.id} ${n.target.join(" ")}: ${n.failureSummary ?? ""}`));
 }
 
-test("keyboard only: Tab reaches the five intents in order; Enter, Space, Escape and Cancel open and close them; focus returns to the trigger", async ({ page }) => {
+test("keyboard only: Tab reaches the intents in order; Enter, Space, Escape and Cancel open and close them; focus returns to the trigger", async ({ page }) => {
   const { s } = await leadOnReport(page);
   const task = s.tasks.reporter;
 
@@ -215,7 +215,7 @@ test("lead page at 320 CSS px: no horizontal scroll; Decide buttons stacked full
       };
     });
   });
-  expect(layout.map(item => item.label)).toEqual(["Close report (pauses stay)", "Release pause…", "Pause other tasks…", "Agree empty restart…", "Reopen report…"]);
+  expect(layout.map(item => item.label)).toEqual([`Close and resume Task ${s.tasks.reporter}…`, "Close report (pauses stay)", "Release pause…", "Pause other tasks…", "Agree empty restart…", "Reopen report…"]);
   for (const [index, item] of layout.entries()) {
     expect(item.right, item.label).toBeLessThanOrEqual(320);
     expect(item.height, item.label).toBeGreaterThanOrEqual(24);

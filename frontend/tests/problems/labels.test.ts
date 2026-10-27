@@ -103,7 +103,7 @@ describe("problem report labels", () => {
     const before = report({ viewer_is_lead: true });
     const after = report({ viewer_is_lead: true, state: "resolved" });
     expect(leadOutcome("close", before, after)).toBe("Report closed. Task 4 is still paused by this report; release it when work can continue.");
-    expect(leadOutcome("close", before, report({ state: "resolved", holds: [hold({ active: false })] }))).toBe("Report closed. No task was paused by it. The final result did not change.");
+    expect(leadOutcome("close", before, report({ state: "resolved", holds: [hold({ active: false })] }))).toBe("Report closed. No task is paused by it any more. The final result did not change.");
     expect(leadOutcome("reopen", after, before)).toBe("Report reopened. No task was paused again.");
     const released = report({ viewer_is_lead: true, holds: [hold({ active: false, release_action: "resume" })] });
     expect(leadOutcome("release", before, released, [4])).toBe("Released the pause on Task 4 (ann-0004). The report is still open.");
