@@ -314,8 +314,9 @@ class AnnotationModeView(_View):
 
 
 class ConsolidationProgressView(_View):
-    """Open and total groups of the row's active consolidation round."""
+    """The row's active consolidation round with its open and total groups."""
 
+    round_id: str
     open: int
     total: int
 

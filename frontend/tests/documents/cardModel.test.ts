@@ -77,7 +77,7 @@ describe("Finalization", () => {
   });
   it("consolidating shows 2 of 3 groups open", () => {
     const stages = { annotation: cell("consolidating", "running"), final: cell("after_annotation", "waiting") };
-    expect(finalizationState(cardRow(stages, { consolidation_progress: { open: 2, total: 3 } }), now)).toEqual({ state: "consolidating (2 of 3 groups open)", tone: "now" });
+    expect(finalizationState(cardRow(stages, { consolidation_progress: { round_id: "r1", open: 2, total: 3 } }), now)).toEqual({ state: "consolidating (2 of 3 groups open)", tone: "now" });
     expect(finalizationState(cardRow(stages), now)).toEqual({ state: "consolidating", tone: "now" });
   });
   it("confirm reads ready to accept", () => {

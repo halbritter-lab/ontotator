@@ -1021,7 +1021,11 @@ def fill_consolidation_progress(
             open_count, total = consolidation_progress(
                 conn, pid, round_id, _draft_decisions(conn, pid, round_id)
             )
-            row["consolidation_progress"] = {"open": open_count, "total": total}
+            row["consolidation_progress"] = {
+                "round_id": round_id,
+                "open": open_count,
+                "total": total,
+            }
 
 
 def _user_ids(conn: Connection, pseudonyms: Iterable[str]) -> dict[str, int]:

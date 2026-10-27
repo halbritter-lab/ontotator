@@ -105,12 +105,13 @@ def test_consolidation_progress_counts_open_groups(tmp_path):
     cons = build_round(tmp_path)
     progress = rows(cons.env)[("c1", "en")]["consolidation_progress"]
     assert progress is not None
+    assert progress["round_id"] == cons.round.round_id
     assert progress["total"] >= 1
     assert 1 <= progress["open"] <= progress["total"]
     partial = group(cons, "partial")
     ok(mutate(cons, "resolve", {"input_ids": inputs(partial), "action": "keep"}))
     after = rows(cons.env)[("c1", "en")]["consolidation_progress"]
-    assert after == {"open": progress["open"] - 1, "total": progress["total"]}
+    assert after == {**progress, "open": progress["open"] - 1}
     # Rows without an active consolidation round carry none.
     assert all(
         row["consolidation_progress"] is None
