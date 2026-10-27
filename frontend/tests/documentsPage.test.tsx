@@ -267,6 +267,8 @@ describe("exact filters from Progress links", () => {
     expect(lastAssign()).toMatchObject({ sort: "import", filters: expected });
     expect(Object.keys((lastAssign() as { filters?: object }).filters ?? {}).sort()).toEqual(Object.keys(expected).sort());
     act(() => { lastAssign().onClose(); });
+    // Two of three selected: the header checkbox is mixed (#47 A-20).
+    expect((screen.getByRole("checkbox", { name: "Select all 3 filtered cases" }) as HTMLInputElement).indeterminate).toBe(true);
     fireEvent.click(screen.getByRole("checkbox", { name: "Select all 3 filtered cases" }));
     await waitFor(() => expect(api.documentRowKeys).toHaveBeenCalledWith("p", { filters: expected, sort: "import" }));
   });
@@ -319,6 +321,8 @@ describe("exact filters from Progress links", () => {
     fireEvent.click(within(selectionRegion()).getByRole("button", { name: "Assign…" }));
     expect(lastAssign()).toMatchObject({ sort: "activity", filters: expected });
     act(() => { lastAssign().onClose(); });
+    // Two of three selected: the header checkbox is mixed (#47 A-20).
+    expect((screen.getByRole("checkbox", { name: "Select all 3 filtered cases" }) as HTMLInputElement).indeterminate).toBe(true);
     fireEvent.click(screen.getByRole("checkbox", { name: "Select all 3 filtered cases" }));
     await waitFor(() => expect(api.documentRowKeys).toHaveBeenCalledWith("p", { filters: expected, sort: "-activity" }));
   });
@@ -1284,7 +1288,7 @@ describe("plan chips on the page", () => {
     expect(await screen.findByRole("dialog", { name: "Upload texts" })).toBeTruthy();
   });
 
-  it("closes the upload dialog after an import, announces the result and reloads the rows", async () => {
+  it("closes the upload dialog after an import, announces the result once (the toast) and reloads the rows", async () => {
     vi.mocked(api.getProjectSettings).mockResolvedValue({ languages: ["en"], annotate_accepted_translations_only: false } as never);
     mockRows(scenarioS1().page);
     renderPage();
@@ -1295,7 +1299,8 @@ describe("plan chips on the page", () => {
     const calls = vi.mocked(api.listDocumentRows).mock.calls.length;
     fireEvent.click(await screen.findByRole("button", { name: "Finish import stub" }));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Upload texts" })).toBeNull());
-    expect(live().textContent).toBe("Imported 9 documents and 0 proposals.");
+    // One live region says it: the toast's, not the page's as well (#47 A-25).
+    expect(live().textContent).toBe("");
     expect(document.querySelector(".ui-toast-message")?.textContent).toBe("Imported 9 documents and 0 proposals.");
     await waitFor(() => expect(vi.mocked(api.listDocumentRows).mock.calls.length).toBeGreaterThan(calls));
   });
