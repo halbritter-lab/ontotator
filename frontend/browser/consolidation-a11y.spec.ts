@@ -31,7 +31,7 @@ for (const [width, layout] of [[1280, "wide"], [900, "medium"], [360, "narrow"]]
     await page.goto(`/#/tasks/${s.assignment_id}`);
     await expect(page.getByRole("heading", { level: 1, name: /^Consolidate case-0107\W+en v1$/ })).toBeVisible({ timeout: 30_000 });
     await expect(page.locator(`.cons-layout-${layout}`)).toBeVisible();
-    await expect(page.getByRole("region", { name: "Clinical text" })).toHaveCount(layout === "narrow" ? 0 : 1);
+    await expect(page.getByRole("region", { name: "Clinical text", exact: true })).toHaveCount(layout === "narrow" ? 0 : 1);
     if (layout === "narrow") await expect(page.locator(".cons-group-expanded .cons-snippet")).toBeVisible();
     const results = await new AxeBuilder({ page }).include(".cons-screen").analyze();
     expect(results.violations.flatMap(v => v.nodes.map(n => `${v.id} ${n.target.join(" ")}: ${n.failureSummary ?? ""}`))).toEqual([]);
