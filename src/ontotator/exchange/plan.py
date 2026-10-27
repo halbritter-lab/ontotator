@@ -329,7 +329,9 @@ def _report_issues(
                 code=issue.code,
                 unit=label,
                 annotation_id=annotation_id,
-                message=issue.message if where == label else f"{where}: {issue.message}",
+                message=issue.message
+                if where == label
+                else f"{where}: {issue.message}",
                 severity=issue.level,
             )
         )

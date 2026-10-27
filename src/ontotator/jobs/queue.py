@@ -171,7 +171,9 @@ class JobQueue:
                 raise LookupError(f"no handler for job kind '{job.kind}'")
             result = handler(job, self.context)
         except Exception as exc:
-            logger.warning("Job %s (%s) failed: %s", job.id, job.kind, exc, exc_info=True)
+            logger.warning(
+                "Job %s (%s) failed: %s", job.id, job.kind, exc, exc_info=True
+            )
             self._finish(
                 job.id,
                 worker,

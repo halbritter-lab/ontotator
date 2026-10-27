@@ -109,7 +109,12 @@ def save(env, decision="accepted_unchanged", text="Übersetzt", **form):
         expected_revision=workspace.draft.revision,
         text=text,
         # The fixture's version failed a check: accepting it unchanged needs a reason.
-        form={"decision": decision, "clinical_change": False, "rationale": "Checked.", **form},
+        form={
+            "decision": decision,
+            "clinical_change": False,
+            "rationale": "Checked.",
+            **form,
+        },
     )
 
 
