@@ -172,8 +172,10 @@ test('ordinary human carry-forward stays private, then exact consolidation is ex
     // D8: the preflight runs on opening Export.
     await expect(page.getByRole('region', { name: 'Export check' })).toBeVisible();
     const create = page.getByRole('button', { name: 'Create final export', exact: true });
-    await expect(create).toHaveAttribute('aria-disabled', 'true');
-    await page.getByLabel(/^Export the \d+ results? as (they are|it is)/).check();
+    // Only texts without a final result are left out: information, no acknowledgement to tick.
+    await expect(page.getByRole('rowgroup', { name: 'Left out: no final result' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Export check' }).getByRole('checkbox')).toHaveCount(0);
+    await expect(create).not.toHaveAttribute('aria-disabled', 'true');
     const exportResponse = page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith('/exports/final'));
     await create.click(); expect((await exportResponse).ok()).toBeTruthy();
     await expect(page.getByRole('button', { name: 'Download (ZIP)' })).toBeVisible({ timeout: 30_000 });

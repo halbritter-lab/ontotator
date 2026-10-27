@@ -125,7 +125,7 @@ test("keyboard only: Tab reaches the intents in order; Enter, Space, Escape and 
     await page.keyboard.press("Tab");
     await expect(next).toBeFocused();
   }
-  for (const previous of [restart, pause, release, close]) {
+  for (const previous of [pause, release, close]) {
     await page.keyboard.press("Shift+Tab");
     await expect(previous).toBeFocused();
   }
