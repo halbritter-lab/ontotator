@@ -106,8 +106,8 @@ describe("CaseNavigation Component", () => {
       />
     );
 
-    expect(screen.getByText(/doc-beta.*(Completed|Abgeschlossen)/i)).toBeTruthy();
-    expect(screen.getByText(/doc-alpha.*(In Progress|In Bearbeitung)/i)).toBeTruthy();
+    expect(screen.getByText(/doc-beta.*(Submitted)/i)).toBeTruthy();
+    expect(screen.getByText(/doc-alpha.*(In progress)/i)).toBeTruthy();
     expect(screen.getByText(/doc-gamma.*(Open|Nicht begonnen)/i)).toBeTruthy();
   });
 
@@ -178,14 +178,14 @@ describe("CaseNavigation Component", () => {
       { ...sampleDocuments[1], document_id: `${prefix}114:18177466:native` },
     ];
     render(<CaseNavigation documents={documents} currentDocumentId={documents[0].document_id} onNavigate={vi.fn()} />);
-    expect(screen.getByRole("option", { name: /Case 1 of 2/ }).textContent).toBe("Case 1 of 2: …100:12011146:native (Completed)");
-    expect(screen.getByRole("option", { name: /Case 2 of 2/ }).textContent).toBe("Case 2 of 2: …114:18177466:native (In Progress)");
+    expect(screen.getByRole("option", { name: /Case 1 of 2/ }).textContent).toBe("Case 1 of 2: …100:12011146:native (Submitted)");
+    expect(screen.getByRole("option", { name: /Case 2 of 2/ }).textContent).toBe("Case 2 of 2: …114:18177466:native (In progress)");
     expect(screen.getByRole("combobox", { name: /Select case/i }).getAttribute("title")).toBe(documents[0].document_id);
   });
 
   it("keeps IDs whole when they share no long prefix", () => {
     render(<CaseNavigation documents={sampleDocuments} currentDocumentId="doc-beta" onNavigate={vi.fn()} />);
-    expect(screen.getByRole("option", { name: /Case 2 of 3/ }).textContent).toBe("Case 2 of 3: doc-alpha (In Progress)");
+    expect(screen.getByRole("option", { name: /Case 2 of 3/ }).textContent).toBe("Case 2 of 3: doc-alpha (In progress)");
   });
 
   it("names a text by case ID, language and corrected version, never by its document ID (R-11)", () => {
@@ -194,8 +194,8 @@ describe("CaseNavigation Component", () => {
       { ...sampleDocuments[1], document_id: "ready-translation~de~v2", case_id: "synthetic-ready", version: 2, origin: "correction", position: 2 },
     ];
     render(<CaseNavigation documents={documents} currentDocumentId={documents[1].document_id} onNavigate={vi.fn()} />);
-    expect(screen.getByRole("option", { name: /Case 1 of 2/ }).textContent).toBe("Case 1 of 2: synthetic-ready de (Completed)");
-    expect(screen.getByRole("option", { name: /Case 2 of 2/ }).textContent).toBe("Case 2 of 2: synthetic-ready de v2 corrected (In Progress)");
+    expect(screen.getByRole("option", { name: /Case 1 of 2/ }).textContent).toBe("Case 1 of 2: synthetic-ready de (Submitted)");
+    expect(screen.getByRole("option", { name: /Case 2 of 2/ }).textContent).toBe("Case 2 of 2: synthetic-ready de v2 corrected (In progress)");
   });
 
   it("shows Case n of m without the document id", () => {

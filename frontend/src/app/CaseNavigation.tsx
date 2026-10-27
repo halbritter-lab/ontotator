@@ -5,6 +5,7 @@ import React from "react";
 import type { DocumentSummary } from "../api/client";
 import { adjacentCase, canOpenCase, sharedIdPrefix } from "./caseOrder";
 import { taskText } from "./identity";
+import { assignmentStatusLabels } from "./labels";
 
 export interface CaseNavigationProps {
   documents: DocumentSummary[];
@@ -15,11 +16,13 @@ export interface CaseNavigationProps {
   currentNavigationId?: string;
 }
 
+// The My tasks status words (X-7): a document status maps to the task status it stands for.
 const statusLabels: Record<string, string> = {
-  not_started: "Open",
-  in_progress: "In Progress",
-  completed: "Completed",
-  reopened: "Reopened",
+  not_started: assignmentStatusLabels.open,
+  in_progress: assignmentStatusLabels.in_progress,
+  completed: assignmentStatusLabels.submitted,
+  reopened: assignmentStatusLabels.reopened,
+  paused: "Paused",
 };
 
 export const CaseNavigation: React.FC<CaseNavigationProps> = ({
@@ -90,7 +93,7 @@ export const CaseNavigation: React.FC<CaseNavigationProps> = ({
             fontSize: "0.82rem",
             padding: "4px 24px 4px 10px",
             cursor: "pointer",
-            maxWidth: 280,
+            maxWidth: 360,
           }}
         >
           {documents.map((doc, index) => {

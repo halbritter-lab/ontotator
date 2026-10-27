@@ -136,7 +136,7 @@ it("renders People sorted by open work in the identity format, linked by owner",
   render(<ProgressPage projectKey="p" onNavigate={navigate} />);
   const table = await screen.findByRole("table", { name: "People" });
   expect(within(table).getAllByRole("columnheader").map(cell => cell.textContent))
-    .toEqual(["Person", "Translation reviews open", "Annotations open", "Reviews open", "Paused", "Submitted"]);
+    .toEqual(["Person", "Translation reviews open", "Annotations open", "Consolidations open", "Paused", "Submitted"]);
   const rows = within(table).getAllByRole("row").slice(1);
   expect(rows.map(row => within(row).getByRole("rowheader").textContent)).toEqual([
     "Translation reviewer (ann-0003)", "Lead (ann-0002, you)", "Second annotator (ann-0005)", "ann-0006",

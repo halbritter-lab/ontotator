@@ -3330,8 +3330,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           {assignmentNavigation && assignmentTasks?.length ? (
             <CaseNavigation documents={assignmentTasks.map((task, index) => ({ document_id: task.document_id, case_id: task.case_id ?? task.external_id ?? undefined,
               version: task.version ?? undefined, origin: task.origin as DocumentSummary["origin"], position: index + 1, language: task.language, text_length: 0,
-              // "reopened" is no document status; CaseNavigation labels it.
-              status: (task.status === "submitted" ? "completed" : task.status === "in_progress" ? "in_progress" : task.status === "reopened" ? "reopened" : "not_started") as DocumentSummary["status"] }))}
+              // "reopened" and "paused" are no document status; CaseNavigation labels them.
+              status: (task.held ? "paused" : task.status === "submitted" ? "completed" : task.status === "in_progress" ? "in_progress" : task.status === "reopened" ? "reopened" : "not_started") as DocumentSummary["status"] }))}
               currentDocumentId={view.document.document_id}
               navigationIds={assignmentTasks.map(task => String(task.assignment_id))}
               currentNavigationId={String(assignmentNavigation.current.assignment_id)}
@@ -3573,7 +3573,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                                : <><IconQuestion />Unresolved</>}
                             </span>
                           ) : (
-                            <span className="decision-tag decision-tag--open">open</span>
+                            <span className="decision-tag decision-tag--open">Pending</span>
                           )}
                         </div>
                         <div className="doc-meta">
