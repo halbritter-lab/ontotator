@@ -30,7 +30,8 @@ Modifiers (finding-modifiers spec "Agreement and grouping"): ``compare``
 compares them as term-id sets (``modifiers``, R4); ``groups`` compares
 ``modifier_spans`` exactly (term and segments), so a different modifier text
 is ``modifiers_differ`` too. A standalone modifier (a modifier term used as a
-finding) never joins the term merge and its group is ``modifier_as_finding``.
+finding) never joins the term merge; its group is ``modifier_as_finding``
+unless everyone agrees (then ``match``, A103).
 
 Which differences are a consolidation *decision* (acceptance 2026-10-22):
 the term and every differing axis always are; the text only when the
@@ -346,7 +347,8 @@ def _group(members: Sequence[tuple[str, Finding]], submissions: int) -> Group:
         kinds.add("notes_differ")
     if len({finding.modifier_spans for finding in findings}) > 1:
         kinds.add("modifiers_differ")
-    if any(finding.standalone_modifier for finding in findings):
+    # A unanimous modifier term is a match (A103): only a difference flags it.
+    if kinds and any(finding.standalone_modifier for finding in findings):
         kinds.add("modifier_as_finding")
     if not kinds:
         kinds.add("match")

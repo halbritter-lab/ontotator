@@ -247,7 +247,7 @@ def test_s19_both_standalone() -> None:
         "a": [f("a1", SEVERE, (SCHWERE,), standalone=True)],
         "b": [f("b1", SEVERE, (SCHWERE,), standalone=True)],
     }
-    assert kinds(data, AB) == {"modifier_as_finding"}
+    assert kinds(data, AB) == {"match"}  # A103: a unanimous modifier term matches
     assert compare(data, AB).matching == 1
 
 
