@@ -64,6 +64,12 @@ async function dismissToasts(page: Page): Promise<void> {
   await expect(page.locator(".ui-toast")).toHaveCount(0);
 }
 
+/** Gives a scenario user a person's name, so the images show names instead of usernames. */
+async function rename(page: Page, username: string, displayName: string): Promise<void> {
+  const response = await page.request.post("/__test_display_name__", { params: { username, display_name: displayName } });
+  expect(response.ok(), await response.text()).toBeTruthy();
+}
+
 const selectionBar = (page: Page) => page.getByRole("region", { name: "Selection", exact: true });
 
 test.describe("admin.md", () => {
@@ -203,6 +209,7 @@ test.describe("annotator.md", () => {
     const response = await page.request.post("/__test_carry_forward__", { params: { scenario: "t5" }, timeout: 120_000 });
     expect(response.ok(), await response.text()).toBeTruthy();
     const s = await response.json() as { username: string; assignment_id: number };
+    await rename(page, s.username, "Ana Weber");
     await loginExisting(page, s.username);
     await page.goto(`/#/tasks/${s.assignment_id}`);
     await expect(page.locator(".text-container")).toBeVisible();
@@ -224,7 +231,9 @@ test.describe("consolidator.md", () => {
   test("Decide a group, then finish the consolidation", async ({ page }) => {
     const response = await page.request.post("/__test_consolidation__", { params: { started: "true", people: "3" }, timeout: 120_000 });
     expect(response.ok(), await response.text()).toBeTruthy();
-    const s = await response.json() as { users: { lead: string }; assignment_id: number };
+    const s = await response.json() as { users: Record<"lead" | "ann-0001" | "ann-0002" | "ann-0003", string>; assignment_id: number };
+    const names = { lead: "Mia Kühn", "ann-0001": "Ana Weber", "ann-0002": "Tom Reis", "ann-0003": "Luc Martin" } as const;
+    for (const [who, name] of Object.entries(names)) await rename(page, s.users[who as keyof typeof names], name);
     await loginExisting(page, s.users.lead);
     await page.goto(`/#/tasks/${s.assignment_id}`);
     await expect(page.getByRole("heading", { level: 1, name: /^Consolidate / })).toBeVisible({ timeout: 30_000 });

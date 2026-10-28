@@ -79,8 +79,8 @@ What for: move to a newer ontology release after work was submitted. Drafts are 
 2. Under **Move to another release** choose the new release.
 3. Click **Check changes**.
 4. Read the panel **Check before moving**:
-   - **Rewritten draft terms** lists terms that will be replaced by their successor.
-   - **Draft terms to change by hand** lists obsolete terms. Their annotators must change them before submitting.
+   - The first table (**Becomes**, **Why**) lists draft terms that will be replaced by their successor.
+   - The second table (**Status**, **Suggestions**) lists draft terms that are obsolete or missing in the new release. Their annotators must change them before submitting.
 5. Click **Move to this release**, or **Cancel**. The page says **Ontology release changed.**
 
 ![The check before moving to another release, with rewritten draft terms and terms to change by hand](images/lead-move-release-check.png)
@@ -441,7 +441,7 @@ What for: set the work plan for a selection.
 What for: switch one text between from proposals, from scratch and not annotated.
 
 1. Open the text card and click **Annotation**.
-2. In **Annotation plan** choose **From proposals**, **From scratch** or **Off**. It saves at once.
+2. Under **Annotation** choose **From proposals**, **From scratch** or **Off**. It saves at once.
 
 Once someone started or submitted work in one mode, the mode is fixed.
 
@@ -451,8 +451,8 @@ What for: give translation reviews or annotations to people.
 
 1. Select the texts, then click the assign button in the selection bar, for example **Assign annotation…**.
 2. Check the **Task**, for example a translation review in one language.
-3. Under **Members** pick the reviewer, or tick everyone who should annotate. Each ticked person gets every selected text.
-4. Read the **Summary**.
+3. In the table of people (**Person**, **Reads**, **Open tasks**) pick the reviewer, or tick everyone who should annotate. Each ticked person gets every selected text.
+4. Read the summary below the table, for example "Ana Weber gets 3 translation reviews (de)."
 5. Click the assign button, for example *Assign 20*.
 
 ![The assign dialog with members, their languages and open tasks](images/lead-assign.png)
@@ -533,7 +533,7 @@ What for: choose the final result of a text.
 1. On **Documents**, tab **Needs your decision**, click **Accept result…** or **Compare results…** in the row. The card opens at **Final result**.
 2. With one submission or a submitted consolidation, check it and click **Accept result**.
 3. If all annotations agree, the card says so. Click **Accept result**.
-4. If they differ, the card shows how many findings match. Open a submission with **Open in editor** and click **Use as final** in its row. Or start a consolidation (next task).
+4. If they differ, the card shows how many findings match. Open a submission with **Open in editor** to read it, then click **Use as final** in its row. This saves at once, without a confirmation. Or start a consolidation (next task).
 5. After saving, the card moves on to the next text that needs a decision.
 
 ![The final result block comparing two submissions](images/lead-compare-results.png)

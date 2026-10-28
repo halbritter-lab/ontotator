@@ -1465,6 +1465,18 @@ if __name__ == "__main__":
 
         app.router.routes.insert(0, app.router.routes.pop())
 
+        @app.post("/__test_display_name__")
+        def test_display_name(
+            username: str = Query(...), display_name: str = Query(...)
+        ) -> dict[str, str]:
+            """Rename a fixture user, so handbook images show people, not usernames."""
+            app.state.accounts.update_profile(
+                Actor.cli(), username, display_name=display_name
+            )
+            return {"display_name": display_name}
+
+        app.router.routes.insert(0, app.router.routes.pop())
+
         register_t1_import_route(app, grant_all)
 
         uvicorn.run(app, host="127.0.0.1", port=PORT, log_level="warning")

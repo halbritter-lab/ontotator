@@ -46,7 +46,7 @@ On a smaller screen, use **Hide text** and **Show text** to make room. On a phon
 What for: decide a group by choosing, per field, the value that is right.
 
 1. Open a group. The table has one column per person. A robot icon marks findings from a tool proposal.
-2. The rows are **Term**, one row per value (for example the assertion), **Text**, **Modifiers** and **Note**. Rows where people disagree come first and are highlighted. Rows where all agree are marked "(all agree)".
+2. The rows are **Term**, one row per value (for example the assertion), **Text**, **Modifiers** and **Note**. Rows where people disagree come first and are highlighted; the other rows need no choice.
 3. In each highlighted row, click the ✓ next to the value you want.
 4. Read the result line below the table. It starts with "Result:" and lists what is still not chosen, for example "text not chosen yet". **Not taken:** lists the values you left out.
 5. Optional: click **+ note** to write a **Note for the lead**, and tick **Guidelines unclear here** if the guidelines did not settle the case.
@@ -77,7 +77,7 @@ What for: when someone used a modifier term (such as "Severe") as a finding of i
 
 What for: keep a finding with a value or term that nobody chose.
 
-1. Open the group and click **More…**.
+1. Open the group and click **More…**. It is offered when no row is in conflict or when the terms differ.
 2. To change values: choose **Edit values…**, set each value and the modifiers, then click **Keep with these values**. This is offered only when no row is in conflict.
 3. To use a different term: choose **Other term…**, search and pick a term. If there was no term conflict, it is saved at once; otherwise choose the remaining highlighted rows with ✓ and click **Keep**.
 
@@ -100,7 +100,7 @@ What for: correct a decision you made.
 1. Right after a decision: click **Undo** in the group row, or press Ctrl+Z (Cmd+Z on a Mac).
 2. Later: open the decided group and click **Reopen**. Decide it again.
 3. To change only the note or the flag of a decided group, use **Edit note** and **Save note**, or the **Guidelines unclear here** box. These save at once.
-4. To start over: open **More…** in the header and choose **Reopen all decisions…**, then **Reopen all**. The message offers **Undo**.
+4. To start over: open **More…** in the header (shown once you decided a group) and choose **Reopen all decisions…**, then **Reopen all**. The message offers **Undo**.
 
 If you changed a group in the full editor, reopening it drops that edit. You are asked to confirm.
 
@@ -113,7 +113,7 @@ What for: hand the merged result to the lead.
 3. The dialog **Submit consolidation?** shows how many groups and findings the result has, and how many are not in the result.
 4. If there are warnings (values filled in by default, a modifier used as a finding, two severities), they are listed under **Check before you submit**. Click **Back** to fix them, or submit anyway: the button then reads **Submit with** and the number of warnings.
 5. Click **Submit**.
-6. The screen confirms: "Consolidation submitted. The lead then accepts the result." Open your next task or click **Back to my tasks**.
+6. The screen confirms: "Consolidation submitted. The lead then accepts the result." If you are the lead yourself, it reads "Consolidation submitted. Accept the result in Documents." Open your next task or click **Back to my tasks**.
 
 While groups are open, **Submit consolidation** stays inactive and says how many groups are left.
 

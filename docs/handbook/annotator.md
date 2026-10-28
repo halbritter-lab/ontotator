@@ -12,7 +12,7 @@ What for: know where things are before you start.
 2. The toolbar shows the text name, its language and the mode:
    - **Annotate from scratch**: you see neither the tool's proposals nor other people's work.
    - **Annotate from proposals**: you see the tool's proposals, never other people's work.
-   - **Review carried findings** or **Check after text change**: findings were carried over from earlier work (see below).
+   - **Review carried findings** (or the round name, for example "Round 2, continued from Round 1") or **Check after text change**: findings were carried over from earlier work (see below).
 3. The save status next to it tells you whether your work is stored: **Saved**, **Saving...** or **Unsaved changes**. Work is saved automatically. If it reads **Offline** or an error, click **Retry**.
 4. The **More** menu holds **Work rounds**, **Report a text problem…**, the guidelines (for example "Guidelines v2") and **Keyboard shortcuts (?)**.
 5. To make the findings column wider or narrower, drag the divider between text and column (**Resize findings column**).
@@ -107,7 +107,7 @@ If a term has become obsolete, the panel says so. Change the term or delete the 
 
 What for: add severity, onset, pattern and similar details to a finding.
 
-1. Select the finding. In **Modifiers**, click **+ Add modifier…** and choose the modifier.
+1. Select the finding. In **Modifiers**, click **+ Add modifier…**, type into **Search modifier** and choose the modifier.
 2. To link the modifier to the words that state it, click **Link a text span** and mark the text.
 
 You can also start from the text:
@@ -158,7 +158,7 @@ Unresolved is a reviewer flag, not clinical uncertainty. For clinical uncertaint
 
 What for: check findings that were carried over from an earlier round, for example after a lead reopened your work or the text changed.
 
-1. The toolbar reads **Review carried findings**. The progress line counts checked findings.
+1. The toolbar names the round, for example "Round 2, continued from Round 1", or reads **Review carried findings** when the round has no name. The progress line counts checked findings.
 2. Click **Next unchecked** (or press `n`) to select the next finding marked **Check needed**.
 3. Read **What to check**: the text span, the values or the note. Carried values are not confirmed.
 4. To see the finding as it was, click **Show original evidence**.
@@ -187,7 +187,7 @@ What for: hand your finished work to the lead.
 
 1. Click **Next open item** to jump to things that still need attention.
 2. Click **Finish & submit text**. While items are open, the button shows how many.
-3. The dialog **Submit text** lists what is still open: **Carried findings to check**, **Findings that need attention**, **Findings after text correction**, **Proposals not decided**. Click **Go to** to fix an item.
+3. A dialog named after the text, for example "Submit CASE-1 en?", lists what is still open: **Carried findings to check**, **Findings that need attention**, **Findings after text correction**, **Proposals not decided**. Click **Go to** to fix an item.
 4. When nothing blocks, click **Submit text**. If only warnings are left, the button reads **Submit with** and the number of warnings.
 5. The next open task opens. To see what you sent, click **View result** in the message.
 
@@ -198,7 +198,7 @@ Submitting also says you checked the whole text for further findings. Afterwards
 What for: finish prefilled values and modifier warnings without leaving the dialog.
 
 1. The group **Values not chosen yet** lists findings with prefilled values.
-2. Click **Confirm as shown** on a row, or **Confirm all as shown** for all of them. Click **Go to** to change a value instead.
+2. Click **Confirm as shown** on a row, or, with more than one row, **Confirm all as shown**. Click **Go to** to change a value instead.
 3. The group **Modifier warnings** lists, for example, a modifier used as a finding or two severities on one finding. Click **Go to** to fix one.
 4. Click the submit button. Warnings you leave are submitted as they are.
 
@@ -257,7 +257,7 @@ What for: check a machine or human translation before it is annotated. Your prof
 1. Open the task. The **Source** is on the left, the **Translation** on the right.
 2. Read the automatic checks band at the top. Click **Details** to see which checks failed.
 3. Correct the translation directly in the right column. Use **Show changes** to see your edits and **Couple scrolling** to scroll both columns together. **Show matching paragraph** (Alt+M) jumps to the paired paragraph.
-4. To compare with another text, click **Compare with…**.
+4. To compare with another text, click the button that starts with **Compare with**, for example "Compare with … de". With several texts to compare, it opens a menu **Compare with…**.
 5. Under **Your review**, choose a **Decision**:
    - **Accepted unchanged**: the translation is right.
    - **Accepted with corrections**: you corrected it. Editing chooses this for you.
