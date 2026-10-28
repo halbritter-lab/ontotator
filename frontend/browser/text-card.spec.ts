@@ -87,6 +87,18 @@ test("remove an assignment after confirming", async ({ page }) => {
   await expect(robotIcon(row, 3)).toBeVisible();
 });
 
+test("someone else's running consolidation: the lead's card shows who and the progress, no link into the draft", async ({ page }) => {
+  const s = await proposalCheckScenario(page, "CONSOLIDATING_ALI");
+  await loginScenarioUser(page, s, "lead");
+  await openDocuments(page, s);
+  const card = await openTextCard(page, CASE, "en");
+  await showSegment(card, "Finalization");
+  await expect(card.getByText(/^Consolidating with Ali.* · \d+ of \d+ groups open$/)).toBeVisible();
+  // The server refuses the unsubmitted round to the lead (ROUND_NOT_FOUND): no dead-end link.
+  await expect(card.getByRole("link", { name: "Open consolidation", exact: true })).toHaveCount(0);
+  await expect(card.getByRole("button", { name: "Remove assignment…", exact: true })).toBeVisible();
+});
+
 test("the lead assigns themselves in the assign dialog; the consolidator rule is said there", async ({ page }) => {
   const s = await proposalCheckScenario(page, "FRESH");
   await loginScenarioUser(page, s, "lead");
