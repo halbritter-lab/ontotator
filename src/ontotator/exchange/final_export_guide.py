@@ -211,6 +211,10 @@ def build_readme(
         sub["origin_key"]["mode"] == "proposal_check"
         for sub in payload["content"]["submissions"]
     )
+    consolidations = any(
+        submission_kind(sub, payload["round_kinds"]) == "consolidation"
+        for sub in payload["content"]["submissions"]
+    )
     out: list[str] = [*_heading("Ontotator final export", "="), ""]
     out += [
         f"Project:          {name if name == key else f'{name} ({key})'}",
@@ -248,6 +252,12 @@ def build_readme(
             "                    rejected, corrected or uncertain, with the proposal's",
             "                    ref; plus the findings the person added.",
         ]
+    if consolidations:
+        out += [
+            "  consolidations    Per consolidation: how each finding came about,",
+            "                    matched (taken over automatically), decided or added",
+            "                    by the consolidator.",
+        ]
     out += [
         "",
         *_heading("How to read it"),
@@ -278,6 +288,21 @@ def build_readme(
                 "  ",
             )
             if checks
+            else []
+        ),
+        *(
+            _wrap(
+                'Every finding of a consolidation has provenance method "merged" in '
+                'the bundle. "consolidations" in receipt.json tells them apart: '
+                'origin "matched" (all annotators agreed, taken over automatically), '
+                '"decided" (the consolidator resolved the group or changed the '
+                'finding; "decision" is auto, keep or choose, "edited" marks a '
+                'change after the decision) or "added" (the '
+                "consolidator added it outside the groups).",
+                "- ",
+                "  ",
+            )
+            if consolidations
             else []
         ),
         *_wrap(

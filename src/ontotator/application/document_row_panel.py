@@ -21,7 +21,7 @@ versions stay selectable.
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -49,6 +49,7 @@ from ontotator.domain.agreement import (
     with_defaults,
 )
 from ontotator.domain.annotations import AnnotationSnapshot
+from ontotator.domain.consolidation_origins import finding_origins, origin_counts
 from ontotator.domain.errors import DomainError
 from ontotator.domain.profiles import TaskProfile
 from ontotator.domain.project_rules import ModifierRoles
@@ -450,6 +451,21 @@ def _changed_passages(
     return findings_in_changed_passages(unplaced)
 
 
+def _consolidation_origins(
+    conn: Connection, pid: int, listed: Iterable[Mapping[str, Any]]
+) -> dict[str, dict[str, int]]:
+    """How the findings of each listed consolidation came about (#133):
+    matched (taken over automatically), decided or added by the consolidator.
+    Derived from the stored submission; one that does not decode has none."""
+    wanted = [
+        item["submission_id"] for item in listed if item["kind"] == "consolidation"
+    ]
+    return {
+        sid: asdict(origin_counts(finding_origins(sub.snapshots, sub.decisions)))
+        for sid, sub in _payloads(conn, pid, wanted, strict=False).items()
+    }
+
+
 def final_panel(
     conn: Connection,
     facts: RowFacts,
@@ -484,6 +500,7 @@ def final_panel(
     )
     agreement = _agreement(comparable, recorded_at, payloads, profile, defaults)
     comparable_ids = {item.submission_id for item in comparable}
+    origins = _consolidation_origins(conn, pid, listing["submissions"])
     own_not_selectable = bool(listing["adjudicator_not_annotator"])
     submissions = [
         {
@@ -495,6 +512,7 @@ def final_panel(
                 if agreement is not None and item["submission_id"] in comparable_ids
                 else None
             ),
+            "consolidation_origins": origins.get(item["submission_id"]),
         }
         for item in listing["submissions"]
     ]

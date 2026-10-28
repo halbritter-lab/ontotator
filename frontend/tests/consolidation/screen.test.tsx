@@ -289,13 +289,22 @@ describe("ConsolidationScreen", () => {
     expect(screen.queryByRole("button", { name: /^Undo/ })).toBeNull();
   });
 
-  it("names a term kept by two groups in the submit summary (R-3)", async () => {
-    const fatigue = { term_id: "HP:0012378", term_label: "Fatigue", layer_id: "phenotype", axes: {}, modifiers: [] };
-    load(withGroup(withGroup(decidedView(), "g-hypo", { result: fatigue }), "g-micro", { result: fatigue }));
+  it("names a term kept by two groups on overlapping text in the submit summary (R-3)", async () => {
+    const fatigue = { term_id: "HP:0012378", term_label: "Fatigue", layer_id: "phenotype", axes: {}, modifiers: [], spans: [span("muscular hypotonia")] };
+    load(withGroup(withGroup(decidedView(), "g-hypo", { result: fatigue }), "g-micro", { result: { ...fatigue, spans: [span("hypotonia")] } }));
     await renderScreen({ assignmentId: 42 });
     fireEvent.click(screen.getByRole("button", { name: "Submit consolidation" }));
     const dialog = screen.getByRole("dialog", { name: "Submit consolidation?" });
     expect(within(dialog).getByText("More than one finding with the same term: Fatigue.")).toBeTruthy();
+  });
+
+  it("does not warn for one term kept on separate spans: the finding is mentioned several times (#132)", async () => {
+    const fatigue = { term_id: "HP:0012378", term_label: "Fatigue", layer_id: "phenotype", axes: {}, modifiers: [], spans: [span("muscular hypotonia")] };
+    load(withGroup(withGroup(decidedView(), "g-hypo", { result: fatigue }), "g-micro", { result: { ...fatigue, spans: [span("below the 3rd percentile")] } }));
+    await renderScreen({ assignmentId: 42 });
+    fireEvent.click(screen.getByRole("button", { name: "Submit consolidation" }));
+    const dialog = screen.getByRole("dialog", { name: "Submit consolidation?" });
+    expect(within(dialog).queryByText(/More than one finding with the same term/)).toBeNull();
   });
 
   it("submits after the summary, shows an axis warning in it, acknowledges it on the second click and offers the next task", async () => {

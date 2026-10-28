@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- The text card says how a consolidation came about ("6 matching, 2 decided by Carla"), and the final export records per finding whether it was matched automatically, decided or added by the consolidator (`consolidations` in `receipt.json`, export format `ontotator-final-export/v2`) (#133).
+
+### Fixed
+
+- The consolidation's duplicate-term warning fires only for findings of the same term on overlapping spans (#132).
+
 ## [0.2.0] - 2026-10-28
 
 ### Added

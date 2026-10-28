@@ -3421,6 +3421,19 @@ export interface components {
             ][];
         };
         /**
+         * ConsolidationOriginsView
+         * @description How the findings of a consolidation came about (#133); they add up to
+         *     ``finding_count``.
+         */
+        ConsolidationOriginsView: {
+            /** Matched */
+            matched: number;
+            /** Decided */
+            decided: number;
+            /** Added */
+            added: number;
+        };
+        /**
          * ConsolidationPersonView
          * @description An input author; display name for the assignee and leads only (U8).
          */
@@ -3461,6 +3474,14 @@ export interface components {
              * @default []
              */
             modifiers: components["schemas"]["ConsolidationModifierView"][];
+            /**
+             * Spans
+             * @default []
+             */
+            spans: [
+                number,
+                number
+            ][];
         };
         /** ConsolidationView */
         ConsolidationView: {
@@ -4226,6 +4247,7 @@ export interface components {
              * @default false
              */
             comparable: boolean;
+            consolidation_origins?: components["schemas"]["ConsolidationOriginsView"] | null;
         };
         /** FinalPanelView */
         FinalPanelView: {

@@ -18,7 +18,7 @@ import { failureOf, keepRequest, selectionPayload, selectRequest, type FinalConf
 import {
   acceptQuestion, AGREEMENT_EXPLANATION, agreementText, allMatchText, remainingText, changedPassagesText, compareSummary, consolidateHint,
   consolidationInputs, decidedLine, decisionKind, earlyFinal, keepLabel, listedSubmissions, nextFinalDecision, nextOtherDecision, onlyHereText, panelMode, panelStep,
-  personName, savedText, submissionLine, submissionName, submissionWhen, textChangedLine, type NextRow,
+  consolidationBreakdown, personName, savedText, submissionLine, submissionName, submissionWhen, textChangedLine, type NextRow,
 } from "./finalPanelText";
 import { versionName } from "./labels";
 import { submissionVersion } from "./SubmissionsTable";
@@ -349,11 +349,13 @@ function AcceptContent(props: ContentProps & { submission: FinalPanelSubmissionV
   const triggerId = `${id}-accept`;
   const isFinal = row.final?.submission_id === submission.submission_id;
   const compared = listed.filter(item => item.comparable).length || listed.length;
-  const consolidation = submission.kind === "consolidation" && submission.round_id
+  const breakdown = consolidationBreakdown(submission);
+  const consolidation =submission.kind === "consolidation" && submission.round_id
     ? { name: "projectConsolidation" as const, key: props.projectKey, roundId: submission.round_id,
       ...(Object.keys(props.query).length ? { documents: props.query } : {}) } : null;
   return <div className="final-panel-choose">
-    {submission.kind === "consolidation" && <p className="final-panel-consolidated"><strong>{submissionName(submission)}</strong></p>}
+    {submission.kind === "consolidation" && <p className="final-panel-consolidated"><strong>{submissionName(submission)}</strong>
+      {breakdown && ` · ${breakdown}`}</p>}
     <p className="final-panel-question">{acceptQuestion(submission)}</p>
     <p className="cell-secondary">{submissionLine(submission, row.language, row.parallel_roots, now)}</p>
     <p className="cell-secondary">{submissionGuidelineLabel(submission.guideline_version, submission.guideline_withdrawn, guidelineCurrent)}</p>

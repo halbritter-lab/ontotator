@@ -85,6 +85,22 @@ export function submissionName(submission: Pick<FinalPanelSubmissionView, "kind"
   return personName(submission);
 }
 
+/**
+ * How a consolidation came about (#133): "6 matching, 2 decided by Carla", plus "1 added by Carla" for findings
+ * added outside the groups; null for other submissions and a consolidation without findings.
+ */
+export function consolidationBreakdown(submission: Pick<FinalPanelSubmissionView, "kind" | "author" | "author_label" | "is_me" | "consolidation_origins">): string | null {
+  const origins = submission.kind === "consolidation" ? submission.consolidation_origins : null;
+  if (!origins) return null;
+  const who = submission.is_me ? "you" : personName(submission).split(" ")[0];
+  const parts = [
+    origins.matched > 0 ? `${origins.matched} matching` : null,
+    origins.decided > 0 ? `${origins.decided} decided by ${who}` : null,
+    origins.added > 0 ? `${origins.added} added by ${who}` : null,
+  ].filter((part): part is string => part !== null);
+  return parts.length ? parts.join(", ") : null;
+}
+
 /** Full agreement (W1): "All findings match (4 of 4)"; no findings: "Both submissions have no findings" / "No submission has findings". */
 export function allMatchText(submissions: number, findings: number): string {
   if (findings > 0) return `All findings match (${findings} of ${findings})`;

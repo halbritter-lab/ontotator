@@ -4,7 +4,8 @@ import hashlib
 import io
 import json
 import zipfile
-from dataclasses import replace
+from collections.abc import Iterable, Mapping
+from dataclasses import asdict, replace
 from typing import Any
 
 import ontospan
@@ -12,12 +13,55 @@ from sqlalchemy import select
 
 from ontotator.application.workflow_warnings import state_digest
 from ontotator.authz.scoped import ScopedRepository
+from ontotator.domain.consolidation_origins import finding_origins, origin_counts
 from ontotator.domain.errors import DomainError
+from ontotator.domain.workspace import Submission
 from ontotator.exchange.final_content import thaw_content
-from ontotator.exchange.final_export_guide import guide_files
+from ontotator.exchange.final_export_guide import guide_files, submission_kind
 from ontotator.exchange.proposal_checks import proposal_check_records
 from ontotator.jobs.queue import Job, JobContext
 from ontotator.storage.final_tables import ExportSelectionSnapshotRow
+
+# v2 (#133): ``consolidations`` in receipt.json.
+FINAL_EXPORT_FORMAT = "ontotator-final-export/v2"
+
+
+def consolidation_records(
+    submissions: Iterable[Submission], round_kinds: Mapping[str, str]
+) -> dict[str, dict[str, Any]]:
+    """Per consolidation submission: how each finding came about (matched and
+    taken over automatically, decided or added by the consolidator) and the
+    counts. Derived from the submission's own decisions, so exports of
+    consolidations submitted before this record hold it too."""
+    records: dict[str, dict[str, Any]] = {}
+    for sub in submissions:
+        kind = submission_kind(
+            {
+                "submission_id": sub.submission_id,
+                "origin_key": {"mode": sub.origin_key.mode},
+            },
+            round_kinds,
+        )
+        if kind != "consolidation":
+            continue
+        origins = finding_origins(sub.snapshots, sub.decisions)
+        records[sub.submission_id] = {
+            "consolidator": sub.origin_key.annotator_id,
+            "counts": asdict(origin_counts(origins)),
+            "findings": [
+                {
+                    "annotation_id": item.annotation_id,
+                    "version": item.version,
+                    "origin": item.origin,
+                    "decision": item.decision,
+                    "edited": item.edited,
+                    "guidelines_unclear": item.guidelines_unclear,
+                    "decision_ids": list(item.decision_ids),
+                }
+                for item in origins
+            ],
+        }
+    return records
 
 
 def final_t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
@@ -168,7 +212,7 @@ def final_t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
         )
     )
     receipt = {
-        "format": "ontotator-final-export/v1",
+        "format": FINAL_EXPORT_FORMAT,
         "snapshot_id": row["snapshot_id"],
         "snapshot_sha256": row["sha256"],
         "selections": payload["state"]["selections"],
@@ -183,6 +227,10 @@ def final_t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
             for sub in content.submissions
         },
         "provenance_only_submission_ids": [sub.submission_id for sub in closure],
+        # v2: how each finding of a consolidation came about (#133).
+        "consolidations": consolidation_records(
+            content.submissions, payload["round_kinds"]
+        ),
         # Additive; left out without proposal checks so older exports stay identical.
         **({"proposal_checks": proposal_checks} if proposal_checks else {}),
         "files": {

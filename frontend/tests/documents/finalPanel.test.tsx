@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, ApiError, AuthError, ConflictError, type DocumentRowView, type DocumentRowsPage, type FinalPanelView, type RowSubmissions, type WorkRoundView } from "../../src/api/client";
 import { formatTime } from "../../src/app/submissionLabels";
 import { DecisionBlock, type DecisionBlockProps } from "../../src/documents/FinalPanel";
-import { AGREEMENT_EXPLANATION, agreementText, compareSummary, remainingText, consolidationStartedToast, nextFinalDecision, nextOtherDecision } from "../../src/documents/finalPanelText";
+import { AGREEMENT_EXPLANATION, agreementText, compareSummary, consolidationBreakdown, remainingText, consolidationStartedToast, nextFinalDecision, nextOtherDecision } from "../../src/documents/finalPanelText";
 import { notifyFinalSelectionChanged } from "../../src/variants/finalSelectionState";
 import { refKey } from "../../src/variants/versionState";
 import { guidelineListing, guidelineSummary } from "../projectFixtures";
@@ -129,6 +129,28 @@ describe("choose", () => {
     const table = screen.getByRole("table", { name: "Submissions, case-108 de" });
     expect(within(table).getAllByRole("row")).toHaveLength(4);
     expect(within(table).getByRole("rowheader", { name: /Consolidated by Luc Martin/ })).toBeTruthy();
+  });
+
+  it("says how a consolidation came about: 4 matching, 2 decided by the consolidator (#133)", async () => {
+    const consolidation = panelSubmission({ submission_id: "c-s3", document_id: "case-108-de", author_label: "rev-0005", author: luc, kind: "consolidation", round_id: "c-r3",
+      round_ordinal: null, finding_count: 6, recorded_at: "2026-10-21T09:00:00Z", consolidation_origins: { matched: 4, decided: 2, added: 0 } });
+    panels[rowKey("case-108", "de")] = finalPanel({
+      submissions: [anaSubmission("case-108", "de"), tomSubmission("case-108", "de"), consolidation],
+      agreement: agreement({ total: 6, matching: 4 }), label_rule: "accept", accept_submission_id: "c-s3",
+    });
+    renderPanel("case-108:de", page([group("case-108", [chooseRow("case-108", "de")])]));
+    const name = await screen.findByText("Consolidated by Luc Martin");
+    expect(name.closest("p")!.textContent).toBe("Consolidated by Luc Martin · 4 matching, 2 decided by Luc");
+  });
+
+  it("words the consolidation breakdown per origin, with you for one's own and nothing for other submissions (#133)", () => {
+    const base = panelSubmission({ submission_id: "c-s1", document_id: "case-108-de", kind: "consolidation", author: luc, author_label: "rev-0005" });
+    expect(consolidationBreakdown({ ...base, consolidation_origins: { matched: 6, decided: 2, added: 0 } })).toBe("6 matching, 2 decided by Luc");
+    expect(consolidationBreakdown({ ...base, consolidation_origins: { matched: 0, decided: 1, added: 2 } })).toBe("1 decided by Luc, 2 added by Luc");
+    expect(consolidationBreakdown({ ...base, is_me: true, consolidation_origins: { matched: 3, decided: 0, added: 1 } })).toBe("3 matching, 1 added by you");
+    expect(consolidationBreakdown({ ...base, consolidation_origins: { matched: 0, decided: 0, added: 0 } })).toBeNull();
+    expect(consolidationBreakdown({ ...base, consolidation_origins: null })).toBeNull();
+    expect(consolidationBreakdown({ ...base, kind: "annotation", consolidation_origins: { matched: 1, decided: 0, added: 0 } })).toBeNull();
   });
 
   it("compare: summary, Agreement: 4 of 6 findings match, 1 differs in context only, How is this counted?", async () => {
