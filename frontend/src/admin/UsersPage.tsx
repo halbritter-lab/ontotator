@@ -100,7 +100,7 @@ export function auditDetails(event: AuditEvent, userNames?: ReadonlyMap<number, 
   if (typeof details.purpose === "string" && Object.keys(details).length === 1) return `${humanize(details.purpose)} code`;
   return auditEntries(details, userNames).join("; ");
 }
-/** "user:lena" is the person; "cli:jan-p" is an operator on the server's command line. */
+/** "user:lena" is the person; "cli:operator" is an operator on the server's command line. */
 export function auditActor(actor: string): string {
   const [kind, name] = actor.includes(":") ? [actor.slice(0, actor.indexOf(":")), actor.slice(actor.indexOf(":") + 1)] : ["", actor];
   if (kind === "user") return name;

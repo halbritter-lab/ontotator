@@ -97,7 +97,7 @@ test("unresolved notes are required, survive reload and block submission when lo
   await page.getByRole("button", { name: /Unresolved/ }).click();
   await expect(proposals.first()).toContainText("Pending"); await expect(note).toBeFocused();
   await expect(note).toHaveAttribute("aria-invalid", "true");
-  await page.screenshot({ path: "../.superpowers/sdd/2026-10-17-phase0-priorities/b02-unresolved-note-required.png", fullPage: true });
+  await page.screenshot({ path: "../build/decision-semantics/evidence/b02-unresolved-note-required.png", fullPage: true });
   await page.locator(".review-actions__title").click(); await page.keyboard.press("4");
   await expect(note).toBeFocused(); await expect(proposals.first()).toContainText("Pending");
   await note.fill("Needs specialist review"); await page.locator(".review-actions__title").click();
@@ -379,7 +379,7 @@ test("a lead enables optional reasons and an annotator creates, clears and submi
   const mode = page.getByRole("combobox", { name: "Findings that point to no text passage" });
   await mode.selectOption("optional"); await page.getByRole("form", { name: "Annotation" }).getByRole("button", { name: "Save changes" }).click();
   await expect(page.getByText("Annotation saved.")).toBeVisible(); await page.reload(); await expect(mode).toHaveValue("optional");
-  await page.getByRole("form", { name: "Annotation" }).screenshot({ path: "../.superpowers/sdd/2026-10-17-phase0-priorities/spanless-modes-project-rules.png" });
+  await page.getByRole("form", { name: "Annotation" }).screenshot({ path: "../build/decision-semantics/evidence/spanless-modes-project-rules.png" });
   const provisioned = await page.request.post("/__test_user__?username=optional-spanless-annotator&pseudonym=optional-spanless-annotator&projects=browser-fixture-decision-semantics");
   expect(provisioned.ok()).toBeTruthy();
   const restricted = await authenticatedRequest(page, "/api/v1/projects/browser-fixture-decision-semantics/members/optional-spanless-annotator", "PUT", { roles: ["annotator"], revoke_assignments: true });
@@ -419,7 +419,7 @@ test("a lead enables optional reasons and an annotator creates, clears and submi
     await annotator.getByRole("button", { name: /^Finish & submit/ }).click();
     const readiness = annotator.getByRole("dialog", { name: "Submit text" });
     await expect(readiness.getByRole("heading", { name: "Findings that need attention", exact: true })).toBeVisible();
-    await readiness.screenshot({ path: "../.superpowers/sdd/2026-10-17-phase0-priorities/submission-current-rules-repair.png" });
+    await readiness.screenshot({ path: "../build/decision-semantics/evidence/submission-current-rules-repair.png" });
     await expect(readiness).toContainText("This project requires a text span for findings.");
     await readiness.locator("[data-open-item]").getByRole("button", { name: "Go to Hypotonia", exact: true }).click();
     await expect(annotator.getByRole("button", { name: "Add mention", exact: true })).toBeFocused();

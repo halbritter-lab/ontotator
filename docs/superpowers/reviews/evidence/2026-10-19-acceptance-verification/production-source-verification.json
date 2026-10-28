@@ -1,6 +1,0 @@
-{
-  "image": "sha256:308835c746dc36e943285e3faea2486743468295fa4abaa47365e8d8d3a45326",
-  "source_snapshot_sha256": "3e2af6fef37d9872e0b443e8def9ac84e4287d91935af4526fe6b0d560b1390f",
-  "production_source_matches_image": true,
-  "post_build_changes": []
-}

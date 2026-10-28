@@ -4,11 +4,11 @@ The newer, separate [Phase 0 acceptance candidate](phase0-acceptance.md) is prep
 
 The reserved demo address is **http://127.0.0.1:18080**; that environment is currently stopped and has not been refreshed. Use the separate Phase 0 candidate above for the latest fixes. The remaining sections record its original T5 preparation.
 Implementation and main contain the completed T5 functionality; user acceptance
-is the next checkpoint before T4. See the [verification record](../superpowers/reviews/2026-10-16-t5-final-review.md).
+is the next checkpoint before T4.
 
 ## Accounts and prepared data
 
-In the main checkout `C:\Users\jan-p\Development\ontocurator`, open the private file
+In the main checkout, open the private file
 `build/t5-acceptance/demo-ready/credentials.json` for the generated passwords.
 It inherits Windows access limited to the local user, SYSTEM and Administrators.
 

@@ -2,11 +2,11 @@
 
 The separate candidate at **http://127.0.0.1:18081** includes the completed Phase 0 review fixes from pushed source `0e9271a`. Its image was refreshed while preserving existing data, credentials, volumes and acceptance tasks; it was not seeded again. It was subsequently started at the user's request and is running for guided manual acceptance. The older T5 environment on port 18080 remains stopped. For a later restart, start Docker Desktop and use the commands below.
 
-Manual acceptance is in progress. Follow the [running findings and session checkpoint](../superpowers/reviews/2026-10-18-phase0-manual-acceptance.md) before resuming; the user has already created and submitted annotations and reopened an assignment. Preserve those edits and collect feedback before implementing changes.
+Manual acceptance is in progress. The user has already created and submitted annotations and reopened an assignment. Preserve those edits and collect feedback before implementing changes.
 
 ## Identity and credentials
 
-- Worktree: `C:/Users/jan-p/Development/ontocurator/.worktrees/phase0-implementation`.
+- Worktree: `.worktrees/phase0-implementation` (relative to the repository root).
 - Runtime source revision: `0e9271aeb5310c39a7497dc97e0576d6de927628`.
 - Image: `sha256:74b37290e03e802b281ef0d6dc8639891152f8e84b49e3dba190b8e8950c928d` (local tag `ontotator-phase0:reviewed`; startup uses the immutable ID).
 - Original seed/tooling revision: `87367d8bd963646d7b4ffd05f7c3f9a13bc5b8e1`. This identifies the initial fixture preparation, not the current application image. The refresh from `001c6729` to `0e9271a` includes application fixes; subsequent acceptance-documentation changes do not change runtime code.
@@ -67,12 +67,12 @@ For a normal stop, use `& docker @candidateComposeArgs stop`; retain the volumes
 
 ## Verification
 
-The reviewed source passed all required stages: 1,320 frontend tests, 2,209 backend tests (one expected Windows POSIX-permissions skip), 88 browser tests, static/type/contract checks and wheel validation. The browser stage was rerun after updating one obsolete assertion; the initial combined invocation did not exit 0. See the [exact source verification record](../superpowers/reviews/2026-10-18-phase0-review-fixes.md).
+The reviewed source passed all required stages: 1,320 frontend tests, 2,209 backend tests (one expected Windows POSIX-permissions skip), 88 browser tests, static/type/contract checks and wheel validation. The browser stage was rerun after updating one obsolete assertion; the initial combined invocation did not exit 0.
 
 The refreshed image's OCI source label and all 31 packaged frontend paths/hashes match the reviewed source and build. `container_check.py --image <immutable-id> --smoke` exited 0, including the real login/annotation/submission journey and container permission/readiness checks, entirely on a disposable stack.
 
 Initial seeding verified six documents, two open translation reviews and one open annotation assignment. The refresh backed up the existing database and verified unchanged row counts and content hashes for all 36 application tables before and after startup. `/readyz` returned 200. Existing data-volume identities, credentials and initial seed records are retained. The reserved older demo's container IDs, image IDs, stopped state and mount identities match the baseline exactly.
 
-Browser evidence includes `decision-semantics.spec.ts`, `variants.spec.ts`, `translation-review.spec.ts` and `reanchor.spec.ts`. Tests used disposable fixture services, not these acceptance assignments. See the [Phase 0 verification record](../superpowers/reviews/2026-10-17-phase0-verification.md).
+Browser evidence includes `decision-semantics.spec.ts`, `variants.spec.ts`, `translation-review.spec.ts` and `reanchor.spec.ts`. Tests used disposable fixture services, not these acceptance assignments.
 
 Report issues with account/role, document, action, actual behavior and expected behavior. This candidate establishes functional review with synthetic data; later workflow decisions D6–D15 remain undecided.
