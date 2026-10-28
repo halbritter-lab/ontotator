@@ -109,6 +109,18 @@ class UploadFileInfo(BaseModel):
     size: int
 
 
+UploadStatus = Literal[
+    "previewing",
+    "ready",
+    "invalid",
+    "committing",
+    "committed",
+    "failed",
+    "discarded",
+]
+"""Lifecycle of a staged upload (the ``uploads.status`` check constraint)."""
+
+
 class UploadView(BaseModel):
     id: int
     kind: Literal["t1", "text"]
@@ -1107,16 +1119,21 @@ class UploadService:
             )
             return {"upload_id": upload_id, "job_id": job_id}
 
-    def list(self, key: str) -> list[UploadView]:
+    def list(
+        self, key: str, statuses: Sequence[UploadStatus] | None = None
+    ) -> list[UploadView]:
+        """The newest 50 uploads; ``statuses`` (when given) keeps only those states."""
         with self.db.transaction() as conn:
             project_id = self._project(conn, key)
+            query = select(UploadRow).where(UploadRow.project_id == project_id)
+            if statuses:
+                query = query.where(UploadRow.status.in_(sorted(set(statuses))))
             return [
                 UploadView.model_validate(dict(row))
                 for row in conn.execute(
-                    select(UploadRow)
-                    .where(UploadRow.project_id == project_id)
-                    .order_by(UploadRow.created_at.desc(), UploadRow.id.desc())
-                    .limit(50)
+                    query.order_by(
+                        UploadRow.created_at.desc(), UploadRow.id.desc()
+                    ).limit(50)
                 ).mappings()
             ]
 

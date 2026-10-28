@@ -6388,6 +6388,36 @@
               "type": "string",
               "title": "Key"
             }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "previewing",
+                      "ready",
+                      "invalid",
+                      "committing",
+                      "committed",
+                      "failed",
+                      "discarded"
+                    ],
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Keep only uploads in these states (repeatable).",
+              "title": "Status"
+            },
+            "description": "Keep only uploads in these states (repeatable)."
           }
         ],
         "responses": {
