@@ -112,6 +112,16 @@ export const IconBook = (p: IconProps) => (
   </Icon>
 );
 
+// Lucide "lock" (ISC, https://lucide.dev, see THIRD_PARTY_NOTICES.md); scaled from its 24 px grid, paths verbatim.
+export const IconLock = (p: IconProps) => (
+  <Icon {...p}>
+    <g transform="scale(0.6667)" strokeWidth="2.25">
+      <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </g>
+  </Icon>
+);
+
 // Lucide "bot" (ISC, https://lucide.dev, see THIRD_PARTY_NOTICES.md); scaled from its 24 px grid, paths verbatim.
 export const IconBot = (p: IconProps) => (
   <Icon {...p}>

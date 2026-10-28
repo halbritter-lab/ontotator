@@ -102,7 +102,7 @@ import { attachCandidates, findingDescription, modifierDisplayId, modifierMarks,
 import { Toast } from "../ui/Toast";
 import { type MentionDisplay, type SelectionPayload } from "../spans/adapter";
 import { markColourSlot } from "../editor/markColours";
-import { IconCheck, IconClose, IconMore, IconPencil, IconQuestion, IconRetry } from "../ui/icons";
+import { IconCheck, IconClose, IconLock, IconMore, IconPencil, IconQuestion, IconRetry } from "../ui/icons";
 import { MenuButton, type MenuItem } from "../ui/MenuButton";
 import { isNegated } from "../editor/negation";
 import { Dialog } from "../ui/Dialog";
@@ -3349,6 +3349,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           {/* Submitted: the status sits where the submit button stands, so the text sheet does not move (#25). */}
           {serverReadOnly || submittedAt ? <span role="status" className="case-status">
             <StatusBadge status="submitted" title={serverReadOnly ? "Read-only. The project lead can reopen it for changes." : undefined}>Submitted{submittedAt && <> <time dateTime={submittedAt} title={fullTimestamp(submittedAt)}>{formatTime(submittedAt)}</time></>}</StatusBadge>
+            {/* Below 1024 px the note is visually hidden (still read out): the lock keeps "Read-only" visible. */}
+            {serverReadOnly && <span className="case-status__lock" title="Read-only" aria-hidden="true"><IconLock /></span>}
             {serverReadOnly && <span className="case-status__note">Read-only. The project lead can reopen it for changes.</span>}
           </span> : <span
             role="status"

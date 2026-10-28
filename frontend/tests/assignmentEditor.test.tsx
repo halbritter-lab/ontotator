@@ -63,6 +63,8 @@ it("keeps a submitted workspace readable while disabling submission and new find
   render(<CaseScreen view={view()} workspaceId="ws" onClose={vi.fn()} readOnly />);
   expect(screen.getByText("Read-only. The project lead can reopen it for changes.")).toBeDefined();
   expect(document.querySelector("[role=status].case-status")!.textContent).toMatch(/^Submitted/);
+  // Narrow headers hide the note visually; the lock (CSS-shown below 1024 px) keeps "Read-only" in sight.
+  expect(document.querySelector(".case-status .case-status__lock[title='Read-only'] svg")).not.toBeNull();
   // No findings to select: no "No finding selected" ballast (#25).
   expect(screen.queryByText("No finding selected")).toBeNull();
   expect(screen.queryByRole("button", { name: /Finish & submit text/ })).toBeNull();
