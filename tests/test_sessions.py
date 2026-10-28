@@ -177,6 +177,20 @@ def test_logout_ends_only_this_session(services: Services) -> None:
     assert services.sessions.resolve(second) is not None
 
 
+def test_issuing_a_reset_code_ends_every_session_of_the_user(
+    services: Services,
+) -> None:
+    first, _ = services.sessions.login("alice", PASSWORD, client_ip="10.0.0.1")
+    second, _ = services.sessions.login("alice", PASSWORD, client_ip="10.0.0.2")
+
+    services.accounts.issue_reset_code(ADMIN, "alice")
+
+    assert services.sessions.resolve(first) is None
+    assert services.sessions.resolve(second) is None
+    details = column_values(services.accounts, "audit_events", "details")
+    assert {"purpose": "reset", "sessions_revoked": 2} in details
+
+
 def test_an_unknown_token_resolves_to_nobody(services: Services) -> None:
     services.sessions.login("alice", PASSWORD, client_ip="10.0.0.1")
 
