@@ -1485,8 +1485,10 @@
   font-size: var(--size-sm);
   line-height: var(--leading-sm);
 }
+.case-status__lock { display: none; color: var(--text-muted); }
 @media (max-width: 1023px) {
   .case-mode { display: none; }
+  .case-status__lock { display: inline-flex; }
   /* "Saved" keeps its dot; the word stays for assistive technology. */
   .status-badge__text,
   .case-status__note { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }

@@ -186,8 +186,9 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
       roundInputs={roundInputs} roundKind={roundInfo?.kind} roundActive={roundInfo?.active} roundBadge={roundBadge} roundTitle={roundTitle}
       roundOrdinal={roundInfo?.round_ordinal} documentVersion={roundInfo?.document_version}
       held={assignment.held} holdReason={assignment.hold_reason} saveBeforeReportRef={saveBeforeReportRef}
-      guidelineNotice={<>{current.answered_report_id && <ReportAnswerNotice key={current.answered_report_id} projectKey={assignment.project_key}
-        reportId={current.answered_report_id} held={assignment.held} onNavigate={onNavigate} />}{guidelines.notice}</>}
+      guidelineNotice={<>{/* Reloads when a lead acts on the task (revision) or a new answer arrives (My tasks list). */}
+        <ReportAnswerNotice key={`${assignment.workflow_revision}:${current.answered_report_id ?? ""}`} projectKey={assignment.project_key}
+          assignmentId={assignment.id} held={assignment.held} onNavigate={onNavigate} />{guidelines.notice}</>}
       versionContext={{ username: user.username, assignmentId, onNavigate, canBrowseVersions: versionAccess.allowed }}
       readOnly={workspace.read_only} routeLeaveRef={routeLeaveRef} leaveGuardRef={leaveGuardRef}
       assignmentNavigation={{ tasks, current, onNavigate: id => onNavigate({ name: "task", assignmentId: id }),

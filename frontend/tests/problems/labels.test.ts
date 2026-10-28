@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import type { FinalSelectionSummary } from "../../src/api/client";
 import { finalResultLabel } from "../../src/problems/LeadStatePanel";
-import { answerNotice, conflictReasonText, historyItems, intentState, leadOutcome, reportStateBadge, reportStateFact, reportTitle, taskLabel, taskRef, toolbarEntry, yourTaskFact } from "../../src/problems/labels";
+import { answeredReport, answerNotice, conflictReasonText, historyItems, intentState, leadOutcome, reportStateBadge, reportStateFact, reportTitle, taskLabel, taskRef, toolbarEntry, yourTaskFact } from "../../src/problems/labels";
 import { event, hold, report } from "./fixtures";
 
 const T = "2026-10-18T10:05:00Z";
@@ -131,8 +131,18 @@ describe("answerNotice (#18)", () => {
   it("names the outcome and says the reporter can continue unless the task stays paused", () => {
     expect(answerNotice(report({ state: "resolved", resolution: "Source fixed." }), false)).toBe("Your problem report was answered: Source fixed. You can continue.");
     const released = report({ events: [event({ action: "resume", actor_label: "lead-0002", reason: null })] });
-    expect(answerNotice(released, false)).toBe("Your problem report was answered: lead-0002 released the pause on your task. You can continue.");
+    expect(answerNotice(released, false)).toBe("Your problem report was answered by lead-0002: lead-0002 released the pause on your task. You can continue.");
     const paused = report({ events: [event({ action: "extend_hold", actor_label: "lead-0002", reason: "Waiting for the source" })] });
-    expect(answerNotice(paused, true)).toBe("Your problem report was answered: Waiting for the source.");
+    expect(answerNotice(paused, true)).toBe("Your problem report was answered by lead-0002: Waiting for the source.");
+    const named = report({ state: "resolved", resolution: "Fixed", events: [event({ action: "resolve", actor_label: "lead-0002", actor: { pseudonym: "lead-0002", display_name: "Lena Lead", is_me: false } })] });
+    expect(answerNotice(named, false)).toBe("Your problem report was answered by Lena Lead: Fixed. You can continue.");
+  });
+  it("picks the newest own report with an unread answer or closed by a lead, even after the answer was read", () => {
+    const closed = report({ report_id: "closed", state: "resolved", state_changed_by_label: "lead-0002", answered: false });
+    const newer = report({ report_id: "newer", created_at: "2026-10-20T00:00:00Z", answered: true });
+    expect(answeredReport([closed])?.report_id).toBe("closed");
+    expect(answeredReport([closed, newer])?.report_id).toBe("newer");
+    expect(answeredReport([report(), report({ state: "resolved", state_changed_by_label: "ann-0004" })])).toBeNull(); // open; closed by the reporter
+    expect(answeredReport([report({ ...closed, viewer_label: "lead-0002", viewer_is_lead: true })])).toBeNull(); // not the viewer's report
   });
 });
