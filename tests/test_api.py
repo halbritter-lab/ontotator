@@ -513,12 +513,14 @@ def test_same_term_id_in_different_layers_isolated_status(app_client):
             "expected_revision": 1,
             "payload": {
                 "command": "create_annotation",
-                "note": "Finding inferred from the complete document",
                 "annotation_id": "ann-mondo",
                 "layer_id": "layer-2",
                 "type_id": "type-req",
                 "term_id": "HP:0001250",
                 "axes": {"severity": "mild"},
+                # The type requires a text span already at draft save.
+                "evidence_id": "ev-mondo",
+                "segments": [{"start": 0, "end": 3}],
             },
         },
     )

@@ -21,6 +21,9 @@ export interface ProjectSettingsPageProps {
   routeLeaveRef?: MutableRefObject<RouteLeaveGuard | null>;
 }
 
+/** "A", "A and B", "A, B and C". */
+const listNames = (names: string[]) => names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+
 export function ProjectSettingsPage(props: ProjectSettingsPageProps): JSX.Element {
   const [loaded, setLoaded] = useState<{ key: string; settings: ProjectSettings; ontologies: OntologyInfo[] } | null>(null);
   const [error, setError] = useState<unknown>();
@@ -209,6 +212,13 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved,
     if (pending) void save("Pins", () => api.applyPins(projectKey, pending.pins, pending.report.report_sha256)).then(done => { if (done && active.current) setRepin(null); });
   };
   const repinPanel = repin && <RepinReportPanel report={repin.report} busy={busy === "Pins"} onApply={applyRepin} onCancel={() => setRepin(null)} />;
+  // The task profile wins. Its span-required types ignore the spanless setting.
+  const annotationTypes = model.profile.layers.flatMap(layer => layer.annotation_types.map(type => ({ layer, type })));
+  const spanRequiredTypes = annotationTypes.filter(({ type }) => type.evidence_policy === "required_on_complete").map(({ type }) => type.label);
+  const spanlessLocked = annotationTypes.length > 0 && spanRequiredTypes.length === annotationTypes.length;
+  const spanRequiredNames = listNames([...new Set(spanRequiredTypes)]);
+  const spanlessHint = spanlessLocked ? `The task profile requires a text span for ${spanRequiredNames}.`
+    : spanRequiredTypes.length ? `Does not apply to ${spanRequiredNames}: the task profile requires a text span for ${spanRequiredTypes.length === 1 ? "this type" : "these types"}.` : undefined;
   const prefillGroups = model.profile.layers.flatMap(layer => layer.annotation_types.filter(type => type.axes?.length)
     .map(type => ({ layer, type, heading: layer.annotation_types.length > 1 ? `${layer.label}: ${type.label}` : layer.label })));
 
@@ -225,8 +235,8 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved,
       <fieldset disabled={busy !== null}><legend className="visually-hidden">Annotation</legend>
         <SettingsCard title="When submitting" hint="Applies to every submission from now on."
           why="In annotation and in consolidation. Submitted work is unchanged. Text evidence the task profile requires is still required.">
-          <Select id="project-rule-spanless" label="Findings that point to no text passage"
-            value={!annotation.allow_spanless_findings ? "prohibited" : annotation.require_spanless_note ? "required" : "optional"}
+          <Select id="project-rule-spanless" label="Findings that point to no text passage" hint={spanlessHint} disabled={spanlessLocked}
+            value={spanlessLocked || !annotation.allow_spanless_findings ? "prohibited" : annotation.require_spanless_note ? "required" : "optional"}
             onChange={event => { const mode = event.target.value; editAnnotation({ allow_spanless_findings: mode !== "prohibited", require_spanless_note: mode === "prohibited" ? annotation.require_spanless_note : mode === "required" }); }}>
             <option value="prohibited">Not allowed</option>
             <option value="required">Allowed with a reason</option>

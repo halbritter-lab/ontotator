@@ -21,10 +21,13 @@ vi.mock("../src/admin/AssignWorkDialog", () => ({
   AssignWorkDialog: (props: AssignWorkDialogProps) => { assignProps.push(props); return <div role="dialog" aria-label="Assign stub" />; },
 }));
 const lastAssign = () => assignProps.at(-1) as AssignWorkDialogProps;
-// The upload stub reports a finished import with its result message.
+// The upload stub is the dialog (the panel owns it): it reports a finished import with its result message, or closes.
 vi.mock("../src/admin/UploadPanel", () => ({
-  UploadPanel: ({ onImported }: { onImported: (message: string) => void }) =>
-    <button type="button" onClick={() => onImported("Imported 9 documents and 0 proposals.")}>Finish import stub</button>,
+  UploadPanel: ({ onImported, onClose }: { onImported: (message: string) => void; onClose: () => void }) =>
+    <div role="dialog" aria-label="Upload texts">
+      <button type="button" onClick={() => onImported("Imported 9 documents and 0 proposals.")}>Finish import stub</button>
+      <button type="button" onClick={onClose}>Close stub</button>
+    </div>,
 }));
 
 function mockRows(rows: DocumentRowsPage, rowSubmissions: Record<string, RowSubmissions> = {}) {
@@ -1319,6 +1322,21 @@ describe("plan chips on the page", () => {
     await waitFor(() => expect(upload.getAttribute("aria-disabled")).toBeNull());
     fireEvent.click(upload);
     expect(await screen.findByRole("dialog", { name: "Upload texts" })).toBeTruthy();
+  });
+
+  it("closing the upload dialog during an import shows no toast and reloads nothing (OQ2)", async () => {
+    vi.mocked(api.getProjectSettings).mockResolvedValue({ languages: ["en"], annotate_accepted_translations_only: false } as never);
+    mockRows(scenarioS1().page);
+    renderPage();
+    await loaded();
+    const upload = screen.getByRole("button", { name: "Upload texts…" });
+    await waitFor(() => expect(upload.getAttribute("aria-disabled")).toBeNull());
+    fireEvent.click(upload);
+    const calls = vi.mocked(api.listDocumentRows).mock.calls.length;
+    fireEvent.click(await screen.findByRole("button", { name: "Close stub" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Upload texts" })).toBeNull());
+    expect(document.querySelector(".ui-toast-message")).toBeNull();
+    expect(vi.mocked(api.listDocumentRows).mock.calls.length).toBe(calls);
   });
 
   it("closes the upload dialog after an import, announces the result once (the toast) and reloads the rows", async () => {

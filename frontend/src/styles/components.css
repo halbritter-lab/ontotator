@@ -575,6 +575,8 @@ textarea.form-control {
   justify-content: flex-end;
   gap: var(--space-2);
 }
+/* Why the primary action is unavailable (Assign, Upload, Plan, Carry): left of the buttons, which keep aria-disabled. */
+.dialog-footer-reason { margin-inline-end: auto; align-self: center; color: var(--text-muted); font-size: var(--size-sm); }
 .shortcut-help-group + .shortcut-help-group { margin-top: var(--space-5); }
 .shortcut-help-group h3 { margin: 0 0 var(--space-2); font-size: var(--size-md); font-weight: var(--weight-strong); }
 .shortcut-help-group dl { margin: 0; }

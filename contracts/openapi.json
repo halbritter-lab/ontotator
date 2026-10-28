@@ -6498,6 +6498,36 @@
               "type": "string",
               "title": "Key"
             }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "previewing",
+                      "ready",
+                      "invalid",
+                      "committing",
+                      "committed",
+                      "failed",
+                      "discarded"
+                    ],
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Keep only uploads in these states (repeatable).",
+              "title": "Status"
+            },
+            "description": "Keep only uploads in these states (repeatable)."
           }
         ],
         "responses": {
@@ -10704,6 +10734,31 @@
         "title": "ConsolidationModifierView",
         "description": "One modifier of a member; ``kind`` and ``exclusive_class`` from the\nlayer's classifier, ``segments`` as code-point ``[start, end]``."
       },
+      "ConsolidationOriginsView": {
+        "properties": {
+          "matched": {
+            "type": "integer",
+            "title": "Matched"
+          },
+          "decided": {
+            "type": "integer",
+            "title": "Decided"
+          },
+          "added": {
+            "type": "integer",
+            "title": "Added"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "matched",
+          "decided",
+          "added"
+        ],
+        "title": "ConsolidationOriginsView",
+        "description": "How the findings of a consolidation came about (#133); they add up to\n``finding_count``."
+      },
       "ConsolidationPersonView": {
         "properties": {
           "person_id": {
@@ -10781,6 +10836,24 @@
             },
             "type": "array",
             "title": "Modifiers",
+            "default": []
+          },
+          "spans": {
+            "items": {
+              "prefixItems": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "integer"
+                }
+              ],
+              "type": "array",
+              "maxItems": 2,
+              "minItems": 2
+            },
+            "type": "array",
+            "title": "Spans",
             "default": []
           }
         },
@@ -13269,6 +13342,16 @@
             "type": "boolean",
             "title": "Comparable",
             "default": false
+          },
+          "consolidation_origins": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConsolidationOriginsView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,

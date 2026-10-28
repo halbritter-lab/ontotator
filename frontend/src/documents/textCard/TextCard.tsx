@@ -190,7 +190,7 @@ export function TextCard(props: TextCardProps): JSX.Element {
         onAssign={props.onAssign} onNavigate={onNavigate} onChanged={props.onChanged} textVersionTools={props.textVersionTools} now={now}
         planControl={plannable ? props.planControl?.("review") : undefined} />{props.stageActions && <div className="text-card-actions">{props.stageActions("review")}</div>}</>}
       {segment === "annotation" && <><AnnotationPart key={rowKeyOf(row)} row={row} projectKey={projectKey} query={query} submissions={list} canManage={canManage}
-        onAssign={props.onAssign} onNavigate={onNavigate} onChanged={props.onChanged} onHistory={() => onView("history")} tools={props.textVersionTools} now={now}
+        onAssign={props.onAssign} onNavigate={onNavigate} onChanged={props.onChanged} tools={props.textVersionTools} now={now}
         planControl={plannable ? props.planControl?.("annotation") : undefined} />{props.stageActions && <div className="text-card-actions">{props.stageActions("annotation")}</div>}</>}
       {segment === "finalization" && <><FinalizationPart row={row} projectKey={projectKey} query={query} decision={props.decision} onNavigate={onNavigate} now={now}
         canManage={canManage} tools={props.textVersionTools} onChanged={props.onChanged} />{props.stageActions && <div className="text-card-actions">{props.stageActions("final")}</div>}</>}

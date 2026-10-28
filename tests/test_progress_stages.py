@@ -204,4 +204,5 @@ def test_one_submitted_annotation_counts_as_annotated_under_a_higher_limit(env):
     submit(env, assign(env, doc("c1", "en"), "anno", "annotate"), "s-limit")
     annotation = progress(env.lead)["stages"]["annotation"]
     assert annotation["done"] == 1
-    assert annotation["counts"]["submitted"] == 0  # one of two places is open
+    # Issue #123: nothing is open, so the text moves on to its final result.
+    assert annotation["counts"]["submitted"] == 1

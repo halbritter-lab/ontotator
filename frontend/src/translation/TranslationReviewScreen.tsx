@@ -33,6 +33,12 @@ export interface TranslationReviewScreenProps {
   held?: boolean;
   holdReason?: string | null;
   saveBeforeReportRef?: MutableRefObject<(() => Promise<void>) | null>;
+  /**
+   * The post-submit flow of annotation tasks (M2 M-6, issue 125): after a submit (not a lead correction) the caller
+   * names the submission and opens the next open task of the project (`next`), else My tasks. Without it the screen
+   * stays on the submitted review and offers the next task itself.
+   */
+  onSubmitted?: (result: { label: string; assignmentId: number; next?: number }) => void;
 }
 type RawDraft = { text: string; form: Record<string, unknown> };
 /** The reviewer's next open task after submitting (spec A.5). */
@@ -368,15 +374,29 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
   };
   /** After a successful submit: a fresh My tasks list, so a task assigned meanwhile counts. */
   const projectKey = workspace.assignment.project_key;
+  // The caller's post-submit flow runs once per submit; a list that cannot load leads to My tasks (no next task).
+  const afterSubmit = useRef(props.onSubmitted); afterSubmit.current = props.onSubmitted;
+  const handedOver = useRef(false);
+  const label = taskText(workspace.variant);
   useEffect(() => {
-    if (!submitted || leadCorrection) return;
+    // Only once the submit settled (not busy): the route guard refuses to leave while an operation runs.
+    if (!submitted || leadCorrection || busy) return;
     let active = true;
     setNextTask({ kind: "loading" });
+    const handOver = (next?: number) => {
+      const done = afterSubmit.current;
+      if (!done || handedOver.current) return false;
+      handedOver.current = true; setNextTask(null);
+      done({ label, assignmentId: props.assignmentId, next });
+      return true;
+    };
     api.listMyTasks().then(tasks => {
-      if (active) setNextTask({ kind: "ready", ...nextOpenTask(tasks, props.assignmentId, projectKey) });
-    }, failure => { if (active) setNextTask({ kind: "error", error: failure }); });
+      if (!active) return;
+      const ready = nextOpenTask(tasks, props.assignmentId, projectKey);
+      if (!handOver(ready.next?.assignment_id)) setNextTask({ kind: "ready", ...ready });
+    }, failure => { if (active && !handOver()) setNextTask({ kind: "error", error: failure }); });
     return () => { active = false; };
-  }, [submitted, nextTaskLoad, props.assignmentId, projectKey, leadCorrection]);
+  }, [submitted, busy, nextTaskLoad, props.assignmentId, projectKey, leadCorrection, label]);
   const nextTaskId = nextTask?.kind === "ready" ? nextTask.next?.assignment_id : undefined;
   useEffect(() => { if (nextTaskId !== undefined) nextTaskButton.current?.focus({ preventScroll: true }); }, [nextTaskId]);
   const saveState = saver.current?.state ?? "saved";
@@ -535,7 +555,7 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
     {!readOnly && props.guidelineNotice}
     <Button className="translation-skip" onClick={focusDecision}>Skip to decision</Button>
     <div className="translation-review-bar density-compact">
-      <h1>{taskText(workspace.variant)}</h1>
+      <h1>{label}</h1>
       <div className="translation-review-meta">
         <p><LanguageTag code={sourceLanguage}>{languageName(sourceLanguage)}</LanguageTag> <span aria-hidden="true">→</span><span className="review-sr-only">{" to "}</span> <LanguageTag code={targetLanguage}>{languageName(targetLanguage)}</LanguageTag></p>
         <details className="translation-details" ref={detailsRef} onKeyDown={closeDetails}>

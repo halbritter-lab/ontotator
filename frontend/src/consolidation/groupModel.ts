@@ -67,22 +67,57 @@ export function groupName(group: ConsolidationGroupView, text: string): string {
 /** Kept findings of a decided group: its result term, none while open or left out. */
 const keptTerm = (group: ConsolidationGroupView) => group.state === "open" || group.state === "leave_out" ? null : group.result ?? null;
 
-/** Other decided groups that already keep `termId` on the group's layer (R-3): keeping this group adds a second finding of it. */
-export function sameTermGroups(group: ConsolidationGroupView, groups: readonly ConsolidationGroupView[], termId: string): ConsolidationGroupView[] {
-  const layerId = group.members[0]?.layer_id;
-  return groups.filter(other => other.group_id !== group.group_id && keptTerm(other)?.term_id === termId && keptTerm(other)?.layer_id === layerId);
+type Spans = readonly (readonly [number, number])[];
+
+/**
+ * Two findings of one term are a duplicate only where their text overlaps (R-3, #132): the same term on separate
+ * spans is a finding mentioned several times. A finding without a span stands for the whole text, so it overlaps
+ * every finding of its term, with or without a span (two spanless findings of a term are a duplicate).
+ */
+export function spansOverlap(a: Spans, b: Spans): boolean {
+  if (!a.length || !b.length) return true;
+  return a.some(([start, end]) => b.some(([otherStart, otherEnd]) => start < otherEnd && otherStart < end));
 }
 
-/** Term labels kept by more than one decided group, for the submit summary (R-3). */
+/** The text of a decided group's kept finding: the stored result's, else (an older server) its default member's. */
+function keptSpans(group: ConsolidationGroupView): Spans {
+  if (group.result?.spans) return group.result.spans;
+  return (group.members.find(member => member.input_id === group.keep_input_id) ?? group.members[0])?.spans ?? [];
+}
+
+/** The text the group's result would take with these choices: the member `resolvePayload` takes the span from. */
+function pendingSpans(group: ConsolidationGroupView, choices: Choices): Spans {
+  const payload = resolvePayload(group, choices);
+  const inputId = payload.action === "choose" && payload.choice ? payload.choice.span_from_input_id : group.keep_input_id;
+  return (group.members.find(member => member.input_id === inputId) ?? group.members[0])?.spans ?? [];
+}
+
+/**
+ * Other decided groups that already keep `termId` on the group's layer on an overlapping span (R-3): keeping this
+ * group adds a second finding of it there.
+ */
+export function sameTermGroups(group: ConsolidationGroupView, groups: readonly ConsolidationGroupView[], termId: string,
+  choices: Choices = {}): ConsolidationGroupView[] {
+  const layerId = group.members[0]?.layer_id;
+  const spans = pendingSpans(group, choices);
+  return groups.filter(other => other.group_id !== group.group_id && keptTerm(other)?.term_id === termId && keptTerm(other)?.layer_id === layerId
+    && spansOverlap(spans, keptSpans(other)));
+}
+
+/** Term labels kept by more than one decided group on overlapping spans, for the submit summary (R-3). */
 export function duplicateTerms(groups: readonly ConsolidationGroupView[]): string[] {
-  const counts = new Map<string, { label: string; count: number }>();
+  const byTerm = new Map<string, { label: string; spans: Spans[] }>();
   for (const group of groups) {
     const kept = keptTerm(group);
     if (!kept) continue;
     const key = `${kept.layer_id} ${kept.term_id}`;
-    counts.set(key, { label: kept.term_label || kept.term_id, count: (counts.get(key)?.count ?? 0) + 1 });
+    const entry = byTerm.get(key) ?? { label: kept.term_label || kept.term_id, spans: [] };
+    entry.spans.push(keptSpans(group));
+    byTerm.set(key, entry);
   }
-  return [...counts.values()].filter(entry => entry.count > 1).map(entry => entry.label);
+  return [...byTerm.values()]
+    .filter(({ spans }) => spans.some((one, index) => spans.slice(index + 1).some(other => spansOverlap(one, other))))
+    .map(entry => entry.label);
 }
 
 export type RowKind = "term" | "axis" | "text" | "modifiers" | "note" | "whole";

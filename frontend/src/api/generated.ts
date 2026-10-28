@@ -3464,6 +3464,19 @@ export interface components {
             ][];
         };
         /**
+         * ConsolidationOriginsView
+         * @description How the findings of a consolidation came about (#133); they add up to
+         *     ``finding_count``.
+         */
+        ConsolidationOriginsView: {
+            /** Matched */
+            matched: number;
+            /** Decided */
+            decided: number;
+            /** Added */
+            added: number;
+        };
+        /**
          * ConsolidationPersonView
          * @description An input author; display name for the assignee and leads only (U8).
          */
@@ -3504,6 +3517,14 @@ export interface components {
              * @default []
              */
             modifiers: components["schemas"]["ConsolidationModifierView"][];
+            /**
+             * Spans
+             * @default []
+             */
+            spans: [
+                number,
+                number
+            ][];
         };
         /** ConsolidationView */
         ConsolidationView: {
@@ -4269,6 +4290,7 @@ export interface components {
              * @default false
              */
             comparable: boolean;
+            consolidation_origins?: components["schemas"]["ConsolidationOriginsView"] | null;
         };
         /** FinalPanelView */
         FinalPanelView: {
@@ -11849,7 +11871,10 @@ export interface operations {
     };
     list_uploads_api_v1_projects__key__uploads_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Keep only uploads in these states (repeatable). */
+                status?: ("previewing" | "ready" | "invalid" | "committing" | "committed" | "failed" | "discarded")[] | null;
+            };
             header?: never;
             path: {
                 key: string;

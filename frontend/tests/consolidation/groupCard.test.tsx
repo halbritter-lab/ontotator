@@ -59,7 +59,7 @@ describe("GroupCard", () => {
   it("hints when the result repeats a term another group already keeps (R-3)", () => {
     const spanless = group("g-f", ["partial"], [member("in-f", TOM, "HP:0012378", "Fatigue", [])]);
     const other = group("g-f2", ["partial"], [member("in-g", LUC, "HP:0012378", "Fatigue", [span("hypotonia")])], { state: "keep",
-      result: { term_id: "HP:0012378", term_label: "Fatigue", layer_id: "phenotype", axes: {}, modifiers: [] } });
+      result: { term_id: "HP:0012378", term_label: "Fatigue", layer_id: "phenotype", axes: {}, modifiers: [], spans: [span("hypotonia")] } });
     renderCard(spanless, { groups: [other, spanless] });
     expect(screen.getByText("Fatigue is already in the result (“hypotonia”). Keep adds a second Fatigue finding.")).toBeTruthy();
     cleanup();
@@ -67,9 +67,23 @@ describe("GroupCard", () => {
     expect(screen.queryByText(/is already in the result/)).toBeNull();
   });
 
+  it("does not hint when the other group keeps the term on a separate span (#132)", () => {
+    const here = group("g-f", ["partial"], [member("in-f", TOM, "HP:0012378", "Fatigue", [span("Unsteady gait")])]);
+    const result = { term_id: "HP:0012378", term_label: "Fatigue", layer_id: "phenotype", axes: {}, modifiers: [] };
+    const elsewhere = group("g-f2", ["partial"], [member("in-g", LUC, "HP:0012378", "Fatigue", [span("hypotonia")])], { state: "keep",
+      result: { ...result, spans: [span("hypotonia")] } });
+    renderCard(here, { groups: [elsewhere, here] });
+    expect(screen.queryByText(/is already in the result/)).toBeNull();
+    cleanup();
+    const overlapping = group("g-f3", ["partial"], [member("in-h", LUC, "HP:0012378", "Fatigue", [span("Unsteady")])], { state: "keep",
+      result: { ...result, spans: [span("Unsteady")] } });
+    renderCard(here, { groups: [elsewhere, overlapping, here] });
+    expect(screen.getByText("Fatigue is already in the result (“Unsteady”). Keep adds a second Fatigue finding.")).toBeTruthy();
+  });
+
   it("a decided group shows what was kept without this session's summary, also read-only (R-2)", () => {
     const decided = hypotoniaThree({ state: "choose", annotation_ids: ["cons-1"],
-      result: { term_id: "HP:0001252", term_label: "Hypotonia", layer_id: "phenotype", axes: { assertion: "absent", experiencer: "patient", temporality: "current" }, modifiers: [] } });
+      result: { term_id: "HP:0001252", term_label: "Hypotonia", layer_id: "phenotype", axes: { assertion: "absent", experiencer: "patient", temporality: "current" }, modifiers: [], spans: [span("muscular hypotonia")] } });
     renderCard(decided, { people: THREE, readOnly: true });
     expect(screen.getByRole("button", { expanded: true }).textContent).toContain("decided: Hypotonia (HP:0001252), Absent, Patient, Current");
     expect(result()).toBe("Result: 1 finding, Hypotonia (HP:0001252), Absent, Patient, Current");

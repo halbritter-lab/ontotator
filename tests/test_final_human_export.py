@@ -238,9 +238,10 @@ _VOLATILE = [
     (re.compile(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} UTC"), "<time>"),
 ]
 # receipt.json and README.txt of a carry-forward final (no draft-sourced
-# inputs): a change here changes every export of that kind.
+# inputs): a change here changes every export of that kind. v2 (#133) added
+# the (here empty) "consolidations" record and the format string.
 CARRY_FORWARD_DIGEST = (
-    "023c8468d700761d5a8264bacb3e7bb5741ae710705451e87d82397c724809cc"
+    "02119bcc51b60b6f222da711765d69d2f933e879f8946dbf17b6ee88048eed14"
 )
 
 

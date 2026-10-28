@@ -20,8 +20,8 @@ export interface UploadWorkPlanProps {
   ruleOn?: boolean;
   /** The caller may accept translations as reviewed outside Ontotator (lead). */
   canAccept?: boolean;
-  /** "{case_id}:{language}" rows accepted by an "Accept without review" override in this upload. */
-  acceptedRows?: ReadonlySet<string>;
+  /** Upload format: plain-text uploads speak of texts and the upload, not of a bundle. */
+  kind?: "t1" | "text";
   disabled?: boolean;
   onChange: (result: UploadWorkPlanResult) => void;
 }
@@ -31,14 +31,8 @@ const rowKey = (item: { case_id: string; language: string }) => `${item.case_id}
 const keyOf = (item: PlanCase) => (item.review === null ? SOURCE : item.language);
 const languageLabel = (language: PlanLanguage) => (language.key === SOURCE ? "Sources" : `${language.key} MT`);
 
-/** "Import 50 cases" / "Import 3 texts" from the cases the upload touches. */
-export function importLabel(workPlan: WorkPlan, kind: "t1" | "text"): string {
-  const count = new Set(workPlan.cases.map(item => item.case_id)).size;
-  return `Import ${plural(count, kind === "text" ? "text" : "case")}`;
-}
-
 /** The upload preview's "Work plan" step (spec "Planning at import"): chips by language, per-case exceptions and the external-review acceptance. */
-export function UploadWorkPlan({ workPlan, ruleOn = true, canAccept = false, acceptedRows, disabled = false, onChange }: UploadWorkPlanProps): JSX.Element {
+export function UploadWorkPlan({ workPlan, ruleOn = true, canAccept = false, kind = "t1", disabled = false, onChange }: UploadWorkPlanProps): JSX.Element {
   const ids = useId().replace(/:/g, "");
   const [languageChoices, setLanguageChoices] = useState<Record<string, Flags>>({});
   const [caseChoices, setCaseChoices] = useState<Record<string, Flags & { case_id: string; language: string }>>({});
@@ -63,13 +57,13 @@ export function UploadWorkPlan({ workPlan, ruleOn = true, canAccept = false, acc
     const counts = new Map<string, number>();
     if (!ruleOn) return counts;
     for (const item of newCases) {
-      if (item.review === null || item.accepted || acceptedRows?.has(rowKey(item))) continue;
+      if (item.review === null || item.accepted) continue;
       const flags = caseFlags(item);
       if (flags.annotate && !flags.review) counts.set(item.language, (counts.get(item.language) ?? 0) + 1);
     }
     return counts;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- newCases and caseFlags derive from the listed inputs
-  }, [workPlan, languageChoices, caseChoices, ruleOn, acceptedRows]);
+  }, [workPlan, languageChoices, caseChoices, ruleOn]);
   const acceptLanguages = [...needs.keys()].filter(language => canAccept && accept[language]).sort();
   const unresolved = [...needs.keys()].sort().find(language => !(canAccept && accept[language] && reason.trim()));
   const blockedReason = unresolved ? `Work plan, ${unresolved}: accept the translations as reviewed outside Ontotator with a reason, or turn Review on.` : null;
@@ -107,7 +101,7 @@ export function UploadWorkPlan({ workPlan, ruleOn = true, canAccept = false, acc
   return <section className="detail-section work-plan-upload" aria-labelledby={`${ids}-heading`}>
     <h3 id={`${ids}-heading`}>Work plan</h3>
     <div className="work-plan-table-scroll"><table className="data-table density-compact work-plan-table">
-      <thead><tr><th scope="col">Language</th><th scope="col">Versions in bundle</th><th scope="col">Translation review</th><th scope="col">Annotate</th></tr></thead>
+      <thead><tr><th scope="col">Language</th><th scope="col">{kind === "text" ? "Versions in upload" : "Versions in bundle"}</th><th scope="col">Translation review</th><th scope="col">Annotate</th></tr></thead>
       <tbody>{workPlan.languages.map(language => {
         const flags = languageFlags(language);
         const name = language.key === SOURCE ? "Sources" : language.key;
@@ -124,10 +118,10 @@ export function UploadWorkPlan({ workPlan, ruleOn = true, canAccept = false, acc
     {[...needs.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([languageKey, count]) => {
       const language = workPlan.languages.find(item => item.key === languageKey);
       return <div key={languageKey} className="work-plan-acceptance" role="group" aria-label={`Acceptance, ${languageKey}`}>
-        <p className="work-plan-acceptance-title">{languageKey}: {count} of {language?.rows ?? count} translations are not marked as reviewed in the package. Annotation needs an accepted translation.</p>
+        <p className="work-plan-acceptance-title">{languageKey}: {count} of {language?.rows ?? count} translations are not marked as reviewed in the {kind === "text" ? "upload" : "package"}. Annotation needs an accepted translation.</p>
         {canAccept ? <Checkbox id={`${ids}-accept-${languageKey}`} label="These translations were reviewed outside Ontotator — accept them as they are" checked={!!accept[languageKey]} disabled={disabled} onChange={event => setAccept(current => ({ ...current, [languageKey]: event.target.checked }))} />
           : <p>Turn translation review on for {languageKey}, or ask a project lead to accept them.</p>}
-        {!!language?.marked_in_package && <p className="field-hint">{language.marked_in_package} already marked as reviewed in the package metadata need nothing.</p>}
+        {!!language?.marked_in_package && <p className="field-hint">{language.marked_in_package} already marked as reviewed in the {kind === "text" ? "upload" : "package"} metadata need nothing.</p>}
         {canAccept && <p className="field-hint">The acceptance is recorded with your name, the reason and the time.</p>}
       </div>;
     })}

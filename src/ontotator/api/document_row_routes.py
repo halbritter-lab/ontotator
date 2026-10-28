@@ -515,6 +515,18 @@ class RowSubmissions(_View):
     open_translation_reviews: list[OpenTranslationReviewView]
 
 
+class ConsolidationOriginsView(_View):
+    """How the findings of a consolidation came about (#133); they add up to
+    ``finding_count``."""
+
+    # Matching findings taken over automatically, unchanged.
+    matched: int
+    # Groups the consolidator decided, or taken-over findings they changed.
+    decided: int
+    # Findings the consolidator added outside every group.
+    added: int
+
+
 class FinalPanelSubmissionView(RowSubmissionView):
     # The lead may use it as final (false: own result under the
     # adjudicator rule, OWN_RESULT_NOT_SELECTABLE).
@@ -523,6 +535,8 @@ class FinalPanelSubmissionView(RowSubmissionView):
     only_here: int | None = None
     # Eligible on the compared version (spec VD16).
     comparable: bool = False
+    # Consolidation submissions only; None for every other kind.
+    consolidation_origins: ConsolidationOriginsView | None = None
 
 
 class AgreementView(_View):

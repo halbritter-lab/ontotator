@@ -1,7 +1,7 @@
 /**
  * Translation review flow in a real browser (review-and-annotation plan V1; spec "Acceptance" 1–7,
  * A.2, A.6, A.9, A.10): layout geometry at 1440×900, 800×900 and 390×844, the check band, the
- * decision form, decision keys, Next task after submit, My tasks flag, accessibility.
+ * decision form, decision keys, the next task after submit, My tasks flag, accessibility.
  *
  * Every test builds a fresh ``REVIEW_FLOW`` project (V0, ``POST /__test_review_flow__``) and logs in
  * as its reviewer Ana, who owns the translation reviews of ``failed-translation`` (one failed check)
@@ -96,8 +96,10 @@ async function acceptUnchanged(page: Page) {
   await expect(confirmDialog(page)).toBeVisible();
   await confirmDialog(page).getByRole("button", { name: "Submit review", exact: true }).click();
   await expect(confirmDialog(page)).toHaveCount(0);
-  await expect(page.getByText("Review submitted", { exact: true })).toBeVisible();
 }
+
+/** The app's toast after a submit (issue 125: the annotation tasks' post-submit flow). */
+const submittedToast = (page: Page, name: string) => page.locator(".ui-toast").filter({ hasText: `${name} de submitted.` });
 
 test("My tasks flags the failed-translation row", async ({ page }) => {
   const s = await start(page);
@@ -253,7 +255,7 @@ test("the built stylesheet keeps the vh fallback before each dvh height", async 
   expect(css).toMatch(/max-height:\s*50vh;\s*max-height:\s*50dvh/);
 });
 
-test("keyboard only: 1, Ctrl+Enter, Enter, Enter opens the next task", async ({ page }) => {
+test("keyboard only: 1, Ctrl+Enter, Enter submits and opens the next task", async ({ page }) => {
   const s = await start(page);
   await openReview(page, s);
   await expectFocusOutsideTextFields(page);
@@ -270,17 +272,13 @@ test("keyboard only: 1, Ctrl+Enter, Enter, Enter opens the next task", async ({ 
   await expect(confirmDialog(page).getByRole("button", { name: "Submit review", exact: true })).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(confirmDialog(page)).toHaveCount(0);
-  await expect(page.getByText("Review submitted", { exact: true })).toBeVisible();
-  const next = page.getByRole("button", { name: "Next task: second-translation de", exact: true });
-  await expect(next).toBeFocused();
-  await expect(page.locator(".translation-next-task [role=status]")).toHaveText("1 more open task in this project.");
-  await expect(page.locator(".translation-next-task").getByRole("link", { name: "Back to my tasks", exact: true })).toBeVisible();
-  await evidence(page, "1440x900-next-task");
-  await page.keyboard.press("Enter");
+  // Issue 125: as after an annotation, a toast names the submitted review and the next open task opens.
   await expect(page).toHaveURL(new RegExp(`#/tasks/${s.assignments["second-translation"]}$`));
   await expect(target(page)).toHaveValue(s.texts["second-translation"]);
   await expect(page.getByRole("navigation", { name: "Breadcrumb" }).locator('[aria-current="page"]')).toHaveText(/^second-translation de, Translation review$/);
-  // Four activations: 1, Ctrl+Enter, Enter, Enter (spec A.10).
+  await expect(submittedToast(page, "failed-translation")).toBeVisible();
+  await evidence(page, "1440x900-next-task");
+  // Three activations: 1, Ctrl+Enter, Enter (spec A.10).
 });
 
 test("editing selects Accepted with corrections and undoing reverts it", async ({ page }) => {
@@ -326,28 +324,22 @@ test("Query never asks for the clinical checkbox", async ({ page }) => {
   await evidence(page, "1440x900-rejected");
 });
 
-test("last task: Back to my tasks is primary", async ({ page }) => {
+test("last task: the submit opens My tasks, and View result reopens the submitted review", async ({ page }) => {
   const s = await start(page);
   await openReview(page, s);
   await acceptUnchanged(page);
-  const first = page.locator(".translation-next-task");
-  await expect(first.getByRole("status")).toHaveText("1 more open task in this project.");
-  await expect(first.getByRole("button", { name: /^Next task: / })).toBeFocused();
-  // R-11: "Next task: {case ID} {language}" (the one text name); soft, so the last-task checks below still run.
-  await expect.soft(first.getByRole("button", { name: /^Next task: / })).toHaveText("Next task: second-translation de");
-  await page.keyboard.press("Enter");
   await expect(page).toHaveURL(new RegExp(`#/tasks/${s.assignments["second-translation"]}$`));
   await expect(target(page)).toHaveValue(s.texts["second-translation"]);
   await expect(checks(page).locator(".translation-checks-line")).toHaveText("All 2 automatic checks passed.");
   await acceptUnchanged(page);
-  const next = page.locator(".translation-next-task");
-  await expect(next.getByRole("status")).toHaveText("No more open tasks in this project.");
-  await expect(next.getByRole("button", { name: /^Next task/ })).toHaveCount(0);
-  const back = next.getByRole("button", { name: "Back to my tasks", exact: true });
-  await expect(back).toHaveClass(/btn-primary/);
-  await evidence(page, "1440x900-last-task");
-  await back.click();
+  // Issue 125: after the last open task of the project, My tasks.
   await expect(page.getByRole("heading", { name: "My tasks", exact: true })).toBeVisible();
+  const toast = submittedToast(page, "second-translation");
+  await expect(toast).toBeVisible();
+  await evidence(page, "1440x900-last-task");
+  await toast.getByRole("button", { name: "View result", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`#/tasks/${s.assignments["second-translation"]}$`));
+  await expect(page.getByRole("region", { name: "Submitted review", exact: true })).toContainText("Accepted unchanged");
 });
 
 async function axeViolations(page: Page): Promise<string[]> {

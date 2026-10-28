@@ -14,6 +14,7 @@ export type DocumentSummary = Omit<ProjectDocumentSummary, VariantMetadataKeys> 
 export type ProjectSettings = components["schemas"]["ProjectSettings"];
 export type UploadView = components["schemas"]["UploadView"];
 export type UploadCreated = components["schemas"]["UploadCreated"];
+export type UploadStatus = NonNullable<NonNullable<operations["list_uploads_api_v1_projects__key__uploads_get"]["parameters"]["query"]>["status"]>[number];
 export type ImportPlan = components["schemas"]["ImportPlan"];
 export type JobView = components["schemas"]["JobView"];
 export type ProjectProgress = components["schemas"]["ProjectProgress"];
@@ -517,8 +518,12 @@ export class ApiClient {
     return this.request<UploadCreated>(`/api/v1/projects/${encodeURIComponent(key)}/uploads`, { method: "POST", body });
   }
 
-  async listUploads(key: string): Promise<UploadView[]> {
-    return this.request<UploadView[]>(`/api/v1/projects/${encodeURIComponent(key)}/uploads`, { method: "GET" });
+  /** The newest uploads; `statuses` keeps only those states (`?status=` repeated). */
+  async listUploads(key: string, statuses: readonly UploadStatus[] = []): Promise<UploadView[]> {
+    const query = new URLSearchParams();
+    for (const status of statuses) query.append("status", status);
+    const suffix = statuses.length ? `?${query}` : "";
+    return this.request<UploadView[]>(`/api/v1/projects/${encodeURIComponent(key)}/uploads${suffix}`, { method: "GET" });
   }
 
   async getUpload(key: string, id: number): Promise<UploadView> {

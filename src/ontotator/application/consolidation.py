@@ -583,6 +583,16 @@ def _group_view(
             }
         )
     state = _state(targets, content, roles)
+    result = state.get("result")
+    if result is not None and result["spans"] is None:
+        result["spans"] = next(
+            (
+                view["spans"]
+                for view in member_views
+                if view["annotation_id"] in state["annotation_ids"]
+            ),
+            [],
+        )
     return {
         "group_id": consolidation_group_id(inputs),
         "kinds": sorted(group.kinds),
@@ -626,9 +636,8 @@ def _state(
         state = marks[0].action
     else:  # decided in the editor without the consolidation view
         state = "leave_out" if all(d.outcome == "rejected" for d in decided) else "keep"
-    annotations = {
-        s.annotation.annotation_id: s.annotation for s in content.annotations
-    }
+    snapshots = {s.annotation.annotation_id: s for s in content.annotations}
+    annotations = {key: s.annotation for key, s in snapshots.items()}
     edited = False
     for decision in decided:
         mark = decision.consolidation
@@ -678,8 +687,25 @@ def _state(
             "layer_id": result.layer_id,
             "axes": {k: v for k, v in result.axes_values.items() if v},
             "modifiers": _modifiers(result, roles),
+            # Its text (R-3: a second finding of the term is a duplicate only on
+            # an overlapping span). A confirmed target outside the draft has
+            # no snapshot here; ``_group_view`` takes the member's spans then.
+            "spans": _evidence_spans(snapshots[result.annotation_id])
+            if result.annotation_id in snapshots
+            else None,
         },
     }
+
+
+def _evidence_spans(snapshot: AnnotationSnapshot) -> list[list[int]]:
+    """The codepoint ranges of a snapshot's referenced evidence, sorted."""
+    refs = {(ref.evidence_id, ref.version) for ref in snapshot.annotation.evidence_refs}
+    return sorted(
+        [segment.start, segment.end]
+        for evidence in snapshot.evidence
+        if (evidence.mention.evidence_id, evidence.version) in refs
+        for segment in evidence.mention.segments
+    )
 
 
 def _submitted(conn: Connection, pid: int, submission_id: str | None) -> _Content:

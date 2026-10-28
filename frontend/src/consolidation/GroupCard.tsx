@@ -170,7 +170,7 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
     members: memberSets(value, people).map((set, index) => ({ ...set, termLabel: value.members[index].term_label || value.members[index].term_id })) })), text),
   [group.group_id, allGroups, people, text]);
   const inputIds = group.members.map(member => member.input_id);
-  const sameTerm = line.termId ? sameTermGroups(group, allGroups, line.termId) : [];
+  const sameTerm = line.termId ? sameTermGroups(group, allGroups, line.termId, choices) : [];
   const termName = group.members.find(member => member.term_id === line.termId)?.term_label || otherTerm?.label || line.termId;
   const status = groupStatus(group, conflicts);
   const stored = useMemo(() => (open ? null : storedResult(group, text)), [open, group, text]);

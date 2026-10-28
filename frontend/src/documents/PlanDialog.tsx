@@ -222,7 +222,7 @@ export function PlanDialog({ projectKey, caseIds, rows, initial, onClose, onSave
   const title = `Work plan: ${plural(caseIds.length, "case")}`;
 
   const footer = <>
-    <span id={reasonId} className="work-plan-save-reason" hidden={!blocked || blocked === summary}>{blocked}</span>
+    <span id={reasonId} className="dialog-footer-reason" hidden={!blocked || blocked === summary}>{blocked}</span>
     {confirming ? <Button onClick={() => { setStep({ kind: "edit" }); setUnderstood(false); }}>Back</Button> : <Button onClick={onClose}>Cancel</Button>}
     <Button variant="primary" loading={saving} aria-disabled={blocked ? true : undefined} aria-describedby={blocked ? reasonId : undefined} onClick={save}>Save for {plural(caseIds.length, "case")}</Button>
   </>;
