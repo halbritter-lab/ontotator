@@ -836,7 +836,7 @@ class ProjectService:
                 "rewrites": changes,
             }
 
-        self.repo.rewrite_draft_in(
+        self.repo._rewrite_draft_in(
             conn,
             project_id,
             draft_key,

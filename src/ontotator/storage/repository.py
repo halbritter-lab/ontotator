@@ -3298,7 +3298,7 @@ class Repository:
             at=now,
         )
 
-    def rewrite_draft_in(
+    def _rewrite_draft_in(
         self,
         conn: Connection,
         project_id: int,
