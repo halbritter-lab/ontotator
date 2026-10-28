@@ -47,6 +47,7 @@ from ontotator.domain.work_rounds import (
 )
 from ontotator.domain.workspace import Draft, MutationEnvelope, WorkspaceKey
 from ontotator.storage.database import Database
+from ontotator.storage.live_submissions import discarded_ids, live_submission
 from ontotator.storage.overview_tables import DraftSnapshotRow
 from ontotator.storage.proposal_queries import newest_proposal_refs
 from ontotator.storage.repository import Repository, _key_str, _lock_id
@@ -151,6 +152,7 @@ def require_independent(
         SubmissionRow.annotator_id == pseudonym,
         SubmissionRow.mode.in_(["independent", "proposal_check"]),
         SubmissionRow.document_id.in_(row_documents),
+        live_submission(),
     )
     if (
         conn.execute(assigned.limit(1)).first() is not None
@@ -553,6 +555,9 @@ class WorkRoundService:
         rid = f"round-{uuid4().hex}"
         inputs: list[dict[str, Any]] = []
         items: list[str | int] = [*sources, *draft_sources]
+        if discarded_ids(conn, pid, sources):
+            # Work discarded by a mode change (#109) is no input.
+            raise DomainError("ROUND_INPUT_STALE")
         for item in items:
             source = self._round_source(conn, project, pid, item)
             sid = source.source_submission_id

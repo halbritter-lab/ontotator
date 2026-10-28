@@ -216,6 +216,14 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   NO_PROPOSALS_ON_VERSION: "This version has no tool proposals, but the annotation of this text started from proposals. Import or re-anchor the proposals for this version first.",
   ANNOTATION_MODE_LOCKED: "The annotation of this text has already started this way, so it cannot change.",
   NO_TOOL_PROPOSALS: "This text has no tool proposals, so it is annotated from scratch.",
+  ANNOTATION_MODE_NOT_LOCKED: "No work fixes this text's mode yet. Choose the mode in the annotation plan.",
+  ANNOTATION_MODE_UNCHANGED: "The text is already annotated this way.",
+  ANNOTATION_MODE_FINAL_SELECTED: "A final result was chosen for this text, so its annotation mode stays.",
+  MODE_CHANGE_STALE: "The work on this text changed. Check the new list before you change the mode.",
+  MODE_CHANGE_REASON_REQUIRED: "Changing the mode requires a reason.",
+  MODE_CHANGE_NOT_FOUND: "This mode change no longer exists. Reload the text.",
+  MODE_CHANGE_ALREADY_RESTORED: "This mode change was already undone.",
+  MODE_CHANGE_NOT_LATEST: "A later mode change is in place. Undo that one first.",
 };
 
 export function errorMessage(error: unknown): string {

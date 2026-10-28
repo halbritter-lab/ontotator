@@ -77,6 +77,7 @@ from ontotator.packages.models import (
 )
 from ontotator.storage.database import Database, advisory_lock_id
 from ontotator.storage.guidelines import current_guideline_version, guideline_facts
+from ontotator.storage.live_submissions import live_submission
 from ontotator.storage.tables import (
     AnnotationSnapshotRow,
     DocumentRow,
@@ -1528,9 +1529,13 @@ class Repository:
                 SubmissionRow.guideline_version,
             ).where(SubmissionRow.project_id == project.id)
             if submission_ids is not None:
+                # The exact closure of a final export (guarded on selection).
                 submission_query = submission_query.where(
                     SubmissionRow.submission_id.in_(submission_ids)
                 )
+            else:
+                # The work export skips discarded submissions (#109).
+                submission_query = submission_query.where(live_submission())
             submission_rows = conn.execute(
                 submission_query.order_by(
                     SubmissionRow.recorded_at, SubmissionRow.submission_id
@@ -3587,6 +3592,7 @@ class Repository:
                     .where(
                         ProjectRow.project_key == project_key,
                         SubmissionRow.document_id == document_id,
+                        live_submission(),
                     )
                     .order_by(SubmissionRow.created_at, SubmissionRow.submission_id)
                 )

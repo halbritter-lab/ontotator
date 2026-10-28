@@ -37,6 +37,7 @@ def test_proposal_count_and_mode_before_assignment(tmp_path):
         "locked": False,
         "override": None,
         "proposal_count": 3,
+        "discarded_count": 0,
     }
     assert c2["proposal_count"] == 0
     assert c2["annotation_mode"]["source"] == "no_proposals"

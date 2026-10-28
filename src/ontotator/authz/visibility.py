@@ -170,6 +170,7 @@ def readable_case_documents(
     ).all()
     ids = {row.document_id for row in assignments}
     # Frozen human source texts are visible only through an exact offered input.
+    from ontotator.storage.live_submissions import live_submission
     from ontotator.storage.tables import SubmissionRow
     from ontotator.storage.workflow_tables import RoundInputRow, WorkRoundRow
 
@@ -188,6 +189,7 @@ def readable_case_documents(
             .where(
                 RoundInputRow.project_id == project_id,
                 qualifying_assignment(fresh.user_id),
+                live_submission(),
             )
         ).scalars()
     )

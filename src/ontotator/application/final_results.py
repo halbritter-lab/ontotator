@@ -27,6 +27,7 @@ from ontotator.storage.final_tables import (
     FinalSelectionEventRow,
     FinalSelectionRow,
 )
+from ontotator.storage.live_submissions import live_submission
 from ontotator.storage.tables import (
     DocumentRow,
     JobRow,
@@ -92,6 +93,8 @@ class FinalResultService:
                     SubmissionRow.project_id == pid,
                     SubmissionRow.document_id == document,
                     SubmissionRow.submission_id == submission,
+                    # A discarded submission (mode change, #109) is no result.
+                    live_submission(),
                 )
             ).first()
             if doc is None or exact is None:

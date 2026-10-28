@@ -1307,7 +1307,23 @@ describe("plan chips on the page", () => {
     const card = await textCard("case-0101 fr");
     const mode = await within(card).findByRole("radiogroup", { name: "Annotation plan" });
     expect(document.getElementById(mode.getAttribute("aria-describedby")!)!.textContent)
-      .toBe("Fixed: Tom Reis has submitted work started from proposals, so the mode no longer changes.");
+      .toBe("Fixed: Tom Reis has submitted work started from proposals. Changing the mode discards that work.");
+  });
+
+  it("Change mode… on a locked mode opens the warning that names the discarded work (#109)", async () => {
+    const fr = { ...planRow("case-0101", "fr", stepOf("assign_annotation")), proposal_count: 12, annotation_mode: { mode: "proposals" as const, source: "locked" as const, locked: true, override: null, proposal_count: 12 },
+      work: [work({ assignment_id: 4, document_id: "case-0101-fr", task: "annotate", status: "submitted", person: { pseudonym: "ann-0004", display_name: "Tom Reis", is_me: false } })] };
+    mockRows(page([group("case-0101", [fr], { plan_revision: 2 })]));
+    const tom = { pseudonym: "ann-0004", display_name: "Tom Reis", is_me: false };
+    const previewCall = vi.spyOn(api, "previewModeChange").mockResolvedValue({ case_id: "case-0101", language: "fr", from_mode: "proposals", to_mode: "scratch", revision: 2,
+      submissions: [{ submission_id: "sub-tom", document_id: "case-0101-fr", mode: "proposal_check", recorded_at: "2026-10-20T10:00:00Z", author: tom }],
+      assignments: [{ assignment_id: 4, document_id: "case-0101-fr", task: "annotate", status: "submitted", person: tom }] });
+    renderPage({ query: { panel: "case-0101:fr", panel_stage: "annotation" } });
+    const card = await textCard("case-0101 fr");
+    fireEvent.click(await within(card).findByRole("button", { name: "Change mode…" }));
+    const warning = await screen.findByRole("dialog", { name: "Change annotation of case-0101 fr to from scratch?" });
+    expect(await within(warning).findByText("Tom Reis: 1 submission is discarded.")).toBeTruthy();
+    expect(previewCall).toHaveBeenCalledWith(expect.any(String), { case_id: "case-0101", language: "fr", mode: "scratch" });
   });
 
   it("opens the upload dialog from the heading row", async () => {

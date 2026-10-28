@@ -17,6 +17,7 @@ from ontotator.authz.visibility import (
 )
 from ontotator.domain.errors import DomainError
 from ontotator.storage.final_tables import FinalSelectionRow
+from ontotator.storage.live_submissions import live_submission
 from ontotator.storage.proposal_queries import (
     newest_proposal_refs,
     newest_proposal_set,
@@ -159,6 +160,7 @@ def visible_annotation_versions(
                 SubmissionRow.project_id == project_id,
                 SubmissionRow.document_id == document_id,
                 SubmissionRow.annotator_id == fresh.pseudonym,
+                live_submission(),
             )
             .order_by(
                 SubmissionRow.created_at.desc(), SubmissionRow.submission_id.desc()
@@ -194,6 +196,7 @@ def visible_annotation_versions(
                 .where(
                     SubmissionRow.project_id == project_id,
                     SubmissionRow.document_id == document_id,
+                    live_submission(),
                 )
                 .order_by(SubmissionRow.recorded_at, SubmissionRow.submission_id)
             )
