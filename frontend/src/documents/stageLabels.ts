@@ -114,12 +114,14 @@ function pausedText(cell: StageCellView): StageText {
 }
 
 /**
- * Annotators of a text against the project limit, an upper bound (R-13): "1 annotator · max 2", "2 · full",
- * "No annotator yet · max 2"; never "1 of 2", which reads like a required number.
+ * Annotators of a text against the project limit, an upper bound (R-13): "1 annotator · max 2", "2 · full";
+ * never "1 of 2", which reads like a required number. Nobody yet reads "Unassigned" like the other stages: the
+ * limit is the same for every text and the assign dialog shows it (issue 129, U2).
  */
 export function annotatorCount(assigned: number, max: number): string {
   if (assigned >= max) return `${assigned} · full`;
-  return `${assigned === 0 ? "No annotator yet" : plural(assigned, "annotator")} · max ${max}`;
+  if (assigned === 0) return "Unassigned";
+  return `${plural(assigned, "annotator")} · max ${max}`;
 }
 
 function annotationText(cell: StageCellView): StageText {
