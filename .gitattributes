@@ -25,3 +25,7 @@ frontend/public/licenses/*.txt text eol=lf
 # Vite copies index.html verbatim into the embedded bundle; CRLF here would make
 # the Windows build differ from the Linux CI build.
 frontend/index.html text eol=lf
+
+# Tests pin the SHA-256 of this ontology fixture; it is stored with CRLF line
+# ends, so every checkout (Linux CI and Windows) gets the same bytes.
+tests/fixtures/hp.json -text
