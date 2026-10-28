@@ -116,6 +116,9 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   };
   const [state, setState] = useState<SearchState>(searchManager.getState());
   const [queryInput, setQueryInput] = useState<string>(initialQuery ?? "");
+  // The field's value as of the last change, for effects that may run with an older render's `queryInput`.
+  const latestQuery = useRef(queryInput);
+  const setQuery = (value: string) => { latestQuery.current = value; setQueryInput(value); };
 
   useEffect(() => {
     return searchManager.subscribe((nextState) => {
@@ -132,7 +135,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
     const identity = [annotationId, workspaceKey, layerId, searchManager] as const;
     const isMount = identity.every((value, index) => Object.is(value, mountIdentity.current[index]));
     const query = isMount ? initialQuery ?? "" : "";
-    setQueryInput(query);
+    setQuery(query);
     if (!isMount) dropPrefixFilter();
     if (query.trim()) runSearch(query, true, isMount ? within ?? null : mode === "modifier" ? MODIFIER_ROOTS : null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -153,7 +156,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
     prefillSettled.current = true;
     lastPrefill.current = initialQuery;
     selectPrefill.current = true;
-    setQueryInput(initialQuery);
+    setQuery(initialQuery);
     runSearch(initialQuery, first);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialQuery]);
@@ -182,7 +185,9 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   useEffect(() => {
     if (lastLanguagesKey.current === languagesKey) return;
     lastLanguagesKey.current = languagesKey;
-    if (queryInput.trim()) runSearch(queryInput, true);
+    // Not `queryInput`: a keystroke handled before this effect ran is newer, and its debounced search must not be
+    // replaced by one for the older text (the field would then wait forever for hits that never match it).
+    if (latestQuery.current.trim()) runSearch(latestQuery.current, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [languagesKey]);
 
@@ -249,12 +254,12 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
       const rest = start.slice(MODIFIER_PREFIX.length).trimStart();
       if (!modifiersOnly) modifiersFromPrefix.current = true;
       setModifiersOnly(true);
-      setQueryInput(rest);
+      setQuery(rest);
       runSearch(rest, false, MODIFIER_ROOTS);
       return;
     }
     if (!val.trim() && modifiersFromPrefix.current) dropPrefixFilter();
-    setQueryInput(val);
+    setQuery(val);
     runSearch(val);
   };
 
@@ -274,7 +279,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
     userTyped.current = true;
     if (modifiersFromPrefix.current) dropPrefixFilter();
     cancelDebounce();
-    setQueryInput("");
+    setQuery("");
     searchManager.clear();
   };
 

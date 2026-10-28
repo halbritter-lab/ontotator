@@ -60,6 +60,8 @@ test('Q7: focused resize handle shows a focus-ring ring without moving text', as
   await expect(mentionWithOffsets(page, '[0:9]')).toBeVisible();
   const handle = page.locator('.text-container .resize-handle--end');
   await expect(handle).toHaveCount(1);
+  // The term label arrives after the save and re-renders every handle (its title names the term): wait for it.
+  await expect(handle).toHaveAttribute('title', /the Hypotonia mention/);
   const text = page.locator('.text-container');
   const rects = () => text.evaluate(el => [...el.querySelectorAll('.run, mark, .mention')].map(m => {
     const r = m.getBoundingClientRect(); return [r.x, r.y, r.width, r.height];
@@ -67,10 +69,13 @@ test('Q7: focused resize handle shows a focus-ring ring without moving text', as
   const before = await rects();
   expect(before.length).toBeGreaterThan(0);
   await page.keyboard.press('Shift'); // keyboard modality, so programmatic focus matches :focus-visible
-  await handle.focus();
-  expect(await handle.evaluate(el => el.matches(':focus-visible'))).toBe(true);
-  const ring = await handle.evaluate(el => getComputedStyle(el, '::before').boxShadow);
-  expect(ring).toContain('rgb(29, 78, 137)'); // --focus-ring #1d4e89
+  // Focus and read in one step: a handle replaced between two reads has an empty computed style.
+  const focused = await handle.evaluate(el => {
+    el.focus();
+    return { visible: el.matches(':focus-visible'), ring: getComputedStyle(el, '::before').boxShadow };
+  });
+  expect(focused.visible).toBe(true);
+  expect(focused.ring).toContain('rgb(29, 78, 137)'); // --focus-ring #1d4e89
   expect(await rects()).toEqual(before);
   const shot = test.info().outputPath('q7-handle-focus.png');
   await page.screenshot({ path: shot });
@@ -269,6 +274,9 @@ test('F7: status tabs switch and survive a reload', async ({ page, browser }) =>
   // Reload to read the submission (at "#/?status=all", so the last-used landing does not apply), then a
   // hash-only goto to "#/" keeps the reloaded task list and shows the default tab.
   await page.reload();
+  // The app decides the last-used landing from the hash of its first render, which may come after "load":
+  // change the hash only once it has rendered, or "#/" is taken for a fresh start and redirects to Projects.
+  await expect(page.getByTestId('current-user')).toBeVisible();
   await page.goto('/#/');
   const tabs = page.getByRole('tablist', { name: 'Task status' });
   const rows = page.getByTestId('task-row');
