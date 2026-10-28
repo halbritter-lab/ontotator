@@ -263,6 +263,15 @@ describe("optional (a row without a final decision step)", () => {
     expect(within(region).queryByText(/annotations submitted/)).toBeNull();
   });
 
+  it("renders no empty block while someone consolidates the text", async () => {
+    panels[rowKey("case-133", "de")] = comparePanel("case-133", "de");
+    const running = stages({ annotation: stageCell("consolidating", "running", { people: [{ pseudonym: "ann-0007", display_name: "Carla Consolidator", is_me: false }] }) });
+    renderPanel("case-133:de", page([group("case-133", [chooseRow("case-133", "de", { next_step: null, steps: [], categories: [], missing_final: { counts: false, reason: "work_open" }, stages: running })])]), { optional: true });
+    await waitFor(() => expect(api.finalPanel).toHaveBeenCalled());
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.queryByRole("region", { name: "Final result" })).toBeNull();
+  });
+
   it("renders nothing when one of two submissions is not eligible (the en-source rule)", async () => {
     const both = comparePanel("case-132", "de");
     panels[rowKey("case-132", "de")] = { ...both, submissions: [{ ...both.submissions![0], eligible: false }, both.submissions![1]] };
