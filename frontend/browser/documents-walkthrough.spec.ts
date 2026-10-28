@@ -128,7 +128,7 @@ test("step 3: Ana accepts unchanged; NEW on the next visit", async () => {
   await act({ actor: "ana", action: "accept_review" });
   await revisit(true);
   await expectStage(cell("translation"), { state: "accepted", who: "" });
-  await expectStage(cell("annotation"), { state: /No annotator yet · max \d+/, who: "" });
+  await expectStage(cell("annotation"), { state: "Unassigned", who: "" });
   await expect(newBadge(de())).toHaveCount(1);
   await expect(documentsTab(page, "To assign", 1)).toBeVisible();
   await expectCounterEqualsTab(page);

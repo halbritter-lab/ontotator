@@ -101,7 +101,7 @@ test("S0 synthetic-accepted: the final is on old text after v2 corrected it; en 
   // en: the source, annotation unassigned, finalization waiting and nothing to decide.
   const en = textRow(page, caseId, "en");
   await expect(rowCell(en, "translation")).toContainText("source text");
-  await expect(rowCell(en, "annotation")).toContainText(/Unassigned|No annotator yet|\d+ annotators? · max \d+|\d+ · full/);
+  await expect(rowCell(en, "annotation")).toContainText(/Unassigned|\d+ annotators? · max \d+|\d+ · full/);
   await expect(rowCell(en, "finalization")).toContainText("waiting");
   await expect(rowCell(en, "next").getByRole("button")).toHaveAccessibleName(textNamePattern("Assign annotation…, ", caseId, "en"));
   expect(await hasDecisionEdge(en)).toBe(false);

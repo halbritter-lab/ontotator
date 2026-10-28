@@ -1736,7 +1736,9 @@ export interface paths {
          *     username, and anybody else only by the exact username or e-mail, so the
          *     search does not browse the installation's user list. System
          *     administrators are never offered (they manage without membership); an
-         *     administrator caller searches everyone. Ten results at most.
+         *     administrator caller searches everyone. Ten results at most; an exact
+         *     username or e-mail comes first, so a typed-out username still shows its
+         *     person (display name and languages) as a confirmation.
          */
         get: operations["member_candidates_api_v1_projects__key__member_candidates_get"];
         put?: never;
@@ -4879,6 +4881,8 @@ export interface components {
             username: string;
             /** Display Name */
             display_name: string;
+            /** Languages */
+            languages?: string[];
         };
         /** MemberChange */
         MemberChange: {

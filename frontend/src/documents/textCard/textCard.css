@@ -46,6 +46,12 @@
 .text-card-muted { color: var(--text-muted); font-size: var(--size-sm); line-height: var(--leading-sm); }
 .text-card-chips,
 .text-card-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+/* The part's one next step (issue 129, U5): label and primary button, set apart from the secondary tools below. */
+.text-card-next {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-3); border: 1px solid var(--notice-info-border); border-radius: var(--radius-sm); background: var(--notice-info-fill);
+}
+.text-card-next-label { margin: 0; color: var(--notice-info-text); }
 .text-card-myself { display: grid; justify-items: start; gap: var(--space-1); }
 .text-card-details { display: grid; gap: var(--space-4); }
 .text-card-plan { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
