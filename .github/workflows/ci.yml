@@ -36,7 +36,7 @@ jobs:
               git config --global "url.https://x-access-token:${ONTOSPAN_TOKEN}@github.com/${repo}.insteadOf" "https://github.com/${repo}"
             done
           fi
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
       - run: uv sync --locked
@@ -79,7 +79,7 @@ jobs:
           persist-credentials: false
       - name: Authenticate the ontospan Git dependency
         run: *ontospan-auth
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
       - run: uv sync --locked
@@ -115,7 +115,7 @@ jobs:
           persist-credentials: false
       - name: Authenticate the ontospan Git dependency
         run: *ontospan-auth
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
       - run: uv sync --locked
