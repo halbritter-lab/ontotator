@@ -184,7 +184,7 @@ def test_search_api_roles_and_stored_within(api) -> None:  # type: ignore[no-unt
     assert set(roles.values()) <= {"modifier", "cohort"}
     event = app.state.repo.get_search_event(result["search_id"], project)
     assert event.within == ROOTS
-    plain = _search(session, key, query="Krampfanfall")
+    plain = _search(session, key, query="Seizure")
     assert {c["role"] for c in plain["candidates"]} == {"finding"}
     stored = app.state.repo.get_search_event(plain["search_id"], project)
     assert stored.within is None
