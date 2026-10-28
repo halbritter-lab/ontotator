@@ -2,7 +2,8 @@
  * Selection bar of Documents (spec "Selection bar"; documents overview VD4, VD21; owner decision R-3 of
  * 2026-10-26: it shows from one selected text on): "3 texts in 2 cases selected", the common next step,
  * "{k} not shown with these filters" (from the selection summary with the current filters) and
- * "Clear selection"; primary "Assign…" (the page's only primary button) and "Plan…" (M2 decision M-1: the two
+ * "Clear selection"; primary "Assign…" (the page's only primary button; it names the work, "Assign review…" or
+ * "Assign annotation…", once the summary knows it; issue 129, U3) and "Plan…" (M2 decision M-1: the two
  * translation plan presets live in the plan dialog's quick choice). Every plan save keeps the selection and shows an
  * Undo toast (D22); a save that changes nothing says why instead. The summary sends the selected texts (`rows`); the
  * plan dialog edits whole cases.
@@ -57,6 +58,18 @@ const ASSIGN_STEP: Readonly<Record<string, string>> = {
 /** "next step: Assign translation review (de)". */
 export const commonStepText = (step: { task: string; language: string }): string =>
   `next step: ${ASSIGN_STEP[step.task] ?? step.task} (${step.language})`;
+
+const ASSIGN_BUTTON: Readonly<Record<string, string>> = { translation_review: "review", annotate: "annotation" };
+
+/**
+ * The primary button names what gets assigned (issue 129, U3): "Assign review…", "Assign annotation…" or both
+ * ("Assign review or annotation…"); "Assign…" while the summary loads or when nothing can be assigned.
+ */
+export function assignButtonText(summary: Pick<SelectionSummary, "steps"> | null): string {
+  const tasks = new Set((summary?.steps ?? []).map(step => step.task).filter(task => task in ASSIGN_BUTTON));
+  const words = Object.keys(ASSIGN_BUTTON).filter(task => tasks.has(task)).map(task => ASSIGN_BUTTON[task]);
+  return words.length ? `Assign ${words.join(" or ")}…` : "Assign…";
+}
 
 /** Why a plan save changed nothing: presets skip source texts (`skipped_rows`), the rest already had the plan. */
 export function nothingChangedText(result: BulkResult, selected: number): string {
@@ -166,7 +179,7 @@ export function SelectionBar({
           {current && current.not_shown > 0 && <span className="selection-bar-hidden">, {current.not_shown} not shown with these filters</span>}
         </p>
         <div className="selection-bar-actions">
-          <Button variant="primary" onClick={onAssign}>Assign…</Button>
+          <Button variant="primary" onClick={onAssign}>{assignButtonText(current)}</Button>
           <Button onClick={() => setPlan(caseIds)}>Plan…</Button>
           <Button onClick={onClear}>Clear selection</Button>
         </div>
