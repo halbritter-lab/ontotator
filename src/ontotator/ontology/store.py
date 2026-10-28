@@ -38,6 +38,7 @@ from ontotator.storage.database import Database
 from ontotator.storage.tables import (
     OntologyFileRow,
     ProjectOntologyRow,
+    ProjectRow,
     StoredFileRow,
 )
 from ontotator.vendor.hpo_span_annotator.hpo import OntologyError
@@ -266,13 +267,21 @@ class OntologyStore:
                 language=language,
             )
         else:
-            # Uploading earlier content again makes it the latest of its name.
+            # Uploading earlier content again makes it the latest of its name,
+            # under the name it was uploaded as now.
             with self.db.transaction() as conn:
-                conn.execute(
+                row = conn.execute(
                     update(OntologyFileRow)
                     .where(OntologyFileRow.sha256 == digest)
-                    .values(uploaded_at=func.now())
-                )
+                    .values(
+                        uploaded_at=func.now(),
+                        filename=name,
+                        prefix=prefix,
+                        language=language,
+                    )
+                    .returning(*_FILE_COLUMNS)
+                ).one()
+            known = _file(row)
         with self.registry.changing():
             self._translation_version[name] = digest
         return known, stored, created
@@ -370,6 +379,27 @@ class OntologyStore:
         if service is None:
             return []
         return [root for root in wanted if service.ontology.get(root) is None]
+
+    def pins_missing_roots(self) -> list[tuple[str, str, str, list[str]]]:
+        """(project, ontology id, sha256, missing roots) of every pin whose
+        allowed roots its release lacks; such pins are not enforced."""
+        with self.db.transaction() as conn:
+            pins = conn.execute(
+                select(
+                    ProjectRow.project_key,
+                    ProjectOntologyRow.ontology_id,
+                    ProjectOntologyRow.sha256,
+                    ProjectOntologyRow.allowed_roots,
+                )
+                .join(ProjectRow, ProjectRow.id == ProjectOntologyRow.project_id)
+                .order_by(ProjectRow.project_key, ProjectOntologyRow.ontology_id)
+            ).all()
+        found = []
+        for project_key, ontology_id, sha256, roots in pins:
+            missing = self.missing_roots(sha256, roots or [])
+            if missing:
+                found.append((project_key, ontology_id, sha256, missing))
+        return found
 
     # --- reading ----------------------------------------------------------
 
