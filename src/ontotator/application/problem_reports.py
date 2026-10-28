@@ -763,10 +763,14 @@ class ProblemReportService:
         project: str,
         document_id: str | None = None,
         assignment_id: int | None = None,
+        limit: int = 100,
+        offset: int = 0,
     ) -> list[ProblemReportView]:
-        """Reports the viewer may read, newest first (reporters: only their own)."""
-        # TODO: N+1 - build_report_view runs ~8 queries per report; batch them
-        # if report lists grow large.
+        """Reports the viewer may read, newest first (reporters: only their own).
+
+        One page of ``limit`` reports from ``offset``: each view costs about 8
+        queries (batch ``build_report_view`` once pages need to grow).
+        """
         with self.db.transaction() as conn:
             pid = self.repo._require_project(conn, project)
             fresh = current_access(conn, access, pid, project)
@@ -790,5 +794,7 @@ class ProblemReportService:
                         ProblemReportRow.created_at.desc(),
                         ProblemReportRow.report_id.desc(),
                     )
+                    .limit(limit)
+                    .offset(offset)
                 ).scalars()
             ]

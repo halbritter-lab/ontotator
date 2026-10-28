@@ -102,6 +102,8 @@ from ontotator.storage.tables import (
 )
 
 _ESCAPED_KEY_PREFIX = "wk2|"
+# Identities per snapshot verification query (bind parameters stay far below limits).
+_SNAPSHOT_CHUNK = 1000
 
 
 def _key_str(key: WorkspaceKey) -> str:
@@ -907,28 +909,43 @@ class Repository:
         annotations: Iterable[AnnotationSnapshot],
         evidence: Iterable[EvidenceSnapshot],
     ) -> None:
-        """A known snapshot identity of any project must have the same content."""
-        for snap in annotations:
-            expected = canonical_hash(encode_snapshot(snap))
-            for stored in conn.execute(
-                select(AnnotationSnapshotRow.payload).where(
-                    AnnotationSnapshotRow.annotation_id
-                    == snap.annotation.annotation_id,
-                    AnnotationSnapshotRow.version == snap.version,
+        """A known snapshot identity of any project must have the same content.
+
+        One indexed query per chunk of identities, not one table scan each:
+        imports run this under the global import lock.
+        """
+        checks = (
+            (
+                AnnotationSnapshotRow,
+                AnnotationSnapshotRow.annotation_id,
+                [
+                    (s.annotation.annotation_id, s.version, encode_snapshot(s))
+                    for s in annotations
+                ],
+            ),
+            (
+                EvidenceSnapshotRow,
+                EvidenceSnapshotRow.evidence_id,
+                [(e.mention.evidence_id, e.version, e.model_dump()) for e in evidence],
+            ),
+        )
+        for row, id_column, items in checks:
+            expected: dict[tuple[str, str], set[str]] = {}
+            for item_id, version, payload in items:
+                expected.setdefault((item_id, version), set()).add(
+                    canonical_hash(payload)
                 )
-            ).scalars():
-                if canonical_hash(stored) != expected:
-                    raise InvalidPackage("Conflicting immutable snapshot content")
-        for ev in evidence:
-            expected = canonical_hash(ev.model_dump())
-            for stored in conn.execute(
-                select(EvidenceSnapshotRow.payload).where(
-                    EvidenceSnapshotRow.evidence_id == ev.mention.evidence_id,
-                    EvidenceSnapshotRow.version == ev.version,
-                )
-            ).scalars():
-                if canonical_hash(stored) != expected:
-                    raise InvalidPackage("Conflicting immutable snapshot content")
+            keys = list(expected)
+            for i in range(0, len(keys), _SNAPSHOT_CHUNK):
+                for item_id, version, stored in conn.execute(
+                    select(id_column, row.version, row.payload).where(
+                        tuple_(id_column, row.version).in_(
+                            keys[i : i + _SNAPSHOT_CHUNK]
+                        )
+                    )
+                ):
+                    if expected[(item_id, version)] != {canonical_hash(stored)}:
+                        raise InvalidPackage("Conflicting immutable snapshot content")
 
     @staticmethod
     def _verify_existing_package_content(

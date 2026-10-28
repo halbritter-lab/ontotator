@@ -8,6 +8,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 from hashlib import sha256
+from itertools import accumulate
 from typing import Literal
 
 from ontotator.domain.annotations import AnnotationRef, AnnotationSnapshot, Modifier
@@ -19,14 +20,48 @@ class TextMap:
     blocks: tuple[tuple[int, int, int], ...]
 
 
+# Codepoints of both changed middles matched by characters alone (~0.1 s).
+_CHAR_MATCH_LIMIT = 8000
+
+
+def _char_blocks(old: str, new: str) -> list[tuple[int, int, int]]:
+    matcher = SequenceMatcher(None, old, new, autojunk=False)
+    return [(a, b, n) for a, b, n in matcher.get_matching_blocks() if n]
+
+
+def _line_blocks(old: str, new: str) -> list[tuple[int, int, int]]:
+    """Equal blocks of whole equal lines, characters only inside changed lines."""
+    old_lines = old.splitlines(keepends=True)
+    new_lines = new.splitlines(keepends=True)
+    if len(old_lines) <= 1 or len(new_lines) <= 1:
+        return _char_blocks(old, new)
+    old_at = [0, *accumulate(map(len, old_lines))]
+    new_at = [0, *accumulate(map(len, new_lines))]
+    blocks: list[tuple[int, int, int]] = []
+    matcher = SequenceMatcher(None, old_lines, new_lines, autojunk=False)
+    for op, i, i_end, j, j_end in matcher.get_opcodes():
+        a, a_end, b, b_end = old_at[i], old_at[i_end], new_at[j], new_at[j_end]
+        if op == "equal":
+            blocks.append((a, b, a_end - a))
+        elif op == "replace":
+            blocks.extend(
+                (a + x, b + y, n)
+                for x, y, n in _char_blocks(old[a:a_end], new[b:b_end])
+            )
+    return blocks
+
+
 def text_map(old: str, new: str) -> TextMap:
     """Equal codepoint blocks of ``old`` and ``new``, in order.
 
-    The common prefix and suffix are equal blocks as they are; only the
-    changed middle goes through ``SequenceMatcher``. Matching a whole long,
+    The common prefix and suffix are equal blocks as they are; the changed
+    middle goes through a character ``SequenceMatcher``. Matching a long,
     repetitive text character by character without autojunk is quadratic
-    (seconds for an ordinary clinical text), and callers such as round creation
-    map under the exclusive project lock.
+    (seconds for an ordinary clinical text edited at both ends), and callers
+    such as round creation map under the exclusive project lock, so a middle
+    longer than ``_CHAR_MATCH_LIMIT`` is matched by lines first and only the
+    differing line groups by characters. Adjacent blocks are merged, so a
+    span across a line edge still maps.
     """
     limit = min(len(old), len(new))
     prefix = 0
@@ -37,16 +72,28 @@ def text_map(old: str, new: str) -> TextMap:
         suffix += 1
     old_middle = old[prefix : len(old) - suffix]
     new_middle = new[prefix : len(new) - suffix]
-    blocks: list[tuple[int, int, int]] = [(0, 0, prefix)] if prefix else []
+    found: list[tuple[int, int, int]] = [(0, 0, prefix)] if prefix else []
     if old_middle and new_middle:
-        matcher = SequenceMatcher(None, old_middle, new_middle, autojunk=False)
-        blocks.extend(
+        found.extend(
             (prefix + a, prefix + b, n)
-            for a, b, n in matcher.get_matching_blocks()
-            if n
+            for a, b, n in (
+                _char_blocks(old_middle, new_middle)
+                if len(old_middle) + len(new_middle) <= _CHAR_MATCH_LIMIT
+                else _line_blocks(old_middle, new_middle)
+            )
         )
     if suffix:
-        blocks.append((len(old) - suffix, len(new) - suffix, suffix))
+        found.append((len(old) - suffix, len(new) - suffix, suffix))
+    blocks: list[tuple[int, int, int]] = []
+    for a, b, n in found:
+        if (
+            blocks
+            and blocks[-1][0] + blocks[-1][2] == a
+            and blocks[-1][1] + blocks[-1][2] == b
+        ):
+            blocks[-1] = (blocks[-1][0], blocks[-1][1], blocks[-1][2] + n)
+        else:
+            blocks.append((a, b, n))
     return TextMap(tuple(blocks))
 
 

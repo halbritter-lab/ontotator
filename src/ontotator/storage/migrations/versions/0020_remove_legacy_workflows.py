@@ -17,6 +17,30 @@ from ontotator.storage.work_purge import purge_legacy
 
 SCHEMA = "ontotator"
 FK = "fk_edit_events_draft_id"
+# The purged tables as of this revision (leaf first), frozen: tables added to
+# the live purge list later do not exist yet when this migration runs.
+TABLES = (
+    "task_hold_state",
+    "task_holds",
+    "problem_report_events",
+    "problem_report_state",
+    "problem_reports",
+    "text_change_resolutions",
+    "final_selection_events",
+    "final_selections",
+    "export_selection_snapshots",
+    "workflow_command_receipts",
+    "review_obligation_resolutions",
+    "round_inputs",
+    "round_submission_bindings",
+    "round_workspace_bindings",
+    "work_round_state",
+    "work_rounds",
+    "drafts",
+    "draft_snapshots",
+    "submissions",
+    "assignments",
+)
 
 revision = "0020"
 down_revision = "0019"
@@ -26,7 +50,7 @@ depends_on = None
 
 def upgrade() -> None:
     op.drop_constraint(FK, "edit_events", schema=SCHEMA)
-    counts = purge_legacy(op.get_bind())
+    counts = purge_legacy(op.get_bind(), TABLES)
     # WARNING reaches stderr without any logging setup (M1 records the line).
     logging.getLogger("ontotator.migrations").warning("0020 legacy purge: %s", counts)
 

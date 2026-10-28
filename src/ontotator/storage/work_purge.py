@@ -137,10 +137,15 @@ def purge(
     assignments: Iterable[int] = (),
     subs: Iterable[Sub] = (),
     drafts: Iterable[int] = (),
+    tables: tuple[str, ...] = _TABLES,
 ) -> dict[str, int]:
-    """Delete the seeds with their whole work; rows deleted per table."""
+    """Delete the seeds with their whole work; rows deleted per table.
+
+    ``tables`` (leaf first) are the tables deleted from; a migration passes
+    the tables of its own revision, so tables added later are not touched.
+    """
     a, r, s, d = _closure(conn, set(assignments), set(subs), set(drafts))
-    counts = dict.fromkeys(_TABLES, 0)
+    counts = dict.fromkeys(tables, 0)
     if not (a or s or d):
         return counts
     p: dict[str, Any] = {"a": sorted(a), "r": sorted(r), "d": sorted(d)}
@@ -198,13 +203,13 @@ def purge(
         "submissions": _IN_SUBS.format(col="submission_id"),
         "assignments": "id = ANY(:a)",
     }
-    for table in _TABLES:
+    for table in tables:
         conn.execute(text(f"ALTER TABLE {S}.{table} DISABLE TRIGGER USER"))
-    for table in _TABLES:
+    for table in tables:
         counts[table] = conn.execute(
             text(f"DELETE FROM {S}.{table} WHERE {deletes[table]}"), p
         ).rowcount
-    for table in _TABLES:
+    for table in tables:
         conn.execute(text(f"ALTER TABLE {S}.{table} ENABLE TRIGGER USER"))
     conn.execute(
         text(
@@ -237,10 +242,10 @@ _KEEP_BOTH_SUBMISSION = (
 )
 
 
-def purge_legacy(conn: Connection) -> dict[str, int]:
+def purge_legacy(conn: Connection, tables: tuple[str, ...] = _TABLES) -> dict[str, int]:
     """D1: annotation review tasks, ``assisted`` work and keep-both
     consolidations with their work; ``assisted`` and ``review`` mode
-    preferences become ``independent``."""
+    preferences become ``independent``. ``tables`` as in ``purge``."""
     assignments = _ids(
         conn,
         f"SELECT a.id FROM {S}.assignments a WHERE a.task = 'review'"
@@ -257,7 +262,7 @@ def purge_legacy(conn: Connection) -> dict[str, int]:
         " WHERE mode = 'assisted'",
     )
     drafts = _ids(conn, f"SELECT id FROM {S}.drafts WHERE mode = 'assisted'")
-    counts = purge(conn, assignments, subs, drafts)
+    counts = purge(conn, assignments, subs, drafts, tables)
     counts["user_preferences_converted"] = conn.execute(
         text(
             f"UPDATE {S}.user_preferences SET preferences = jsonb_set(preferences,"

@@ -273,3 +273,35 @@ def test_lead_restart_abandons_submitted_round_and_opens_empty_preserved_history
     )
     assert repo.get_submission(inputs[0].submission_id, "pkg-1") == inputs[0]
     assert not AssignmentService(repo.db).list("pkg-1", user="anna")[0].held
+
+
+def test_report_list_pages_newest_first(rounds):
+    from ontotator.application.problem_reports import ProblemReportService
+    from ontotator.assignments.service import AssignmentService
+
+    repo, access, actor, assignment, _ = rounds
+    service = ProblemReportService(repo.db)
+    for index in range(3):
+        current = AssignmentService(repo.db).list("pkg-1", user="anna")[0]
+        report = service.report(
+            access,
+            actor,
+            assignment.id,
+            request_id=f"report-{index}",
+            expected_workflow_revision=current.workflow_revision,
+            reason=f"Problem {index}",
+            round_id=current.active_round_id,
+        )
+        service.act(
+            access,
+            actor,
+            report.report_id,
+            request_id=f"resume-{index}",
+            expected_revision=report.revision,
+            action="resume",
+            reason="Continue",
+        )
+    every = service.list(access, "pkg-1")
+    assert [r.reason for r in every] == ["Problem 2", "Problem 1", "Problem 0"]
+    pages = [service.list(access, "pkg-1", limit=2, offset=o) for o in (0, 2, 4)]
+    assert pages == [every[:2], every[2:], []]

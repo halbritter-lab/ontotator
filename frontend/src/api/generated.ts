@@ -9326,6 +9326,8 @@ export interface operations {
             query?: {
                 document_id?: string | null;
                 assignment_id?: number | null;
+                limit?: number;
+                offset?: number;
             };
             header?: never;
             path: {

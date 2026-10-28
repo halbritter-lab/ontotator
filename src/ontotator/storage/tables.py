@@ -232,6 +232,12 @@ class AnnotationSnapshotRow(Base):
     """An immutable, content-addressed annotation snapshot (append-only)."""
 
     __tablename__ = "annotation_snapshots"
+    # Identity lookups across projects (import verification).
+    __table_args__ = (
+        Index(
+            "ix_annotation_snapshots_annotation_id_version", "annotation_id", "version"
+        ),
+    )
 
     project_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey(ProjectRow.id), primary_key=True
@@ -247,6 +253,10 @@ class EvidenceSnapshotRow(Base):
     """An immutable, content-addressed evidence snapshot (append-only)."""
 
     __tablename__ = "evidence_snapshots"
+    # Identity lookups across projects (import verification).
+    __table_args__ = (
+        Index("ix_evidence_snapshots_evidence_id_version", "evidence_id", "version"),
+    )
 
     project_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey(ProjectRow.id), primary_key=True
