@@ -275,7 +275,8 @@ function PanelContent(props: ContentProps): JSX.Element {
   if (accept) return <AcceptContent {...props} submission={accept} onCompareAll={() => setCompareAll(true)} />;
   // W1 (U7): full agreement of the compared eligible submissions, no consolidation among them (X4).
   const listed = listedSubmissions(data.panel.submissions ?? []);
-  const allMatch = data.panel.all_match && !compareAll && !row.final && !listed.some(item => item.kind === "consolidation")
+  // While other annotations are still open (issue 123) the agreement is partial: no one-click shortcut, the comparison.
+  const allMatch = data.panel.all_match && !compareAll && !row.final && !earlyFinal(row) && !listed.some(item => item.kind === "consolidation")
     ? listed.find(item => item.submission_id === data.panel.all_match_submission_id) ?? null : null;
   if (allMatch) return <AllMatchContent {...props} submission={allMatch} />;
   return <CompareContent {...props} />;

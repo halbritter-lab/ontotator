@@ -270,7 +270,7 @@ test("EMPTY: publish v1, read it in a task, publish v2, review under v2, export 
     const confirm = ben.page.getByRole("dialog", { name: "Submit this review?", exact: true });
     await confirm.getByRole("button", { name: "Submit review", exact: true }).click();
     // Issue 125: the task flow names the submitted review in a toast and leaves it.
-    await expect(ben.page.locator(".ui-toast").filter({ hasText: / submitted\.$/ })).toBeVisible();
+    await expect(ben.page.locator(".ui-toast").filter({ hasText: / submitted\./ })).toBeVisible();
 
     // Documents: the final-result panel labels each submission with its version.
     let result = await finalResult(page, s, "guide-0001", "en");

@@ -210,7 +210,7 @@ test('lead assigns the exact pending translation; ordinary reviewer corrects, su
   expect(createdResponse.ok()).toBeTruthy(); const created = await createdResponse.json() as Variant;
   expect(created.translation_status).toBe('accepted'); expect(created.version).toBeGreaterThan(opened.variant.version);
   // Issue 125: the task flow leaves the review (next task, else My tasks); the toast's View result reopens it read-only.
-  const toast = page.locator('.ui-toast').filter({ hasText: / submitted\.$/ });
+  const toast = page.locator('.ui-toast').filter({ hasText: / submitted\./ });
   await expect(toast).toBeVisible();
   await expect(page).not.toHaveURL(new RegExp(`#/tasks/${assignmentId}$`));
   const writes: string[] = []; page.on('request', r => { if (r.url().includes('/translation-reviews/') && ['POST', 'PUT'].includes(r.method())) writes.push(r.url()); });

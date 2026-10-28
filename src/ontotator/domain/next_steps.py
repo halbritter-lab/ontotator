@@ -192,12 +192,15 @@ def _may_annotate(facts: StepFacts) -> bool:
 
 
 def _final_ready(facts: StepFacts) -> bool:
-    """Rule 5: the missing-final rule (at least one submission, nothing open).
+    """Rule 5: the missing-final rule (at least one submission, nothing open)
+    and at least one annotation assigned on the target version(s).
 
     "Annotations per text" is an upper limit, not a quorum (issue #123): fewer
-    assignments than the limit never hold the final result back.
+    assignments than the limit never hold the final result back. A target
+    without any assignment (only old-version work waiting for a carry) is not
+    ready.
     """
-    return facts.missing_final
+    return facts.missing_final and facts.annotation_assignments >= 1
 
 
 def row_stage(facts: StepFacts) -> Stage:

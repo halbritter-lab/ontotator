@@ -197,6 +197,11 @@ def test_choose_final_does_not_wait_for_annotations_per_text():
     assert codes(**{**kw, "annotation_assignments": 2}, missing_final=True) == [
         "choose_final"
     ]
+    # Nothing assigned on the target (only old-version work waiting for a
+    # carry, which the missing-final rule counts): not ready.
+    assert "choose_final" not in codes(
+        **{**kw, "annotation_assignments": 0}, missing_final=True
+    )
 
 
 def test_two_annotations_per_text_counts_assigned():

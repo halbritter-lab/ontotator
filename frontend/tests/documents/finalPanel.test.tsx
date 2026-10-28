@@ -285,6 +285,21 @@ describe("optional (a row without a final decision step)", () => {
     expect(api.selectFinalResult).toHaveBeenCalledWith("p", expect.objectContaining({ submission_id: "case-134-s1", expected_revision: 0 }));
   });
 
+  it("compares two matching submissions instead of the one-click Accept result while a third annotation is open", async () => {
+    panels[rowKey("case-135", "de")] = { ...comparePanel("case-135", "de"), all_match: true, all_match_submission_id: "case-135-s1" };
+    const early = chooseRow("case-135", "de", { next_step: null, steps: [], categories: [], missing_final: { counts: false, reason: "work_open" }, work: [
+      work({ assignment_id: 1, document_id: "case-135-de", author_label: "ann-0003", status: "submitted" }),
+      work({ assignment_id: 2, document_id: "case-135-de", author_label: "ann-0004", status: "submitted" }),
+      work({ assignment_id: 3, document_id: "case-135-de", author_label: "ann-0005", status: "open" }),
+    ] });
+    renderPanel("case-135:de", page([group("case-135", [early])]), { optional: true });
+    const region = await screen.findByRole("region", { name: "Final result" });
+    expect(await within(region).findByRole("table")).toBeTruthy();
+    expect(within(region).getAllByRole("button", { name: "Use as final" })).toHaveLength(2);
+    expect(within(region).getByRole("button", { name: "Consolidate…" })).toBeTruthy();
+    expect(within(region).queryByRole("button", { name: "Accept result" })).toBeNull();
+  });
+
   it("renders nothing when one of two submissions is not eligible (the en-source rule)", async () => {
     const both = comparePanel("case-132", "de");
     panels[rowKey("case-132", "de")] = { ...both, submissions: [{ ...both.submissions![0], eligible: false }, both.submissions![1]] };
