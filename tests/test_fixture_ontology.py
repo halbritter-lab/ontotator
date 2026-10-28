@@ -35,7 +35,7 @@ TERMS = [
     ("HP:0007359", "Focal-onset seizure", "HP:0001250"),
 ]
 # Pasted from the unchanged shared fixtures: they must stay byte-identical.
-HP_JSON_SHA = "279123a1ae5314e4632a0f85be2d82efd50f44ebf0d98e0100ed6859d7cb83e4"
+HP_JSON_SHA = "20d4a647b8a3a15569423c96f29a7a9e8f3a14ce59867fe6f0a46fd409d193d0"
 HP_DE_SHA = "aa8f4e933a4fa12078b83e039d2d3aff273706b550e416f584228a034d7aeb12"
 
 

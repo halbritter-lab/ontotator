@@ -39,6 +39,27 @@ export function panelStep(row: Pick<DocumentRowView, "next_step" | "steps">): Ne
   return leadSteps(row).find(step => step.action != null && PANEL_ACTIONS.has(step.action)) ?? null;
 }
 
+/** Annotate work of the row's current versions (not moved to a newer one). */
+function currentAnnotateWork(row: Pick<DocumentRowView, "work">): DocumentRowView["work"] {
+  return (row.work ?? []).filter(item => item.task === "annotate" && item.moved_to_version == null);
+}
+
+/** Annotate assignments not submitted yet (open, in progress, reopened or paused). */
+export function openAnnotateWork(row: Pick<DocumentRowView, "work">): DocumentRowView["work"] {
+  return currentAnnotateWork(row).filter(item => item.status !== "submitted");
+}
+
+/**
+ * "Annotators per text" is an upper limit (issue 123): once one annotation is submitted the lead may accept a
+ * result (or consolidate) while other annotations are still open. True for a row without a final whose annotate
+ * work is partly submitted and partly open, outside a running consolidation.
+ */
+export function earlyFinal(row: Pick<DocumentRowView, "work" | "final" | "stages">): boolean {
+  if (row.final || row.stages?.annotation.state === "consolidating") return false;
+  const work = currentAnnotateWork(row);
+  return work.some(item => item.status === "submitted") && work.some(item => item.status !== "submitted");
+}
+
 /** Content of the panel: "review" for "Review changes…", else "choose". */
 export function panelMode(row: Pick<DocumentRowView, "next_step" | "steps">): "choose" | "review" {
   return panelStep(row)?.action === "review_changes" ? "review" : "choose";
@@ -62,6 +83,22 @@ export function consolidationInputs(submissions: readonly (Pick<FinalPanelSubmis
 export function submissionName(submission: Pick<FinalPanelSubmissionView, "kind" | "author" | "author_label" | "is_me">): string {
   if (submission.kind === "consolidation") return `Consolidated by ${submission.is_me ? "you" : personName(submission)}`;
   return personName(submission);
+}
+
+/**
+ * How a consolidation came about (#133): "6 matching, 2 decided by Carla", plus "1 added by Carla" for findings
+ * added outside the groups; null for other submissions and a consolidation without findings.
+ */
+export function consolidationBreakdown(submission: Pick<FinalPanelSubmissionView, "kind" | "author" | "author_label" | "is_me" | "consolidation_origins">): string | null {
+  const origins = submission.kind === "consolidation" ? submission.consolidation_origins : null;
+  if (!origins) return null;
+  const who = submission.is_me ? "you" : personName(submission).split(" ")[0];
+  const parts = [
+    origins.matched > 0 ? `${origins.matched} matching` : null,
+    origins.decided > 0 ? `${origins.decided} decided by ${who}` : null,
+    origins.added > 0 ? `${origins.added} added by ${who}` : null,
+  ].filter((part): part is string => part !== null);
+  return parts.length ? parts.join(", ") : null;
 }
 
 /** Full agreement (W1): "All findings match (4 of 4)"; no findings: "Both submissions have no findings" / "No submission has findings". */

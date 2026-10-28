@@ -17,8 +17,8 @@ import { refKey } from "../variants/versionState";
 import { failureOf, keepRequest, selectionPayload, selectRequest, type FinalConfirmFailure, type FinalConfirmRequest } from "./FinalConfirm";
 import {
   acceptQuestion, AGREEMENT_EXPLANATION, agreementText, allMatchText, remainingText, changedPassagesText, compareSummary, consolidateHint,
-  consolidationInputs, decidedLine, decisionKind, keepLabel, listedSubmissions, nextFinalDecision, nextOtherDecision, onlyHereText, panelMode, panelStep,
-  personName, savedText, submissionLine, submissionName, submissionWhen, textChangedLine, type NextRow,
+  consolidationInputs, decidedLine, decisionKind, earlyFinal, keepLabel, listedSubmissions, nextFinalDecision, nextOtherDecision, onlyHereText, panelMode, panelStep,
+  consolidationBreakdown, personName, savedText, submissionLine, submissionName, submissionWhen, textChangedLine, type NextRow,
 } from "./finalPanelText";
 import { versionName } from "./labels";
 import { submissionVersion } from "./SubmissionsTable";
@@ -176,8 +176,10 @@ export function DecisionBlock(props: DecisionBlockProps): JSX.Element | null {
   const headingRef = useRef<HTMLHeadingElement>(null);
   // R-1: a running consolidation offers no second one, so the optional block would stay empty.
   const consolidable = state.data && row?.stages?.annotation.state !== "consolidating" ? consolidationDocuments(listedSubmissions(state.data.panel.submissions ?? [])).length > 0 : false;
-  const optionalOnly = props.optional && !noneLeft && !success && !failure;
-  if (props.optional && !consolidable && !noneLeft && !success && !failure) return null;
+  // A submitted annotation next to open ones (issue 123): the whole decision; the card warns about the open work.
+  const optional = props.optional && !(row && earlyFinal(row));
+  const optionalOnly = optional && !noneLeft && !success && !failure;
+  if (optional && !consolidable && !noneLeft && !success && !failure) return null;
 
   let content: ReactNode;
   if (noneLeft) {
@@ -273,7 +275,8 @@ function PanelContent(props: ContentProps): JSX.Element {
   if (accept) return <AcceptContent {...props} submission={accept} onCompareAll={() => setCompareAll(true)} />;
   // W1 (U7): full agreement of the compared eligible submissions, no consolidation among them (X4).
   const listed = listedSubmissions(data.panel.submissions ?? []);
-  const allMatch = data.panel.all_match && !compareAll && !row.final && !listed.some(item => item.kind === "consolidation")
+  // While other annotations are still open (issue 123) the agreement is partial: no one-click shortcut, the comparison.
+  const allMatch = data.panel.all_match && !compareAll && !row.final && !earlyFinal(row) && !listed.some(item => item.kind === "consolidation")
     ? listed.find(item => item.submission_id === data.panel.all_match_submission_id) ?? null : null;
   if (allMatch) return <AllMatchContent {...props} submission={allMatch} />;
   return <CompareContent {...props} />;
@@ -346,11 +349,13 @@ function AcceptContent(props: ContentProps & { submission: FinalPanelSubmissionV
   const triggerId = `${id}-accept`;
   const isFinal = row.final?.submission_id === submission.submission_id;
   const compared = listed.filter(item => item.comparable).length || listed.length;
-  const consolidation = submission.kind === "consolidation" && submission.round_id
+  const breakdown = consolidationBreakdown(submission);
+  const consolidation =submission.kind === "consolidation" && submission.round_id
     ? { name: "projectConsolidation" as const, key: props.projectKey, roundId: submission.round_id,
       ...(Object.keys(props.query).length ? { documents: props.query } : {}) } : null;
   return <div className="final-panel-choose">
-    {submission.kind === "consolidation" && <p className="final-panel-consolidated"><strong>{submissionName(submission)}</strong></p>}
+    {submission.kind === "consolidation" && <p className="final-panel-consolidated"><strong>{submissionName(submission)}</strong>
+      {breakdown && ` · ${breakdown}`}</p>}
     <p className="final-panel-question">{acceptQuestion(submission)}</p>
     <p className="cell-secondary">{submissionLine(submission, row.language, row.parallel_roots, now)}</p>
     <p className="cell-secondary">{submissionGuidelineLabel(submission.guideline_version, submission.guideline_withdrawn, guidelineCurrent)}</p>

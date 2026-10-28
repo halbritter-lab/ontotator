@@ -25,7 +25,7 @@ vi.mock("../src/variants/useCoupledScroll", async importOriginal => {
 });
 
 afterEach(() => { cleanup(); window.localStorage.clear(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); hook.calls.length = 0; hook.pairs = null; hook.origin = "scroll"; hook.aligns.length = 0; });
-function setup(workspace = reviewWorkspace(), strict = false, viewport?: { width: number; listeners: Set<() => void> }, reportActions?: JSX.Element, guidelineNotice?: JSX.Element) {
+function setup(workspace = reviewWorkspace(), strict = false, viewport?: { width: number; listeners: Set<() => void> }, reportActions?: JSX.Element, guidelineNotice?: JSX.Element, onSubmitted?: (result: { label: string; assignmentId: number; next?: number }) => void) {
   vi.spyOn(api, 'listSourceObligations').mockResolvedValue([]);
   vi.spyOn(api, "listMyTasks").mockResolvedValue([]);
   const width = () => viewport?.width ?? 1440;
@@ -41,7 +41,7 @@ function setup(workspace = reviewWorkspace(), strict = false, viewport?: { width
   const routeLeaveRef: { current: RouteLeaveGuard | null } = { current: null };
   const leaveGuardRef: { current: ((proceed: () => void) => void) | null } = { current: null };
   const navigate = vi.fn();
-  const element = <TranslationReviewScreen assignmentId={17} username="alice" onNavigate={navigate} routeLeaveRef={routeLeaveRef} leaveGuardRef={leaveGuardRef} reportActions={reportActions} guidelineNotice={guidelineNotice} />;
+  const element = <TranslationReviewScreen assignmentId={17} username="alice" onNavigate={navigate} routeLeaveRef={routeLeaveRef} leaveGuardRef={leaveGuardRef} reportActions={reportActions} guidelineNotice={guidelineNotice} onSubmitted={onSubmitted} />;
   const rendered = render(strict ? <StrictMode>{element}</StrictMode> : element);
   return { ...rendered, open, save, submit, routeLeaveRef, leaveGuardRef, navigate };
 }
@@ -1176,7 +1176,39 @@ it("shows loading and an error with Retry for the task list", async () => {
   expect(screen.getByRole("button", { name: "Next task: case-2 de" })).toBeDefined();
   expect(screen.queryByText(/Network down/)).toBeNull();
 });
-const leadWorkspace = () => reviewWorkspace({ lead_correction: true, assignment: { ...reviewWorkspace().assignment, lead_correction: true } });
+it("hands a submitted review to the task flow with the next open task of the project (issue 125)", async () => {
+  const onSubmitted = vi.fn();
+  setup(undefined, false, undefined, undefined, undefined, onSubmitted);
+  vi.spyOn(api, "listMyTasks").mockResolvedValue([taskSummary(17, { status: "submitted" }),
+    taskSummary(30, { project_key: "other", external_id: "elsewhere" }), taskSummary(18, { external_id: "case-2", task: "annotate" })]);
+  const heading = (await screen.findByRole("heading", { level: 1 })).textContent;
+  await submitAcceptedUnchanged();
+  expect(onSubmitted).toHaveBeenCalledTimes(1);
+  expect(onSubmitted).toHaveBeenCalledWith({ label: heading, assignmentId: 17, next: 18 });
+  // The flow leaves the page: no in-page next-task block meanwhile.
+  expect(screen.queryByRole("button", { name: /^Next task/ })).toBeNull();
+});
+it("hands over without a next task when none is left or the list cannot load (My tasks)", async () => {
+  const onSubmitted = vi.fn();
+  setup(undefined, false, undefined, undefined, undefined, onSubmitted);
+  vi.spyOn(api, "listMyTasks").mockRejectedValue(new Error("Network down"));
+  await submitAcceptedUnchanged();
+  expect(onSubmitted).toHaveBeenCalledWith(expect.objectContaining({ assignmentId: 17, next: undefined }));
+  expect(screen.queryByText(/Network down/)).toBeNull();
+});
+it("lead correction never hands over to the task flow", async () => {
+  const onSubmitted = vi.fn();
+  setup(leadWorkspace(), false, undefined, undefined, undefined, onSubmitted);
+  await screen.findByRole("textbox", { name: "Translation (de)" });
+  vi.useFakeTimers();
+  fireEvent.change(screen.getByRole("textbox", { name: "Translation (de)" }), { target: { value: "Lead fix" } });
+  await clock();
+  await confirmSubmit();
+  await clock(0);
+  expect(screen.getByText("Review submitted")).toBeDefined();
+  expect(onSubmitted).not.toHaveBeenCalled();
+});
+const leadWorkspace =() => reviewWorkspace({ lead_correction: true, assignment: { ...reviewWorkspace().assignment, lead_correction: true } });
 it("lead correction shows only Accepted with corrections, preselected, with the lead note", async () => {
   const { save } = setup(leadWorkspace());
   await screen.findByRole("textbox", { name: "Translation (de)" });

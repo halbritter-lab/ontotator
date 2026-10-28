@@ -37,7 +37,7 @@ from ontotator.domain.workspace import (
 from ontotator.packages.models import PackageManifest, ValidatedPackage
 from ontotator.storage.repository import Repository
 
-HP_DIGEST = "279123a1ae5314e4632a0f85be2d82efd50f44ebf0d98e0100ed6859d7cb83e4"
+HP_DIGEST = "20d4a647b8a3a15569423c96f29a7a9e8f3a14ce59867fe6f0a46fd409d193d0"
 
 
 def _create_storage_sample_profile() -> TaskProfile:

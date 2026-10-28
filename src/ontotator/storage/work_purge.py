@@ -148,7 +148,7 @@ def purge(
     a, r, s, d = _closure(conn, set(assignments), set(subs), set(drafts))
     counts = dict.fromkeys(tables, 0)
     # A database at an older revision lacks the later tables (the discard
-    # marks of 0026): they have nothing to delete.
+    # marks of 0027): they have nothing to delete.
     tables = tuple(
         table
         for table in tables

@@ -14,6 +14,7 @@ export type DocumentSummary = Omit<ProjectDocumentSummary, VariantMetadataKeys> 
 export type ProjectSettings = components["schemas"]["ProjectSettings"];
 export type UploadView = components["schemas"]["UploadView"];
 export type UploadCreated = components["schemas"]["UploadCreated"];
+export type UploadStatus = NonNullable<NonNullable<operations["list_uploads_api_v1_projects__key__uploads_get"]["parameters"]["query"]>["status"]>[number];
 export type ImportPlan = components["schemas"]["ImportPlan"];
 export type JobView = components["schemas"]["JobView"];
 export type ProjectProgress = components["schemas"]["ProjectProgress"];
@@ -274,6 +275,7 @@ export type GuidelinePublishInput = { file: File; changeNote: string; expectedLa
 export type GuidelineWithdrawBody = { reason: string | null; expected_latest_version: number };
 export type CreateProjectRequest = components["schemas"]["CreateProjectRequest"];
 export type ProjectPin = components["schemas"]["ProjectPin"];
+export type RepinReport = components["schemas"]["RepinReport"];
 export type Member = components["schemas"]["Member"];
 export type MemberCandidate = components["schemas"]["MemberCandidate"];
 export type OpenTasksView = components["schemas"]["OpenTasksView"];
@@ -467,6 +469,10 @@ export class ApiClient {
   async getProjectSettings(key: string): Promise<ProjectSettings> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/settings`, { method: "GET" }); }
   async updateProjectSettings(key: string, change: ProjectSettingsPatch): Promise<ProjectSettings> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/settings`, { method: "PATCH", body: JSON.stringify(change) }); }
   async updatePins(key: string, pins: ProjectPin[]): Promise<ProjectSettings> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/pins`, { method: "PUT", body: JSON.stringify(pins) }); }
+  /** The dry run of moving to these releases: rewritten and flagged draft terms. */
+  async previewPins(key: string, pins: ProjectPin[]): Promise<RepinReport> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/pins/preview`, { method: "POST", body: JSON.stringify(pins) }); }
+  /** Apply a previewed move; refused with REPIN_REPORT_STALE when the report changed since. */
+  async applyPins(key: string, pins: ProjectPin[], reportSha256: string): Promise<ProjectSettings> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/pins/apply`, { method: "POST", body: JSON.stringify({ pins, report_sha256: reportSha256 }) }); }
   async updateProjectProfile(key: string, profile: TaskProfile): Promise<ProjectSettings> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/profile`, { method: "PUT", body: JSON.stringify(profile) }); }
   async listMembers(key: string): Promise<Member[]> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/members`, { method: "GET" }); }
   async listMemberCandidates(key: string, query: string): Promise<MemberCandidate[]> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/member-candidates?q=${encodeURIComponent(query)}`, { method: "GET" }); }
@@ -519,8 +525,12 @@ export class ApiClient {
     return this.request<UploadCreated>(`/api/v1/projects/${encodeURIComponent(key)}/uploads`, { method: "POST", body });
   }
 
-  async listUploads(key: string): Promise<UploadView[]> {
-    return this.request<UploadView[]>(`/api/v1/projects/${encodeURIComponent(key)}/uploads`, { method: "GET" });
+  /** The newest uploads; `statuses` keeps only those states (`?status=` repeated). */
+  async listUploads(key: string, statuses: readonly UploadStatus[] = []): Promise<UploadView[]> {
+    const query = new URLSearchParams();
+    for (const status of statuses) query.append("status", status);
+    const suffix = statuses.length ? `?${query}` : "";
+    return this.request<UploadView[]>(`/api/v1/projects/${encodeURIComponent(key)}/uploads${suffix}`, { method: "GET" });
   }
 
   async getUpload(key: string, id: number): Promise<UploadView> {

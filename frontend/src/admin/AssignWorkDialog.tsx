@@ -365,7 +365,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
   const closing = busy ? undefined : props.onClose;
 
   return <Dialog open title={title} size="md" onClose={closing} footer={<>
-    {reason && <span id={reasonId} className="assign-footer-reason">{reason}</span>}
+    {reason && <span id={reasonId} className="dialog-footer-reason">{reason}</span>}
     <Button disabled={busy} onClick={props.onClose}>Cancel</Button>
     <Button variant="primary" loading={busy} aria-disabled={reason ? "true" : undefined} aria-describedby={reason ? reasonId : undefined} onClick={assign}>{confirming ? "Assign anyway" : rowMulti
       ? (picked ? `Assign ${picked === 1 ? "1 person" : `${picked} people`}` : "Assign") : isRow && !usernames.length ? "Assign" : `Assign ${count}`}</Button>

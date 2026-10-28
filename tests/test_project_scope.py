@@ -124,6 +124,7 @@ CALLS: dict[str, Callable[[Repository], object]] = {
         "B", "B", None, _package("B").manifest.task_profile, {}
     ),
     "project_pins": lambda r: r.project_pins("B"),
+    "superseded_pins": lambda r: r.superseded_pins("B"),
     "t1_export_content": lambda r: r.t1_export_content("B"),
     "t1_export_content_exact": lambda r: r.t1_export_content_exact("B", []),
     "workspace_input_snapshots": lambda r: r.workspace_input_snapshots(_key("B")),

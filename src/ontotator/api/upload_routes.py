@@ -2,7 +2,7 @@
 
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, File, Form, Request, UploadFile
+from fastapi import APIRouter, File, Form, Query, Request, UploadFile
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.concurrency import run_in_threadpool
 
@@ -21,6 +21,7 @@ from ontotator.exchange.uploads import (
     PlanChoice,
     UploadFileInfo,
     UploadService,
+    UploadStatus,
     UploadView,
 )
 from ontotator.exchange.variant_overrides import StatusOverride
@@ -100,10 +101,16 @@ async def create_upload(
 
 @router.get("/uploads")
 def list_uploads(
-    key: str, request: Request, principal: PrincipalDep
+    key: str,
+    request: Request,
+    principal: PrincipalDep,
+    status: Annotated[
+        list[UploadStatus] | None,
+        Query(description="Keep only uploads in these states (repeatable)."),
+    ] = None,
 ) -> list[UploadView]:
     _guard(request, Action.IMPORT_DOCUMENTS, key)
-    return _service(request, principal).list(key)
+    return _service(request, principal).list(key, statuses=status)
 
 
 @router.get("/uploads/{upload_id}")

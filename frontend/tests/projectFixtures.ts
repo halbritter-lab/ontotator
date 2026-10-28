@@ -1,4 +1,4 @@
-import type { CurrentUser, GuidelineDocument, GuidelineListing, GuidelineSummary, Member, OntologyInfo, ProjectSettings, TaskProfile } from "../src/api/client";
+import type { CurrentUser, GuidelineDocument, GuidelineListing, GuidelineSummary, Member, OntologyInfo, ProjectSettings, RepinReport, TaskProfile } from "../src/api/client";
 export const currentUser: CurrentUser = { username: "lead", display_name: "Lead", pseudonym: "ann-lead", is_system_admin: false, csrf_token: "token" };
 export const profile: TaskProfile = {
   schema: "ontotator-task-profile/v1", profile_id: "custom-profile", version: "1", default_layer_id: "findings",
@@ -18,6 +18,14 @@ export const members: Member[] = [
   { username: "alice", display_name: "Alice", pseudonym: "ann-1", languages: ["de"], roles: ["annotator"] },
   { username: "lead", display_name: "Lead", pseudonym: "ann-2", languages: ["en"], roles: ["lead"] },
 ];
+/** A dry run of a release move (#81); by default one that touches no draft. */
+export function repinReport(overrides: Partial<RepinReport> = {}): RepinReport {
+  return {
+    project_key: settings.project_key, locked: false, report_sha256: "f".repeat(64),
+    changes: [{ ontology_id: "HP", from_sha256: "a".repeat(64), from_release: "2026", to_sha256: "b".repeat(64), to_release: "2027" }],
+    rewrites: [], flagged: [], submitted: [], ...overrides,
+  };
+}
 export function deferred<T>() { let resolve!: (value: T) => void; let reject!: (error: unknown) => void; const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; }
 
 /** Guideline fixtures: dates fall in the current year so labels carry no year ("20 Oct, 14:02"). */

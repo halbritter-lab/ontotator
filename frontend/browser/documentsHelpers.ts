@@ -181,6 +181,6 @@ export async function showSegment(card: Locator, title: "Translation" | "Annotat
   await expect(segment).toHaveAttribute("aria-current", "step");
 }
 
-/** A person's chip in the card: the lead's menu button "{name}, {state}: actions" (Reassign, Remove, Assign another person). */
-export const chipMenu = (card: Locator, name: string): Locator =>
-  card.getByRole("button", { name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}, [^:]+: actions$`) });
+/** A person's row in the card (#108): one list item per person in a list such as "Annotators", with their status and their own actions. */
+export const personRow = (card: Locator, list: "Annotators" | "Translation reviewers" | "Consolidators", name: string): Locator =>
+  card.getByRole("list", { name: list, exact: true }).getByRole("listitem").filter({ has: card.page().getByText(name, { exact: true }) });

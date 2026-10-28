@@ -281,46 +281,49 @@ test("stale rules recover to an actionable evidence repair at desktop and narrow
 });
 
 
-test("repairing a historical spanless proposal collects a clinical reason without changing its source", async ({ page }) => {
+test("repairing a historical spanless proposal of a span-required type starts only from selected text, without changing its source", async ({ page }) => {
   await importPackage(page, "spanless", "pkg-spanless-decisions", "spanless-source-repair", { proposals: true });
   const openedResponse = page.waitForResponse(r => /assignments\/\d+\/open$/.test(r.url()) && r.request().method() === "POST");
   await openCase(page, { task: "annotate" });
   const opened = await (await openedResponse).json();
   const source = opened.view.available_inputs.find((item: { annotation: { evidence_refs: unknown[] } }) => !item.annotation.evidence_refs?.length);
   const sourceBefore = JSON.stringify(source);
+  // #124: the type requires a text span, so even a project allowing spanless findings saves no spanless draft copy.
+  const bypass = await authenticatedRequest(page, `/api/v1/workspaces/${encodeURIComponent(opened.workspace_id)}/commands`, "POST", {
+    mutation_id: "bypass-required-span", expected_revision: opened.view.draft.revision, payload: {
+      command: "create_annotation", annotation_id: "bypass-required-span", layer_id: source.annotation.layer_id, type_id: source.annotation.type_id,
+      term_id: source.annotation.term_id, segments: [], axes_values: {}, note: "Specialist summary supports this finding",
+      source_annotation_id: source.annotation.annotation_id, source_version: source.version,
+    },
+  });
+  expect(bypass.status()).toBe(422); expect((await bypass.json()).code).toBe("MISSING_EVIDENCE");
   // N-4: proposals follow the text; the spanless source is listed last.
   const proposals = page.locator('.sidebar [data-list-key^="target:"]');
   await proposals.nth(1).click(); await page.keyboard.press("2"); await expect(proposals.nth(1)).toContainText("Rejected");
   // Rejecting moved on to the open proposal; go back to the rejected one.
   await expect(proposals.first()).toHaveClass(/\bselected\b/); await proposals.nth(1).click();
+  const creates: unknown[] = [];
+  page.on("request", request => { if (request.url().endsWith("/commands") && request.postDataJSON()?.payload?.command === "create_annotation") creates.push(request.postDataJSON()); });
   await page.getByRole("button", { name: /Edit & Replace/ }).click();
-  const dialog = page.getByRole("dialog", { name: "Reason for no text span" });
-  await dialog.getByLabel("Reason for no text span").fill("Specialist summary supports this finding");
-  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
-  await expect(proposals.nth(1)).toContainText("Rejected");
+  // No reason dialog: the copy waits for supporting text.
+  await expect(page.getByRole("dialog", { name: "Reason for no text span" })).toHaveCount(0);
+  await expect(page.getByText("This annotation type requires a text span. Select supporting text to create an editable copy of this proposal. The current decision is kept until you confirm the replacement.")).toBeVisible();
+  expect(creates).toHaveLength(0);
+  await page.getByRole("button", { name: "Cancel (Esc)" }).click();
+  await expect(proposals.nth(1)).toContainText("Rejected"); expect(creates).toHaveLength(0);
   await page.getByRole("button", { name: /Edit & Replace/ }).click();
-  await expect(dialog.getByLabel("Reason for no text span")).toHaveValue("Specialist summary supports this finding");
   const copied = page.waitForResponse(r => r.url().endsWith("/commands") && r.request().postDataJSON().payload.command === "create_annotation");
-  await dialog.getByRole("button", { name: "Create editable copy" }).click();
-  await page.getByRole("button", { name: "Reset decision and edit copy" }).click();
-  await expect(page.getByLabel("Reason for no text span")).toHaveValue("Specialist summary supports this finding");
-  await expect(proposals.nth(1)).toContainText("Pending");
-  const draft = await (await copied).json();
-  const replacement = draft.annotations[0];
-  const premature = await authenticatedRequest(page, `/api/v1/workspaces/${encodeURIComponent(opened.workspace_id)}/decisions`, "POST", {
-    mutation_id: "premature-required-evidence-approval", expected_revision: draft.revision, payload: { target: { annotation_id: source.annotation.annotation_id, version: source.version }, outcome: "changed",
-      replacement: { annotation_id: replacement.annotation.annotation_id, version: replacement.version } },
-  });
-  expect(premature.status()).toBe(422); expect((await premature.json()).code).toBe("MISSING_EVIDENCE");
-  await page.getByRole("button", { name: "Add mention", exact: true }).click(); await selectText(page, 0, 9);
+  await selectText(page, 0, 9); await page.getByRole("button", { name: "Reset decision and edit copy" }).click();
+  const copyResponse = await copied; expect(copyResponse.ok()).toBeTruthy();
+  expect(creates).toHaveLength(1);
+  expect((creates[0] as { payload: { segments: unknown[] } }).payload.segments).toEqual([{ start: 0, end: 9 }]);
   await expect(proposals.nth(1)).toContainText("Replaced");
-  await expect(page.getByLabel("Note", { exact: true })).toHaveValue("Specialist summary supports this finding");
   await proposals.first().click(); await page.keyboard.press("2"); await expect(proposals.first()).toContainText("Rejected");
   const submitted = page.waitForResponse(r => r.url().endsWith("/submit") && r.request().method() === "POST" && r.ok());
   await submitCase(page);
   const submission = await (await submitted).json();
   expect(submission.snapshots).toHaveLength(1);
-  expect(submission.snapshots[0].annotation.note).toBe("Specialist summary supports this finding");
+  expect(submission.snapshots[0].annotation.evidence_refs).toHaveLength(1);
   expect(submission.decisions.find((d: { outcome: string }) => d.outcome === "changed").replacement.version).toBe(submission.snapshots[0].version);
   const reopened = await authenticatedRequest(page, `/api/v1/assignments/${opened.assignment.id}/open`, "POST");
   const after = await reopened.json();

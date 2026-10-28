@@ -164,22 +164,27 @@ def test_confirm_requires_evidence_and_keeps_revision_on_failure(tmp_path):
 
 
 def test_replacement_approval_requires_evidence(tmp_path):
+    from sqlalchemy import update
+
+    from ontotator.storage.tables import DraftRow
+
     repo, ontologies, key, target = strict_review(tmp_path)
-    draft = EditorService(repo, ontologies).apply(
-        key,
-        envelope(
-            "create",
-            0,
-            CreateAnnotationCommand(
-                annotation_id="replacement",
-                note="This explanation does not replace required evidence.",
-                layer_id="layer-2",
-                type_id="type-req",
-                term_id="MONDO:0005071",
-                axes_values={"severity": "mild"},
-            ).model_dump(),
-        ),
-    )
+    create = CreateAnnotationCommand(
+        annotation_id="replacement",
+        note="This explanation does not replace required evidence.",
+        layer_id="layer-2",
+        type_id="type-req",
+        term_id="MONDO:0005071",
+        axes_values={"severity": "mild"},
+    ).model_dump()
+    # A new draft already refuses to save the spanless replacement (#124).
+    with pytest.raises(DomainError, match="MISSING_EVIDENCE"):
+        EditorService(repo, ontologies).apply(key, envelope("create-new", 0, create))
+    assert repo.open_draft(key).revision == 0
+    # A legacy draft saves it; approving it still requires the evidence.
+    with repo.db.transaction() as conn:
+        conn.execute(update(DraftRow).values(spanless_policy_version=None))
+    draft = EditorService(repo, ontologies).apply(key, envelope("create", 0, create))
     replacement = draft.annotations[0]
     with pytest.raises(DomainError, match="MISSING_EVIDENCE"):
         ReviewService(repo, registry=ontologies).decide(

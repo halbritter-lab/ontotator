@@ -168,13 +168,33 @@ describe("comparison model", () => {
 
   it("finds other decided groups keeping the same term and lists duplicate terms (R-3)", () => {
     const kept = (id: string, extra = {}) => group(id, ["partial"], [member(`in-${id}`, BEN, "HP:0012378", "Fatigue", [])], { state: "keep",
-      result: { term_id: "HP:0012378", term_label: "Fatigue", layer_id: "phenotype", axes: {}, modifiers: [] }, ...extra });
+      result: { term_id: "HP:0012378", term_label: "Fatigue", layer_id: "phenotype", axes: {}, modifiers: [], spans: [] }, ...extra });
     const first = kept("a"), second = kept("b"), left = kept("c", { state: "leave_out" });
     const open = group("o", ["partial"], [member("in-o", BEN, "HP:0012378", "Fatigue", [span("hypotonia")])]);
     expect(sameTermGroups(open, [first, left, open], "HP:0012378")).toEqual([first]);
     expect(sameTermGroups(open, [first], "HP:0001252")).toEqual([]);
     expect(duplicateTerms([first, left, open])).toEqual([]);
     expect(duplicateTerms([first, second, left])).toEqual(["Fatigue"]);
+  });
+
+  it("counts the same term as a duplicate only on overlapping spans; a spanless finding overlaps every one (#132)", () => {
+    const fatigue = { term_id: "HP:0012378", term_label: "Fatigue", layer_id: "phenotype", axes: {}, modifiers: [] };
+    const kept = (id: string, spans: [number, number][], extra = {}) => group(id, ["match"], [member(`in-${id}`, BEN, "HP:0012378", "Fatigue", spans)],
+      { state: "auto", result: { ...fatigue, spans }, ...extra });
+    const seizures = kept("a", [span("seizures")]), hypotonia = kept("b", [span("muscular hypotonia")]);
+    const gait = kept("c", [span("Unsteady gait")]), fever = kept("d", [span("Recurrent fever")]);
+    // Four auto-matched findings of one term on four spans: no warning.
+    expect(duplicateTerms([seizures, hypotonia, gait, fever])).toEqual([]);
+    expect(duplicateTerms([seizures, hypotonia, kept("e", [span("hypotonia")])])).toEqual(["Fatigue"]);
+    expect(duplicateTerms([seizures, kept("f", [])])).toEqual(["Fatigue"]);
+    expect(duplicateTerms([kept("f", []), kept("g", [])])).toEqual(["Fatigue"]);
+    // Another layer is never a duplicate.
+    expect(duplicateTerms([seizures, kept("h", [span("seizures")], { result: { ...fatigue, layer_id: "other", spans: [span("seizures")] } })])).toEqual([]);
+    // Without stored result spans (an older server) the kept member's span counts.
+    expect(duplicateTerms([seizures, kept("i", [span("seizures")], { result: fatigue })])).toEqual(["Fatigue"]);
+    const open = group("o", ["partial"], [member("in-o", TOM, "HP:0012378", "Fatigue", [span("hypotonia")])]);
+    expect(sameTermGroups(open, [seizures, hypotonia, open], "HP:0012378")).toEqual([hypotonia]);
+    expect(sameTermGroups(open, [seizures, gait], "HP:0012378")).toEqual([]);
   });
 
   it("never offers keep both", () => {

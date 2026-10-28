@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -412,21 +413,68 @@ def _hpo(nodes: list[str], edges: list[tuple[str, str]]) -> bytes:
     ).encode()
 
 
+# The required terms with their HPO parents (#97).
+_REQUIRED = [
+    ("HP:0000118", "HP:0000001"),
+    ("HP:0012823", "HP:0000001"),
+    ("HP:0040279", "HP:0000001"),
+    ("HP:0012824", "HP:0012823"),
+    ("HP:0003674", "HP:0012823"),
+]
+
+
+def _complete(
+    extra: Sequence[str] = (), edges: Sequence[tuple[str, str]] = (), skip: str = ""
+) -> bytes:
+    nodes = ["HP:0000001", *(child for child, _ in _REQUIRED), *extra]
+    return _hpo(
+        [n for n in nodes if n != skip],
+        [(c, p) for c, p in [*_REQUIRED, *edges] if skip not in (c, p)],
+    )
+
+
 def test_a_cut_down_or_broken_hpo_release_is_refused(tmp_path: Path) -> None:
     """Missing roots or terms that do not reach HP:0000001 (#97)."""
     store = _store(_db(tmp_path))
     with pytest.raises(DomainError) as missing:
         store.add(Actor.cli(), "hp.json", _hpo(["HP:0000001", "HP:0001250"], []))
     assert missing.value.code == "INVALID_ONTOLOGY"
-    assert "HP:0000118" in str(missing.value.details)
+    for root in ("HP:0000118", "HP:0012823", "HP:0040279", "HP:0012824"):
+        assert root in str(missing.value.details)
+    assert "HP:0003674" in str(missing.value.details)
 
-    broken = _hpo(
-        ["HP:0000001", "HP:0000118", "HP:0001250"], [("HP:0000118", "HP:0000001")]
-    )
+    broken = _complete(["HP:0001250", "HP:0001251"])
     with pytest.raises(DomainError) as unreached:
         store.add(Actor.cli(), "hp.json", broken)
     assert "broken is_a graph" in str(unreached.value.details)
+    # The terms that miss the root are named.
+    assert "HP:0001250, HP:0001251" in str(unreached.value.details)
     assert store.list() == []
+
+
+@pytest.mark.parametrize(
+    "root", ["HP:0012823", "HP:0040279", "HP:0012824", "HP:0003674"]
+)
+def test_a_release_without_a_modifier_root_is_refused(
+    tmp_path: Path, root: str
+) -> None:
+    """Without a classifier root every modifier would classify as a finding."""
+    store = _store(_db(tmp_path))
+    with pytest.raises(DomainError) as refused:
+        store.add(Actor.cli(), "hp.json", _complete(skip=root))
+    assert refused.value.code == "INVALID_ONTOLOGY"
+    assert f"lacks the required HPO terms {root}" in str(refused.value.details)
+    assert store.list() == []
+
+
+def test_a_complete_release_with_few_stray_terms_is_stored(tmp_path: Path) -> None:
+    """98% of the current terms reaching the root is enough."""
+    store = _store(_db(tmp_path))
+    reaching = [f"HP:{n:07d}" for n in range(100, 150)]
+    stray = "HP:0099999"
+    edges = [(term, "HP:0000118") for term in reaching]
+    item = store.add(Actor.cli(), "hp.json", _complete([*reaching, stray], edges))
+    assert item.kind == "ontology"
 
 
 def test_an_allowed_root_the_release_lacks_is_refused(tmp_path: Path) -> None:

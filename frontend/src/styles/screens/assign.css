@@ -1,8 +1,7 @@
 /* Assign dialog for a row and for many cases (lead workflow L5, spec "Assign dialog"). */
 .assign-dialog { display: flex; flex-direction: column; gap: var(--space-3); }
 .assign-dialog p { margin: 0; }
-.assign-muted, .assign-footer-reason { color: var(--text-muted); font-size: var(--size-sm); }
-.assign-footer-reason { margin-right: auto; }
+.assign-muted { color: var(--text-muted); font-size: var(--size-sm); }
 .assign-context { display: flex; flex-direction: column; gap: var(--space-1); }
 .assign-field { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .assign-field .form-group { margin-bottom: 0; flex: 1 1 16rem; }

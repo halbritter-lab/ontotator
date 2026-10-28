@@ -4,7 +4,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { StageActions } from "../../src/documents/StageActions";
 import type { TextVersionsTools } from "../../src/documents/TextVersions";
 import { assignment, members } from "../assignmentFixtures";
-import { row, version } from "./fixtures";
+import { row, version, work } from "./fixtures";
 
 afterEach(cleanup);
 
@@ -21,4 +21,16 @@ it("a submitted annotation gets Reopen… under Annotation, which opens the reop
   cleanup();
   render(<StageActions row={text} stage="review" textVersionTools={tools("submitted")} />);
   expect(screen.queryByRole("button", { name: /^Reopen/ })).toBeNull();
+});
+
+it("in the text card the person rows carry Reassign… and Reopen…: no second list of people (#108)", () => {
+  const text = row({ case_id: "z", language: "en", versions: [version({ document_id: "z/doc" })], work: [work({ assignment_id: 11, document_id: "z/doc", status: "in_progress" })] });
+  render(<StageActions row={text} stage="annotation" textVersionTools={tools("in_progress")} />);
+  expect(screen.getByRole("button", { name: "Reassign…" })).toBeTruthy();
+  cleanup();
+  for (const status of ["submitted", "in_progress"] as const) {
+    const { container } = render(<StageActions row={text} stage="annotation" textVersionTools={tools(status)} inCard />);
+    expect(container.textContent).toBe("");
+    cleanup();
+  }
 });

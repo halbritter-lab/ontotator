@@ -160,3 +160,34 @@ Tool precision is computed per proposal set: group the records by
 `confirmed / (confirmed + rejected + corrected)`. A corrected proposal counts as
 not exact. `uncertain` decisions are reported separately and left out of
 precision. Added findings are what the tool missed.
+
+## Consolidated findings in the export
+
+Since export format `ontotator-final-export/v2` (the `format` field of
+`receipt.json`), the receipt tells how each finding of a consolidation came
+about. In the T1 bundle every such finding has provenance method `merged`, so
+the bundle alone cannot tell an automatically taken-over match from a
+consolidator's decision. `receipt.json` holds `consolidations`, keyed by the
+submission ID of every consolidation in the archive (selected and
+provenance-only):
+
+- `consolidator`: the consolidator's pseudonym (the submission's author).
+- `findings`: one entry per finding of the submission, in bundle order, with
+  `annotation_id`, `version` and
+  - `origin`: `matched` (every annotator marked the same finding; it was taken
+    over automatically and not changed), `decided` (the consolidator resolved
+    the group, or changed a taken-over finding) or `added` (the consolidator
+    added it outside the groups);
+  - `decision`: the group's consolidation action, `auto`, `keep` or `choose`;
+    `null` for `added` findings and for findings decided in the editor
+    without the consolidation view;
+  - `edited`: the finding was changed after its group was resolved;
+  - `guidelines_unclear`: the consolidator flagged the group;
+  - `decision_ids`: the review decisions (under `review_decisions`) that
+    produced the finding.
+- `counts`: the number of `matched`, `decided` and `added` findings.
+
+The record is derived from the consolidation's stored decisions at export
+time, so it is also complete for consolidations submitted before v2. Version
+v1 receipts have no `consolidations`; the decisions' `consolidation.action`
+under `review_decisions` holds the same information per group there.

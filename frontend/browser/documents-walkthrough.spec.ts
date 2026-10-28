@@ -157,7 +157,8 @@ test("step 5: Tom submits (Luc keeps a draft)", async () => {
   await act({ actor: "luc", action: "draft_annotation", preset: "luc_v1" });
   await revisit(false);
   await expectStage(cell("annotation"), { state: "1 of 2 submitted", who: LUC });
-  await expectStage(cell("finalization"), WAITING);
+  // Issue 123: the per-text limit is an upper bound; Tom's result can be accepted while Luc's draft is open.
+  await expectStage(cell("finalization"), { state: "can be accepted", who: "" });
   await expectCounterEqualsTab(page);
   record(5);
   await evidence(page, "walkthrough-5");

@@ -405,7 +405,6 @@ def _build_row(ctx: _Context, case_id: str, language: str) -> dict[str, Any]:
         has_selection=has_final,
         submission_count=submission_count,
         assignments=[item for item in row_assignments if item.document_id in live_ids],
-        per_text=facts.annotations_per_text,
     )
     if not is_source and not discarded:
         # A source change is an issue of category translation on rows with

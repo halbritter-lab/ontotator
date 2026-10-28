@@ -45,29 +45,70 @@ from ontotator.vendor.hpo_span_annotator.hpo import OntologyError
 
 logger = logging.getLogger(__name__)
 
-# An HPO release without these is cut down or another file (#97).
-_HPO_ROOTS = ("HP:0000001", "HP:0000118")
+HPO_ROOT = "HP:0000001"
+PHENOTYPIC_ABNORMALITY = "HP:0000118"
 # Share of the current (not obsolete) terms that must reach HP:0000001.
 _MIN_REACHING_ROOT = 0.98
+# How many terms that miss the root an error names.
+_UNREACHED_SHOWN = 10
+
+
+def required_roots() -> tuple[str, ...]:
+    """The terms every HPO release must hold (#97).
+
+    The root, Phenotypic abnormality and the four roots the modifier
+    classifier is built from: without one of those, ``subtree`` is empty and
+    every modifier, onset, severity or frequency term classifies as a finding.
+    """
+    from ontotator.ontology.modifiers import (
+        CLINICAL_MODIFIER,
+        FREQUENCY,
+        ONSET,
+        SEVERITY,
+    )
+
+    return (
+        HPO_ROOT,
+        PHENOTYPIC_ABNORMALITY,
+        CLINICAL_MODIFIER,
+        FREQUENCY,
+        SEVERITY,
+        ONSET,
+    )
 
 
 def release_problem(service: OntologyService) -> str | None:
-    """Why an HPO release is unusable: missing roots or a broken is_a graph."""
+    """Why an HPO release is unusable: missing roots or a broken is_a graph.
+
+    A release is refused when it lacks one of :func:`required_roots`, or when
+    fewer than 98% of its current terms reach HP:0000001 through ``is_a``.
+    Allowed roots a project pins are checked where the pin is set
+    (``check_allowed_roots``). Other ontologies are not checked.
+    """
     from ontotator.ontology.modifiers import subtree
 
     ontology = service.ontology
     if ontology.dominant_prefix != "HP":
         return None
-    missing = [root for root in _HPO_ROOTS if root not in ontology.terms]
+    missing = [
+        root
+        for root in required_roots()
+        if root not in ontology.terms or ontology.terms[root].obsolete
+    ]
     if missing:
-        return f"lacks the HPO root terms {', '.join(missing)}"
-    current = [t.hpo_id for t in ontology.terms.values() if not t.obsolete]
-    reached = subtree(service, _HPO_ROOTS[0])
-    share = sum(term_id in reached for term_id in current) / len(current)
+        return f"lacks the required HPO terms {', '.join(missing)}"
+    current = sorted(t.hpo_id for t in ontology.terms.values() if not t.obsolete)
+    reached = subtree(service, HPO_ROOT)
+    unreached = [term_id for term_id in current if term_id not in reached]
+    share = (len(current) - len(unreached)) / len(current)
     if share < _MIN_REACHING_ROOT:
+        shown = ", ".join(unreached[:_UNREACHED_SHOWN])
+        more = len(unreached) - _UNREACHED_SHOWN
         return (
             f"has a broken is_a graph: only {share:.0%} of its current terms "
-            f"reach {_HPO_ROOTS[0]}"
+            f"reach {HPO_ROOT}; {len(unreached)} do not ({shown}"
+            + (f" and {more} more" if more > 0 else "")
+            + ")"
         )
     return None
 
@@ -368,6 +409,17 @@ class OntologyStore:
         wanted = list(roots)
         if not wanted:
             return []
+        service = self.service(sha256)
+        if service is None:
+            return []
+        return [root for root in wanted if service.ontology.get(root) is None]
+
+    def service(self, sha256: str) -> OntologyService | None:
+        """The loaded service of the stored ontology ``sha256``.
+
+        Loads it in this worker when another one stored it. ``None`` when the
+        file is not a stored, readable ontology.
+        """
         try:
             service = self.registry.get_service(sha256)
             known = self._get(sha256) if service is None else None
@@ -375,10 +427,8 @@ class OntologyStore:
                 self.registry.register_path(self.db.blobs.path(sha256))
                 service = self.registry.get_service(sha256)
         except (DomainError, OntologyError, OSError, ValueError, KeyError):
-            return []
-        if service is None:
-            return []
-        return [root for root in wanted if service.ontology.get(root) is None]
+            return None
+        return service
 
     def pins_missing_roots(self) -> list[tuple[str, str, str, list[str]]]:
         """(project, ontology id, sha256, missing roots) of every pin whose

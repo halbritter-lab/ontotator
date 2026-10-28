@@ -366,6 +366,11 @@ class WorkspaceService:
             members = {
                 (a.annotation.annotation_id, a.version): a for a in available_inputs
             }
+            # Work submitted before the project moved to another release
+            # carries that release's digest (#81).
+            superseded = (
+                self.repo.superseded_pins(key.project_key) if canonical.targets else {}
+            )
             for target in canonical.targets:
                 snap = members.get((target.annotation_id, target.version))
                 if snap is None:
@@ -388,7 +393,9 @@ class WorkspaceService:
                     )
                 layer = resolve_layer(profile, snap.annotation.layer_id)
                 ont = resolve_ontology(profile, layer.ontology_id)
-                if snap.ontology_sha256 != ont.sha256:
+                if snap.ontology_sha256 != ont.sha256 and (
+                    snap.ontology_sha256 not in superseded.get(layer.ontology_id, set())
+                ):
                     raise DomainError(
                         "INVALID_REVIEW_TARGET",
                         "Review target ontology SHA-256 does not match configured layer ontology",

@@ -112,8 +112,8 @@ describe("UploadPanel with a work plan", () => {
 
   it("names the import button by count and blocks it with aria-disabled until the acceptance is resolved", async () => {
     render(<UploadPanel projectKey="p" languages={[]} onImported={vi.fn()} canOverrideTranslationStatus />);
-    await userEvent.upload(screen.getByLabelText(/^Files/), new File(["{}"], "bundle.json"));
-    fireEvent.submit(screen.getByRole("button", { name: "Check" }).closest("form")!);
+    await userEvent.upload(screen.getByLabelText("Files"), new File(["{}"], "bundle.json"));
+    fireEvent.click(screen.getByRole("button", { name: "Check" }));
     const importButton = await screen.findByRole("button", { name: "Import 50 cases" });
     expect(importButton.getAttribute("aria-disabled")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Translation review, fr" }));

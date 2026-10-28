@@ -1,0 +1,72 @@
+/* Upload texts dialog (#128): the body is the only scroll area; the footer stays fixed. */
+.upload-dialog .ui-dialog-body { overscroll-behavior: contain; }
+.upload-body { display: flex; flex-direction: column; gap: var(--space-3); }
+.upload-body p { margin: 0; }
+.upload-muted { color: var(--text-muted); }
+
+/* The result line takes the focus after Check; it reads as the preview's heading line. */
+.upload-result { font-weight: var(--weight-strong); }
+.upload-result:focus { outline: none; }
+.upload-result:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: var(--radius-sm); }
+.upload-result--alert { color: var(--danger); }
+.upload-result-extra { font-weight: normal; color: var(--text-muted); }
+
+/* Step 1: Format and Language side by side; files as removable chips. */
+.upload-form { display: flex; flex-direction: column; gap: var(--space-3); }
+.upload-form .form-group { margin-bottom: 0; }
+.upload-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); align-items: start; }
+@media (max-width: 599px) { .upload-fields { grid-template-columns: minmax(0, 1fr); } }
+.upload-files-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.upload-chips { display: contents; list-style: none; }
+.upload-chip { display: inline-flex; align-items: center; gap: var(--space-1); max-width: 100%; padding-inline: var(--space-2) var(--space-1); border: 1px solid var(--border); border-radius: 999px; background: var(--surface-sunken); font-size: var(--size-sm); }
+.upload-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.upload-files .field-hint { margin-top: var(--space-1); }
+
+/* Collapsed disclosures (unfinished uploads, texts, technical details): content renders only while open. */
+.upload-disclosure > summary { cursor: pointer; width: fit-content; font-weight: var(--weight-strong); }
+.upload-disclosure[open] > summary { margin-bottom: var(--space-2); }
+.upload-unfinished-list { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--space-2); }
+.upload-unfinished-list li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); padding-block: var(--space-1); border-bottom: 1px solid var(--border); }
+.upload-unfinished-text { flex: 1 1 18rem; font-size: var(--size-sm); }
+
+/* Preview: summary row, notes one line each, blocks with small headings. */
+.upload-preview { display: flex; flex-direction: column; gap: var(--space-3); }
+.upload-summary { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-5); margin: 0; padding: var(--space-2) var(--space-3); border-radius: var(--radius); background: var(--surface-sunken); }
+.upload-summary div { display: flex; flex-direction: column; }
+.upload-summary dt { color: var(--text-muted); font-size: var(--size-sm); }
+.upload-summary dd { margin: 0; font-weight: var(--weight-strong); font-variant-numeric: tabular-nums; }
+.upload-block { display: flex; flex-direction: column; gap: var(--space-1); }
+.upload-block-heading { margin: 0; font-size: var(--size-md); font-weight: var(--weight-strong); }
+/* The work plan step reads as one more block of the preview (no section padding or rule of its own). */
+.upload-preview .work-plan-upload { padding: 0; border-bottom: 0; }
+.upload-preview .work-plan-upload > h3 { margin: 0; color: var(--text); font-size: var(--size-md); }
+.upload-notes, .upload-sources { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--space-1); }
+.upload-note { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--space-2); }
+.upload-note-text { flex: 0 1 auto; }
+.upload-note--warning .upload-note-text { color: var(--notice-warning-text); }
+.upload-note--warning .upload-note-text::before { content: "Warning: "; font-weight: var(--weight-strong); }
+.upload-note-details { flex-basis: 100%; margin: var(--space-1) 0 var(--space-2); padding-inline-start: var(--space-5); max-height: 16rem; overflow: auto; font-size: var(--size-sm); }
+.upload-sources li { font-size: var(--size-md); }
+
+/* Paged text list. */
+.upload-texts { display: flex; flex-direction: column; gap: var(--space-2); }
+.upload-texts-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: var(--space-3); }
+.upload-texts-filters .form-group { margin-bottom: 0; }
+.upload-texts-range { color: var(--text-muted); font-size: var(--size-sm); }
+.upload-texts-table th, .upload-texts-table td { overflow-wrap: normal; }
+.upload-texts-pages { display: flex; align-items: center; gap: var(--space-2); font-size: var(--size-sm); }
+
+/* Problems per uploaded file, with a format hint. */
+.upload-problems { display: flex; flex-direction: column; gap: var(--space-3); }
+.upload-problem-file { display: flex; flex-direction: column; gap: var(--space-1); }
+.upload-problem-file > ul { margin: 0; padding-inline-start: var(--space-4); display: grid; gap: var(--space-1); }
+.upload-problem-examples { margin: 0; padding-inline-start: var(--space-4); font-size: var(--size-sm); }
+.upload-hint { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--notice-info-border); border-radius: var(--radius); background: var(--notice-info-fill); color: var(--notice-info-text); }
+
+/* Technical details: hashes and IDs, small and breakable. */
+.upload-technical-body { display: flex; flex-direction: column; gap: var(--space-2); font-size: var(--size-sm); }
+.upload-technical-body h4 { margin: var(--space-2) 0 0; font-size: var(--size-sm); }
+.upload-technical-body ul { margin: 0; padding-inline-start: var(--space-4); }
+.upload-technical-list { display: grid; grid-template-columns: max-content 1fr; gap: var(--space-1) var(--space-3); margin: 0; }
+.upload-technical-list dd { margin: 0; }
+.upload-technical-body code { overflow-wrap: anywhere; }
