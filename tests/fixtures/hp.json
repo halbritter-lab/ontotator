@@ -165,6 +165,36 @@
      "meta": {
       "deprecated": true
      }
+    },
+    {
+     "id": "http://purl.obolibrary.org/obo/HP_0012823",
+     "lbl": "Clinical modifier",
+     "type": "CLASS",
+     "meta": {}
+    },
+    {
+     "id": "http://purl.obolibrary.org/obo/HP_0012824",
+     "lbl": "Severity",
+     "type": "CLASS",
+     "meta": {}
+    },
+    {
+     "id": "http://purl.obolibrary.org/obo/HP_0031797",
+     "lbl": "Clinical course",
+     "type": "CLASS",
+     "meta": {}
+    },
+    {
+     "id": "http://purl.obolibrary.org/obo/HP_0003674",
+     "lbl": "Onset",
+     "type": "CLASS",
+     "meta": {}
+    },
+    {
+     "id": "http://purl.obolibrary.org/obo/HP_0040279",
+     "lbl": "Frequency",
+     "type": "CLASS",
+     "meta": {}
     }
    ],
    "edges": [
@@ -212,6 +242,31 @@
      "sub": "http://purl.obolibrary.org/obo/HP_0000407",
      "pred": "is_a",
      "obj": "http://purl.obolibrary.org/obo/HP_0000365"
+    },
+    {
+     "sub": "http://purl.obolibrary.org/obo/HP_0012823",
+     "pred": "is_a",
+     "obj": "http://purl.obolibrary.org/obo/HP_0000001"
+    },
+    {
+     "sub": "http://purl.obolibrary.org/obo/HP_0012824",
+     "pred": "is_a",
+     "obj": "http://purl.obolibrary.org/obo/HP_0012823"
+    },
+    {
+     "sub": "http://purl.obolibrary.org/obo/HP_0031797",
+     "pred": "is_a",
+     "obj": "http://purl.obolibrary.org/obo/HP_0012823"
+    },
+    {
+     "sub": "http://purl.obolibrary.org/obo/HP_0003674",
+     "pred": "is_a",
+     "obj": "http://purl.obolibrary.org/obo/HP_0031797"
+    },
+    {
+     "sub": "http://purl.obolibrary.org/obo/HP_0040279",
+     "pred": "is_a",
+     "obj": "http://purl.obolibrary.org/obo/HP_0000001"
     }
    ]
   }

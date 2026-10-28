@@ -2,9 +2,10 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import { importPackage, openCase, selectText } from "./helpers";
 
 // The fixture's ontology (tests/fixtures/hp.json) is a single-parent tree:
-// All > Phenotypic abnormality > { Abnormality of the nervous system >
+// All > { Clinical modifier > { Clinical course > Onset, Severity }, Frequency,
+// Phenotypic abnormality > { Abnormality of the nervous system >
 // { Areflexia, Hypotonia, Seizure > { Dialeptic seizure, Status epilepticus } },
-// Hearing impairment > Sensorineural hearing impairment }.
+// Hearing impairment > Sensorineural hearing impairment } }.
 // The document is "Hypotonia and seizure. ...": "Hypotonia" at 0-9, "seizure" at 14-21.
 
 const revision = (page: Page) => page.locator(".status-badge");
@@ -151,6 +152,8 @@ test.describe("ontology tree", () => {
     await expect(panel.locator('[aria-current="true"]')).toHaveCount(1);
     await expect(panel.locator(".tree-label")).toHaveText([
       "All",
+      "Clinical modifier",
+      "Frequency",
       "Phenotypic abnormality",
       "Abnormality of the nervous system",
       "Areflexia",
