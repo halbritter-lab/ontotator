@@ -809,3 +809,46 @@ def test_an_exported_project_imports_and_exports_unchanged(tmp_path: Path) -> No
     assert second.search_events == first.search_events
     assert [e.event_id for e in second.search_events] == ["walk-1"]
     assert second.embedded_files == first.embedded_files
+
+
+def test_snapshot_verification_checks_all_identities_in_one_query_each(
+    tmp_path: Path,
+) -> None:
+    from sqlalchemy import event
+
+    from ontotator.domain.annotations import AnnotationSnapshot
+    from ontotator.domain.documents import EvidenceSnapshot
+
+    repo = _repo(tmp_path)
+    package = _sample_package("pkg-a")
+    repo.import_package(package)
+    (snap,) = package.annotations.values()
+    (ev,) = package.evidence.values()
+    unknown = [snap.model_copy(update={"version": f"unknown-{i}"}) for i in range(50)]
+    statements: list[str] = []
+
+    def capture(_conn, _cursor, statement, *_args) -> None:
+        statements.append(statement)
+
+    event.listen(repo.db.engine, "before_cursor_execute", capture)
+    try:
+        with repo.db.transaction() as conn:
+            Repository._verify_snapshot_contents(conn, [snap, *unknown], [ev])
+    finally:
+        event.remove(repo.db.engine, "before_cursor_execute", capture)
+    assert len([s for s in statements if "_snapshots" in s]) == 2
+
+    changed = AnnotationSnapshot.model_validate(
+        snap.model_dump()
+        | {"annotation": snap.annotation.model_dump() | {"note": "Changed"}}
+    )
+    changed_ev = EvidenceSnapshot.model_validate(
+        ev.model_dump() | {"text_sha256": "0" * 64}
+    )
+    for annotations, evidence in (
+        ([changed], []),
+        ([snap, changed], []),  # one identity twice, once with other content
+        ([], [changed_ev]),
+    ):
+        with repo.db.transaction() as conn, pytest.raises(InvalidPackage):
+            Repository._verify_snapshot_contents(conn, annotations, evidence)
