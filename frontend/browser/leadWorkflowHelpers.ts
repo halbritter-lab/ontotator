@@ -8,7 +8,8 @@ export type LeadScenarioName =
   | "FR_OFF"
   | "ACCEPTANCE"
   | "ROWS"
-  | "REJECTED_TRANSLATION_FOR_LEAD";
+  | "REJECTED_TRANSLATION_FOR_LEAD"
+  | "UPLOAD_DIALOG";
 
 /** The people of every lead workflow scenario. */
 export type LeadPerson = "lead" | "ana" | "ben" | "annotator";
