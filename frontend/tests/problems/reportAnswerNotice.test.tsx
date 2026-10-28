@@ -13,7 +13,7 @@ it("shows a lead's answer on the task page after the answer was read elsewhere, 
   const list = vi.spyOn(api, "listTaskProblemReports").mockResolvedValue([closed(false)]);
   const seen = vi.spyOn(api, "markProblemReportSeen");
   render(<ReportAnswerNotice projectKey="p" assignmentId={4} held={false} onNavigate={vi.fn()} />);
-  expect(await screen.findByText(/Your problem report was answered by lead-0002: Word restored\. You can continue\./)).toBeDefined();
+  expect(await screen.findByText(/Your problem report was answered by the project lead: Word restored\. You can continue\./)).toBeDefined();
   expect(list).toHaveBeenCalledWith("p", 4);
   fireEvent.click(screen.getByRole("button", { name: "Dismiss message" }));
   expect(screen.queryByText(/was answered/)).toBeNull();

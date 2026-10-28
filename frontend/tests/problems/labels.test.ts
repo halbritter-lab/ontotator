@@ -129,13 +129,13 @@ it("names the final result's author with display name and pseudonym for leads", 
 
 describe("answerNotice (#18)", () => {
   it("names the outcome and says the reporter can continue unless the task stays paused", () => {
-    expect(answerNotice(report({ state: "resolved", resolution: "Source fixed." }), false)).toBe("Your problem report was answered: Source fixed. You can continue.");
+    expect(answerNotice(report({ state: "resolved", resolution: "Source fixed." }), false)).toBe("Your problem report was answered by the project lead: Source fixed. You can continue.");
     const released = report({ events: [event({ action: "resume", actor_label: "lead-0002", reason: null })] });
-    expect(answerNotice(released, false)).toBe("Your problem report was answered by lead-0002: lead-0002 released the pause on your task. You can continue.");
+    expect(answerNotice(released, false)).toBe("Your problem report was answered by the project lead: lead-0002 released the pause on your task. You can continue.");
     const paused = report({ events: [event({ action: "extend_hold", actor_label: "lead-0002", reason: "Waiting for the source" })] });
-    expect(answerNotice(paused, true)).toBe("Your problem report was answered by lead-0002: Waiting for the source.");
+    expect(answerNotice(paused, true)).toBe("Your problem report was answered by the project lead: Waiting for the source.");
     const named = report({ state: "resolved", resolution: "Fixed", events: [event({ action: "resolve", actor_label: "lead-0002", actor: { pseudonym: "lead-0002", display_name: "Lena Lead", is_me: false } })] });
-    expect(answerNotice(named, false)).toBe("Your problem report was answered by Lena Lead: Fixed. You can continue.");
+    expect(answerNotice(named, false)).toBe("Your problem report was answered by the project lead: Fixed. You can continue.");
   });
   it("picks the newest own report with an unread answer or closed by a lead, even after the answer was read", () => {
     const closed = report({ report_id: "closed", state: "resolved", state_changed_by_label: "lead-0002", answered: false });
