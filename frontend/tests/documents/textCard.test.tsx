@@ -2,14 +2,15 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { api, type DocumentRowView } from "../../src/api/client";
+import { api, type AssignmentView, type DocumentRowView } from "../../src/api/client";
 import { routeHref, type ProjectDocumentsQuery, type Route } from "../../src/app/router";
 import { formatTime } from "../../src/app/submissionLabels";
 import { TextCard, type TextCardProps } from "../../src/documents/textCard/TextCard";
 import type { SegmentId } from "../../src/documents/textCard/cardModel";
 import { annotateItem, cardRow } from "./cardFixtures";
 import { final, submission, submissions, version, work } from "./fixtures";
-import { ana, cell, tom } from "./tableFixtures";
+import { ana, cell, luc, tom } from "./tableFixtures";
+import type { TextVersionsTools } from "../../src/documents/TextVersions";
 
 const now = new Date("2026-10-21T12:00:00");
 const query: ProjectDocumentsQuery = { decision: "all", panel: "case-200:de" };
@@ -35,6 +36,15 @@ function assignRow(overrides: Partial<DocumentRowView> = {}): DocumentRowView {
     ...overrides,
   });
 }
+
+/** An assignment of the page's inventory (Reassign…, Reopen…, revoking Remove…). */
+function toolAssignment(id: number, status: AssignmentView["status"], overrides: Partial<AssignmentView> = {}): AssignmentView {
+  return { id, workflow_revision: 0, held: false, lead_correction: false, project_key: "p", document_id: "case-200-de", user_id: id, username: "tom", display_name: "Tom Reis",
+    pseudonym: "ann-0004", task: "annotate", status, created_at: "2026-10-14T09:00:00Z", updated_at: "2026-10-14T09:00:00Z", revoked_at: null, last_submission_id: null, ...overrides };
+}
+const textTools = (assignments: AssignmentView[]): TextVersionsTools => ({
+  username: "lead", members: [], assignments, variants: new Map(), requiredLanguages: () => [], onAssignmentsChanged: vi.fn(),
+});
 
 type Handlers = Pick<TextCardProps, "onStep" | "onClose" | "onNavigate" | "onAssign" | "onChangePlan" | "onChanged">;
 
@@ -109,8 +119,7 @@ describe("header", () => {
 
   it("J / K do nothing while another dialog is on top of the card", () => {
     const { onStep } = renderCard({ initialSegment: "annotation" });
-    fireEvent.click(within(card()).getByRole("button", { name: "Tom Reis, not started: actions" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Remove (draft is discarded)" }));
+    fireEvent.click(within(card()).getByRole("button", { name: "Remove Tom Reis’s assignment" }));
     const confirm = screen.getByRole("dialog", { name: "Remove assignment?" });
     fireEvent.keyDown(document.activeElement ?? confirm, { key: "j" });
     fireEvent.keyDown(document.activeElement ?? confirm, { key: "k" });
@@ -147,9 +156,10 @@ describe("annotation part", () => {
     expect(onNavigate).toHaveBeenCalledWith(route);
     expect(within(card()).queryByRole("link", { name: "View proposals" })).toBeNull();
     expect(within(card()).getByText("1 of 2 annotators assigned.")).toBeTruthy();
-    const chip = within(card()).getByRole("button", { name: "Tom Reis, not started: actions" });
-    expect(chip.textContent).toContain("assigned yesterday");
-    expect(within(card()).queryByRole("button", { name: "Remove Tom Reis" })).toBeNull();
+    const people = within(card()).getByRole("list", { name: "Annotators" });
+    const tomRow = within(people).getByText("Tom Reis").closest("li")!;
+    expect(tomRow.textContent).toBe("Tom Reis ann-0004Assigned yesterday, from proposalsNot startedRemove…");
+    expect(within(tomRow).getByText("Assigned yesterday").tagName).toBe("TIME");
   });
 
   it("says why a text without proposals is annotated from scratch; Open text shows no proposals", () => {
@@ -197,25 +207,87 @@ describe("annotation part", () => {
     expect(document.getElementById(button.getAttribute("aria-describedby")!)!.textContent).toBe("2 of 2 annotators assigned.");
     fireEvent.click(button);
     expect(full.onAssign).not.toHaveBeenCalled();
-    // At the limit the chip menu offers no "Assign another person".
-    fireEvent.click(within(card()).getByRole("button", { name: "Tom Reis, not started: actions" }));
-    expect(screen.queryByRole("menuitem", { name: /^Assign another person/ })).toBeNull();
+    // "Assign another person" is the part's "Assign annotators…" (#108), not a per-person action.
+    expect(within(card()).queryByRole("button", { name: /^Assign another person/ })).toBeNull();
   });
 
-  it("below the limit a chip offers Assign another person", () => {
-    const { onAssign } = renderCard();
-    fireEvent.click(within(card()).getByRole("button", { name: "Tom Reis, not started: actions" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Assign another person (Tom Reis keeps working)" }));
-    expect(onAssign).toHaveBeenCalledWith(expect.objectContaining({ case_id: "case-200" }), "annotate");
+  it("one row per person: unsubmitted first, each with only their own actions named after them (#108)", async () => {
+    const tools = textTools([toolAssignment(1, "in_progress"), toolAssignment(2, "submitted", { pseudonym: "ann-0003", username: "ana", last_submission_id: "s-ana" }), toolAssignment(3, "reopened", { pseudonym: "ann-0005", username: "luc", last_submission_id: "s-luc" })]);
+    const row = assignRow({
+      stages: { review: cell("not_planned", "none"), annotation: cell("in_progress", "running", { assigned: 3, target: 3, submitted: 1, total: 3 }), final: cell("after_annotation", "waiting") },
+      work: [
+        annotateItem({ assignment_id: 2, person: ana, author_label: "ann-0003", status: "submitted", assigned_at: "2026-10-12T09:00:00" }),
+        annotateItem({ assignment_id: 1, person: tom, author_label: "ann-0004", status: "in_progress", assigned_at: "2026-10-14T09:00:00", assigned_by: { pseudonym: "lead-0001", display_name: "Lena Lead", is_me: true } }),
+        annotateItem({ assignment_id: 3, person: luc, author_label: "ann-0005", status: "reopened", assigned_at: "2026-10-13T09:00:00", annotation_mode: "scratch" }),
+      ],
+    });
+    renderCard({ row, textVersionTools: tools });
+    const people = within(card()).getByRole("list", { name: "Annotators" });
+    await within(people).findByRole("link", { name: "Open annotation of Ana Weber" });
+    const rows = within(people).getAllByRole("listitem");
+    expect(rows.map(item => within(item).getByText(/^(Tom Reis|Ana Weber|Luc Martin)$/).textContent)).toEqual(["Luc Martin", "Tom Reis", "Ana Weber"]);
+    const actions = (item: HTMLElement) => Array.from(item.querySelectorAll("button, a")).map(element => element.getAttribute("aria-label"));
+    expect(rows[0].textContent).toContain("Reopened");
+    expect(rows[0].textContent).toContain("13 Oct, from scratch");
+    // Reopened work was submitted once: Remove… revokes (removeAssignment refuses it).
+    expect(actions(rows[0])).toEqual(["Reassign Luc Martin’s annotation", "Remove Luc Martin’s assignment"]);
+    expect(rows[1].textContent).toContain("In progress");
+    expect(within(rows[1]).getByText("Assigned 14 Oct").getAttribute("title")).toBe("Assigned 14 Oct 2026, 09:00 by Lena Lead");
+    expect(rows[1].textContent).toContain("Assigned 14 Oct by you, from proposals");
+    expect(actions(rows[1])).toEqual(["Reassign Tom Reis’s annotation", "Remove Tom Reis’s assignment, the draft is discarded"]);
+    expect(rows[2].textContent).toContain("Submitted 18 Oct, 3 findings · assigned 12 Oct");
+    expect(actions(rows[2])).toEqual(["Open annotation of Ana Weber", "Reopen Ana Weber’s annotation", "Remove Ana Weber’s assignment"]);
+    // The status pills say it in words and shape.
+    expect(rows.map(item => item.querySelector(".status-pill")!.textContent)).toEqual(["Reopened", "In progress", "Submitted"]);
+    fireEvent.click(within(rows[2]).getByRole("button", { name: "Reopen Ana Weber’s annotation" }));
+    expect(screen.getByRole("dialog", { name: "Reopen case-200-de" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    fireEvent.click(within(rows[0]).getByRole("button", { name: "Remove Luc Martin’s assignment" }));
+    const revoke = screen.getByRole("dialog", { name: "Remove assignment?" });
+    expect(revoke.textContent).toContain("The assignment is revoked; their submitted work stays in the history.");
+    fireEvent.click(within(revoke).getByRole("button", { name: "Cancel" }));
+    fireEvent.click(within(rows[1]).getByRole("button", { name: "Reassign Tom Reis’s annotation" }));
+    expect(screen.getByRole("dialog", { name: "Reassign case-200-de" })).toBeTruthy();
   });
 
-  it("after removing a person, focus moves to Assign annotators…", async () => {
+  it("a person removed after submitting stays listed as Removed with Open annotation", async () => {
+    const tools = textTools([toolAssignment(4, "submitted", { pseudonym: "ann-0003", username: "ana", display_name: "Ana Weber", last_submission_id: "s-ana", revoked_at: "2026-10-19T10:00:00Z" })]);
+    const { onNavigate } = renderCard({ textVersionTools: tools });
+    const people = within(card()).getByRole("list", { name: "Annotators" });
+    const link = await within(people).findByRole("link", { name: "Open annotation of Ana Weber (assignment removed)" });
+    const removed = link.closest("li")!;
+    expect(removed.classList.contains("person-row--removed")).toBe(true);
+    expect(removed.textContent).toBe("Ana Weber ann-0003Removed 19 Oct · submitted 18 Oct, kept in the historyRemovedOpen annotation");
+    expect(within(removed).queryByRole("button")).toBeNull();
+    fireEvent.click(link);
+    expect(onNavigate).toHaveBeenCalledWith({ name: "projectCase", key: "p", caseId: "case-200", variant: "case-200-de", show: "submission:s-ana", documents: query });
+    cleanup();
+    // Without the page's assignments (annotators' view) the submission alone keeps the person listed; a proposal check is a layer too.
+    vi.mocked(api.getRowSubmissions).mockImplementation(async (_key, caseId, language) => submissions(caseId, language, {
+      submissions: [submission({ submission_id: "s-ana", document_id: "case-200-de", author_label: "ann-0003", author: ana, kind: "proposal_check" })],
+    }));
+    renderCard({ canManage: false });
+    const plain = (await within(card()).findByRole("link", { name: "Open annotation of Ana Weber (assignment removed)" })).closest("li")!;
+    expect(plain.textContent).toBe("Ana Weber ann-0003Assignment removed · submitted 18 Oct, kept in the historyRemovedOpen annotation");
+  });
+
+  it("after removing a person, focus moves to the next person's first button, else to Assign annotators…", async () => {
     vi.spyOn(api, "removeAssignment").mockResolvedValue({} as Awaited<ReturnType<typeof api.removeAssignment>>);
     renderCard({ initialSegment: "annotation" });
-    fireEvent.click(within(card()).getByRole("button", { name: "Tom Reis, not started: actions" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Remove (draft is discarded)" }));
-    fireEvent.click(within(screen.getByRole("dialog", { name: "Remove assignment?" })).getByRole("button", { name: "Remove" }));
+    fireEvent.click(within(card()).getByRole("button", { name: "Remove Tom Reis’s assignment" }));
+    const dialog = screen.getByRole("dialog", { name: "Remove assignment?" });
+    expect(within(dialog).getByText("Remove Tom Reis from the annotation of case-200? Their draft is discarded.")).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Remove" }));
     await waitFor(() => expect(document.activeElement).toBe(within(card()).getByRole("button", { name: "Assign annotators…" })));
+    cleanup();
+    const row = assignRow({ work: [
+      annotateItem({ assignment_id: 1, person: tom, author_label: "ann-0004", assigned_at: "2026-10-14T09:00:00" }),
+      annotateItem({ assignment_id: 2, person: luc, author_label: "ann-0005", assigned_at: "2026-10-15T09:00:00" }),
+    ] });
+    renderCard({ row });
+    fireEvent.click(within(card()).getByRole("button", { name: "Remove Tom Reis’s assignment" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Remove assignment?" })).getByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(document.activeElement).toBe(within(card()).getByRole("button", { name: "Remove Luc Martin’s assignment" })));
   });
 
   it("no chip offers a review of a submitted annotation", async () => {
@@ -229,18 +301,20 @@ describe("annotation part", () => {
     const { onNavigate } = renderCard({ row });
     const part = within(card()).getByRole("heading", { name: "Annotation" }).closest("section")!;
     expect(within(part).queryByRole("button", { name: /review/i })).toBeNull();
-    // The submitted person's name opens the text view with their layer; the chip has nothing to change.
-    const link = await within(card()).findByRole("link", { name: "Ana Weber" });
-    const chip = link.closest(".assignment-chip") as HTMLElement;
-    expect(chip.textContent).toContain("submitted");
-    expect(within(chip).queryByRole("button")).toBeNull();
+    // "Open annotation" opens the text view with the person's layer; without the assignments there is nothing to change.
+    const link = await within(card()).findByRole("link", { name: "Open annotation of Ana Weber" });
+    const person = link.closest("li") as HTMLElement;
+    expect(person.textContent).toContain("Submitted");
+    expect(within(person).queryByRole("button")).toBeNull();
     fireEvent.click(link);
     expect(onNavigate).toHaveBeenCalledWith({ name: "projectCase", key: "p", caseId: "case-200", variant: "case-200-de", show: "submission:s-ana", documents: query });
   });
 
-  it("people without lead rights see no menus and no Assign annotators…", () => {
-    renderCard({ canManage: false });
-    expect(within(card()).queryByRole("button", { name: /: actions$/ })).toBeNull();
+  it("people without lead rights see the rows without buttons and no Assign annotators…", () => {
+    renderCard({ canManage: false, textVersionTools: textTools([toolAssignment(1, "open")]) });
+    const people = within(card()).getByRole("list", { name: "Annotators" });
+    expect(within(people).getByText("Tom Reis")).toBeTruthy();
+    expect(within(people).queryByRole("button")).toBeNull();
     expect(within(card()).queryByRole("button", { name: "Assign annotators…" })).toBeNull();
   });
 });
@@ -255,7 +329,8 @@ describe("translation part", () => {
     expect(within(card()).queryByText(/^Version 1/)).toBeNull();
     expect(within(card()).queryByText("Automatic check passed")).toBeNull();
     expect(within(card()).getByText("Ready for review")).toBeTruthy();
-    expect(within(card()).getByText("Ana Weber").closest(".assignment-chip")!.textContent).toContain("in progress");
+    const reviewers = within(card()).getByRole("list", { name: "Translation reviewers" });
+    expect(within(reviewers).getByRole("listitem").textContent).toBe("Ana Weber ann-0003Review of v1In progress");
     fireEvent.click(within(card()).getByRole("button", { name: "Assign review…" }));
     expect(onAssign).toHaveBeenCalledWith(row, "translation_review");
     fireEvent.click(within(card()).getByRole("link", { name: "Compare with source" }));
@@ -278,12 +353,15 @@ describe("translation part", () => {
     const row = assignRow({ versions, parallel_roots: true, work: [reviewed, open] });
     renderCard({ row, initialSegment: "translation", textVersionTools });
     const part = within(card()).getByRole("heading", { name: "Translation" }).closest("section")!;
-    // Only the open reviewer is a chip; its menu holds Reassign and Remove.
-    expect(within(part).queryByText("Ana Weber")?.closest(".assignment-chip") ?? null).toBeNull();
-    fireEvent.click(within(part).getByRole("button", { name: "Tom Reis, not started: actions" }));
-    expect(screen.getByRole("menuitem", { name: /^Reassign to someone else…/ })).toBeTruthy();
-    expect(screen.getByRole("menuitem", { name: "Remove assignment…" })).toBeTruthy();
-    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    // Only the open reviewer has a row, with their own Reassign… and Remove…; the submitted review is listed under its version.
+    const reviewers = within(part).getByRole("list", { name: "Translation reviewers" });
+    expect(within(reviewers).getAllByRole("listitem")).toHaveLength(1);
+    expect(within(reviewers).queryByText("Ana Weber")).toBeNull();
+    expect(within(reviewers).getByRole("listitem").textContent).toContain("Review of mt v1");
+    expect(within(reviewers).getAllByRole("button").map(button => button.getAttribute("aria-label"))).toEqual(["Reassign Tom Reis’s translation review", "Remove Tom Reis’s review assignment"]);
+    fireEvent.click(within(reviewers).getByRole("button", { name: "Remove Tom Reis’s review assignment" }));
+    expect(screen.getByRole("dialog", { name: "Remove assignment?" }).textContent).toContain("The assignment is revoked; their draft is kept, not deleted.");
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     const older = within(part).getByText("Older versions (1)").closest("details")!;
     expect(older.open).toBe(false);
     expect(within(older).getByText("m1 v1")).toBeTruthy();

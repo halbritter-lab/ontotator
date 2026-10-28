@@ -1,12 +1,12 @@
 /**
  * The text card of Documents (plan T2, spec §2): the path Translation, Annotation, Finalization with its parts,
- * History and Details inside the card, removing an assignment from the chip menu, assigning yourself, the toggling
+ * History and Details inside the card, removing an assignment from its person row, assigning yourself, the toggling
  * row click with the selection bar for two or more texts, ‹ › through the table order, the 390 px sheet and axe.
  * Scenarios: tests/browser_proposal_check_scenarios.py.
  */
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { cardRow, cardSegment, documentsReady, chipMenu, documentsTable, openTextCard, robotIcon, showSegment, textCard, textName } from "./documentsHelpers";
+import { cardRow, cardSegment, documentsReady, documentsTable, openTextCard, personRow, robotIcon, showSegment, textCard, textName } from "./documentsHelpers";
 import { authenticatedRequest } from "./helpers";
 import { loginScenarioUser, proposalCheckScenario, type ProposalCheckScenario } from "./proposalCheckHelpers";
 
@@ -68,20 +68,23 @@ test("remove an assignment after confirming", async ({ page }) => {
   const tom = s.display_names.tom;
   const confirm = page.getByRole("dialog", { name: "Remove assignment?", exact: true });
 
-  await chipMenu(card, tom).click();
-  await expect(page.getByRole("menuitem", { name: "Reassign to someone else…", exact: true })).toBeVisible();
-  await page.getByRole("menuitem", { name: "Remove (draft is discarded)", exact: true }).click();
+  // One row per person (#108): name, status and only this person's actions, each named after them.
+  const person = personRow(card, "Annotators", tom);
+  await expect(person.locator(".status-pill")).toHaveText("Not started");
+  await expect(person.getByRole("button", { name: `Reassign ${tom}’s annotation`, exact: true })).toBeVisible();
+  const remove = person.getByRole("button", { name: new RegExp(`^Remove ${tom}’s assignment`) });
+  await remove.click();
   await expect(confirm.getByText(`Remove ${tom} from the annotation of ${CASE}? Their draft is discarded.`, { exact: true })).toBeVisible();
   await confirm.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(confirm).toHaveCount(0);
-  await expect(chipMenu(card, tom)).toBeVisible();
+  await expect(remove).toBeFocused();
 
-  await chipMenu(card, tom).click();
-  await page.getByRole("menuitem", { name: "Remove (draft is discarded)", exact: true }).click();
+  await remove.click();
   const removed = page.waitForResponse(r => r.request().method() === "POST" && /\/assignments\/\d+\/remove$/.test(r.url()));
   await confirm.getByRole("button", { name: "Remove", exact: true }).click();
   expect((await removed).ok()).toBeTruthy();
-  await expect(chipMenu(card, tom)).toHaveCount(0);
+  await expect(person).toHaveCount(0);
+  await expect(card.getByRole("button", { name: "Assign annotators…", exact: true })).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(card).toHaveCount(0);
   await expect(robotIcon(row, 3)).toBeVisible();
@@ -93,10 +96,16 @@ test("someone else's running consolidation: the lead's card shows who and the pr
   await openDocuments(page, s);
   const card = await openTextCard(page, CASE, "en");
   await showSegment(card, "Finalization");
-  await expect(card.getByText(/^Consolidating with Ali.* · \d+ of \d+ groups open$/)).toBeVisible();
+  // The consolidator's row (#108): status, open groups and the lead's one action naming them (no Reassign, D1).
+  const consolidator = card.getByRole("list", { name: "Consolidators", exact: true }).getByRole("listitem");
+  await expect(consolidator).toHaveCount(1);
+  await expect(consolidator).toContainText(/^Ali/);
+  await expect(consolidator).toContainText(/\d+ of \d+ groups open/);
+  await expect(consolidator.locator(".status-pill")).toHaveText("Consolidating");
   // The server refuses the unsubmitted round to the lead (ROUND_NOT_FOUND): no dead-end link.
-  await expect(card.getByRole("link", { name: "Open consolidation", exact: true })).toHaveCount(0);
-  await expect(card.getByRole("button", { name: "Remove assignment…", exact: true })).toBeVisible();
+  await expect(card.getByRole("link", { name: /^Open consolidation/ })).toHaveCount(0);
+  await expect(consolidator.getByRole("button")).toHaveCount(1);
+  await expect(consolidator.getByRole("button", { name: /^Remove Ali.*’s consolidation assignment$/ })).toBeVisible();
 });
 
 test("the lead assigns themselves in the assign dialog; the consolidator rule is said there", async ({ page }) => {
@@ -118,7 +127,7 @@ test("the lead assigns themselves in the assign dialog; the consolidator rule is
   await dialog.getByRole("button", { name: "Assign 1 person", exact: true }).click();
   expect((await saved).ok()).toBeTruthy();
   await expect(dialog).toHaveCount(0);
-  await expect(chipMenu(card, s.display_names.lead)).toBeVisible();
+  await expect(personRow(card, "Annotators", s.display_names.lead)).toBeVisible();
 });
 
 test("a row click selects and one text brings the bar; a double click opens the card (R-3, R-4)", async ({ page }) => {
