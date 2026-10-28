@@ -193,7 +193,7 @@ export function UploadPanel({ projectKey, languages, onImported, canOverrideTran
         })}
       </fieldset>}
       {view.status === "previewing" && <><InlineMessage tone="info">Checking …</InlineMessage>{view.preview_job_id == null && <Button disabled={busy} onClick={() => { void resume(view.id); }}>Refresh status</Button>}</>}
-      {["ready", "invalid", "failed"].includes(view.status) && <Toolbar label="Preview actions"><Button variant="primary" disabled={busy || stale || missingReason || view.status !== "ready" || !view.preview?.committable || !view.plan_sha256} aria-disabled={planBlocked ? true : undefined} aria-describedby={planBlocked ? importReasonId : undefined} onClick={() => { void commit(); }}>{workPlan ? importLabel(workPlan, view.kind) : "Import"}</Button><Button disabled={busy} onClick={() => { void discard(); }}>Discard</Button></Toolbar>}
+      {["ready", "invalid", "failed"].includes(view.status) && <Toolbar label="Preview actions">{view.status !== "failed" && <Button variant="primary" disabled={busy || stale || missingReason || view.status !== "ready" || !view.preview?.committable || !view.plan_sha256} aria-disabled={planBlocked ? true : undefined} aria-describedby={planBlocked ? importReasonId : undefined} onClick={() => { void commit(); }}>{workPlan ? importLabel(workPlan, view.kind) : "Import"}</Button>}<Button disabled={busy} onClick={() => { void discard(); }}>Discard</Button></Toolbar>}
       {planBlocked && <p id={importReasonId} className="field-hint">{planBlocked}</p>}
     </>}
     <section className="detail-section"><h3>Recent uploads</h3>{listError !== undefined && <ErrorNotice error={listError} />}<Button disabled={busy} onClick={() => { void refreshList(lifetime.current); }}>Refresh uploads</Button>
