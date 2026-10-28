@@ -293,7 +293,7 @@ describe("E2E Release Flow - Origin-Neutral Review & Submission", () => {
 
     // 5. Complete / Submit workspace
     // Submitting confirms the entire text was checked (a sentence above "Submit text").
-    const submitBtn = screen.getByRole("button", { name: /Finish & submit text|Fall abschließen & abgeben/i });
+    const submitBtn = screen.getByRole("button", { name: /Finish & submit|Fall abschließen & abgeben/i });
     fireEvent.click(submitBtn);
     const dialog = await screen.findByRole("dialog", { name: /Submit text/i });
     // The review proposals keep empty experiencer and temporality: acknowledge them in one click.
