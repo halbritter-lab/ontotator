@@ -407,7 +407,12 @@ def test_levels_list_the_children_under_each_expanded_node() -> None:
     levels = tree.levels(["HP:0000001", "HP:0000118"])
 
     assert [level.term_id for level in levels] == ["HP:0000001", "HP:0000118"]
-    assert [n.term_id for n in levels[0].children] == ["HP:0000118"]
+    # The modifier roots sit beside Phenotypic abnormality (#97).
+    assert [n.term_id for n in levels[0].children] == [
+        "HP:0012823",
+        "HP:0040279",
+        "HP:0000118",
+    ]
     assert [(n.term_id, n.label, n.child_count) for n in levels[1].children] == [
         ("HP:0000707", "Abnormality of the nervous system", 3),
         ("HP:0000365", "Hearing impairment", 1),

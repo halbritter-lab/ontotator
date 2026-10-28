@@ -547,8 +547,22 @@ def test_ontology_upload_is_content_addressed_and_never_overwrites(
     client, _ = _app(tmp_path)
     store = client.app.state.ontology_store
     blobs = client.app.state.repo.db.blobs
-    labels = {"HP:0000001": "All", "HP:0000118": "Pheno"}
-    rooted = {"HP:0000118": "HP:0000001"}
+    # The roots every HPO release must hold (#97).
+    labels = {
+        "HP:0000001": "All",
+        "HP:0000118": "Pheno",
+        "HP:0012823": "Clinical modifier",
+        "HP:0040279": "Frequency",
+        "HP:0012824": "Severity",
+        "HP:0003674": "Onset",
+    }
+    rooted = {
+        "HP:0000118": "HP:0000001",
+        "HP:0012823": "HP:0000001",
+        "HP:0040279": "HP:0000001",
+        "HP:0012824": "HP:0012823",
+        "HP:0003674": "HP:0012823",
+    }
     old_release = _obo("2025-01-01", labels, rooted)
     new_release = _obo(
         "2026-01-01",
@@ -637,7 +651,7 @@ def test_failed_eager_ontology_load_is_logged_and_listed(
     loaded = [o for o in listed if o["status"] == "loaded"]
     assert len(failed) == 1 and failed[0]["error"]
     assert failed[0]["sha256"] == hashlib.sha256(broken.read_bytes()).hexdigest()
-    assert len(loaded) == 1 and loaded[0]["term_count"] == 11
+    assert len(loaded) == 1 and loaded[0]["term_count"] == 16
 
 
 def test_routes_use_public_repository_and_registry_api() -> None:

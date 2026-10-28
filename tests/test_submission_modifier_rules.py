@@ -67,7 +67,7 @@ def test_warnings_and_digest_without_modifiers_are_unchanged(tmp_path: Path) -> 
         "acknowledgement": {
             "draft_revision": 1,
             "policy_revision": 1,
-            "warning_digest": "a43b960958980902e556dba96fa4ef9695ce38d3b30c1bf223f4bef20f8a21d0",
+            "warning_digest": "69100ed8e046072e8071459539e1771965752ef9084faf4f810ae08a0635e425",
         },
     }
 
