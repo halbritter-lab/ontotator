@@ -34,7 +34,9 @@ from ontotator.authz.visibility import qualifying_assignment
 from ontotator.domain.annotation_modes import workspace_mode
 from ontotator.domain.errors import AccessDenied, DomainError
 from ontotator.domain.guidelines import Notice
-from ontotator.storage.tables import AssignmentRow, ProjectRow, UserRow
+from ontotator.storage.live_submissions import discarded_draft_keys
+from ontotator.storage.mode_change_tables import DiscardedSubmissionRow
+from ontotator.storage.tables import AssignmentRow, ProjectRow, SubmissionRow, UserRow
 from ontotator.storage.workflow_tables import (
     ProblemReportRow,
     TaskHoldRow,
@@ -478,6 +480,54 @@ def assignment_metadata(
     )[0]
 
 
+def _fresh_after_discard(request: Request, assignment: Assignment) -> bool:
+    """An unstarted annotate assignment of a person whose earlier work in
+    this workspace was discarded by a mode change (not restored)."""
+    if (
+        assignment.task != "annotate"
+        or assignment.active_round_id is not None
+        or assignment.status != "open"
+        or assignment.last_submission_id is not None
+    ):
+        return False
+    mode = workspace_mode(assignment.task, assignment.annotation_mode)
+    with request.app.state.repo.db.transaction() as conn:
+        row = conn.execute(
+            select(AssignmentRow.project_id, UserRow.pseudonym)
+            .join(UserRow, UserRow.id == AssignmentRow.user_id)
+            .where(AssignmentRow.id == assignment.id)
+        ).one()
+        if discarded_draft_keys(
+            conn,
+            row.project_id,
+            annotator_id=row.pseudonym,
+            document_id=assignment.document_id,
+            mode=mode,
+        ):
+            return True
+        return (
+            conn.execute(
+                select(SubmissionRow.submission_id)
+                .join(
+                    DiscardedSubmissionRow,
+                    (DiscardedSubmissionRow.project_id == SubmissionRow.project_id)
+                    & (
+                        DiscardedSubmissionRow.submission_id
+                        == SubmissionRow.submission_id
+                    ),
+                )
+                .where(
+                    SubmissionRow.project_id == row.project_id,
+                    SubmissionRow.document_id == assignment.document_id,
+                    SubmissionRow.annotator_id == row.pseudonym,
+                    SubmissionRow.mode == mode,
+                )
+                .limit(1)
+            ).first()
+            is not None
+        )
+
+
 @router.post("/assignments/{assignment_id}/open")
 def open_assignment(
     assignment_id: int,
@@ -492,6 +542,20 @@ def open_assignment(
         assignment.task == "review" and assignment.active_round_id is None
     ):
         raise DomainError("TASK_INVALID")
+    if _fresh_after_discard(request, assignment):
+        # The person's earlier work here was discarded by a mode change: a
+        # round of its own gives this assignment a fresh workspace, while the
+        # discarded workspace stays as it was for a restore.
+        from ontotator.application.work_rounds import WorkRoundService
+
+        WorkRoundService(request.app.state.repo.db).create(
+            get_access(request),
+            Actor.user(principal.user_id, principal.username),
+            assignment.id,
+            request_id=f"fresh-after-discard-{assignment.id}",
+            expected_workflow_revision=assignment.workflow_revision,
+        )
+        assignment = _owned_assignment(request, principal.user_id, assignment.id)
     if assignment.active_round_id is not None and not (
         body and body.review_round_target_set_id
     ):

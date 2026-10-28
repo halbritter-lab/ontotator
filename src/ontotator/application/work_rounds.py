@@ -233,6 +233,7 @@ class WorkRoundService:
                     select(SubmissionRow.submission_id).where(
                         SubmissionRow.project_id == pid,
                         SubmissionRow.local_key.in_(_workspace_aliases(key)),
+                        live_submission(),
                     )
                 ).scalars()
             )

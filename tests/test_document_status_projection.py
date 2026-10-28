@@ -43,6 +43,12 @@ class MemoryTransaction:
 
 @pytest.mark.parametrize("conflict_first", [False, True])
 def test_metadata_status_matches_canonical_round_traversal(monkeypatch, conflict_first):
+    # In-memory query results: no mode change discarded any work here.
+    from ontotator.api import document_projection
+    from ontotator.storage import repository
+
+    for module in (document_projection, repository):
+        monkeypatch.setattr(module, "discarded_draft_keys", lambda *_a, **_k: set())
     active = WorkspaceKey(
         project_key="p",
         document_id="d",

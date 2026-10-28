@@ -18,10 +18,22 @@ from typing import Any
 
 from sqlalchemy import ColumnElement, Connection, exists, select
 
-from ontotator.storage.mode_change_tables import DiscardedSubmissionRow
-from ontotator.storage.tables import SubmissionRow
+from ontotator.storage.mode_change_tables import (
+    AnnotationModeChangeRow,
+    DiscardedSubmissionRow,
+)
+from ontotator.storage.tables import AssignmentRow, DraftRow, SubmissionRow, UserRow
+from ontotator.storage.workflow_tables import RoundWorkspaceBindingRow, WorkRoundRow
 
-__all__ = ["discarded_ids", "live_submission", "live_submission_ref"]
+# The workspace an annotate assignment of each annotation mode opens.
+_WORKSPACE_MODES = {"proposals": "proposal_check", "scratch": "independent"}
+
+__all__ = [
+    "discarded_draft_keys",
+    "discarded_ids",
+    "live_submission",
+    "live_submission_ref",
+]
 
 
 def live_submission_ref(
@@ -58,3 +70,88 @@ def discarded_ids(
             return set()
         query = query.where(DiscardedSubmissionRow.submission_id.in_(wanted))
     return set(conn.execute(query).scalars())
+
+
+def discarded_draft_keys(
+    conn: Connection,
+    project_id: int,
+    *,
+    annotator_id: str | None = None,
+    document_id: str | None = None,
+    mode: str | None = None,
+) -> set[str]:
+    """Draft keys of annotation work a mode change revoked (not restored).
+
+    A draft is discarded work when it belongs to the person, document and
+    workspace mode of an annotate assignment revoked by an unrestored mode
+    change, and it is either unbound (the legacy workspace) or bound to a
+    round of such an assignment. The person's own workspace chain skips these
+    so a new assignment starts fresh; a restore makes them count again.
+    Optional filters narrow the drafts to one annotator, document or mode.
+    """
+    revoked: set[int] = set()
+    for ids in conn.execute(
+        select(AnnotationModeChangeRow.revoked_assignment_ids).where(
+            AnnotationModeChangeRow.project_id == project_id,
+            AnnotationModeChangeRow.restored_at.is_(None),
+        )
+    ).scalars():
+        revoked.update(int(i) for i in ids)
+    if not revoked:
+        return set()
+    work = {
+        (row.pseudonym, row.document_id, _WORKSPACE_MODES[row.annotation_mode])
+        for row in conn.execute(
+            select(
+                UserRow.pseudonym,
+                AssignmentRow.document_id,
+                AssignmentRow.annotation_mode,
+            )
+            .join(UserRow, UserRow.id == AssignmentRow.user_id)
+            .where(
+                AssignmentRow.project_id == project_id,
+                AssignmentRow.id.in_(sorted(revoked)),
+                AssignmentRow.task == "annotate",
+                AssignmentRow.revoked_at.is_not(None),
+            )
+        )
+        if row.annotation_mode in _WORKSPACE_MODES
+    }
+    if annotator_id is not None:
+        work = {item for item in work if item[0] == annotator_id}
+    if document_id is not None:
+        work = {item for item in work if item[1] == document_id}
+    if mode is not None:
+        work = {item for item in work if item[2] == mode}
+    if not work:
+        return set()
+    query = (
+        select(
+            DraftRow.draft_key,
+            DraftRow.document_id,
+            DraftRow.annotator_id,
+            DraftRow.mode,
+            WorkRoundRow.assignment_id,
+        )
+        .outerjoin(
+            RoundWorkspaceBindingRow,
+            (RoundWorkspaceBindingRow.project_id == DraftRow.project_id)
+            & (RoundWorkspaceBindingRow.workspace_key == DraftRow.draft_key),
+        )
+        .outerjoin(
+            WorkRoundRow, WorkRoundRow.round_id == RoundWorkspaceBindingRow.round_id
+        )
+        .where(
+            DraftRow.project_id == project_id,
+            DraftRow.annotator_id.in_(sorted({item[0] for item in work})),
+            DraftRow.document_id.in_(sorted({item[1] for item in work})),
+        )
+    )
+    keys: set[str] = set()
+    for draft_key, document, annotator, draft_mode, owner in conn.execute(query):
+        # Unbound (the legacy workspace) or a round of the revoked work.
+        if (annotator, document, draft_mode) in work and (
+            owner is None or owner in revoked
+        ):
+            keys.add(draft_key)
+    return keys
