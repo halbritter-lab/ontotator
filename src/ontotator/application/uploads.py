@@ -135,7 +135,8 @@ class TranslationUploadService:
     def _rebuild_and_place(
         self, prefix: str, name: str, staged: Path
     ) -> dict[str, OntologyService]:
-        self.registry.load_registered()
+        # Only the releases this worker has loaded are rebuilt; any other one
+        # reads the placed file when it is first loaded.
         others = [
             path
             for path in self.registry.translation_files()

@@ -152,6 +152,10 @@ docker compose exec ontotator_app ontotator admin ontologies list
 stage_file ./profile.json /tmp/profile.json
 ```
 
+`ontotator admin ontologies check-roots` lists project pins whose allowed roots are missing from the pinned release; findings of such a pin are not restricted until the roots are corrected.
+
+To check a single file against the checksum its release publishes, add `--sha256 <hex>`: a different file is refused with `ONTOLOGY_DIGEST_MISMATCH` and nothing is stored.
+
 Replace `ONTOLOGY_SHA256` with the full hash printed for the ontology JSON; the task profile must define ontology id `hp` and the intended layers. [smoke-profile.json](../tests/fixtures/smoke-profile.json) illustrates the JSON structure with synthetic fixtures; supply your own release identity, hash and protocol. See the [scientific workflow](scientific-workflow.md) for protocol guidance. Workers discover uploaded ontologies on use; no restart is needed for a new upload.
 
 ```bash

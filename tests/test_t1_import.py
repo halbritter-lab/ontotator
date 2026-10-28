@@ -219,8 +219,7 @@ def test_the_cli_creates_a_project_and_imports(
         str(profile),
         "--pin",
         f"hp={HP_SHA}",
-        "--allowed-roots",
-        "hp=HP:0000118",
+        # No --allowed-roots: hpo-phenotype defaults to HP:0000118 (#85).
         "--t1-profile",
         "hp=hpo-phenotype",
     )

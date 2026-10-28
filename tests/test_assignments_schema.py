@@ -123,7 +123,8 @@ def test_user_languages_validate_codes_and_cascade(
     )
     with db.engine.begin() as conn:
         conn.execute(insert, {"user": user_id, "language": "en"})
-    for language in ("EN", "eng", "e1", ""):
+        conn.execute(insert, {"user": user_id, "language": "nna"})
+    for language in ("EN", "engl", "e1", ""):
         with (
             pytest.raises(IntegrityError) as invalid,
             db.engine.begin() as conn,

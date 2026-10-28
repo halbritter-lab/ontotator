@@ -176,7 +176,7 @@ def test_profile_languages_failure_rolls_back_profile_and_audit(app):
 
     client = logged_in(app, "alice")
     response = client.patch(
-        "/api/v1/me/profile", json={"display_name": "Changed", "languages": ["deu"]}
+        "/api/v1/me/profile", json={"display_name": "Changed", "languages": ["deut"]}
     )
     assert response.status_code == 422 and response.json()["code"] == "LANGUAGE_INVALID"
     assert client.get("/api/v1/me/profile").json()["display_name"] == "alice"

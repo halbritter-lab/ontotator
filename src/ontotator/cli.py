@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import ipaddress
 import json
 import os
@@ -812,7 +813,11 @@ def projects_create(
         list[str] | None,
         typer.Option(
             "--allowed-roots",
-            help="<ontology id>=<term>,<term>,... the allowed roots (repeatable).",
+            help=(
+                "<ontology id>=<term>,<term>,... the allowed roots (repeatable; "
+                "an hpo-phenotype ontology defaults to HP:0000118, '<id>=' "
+                "allows every term)."
+            ),
             show_default=False,
         ),
     ] = None,
@@ -834,6 +839,7 @@ def projects_create(
     from ontotator.domain.profiles import TaskProfile
     from ontotator.exchange.jobs import operator_access
     from ontotator.exchange.t1 import Pin, T1Profile
+    from ontotator.projects.service import check_allowed_roots
 
     try:
         task_profile = TaskProfile.model_validate_json(
@@ -873,7 +879,13 @@ def projects_create(
             sha256=sha,
             allowed_roots=tuple(
                 root.strip()
-                for root in roots.get(ontology_id, "").split(",")
+                for root in roots.get(
+                    ontology_id,
+                    # Phenotypic abnormality: findings, not inheritance or history.
+                    "HP:0000118"
+                    if profiles.get(ontology_id) == "hpo-phenotype"
+                    else "",
+                ).split(",")
                 if root.strip()
             ),
             t1_profile=cast(T1Profile, profiles.get(ontology_id, "generic")),
@@ -882,6 +894,7 @@ def projects_create(
     }
     actor = Actor.cli()
     with _open_database(ctx) as db:
+        check_allowed_roots(_ontology_store(db), pins)
         ScopedRepository(db, operator_access(actor), actor).create_project(
             project, name, description, task_profile, pins
         )
@@ -1177,16 +1190,48 @@ def ontologies_add(
             readable=True,
         ),
     ],
+    sha256: Annotated[
+        str | None,
+        typer.Option(
+            "--sha256",
+            help="The expected SHA-256 of the one file; a different file is refused.",
+        ),
+    ] = None,
 ) -> None:
     """Store files in the data volume; prints sha256, prefix, release and kind.
 
     Every file is checked first. Adding a stored file again changes nothing.
     The data volume is ONTOTATOR_DATA_DIR (default ./data).
     """
+    if sha256 is not None and len(files) != 1:
+        raise typer.BadParameter("--sha256 checks exactly one file.")
     with _open_database(ctx) as db:
         store = _ontology_store(db)
         for path in files:
-            _print_ontology_file(store.add(Actor.cli(), path.name, path.read_bytes()))
+            data = path.read_bytes()
+            if sha256 is not None:
+                actual = hashlib.sha256(data).hexdigest()
+                if actual != sha256.strip().lower():
+                    raise DomainError(
+                        "ONTOLOGY_DIGEST_MISMATCH",
+                        f"'{path.name}' has SHA-256 {actual}, expected {sha256}.",
+                    )
+            _print_ontology_file(store.add(Actor.cli(), path.name, data))
+
+
+@ontologies_app.command("check-roots")
+def ontologies_check_roots(ctx: typer.Context) -> None:
+    """List project pins whose allowed roots their release lacks.
+
+    Findings of such a pin are not restricted until the roots are fixed.
+    One line per pin: project, ontology id, sha256 and the missing roots.
+    """
+    with _open_database(ctx) as db:
+        found = _ontology_store(db).pins_missing_roots()
+    for project_key, ontology_id, sha256, missing in found:
+        typer.echo(f"{project_key}  {ontology_id}  {sha256}  {','.join(missing)}")
+    if not found:
+        typer.echo("Every pin's allowed roots are in its release.")
 
 
 @ontologies_app.command("list")

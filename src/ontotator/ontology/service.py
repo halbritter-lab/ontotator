@@ -55,11 +55,20 @@ logger = logging.getLogger(__name__)
 
 # Digits alone, PREFIX:digits or PREFIX_digits. Anything else is a keyword.
 _CODE_QUERY = re.compile(r"^(?:\d+|[A-Za-z][A-Za-z0-9]*[:_]\d+)$")
+_SPACED_CODE = re.compile(r"^([A-Za-z][A-Za-z0-9]*) \d+$")
 
 
-def looks_like_code(query: str) -> bool:
-    """Whether the single search treats this query as a term id."""
-    return bool(_CODE_QUERY.match((query or "").strip()))
+def looks_like_code(query: str, prefix: str | None = None) -> bool:
+    """Whether the single search treats this query as a term id.
+
+    `PREFIX digits` with a space counts only for the ontology's own `prefix`:
+    "HP 1250" is an id, "trisomy 21" stays a keyword.
+    """
+    raw = (query or "").strip()
+    if _CODE_QUERY.match(raw):
+        return True
+    spaced = _SPACED_CODE.match(raw)
+    return bool(spaced and prefix and spaced.group(1).casefold() == prefix.casefold())
 
 
 class OntologyService:
@@ -379,9 +388,8 @@ class OntologyService:
             runtime_drift=self.runtime_drift(),
         )
 
-    @staticmethod
     def _searched_languages(
-        request: SearchRequest, languages: Sequence[str]
+        self, request: SearchRequest, languages: Sequence[str]
     ) -> list[str]:
         """The languages whose names this search actually looked at.
 
@@ -390,7 +398,9 @@ class OntologyService:
         """
         if request.route in ("id", "browse"):
             return []
-        if request.route == "auto" and looks_like_code(request.query):
+        if request.route == "auto" and looks_like_code(
+            request.query, self.ontology.dominant_prefix
+        ):
             return []
         if request.route == "exact":
             return ["en"]
@@ -528,7 +538,7 @@ class OntologyService:
             return [], False, None
 
         allowed = self._allowed(request)
-        if looks_like_code(query):
+        if looks_like_code(query, self.ontology.dominant_prefix):
             # A typed id is a statement, not a question: that term or nothing.
             hits: list[dict[str, Any]] = [
                 hit

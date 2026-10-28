@@ -90,6 +90,14 @@ def test_an_ontology_is_stored_once_by_hash(tmp_path: Path) -> None:
         assert list(conn.execute(select(StoredFileRow.sha256)).scalars()) == [HP_SHA]
 
 
+def test_the_uploading_worker_records_the_file_release(tmp_path: Path) -> None:
+    """Search history of this worker names the release, not "uploaded" (#83)."""
+    _item, service = _store(_db(tmp_path)).add_ontology(
+        Actor.cli(), "hp.json", HP.read_bytes()
+    )
+    assert service.ref.release == "2026-06-23"
+
+
 def test_a_file_that_is_no_ontology_is_refused(tmp_path: Path) -> None:
     db = _db(tmp_path)
     with pytest.raises(DomainError) as excinfo:
@@ -286,3 +294,155 @@ def test_the_list_shows_failures_of_pinned_files(tmp_path: Path) -> None:
     registry: OntologyRegistry = app.state.ontology_registry
     assert [failure.sha256 for failure in registry.failures()] == [sha]
     assert [s for s, _ in registry.services()] == [HP_SHA]
+
+
+def test_uploading_earlier_translation_content_again_wins_after_restart(
+    tmp_path: Path,
+) -> None:
+    """A, B, then A again: a restart places A, not B (#84)."""
+    db = _db(tmp_path)
+    store = _store(db)
+    first = DE.read_bytes()
+    second = first + b"HP:0001284\trdfs:label\ten\tAreflexia\tde\tAreflexie\tOFFICIAL\n"
+    for data in (first, second, first):
+        store.add(Actor.cli(), "hp-de.babelon.tsv", data)
+    placed = db.data_dir / "translations" / "hp-de.babelon.tsv"
+    placed.unlink()
+
+    OntologyStore(db, OntologyRegistry(), db.data_dir).register_all()
+
+    assert placed.read_bytes() == first
+
+
+def test_known_translation_content_under_a_new_name_is_renamed(
+    tmp_path: Path,
+) -> None:
+    """Other workers place the file under the name it was uploaded as last."""
+    db = _db(tmp_path)
+    store = _store(db)
+    store.add(Actor.cli(), "hp-de.babelon.tsv", DE.read_bytes())
+    renamed = store.add(Actor.cli(), "hp-de.synonyms.tsv", DE.read_bytes())
+
+    assert renamed.filename == "hp-de.synonyms.tsv"
+    assert [item.filename for item in store.list()] == ["hp-de.synonyms.tsv"]
+
+
+def test_check_roots_lists_pins_whose_roots_the_release_lacks(
+    tmp_path: Path,
+) -> None:
+    from typer.testing import CliRunner
+
+    from ontotator.cli import app
+
+    db = _db(tmp_path)
+    _store(db).add(Actor.cli(), "hp.json", HP.read_bytes())
+    _pin_hp(db)
+    assert _store(db).pins_missing_roots() == []
+    with db.transaction() as conn:
+        conn.execute(
+            ProjectOntologyRow.__table__.update().values(
+                allowed_roots=["HP:0000118", "HP:0000005"]
+            )
+        )
+    project = make_layered_package("single").manifest.package_id
+
+    assert _store(db).pins_missing_roots() == [(project, "hp", HP_SHA, ["HP:0000005"])]
+    listed = CliRunner().invoke(
+        app,
+        [
+            "admin",
+            "--database-url",
+            database_url_for(tmp_path / "workspace" / "editor.db"),
+            "ontologies",
+            "check-roots",
+        ],
+        env={"ONTOTATOR_DATA_DIR": str(db.data_dir)},
+    )
+    assert listed.exit_code == 0, listed.output
+    assert listed.output.splitlines() == [f"{project}  hp  {HP_SHA}  HP:0000005"]
+
+
+def test_a_worker_takes_up_a_translation_another_worker_stored(
+    tmp_path: Path,
+) -> None:
+    """Before capturing a project's search, a worker reloads newer files (#84)."""
+    from ontotator.storage.repository import Repository
+
+    db = _db(tmp_path)
+    _store(db).add(Actor.cli(), "hp.json", HP.read_bytes())
+    _pin_hp(db)
+    workers = []
+    for _ in range(2):
+        registry = OntologyRegistry(base_dir=db.data_dir)
+        OntologyStore(db, registry, db.data_dir).register_all()
+        assert registry.get_service(HP_SHA) is not None
+        workers.append(registry)
+    other = OntologyStore(db, workers[1], db.data_dir)
+    other.add(Actor.cli(), "hp-de.babelon.tsv", DE.read_bytes())
+    stale = workers[0].get_service(HP_SHA)
+    assert stale is not None and stale.languages == []
+
+    project_key = make_layered_package("single").manifest.package_id
+    [condition] = workers[0].ensure_package_conditions(Repository(db), project_key)
+
+    fresh = workers[0].get_service(HP_SHA)
+    assert fresh is not None and fresh.languages == ["de"]
+    assert [item.filename for item in condition.translations] == [DE.name]
+
+
+def _hpo(nodes: list[str], edges: list[tuple[str, str]]) -> bytes:
+    obo = "http://purl.obolibrary.org/obo/"
+
+    def iri(term: str) -> str:
+        return obo + term.replace(":", "_")
+
+    return json.dumps(
+        {
+            "graphs": [
+                {
+                    "id": f"{obo}hp.json",
+                    "meta": {"version": f"{obo}hp/releases/2026-01-01/hp.json"},
+                    "nodes": [{"id": iri(n), "lbl": n, "type": "CLASS"} for n in nodes],
+                    "edges": [
+                        {"sub": iri(s), "pred": "is_a", "obj": iri(o)} for s, o in edges
+                    ],
+                }
+            ]
+        }
+    ).encode()
+
+
+def test_a_cut_down_or_broken_hpo_release_is_refused(tmp_path: Path) -> None:
+    """Missing roots or terms that do not reach HP:0000001 (#97)."""
+    store = _store(_db(tmp_path))
+    with pytest.raises(DomainError) as missing:
+        store.add(Actor.cli(), "hp.json", _hpo(["HP:0000001", "HP:0001250"], []))
+    assert missing.value.code == "INVALID_ONTOLOGY"
+    assert "HP:0000118" in str(missing.value.details)
+
+    broken = _hpo(
+        ["HP:0000001", "HP:0000118", "HP:0001250"], [("HP:0000118", "HP:0000001")]
+    )
+    with pytest.raises(DomainError) as unreached:
+        store.add(Actor.cli(), "hp.json", broken)
+    assert "broken is_a graph" in str(unreached.value.details)
+    assert store.list() == []
+
+
+def test_an_allowed_root_the_release_lacks_is_refused(tmp_path: Path) -> None:
+    from ontotator.exchange.t1 import Pin
+    from ontotator.projects.service import check_allowed_roots
+
+    db = _db(tmp_path)
+    _store(db).add(Actor.cli(), "hp.json", HP.read_bytes())
+    # Another process: the release is not loaded there yet.
+    fresh = OntologyStore(db, OntologyRegistry(), db.data_dir)
+
+    phenotype = Pin(sha256=HP_SHA, allowed_roots=("HP:0000118",))
+    check_allowed_roots(fresh, {"hp": phenotype})
+    with pytest.raises(DomainError) as refused:
+        check_allowed_roots(
+            fresh, {"hp": Pin(sha256=HP_SHA, allowed_roots=("HP:0000005",))}
+        )
+    assert refused.value.code == "ALLOWED_ROOTS_UNKNOWN"
+    assert refused.value.details == {"ontology_id": "hp", "missing": ["HP:0000005"]}

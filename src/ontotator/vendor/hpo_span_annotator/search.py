@@ -55,6 +55,7 @@ from __future__ import annotations
 
 import hashlib
 import random
+import re
 from typing import Any
 
 from ontotator.vendor.hpo_span_annotator.hpo import (
@@ -80,6 +81,10 @@ FOUND_VIA_BY_PATH = {
     "id": "typed_id",
     "browse": "browse",
 }
+
+
+# PREFIX, then ':', '_' or one space, then digits: `hp:0001250`, `HP 1250`.
+_TYPED_ID = re.compile(r"^([A-Za-z][A-Za-z0-9]*)[:_ ](\d+)$")
 
 
 class SearchError(RuntimeError):
@@ -180,34 +185,12 @@ class SearchEngine:
         if not raw:
             return []
 
-        # 1. Digits-only query matches integer-equivalent ID in unique dominant prefix
+        # 1. Digits alone mean the unique dominant prefix
         if raw.isdigit():
             dominant = self.ontology.dominant_prefix
             if not dominant:
                 return []
-            target_int = int(raw)
-            matched_terms: list[Term] = []
-            for candidate_term in self.ontology.terms.values():
-                if ":" not in candidate_term.hpo_id:
-                    continue
-                prefix, local_id = candidate_term.hpo_id.split(":", 1)
-                if (
-                    prefix == dominant
-                    and local_id.isdigit()
-                    and int(local_id) == target_int
-                ):
-                    matched_terms.append(candidate_term)
-            # Prefix ties or multiple matching IDs return no ID candidate
-            if len(matched_terms) != 1:
-                return []
-            matched = matched_terms[0]
-            return [
-                {
-                    **matched.as_dict(),
-                    "matched_term": matched.hpo_id,
-                    "match_kind": "id",
-                }
-            ]
+            return self._numeric_id(dominant, int(raw))
 
         # 2. Explicit query: full CURIE or OBO identifier
         candidate = raw
@@ -217,15 +200,36 @@ class SearchEngine:
                 candidate = parsed
 
         term = self.ontology.get(candidate)
-        if not term:
+        if term:
+            return [self._id_hit(term)]
+        # 3. Typed forms: any prefix case, ':', '_' or a space, unpadded digits
+        typed = _TYPED_ID.match(raw)
+        if typed is None:
             return []
-        return [
-            {
-                **term.as_dict(),
-                "matched_term": term.hpo_id,
-                "match_kind": "id",
-            }
-        ]
+        return self._numeric_id(typed.group(1), int(typed.group(2)))
+
+    def _numeric_id(self, prefix: str, number: int) -> list[dict[str, Any]]:
+        """The one term whose id is `prefix` plus a number equal to `number`."""
+        wanted = prefix.casefold()
+        matched_terms: list[Term] = []
+        for candidate_term in self.ontology.terms.values():
+            if ":" not in candidate_term.hpo_id:
+                continue
+            term_prefix, local_id = candidate_term.hpo_id.split(":", 1)
+            if (
+                term_prefix.casefold() == wanted
+                and local_id.isdigit()
+                and int(local_id) == number
+            ):
+                matched_terms.append(candidate_term)
+        # Prefix ties or multiple matching IDs return no ID candidate
+        if len(matched_terms) != 1:
+            return []
+        return [self._id_hit(matched_terms[0])]
+
+    @staticmethod
+    def _id_hit(term: Term) -> dict[str, Any]:
+        return {**term.as_dict(), "matched_term": term.hpo_id, "match_kind": "id"}
 
     def _browse(self, query: str, k: int) -> list[dict[str, Any]]:
         """Children first, then siblings, of the id the annotator is standing on.

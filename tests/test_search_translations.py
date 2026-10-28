@@ -91,6 +91,27 @@ def test_service_knows_its_languages_files_and_counts() -> None:
     )
 
 
+def test_three_letter_translation_keeps_its_code(tmp_path: Path) -> None:
+    """hp-nna is Nynorsk ("nna"), not "nn" (#86)."""
+    from ontotator.ontology.translations import parse_translation_name
+
+    nna = tmp_path / "hp-nna.babelon.tsv"
+    nna.write_text(
+        "subject_id\tpredicate_id\tsource_language\tsource_value\t"
+        "translation_language\ttranslation_value\ttranslation_status\n"
+        "HP:0001250\trdfs:label\ten\tSeizure\tnna\tKrampeanfall\tOFFICIAL\n",
+        encoding="utf-8",
+    )
+    assert parse_translation_name(nna.name) == ("hp", "nna")
+    service = _service(nna)
+    assert service.translation_counts == {"nna": 1}
+    hits = _search(service, "Krampeanfall", languages=["nna"]).candidates
+    assert hits[0].term_id == "HP:0001250"
+    assert hits[0].match_language == "nna"
+    # Its captured search condition validates with the three-letter code.
+    service.capture_condition()
+
+
 def test_unusable_files_are_logged_and_do_not_stop_the_load(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:

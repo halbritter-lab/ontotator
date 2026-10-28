@@ -111,7 +111,7 @@ def test_languages_are_validated_and_replaced(app):
         "de",
         "en",
     ]
-    bad = admin.patch(path, json={"languages": ["deu"]})
+    bad = admin.patch(path, json={"languages": ["deut"]})
     assert bad.status_code == 422
     assert bad.json()["code"] == "LANGUAGE_INVALID"
     assert admin.patch(path, json={"languages": []}).json()["languages"] == []
@@ -121,7 +121,7 @@ def test_invalid_compound_create_and_patch_roll_back(app):
     admin = logged_in(app, "root", system_admin=True)
     bad = admin.post(
         "/api/v1/admin/users/",
-        json={"username": "carol", "display_name": "Carol", "languages": ["deu"]},
+        json={"username": "carol", "display_name": "Carol", "languages": ["deut"]},
     )
     assert bad.status_code == 422
     assert app.state.accounts.get_by_username("carol") is None
@@ -133,7 +133,7 @@ def test_invalid_compound_create_and_patch_roll_back(app):
             "email": "new@example.org",
             "is_system_admin": True,
             "active": False,
-            "languages": ["deu"],
+            "languages": ["deut"],
         },
     )
     assert bad.status_code == 422

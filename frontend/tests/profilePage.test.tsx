@@ -103,9 +103,9 @@ describe("ProfilePage component", () => {
     await user.click(screen.getByRole("button", { name: "Save" }));
     await screen.findByText("Saved.");
     expect(save).toHaveBeenCalledWith({ languages: ["en", "de"] });
-    await user.type(screen.getByLabelText("Languages you can read"), "deu");
+    await user.type(screen.getByLabelText("Languages you can read"), "deut");
     await user.click(screen.getByRole("button", { name: "Save" }));
-    expect(screen.getByText("Use a two-letter language code, e.g. de.")).toBeDefined();
+    expect(screen.getByText("Use a two- or three-letter language code, e.g. de.")).toBeDefined();
     expect(save).toHaveBeenCalledOnce();
   });
 

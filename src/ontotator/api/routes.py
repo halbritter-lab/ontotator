@@ -47,6 +47,7 @@ from ontotator.authz.policy import (
 )
 from ontotator.authz.scoped import ScopedRepository, project_not_found
 from ontotator.domain.errors import AccessDenied, DomainError
+from ontotator.domain.profiles import resolve_layer
 from ontotator.domain.review import ReviewTargetSet
 from ontotator.domain.scopes import build_scope, is_review_like
 from ontotator.domain.workspace import (
@@ -57,7 +58,10 @@ from ontotator.domain.workspace import (
     WorkspaceMode,
 )
 from ontotator.ontology.modifiers import (
+    MODIFIER_ROOTS,
     ModifierClassifier,
+    finding_roots,
+    modifier_layers,
     term_roles_for_services,
 )
 from ontotator.ontology.provenance import SearchRequest, SearchResult
@@ -385,6 +389,25 @@ def resolve_term_labels(
     return labels
 
 
+def finding_within(
+    repo: Repository, project_key: str, layer_id: str, service: OntologyService
+) -> list[str] | None:
+    """The roots an unrestricted finding search keeps to (#85).
+
+    The pin's allowed roots, plus the modifier roots on an ``hpo-phenotype``
+    layer (a modifier on its own is a valid finding there); None when the
+    pin restricts nothing, so the search offers only terms editing accepts.
+    """
+    profile = repo.get_task_profile(project_key)
+    pins = repo.project_pins(project_key)
+    pin = pins.get(resolve_layer(profile, layer_id).ontology_id)
+    roots = finding_roots(service, pin.allowed_roots) if pin is not None else None
+    if roots is None:
+        return None
+    modifiers = MODIFIER_ROOTS if layer_id in modifier_layers(profile, pins) else ()
+    return [*roots, *modifiers]
+
+
 def layer_classifier(
     repo: Repository, project_key: str, layer_id: str, service: OntologyService
 ) -> ModifierClassifier:
@@ -580,6 +603,13 @@ def search_ontology(
     ontology = layer_ontology(
         request, repo, ws_svc, req.workspace_key, req.layer_id, req.annotation_id
     )
+    if req.within is None:
+        within = finding_within(
+            repo, req.workspace_key.project_key, req.layer_id, ontology
+        )
+        if within is not None:
+            # Recorded on the search event too: these were the offered terms.
+            req = req.model_copy(update={"within": within})
 
     result = ontology.search(req)
     result.search_id = str(uuid4())
@@ -638,9 +668,10 @@ class OntologyInfo(BaseModel):
     ontology_id: str
     release: str
     sha256: str
-    term_count: int
+    # None for a stored file this worker has not parsed yet ("stored").
+    term_count: int | None
     path: str | None = None
-    status: Literal["loaded", "failed"] = "loaded"
+    status: Literal["loaded", "stored", "failed"] = "loaded"
     error: str | None = None
     translations: list[OntologyTranslation] = Field(default_factory=list)
 
@@ -684,17 +715,34 @@ def package_ontologies(
 
 @router.get("/ontologies")
 def list_ontologies(
-    ontology: OntologyDep, principal: PrincipalDep
+    request: Request, ontology: OntologyDep, principal: PrincipalDep
 ) -> list[OntologyInfo]:
-    """List loaded ontologies plus registered files that failed to load.
+    """List loaded ontologies, stored ones not parsed yet, and failed files.
 
-    Server paths and load errors are for system administrators only.
+    Listing parses nothing: a stored release is described by its row until a
+    project uses it. Server paths and load errors are for system admins only.
     """
-    ontology.load_registered()
+    loaded = ontology.services()
+    failures = ontology.failures()
     results = [
-        _ontology_info(sha, svc, ontology.registered_path(sha))
-        for sha, svc in ontology.services()
+        _ontology_info(sha, svc, ontology.registered_path(sha)) for sha, svc in loaded
     ]
+    known = {sha for sha, _ in loaded} | {failure.sha256 for failure in failures}
+    store = getattr(request.app.state, "ontology_store", None)
+    for item in store.list() if store is not None else []:
+        if item.kind != "ontology" or item.sha256 in known:
+            continue
+        path = ontology.registered_path(item.sha256)
+        results.append(
+            OntologyInfo(
+                ontology_id=item.prefix,
+                release=item.release or "",
+                sha256=item.sha256,
+                term_count=None,
+                path=str(path) if path is not None else None,
+                status="stored",
+            )
+        )
     results.extend(
         OntologyInfo(
             ontology_id="unknown",
@@ -705,7 +753,7 @@ def list_ontologies(
             status="failed",
             error=failure.error,
         )
-        for failure in ontology.failures()
+        for failure in failures
     )
     if not principal.is_system_admin:
         results = [r.model_copy(update={"path": None, "error": None}) for r in results]

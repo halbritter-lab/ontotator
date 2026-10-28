@@ -7,9 +7,10 @@ validation, search (``within``, ``role``), submit rules and grouping.
 
 from __future__ import annotations
 
+import logging
 import threading
 from collections import deque
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, Protocol
 
@@ -60,6 +61,37 @@ NO_MODIFIERS = ModifierClassifier(frozenset(), frozenset(), frozenset(), frozens
 _lock = threading.Lock()
 _subtrees: dict[tuple[str, str], frozenset[str]] = {}
 _classifiers: dict[str, ModifierClassifier] = {}
+_warned_roots: set[tuple[str, tuple[str, ...]]] = set()
+logger = logging.getLogger(__name__)
+
+
+def finding_roots(
+    service: OntologyService, allowed_roots: Sequence[str]
+) -> tuple[str, ...] | None:
+    """The roots a finding must lie under; None when findings are unrestricted.
+
+    Fails open: a pin naming a root its release lacks would refuse every
+    term, so such a pin is not enforced and a warning is logged once
+    (``ontotator admin ontologies check-roots`` lists those pins).
+    """
+    roots = tuple(allowed_roots)
+    if not roots:
+        return None
+    missing = [root for root in roots if service.ontology.get(root) is None]
+    if not missing:
+        return roots
+    key = (service.ref.sha256, roots)
+    with _lock:
+        first = key not in _warned_roots
+        _warned_roots.add(key)
+    if first:
+        logger.warning(
+            "Allowed roots %s are missing from ontology %s; findings are not "
+            "restricted for its pins.",
+            ", ".join(missing),
+            service.ref.sha256,
+        )
+    return None
 
 
 def subtree(service: OntologyService, root: str) -> frozenset[str]:

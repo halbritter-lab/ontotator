@@ -296,9 +296,10 @@ export interface OntologyInfo {
   ontology_id: string;
   release: string;
   sha256: string;
-  term_count: number;
+  /** Null for a stored release this server has not parsed yet. */
+  term_count: number | null;
   path?: string | null;
-  status?: "loaded" | "failed";
+  status?: "loaded" | "stored" | "failed";
   error?: string | null;
   /** The languages the ontology can be searched in besides English. */
   translations?: OntologyTranslation[];

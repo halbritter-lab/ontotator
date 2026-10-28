@@ -7568,7 +7568,7 @@
     "/api/v1/ontologies": {
       "get": {
         "summary": "List Ontologies",
-        "description": "List loaded ontologies plus registered files that failed to load.\n\nServer paths and load errors are for system administrators only.",
+        "description": "List loaded ontologies, stored ones not parsed yet, and failed files.\n\nListing parses nothing: a stored release is described by its row until a\nproject uses it. Server paths and load errors are for system admins only.",
         "operationId": "list_ontologies_api_v1_ontologies_get",
         "responses": {
           "200": {
@@ -15334,7 +15334,14 @@
             "title": "Sha256"
           },
           "term_count": {
-            "type": "integer",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Term Count"
           },
           "path": {
@@ -15352,6 +15359,7 @@
             "type": "string",
             "enum": [
               "loaded",
+              "stored",
               "failed"
             ],
             "title": "Status",
@@ -19964,7 +19972,7 @@
           "fitting_languages": {
             "items": {
               "type": "string",
-              "pattern": "^[a-z]{2}$"
+              "pattern": "^[a-z]{2,3}$"
             },
             "type": "array",
             "maxItems": 33,
