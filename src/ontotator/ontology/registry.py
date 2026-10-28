@@ -5,7 +5,7 @@ import hashlib
 import logging
 import threading
 from collections import OrderedDict
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from concurrent.futures import Future
 from dataclasses import dataclass
 from pathlib import Path
@@ -80,6 +80,9 @@ class OntologyRegistry:
         # Counts the swaps of :meth:`publish`, i.e. the times the translation
         # files changed under the loaded ontologies.
         self.translation_generation = 0
+        # Takes up translation files another worker stored (set by the store);
+        # called before a project's search conditions are captured.
+        self.translation_sync: Callable[[], None] | None = None
         self._load_locks: dict[str, threading.Lock] = {}
         # Relative ``resource_path`` entries resolve against this directory
         # (the workspace), never against the process working directory.
@@ -310,6 +313,8 @@ class OntologyRegistry:
         conditions = repo.get_search_conditions(project_key)
         if conditions is not None:
             return conditions
+        if self.translation_sync is not None:
+            self.translation_sync()
         with repo.db.transaction() as conn:
             structure = project_state(conn, project_key)[0]
         profile = repo.get_task_profile(project_key)

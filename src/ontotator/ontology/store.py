@@ -15,12 +15,13 @@ import io
 import logging
 import os
 import tempfile
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import Row, select
+from sqlalchemy import Row, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from ontotator.application.uploads import (
@@ -102,6 +103,9 @@ class OntologyStore:
         self.registry = registry
         self.translations_dir = Path(data_dir) / "translations"
         self._use_translations_dir()
+        # Filename -> sha256 of the translation files this worker has taken up.
+        self._translation_version: dict[str, str] = {}
+        registry.translation_sync = self.sync_translations
 
     # --- adding ---------------------------------------------------------
 
@@ -232,6 +236,16 @@ class OntologyStore:
                 filename=name,
                 language=language,
             )
+        else:
+            # Uploading earlier content again makes it the latest of its name.
+            with self.db.transaction() as conn:
+                conn.execute(
+                    update(OntologyFileRow)
+                    .where(OntologyFileRow.sha256 == digest)
+                    .values(uploaded_at=func.now())
+                )
+        with self.registry.changing():
+            self._translation_version[name] = digest
         return known, stored, created
 
     def _insert(
@@ -349,21 +363,9 @@ class OntologyStore:
         stop the start.
         """
         files = self.list()
-        latest: dict[str, OntologyFile] = {}
-        for item in files:
-            if item.kind == "translation":
-                # A later upload of the same name replaces an earlier one.
-                latest[item.filename] = item
-        for item in latest.values():
-            try:
-                self._place_translation(item)
-            except (OSError, ValueError) as exc:
-                logger.warning(
-                    "Could not place translation %s (sha256 %s): %s",
-                    item.filename,
-                    item.sha256,
-                    exc,
-                )
+        with self.registry.changing():
+            for item in self._place_translations(self._latest_translations(files)):
+                self._translation_version[item.filename] = item.sha256
         for item in files:
             if item.kind != "ontology":
                 continue
@@ -376,6 +378,59 @@ class OntologyStore:
                     item.sha256,
                     exc,
                 )
+
+    @staticmethod
+    def _latest_translations(files: Iterable[OntologyFile]) -> Sequence[OntologyFile]:
+        latest: dict[str, OntologyFile] = {}
+        for item in files:
+            if item.kind == "translation":
+                # A later upload of the same name replaces an earlier one.
+                latest[item.filename] = item
+        return list(latest.values())
+
+    def _place_translations(
+        self, items: Iterable[OntologyFile]
+    ) -> Sequence[OntologyFile]:
+        """Place files; return those that were placed."""
+        placed = []
+        for item in items:
+            try:
+                self._place_translation(item)
+            except (OSError, ValueError) as exc:
+                logger.warning(
+                    "Could not place translation %s (sha256 %s): %s",
+                    item.filename,
+                    item.sha256,
+                    exc,
+                )
+                continue
+            placed.append(item)
+        return placed
+
+    def sync_translations(self) -> None:
+        """Take up translation files another worker stored since this one looked.
+
+        Places the newer files and rebuilds the loaded ontologies of their
+        prefixes, so a new project never captures the old file (#84).
+        """
+        latest = self._latest_translations(self.list())
+        with self.registry.changing():
+            changed = [
+                item
+                for item in latest
+                if self._translation_version.get(item.filename) != item.sha256
+            ]
+            placed = self._place_translations(changed)
+            if not placed:
+                return
+            paths = self.registry.translation_files()
+            rebuilt: dict[str, OntologyService] = {}
+            for prefix in sorted({item.prefix for item in placed}):
+                rebuilt.update(self.registry.rebuild_for_prefix(prefix, paths))
+            if rebuilt:
+                self.registry.publish(rebuilt)
+            for item in placed:
+                self._translation_version[item.filename] = item.sha256
 
     def _place_translation(self, item: OntologyFile) -> None:
         target = self.translations_dir / item.filename

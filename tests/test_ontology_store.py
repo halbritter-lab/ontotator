@@ -294,3 +294,49 @@ def test_the_list_shows_failures_of_pinned_files(tmp_path: Path) -> None:
     registry: OntologyRegistry = app.state.ontology_registry
     assert [failure.sha256 for failure in registry.failures()] == [sha]
     assert [s for s, _ in registry.services()] == [HP_SHA]
+
+
+def test_uploading_earlier_translation_content_again_wins_after_restart(
+    tmp_path: Path,
+) -> None:
+    """A, B, then A again: a restart places A, not B (#84)."""
+    db = _db(tmp_path)
+    store = _store(db)
+    first = DE.read_bytes()
+    second = first + b"HP:0001284\trdfs:label\ten\tAreflexia\tde\tAreflexie\tOFFICIAL\n"
+    for data in (first, second, first):
+        store.add(Actor.cli(), "hp-de.babelon.tsv", data)
+    placed = db.data_dir / "translations" / "hp-de.babelon.tsv"
+    placed.unlink()
+
+    OntologyStore(db, OntologyRegistry(), db.data_dir).register_all()
+
+    assert placed.read_bytes() == first
+
+
+def test_a_worker_takes_up_a_translation_another_worker_stored(
+    tmp_path: Path,
+) -> None:
+    """Before capturing a project's search, a worker reloads newer files (#84)."""
+    from ontotator.storage.repository import Repository
+
+    db = _db(tmp_path)
+    _store(db).add(Actor.cli(), "hp.json", HP.read_bytes())
+    _pin_hp(db)
+    workers = []
+    for _ in range(2):
+        registry = OntologyRegistry(base_dir=db.data_dir)
+        OntologyStore(db, registry, db.data_dir).register_all()
+        assert registry.get_service(HP_SHA) is not None
+        workers.append(registry)
+    other = OntologyStore(db, workers[1], db.data_dir)
+    other.add(Actor.cli(), "hp-de.babelon.tsv", DE.read_bytes())
+    stale = workers[0].get_service(HP_SHA)
+    assert stale is not None and stale.languages == []
+
+    project_key = make_layered_package("single").manifest.package_id
+    [condition] = workers[0].ensure_package_conditions(Repository(db), project_key)
+
+    fresh = workers[0].get_service(HP_SHA)
+    assert fresh is not None and fresh.languages == ["de"]
+    assert [item.filename for item in condition.translations] == [DE.name]
