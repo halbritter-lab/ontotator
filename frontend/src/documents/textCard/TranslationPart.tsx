@@ -37,6 +37,10 @@ export function TranslationPart({ row, projectKey, query, canManage, onAssign, o
   const source = shown && !native ? sourceDocument(row, shown.document_id) : null;
   // Submitted reviews are listed under their version; the chips are the open ones.
   const reviewers = row.work.filter(item => item.task === "translation_review" && item.moved_to_version == null && item.status !== "submitted");
+  // Issue 129, U5: a planned review nobody holds yet is the part's one next step (primary, on its own line);
+  // Compare with source and the version actions follow as secondary tools.
+  const reviewNext = canManage && !native && reviewers.length === 0 && row.stages?.review.state === "unassigned";
+  const assignOther = canManage && !native && !reviewNext;
   return <section className="text-card-part" aria-labelledby="text-card-translation">
     <div className="text-card-part-head">
       <h3 id="text-card-translation" className="text-card-part-title">Translation</h3>
@@ -47,11 +51,15 @@ export function TranslationPart({ row, projectKey, query, canManage, onAssign, o
       {reviewers.map(item => <AssignmentChip key={item.assignment_id} item={item} caseId={row.case_id} onChanged={onChanged} now={now}
         menu={canManage ? { tools: textVersionTools, review: true } : undefined} />)}
     </div>}
-    <div className="text-card-actions">
-      {canManage && !native && <Button size="sm" onClick={() => onAssign(row, "translation_review")}>Assign review…</Button>}
+    {reviewNext && <div className="text-card-next" role="group" aria-labelledby="text-card-translation-next">
+      <p id="text-card-translation-next" className="text-card-next-label"><strong>Next step:</strong> {`assign someone to review this ${shown?.origin === "machine_translation" ? "machine translation" : "translation"}.`}</p>
+      <Button variant="primary" size="sm" onClick={() => onAssign(row, "translation_review")}>Assign review…</Button>
+    </div>}
+    {(assignOther || source) && <div className="text-card-actions">
+      {assignOther && <Button size="sm" onClick={() => onAssign(row, "translation_review")}>Assign review…</Button>}
       {source && <RouteLink route={textViewRoute(projectKey, row.case_id, shown!.document_id, query, { compare: source })} onNavigate={onNavigate}
         className="btn btn-secondary btn-sm">Compare with source</RouteLink>}
-    </div>
+    </div>}
     <TextVersions row={row} projectKey={projectKey} query={query} onNavigate={onNavigate} tools={textVersionTools} now={now} hideOpenWork collapseOlder />
   </section>;
 }

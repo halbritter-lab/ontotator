@@ -67,6 +67,8 @@ describe("next step labels", () => {
     expect(secondaryLine(step({ code: "waiting_for_translation_review", kind: "in_progress", detail: { kind: "waiting", version: 2, origin: "correction", translation_status: "ready_for_review", task_paused: false } }), plain))
       .toBe("v2 correction, waiting for review");
     expect(secondaryLine(step({ code: "assign_annotation", kind: "assign", assigned: 1, target: 2, detail: null }), plain)).toBe("1 annotator · max 2");
+    // Nobody yet: no "No annotator yet · max 2" under "Assign annotation" (#129 U2).
+    expect(secondaryLine(step({ code: "assign_annotation", kind: "assign", assigned: 0, target: 2, detail: null }), plain)).toBe("");
   });
 
   it("names Choose final as Accept result… for one submission and Compare results… otherwise (V6, VD16)", () => {
