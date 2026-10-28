@@ -109,12 +109,18 @@ def test_uploaded_ontologies_are_listed_after_a_restart(tmp_path: Path) -> None:
     assert first.state.repo.db.blobs.path(stored.sha256).is_file()
 
     # Restart: the second app finds the file in the ontology store.
-    client = AutoLoginClient(_app(ws))
+    second = _app(ws)
+    client = AutoLoginClient(second)
 
-    ontologies = client.get("/api/v1/ontologies").json()
-    assert len(ontologies) == 1
-    assert ontologies[0]["ontology_id"] == "hp"
-    assert ontologies[0]["term_count"] == 2
+    # Listing describes the stored row and parses nothing (#82).
+    [listed] = client.get("/api/v1/ontologies").json()
+    assert (listed["ontology_id"], listed["release"], listed["status"]) == (
+        "hp",
+        "2024-06-01",
+        "stored",
+    )
+    assert listed["term_count"] is None
+    assert second.state.ontology_registry.services() == []
 
 
 def test_only_system_admins_see_server_paths(tmp_path: Path) -> None:

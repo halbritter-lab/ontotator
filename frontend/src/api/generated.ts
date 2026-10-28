@@ -2243,9 +2243,10 @@ export interface paths {
         };
         /**
          * List Ontologies
-         * @description List loaded ontologies plus registered files that failed to load.
+         * @description List loaded ontologies, stored ones not parsed yet, and failed files.
          *
-         *     Server paths and load errors are for system administrators only.
+         *     Listing parses nothing: a stored release is described by its row until a
+         *     project uses it. Server paths and load errors are for system admins only.
          */
         get: operations["list_ontologies_api_v1_ontologies_get"];
         put?: never;
@@ -5017,7 +5018,7 @@ export interface components {
             /** Sha256 */
             sha256: string;
             /** Term Count */
-            term_count: number;
+            term_count: number | null;
             /** Path */
             path?: string | null;
             /**
@@ -5025,7 +5026,7 @@ export interface components {
              * @default loaded
              * @enum {string}
              */
-            status: "loaded" | "failed";
+            status: "loaded" | "stored" | "failed";
             /** Error */
             error?: string | null;
             /** Translations */

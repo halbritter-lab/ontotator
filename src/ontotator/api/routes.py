@@ -638,9 +638,10 @@ class OntologyInfo(BaseModel):
     ontology_id: str
     release: str
     sha256: str
-    term_count: int
+    # None for a stored file this worker has not parsed yet ("stored").
+    term_count: int | None
     path: str | None = None
-    status: Literal["loaded", "failed"] = "loaded"
+    status: Literal["loaded", "stored", "failed"] = "loaded"
     error: str | None = None
     translations: list[OntologyTranslation] = Field(default_factory=list)
 
@@ -684,17 +685,34 @@ def package_ontologies(
 
 @router.get("/ontologies")
 def list_ontologies(
-    ontology: OntologyDep, principal: PrincipalDep
+    request: Request, ontology: OntologyDep, principal: PrincipalDep
 ) -> list[OntologyInfo]:
-    """List loaded ontologies plus registered files that failed to load.
+    """List loaded ontologies, stored ones not parsed yet, and failed files.
 
-    Server paths and load errors are for system administrators only.
+    Listing parses nothing: a stored release is described by its row until a
+    project uses it. Server paths and load errors are for system admins only.
     """
-    ontology.load_registered()
+    loaded = ontology.services()
+    failures = ontology.failures()
     results = [
-        _ontology_info(sha, svc, ontology.registered_path(sha))
-        for sha, svc in ontology.services()
+        _ontology_info(sha, svc, ontology.registered_path(sha)) for sha, svc in loaded
     ]
+    known = {sha for sha, _ in loaded} | {failure.sha256 for failure in failures}
+    store = getattr(request.app.state, "ontology_store", None)
+    for item in store.list() if store is not None else []:
+        if item.kind != "ontology" or item.sha256 in known:
+            continue
+        path = ontology.registered_path(item.sha256)
+        results.append(
+            OntologyInfo(
+                ontology_id=item.prefix,
+                release=item.release or "",
+                sha256=item.sha256,
+                term_count=None,
+                path=str(path) if path is not None else None,
+                status="stored",
+            )
+        )
     results.extend(
         OntologyInfo(
             ontology_id="unknown",
@@ -705,7 +723,7 @@ def list_ontologies(
             status="failed",
             error=failure.error,
         )
-        for failure in ontology.failures()
+        for failure in failures
     )
     if not principal.is_system_admin:
         results = [r.model_copy(update={"path": None, "error": None}) for r in results]
