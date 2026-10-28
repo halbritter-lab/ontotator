@@ -209,11 +209,15 @@ test('lead assigns the exact pending translation; ordinary reviewer corrects, su
   const createdResponse = await authenticatedRequest(page, variantPath(s, record.created_variant_id!, 'variant'));
   expect(createdResponse.ok()).toBeTruthy(); const created = await createdResponse.json() as Variant;
   expect(created.translation_status).toBe('accepted'); expect(created.version).toBeGreaterThan(opened.variant.version);
-  await expect(page.getByText(`A corrected version v${created.version} was created.`, { exact: true })).toBeVisible();
-  await expect(page.getByText('Your corrected text was saved as a new version, which is accepted for annotation.', { exact: true })).toBeVisible();
-  await expect(review(page)).not.toContainText(record.status_after === 'reviewed' ? 'status_after' : 'reviewed');
+  // Issue 125: the task flow leaves the review (next task, else My tasks); the toast's View result reopens it read-only.
+  const toast = page.locator('.ui-toast').filter({ hasText: / submitted\./ });
+  await expect(toast).toBeVisible();
+  await expect(page).not.toHaveURL(new RegExp(`#/tasks/${assignmentId}$`));
   const writes: string[] = []; page.on('request', r => { if (r.url().includes('/translation-reviews/') && ['POST', 'PUT'].includes(r.method())) writes.push(r.url()); });
-  await page.reload(); await expect(target(page)).toHaveValue(corrected); await expect(target(page)).toHaveAttribute('readonly', '');
+  await toast.getByRole('button', { name: 'View result', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`#/tasks/${assignmentId}$`));
+  await expect(target(page)).toHaveValue(corrected); await expect(target(page)).toHaveAttribute('readonly', '');
+  await expect(review(page)).not.toContainText(record.status_after === 'reviewed' ? 'status_after' : 'reviewed');
   await expect(page.getByRole('radio')).toHaveCount(0); await expect(submitButton(page)).toHaveCount(0);
   const summary = page.getByRole('region', { name: 'Submitted review', exact: true });
   await expect(summary).toContainText('Accepted with corrections');

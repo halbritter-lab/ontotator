@@ -81,20 +81,19 @@ def test_reopen_reassign_and_exact_retry_bypass_plan(env):
     )
 
 
-def test_missing_final_respects_annotations_per_text():
+def test_missing_final_treats_annotations_per_text_as_an_upper_limit():
+    """Issue #123: one submission with nothing open is enough, whatever the
+    limit; an open assignment still keeps the row out of the rule."""
     done = AssignmentFact(1, "d", "annotate", "submitted", False, False, "a", 1, None)
     open_ = AssignmentFact(2, "d", "annotate", "open", False, False, "b", 2, None)
     assert not missing_final_counts(
-        has_selection=False, submission_count=1, assignments=[done, open_], per_text=2
-    )
-    assert not missing_final_counts(
-        has_selection=False, submission_count=1, assignments=[done], per_text=2
-    )
-    assert missing_final_counts(
-        has_selection=False, submission_count=2, assignments=[done], per_text=2
+        has_selection=False, submission_count=1, assignments=[done, open_]
     )
     assert missing_final_counts(
         has_selection=False, submission_count=1, assignments=[done]
+    )
+    assert missing_final_counts(
+        has_selection=False, submission_count=2, assignments=[done]
     )
 
 

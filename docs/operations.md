@@ -4,7 +4,7 @@ This guide describes the image and Compose files in this repository. Commands ru
 
 ## Deployment boundary
 
-`docker-compose.yml` provides PostgreSQL (`ontotator_postgres`), a one-shot `migrate` service and the app (`ontotator_app`); the development stack names them `postgres` and `app`. TLS, DNS, host provisioning and the reverse proxy belong to the host. The stack is designed to run behind Nginx Proxy Manager (NPM), possibly shared with other stacks: `ontotator_app` joins NPM's existing external Docker network (`NPM_SHARED_NETWORK_NAME`, for example `npm_default`), so NPM forwards to `http://ontotator_app:8000`. The prefixed names avoid clashes on that shared network: NPM itself names its service `app`, and a plain `postgres` host could resolve to another stack's database. App has **no published host port**. PostgreSQL is only on the internal backend network. Compose does not create the NPM network; it must exist before `up`.
+`docker-compose.yml` provides PostgreSQL (`ontotator_postgres`), a one-shot `migrate` service and the app (`ontotator_app`); the development stack names them `postgres` and `app`. TLS, DNS, host provisioning and the reverse proxy belong to the host. The stack is designed to run behind Nginx Proxy Manager (NPM), possibly shared with other stacks: `ontotator_app` joins an external Docker network that NPM is also on (`NPM_SHARED_NETWORK_NAME`; recommended is a dedicated `ontotator_edge` network with NPM's address pinned, see [Reverse proxy settings](#reverse-proxy-settings)), so NPM forwards to `http://ontotator_app:8000`. The prefixed names avoid clashes on that shared network: NPM itself names its service `app`, and a plain `postgres` host could resolve to another stack's database. App has **no published host port**. PostgreSQL is only on the internal backend network. Compose does not create the NPM network; it must exist before `up`.
 
 Services use read-only roots, writable data volumes and bounded tmpfs, dropped capabilities, `no-new-privileges`, rotated logs and resource limits. The image runs as UID/GID `1001:1001` with tini as PID 1. PostgreSQL runs as `70:70`. App and PostgreSQL restart unless stopped; migrations are one-shot. Connect PostgreSQL directly or use session-mode pooling: servers hold a PostgreSQL advisory runtime lease, which transaction-mode pooling would break.
 
@@ -51,7 +51,7 @@ CI builds the image on pull requests (`.github/workflows/docker.yml`) and, on a 
 
 ## Configuration and secrets
 
-Copy `.env.docker.template` to `.env.docker`, link it as `.env` (`ln -sf .env.docker .env`, Compose reads `.env`) and set the verified image, exact HTTPS public origin, NPM network name and NPM's fixed IP. `.env.docker` holds private deployment configuration; passwords belong in separate files. Production secrets use the relevant `*_FILE` settings. App gets only its database password and initial admin hash. The schema owner's URL/password are available only to `migrate`; the bootstrap role is only for PostgreSQL initialization.
+Copy `.env.docker.template` to `.env.docker`, link it as `.env` (`ln -sf .env.docker .env`, Compose reads `.env`) and set the verified image, exact HTTPS public origin, proxy network name and NPM's pinned address on it (see [Reverse proxy settings](#reverse-proxy-settings)). `.env.docker` holds private deployment configuration; passwords belong in separate files. Production secrets use the relevant `*_FILE` settings. App gets only its database password and initial admin hash. The schema owner's URL/password are available only to `migrate`; the bootstrap role is only for PostgreSQL initialization.
 
 On the Linux host, generate three independent 64-character hexadecimal passwords, and copy the same role password into each consuming directory:
 
@@ -97,15 +97,32 @@ Keep these directories out of source control and public backups. Changing initia
 
 ## First start
 
-Provision the proxy/network configuration, `.env` and service secrets first:
+Provision the proxy/network configuration, `.env` and service secrets first. The PostgreSQL container runs as UID 70 and must be able to read the bind-mounted init script. A restrictive host umask (for example `027`) during checkout or copying leaves it mode `0640`, which that UID cannot read, so set the modes explicitly:
 
 ```bash
+chmod 0755 docker
+chmod 0644 docker/postgres-init.sh
 docker compose config --quiet
 docker compose up -d --wait
 docker compose ps --all
 ```
 
-PostgreSQL initialization creates separate non-superuser owner and app roles and the application schema. If initialization fails (for example `Invalid generated credential (hex expected)` in `docker compose logs ontotator_postgres`), the data volume is left half-initialized: PostgreSQL restarts, reports healthy and skips initialization, but the roles are missing. On a **new, empty** deployment only, fix the secrets, run `docker compose down --volumes` and start again. `migrate` upgrades that schema as owner, and only successful completion allows app to start. Sign in at your HTTPS origin as `admin` with the password used to generate the bootstrap hash.
+PostgreSQL initialization creates separate non-superuser owner and app roles and the application schema. `migrate` upgrades that schema as owner, and only successful completion allows app to start.
+
+If initialization fails, the data volume is left half-initialized: PostgreSQL restarts, reports healthy and skips initialization, but the roles `ontotator_owner` and `ontotator_app` and the `ontotator` schema are missing, so `migrate` fails (for example `password authentication failed` or `role "ontotator_owner" does not exist`) and app never starts. Look for the cause in the first lines of `docker compose logs ontotator_postgres`:
+
+- `Invalid generated credential (hex expected)`: a password file is not 64 lowercase hex characters; see [Configuration and secrets](#configuration-and-secrets).
+- `Permission denied` for `/docker-entrypoint-initdb.d/10-ontotator.sh`: the init script is not readable by UID 70; apply the `chmod` lines above.
+
+Recovery is to delete the half-initialized volume and initialize again. This is safe **only on a brand-new deployment whose volume never held data**: `down --volumes` also deletes the app's data volume. Never run it on a deployment that has been in use; restore from a backup instead.
+
+```bash
+docker compose down --volumes
+chmod 0755 docker && chmod 0644 docker/postgres-init.sh # and/or fix the secrets
+docker compose up -d --wait
+```
+
+Sign in at your HTTPS origin as `admin` with the password used to generate the bootstrap hash.
 
 After confirming admin exists and can sign in, remove `ONTOTATOR_ADMIN_PASSWORD_HASH_FILE` from app's environment in your **deployment copy** of the Compose configuration. Recreate ontotator_app with that revised configuration while the hash file still exists:
 
@@ -181,7 +198,7 @@ docker compose exec -T ontotator_app cat /tmp/edits.jsonl > ./edits.jsonl
 
 ## Upgrades
 
-Take a consistent database/data-volume backup first. Build or pull the verified new digest, update `ONTOTATOR_IMAGE` in `.env`, and run:
+Take a consistent database/data-volume backup first, as in [Backups and restore](#backups-and-restore), before every image switch (upgrade, downgrade or rollback). Build or pull the verified new digest, update `ONTOTATOR_IMAGE` in `.env`, and run:
 
 ```bash
 docker compose pull
@@ -225,6 +242,8 @@ docker compose up -d --wait ontotator_app
 ```
 
 Run the block in the source deployment directory (or set `COMPOSE_PROJECT_NAME` and the same `--file`/`--env-file` options) so every `docker compose` command addresses the source project. Keep the spaces in `{{ .Config.Image }}`: the Docker CLI on Windows turns a space-free `{{.Config.Image}}` passed from Git Bash into the literal `.Config.Image`. In Git Bash also set `MSYS_NO_PATHCONV=1`, otherwise container paths such as `/source` are rewritten into Windows paths. `image-reference.txt` holds the reference app was started with; it identifies the image only if `.env` pins a digest. The final `up` also reruns the one-shot `migrate`, which finds the schema current. The volume is resolved from app's actual `/data` mount, never guessed from a project name. The archive helper uses the same verified image, has no network, reads the source volume read-only and records numeric owners. If any command fails, app stays stopped; investigate before releasing the maintenance restriction. Keep deployed Compose settings, ontology release identities and protected role credentials with this recovery record. `pg_dump` does not back up role passwords. Protect backups as clinical data. Bash streams binary data safely; older PowerShell versions may corrupt native binary redirection.
+
+Schedule this backup rather than relying on manual runs: run it nightly (it stops app for the duration of the dump and archive, so pick a quiet hour), copy each recovery point off the host, encrypted, together with its `SHA256SUMS`, and keep several recovery points. A backup that exists only on the deployment host is lost with the host. Run it additionally right before every image switch (see [Upgrades](#upgrades)). Check regularly that the newest off-host copy verifies with `sha256sum --check`, and rehearse a restore as below after any change to this procedure or to the Compose files.
 
 Restore only into a **fresh isolated target**, using the same image digest and role names. Prepare a separate deployment directory containing the matching Compose file, `docker/postgres-init.sh` at the same relative path (the Compose file mounts it from `./docker/`), private `.env` and service-specific secrets in `./secrets/`. Generate fresh bootstrap/owner/app passwords for the target as in [Configuration and secrets](#configuration-and-secrets): the dump carries no role passwords, so initialization sets the target's roles from its own files, and the consuming files must match them. Remove app's bootstrap admin `_FILE` setting as described earlier: the restored database already contains admin. Configure a separate test origin/proxy; do not attach the target to the live proxy network or allow users/CLI writers during restoration.
 
@@ -291,30 +310,45 @@ Recovery audits operator/reason and ends all sessions for that administrator. Co
 
 ## Reverse proxy settings
 
-Set `ONTOTATOR_PUBLIC_ORIGIN` to the exact browser-facing HTTPS origin, for example `https://editor.example.org` (include a nondefault port if used). Set `ONTOTATOR_TRUSTED_PROXIES` to NPM's exact IP on the shared network, never `*` or a subnet: other containers on that network could otherwise set `X-Forwarded-For` themselves. Docker assigns container IPs dynamically, so give NPM a fixed one in the NPM stack's Compose file. The network needs an explicit subnet for that; changing the subnet of an existing network means recreating it, which briefly disconnects every stack on it (reconnect them with `docker compose up -d`):
+Set `ONTOTATOR_PUBLIC_ORIGIN` to the exact browser-facing HTTPS origin, for example `https://editor.example.org` (include a nondefault port if used). Set `ONTOTATOR_TRUSTED_PROXIES` to NPM's exact IP on the network app shares with it, never `*` or a subnet: other containers on that network could otherwise set `X-Forwarded-For` themselves.
+
+That address must not change. Docker assigns container IPs dynamically, so after NPM is recreated (an image update, or a host reboot with a different start order) it can come back with another address. The app then no longer trusts NPM's forwarded headers and sees NPM itself as the client of every request. The login lockout counts failures per client address, so all users now share one address: 100 failed logins from anyone, or 5 for one username, lock every user (or that user) out of the server until the window ends. Pin NPM's address so this cannot happen.
+
+The recommended way is a small dedicated network between NPM and this stack, created by the NPM stack with a fixed subnet and a pinned NPM address. NPM's existing network stays as it is: giving `npm_default` a fixed subnet instead would mean recreating it, which disconnects every stack on it. In the NPM stack's Compose file:
 
 ```yaml
 # NPM stack, not this repository
 services:
   app: # the NPM service
     networks:
-      default:
-        ipv4_address: 172.30.0.10 # = ONTOTATOR_TRUSTED_PROXIES
+      default: {}
+      ontotator_edge: { ipv4_address: 10.89.0.2 } # = ONTOTATOR_TRUSTED_PROXIES
 networks:
-  default:
-    name: npm_default
+  default: { name: npm_default }
+  ontotator_edge:
+    name: ontotator_edge
     ipam:
       config:
-        - subnet: 172.30.0.0/24
+        # ip_range keeps dynamic addresses (ontotator_app) away from NPM's pinned .2,
+        # even if ontotator_app starts while NPM is down.
+        - { subnet: 10.89.0.0/29, ip_range: 10.89.0.4/30 }
 ```
 
-Check with `docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' NPM_CONTAINER`. If NPM ever gets another IP, the app no longer trusts its forwarded headers and sees NPM itself as the client for login throttling; fix the pin, do not widen the trust.
+Pick a subnet that is unused on the host (compare `docker network inspect` of the existing networks and the host's own routes). Run `docker compose up -d` in the NPM stack, then set `NPM_SHARED_NETWORK_NAME=ontotator_edge` and `ONTOTATOR_TRUSTED_PROXIES=10.89.0.2` for this stack. NPM still reaches the app as `ontotator_app:8000`, and only NPM and this stack are on that network. Pinning NPM's address on its existing network works too, but only if that network already has an explicit subnet.
+
+Check with `docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' NPM_CONTAINER`. If NPM ever gets another IP, fix the pin; do not widen the trust.
 
 NPM proxy host (Hosts, Proxy Hosts, Add Proxy Host):
 
 - Details: domain `editor.example.org`, scheme `http`, forward hostname `ontotator_app`, port `8000`. "Websockets Support" is not needed (the app uses none); "Block Common Exploits" may be on.
 - SSL: a Let's Encrypt certificate, "Force SSL" and "HTTP/2 Support" on. Leave NPM's "HSTS Enabled" off; the app sends its own HSTS header.
 - NPM already sets `Host $host`, `X-Forwarded-Proto $scheme` and `X-Forwarded-For $remote_addr` (it overwrites the client's header, as required). Nothing must be added for correctness; the Advanced tab takes the hardening below.
+
+`$remote_addr` is the client's real address only if NPM does not itself take it from a client-supplied header. NPM's nginx accepts `X-Real-IP` from connections coming from private address ranges and, with its Cloudflare/CloudFront range fetch, from those ranges too. The per-address login lockout counts whatever NPM forwards, so a client that can set `X-Real-IP` chooses the address it is counted under. On NPM:
+
+- Set `IP_RANGES_FETCH_ENABLED: "false"` in NPM's environment unless the site really is behind Cloudflare or CloudFront.
+- Check how IPv6 clients arrive. Without IPv6 on the Docker network, Docker's userland proxy forwards them to NPM from the bridge gateway, a private address: they all share that address, and NPM may accept their `X-Real-IP`. Serve IPv6 natively to NPM, or make sure the gateway address is not trusted for `X-Real-IP`.
+- Verify from outside, over IPv4 and IPv6: NPM's access log must show your real public address, also for a request sent with a made-up `X-Real-IP` or `X-Forwarded-For` header.
 
 For another proxy in front of app, forward the original `Host`, `X-Forwarded-For` and `X-Forwarded-Proto`. For nginx, configure `proxy_set_header Host $host;`, `proxy_set_header X-Forwarded-For $remote_addr;` (at the first proxy; `$proxy_add_x_forwarded_for` only behind another trusted proxy) and `proxy_set_header X-Forwarded-Proto $scheme;`. For a public nondefault port preserve its authority in Host. Ensure the first trusted proxy replaces untrusted incoming forwarded headers and any proxy chain is explicitly configured. Host validation, HTTPS session cookies, same-origin writes and per-client login throttling depend on these settings. Verify through the public origin after provisioning; TLS/proxy configuration is maintained outside this repository.
 
@@ -336,14 +370,35 @@ The app sets its own security headers (CSP with `frame-ancestors 'none'`, `X-Fra
 
 On the host, with NPM (and possibly other stacks) already running:
 
-1. Network: `docker network ls` shows NPM's network (the value for `NPM_SHARED_NETWORK_NAME`). Pin NPM's IP as in [Reverse proxy settings](#reverse-proxy-settings).
-2. Checkout: clone `halbritter-lab/ontotator` into its own directory; only the Compose files, `docker/postgres-init.sh` and the template are used.
+1. Network: create the dedicated edge network with NPM's pinned address as in [Reverse proxy settings](#reverse-proxy-settings); its name is the value for `NPM_SHARED_NETWORK_NAME`.
+2. Files: take `docker-compose.yml`, `docker/postgres-init.sh` and `.env.docker.template` from the release you deploy, so the Compose file matches the image (for example `git clone --depth 1 --branch vX.Y.Z https://github.com/halbritter-lab/ontotator.git`, or download the three files from that tag). Nothing else from the repository is used on the host. Make the init script readable by PostgreSQL's UID 70 with `chmod 0755 docker && chmod 0644 docker/postgres-init.sh` (see [First start](#first-start)).
 3. Secrets: create `secrets/` as in [Configuration and secrets](#configuration-and-secrets).
-4. Settings: `cp .env.docker.template .env.docker && ln -sf .env.docker .env`, then set `ONTOTATOR_IMAGE` (digest printed by `scripts/publish-image.sh`), `ONTOTATOR_PUBLIC_ORIGIN`, `NPM_SHARED_NETWORK_NAME` and `ONTOTATOR_TRUSTED_PROXIES` (NPM's fixed IP). If the GHCR package is private, `docker login ghcr.io` with a read-only package token.
-5. Start: `docker compose config --quiet && docker compose pull && docker compose up -d --wait && docker compose ps --all`, then finish the admin bootstrap as in [First start](#first-start).
-6. NPM: add the proxy host as in [Reverse proxy settings](#reverse-proxy-settings), first without the Advanced hardening.
-7. Verify: `curl -fsS https://editor.example.org/readyz` reports every check true, and sign-in works in a browser. Then add the Advanced hardening: `/readyz` must now answer 403 from outside while `docker compose ps` keeps app healthy.
-8. Update: publish a new version, set its digest in `.env.docker` and follow [Upgrades](#upgrades). Other stacks are not touched; they share only the NPM network.
+4. Settings: `cp .env.docker.template .env.docker && ln -sf .env.docker .env`, then set `ONTOTATOR_IMAGE` (the `ghcr.io/halbritter-lab/ontotator@sha256:...` digest reference of the release), `ONTOTATOR_PUBLIC_ORIGIN`, `NPM_SHARED_NETWORK_NAME` and `ONTOTATOR_TRUSTED_PROXIES` (NPM's pinned address).
+5. Registry access: a public GHCR package needs no login. If the package is private, log in once as the user that runs Compose, with a GitHub personal access token (classic) that has only the `read:packages` scope: `docker login ghcr.io --username GITHUB_USER --password-stdin < /absolute/private/ghcr-read-token`. Docker stores the credential in that user's `~/.docker/config.json`; never put a token that may write packages or repositories on the server.
+6. Start: `docker compose config --quiet && docker compose pull && docker compose up -d --wait && docker compose ps --all`, then finish the admin bootstrap as in [First start](#first-start).
+7. NPM: add the proxy host as in [Reverse proxy settings](#reverse-proxy-settings), first without the Advanced hardening.
+8. Verify: `curl -fsS https://editor.example.org/readyz` reports every check true, and sign-in works in a browser. Then add the Advanced hardening: `/readyz` must now answer 403 from outside while `docker compose ps` keeps app healthy.
+9. Update: take the Compose files of the new release, set its digest in `.env.docker` and follow [Upgrades](#upgrades). Other stacks are not touched; they share only NPM.
+
+### Managed hosting deployment
+
+When the server is managed from a separate infrastructure ("hosting") repository with Ansible, as the maintainers' own deployment is, the steps above are expressed declaratively there instead of being done by hand on the host:
+
+- Files: the hosting repository vendors `docker-compose.yml` and `docker/postgres-init.sh` of the pinned release into `server/apps/ontotator/`, and Ansible copies them to the host with mode `0644`, so the host umask cannot make the init script unreadable. Nothing is cloned on the server.
+- Images: an override file pins `migrate` and `ontotator_app` as `ghcr.io/halbritter-lab/ontotator:X.Y.Z@sha256:...`, tag and digest together. PostgreSQL stays pinned in the vendored base file. Only numeric `X.Y.Z` releases are published for pinning; never pin `latest`, `X.Y` or `sha-...` tags.
+- Project: the Compose project name is fixed (`project_name: ontotator`), so volume and container names stay the same across deployments. Changing it would start a new, empty project beside the old volumes.
+- Proxy: the NPM proxy host is a declared `npm-hosts` entry forwarding to `ontotator_app:8000` with `hsts_enabled: false` (the app sends its own HSTS header), on the edge network from [Reverse proxy settings](#reverse-proxy-settings).
+- Settings and secrets are still required as in [Configuration and secrets](#configuration-and-secrets): the base file needs `ONTOTATOR_IMAGE`, `ONTOTATOR_PUBLIC_ORIGIN`, `ONTOTATOR_TRUSTED_PROXIES` and `NPM_SHARED_NETWORK_NAME` set even when the override pins the images.
+
+A release is deployed from the hosting repository, not on the server:
+
+```bash
+make pin APP=ontotator VERSION=X.Y.Z # vendors the release's files and pins its image digests
+git add server/apps/ontotator && git commit # review the vendored diff first
+make deploy APP=ontotator
+```
+
+Take a backup before `make deploy` switches the image, as in [Upgrades](#upgrades). Read the release notes for changes to the Compose file or init script; the PostgreSQL init script only runs on an empty volume, so changing it does not affect an existing database.
 
 ## Workers and resource limits
 

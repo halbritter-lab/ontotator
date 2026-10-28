@@ -95,18 +95,35 @@ describe("project members", () => {
   });
 
   it("suggests matching people to a lead from three typed letters on", async () => {
-    vi.mocked(api.listMemberCandidates).mockResolvedValue([{ username: "maria.k", display_name: "Maria Klein" }]);
+    vi.mocked(api.listMemberCandidates).mockResolvedValue([{ username: "maria.k", display_name: "Maria Klein", languages: [] }]);
     render(<MembersSection projectKey="p" isSystemAdmin={false} />);
     fireEvent.click(await screen.findByRole("button", { name: "Add member…" }));
     fireEvent.change(screen.getByLabelText(/^Username/), { target: { value: "ma" } });
     expect(api.listMemberCandidates).not.toHaveBeenCalled();
     fireEvent.change(screen.getByLabelText(/^Username/), { target: { value: "mar" } });
     expect(api.listMemberCandidates).toHaveBeenCalledWith("p", "mar");
-    const option = await screen.findByRole("option", { name: "maria.k Maria Klein" });
+    const option = await screen.findByRole("option", { name: "maria.k Maria Klein · no languages listed" });
     // The list sits in the field's box (not a detached native popup); a click picks the username.
     expect(option.closest(".suggest-field")?.contains(screen.getByLabelText(/^Username/))).toBe(true);
     fireEvent.click(option);
     expect((screen.getByLabelText(/^Username/) as HTMLInputElement).value).toBe("maria.k");
+  });
+
+  it("confirms a typed-out username with name and languages, without a list over the roles (issue 129, W1)", async () => {
+    vi.mocked(api.listMemberCandidates).mockResolvedValue([
+      { username: "maria.k", display_name: "Maria Klein", languages: ["de", "en"] },
+      { username: "maria.kl", display_name: "Maria Klee", languages: [] },
+    ]);
+    render(<MembersSection projectKey="p" isSystemAdmin={false} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Add member…" }));
+    fireEvent.change(screen.getByLabelText(/^Username/), { target: { value: "maria.k" } });
+    expect(api.listMemberCandidates).toHaveBeenCalledWith("p", "maria.k");
+    expect(await screen.findByText("Found maria.k: Maria Klein · reads de, en")).toBeDefined();
+    // The other match stays a suggestion; the typed one is not repeated in the list.
+    expect(screen.getByRole("option", { name: "maria.kl Maria Klee · no languages listed" })).toBeDefined();
+    expect(screen.queryByRole("option", { name: /^maria\.k Maria Klein/ })).toBeNull();
+    fireEvent.change(screen.getByLabelText(/^Username/), { target: { value: "maria" } });
+    await waitFor(() => expect(screen.queryByText(/^Found /)).toBeNull());
   });
 
   it("says plainly when the typed username does not exist", async () => {

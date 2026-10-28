@@ -1,12 +1,29 @@
-import { useId, type ReactNode } from "react";
-import type { DocumentRowView } from "../../api/client";
+import { useId, useState, type ReactNode } from "react";
+import { AssignmentActions } from "../../admin/AssignmentActions";
+import type { AssignmentView, DocumentRowView } from "../../api/client";
+import { plural } from "../../app/labels";
+import { Button, InlineMessage } from "../../ui";
 import type { ProjectDocumentsQuery, Route } from "../../app/router";
+import { earlyFinal, openAnnotateWork } from "../finalPanelText";
 import { RouteLink } from "../RowCells";
 import { shortName } from "../stageLabels";
 import type { TextVersionsTools } from "../TextVersions";
 import { finalizationState, textViewRoute } from "./cardModel";
 import { PersonList, useFocusAfterRemoval } from "./PersonRow";
 import { assignedLine, workerName, WorkPersonRow } from "./WorkPersonRow";
+
+type WorkItem = DocumentRowView["work"][number];
+
+/** The person of a work item: "you", the short name, else the pseudonym label. */
+function workName(item: WorkItem): string {
+  if (item.is_me) return "you";
+  return item.person ? shortName(item.person) : item.author_label;
+}
+
+function nameOf(items: readonly WorkItem[], assignmentId: number): string {
+  const item = items.find(entry => entry.assignment_id === assignmentId);
+  return item ? workName(item) : String(assignmentId);
+}
 
 /**
  * Finalization part of the text card: what happens next, the decision block, the final result. While a consolidation
@@ -41,11 +58,24 @@ export function FinalizationPart({ row, projectKey, query, decision, onNavigate,
   const consolidationLink = (label?: string) => openable && <RouteLink route={{ name: "projectConsolidation", key: projectKey, roundId: openable.round_id, ...(Object.keys(query).length ? { documents: query } : {}) }}
     onNavigate={onNavigate} className="btn btn-secondary btn-sm" aria-label={label}>Open consolidation</RouteLink>;
   const groups = progress ? `${progress.open} of ${progress.total} groups open` : null;
+  // "Annotators per text" is an upper limit (issue 123): with one annotation submitted the lead may decide now; the
+  // open annotations are a warning, each with "Remove assignment…", or are left to run.
+  const early = earlyFinal(row);
+  const open = early ? openAnnotateWork(row) : [];
+  const openAssignments = early && canManage ? open.flatMap(item => tools?.assignments.find(entry => entry.id === item.assignment_id && !entry.revoked_at) ?? []) : [];
+  const [revoking, setRevoking] = useState<AssignmentView | null>(null);
   return <section className="text-card-part" aria-labelledby={`${id}-title`}>
     <h3 id={`${id}-title`} className="text-card-part-title">Finalization</h3>
-    {waiting && <p className="text-card-muted">
-      {`Starts when all ${target ? `${target} ` : ""}annotations are submitted: compare the results, consolidate the differences, then accept the result.`}
+    {waiting && !early && <p className="text-card-muted">
+      {`Starts once an annotation is submitted${target && target > 1 ? ` (up to ${target} per text, fewer is fine)` : ""}: compare the results, consolidate the differences, then accept the result.`}
     </p>}
+    {early && <InlineMessage tone="warning" live={false}>
+      <p>{`${plural(open.length, "annotation")} still open: ${open.map(workName).join(", ")}. You can accept a result now; open work stays assigned unless you remove it.`}</p>
+      {openAssignments.length > 0 && <div className="text-card-actions">
+        {openAssignments.map(assignment => <Button key={assignment.id} size="sm" variant="quiet" aria-label={`Remove assignment…, ${nameOf(open, assignment.id)}`}
+          onClick={() => setRevoking(assignment)}>Remove assignment…</Button>)}
+      </div>}
+    </InlineMessage>}
     {running.length > 0 ? <PersonList label="Consolidators">
       {running.map(item => {
         const assigned = assignedLine(item, now, !groups);
@@ -58,6 +88,8 @@ export function FinalizationPart({ row, projectKey, query, decision, onNavigate,
       {consolidators.length > 0 && <p>{`Consolidating with ${consolidators.map(person => (person.is_me ? "you" : shortName(person))).join(", ")}${groups ? ` · ${groups}` : ""}`}</p>}
       {openable && <div className="text-card-actions">{consolidationLink()}</div>}
     </>}
+    {revoking && tools && <AssignmentActions assignment={revoking} members={tools.members} open="revoke"
+      onChanged={() => { tools.onAssignmentsChanged(); onChanged?.(); }} onClose={() => setRevoking(null)} />}
     {decision}
     {row.final && <p>
       <RouteLink route={textViewRoute(projectKey, row.case_id, row.final.document_id, query, { show: `final:${row.final.submission_id}` })} onNavigate={onNavigate}

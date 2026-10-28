@@ -53,7 +53,9 @@ const caseBox = (page: Page, caseId: string) => page.getByRole("checkbox", { nam
 const chip = (page: Page, flag: "Translation review" | "Annotate", caseId: string, language: string) =>
   page.getByRole("button", { name: textNamePattern(`${flag}, `, caseId, language) });
 /** The selection bar's actions (U4). */
-const BAR_ACTIONS = ["Assign…", "Plan…", "Clear selection"];
+/** "Assign…", or what gets assigned: "Assign review…", "Assign annotation…" (#129 U3). */
+const ASSIGN = /^Assign( [a-z ]+)?…$/;
+const BAR_ACTIONS = [ASSIGN, "Plan…", "Clear selection"];
 /** The bulk "Plan…" dialog "Work plan · 1 case" (separator per U9). */
 const planDialog = (page: Page) => page.getByRole("dialog", { name: /^Work plan\W+1 case$/ });
 /** The "Translation review" radio group of one language in the bulk plan dialog. */
@@ -171,7 +173,7 @@ test("axe has no violations on Documents with selection bar, plan dialog, assign
   expect(await axeViolations(page, "[role=dialog]"), "plan dialog").toEqual([]);
   await plan.getByRole("button", { name: "Cancel", exact: true }).click();
 
-  await bar(page).getByRole("button", { name: "Assign…", exact: true }).click();
+  await bar(page).getByRole("button", { name: ASSIGN }).click();
   const assign = page.getByRole("dialog", { name: /^Assign\W/ });
   await expect(assign.getByRole("table", { name: "Members" })).toBeVisible();
   await assign.getByRole("radio", { name: new RegExp(`^${esc(s.display_names.ana)}`) }).click();
@@ -206,7 +208,7 @@ test("390 px cards and floating selection bar", async ({ page }) => {
   expect(box.y + box.height).toBeLessThanOrEqual(844);
   for (const name of BAR_ACTIONS) {
     const button = (await bar(page).getByRole("button", { name, exact: true }).boundingBox())!;
-    expect(button.x + button.width, name).toBeLessThanOrEqual(390);
+    expect(button.x + button.width, String(name)).toBeLessThanOrEqual(390);
   }
   await evidence(page, "390-selection-bar");
 
@@ -216,7 +218,7 @@ test("390 px cards and floating selection bar", async ({ page }) => {
   const barBox = (await bar(page).boundingBox())!;
   const covered: string[] = [];
   for (const name of BAR_ACTIONS) {
-    if (overlap(toastBox, (await bar(page).getByRole("button", { name, exact: true }).boundingBox())!)) covered.push(name);
+    if (overlap(toastBox, (await bar(page).getByRole("button", { name, exact: true }).boundingBox())!)) covered.push(String(name));
   }
   test.info().annotations.push({ type: "toast over selection bar", description: `${overlap(toastBox, barBox) ? "overlaps" : "clear"}; covered buttons: ${covered.join(", ") || "none"}` });
   await evidence(page, "390-toast-and-bar");
@@ -256,7 +258,7 @@ test("320 px reflow without horizontal scrolling", async ({ page }) => {
   await evidence(page, "320-plan-dialog");
   await plan.getByRole("button", { name: "Cancel", exact: true }).click();
 
-  await bar(page).getByRole("button", { name: "Assign…", exact: true }).click();
+  await bar(page).getByRole("button", { name: ASSIGN }).click();
   const assign = page.getByRole("dialog", { name: /^Assign\W/ });
   await expect(assign.getByRole("radio", { name: new RegExp(`^${esc(s.display_names.ana)}`) })).toBeVisible();
   expect(await overflow(page), "assign dialog").toMatchObject({ scrollWidth: 320, outside: [] });

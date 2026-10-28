@@ -84,7 +84,7 @@ describe("path", () => {
     expect(within(card()).getByRole("heading", { name: "Translation" })).toBeTruthy();
     expect(within(card()).queryByRole("heading", { name: "Annotation" })).toBeNull();
     fireEvent.click(segmentButton("Finalization"));
-    expect(within(card()).getByText("Starts when all 2 annotations are submitted: compare the results, consolidate the differences, then accept the result.")).toBeTruthy();
+    expect(within(card()).getByText("Starts once an annotation is submitted (up to 2 per text, fewer is fine): compare the results, consolidate the differences, then accept the result.")).toBeTruthy();
   });
 });
 
@@ -320,6 +320,24 @@ describe("annotation part", () => {
 });
 
 describe("translation part", () => {
+  it("an unassigned review of a machine translation is the one primary next step; Compare with source follows (issue 129, U5)", () => {
+    const row = cardRow({ review: cell("unassigned", "todo", { version: 1, note: "machine_translation" }), annotation: cell("after_review", "waiting"), final: cell("after_review", "waiting") }, {
+      versions: [version({ document_id: "case-200-de", origin: "machine_translation", derived_from: "case-200-en", translation_status: "ready_for_review" })],
+      work: [],
+    });
+    const { onAssign } = renderCard({ row, initialSegment: "translation" });
+    const part = within(card()).getByRole("heading", { name: "Translation" }).closest("section")!;
+    const next = within(part).getByRole("group", { name: "Next step: assign someone to review this machine translation." });
+    const assign = within(next).getByRole("button", { name: "Assign review…" });
+    expect(assign.className).toContain("btn-primary");
+    expect(within(part).getAllByRole("button", { name: "Assign review…" })).toHaveLength(1);
+    expect(part.querySelectorAll(".btn-primary")).toHaveLength(1);
+    expect(within(next).queryByRole("link", { name: "Compare with source" })).toBeNull();
+    expect(within(part).getByRole("link", { name: "Compare with source" })).toBeTruthy();
+    fireEvent.click(assign);
+    expect(onAssign).toHaveBeenCalledWith(row, "translation_review");
+  });
+
   it("names the open reviewers and the actions, without a separate version line", () => {
     const row = assignRow({
       versions: [version({ document_id: "case-200-de", origin: "machine_translation", derived_from: "case-200-en", translation_status: "ready_for_review" })],

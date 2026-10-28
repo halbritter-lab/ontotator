@@ -516,7 +516,8 @@ describe("CaseScreen integration", () => {
     await waitFor(() => expect(apply).toHaveBeenCalledWith("ws-optional-detach", expect.objectContaining({ payload: expect.objectContaining({ command: "detach_mention" }) })));
   });
 
-  it.each(["optional", "required_on_complete"] as const)("opens a note-less historical editable copy when reasons are optional (%s)", async evidencePolicy => {
+  // A span-required type waits for supporting text instead (#124, "adopts a spanless proposal of a span-required type ...").
+  it.each(["optional"] as const)("opens a note-less historical editable copy when reasons are optional (%s)", async evidencePolicy => {
     const view = withEditableFinding(structuredClone(sampleView));
     Object.assign(view, { enforce_spanless_rules: true, allow_spanless_findings: true, require_spanless_note: false });
     const proposal = view.draft.annotations![0]; view.draft.annotations = []; view.available_inputs = [proposal];
@@ -625,13 +626,15 @@ describe("CaseScreen integration", () => {
     expect(logout).not.toHaveBeenCalled();
   });
 
-  it("keeps profile-required evidence mandatory even when the project permits spanless findings", () => {
+  // #124: the task profile wins over the project setting; the editor offers no spanless finding.
+  it.each([true, false])("hides the spanless button for a span-required type whatever the project allows (%s)", allow => {
     const view = structuredClone(sampleView);
-    Object.assign(view, { enforce_spanless_rules: true, allow_spanless_findings: true });
+    Object.assign(view, { enforce_spanless_rules: true, allow_spanless_findings: allow });
     view.layers![0].annotation_types[0].evidence_policy = "required_on_complete";
     render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()} />);
-    expect((screen.getByRole("button", { name: "Add finding without a text span" }) as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByText("This annotation type requires a text span.")).toBeDefined();
+    expect(screen.queryByRole("button", { name: "Add finding without a text span" })).toBeNull();
+    expect(screen.queryByText("This annotation type requires a text span.")).toBeNull();
+    expect(screen.queryByText("This project requires a text span for findings.")).toBeNull();
   });
 
   it("creates spanless annotation without text segments", async () => {
@@ -2231,7 +2234,25 @@ describe("CaseScreen integration", () => {
     expect(apply).toHaveBeenCalledOnce();
   });
 
-  it.each(["optional", "required_on_complete"] as const)("collects a reason before adopting a spanless proposal (%s)", async (evidencePolicy) => {
+  // #124: a span-required type never gets a spanless copy; Edit & Replace waits for supporting text.
+  it("adopts a spanless proposal of a span-required type only from selected text", async () => {
+    const view = withEditableFinding(structuredClone(sampleView));
+    Object.assign(view, { enforce_spanless_rules: true, allow_spanless_findings: true, require_spanless_note: true });
+    const proposal = view.draft.annotations![0]; view.draft.annotations = []; view.available_inputs = [proposal];
+    view.key.mode = "review"; view.draft.key.mode = "review";
+    const target = { annotation_id: proposal.annotation.annotation_id, version: proposal.version };
+    view.targets!.targets = [target]; view.draft.targets = view.targets!;
+    view.layers![0].annotation_types[0].evidence_policy = "required_on_complete";
+    const apply = vi.spyOn(api, "applyCommand");
+    render(<CaseScreen view={view} workspaceId="ws-required" onClose={vi.fn()} />);
+    fireEvent.click(document.querySelector('[data-list-key^="target:"]')!);
+    fireEvent.click(screen.getByRole("button", { name: /Edit & Replace/ }));
+    expect(await screen.findByText("This annotation type requires a text span. Select supporting text to create an editable copy of this proposal. The current decision is kept until you confirm the replacement.")).toBeDefined();
+    expect(screen.queryByRole("dialog", { name: "Reason for no text span" })).toBeNull();
+    expect(apply).not.toHaveBeenCalled();
+  });
+
+  it.each(["optional"] as const)("collects a reason before adopting a spanless proposal (%s)", async (evidencePolicy) => {
     const view = withEditableFinding(structuredClone(sampleView));
     Object.assign(view, { enforce_spanless_rules: true, allow_spanless_findings: true });
     const proposal = view.draft.annotations![0]; view.draft.annotations = []; view.available_inputs = [proposal];
