@@ -61,7 +61,7 @@ def test_archive_contains_hashed_readme_and_index(case_env):
         "index.csv",
     } <= names
     receipt = json.loads(archive.read("receipt.json"))
-    assert receipt["format"] == "ontotator-final-export/v1"
+    assert receipt["format"] == "ontotator-final-export/v2"
     assert set(receipt["files"]) == names - {"receipt.json"}
     for name, digest in receipt["files"].items():
         assert hashlib.sha256(archive.read(name)).hexdigest() == digest, name
