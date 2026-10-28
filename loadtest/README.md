@@ -1,4 +1,4 @@
-# Representative P9 load test
+# Representative load test
 
 Use a fresh, disposable **dev** Compose project. The script refuses the small
 fixture ontology: pass a real `hp.json` release from 2026-06-23 or newer. Its SHA256
@@ -73,7 +73,7 @@ six-second user ramp; warmup is a distinct process and contributes no samples.
 
 Record the real machine CPU/RAM, Docker Desktop version, image digest, HPO
 release/SHA, document count, workload/think time, full Locust table and outcomes
-in `docs/operations/load-test-2026-10.md`. Verify the measured stack has app
+in a local results report. Verify the measured stack has app
 **2 CPU / 2 GiB and 2 workers**, PostgreSQL **1 CPU / 1 GiB**; record the actual
 Compose limits. A harness parse/test pass is not a performance result. If a
 measured target misses, record it and profile the slowest endpoint with `py-spy

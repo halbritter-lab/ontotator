@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "seed_t5_acceptance.py"
+SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "seed_acceptance.py"
 
 
 @pytest.fixture
@@ -18,7 +18,7 @@ def seed():
 
 def config(seed, **changes):
     values = dict(
-        project="ontotator-t5-acceptance-check",
+        project="ontotator-acceptance-check",
         image="sha256:" + "a" * 64,
         source_sha="b" * 40,
         app_port=18080,
@@ -31,7 +31,7 @@ def config(seed, **changes):
     "changes",
     [
         {"project": "existing-production"},
-        {"project": "ontotator-t5-acceptance/other"},
+        {"project": "ontotator-acceptance/other"},
         {"image": "ontotator-dev:local"},
         {"source_sha": "main"},
         {"app_port": 80000},
@@ -71,7 +71,7 @@ def test_only_expected_bootstrap_identity_is_fresh(seed):
 def test_local_output_must_be_new_and_inside_ignored_acceptance_area(seed, tmp_path):
     root = tmp_path / "checkout"
     root.mkdir()
-    allowed = root / "build" / "t5-acceptance" / "run"
+    allowed = root / "build" / "acceptance" / "run"
     assert seed["output_path"](root, allowed) == allowed
     with pytest.raises(ValueError):
         seed["output_path"](root, root / "examples" / "credentials")
@@ -232,7 +232,7 @@ def test_full_hpo_builder_regenerates_bundle_profile_and_translation_inventory_o
     builder["prepare_inputs"](source, output, source_manifest)
     generated = seed["verify_inputs"](output)
     profile = json.loads((output / "profile.json").read_text())
-    assert profile["profile_id"] == "t5-full-hpo-acceptance/v1"
+    assert profile["profile_id"] == "full-hpo-acceptance/v1"
     assert profile["ontologies"][0]["sha256"] == descriptor("hp.json")["sha256"]
     _, units = ontospan.read_bundle(output / "demo.zip")
     assert len(units) == 6
@@ -243,7 +243,7 @@ def test_full_hpo_builder_regenerates_bundle_profile_and_translation_inventory_o
     )
     assert generated["translations"] == ["hp-de.babelon.tsv", "hp-es.babelon.tsv"]
     assert (output / "demo.zip").read_bytes() != (
-        SCRIPT.parents[1] / "examples/t5-acceptance/demo.zip"
+        SCRIPT.parents[1] / "examples/acceptance/demo.zip"
     ).read_bytes()
     with pytest.raises(ValueError, match="exists"):
         builder["prepare_inputs"](source, output, source_manifest)
@@ -330,7 +330,7 @@ class FakeApi:
 
 
 def shipped_profile():
-    root = Path(__file__).resolve().parents[1] / "examples" / "t5-acceptance"
+    root = Path(__file__).resolve().parents[1] / "examples" / "acceptance"
     return json.loads((root / "profile.json").read_text(encoding="utf-8"))
 
 
@@ -348,7 +348,7 @@ def test_seed_plan_sets_the_clinical_creation_defaults(seed):
     assert patches == [
         (
             "PATCH",
-            "/api/v1/projects/t5-acceptance/settings",
+            "/api/v1/projects/acceptance/settings",
             {"creation_defaults": api.settings["creation_defaults"]},
         )
     ]

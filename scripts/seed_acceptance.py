@@ -1,8 +1,7 @@
-"""Prepare identity files, then seed ONE fresh, already-running local T5 stack.
+"""Prepare identity files, then seed ONE fresh, already-running local demo stack.
 
 Host-only Python standard library. Never starts, stops, resets or builds a stack.
-Use prepare --help / seed --help. Final reviewed source/image and root runtime
-validation are prerequisites; preparing files is not evidence of a running demo.
+Use prepare --help / seed --help. Preparing files is not evidence of a running demo.
 """
 
 from __future__ import annotations
@@ -29,8 +28,8 @@ from urllib.request import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-INPUTS = ROOT / "examples" / "t5-acceptance"
-PROJECT_KEY = "t5-acceptance"
+INPUTS = ROOT / "examples" / "acceptance"
+PROJECT_KEY = "acceptance"
 ACTORS = {
     "demo-lead": ("Project lead", "lead", ["en", "de"], None),
     "demo-reviewer": (
@@ -56,8 +55,8 @@ def configuration(
     pg_port: int,
     snapshot_sha256: str | None = None,
 ) -> dict[str, Any]:
-    if not re.fullmatch(r"ontotator-t5-acceptance(?:-[a-z0-9][a-z0-9-]*)?", project):
-        raise ValueError("Use a dedicated ontotator-t5-acceptance[-suffix] project")
+    if not re.fullmatch(r"ontotator-acceptance(?:-[a-z0-9][a-z0-9-]*)?", project):
+        raise ValueError("Use a dedicated ontotator-acceptance[-suffix] project")
     if not re.fullmatch(r"sha256:[0-9a-f]{64}", image):
         raise ValueError("An immutable local sha256 image ID is required")
     if not re.fullmatch(r"[0-9a-f]{40}", source_sha):
@@ -128,7 +127,7 @@ def require_image_identity(cfg: dict[str, Any], image: dict[str, Any]) -> None:
 
 
 def output_path(root: Path, output: Path, *, existing: bool = False) -> Path:
-    allowed = (root / "build" / "t5-acceptance").resolve()
+    allowed = (root / "build" / "acceptance").resolve()
     resolved = output.resolve()
     if (
         not allowed.is_relative_to(root.resolve())
@@ -136,7 +135,7 @@ def output_path(root: Path, output: Path, *, existing: bool = False) -> Path:
         or not resolved.is_relative_to(allowed)
     ):
         raise ValueError(
-            "Output must be inside this checkout's ignored build/t5-acceptance/<run>"
+            "Output must be inside this checkout's ignored build/acceptance/<run>"
         )
     if not existing and resolved.exists():
         raise ValueError("Output exists; refuse overwrite or reseed")
@@ -609,11 +608,11 @@ def seed(directory: Path) -> None:
             "python",
             "-c",
             "import pathlib,sys; pathlib.Path(sys.argv[1]).write_bytes(sys.stdin.buffer.read())",
-            f"/tmp/t5-acceptance-{name}",
+            f"/tmp/acceptance-{name}",
             data=(inputs / name).read_bytes(),
         )
     manifest = verify_inputs(inputs)
-    stack.cli("ontologies", "add", "/tmp/t5-acceptance-hp.json")
+    stack.cli("ontologies", "add", "/tmp/acceptance-hp.json")
     for name in manifest.get("translations", []):
         destination = f"/tmp/{name}"
         stack.compose(
@@ -632,9 +631,9 @@ def seed(directory: Path) -> None:
         "create",
         PROJECT_KEY,
         "--name",
-        "T5 synthetic acceptance",
+        "Synthetic acceptance",
         "--profile",
-        "/tmp/t5-acceptance-profile.json",
+        "/tmp/acceptance-profile.json",
         "--pin",
         f"hp={manifest['sha256']['hp.json']}",
         "--allowed-roots",
@@ -688,7 +687,7 @@ def seed(directory: Path) -> None:
         "PATCH", f"/api/v1/projects/{PROJECT_KEY}/settings", {"languages": ["en", "de"]}
     )
     ensure_creation_defaults(lead)
-    stack.cli("import", PROJECT_KEY, "/tmp/t5-acceptance-demo.zip")
+    stack.cli("import", PROJECT_KEY, "/tmp/acceptance-demo.zip")
     documents = lead.request("GET", f"/api/v1/projects/{PROJECT_KEY}/documents")
     if len(documents) != 6:
         raise RuntimeError("Real import did not produce the six expected variants")

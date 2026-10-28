@@ -1,4 +1,4 @@
-"""Delete every annotation of a project (or of one text) with its work (D4).
+"""Delete every annotation of a project (or of one text) with its work.
 
     uv run python scripts/purge_annotation_work.py --project KEY \
         [--case CASE --language LANG] --confirm
