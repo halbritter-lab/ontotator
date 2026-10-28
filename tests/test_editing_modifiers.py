@@ -298,6 +298,40 @@ def test_without_allowed_roots_every_term_is_a_finding(tmp_path: Path) -> None:
     )
 
 
+def test_a_root_the_release_lacks_restricts_nothing(tmp_path: Path) -> None:
+    """Fail open: a pin naming a missing root must not block the project."""
+    pin = Pin(
+        sha256=MOD_PIN.sha256, allowed_roots=("HP:0000005",), t1_profile="hpo-phenotype"
+    )
+    env = _env(tmp_path, pin)
+    env.run(
+        {
+            "command": "create_annotation",
+            "annotation_id": "a1",
+            "term_id": "HP:0000001",
+            "segments": [seg(KRAMPF)],
+        }
+    )
+
+
+def test_keeping_a_stored_term_outside_the_roots_is_allowed(tmp_path: Path) -> None:
+    """A finding stored before the roots were enforced keeps its term."""
+    env = _env(tmp_path, Pin(sha256=MOD_PIN.sha256, t1_profile="hpo-phenotype"))
+    env.run(
+        {
+            "command": "create_annotation",
+            "annotation_id": "a1",
+            "term_id": "HP:0000001",
+            "segments": [seg(KRAMPF)],
+        }
+    )
+    with env.repo.db.transaction() as conn:
+        conn.execute(
+            ProjectOntologyRow.__table__.update().values(allowed_roots=["HP:0000118"])
+        )
+    env.run({"command": "set_term", "annotation_id": "a1", "term_id": "HP:0000001"})
+
+
 def test_primary_id_is_stored(env: Env) -> None:
     env.seizure()
     draft = env.run(

@@ -1219,6 +1219,21 @@ def ontologies_add(
             _print_ontology_file(store.add(Actor.cli(), path.name, data))
 
 
+@ontologies_app.command("check-roots")
+def ontologies_check_roots(ctx: typer.Context) -> None:
+    """List project pins whose allowed roots their release lacks.
+
+    Findings of such a pin are not restricted until the roots are fixed.
+    One line per pin: project, ontology id, sha256 and the missing roots.
+    """
+    with _open_database(ctx) as db:
+        found = _ontology_store(db).pins_missing_roots()
+    for project_key, ontology_id, sha256, missing in found:
+        typer.echo(f"{project_key}  {ontology_id}  {sha256}  {','.join(missing)}")
+    if not found:
+        typer.echo("Every pin's allowed roots are in its release.")
+
+
 @ontologies_app.command("list")
 def ontologies_list(ctx: typer.Context) -> None:
     """One line per stored file: sha256, prefix, release and kind, oldest first."""

@@ -46,6 +46,7 @@ from ontotator.exchange.t1 import Pin
 from ontotator.ontology.modifiers import (
     ModifierClassifier,
     classifier_of,
+    finding_roots,
     modifier_layers,
     subtree,
 )
@@ -988,7 +989,8 @@ class EditingService:
             )
 
         term_id = self._validate_term_for_layer(services[layer_id], cmd.term_id)
-        self._check_allowed_roots(draft, profile, pins, layer_id, services, term_id)
+        if term_id != existing.annotation.term_id:
+            self._check_allowed_roots(draft, profile, pins, layer_id, services, term_id)
         # The finding keeps its modifiers.
         updated_ann = existing.annotation.model_copy(update={"term_id": term_id})
         new_snap = snapshot(updated_ann, existing.evidence, doc, profile)
@@ -1417,7 +1419,8 @@ class EditingService:
         service = services[layer_id]
         if isinstance(service, Exception):
             raise service
-        if any(term_id in subtree(service, root) for root in pin.allowed_roots):
+        roots = finding_roots(service, pin.allowed_roots)
+        if roots is None or any(term_id in subtree(service, r) for r in roots):
             return
         classifier = self._classifier(draft, profile, pins, layer_id, services)
         if classifier is not None and classifier.kind(term_id) is not None:

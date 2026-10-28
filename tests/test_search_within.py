@@ -184,9 +184,26 @@ def test_search_api_roles_and_stored_within(api) -> None:  # type: ignore[no-unt
     assert set(roles.values()) <= {"modifier", "cohort"}
     event = app.state.repo.get_search_event(result["search_id"], project)
     assert event.within == ROOTS
-    plain = _search(session, key, query="Krampfanfall")
-    assert {c["role"] for c in plain["candidates"]} == {"finding"}
+    plain = _search(session, key, query="Seizure")
+    plain_roles = {c["term_id"]: c["role"] for c in plain["candidates"]}
+    assert plain_roles["HP:0001250"] == "finding"
     stored = app.state.repo.get_search_event(plain["search_id"], project)
+    # The pin's allowed roots (HP:0000118) and the modifier roots (#85).
+    assert stored.within == ["HP:0000118", *ROOTS]
+
+
+def test_finding_search_keeps_to_the_allowed_roots(api) -> None:  # type: ignore[no-untyped-def]
+    from sqlalchemy import update
+
+    from ontotator.storage.tables import ProjectOntologyRow
+
+    app, session, project, key = api
+    assert _search(session, key, query="HP:0000001")["candidates"] == []
+    with app.state.repo.db.transaction() as conn:
+        conn.execute(update(ProjectOntologyRow).values(allowed_roots=[]))
+    unrestricted = _search(session, key, query="HP:0000001")
+    assert [c["term_id"] for c in unrestricted["candidates"]] == ["HP:0000001"]
+    stored = app.state.repo.get_search_event(unrestricted["search_id"], project)
     assert stored.within is None
     assert "within" not in stored.model_dump()
 

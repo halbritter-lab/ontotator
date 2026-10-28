@@ -47,6 +47,7 @@ from ontotator.authz.policy import (
 )
 from ontotator.authz.scoped import ScopedRepository, project_not_found
 from ontotator.domain.errors import AccessDenied, DomainError
+from ontotator.domain.profiles import resolve_layer
 from ontotator.domain.review import ReviewTargetSet
 from ontotator.domain.scopes import build_scope, is_review_like
 from ontotator.domain.workspace import (
@@ -57,7 +58,10 @@ from ontotator.domain.workspace import (
     WorkspaceMode,
 )
 from ontotator.ontology.modifiers import (
+    MODIFIER_ROOTS,
     ModifierClassifier,
+    finding_roots,
+    modifier_layers,
     term_roles_for_services,
 )
 from ontotator.ontology.provenance import SearchRequest, SearchResult
@@ -385,6 +389,25 @@ def resolve_term_labels(
     return labels
 
 
+def finding_within(
+    repo: Repository, project_key: str, layer_id: str, service: OntologyService
+) -> list[str] | None:
+    """The roots an unrestricted finding search keeps to (#85).
+
+    The pin's allowed roots, plus the modifier roots on an ``hpo-phenotype``
+    layer (a modifier on its own is a valid finding there); None when the
+    pin restricts nothing, so the search offers only terms editing accepts.
+    """
+    profile = repo.get_task_profile(project_key)
+    pins = repo.project_pins(project_key)
+    pin = pins.get(resolve_layer(profile, layer_id).ontology_id)
+    roots = finding_roots(service, pin.allowed_roots) if pin is not None else None
+    if roots is None:
+        return None
+    modifiers = MODIFIER_ROOTS if layer_id in modifier_layers(profile, pins) else ()
+    return [*roots, *modifiers]
+
+
 def layer_classifier(
     repo: Repository, project_key: str, layer_id: str, service: OntologyService
 ) -> ModifierClassifier:
@@ -580,6 +603,13 @@ def search_ontology(
     ontology = layer_ontology(
         request, repo, ws_svc, req.workspace_key, req.layer_id, req.annotation_id
     )
+    if req.within is None:
+        within = finding_within(
+            repo, req.workspace_key.project_key, req.layer_id, ontology
+        )
+        if within is not None:
+            # Recorded on the search event too: these were the offered terms.
+            req = req.model_copy(update={"within": within})
 
     result = ontology.search(req)
     result.search_id = str(uuid4())

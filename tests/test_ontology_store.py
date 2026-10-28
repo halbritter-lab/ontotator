@@ -314,6 +314,54 @@ def test_uploading_earlier_translation_content_again_wins_after_restart(
     assert placed.read_bytes() == first
 
 
+def test_known_translation_content_under_a_new_name_is_renamed(
+    tmp_path: Path,
+) -> None:
+    """Other workers place the file under the name it was uploaded as last."""
+    db = _db(tmp_path)
+    store = _store(db)
+    store.add(Actor.cli(), "hp-de.babelon.tsv", DE.read_bytes())
+    renamed = store.add(Actor.cli(), "hp-de.synonyms.tsv", DE.read_bytes())
+
+    assert renamed.filename == "hp-de.synonyms.tsv"
+    assert [item.filename for item in store.list()] == ["hp-de.synonyms.tsv"]
+
+
+def test_check_roots_lists_pins_whose_roots_the_release_lacks(
+    tmp_path: Path,
+) -> None:
+    from typer.testing import CliRunner
+
+    from ontotator.cli import app
+
+    db = _db(tmp_path)
+    _store(db).add(Actor.cli(), "hp.json", HP.read_bytes())
+    _pin_hp(db)
+    assert _store(db).pins_missing_roots() == []
+    with db.transaction() as conn:
+        conn.execute(
+            ProjectOntologyRow.__table__.update().values(
+                allowed_roots=["HP:0000118", "HP:0000005"]
+            )
+        )
+    project = make_layered_package("single").manifest.package_id
+
+    assert _store(db).pins_missing_roots() == [(project, "hp", HP_SHA, ["HP:0000005"])]
+    listed = CliRunner().invoke(
+        app,
+        [
+            "admin",
+            "--database-url",
+            database_url_for(tmp_path / "workspace" / "editor.db"),
+            "ontologies",
+            "check-roots",
+        ],
+        env={"ONTOTATOR_DATA_DIR": str(db.data_dir)},
+    )
+    assert listed.exit_code == 0, listed.output
+    assert listed.output.splitlines() == [f"{project}  hp  {HP_SHA}  HP:0000005"]
+
+
 def test_a_worker_takes_up_a_translation_another_worker_stored(
     tmp_path: Path,
 ) -> None:
