@@ -326,9 +326,17 @@ export function conflictReasonText(details: unknown): string | null {
   return typeof reason === "string" ? CONFLICT_REASONS[reason] ?? null : null;
 }
 
-/** The task's banner for an answered report (R-26): "Your problem report was answered: Source fixed. You can continue." */
+/** The task's banner for an answered report (R-26): "Your problem report was answered by lead-0002: Source fixed. You can continue." */
 export function answerNotice(r: ProblemReportView, held: boolean): string {
   const last = historyItems(r).at(-1);
+  const lead = [...(r.events ?? [])].sort(byCreatedAt).filter(e => e.actor_label !== r.reporter_label).at(-1);
   const outcome = (r.state === "resolved" && r.resolution ? r.resolution : last?.quote ?? last?.sentence ?? reportStateFact(r)).trim().replace(/\.$/, "");
-  return `Your problem report was answered: ${outcome}.${held ? "" : " You can continue."}`;
+  return `Your problem report was answered${lead ? ` by ${lead.actor_label}` : ""}: ${outcome}.${held ? "" : " You can continue."}`;
+}
+
+/** The viewer's own report on a task whose answer the task page shows: an unread answer, else one closed by someone else; newest. */
+export function answeredReport(reports: ProblemReportView[]): ProblemReportView | null {
+  return reports.filter(r => r.reporter_label === r.viewer_label
+    && (r.answered || (r.state === "resolved" && r.state_changed_by_label !== r.reporter_label)))
+    .sort((a, b) => Date.parse(b.created_at ?? "") - Date.parse(a.created_at ?? ""))[0] ?? null;
 }
