@@ -38,6 +38,8 @@ describe("GroupCard", () => {
     expect(take.getAttribute("aria-pressed")).toBe("true");
     expect(result()).toContain("Absent");
     expect(result()).toContain("Not saved yet.");
+    // R-18: no space before a comma, and a full stop before the staged note.
+    expect(result()).toMatch(/Absent, \w+, \w+\. Not saved yet\./);
     expect(result()).toContain("Not taken: Axial hypotonia (Ali)");
     // The term is still open: Keep is unavailable with its reason.
     const button = screen.getByRole("button", { name: "Keep" });

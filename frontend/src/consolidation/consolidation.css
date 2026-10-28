@@ -343,9 +343,10 @@
   background: var(--accent-light);
 }
 
-/* Inline chips: an inline-block chip gets spaces around it in its accessible text ("Present , Patient", R-18). */
+/* Inline chips without side padding: an inline-block or padded chip reads "Present , Patient" in text or on screen (R-18). */
 .cons-result .axis-value {
   display: inline;
+  padding-inline: 0;
   white-space: nowrap;
 }
 

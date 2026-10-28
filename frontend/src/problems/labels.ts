@@ -60,7 +60,7 @@ export function reportStateBadge(r: ProblemReportView): { text: "Open" | "Closed
 /** A person as the viewer reads it inside a sentence: "you" (reporter view); in lead view "Ana Weber (ann-0004)" or "lead-0002 (you)". */
 function personInText(r: ProblemReportView, label: string, ref?: Ref): string {
   if (r.viewer_is_lead) return personLabel(label, label === r.viewer_label, ref);
-  return label === r.viewer_label ? "you" : label;
+  return label === r.viewer_label ? "you" : "the project lead"; // D1: annotators never see a lead's pseudonym
 }
 
 /** "Open" | "Closed by ann-0002, 19 Oct, 01:31" | "Withdrawn by you, …". */
@@ -97,7 +97,7 @@ export function yourTaskFact(r: ProblemReportView): { kind: TaskFactKind; text: 
   if (!newest) return { kind: "unknown-release", text: "Released (no record of who released it)", at: null };
   if (newest.active) {
     return own.length > 1
-      ? { kind: "repaused", text: `Paused again by ${newest.created_by_label}`, at: newest.created_at }
+      ? { kind: "repaused", text: "Paused again by the project lead", at: newest.created_at }
       : { kind: "paused", text: "Paused since", at: newest.created_at };
   }
   const at = newest.released_at ?? null;
@@ -109,7 +109,7 @@ export function yourTaskFact(r: ProblemReportView): { kind: TaskFactKind; text: 
     case "withdraw":
       return { kind: "withdrawn", text: "Resumed when you withdrew the report", at };
     case "resume":
-      return { kind: "resumed", text: newest.released_by_label === r.reporter_label || !newest.released_by_label ? "Resumed by you" : `Resumed by ${newest.released_by_label}`, at };
+      return { kind: "resumed", text: newest.released_by_label === r.reporter_label || !newest.released_by_label ? "Resumed by you" : "Resumed by the project lead", at };
     default:
       return { kind: "unknown-release", text: "Released (no record of who released it)", at };
   }
@@ -190,7 +190,7 @@ function eventSentence(r: ProblemReportView, e: ReportEventView, actor: string):
 export function historyItems(r: ProblemReportView): HistoryItem[] {
   const actorOf = (label: string, ref?: Ref): string => {
     if (r.viewer_is_lead) return personLabel(label, label === r.viewer_label, ref);
-    return label === r.reporter_label ? "You" : label;
+    return label === r.reporter_label ? "You" : "The project lead";
   };
   const created: HistoryItem = r.viewer_is_lead
     ? { key: "created", at: r.created_at ?? "", sentence: `${actorOf(r.reporter_label, r.reporter)} reported the problem. Task ${r.assignment_id} paused.` }
@@ -331,7 +331,8 @@ export function answerNotice(r: ProblemReportView, held: boolean): string {
   const last = historyItems(r).at(-1);
   const outcome = (r.state === "resolved" && r.resolution ? r.resolution : last?.quote ?? last?.sentence ?? reportStateFact(r)).trim().replace(/\.$/, "");
   // Annotators see others only as pseudonyms (D1), so the banner names the role, not the person.
-  return `Your problem report was answered by the project lead: ${outcome}.${held ? "" : " You can continue."}`;
+  const answer = outcome.startsWith("The project lead ") ? outcome : `Your problem report was answered by the project lead: ${outcome}`;
+  return `${answer}.${held ? "" : " You can continue."}`;
 }
 
 /** The viewer's own report on a task whose answer the task page shows: an unread answer, else one closed by someone else; newest. */
