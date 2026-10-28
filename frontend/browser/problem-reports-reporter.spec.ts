@@ -166,7 +166,7 @@ test("report, resume with a reason, lead sees it and closes, reporter sees Close
 
   // The reporter sees the lead's close the next time the dialog opens.
   dialog = await openReports(page, task);
-  await expect(fact(dialog, "Report")).toContainText(`Closed by ${s.labels.lead}`);
+  await expect(fact(dialog, "Report")).toContainText("Closed by the project lead");
   await expect(fact(dialog, "Report")).toContainText("Outcome: Fixed in the source text; no change needed.");
   await expect(fact(dialog, "Your task")).toContainText("Resumed by you");
   await expect(dialog.getByRole("button", { name: "Resume my task…" })).toHaveCount(0);
@@ -249,7 +249,7 @@ test("a lead releases the pause in another window: the open dialog and editor up
   await expect(dialog.locator(".problem-task-status")).toContainText("Your task: Paused");
   await refocus(page);
   await expect(dialog.locator(".problem-task-status")).toContainText("Your task: Active");
-  await expect(fact(dialog, "Your task")).toContainText(`Resumed by ${s.labels.lead}`);
+  await expect(fact(dialog, "Your task")).toContainText("Resumed by the project lead");
   await expect(dialog.getByRole("button", { name: "Resume my task…" })).toHaveCount(0);
   await expect(banner(page)).toHaveCount(0);
   await closeReports(page, task);
