@@ -90,6 +90,14 @@ def test_an_ontology_is_stored_once_by_hash(tmp_path: Path) -> None:
         assert list(conn.execute(select(StoredFileRow.sha256)).scalars()) == [HP_SHA]
 
 
+def test_the_uploading_worker_records_the_file_release(tmp_path: Path) -> None:
+    """Search history of this worker names the release, not "uploaded" (#83)."""
+    _item, service = _store(_db(tmp_path)).add_ontology(
+        Actor.cli(), "hp.json", HP.read_bytes()
+    )
+    assert service.ref.release == "2026-06-23"
+
+
 def test_a_file_that_is_no_ontology_is_refused(tmp_path: Path) -> None:
     db = _db(tmp_path)
     with pytest.raises(DomainError) as excinfo:

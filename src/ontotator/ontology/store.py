@@ -158,6 +158,8 @@ class OntologyStore:
                     language=None,
                 )
             self.registry.register_path(self.db.blobs.path(digest))
+            # The release the file states, as every other worker records it.
+            service.ref = OntologyRef(release=service.ontology.release, sha256=digest)
             self.registry.register_service(service)
         return known, service, created
 
