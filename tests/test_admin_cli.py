@@ -452,6 +452,22 @@ def test_ontologies_add_and_list(tmp_path: Path) -> None:
     assert "INVALID_ONTOLOGY" in refused.output
 
 
+def test_ontologies_add_checks_the_expected_sha256(tmp_path: Path) -> None:
+    import hashlib
+
+    hp = Path(__file__).parent / "fixtures" / "hp.json"
+    hp_sha = hashlib.sha256(hp.read_bytes()).hexdigest()
+
+    wrong = _admin(tmp_path, "ontologies", "add", str(hp), "--sha256", "0" * 64)
+    assert wrong.exit_code == 1
+    assert "ONTOLOGY_DIGEST_MISMATCH" in wrong.output
+    assert _admin(tmp_path, "ontologies", "list").output == ""
+
+    right = _admin(tmp_path, "ontologies", "add", str(hp), "--sha256", hp_sha.upper())
+    assert right.exit_code == 0, right.output
+    assert right.output.startswith(hp_sha)
+
+
 def test_cli_imports_plain_text(tmp_path: Path) -> None:
     from t1_fixtures import create_project
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import ipaddress
 import json
 import os
@@ -1177,16 +1178,33 @@ def ontologies_add(
             readable=True,
         ),
     ],
+    sha256: Annotated[
+        str | None,
+        typer.Option(
+            "--sha256",
+            help="The expected SHA-256 of the one file; a different file is refused.",
+        ),
+    ] = None,
 ) -> None:
     """Store files in the data volume; prints sha256, prefix, release and kind.
 
     Every file is checked first. Adding a stored file again changes nothing.
     The data volume is ONTOTATOR_DATA_DIR (default ./data).
     """
+    if sha256 is not None and len(files) != 1:
+        raise typer.BadParameter("--sha256 checks exactly one file.")
     with _open_database(ctx) as db:
         store = _ontology_store(db)
         for path in files:
-            _print_ontology_file(store.add(Actor.cli(), path.name, path.read_bytes()))
+            data = path.read_bytes()
+            if sha256 is not None:
+                actual = hashlib.sha256(data).hexdigest()
+                if actual != sha256.strip().lower():
+                    raise DomainError(
+                        "ONTOLOGY_DIGEST_MISMATCH",
+                        f"'{path.name}' has SHA-256 {actual}, expected {sha256}.",
+                    )
+            _print_ontology_file(store.add(Actor.cli(), path.name, data))
 
 
 @ontologies_app.command("list")
