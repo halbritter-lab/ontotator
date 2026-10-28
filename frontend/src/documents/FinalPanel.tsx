@@ -17,7 +17,7 @@ import { refKey } from "../variants/versionState";
 import { failureOf, keepRequest, selectionPayload, selectRequest, type FinalConfirmFailure, type FinalConfirmRequest } from "./FinalConfirm";
 import {
   acceptQuestion, AGREEMENT_EXPLANATION, agreementText, allMatchText, remainingText, changedPassagesText, compareSummary, consolidateHint,
-  consolidationInputs, decidedLine, decisionKind, keepLabel, listedSubmissions, nextFinalDecision, nextOtherDecision, onlyHereText, panelMode, panelStep,
+  consolidationInputs, decidedLine, decisionKind, earlyFinal, keepLabel, listedSubmissions, nextFinalDecision, nextOtherDecision, onlyHereText, panelMode, panelStep,
   personName, savedText, submissionLine, submissionName, submissionWhen, textChangedLine, type NextRow,
 } from "./finalPanelText";
 import { versionName } from "./labels";
@@ -176,8 +176,10 @@ export function DecisionBlock(props: DecisionBlockProps): JSX.Element | null {
   const headingRef = useRef<HTMLHeadingElement>(null);
   // R-1: a running consolidation offers no second one, so the optional block would stay empty.
   const consolidable = state.data && row?.stages?.annotation.state !== "consolidating" ? consolidationDocuments(listedSubmissions(state.data.panel.submissions ?? [])).length > 0 : false;
-  const optionalOnly = props.optional && !noneLeft && !success && !failure;
-  if (props.optional && !consolidable && !noneLeft && !success && !failure) return null;
+  // A submitted annotation next to open ones (issue 123): the whole decision; the card warns about the open work.
+  const optional = props.optional && !(row && earlyFinal(row));
+  const optionalOnly = optional && !noneLeft && !success && !failure;
+  if (optional && !consolidable && !noneLeft && !success && !failure) return null;
 
   let content: ReactNode;
   if (noneLeft) {

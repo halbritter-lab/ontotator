@@ -66,6 +66,13 @@ describe("Finalization", () => {
       expect(finalizationState(cardRow({ final: cell(state, "waiting") }), now)).toEqual({ state: "waiting", tone: "later" });
     }
   });
+  it("one of two submitted with the other open can be accepted now (issue 123)", () => {
+    const work = [annotateItem({ assignment_id: 1, status: "submitted" }), annotateItem({ assignment_id: 2, status: "in_progress" })];
+    expect(finalizationState(cardRow({ final: cell("after_annotation", "waiting") }, { work }), now)).toEqual({ state: "can be accepted", tone: "now" });
+    // Nothing submitted yet: still waiting.
+    const open = [annotateItem({ assignment_id: 3, status: "in_progress" })];
+    expect(finalizationState(cardRow({ final: cell("after_annotation", "waiting") }, { work: open }), now)).toEqual({ state: "waiting", tone: "later" });
+  });
   it("2 of 2 submitted is done and finalization is ready to compare", () => {
     const target = cardRow({ annotation: cell("submitted", "done", { submitted: 2, total: 2 }), final: cell("choose", "decision", { submitted: 2 }) });
     expect(annotationState(target).tone).toBe("done");

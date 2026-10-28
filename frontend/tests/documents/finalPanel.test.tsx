@@ -9,7 +9,7 @@ import { notifyFinalSelectionChanged } from "../../src/variants/finalSelectionSt
 import { refKey } from "../../src/variants/versionState";
 import { guidelineListing, guidelineSummary } from "../projectFixtures";
 import { assignment } from "../assignmentFixtures";
-import { agreement, bar, final, finalPanel, group, item, page, panelSubmission, round, rowKey, stageCell, stages, stepOf, translationReview, version } from "./fixtures";
+import { agreement, bar, final, finalPanel, group, item, page, panelSubmission, round, rowKey, stageCell, stages, stepOf, translationReview, version, work } from "./fixtures";
 import { acceptPanel, ana, anaSubmission, chooseRow, comparePanel, luc, panelRowSubmissions, reviewRow, tom, tomSubmission } from "./panelFixtures";
 
 const OWN_REASON = "In this project the consolidator of a text may not be one of its annotators. Another lead must choose this result.";
@@ -270,6 +270,19 @@ describe("optional (a row without a final decision step)", () => {
     await waitFor(() => expect(api.finalPanel).toHaveBeenCalled());
     await act(async () => { await Promise.resolve(); });
     expect(screen.queryByRole("region", { name: "Final result" })).toBeNull();
+  });
+
+  it("offers Accept result with one annotation submitted and another still open (issue 123: the limit is an upper bound)", async () => {
+    panels[rowKey("case-134", "de")] = acceptPanel("case-134", "de");
+    const early = chooseRow("case-134", "de", { next_step: null, steps: [], categories: [], missing_final: { counts: false, reason: "work_open" }, work: [
+      work({ assignment_id: 1, document_id: "case-134-de", author_label: "ann-0003", status: "submitted" }),
+      work({ assignment_id: 2, document_id: "case-134-de", author_label: "ann-0004", status: "in_progress" }),
+    ] });
+    renderPanel("case-134:de", page([group("case-134", [early])]), { optional: true });
+    const region = await screen.findByRole("region", { name: "Final result" });
+    expect(await within(region).findByText("Accept Ana Weber’s annotation as the result?")).toBeTruthy();
+    fireEvent.click(within(region).getByRole("button", { name: "Accept result" }));
+    expect(api.selectFinalResult).toHaveBeenCalledWith("p", expect.objectContaining({ submission_id: "case-134-s1", expected_revision: 0 }));
   });
 
   it("renders nothing when one of two submissions is not eligible (the en-source rule)", async () => {

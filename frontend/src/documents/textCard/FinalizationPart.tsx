@@ -1,12 +1,27 @@
 import { useId, useState, type ReactNode } from "react";
 import { AssignmentActions } from "../../admin/AssignmentActions";
 import type { AssignmentView, DocumentRowView } from "../../api/client";
-import { Button } from "../../ui";
+import { plural } from "../../app/labels";
+import { Button, InlineMessage } from "../../ui";
 import type { ProjectDocumentsQuery, Route } from "../../app/router";
+import { earlyFinal, openAnnotateWork } from "../finalPanelText";
 import { RouteLink } from "../RowCells";
 import { shortName } from "../stageLabels";
 import type { TextVersionsTools } from "../TextVersions";
 import { finalizationState, textViewRoute } from "./cardModel";
+
+type WorkItem = DocumentRowView["work"][number];
+
+/** The person of a work item: "you", the short name, else the pseudonym label. */
+function workName(item: WorkItem): string {
+  if (item.is_me) return "you";
+  return item.person ? shortName(item.person) : item.author_label;
+}
+
+function nameOf(items: readonly WorkItem[], assignmentId: number): string {
+  const item = items.find(entry => entry.assignment_id === assignmentId);
+  return item ? workName(item) : String(assignmentId);
+}
 
 /**
  * Finalization part of the text card: what happens next, the decision block, the final result. While a consolidation
@@ -38,12 +53,24 @@ export function FinalizationPart({ row, projectKey, query, decision, onNavigate,
   const openable = progress && consolidators.length > 0 && consolidators.every(person => person.is_me) ? progress : null;
   const removable = consolidating && canManage ? row.work.filter(item => item.task === "review" && item.status !== "submitted" && item.moved_to_version == null)
     .flatMap(item => tools?.assignments.find(entry => entry.id === item.assignment_id && !entry.revoked_at) ?? []) : [];
+  // "Annotators per text" is an upper limit (issue 123): with one annotation submitted the lead may decide now; the
+  // open annotations are a warning, each with "Remove assignment…", or are left to run.
+  const early = earlyFinal(row);
+  const open = early ? openAnnotateWork(row) : [];
+  const openAssignments = early && canManage ? open.flatMap(item => tools?.assignments.find(entry => entry.id === item.assignment_id && !entry.revoked_at) ?? []) : [];
   const [revoking, setRevoking] = useState<AssignmentView | null>(null);
   return <section className="text-card-part" aria-labelledby={`${id}-title`}>
     <h3 id={`${id}-title`} className="text-card-part-title">Finalization</h3>
-    {waiting && <p className="text-card-muted">
-      {`Starts when all ${target ? `${target} ` : ""}annotations are submitted: compare the results, consolidate the differences, then accept the result.`}
+    {waiting && !early && <p className="text-card-muted">
+      {`Starts once an annotation is submitted${target && target > 1 ? ` (up to ${target} per text, fewer is fine)` : ""}: compare the results, consolidate the differences, then accept the result.`}
     </p>}
+    {early && <InlineMessage tone="warning" live={false}>
+      <p>{`${plural(open.length, "annotation")} still open: ${open.map(workName).join(", ")}. You can accept a result now; open work stays assigned unless you remove it.`}</p>
+      {openAssignments.length > 0 && <div className="text-card-actions">
+        {openAssignments.map(assignment => <Button key={assignment.id} size="sm" variant="quiet" aria-label={`Remove assignment…, ${nameOf(open, assignment.id)}`}
+          onClick={() => setRevoking(assignment)}>Remove assignment…</Button>)}
+      </div>}
+    </InlineMessage>}
     {consolidators.length > 0 && <p>{`Consolidating with ${consolidators.map(person => (person.is_me ? "you" : shortName(person))).join(", ")}${progress ? ` · ${progress.open} of ${progress.total} groups open` : ""}`}</p>}
     {(openable || removable.length > 0) && <div className="text-card-actions">
       {openable && <RouteLink route={{ name: "projectConsolidation", key: projectKey, roundId: openable.round_id, ...(Object.keys(query).length ? { documents: query } : {}) }}

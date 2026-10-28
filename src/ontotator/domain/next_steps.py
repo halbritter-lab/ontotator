@@ -124,7 +124,7 @@ class StepFacts:
     # Non-revoked annotate assignments, minimum over the row's target versions.
     annotation_assignments: int
     open_annotations: int
-    # missing_final_counts(..., per_text=per_text), restricted to Annotate on.
+    # missing_final_counts(...): at least one submission, nothing open; Annotate on only.
     missing_final: bool
     has_final: bool
     check_failed: bool  # a newest version is automatic_check_failed
@@ -192,8 +192,12 @@ def _may_annotate(facts: StepFacts) -> bool:
 
 
 def _final_ready(facts: StepFacts) -> bool:
-    """Rule 5: missing-final rule and at least "Annotations per text" assigned."""
-    return facts.missing_final and facts.annotation_assignments >= facts.per_text
+    """Rule 5: the missing-final rule (at least one submission, nothing open).
+
+    "Annotations per text" is an upper limit, not a quorum (issue #123): fewer
+    assignments than the limit never hold the final result back.
+    """
+    return facts.missing_final
 
 
 def row_stage(facts: StepFacts) -> Stage:
@@ -288,7 +292,7 @@ def derive_steps(facts: StepFacts, *, row: object = None) -> list[Step]:
                 "translation_not_accepted", "translation_review", "accept_or_review"
             )
         )
-    # 5: all annotation work submitted, enough annotations, no final yet.
+    # 5: all annotation work submitted, at least one submission, no final yet.
     if facts.annotate and _final_ready(facts):
         steps.append(_decision("choose_final", "final", "choose_final"))
     # 6: translation needs a reviewer (D4: a failed check carries a badge).
