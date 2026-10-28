@@ -19,14 +19,17 @@ COPY src/ ./src/
 # Replace committed assets, so a renamed JS bundle cannot leave stale files.
 RUN rm -rf src/ontotator/web
 COPY --from=web /web/dist/ ./src/ontotator/web/
-# A credential helper reads the ephemeral BuildKit secret. The credential never
-# enters the dependency URL, lockfile, image history or a persisted git config.
-RUN --mount=type=secret,id=github_token,required=true \
+# The optional github_token BuildKit secret is read by a credential helper only
+# when it is non-empty; otherwise GitHub is fetched anonymously. The credential
+# never enters the dependency URL, lockfile, image history or a persisted config.
+RUN --mount=type=secret,id=github_token,required=false \
     --mount=type=cache,target=/root/.cache/uv \
-    GIT_CONFIG_COUNT=1 \
-    GIT_CONFIG_KEY_0=credential.helper \
-    GIT_CONFIG_VALUE_0='!f() { if [ "$1" = get ]; then printf "username=x-access-token\npassword="; cat /run/secrets/github_token; printf "\n"; fi; }; f' \
-    uv sync --frozen --no-dev --no-editable --compile-bytecode
+    if [ -s /run/secrets/github_token ]; then \
+        export GIT_CONFIG_COUNT=1 \
+            GIT_CONFIG_KEY_0=credential.helper \
+            GIT_CONFIG_VALUE_0='!f() { if [ "$1" = get ]; then printf "username=x-access-token\npassword="; cat /run/secrets/github_token; printf "\n"; fi; }; f'; \
+    fi \
+    && uv sync --frozen --no-dev --no-editable --compile-bytecode
 
 FROM python:3.12-slim-bookworm@sha256:34386ef0cb081344d7ec1c103ba398e6e9f64e9ab3a1509accc92a4e24a07258 AS runtime
 RUN apt-get update \

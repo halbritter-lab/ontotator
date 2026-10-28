@@ -24,12 +24,13 @@ The quickest way to try Ontotator is the disposable development stack. It runs P
 ### Prerequisites
 
 - Docker with Compose v2.
-- A GitHub token file. The Docker build installs the `ontospan` Python dependency from GitHub and requires a BuildKit secret named `github_token`: a token that can read the `ontospan` repository.
+
+The Docker build installs the `ontospan` Python dependency from GitHub. A GitHub token is optional. The development Compose file passes the file named by `GITHUB_TOKEN_FILE` as the `github_token` build secret; an empty file means an anonymous fetch.
 
 ### Start the stack
 
 ```bash
-export GITHUB_TOKEN_FILE=/absolute/path/to/github-token
+export GITHUB_TOKEN_FILE=/absolute/path/to/github-token-or-empty-file
 docker compose -f docker-compose.dev.yml up -d --build --wait
 ```
 
