@@ -259,9 +259,10 @@ describe("Unconfirmed values section", () => {
     expect(first.getByText("Hypotonia")).toBeDefined();
     expect(first.queryByText("HP:h")).toBeNull();
     expect(first.getByText("\u201cthe quoted mark\u201d")).toBeDefined();
-    // Values as chips; the axis label is read before each.
+    // Values as chips; the axis label is shown before each.
     expect(Array.from(items[0].querySelectorAll(".submit-item__value")).map(value => value.textContent)).toEqual(["Assertion: Present", "Experiencer: Patient"]);
-    expect(items[0].querySelectorAll(".submit-item__values .visually-hidden")).toHaveLength(2);
+    expect(Array.from(items[0].querySelectorAll(".submit-item__values .submit-item__axis")).map(label => label.textContent)).toEqual(["Assertion: ", "Experiencer: "]);
+    expect(items[0].querySelectorAll(".submit-item__values .visually-hidden")).toHaveLength(0);
     expect(items[0].querySelectorAll(".submit-item__values .axis-value")).toHaveLength(2);
     expect(first.getByRole("button", { name: "Confirm as shown: Hypotonia" }).className).toContain("btn-secondary");
     expect(first.getByRole("button", { name: "Go to Hypotonia" }).className).toContain("btn-secondary");

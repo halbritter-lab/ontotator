@@ -27,6 +27,11 @@ export function summaryText(findings: number, open: number): string {
   return `${counted}. ${open === 1 ? "1 thing is" : `${open} things are`} still open:`;
 }
 
+/** What the dialog's summary counts as open; the header's "Finish & submit (N open)" uses the same number. */
+export function submitOpenCount(items: readonly OpenItem[], unconfirmed: readonly UnconfirmedRow[]): number {
+  return dialogItems(items).length + unconfirmed.length + items.filter(item => MODIFIER_WARNING_KINDS.includes(item.kind)).length;
+}
+
 /** Label of the primary button: acknowledgeable warnings are submitted only with an explicit "Submit with N warnings". */
 export function submitLabel(warnings: number): string {
   return warnings > 0 ? `Submit with ${plural(warnings, "warning")}` : "Submit text";
@@ -80,7 +85,7 @@ export function SubmitCaseDialog({
   const warnings = (requireChosenAxes ? 0 : unconfirmed.length) + modifierWarnings.length;
   const blockedReason = readOnly ? "This text is read-only."
     : submitBlockedReason(items, requireChosenAxes ? valueCount(unconfirmed) : 0);
-  const openCount = items.length + unconfirmed.length + modifierWarnings.length;
+  const openCount = submitOpenCount(allItems, unconfirmed);
   let listed = 0;
   const groups = GROUPS.map(([kind, heading]) => {
     const rows = items.filter(item => item.kind === kind).slice(0, Math.max(0, LISTED_ITEMS - listed));
