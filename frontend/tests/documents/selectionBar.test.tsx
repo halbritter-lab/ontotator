@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { useState } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { api, ApiError, type BulkPreview, type BulkResult, type ConsequencesView, type DocumentRowFilters, type SelectionSummary } from "../../src/api/client";
-import { SelectionBar, type SelectionBarProps } from "../../src/documents/SelectionBar";
+import { assignButtonText, SelectionBar, type SelectionBarProps } from "../../src/documents/SelectionBar";
 import { Toast, useToast } from "../../src/ui";
 
 type LanguagePreview = BulkPreview["languages"][number];
@@ -80,6 +80,24 @@ it("keeps three stable actions; the plan presets live in Plan… (M-1)", () => {
   render(<Harness initial={["case-0101:de", "case-0102:de"]} />);
   expect(within(bar()).getAllByRole("button").map(button => button.textContent)).toEqual(["Assign…", "Plan…", "Clear selection"]);
   expect(bar().textContent).not.toMatch(/\bReview\b|Annotation review|Independent annotation|Translation review and annotation/);
+});
+
+it("names what Assign assigns once the summary is there (issue 129, U3)", async () => {
+  const onAssign = vi.fn();
+  render(<Harness onAssign={onAssign} />);
+  const named = await within(bar()).findByRole("button", { name: "Assign review…" });
+  expect(named.className).toContain("btn-primary");
+  fireEvent.click(named);
+  expect(onAssign).toHaveBeenCalledOnce();
+});
+
+it("assignButtonText: review, annotation, both, or plain Assign…", () => {
+  expect(assignButtonText(null)).toBe("Assign…");
+  expect(assignButtonText({ steps: [] })).toBe("Assign…");
+  expect(assignButtonText(summary())).toBe("Assign review…");
+  expect(assignButtonText({ steps: [{ task: "annotate", language: "de", versions: 2, cases: 2 }] })).toBe("Assign annotation…");
+  expect(assignButtonText({ steps: [{ task: "annotate", language: "de", versions: 2, cases: 2 }, { task: "translation_review", language: "fr", versions: 1, cases: 1 }] }))
+    .toBe("Assign review or annotation…");
 });
 
 it("sends rows to selection-summary", async () => {

@@ -181,7 +181,10 @@ def test_annotate_without_review_on_unaccepted_translation_is_a_decision():
     )
 
 
-def test_choose_final_waits_for_annotations_per_text():
+def test_choose_final_does_not_wait_for_annotations_per_text():
+    # Issue #123: "Annotations per text" is an upper limit. One of two
+    # planned annotations submitted, nothing open: the lead may decide now
+    # (choose_final first) or still assign the second annotator.
     kw = dict(
         annotate=True,
         is_source=True,
@@ -189,12 +192,15 @@ def test_choose_final_waits_for_annotations_per_text():
         per_text=2,
         annotation_assignments=1,
     )
-    assert (
-        codes(**kw, missing_final=True)[0] == "assign_annotation"
-    )  # 1 of 2 submitted is not final-ready
-    assert (
-        codes(**{**kw, "annotation_assignments": 2}, missing_final=True)[0]
-        == "choose_final"
+    assert codes(**kw, missing_final=True)[:2] == ["choose_final", "assign_annotation"]
+    assert row_stage(facts(**kw, missing_final=True)) == "final"
+    assert codes(**{**kw, "annotation_assignments": 2}, missing_final=True) == [
+        "choose_final"
+    ]
+    # Nothing assigned on the target (only old-version work waiting for a
+    # carry, which the missing-final rule counts): not ready.
+    assert "choose_final" not in codes(
+        **{**kw, "annotation_assignments": 0}, missing_final=True
     )
 
 
@@ -636,9 +642,8 @@ def test_pending_old_people_only_affects_rule_8():
         assert [s.code for s in derive_steps(base) if s.code not in drop] == [
             s.code for s in derive_steps(pending) if s.code not in drop
         ]
-    # choose_final (rule 5) stays on annotation_assignments: per text 2 with
-    # one assignment is not ready even with a pending person (Tom's v1
-    # submission counts for the missing-final rule).
+    # choose_final (rule 5) needs no quorum (issue #123): per text 2 with one
+    # assignment is ready next to Tom's pending carry.
     f = _annotating(
         missing_final=True,
         annotation_assignments=1,
@@ -646,7 +651,7 @@ def test_pending_old_people_only_affects_rule_8():
         old_submitted=(OldItem(TOM, 1, submission_id="s-tom"),),
         pending_old_people=1,
     )
-    assert [s.code for s in derive_steps(f)] == ["carry_text_change"]
+    assert [s.code for s in derive_steps(f)] == ["carry_text_change", "choose_final"]
 
 
 def test_rule_9_finishing_is_in_progress():

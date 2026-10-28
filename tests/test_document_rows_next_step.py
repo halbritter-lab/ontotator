@@ -159,7 +159,9 @@ def test_annotate_only_row_with_unaccepted_translation_stays_in_plan(env):
     assert group(result, "c1")["not_in_plan_languages"] == ["fr"]
 
 
-def test_missing_final_respects_annotations_per_text(env):
+def test_annotations_per_text_is_an_upper_limit_for_the_final(env):
+    """Issue #123: one of two planned annotations submitted and nothing open:
+    the lead may accept the result now; a second annotator stays assignable."""
     with env.db.transaction() as conn:
         conn.execute(
             update(ProjectRow)
@@ -169,14 +171,29 @@ def test_missing_final_respects_annotations_per_text(env):
     aid = assign(env, doc("c1", "en"), "anno", "annotate")
     submit(env, aid, "s-c1-en")
     en = rows(env)[("c1", "en")]
-    step = en["next_step"]
-    assert (step["code"], step["assigned"], step["target"]) == (
-        "assign_annotation",
-        1,
-        2,
-    )
-    assert en["missing_final"]["counts"] is False
-    assert not any(i["code"] == "MISSING_FINAL" for i in en["issues"])
+    assert en["next_step"]["code"] == "choose_final"
+    assign_step = next(s for s in en["steps"] if s["code"] == "assign_annotation")
+    assert (assign_step["assigned"], assign_step["target"]) == (1, 2)
+    assert en["missing_final"]["counts"] is True
+    assert any(i["code"] == "MISSING_FINAL" for i in en["issues"])
+    assert en["stages"]["final"]["state"] == "choose"
+
+
+def test_open_annotation_keeps_the_final_optional(env):
+    """With a second annotation still open the row is no final decision yet
+    (the text card offers the result with a warning instead)."""
+    with env.db.transaction() as conn:
+        conn.execute(
+            update(ProjectRow)
+            .where(ProjectRow.project_key == "proj")
+            .values(annotations_per_text=2)
+        )
+    submit(env, assign(env, doc("c1", "en"), "anno", "annotate"), "s-c1-en")
+    assign(env, doc("c1", "en"), "anno2", "annotate")
+    en = rows(env)[("c1", "en")]
+    assert "choose_final" not in {s["code"] for s in en["steps"]}
+    assert en["missing_final"] == {"counts": False, "reason": "work_open"}
+    assert en["stages"]["final"]["state"] == "after_annotation"
 
 
 def test_bar_segments_equal_row_step_kinds(env):

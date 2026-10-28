@@ -7,6 +7,9 @@
 .assign-field .form-group { margin-bottom: 0; flex: 1 1 16rem; }
 /* A static value in plain text: a border would make it look like a button (#47 A-21). */
 .assign-step { font-weight: var(--weight-strong); }
+/* The texts a batch assigns (issue 129, U4): one running line, "Show all" at its end. */
+.assign-texts { overflow-wrap: anywhere; }
+.assign-texts .btn { margin-inline-start: var(--space-2); vertical-align: baseline; }
 
 /* Members table: Person, Reads, Open tasks (+ Gets). */
 .assign-members { width: 100%; border-collapse: collapse; font-size: var(--size-sm); }

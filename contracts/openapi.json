@@ -6133,7 +6133,7 @@
           "projects"
         ],
         "summary": "Member Candidates",
-        "description": "Active users outside the project matching ``q`` (three characters at least).\n\nA lead finds people who share a project with them by part of the name or\nusername, and anybody else only by the exact username or e-mail, so the\nsearch does not browse the installation's user list. System\nadministrators are never offered (they manage without membership); an\nadministrator caller searches everyone. Ten results at most.",
+        "description": "Active users outside the project matching ``q`` (three characters at least).\n\nA lead finds people who share a project with them by part of the name or\nusername, and anybody else only by the exact username or e-mail, so the\nsearch does not browse the installation's user list. System\nadministrators are never offered (they manage without membership); an\nadministrator caller searches everyone. Ten results at most; an exact\nusername or e-mail comes first, so a typed-out username still shows its\nperson (display name and languages) as a confirmation.",
         "operationId": "member_candidates_api_v1_projects__key__member_candidates_get",
         "parameters": [
           {
@@ -14843,6 +14843,13 @@
           "display_name": {
             "type": "string",
             "title": "Display Name"
+          },
+          "languages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Languages"
           }
         },
         "type": "object",

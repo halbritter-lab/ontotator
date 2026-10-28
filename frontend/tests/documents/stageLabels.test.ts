@@ -61,7 +61,7 @@ describe("Annotation cell", () => {
   });
   it("unassigned", () => {
     expect(text("annotation", cell("unassigned", "todo"))).toEqual(["○ Unassigned", ""]);
-    expect(text("annotation", cell("unassigned", "todo", { assigned: 0, target: 2 }))).toEqual(["○ No annotator yet · max 2", ""]);
+    expect(text("annotation", cell("unassigned", "todo", { assigned: 0, target: 2 }))).toEqual(["○ Unassigned", ""]);
   });
   it("partly_assigned", () => expect(text("annotation", cell("partly_assigned", "todo", { people: [tom], assigned: 1, target: 2 }))).toEqual(["○ 1 annotator · max 2", "Tom Reis working"]));
   it("in_progress", () => {

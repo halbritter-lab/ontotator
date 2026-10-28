@@ -132,7 +132,7 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   LAYER_NOT_CHECKED: "Check each required layer before submitting.",
   LOGIN_FAILED: "Username or password is wrong, or the account is temporarily locked.",
   MEMBER_HAS_ASSIGNMENTS: "This member has unfinished assignments. Confirm their revocation before changing roles.",
-  MISSING_EVIDENCE: "Add the required evidence before submitting.",
+  MISSING_EVIDENCE: "This annotation type requires a text span. Select supporting text first.",
   MODE_NOT_ALLOWED: "Your project roles do not allow this working mode.",
   NOT_AN_ACTIVE_ADMIN: "This operation needs an active system administrator.",
   NOT_A_MEMBER: "This user is not a member of the project.",
