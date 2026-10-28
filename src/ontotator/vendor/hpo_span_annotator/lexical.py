@@ -1,25 +1,18 @@
-"""Char n-gram TF-IDF over HPO names. The scored route that runs no encoder.
+"""Char n-gram TF-IDF over ontology names: the scored, model-free search route.
 
-This exists because of a circularity problem, not because a second search box is
-nice to have. Phentrieve is the search aid inside this tool *and* the system the
-resulting benchmark scores, so a gold whose terms were only ever reachable
-through its encoder would score that encoder near 1.0 by construction. `exact`,
-`id` and `browse` avoid that but are narrow: they need the annotator to type a
-string that matches, or to already know roughly where in the ontology to look.
+`exact`, `id` and `browse` are narrow: they need the annotator to type a string
+that matches, or to already know roughly where in the ontology to look.
+Character n-grams add a *scored* route that answers a phrase the annotator has
+not matched exactly, without any embedding model or external service.
 
-Character n-grams give a *scored* route that shares nothing with the evaluated
-stack. It is checked, not assumed: phentrieve ships only `DenseRetriever` over
-ChromaDB, with no BM25, TF-IDF or fusion anywhere in its retrieval package, so
-there is no shared component. (The sibling ICD tool could not make this claim —
-there char-TFIDF was a component of the RRF retriever of record, so a "lexical"
-hit was not clean however lexical it looked.)
+Adapted from hpo-span-annotator (MIT); see THIRD_PARTY_NOTICES.md.
 
 ## What it is and is not good at
 
 It matches surface form. Morphological variants, word order, partial phrases and
 typos land; `low muscle tone` returns Hypotonia at 1.00. Paraphrase with no
 shared characters does not: `cannot hear well` returns nothing useful. It is an
-addition to the clean routes, never a replacement for the dense one.
+addition to the exact, id and browse routes, not a semantic search.
 
 ## Translations, and why coverage is the whole story
 
@@ -47,8 +40,8 @@ module's loader indexing untranslated English strings as French. The second
 reported German highest at 65.6%, measured only on terms carrying two or more
 German names so that one could be held out -- 311 terms, 1.6% of HPO, and zero
 terms for Spanish, so the best-covered language was never measured at all. A
-benchmark that can only see the well-covered corner of a language will always say
-coverage does not matter.
+measurement that can only see the well-covered corner of a language will always
+say coverage does not matter.
 
 These numbers come from HPO's own names, not clinical text. They set a direction
 and not a conclusion.
@@ -143,8 +136,7 @@ class LexicalIndex:
     """TF-IDF over every HPO name, one row per string.
 
     One row per *string* rather than per term, scored by the max over a term's
-    strings — the same arrangement the dense index uses, and for the same reason:
-    concatenating a term's ten names into one document makes every one of them a
+    strings, because concatenating a term's ten names into one document makes every one of them a
     worse match for itself.
     """
 

@@ -4,7 +4,7 @@ This guide describes the image and Compose files in this repository. Commands ru
 
 ## Deployment boundary
 
-`docker-compose.yml` provides PostgreSQL (`ontotator_postgres`), a one-shot `migrate` service and the app (`ontotator_app`); the development stack names them `postgres` and `app`. TLS, DNS, host provisioning and the reverse proxy belong to the host. Like Phentrieve, the stack runs behind Nginx Proxy Manager (NPM): `ontotator_app` joins NPM's existing external Docker network (`NPM_SHARED_NETWORK_NAME`, for example `npm_default`), so NPM forwards to `http://ontotator_app:8000`. The prefixed names avoid clashes on that shared network: NPM itself names its service `app`, and a plain `postgres` host could resolve to another stack's database. App has **no published host port**. PostgreSQL is only on the internal backend network. Compose does not create the NPM network; it must exist before `up`.
+`docker-compose.yml` provides PostgreSQL (`ontotator_postgres`), a one-shot `migrate` service and the app (`ontotator_app`); the development stack names them `postgres` and `app`. TLS, DNS, host provisioning and the reverse proxy belong to the host. The stack is designed to run behind Nginx Proxy Manager (NPM), possibly shared with other stacks: `ontotator_app` joins NPM's existing external Docker network (`NPM_SHARED_NETWORK_NAME`, for example `npm_default`), so NPM forwards to `http://ontotator_app:8000`. The prefixed names avoid clashes on that shared network: NPM itself names its service `app`, and a plain `postgres` host could resolve to another stack's database. App has **no published host port**. PostgreSQL is only on the internal backend network. Compose does not create the NPM network; it must exist before `up`.
 
 Services use read-only roots, writable data volumes and bounded tmpfs, dropped capabilities, `no-new-privileges`, rotated logs and resource limits. The image runs as UID/GID `1001:1001` with tini as PID 1. PostgreSQL runs as `70:70`. App and PostgreSQL restart unless stopped; migrations are one-shot. Connect PostgreSQL directly or use session-mode pooling: servers hold a PostgreSQL advisory runtime lease, which transaction-mode pooling would break.
 
@@ -51,7 +51,7 @@ CI builds the image on pull requests (`.github/workflows/docker.yml`) and, on a 
 
 ## Configuration and secrets
 
-As for Phentrieve, copy `.env.docker.template` to `.env.docker`, link it as `.env` (`ln -sf .env.docker .env`, Compose reads `.env`) and set the verified image, exact HTTPS public origin, NPM network name and NPM's fixed IP. `.env.docker` holds private deployment configuration; passwords belong in separate files. Production secrets use the relevant `*_FILE` settings. App gets only its database password and initial admin hash. The schema owner's URL/password are available only to `migrate`; the bootstrap role is only for PostgreSQL initialization.
+Copy `.env.docker.template` to `.env.docker`, link it as `.env` (`ln -sf .env.docker .env`, Compose reads `.env`) and set the verified image, exact HTTPS public origin, NPM network name and NPM's fixed IP. `.env.docker` holds private deployment configuration; passwords belong in separate files. Production secrets use the relevant `*_FILE` settings. App gets only its database password and initial admin hash. The schema owner's URL/password are available only to `migrate`; the bootstrap role is only for PostgreSQL initialization.
 
 On the Linux host, generate three independent 64-character hexadecimal passwords, and copy the same role password into each consuming directory:
 
@@ -291,7 +291,7 @@ Recovery audits operator/reason and ends all sessions for that administrator. Co
 
 ## Reverse proxy settings
 
-Set `ONTOTATOR_PUBLIC_ORIGIN` to the exact browser-facing HTTPS origin, for example `https://editor.example.org` (include a nondefault port if used). Set `ONTOTATOR_TRUSTED_PROXIES` to NPM's exact IP on the shared network, never `*` or a subnet: Phentrieve's containers share that network and could otherwise set `X-Forwarded-For` themselves. Docker assigns container IPs dynamically, so give NPM a fixed one in the NPM stack's Compose file. The network needs an explicit subnet for that; changing the subnet of an existing network means recreating it, which briefly disconnects every stack on it (reconnect them with `docker compose up -d`):
+Set `ONTOTATOR_PUBLIC_ORIGIN` to the exact browser-facing HTTPS origin, for example `https://editor.example.org` (include a nondefault port if used). Set `ONTOTATOR_TRUSTED_PROXIES` to NPM's exact IP on the shared network, never `*` or a subnet: other containers on that network could otherwise set `X-Forwarded-For` themselves. Docker assigns container IPs dynamically, so give NPM a fixed one in the NPM stack's Compose file. The network needs an explicit subnet for that; changing the subnet of an existing network means recreating it, which briefly disconnects every stack on it (reconnect them with `docker compose up -d`):
 
 ```yaml
 # NPM stack, not this repository
@@ -332,18 +332,18 @@ The app sets its own security headers (CSP with `frame-ancestors 'none'`, `X-Fra
 - Block `/livez` and `/readyz` from outside (`location ~ ^/(livez|readyz)$ { deny all; }`); Docker health checks reach them directly.
 - Terminate TLS with a current configuration and redirect HTTP to HTTPS.
 
-## Deploy on a VPS next to Phentrieve
+## Deploy on a VPS with an existing NPM
 
-On the host, with NPM and Phentrieve already running:
+On the host, with NPM (and possibly other stacks) already running:
 
-1. Network: `docker network ls` shows NPM's network (the `NPM_SHARED_NETWORK_NAME` Phentrieve uses). Pin NPM's IP as in [Reverse proxy settings](#reverse-proxy-settings).
-2. Checkout: clone `halbritter-lab/ontotator` into its own directory next to the Phentrieve checkout; only the Compose files, `docker/postgres-init.sh` and the template are used.
+1. Network: `docker network ls` shows NPM's network (the value for `NPM_SHARED_NETWORK_NAME`). Pin NPM's IP as in [Reverse proxy settings](#reverse-proxy-settings).
+2. Checkout: clone `halbritter-lab/ontotator` into its own directory; only the Compose files, `docker/postgres-init.sh` and the template are used.
 3. Secrets: create `secrets/` as in [Configuration and secrets](#configuration-and-secrets).
 4. Settings: `cp .env.docker.template .env.docker && ln -sf .env.docker .env`, then set `ONTOTATOR_IMAGE` (digest printed by `scripts/publish-image.sh`), `ONTOTATOR_PUBLIC_ORIGIN`, `NPM_SHARED_NETWORK_NAME` and `ONTOTATOR_TRUSTED_PROXIES` (NPM's fixed IP). If the GHCR package is private, `docker login ghcr.io` with a read-only package token.
 5. Start: `docker compose config --quiet && docker compose pull && docker compose up -d --wait && docker compose ps --all`, then finish the admin bootstrap as in [First start](#first-start).
 6. NPM: add the proxy host as in [Reverse proxy settings](#reverse-proxy-settings), first without the Advanced hardening.
 7. Verify: `curl -fsS https://editor.example.org/readyz` reports every check true, and sign-in works in a browser. Then add the Advanced hardening: `/readyz` must now answer 403 from outside while `docker compose ps` keeps app healthy.
-8. Update: publish a new version, set its digest in `.env.docker` and follow [Upgrades](#upgrades). Phentrieve is not touched; the stacks share only the NPM network.
+8. Update: publish a new version, set its digest in `.env.docker` and follow [Upgrades](#upgrades). Other stacks are not touched; they share only the NPM network.
 
 ## Workers and resource limits
 
