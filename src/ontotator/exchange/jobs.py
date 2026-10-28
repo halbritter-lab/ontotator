@@ -8,7 +8,6 @@ a system admin (Q5).
 
 from __future__ import annotations
 
-import hashlib
 import json
 import tempfile
 from collections import Counter
@@ -19,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 import ontospan
-from sqlalchemy import Connection, Text, cast, delete, exists, func, or_, select
+from sqlalchemy import Connection, Text, cast, delete, exists, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from ontotator.auth.audit import Actor, record_audit
@@ -38,7 +37,7 @@ from ontotator.exchange.t1 import (
 )
 from ontotator.exchange.uploads import upload_commit, upload_preview
 from ontotator.jobs.queue import Handler, Job, JobContext, StructuredJobError
-from ontotator.storage.database import Database, advisory_lock_id
+from ontotator.storage.database import Database
 from ontotator.storage.repository import ProjectExport
 from ontotator.storage.tables import (
     JobRow,
@@ -55,20 +54,14 @@ from ontotator.storage.tables import (
 MAX_ISSUES = 20
 
 
-def _lock_file(conn: Connection, digest: str) -> None:
-    conn.execute(select(func.pg_advisory_xact_lock(advisory_lock_id("blob", digest))))
-
-
 def store_file(db: Database, data: bytes) -> str:
     """Put ``data`` in the blob store and record it in ``stored_files``.
 
     Record the reference in the same transaction, as uploads do, so that
     ``delete_unreferenced_file`` cannot remove the file in between.
     """
-    digest = hashlib.sha256(data).hexdigest()
     with db.transaction() as conn:
-        _lock_file(conn, digest)
-        db.blobs.put(data)
+        digest = db.put_blob(conn, data)
         conn.execute(
             pg_insert(StoredFileRow)
             .values(sha256=digest, size=len(data))
@@ -77,17 +70,18 @@ def store_file(db: Database, data: bytes) -> str:
     return digest
 
 
-def delete_unreferenced_file(db: Database, conn: Connection, digest: str) -> bool:
-    """Delete a stored file that nothing references any more; whether it did.
+def delete_unreferenced_file(conn: Connection, digest: str) -> bool:
+    """Delete the ``stored_files`` row of a file nothing references; whether it did.
 
     References are uploads that are not discarded, job payloads and results
     (imports, exports), proposal sets, project resources and ontology files.
-    Runs in the caller's transaction; the file goes last, so a failure before
-    it keeps both. shortcut: a job payload or result is recorded after its
-    ``store_file`` commits, so identical bytes discarded in between are lost;
-    hold the blob lock until the job row is written if that ever matters.
+    Runs in the caller's transaction; after it commits, ``unlink_deleted_files``
+    removes the files. shortcut: a job payload or result is recorded after its
+    ``store_file`` commits, so a discard of identical bytes in between drops the
+    row and file it needs; hold the blob lock until the job row is written if
+    exports or CLI imports ever coincide byte-for-byte with discarded uploads.
     """
-    _lock_file(conn, digest)
+    Database.lock_blob(conn, digest)
     referenced = conn.execute(
         select(
             or_(
@@ -110,8 +104,24 @@ def delete_unreferenced_file(db: Database, conn: Connection, digest: str) -> boo
     if referenced:
         return False
     conn.execute(delete(StoredFileRow).where(StoredFileRow.sha256 == digest))
-    db.blobs.delete(digest)
     return True
+
+
+def unlink_deleted_files(db: Database, digests: Sequence[str]) -> None:
+    """Remove the files whose ``stored_files`` rows a committed discard deleted.
+
+    Under the blob lock, a file stored again since then has its row back and stays.
+    """
+    for digest in digests:
+        with db.transaction() as conn:
+            Database.lock_blob(conn, digest)
+            if (
+                conn.execute(
+                    select(StoredFileRow.sha256).where(StoredFileRow.sha256 == digest)
+                ).first()
+                is None
+            ):
+                db.blobs.delete(digest)
 
 
 def operator_access(actor: Actor) -> Access:

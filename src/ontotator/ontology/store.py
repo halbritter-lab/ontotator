@@ -264,8 +264,8 @@ class OntologyStore:
         filename: str,
         language: str | None,
     ) -> tuple[OntologyFile, bool]:
-        digest = self.db.blobs.put(data)
         with self.db.transaction() as conn:
+            digest = self.db.put_blob(conn, data)
             conn.execute(
                 pg_insert(StoredFileRow)
                 .values(sha256=digest, size=len(data))

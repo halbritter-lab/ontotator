@@ -704,7 +704,7 @@ def test_preview_with_existing_sets_and_new_set_only_change_is_stale(staged, tmp
     assert app.state.repo.get_document("proj", "a") is None
 
 
-@pytest.mark.parametrize("limit", ["MAX_EXPANDED_BYTES", "MAX_ENTRIES"])
+@pytest.mark.parametrize("limit", ["MAX_TOTAL_BYTES", "MAX_ENTRIES"])
 def test_bundle_expansion_is_bounded_before_ontospan_reads_it(
     staged, tmp_path, monkeypatch, limit
 ):
@@ -791,4 +791,32 @@ def test_discard_keeps_a_blob_that_a_job_references(staged):
         "t1_import", {"project": "proj", "blob_sha256": sha}, actor=Actor.cli()
     )
     assert admin.post(f"{BASE}/{upload['id']}/discard").status_code == 200
+    assert db.blobs.path(sha).is_file()
+
+
+def test_a_failed_discard_keeps_the_blob(staged, monkeypatch):
+    app, admin = staged
+    upload = _ready(app, admin)
+    sha = upload["files"][0]["sha256"]
+
+    def fail(*args):
+        raise RuntimeError("commit fails")
+
+    monkeypatch.setattr(UploadService, "get", fail)
+    with pytest.raises(RuntimeError):
+        UploadService(app.state.repo.db, app.state.jobs, Actor.cli()).discard(
+            "proj", upload["id"]
+        )
+    assert app.state.repo.db.blobs.path(sha).is_file()
+    monkeypatch.undo()
+    assert admin.get(f"{BASE}/{upload['id']}").json()["status"] == "ready"
+
+
+def test_unlinking_keeps_a_file_stored_again_since_the_discard(staged):
+    from ontotator.exchange.jobs import store_file, unlink_deleted_files
+
+    app, _ = staged
+    db = app.state.repo.db
+    sha = store_file(db, b"stored again")
+    unlink_deleted_files(db, [sha])
     assert db.blobs.path(sha).is_file()
