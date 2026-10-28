@@ -205,7 +205,7 @@ def test_insert_outcome_comes_from_actual_returning_value(monkeypatch, inserted)
     conn = Connection()
     store = object.__new__(OntologyStore)
     store.db = SimpleNamespace(
-        blobs=SimpleNamespace(put=lambda _data: canonical.sha256),
+        put_blob=lambda _conn, _data: canonical.sha256,
         transaction=lambda: nullcontext(conn),
     )
     monkeypatch.setattr(
