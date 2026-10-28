@@ -124,7 +124,7 @@ export function CarryDialog(props: CarryDialogProps): JSX.Element {
 
   return <Dialog open size="sm" title={carryTitle(to, textLabel(row))} onClose={busy ? undefined : props.onClose} footer={<>
     {failure && <p className="text-change-error" role="alert">{failure}</p>}
-    {reason && <span id={reasonId} className="assign-footer-reason">{reason}</span>}
+    {reason && <span id={reasonId} className="dialog-footer-reason">{reason}</span>}
     <Button disabled={busy} onClick={props.onClose}>Cancel</Button>
     <Button variant="primary" loading={busy} aria-disabled={reason ? "true" : undefined} aria-describedby={reason ? reasonId : undefined}
       onClick={() => { void carry(false); }}>Assign</Button>

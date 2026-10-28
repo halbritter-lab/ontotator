@@ -112,40 +112,56 @@ it("keeps translation distribution context exact through partial language retry"
   expect(vi.mocked(api.createAssignments).mock.calls[1][1]).toEqual({ task: "translation_review", seed: 42, context, confirm_language: true, rows: [{ document_id: readyTarget.document_id, username: "alice" }] });
 });
 
-const overridePlan: ImportPlan = { documents: [], duplicates: [], collisions: [], proposal_sets: [], documents_only: [], errors: [], warnings: [], normalised_count: 0, counts: {}, input_sha256: "input", state_sha256: "state", plan_sha256: "real-plan", committable: true, variants: [{ document_id: "internal", external_id: "external:/ß", case_id: "case", language: "de", version: 3, origin: "correction", derived_from: "previous", derived_in_upload: false, translation: null, status: "ready_for_review", failed_checks: [], marked_in_package: false }] };
+const overridePlan: ImportPlan = { documents: [{ document_id: "internal", language: "de", text_sha256: "t".repeat(64), action: "add", normalised: false, label: "case.zip/documents/1.json" }], duplicates: [], collisions: [], proposal_sets: [], documents_only: [], errors: [], warnings: [], normalised_count: 0, counts: {}, input_sha256: "input", state_sha256: "state", plan_sha256: "real-plan", committable: true, variants: [{ document_id: "internal", external_id: "external:/ß", case_id: "case", language: "de", version: 3, origin: "correction", derived_from: "previous", derived_in_upload: false, translation: null, status: "ready_for_review", failed_checks: [], marked_in_package: false }] };
 const retained: UploadView = { id: 7, kind: "t1", language: null, files: [], status: "ready", preview: overridePlan, plan_sha256: "real-plan", commit_job_id: null, preview_job_id: null, created_at: "2026-10-16T00:00:00Z" };
 
-it("requires an explicit per-variant reason and retains exact override after a recoverable refusal", async () => {
+/** Opens the retained upload from "Unfinished uploads (n)". */
+async function openRetained() {
+  fireEvent.click(await screen.findByText(/^Unfinished uploads \(\d+\)$/));
+  fireEvent.click((await screen.findAllByRole("button", { name: "Open preview" }))[0]);
+  return screen.findByRole("button", { name: "Import 1 case" });
+}
+
+it("offers no per-variant acceptance and commits without status overrides (Q2)", async () => {
   vi.mocked(api.listUploads).mockResolvedValue([retained]);
   vi.spyOn(api, "getUpload").mockResolvedValue(retained);
-  vi.spyOn(api, "commitUpload").mockRejectedValue(new ApiError(422, "Use a different reason", "OVERRIDE_REASON_REQUIRED"));
+  vi.spyOn(api, "commitUpload").mockResolvedValue({ upload_id: 7, job_id: 12 });
+  vi.spyOn(api, "getJob").mockReturnValue(new Promise(() => undefined));
   render(<UploadPanel projectKey="p" languages={["de"]} canOverrideTranslationStatus onImported={vi.fn()} />);
-  fireEvent.click(await screen.findByRole("button", { name: "Resume upload 7" }));
-  const accept = await screen.findByLabelText(/^Accept without review:/);
-  fireEvent.click(accept);
-  expect((screen.getByRole("button", { name: "Import" }) as HTMLButtonElement).disabled).toBe(true);
-  const reason = screen.getByLabelText(/^Reason:.*required/);
-  fireEvent.change(reason, { target: { value: "   " } });
-  expect((screen.getByRole("button", { name: "Import" }) as HTMLButtonElement).disabled).toBe(true);
-  fireEvent.change(reason, { target: { value: "  Explicit reason  " } });
-  fireEvent.click(screen.getByRole("button", { name: "Import" }));
-  await waitFor(() => expect(api.commitUpload).toHaveBeenCalledWith("p", 7, "real-plan", [{ external_id: "external:/ß", language: "de", version: 3, reason: "  Explicit reason  " }]));
-  await screen.findByRole("alert");
-  expect((reason as HTMLInputElement).value).toBe("  Explicit reason  ");
-  expect((accept as HTMLInputElement).checked).toBe(true);
+  fireEvent.click(await openRetained());
+  expect(screen.queryByLabelText(/^Accept without review/)).toBeNull();
+  expect(screen.queryByRole("group", { name: "Accept without review" })).toBeNull();
+  await waitFor(() => expect(api.commitUpload).toHaveBeenCalledWith("p", 7, "real-plan"));
 });
 
-it("defaults to no override controls and drops them on capability loss", async () => {
-  vi.mocked(api.listUploads).mockResolvedValue([retained]);
-  vi.spyOn(api, "getUpload").mockResolvedValue(retained);
-  const view = render(<UploadPanel projectKey="p" languages={["de"]} onImported={vi.fn()} />);
-  fireEvent.click(await screen.findByRole("button", { name: "Resume upload 7" }));
-  await screen.findByRole("table", { name: "Variants" });
-  expect(screen.queryByLabelText(/^Accept without review:/)).toBeNull();
-  view.rerender(<UploadPanel projectKey="p" languages={["de"]} canOverrideTranslationStatus onImported={vi.fn()} />);
-  fireEvent.click(screen.getByLabelText(/^Accept without review:/));
-  view.rerender(<UploadPanel projectKey="p" languages={["de"]} canOverrideTranslationStatus={false} onImported={vi.fn()} />);
-  expect(screen.queryByLabelText(/^Reason:/)).toBeNull();
+it("keeps original File identity for stale Check again", async () => {
+  const file = new File(["public input"], "case.zip");
+  vi.spyOn(api, "createUpload").mockResolvedValueOnce({ upload_id: 7, job_id: 11 }).mockResolvedValueOnce({ upload_id: 8, job_id: 12 });
+  vi.spyOn(api, "getJob").mockImplementation(async id => ({ id, kind: "upload_preview", status: "succeeded", result: null, error: null, created_at: retained.created_at, finished_at: retained.created_at }));
+  vi.spyOn(api, "getUpload").mockImplementation(async (_project, id) => ({ ...retained, id }));
+  vi.spyOn(api, "commitUpload").mockRejectedValue(new ApiError(409, "Project changed", "UPLOAD_STALE"));
+  render(<UploadPanel projectKey="p" languages={["de"]} canOverrideTranslationStatus onImported={vi.fn()} />);
+  fireEvent.change(screen.getByLabelText("Files"), { target: { files: [file] } });
+  fireEvent.click(screen.getByRole("button", { name: "Check" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Import 1 case" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Check again" }));
+  await waitFor(() => expect(api.createUpload).toHaveBeenCalledTimes(2));
+  await screen.findByRole("button", { name: "Import 1 case" });
+  expect(vi.mocked(api.createUpload).mock.calls[1][2][0]).toBe(file);
+  expect(api.commitUpload).toHaveBeenCalledTimes(1);
+});
+
+it("lists a variant's kind, status and every failed check in words, without internal IDs", () => {
+  const plan: ImportPlan = { ...overridePlan, variants: [{ ...overridePlan.variants![0], derived_from: "actual-predecessor", derived_in_upload: true, status: "automatic_check_failed", failed_checks: ["units_added", "negation_changed"] }] };
+  render(<UploadPreview plan={plan} />);
+  fireEvent.click(screen.getByText("Texts in this upload (1)"));
+  const table = within(screen.getByRole("table", { name: "Texts in this upload" }));
+  expect(table.getByText("case")).toBeTruthy();
+  expect(table.getByText("Correction")).toBeTruthy();
+  expect(table.getByText("Check failed")).toBeTruthy();
+  expect(table.getByText(/Units added in translation/)).toBeTruthy();
+  expect(table.getByText(/Negation changed/)).toBeTruthy();
+  expect(screen.queryByText(/actual-predecessor|internal/)).toBeNull();
 });
 
 it("reads immutable review history for the actual internal ID and discards superseded replies", async () => {
@@ -195,39 +211,6 @@ it("shows ordered readonly reviewer snapshots, rationale and created variant", a
   await waitFor(() => expect(screen.queryByRole("dialog", { name: `Translation reviews: ${target.document_id}` })).toBeNull());
 });
 
-it("resets explicit override choices when a different persisted upload has the same logical tuple", async () => {
-  const other = { ...retained, id: 8 };
-  vi.mocked(api.listUploads).mockResolvedValue([retained, other]);
-  vi.spyOn(api, "getUpload").mockImplementation(async (_project, id) => ({ ...retained, id }));
-  render(<UploadPanel projectKey="p" languages={["de"]} canOverrideTranslationStatus onImported={vi.fn()} />);
-  fireEvent.click(await screen.findByRole("button", { name: "Resume upload 7" }));
-  fireEvent.click(await screen.findByLabelText(/^Accept without review:/));
-  fireEvent.change(screen.getByLabelText(/^Reason:/), { target: { value: "Specific to first upload" } });
-  fireEvent.click(screen.getByRole("button", { name: "Resume upload 8" }));
-  await screen.findByText("Upload 8, Ready to import");
-  expect(screen.queryByLabelText(/^Reason:/)).toBeNull();
-  expect((screen.getByLabelText(/^Accept without review:/) as HTMLInputElement).checked).toBe(false);
-});
-
-it("keeps original File identity for stale Check again and does not carry its override to the new plan", async () => {
-  const file = new File(["public input"], "case.zip");
-  vi.spyOn(api, "createUpload").mockResolvedValueOnce({ upload_id: 7, job_id: 11 }).mockResolvedValueOnce({ upload_id: 8, job_id: 12 });
-  vi.spyOn(api, "getJob").mockImplementation(async id => ({ id, kind: "upload_preview", status: "succeeded", result: null, error: null, created_at: retained.created_at, finished_at: retained.created_at }));
-  vi.spyOn(api, "getUpload").mockImplementation(async (_project, id) => ({ ...retained, id }));
-  vi.spyOn(api, "commitUpload").mockRejectedValue(new ApiError(409, "Project changed", "UPLOAD_STALE"));
-  render(<UploadPanel projectKey="p" languages={["de"]} canOverrideTranslationStatus onImported={vi.fn()} />);
-  fireEvent.change(screen.getByLabelText(/^Files/), { target: { files: [file] } });
-  fireEvent.submit(screen.getByRole("button", { name: "Check" }).closest("form")!);
-  fireEvent.click(await screen.findByLabelText(/^Accept without review:/));
-  fireEvent.change(screen.getByLabelText(/^Reason:/), { target: { value: "Initial reason" } });
-  fireEvent.click(screen.getByRole("button", { name: "Import" }));
-  fireEvent.click(await screen.findByRole("button", { name: "Check again" }));
-  await screen.findByText("Upload 8, Ready to import");
-  expect(vi.mocked(api.createUpload).mock.calls[1][2][0]).toBe(file);
-  expect(screen.queryByLabelText(/^Reason:/)).toBeNull();
-  expect(api.commitUpload).toHaveBeenCalledTimes(1);
-});
-
 it("retains an unsaved translation gate when another settings section is saved", async () => {
   vi.spyOn(api, "updateProjectSettings").mockResolvedValue({ ...settings, annotate_accepted_translations_only: false });
   const view = render(<ProjectSettingsPage projectKey="p" currentUser={currentUser} section="workflow" />);
@@ -274,16 +257,6 @@ it("binds document state to actual user identity before accepting late replies",
   expect((await waitFor(viewText)).getAttribute("href")).toContain("new-user-document");
   await act(async () => old.resolve(targetPage({ document_id: "old-user-document" })));
   expect(viewText().getAttribute("href")).not.toContain("old-user-document");
-});
-
-it("renders exact preview variant lineage and every failed code", () => {
-  const plan: ImportPlan = { documents: [], duplicates: [], collisions: [], proposal_sets: [], documents_only: [], errors: [], warnings: [], normalised_count: 0, counts: {}, input_sha256: "input", state_sha256: "state", plan_sha256: "plan", committable: true, variants: [{ document_id: "internal", external_id: "external", case_id: "case", language: "de", version: 3, origin: "correction", derived_from: "actual-predecessor", derived_in_upload: true, translation: null, status: "automatic_check_failed", failed_checks: ["units_added", "negation_changed"], marked_in_package: false }] };
-  render(<UploadPreview plan={plan} />);
-  const table = within(screen.getByRole("table", { name: "Variants" }));
-  expect(table.getByText("external")).toBeTruthy();
-  expect(table.getByText(/actual-predecessor.*in this upload/)).toBeTruthy();
-  expect(table.getByText("units_added")).toBeTruthy();
-  expect(table.getByText("negation_changed")).toBeTruthy();
 });
 
 it("loads explicit false annotation gate and saves its changed Workflow value", async () => {

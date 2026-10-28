@@ -55,7 +55,6 @@
 .work-plan-confirm .form-group { margin-bottom: 0; }
 .work-plan-confirm { display: grid; gap: var(--space-2); }
 
-.modal-actions .work-plan-save-reason { margin-inline-end: auto; color: var(--text-muted); font-size: var(--size-sm); }
 
 .work-plan-upload { display: grid; gap: var(--space-2); }
 .work-plan-cases > summary { cursor: pointer; width: fit-content; }

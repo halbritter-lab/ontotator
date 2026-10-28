@@ -11606,7 +11606,10 @@ export interface operations {
     };
     list_uploads_api_v1_projects__key__uploads_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Keep only uploads in these states (repeatable). */
+                status?: ("previewing" | "ready" | "invalid" | "committing" | "committed" | "failed" | "discarded")[] | null;
+            };
             header?: never;
             path: {
                 key: string;

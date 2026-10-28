@@ -152,8 +152,9 @@ async function importTwoDocuments(page: Page) {
   ]);
   await upload.getByRole("button", { name: "Check", exact: true }).click();
   const preview = upload.getByRole("region", { name: "Upload preview", exact: true });
-  await expect(preview).toContainText("2 documents added");
-  await expect(preview).toContainText("1 with normalized text");
+  await expect(upload.getByText("Checked 2 files: ready to import.", { exact: true })).toBeFocused();
+  await expect(preview.locator(".upload-summary")).toContainText("Texts2 (en 2)");
+  await expect(preview).toContainText("1 text normalized to Unicode NFC.");
   const rows = page.getByRole("button", { name: /^Text / });
   await expect(rows).toHaveCount(0);
   await upload.getByRole("button", { name: "Import 2 texts", exact: true }).click();
