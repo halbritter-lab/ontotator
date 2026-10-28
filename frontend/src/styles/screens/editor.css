@@ -300,7 +300,7 @@
 
 /* A marking mode (adding a mention or a segment) shows one line above the text;
    nothing is shown in the normal state (spec C.6). The text never moves
-   (PRODUCT.md): the line overlays the top of the text sheet instead of taking
+   (docs/design/product.md): the line overlays the top of the text sheet instead of taking
    space in the flow. It is one line of 32 px (24 px button + 2 x 4 px), which
    fits the sheet's top padding (--space-6), so the first line of text stays
    visible. In the grid layouts (versions, comparison) its grid area is the
