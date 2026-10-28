@@ -112,6 +112,8 @@ async function openStates(page: Page, annotator: string) {
 }
 
 test.describe("Design direction C", () => {
+  // Each shot runs an axe scan at three viewports; slow CI runners need more than 30 s.
+  test.describe.configure({ timeout: 90_000 });
   test("design: login and dashboard", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByRole("form", { name: "Log in to Ontotator" })).toBeVisible();
