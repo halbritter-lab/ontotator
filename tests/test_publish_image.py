@@ -73,7 +73,8 @@ def test_builds_scans_pushes_the_version_tag_and_prints_digest_reference(publish
     assert result.returncode == 0, result.stderr
     docker = [call for call in calls if call.startswith("docker")]
     assert (
-        docker[0] == "docker buildx imagetools inspect ghcr.io/halbritter-lab/ontotator:0.4.0"
+        docker[0]
+        == "docker buildx imagetools inspect ghcr.io/halbritter-lab/ontotator:0.4.0"
     )
     assert docker[1].startswith(
         "docker build --load --secret id=github_token,env=GITHUB_TOKEN"
