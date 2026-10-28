@@ -213,7 +213,8 @@ test('source update review shows both immutable sources and deliberately submits
   const resolved = page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith(`/source-obligations/${encodeURIComponent(cause.cause_id)}/resolve`));
   await submit.click(); const record = await resolved; expect(record.ok(), await record.text()).toBeTruthy();
   expect(record.request().postDataJSON()).toEqual({ expected_revision: 1, translation_text_sha256: cause.translation_text_sha256, old_source_text_sha256: cause.old_source_text_sha256, new_source_text_sha256: cause.new_source_text_sha256 });
-  await expect(page.getByText('Review submitted', { exact: true })).toBeVisible();
+  // Issue 125: the task flow names the submitted review in a toast and leaves it.
+  await expect(page.locator('.ui-toast').filter({ hasText: / submitted\.$/ })).toBeVisible();
   expect(await value<unknown[]>(page, `/api/v1/translation-reviews/${s.assignment_id}/source-obligations`)).toEqual([]);
   await test.info().attach('exact-source-obligation', { body: Buffer.from(JSON.stringify({ project: s.project, assignment: s.assignment_id, cause, record: await record.json() }, null, 2)), contentType: 'application/json' });
 });
