@@ -116,6 +116,9 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   };
   const [state, setState] = useState<SearchState>(searchManager.getState());
   const [queryInput, setQueryInput] = useState<string>(initialQuery ?? "");
+  // The field's query as of the last keystroke, also before React renders it (see the language effect).
+  const latestQuery = useRef(queryInput);
+  latestQuery.current = queryInput;
 
   useEffect(() => {
     return searchManager.subscribe((nextState) => {
@@ -182,7 +185,8 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   useEffect(() => {
     if (lastLanguagesKey.current === languagesKey) return;
     lastLanguagesKey.current = languagesKey;
-    if (queryInput.trim()) runSearch(queryInput, true);
+    // Not `queryInput`: typing right before the languages load would be dropped for the older query.
+    if (latestQuery.current.trim()) runSearch(latestQuery.current, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only a language change re-asks
   }, [languagesKey]);
 
@@ -250,11 +254,13 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
       if (!modifiersOnly) modifiersFromPrefix.current = true;
       setModifiersOnly(true);
       setQueryInput(rest);
+      latestQuery.current = rest;
       runSearch(rest, false, MODIFIER_ROOTS);
       return;
     }
     if (!val.trim() && modifiersFromPrefix.current) dropPrefixFilter();
     setQueryInput(val);
+    latestQuery.current = val;
     runSearch(val);
   };
 

@@ -11,6 +11,9 @@ test("sidebar scrolls proposals and saved findings as one list with stable readi
   const curatedHeader = scroller.locator(".sidebar-header").filter({ hasText: "Findings (0)" });
   await expect(proposalsHeader).toBeVisible();
   await expect(scroller.locator(".badge-ai")).toHaveCount(30);
+  // Term labels arrive after the cards and make them taller: scroll only once they are in (15 of each term).
+  await expect(scroller.getByText("Seizure", { exact: true })).toHaveCount(15);
+  await expect(scroller.getByText("Hypotonia", { exact: true })).toHaveCount(15);
 
   // The list overflows and the curated section starts below the fold ...
   const overflow = await scroller.evaluate((el) => el.scrollHeight - el.clientHeight);

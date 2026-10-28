@@ -22,7 +22,7 @@ describe("problem report labels", () => {
     const now = new Date("2026-10-19T12:00:00Z");
     expect(reportStateFact(report(), now)).toBe("Open");
     const closed = reportStateFact(report({ state: "resolved", state_changed_by_label: "ann-0002", state_changed_at: "2026-10-19T01:31:00Z" }), now);
-    expect(closed).toMatch(/^Closed by ann-0002, 19 Oct, \d\d:31$/);
+    expect(closed).toMatch(/^Closed by the project lead, 19 Oct, \d\d:31$/);
     expect(reportStateFact(report({ state: "withdrawn", state_changed_by_label: "ann-0004", state_changed_at: "2026-10-19T01:31:00Z" }), now)).toMatch(/^Withdrawn by you, /);
     expect(reportStateFact(report({ state: "resolved", viewer_is_lead: true, viewer_label: "lead-0002", state_changed_by_label: "lead-0002", state_changed_at: null }), now)).toBe("Closed by lead-0002 (you)");
   });
@@ -33,9 +33,9 @@ describe("problem report labels", () => {
   it("your_task_fact_for_each_release_path", () => {
     expect(yourTaskFact(report()).text).toBe("Paused since");
     expect(yourTaskFact(report({ holds: [hold({ active: false, release_action: "resume", released_by_label: "ann-0004", released_at: "2026-10-19T01:13:00Z" })] })).text).toBe("Resumed by you");
-    expect(yourTaskFact(report({ holds: [hold({ active: false, release_action: "resume", released_by_label: "lead-0002", released_at: "2026-10-19T01:13:00Z" })] })).text).toBe("Resumed by lead-0002");
+    expect(yourTaskFact(report({ holds: [hold({ active: false, release_action: "resume", released_by_label: "lead-0002", released_at: "2026-10-19T01:13:00Z" })] })).text).toBe("Resumed by the project lead");
     expect(yourTaskFact(report({ events: [event({ event_id: "e9", action: "restart", round_ordinal: 3 })], holds: [hold({ active: false, release_action: "restart", release_event_id: "e9", released_by_label: "lead-0002", released_at: "2026-10-19T02:00:00Z" })] })).text).toBe("Restarted with an empty Round 3");
-    expect(yourTaskFact(report({ holds: [hold({ active: false }), hold({ hold_id: "h2", created_by_label: "lead-0002", created_at: "2026-10-19T03:00:00Z" })] })).text).toBe("Paused again by lead-0002");
+    expect(yourTaskFact(report({ holds: [hold({ active: false }), hold({ hold_id: "h2", created_by_label: "lead-0002", created_at: "2026-10-19T03:00:00Z" })] })).text).toBe("Paused again by the project lead");
     expect(yourTaskFact(report({ holds: [hold({ active: false })] })).text).toBe("Released (no record of who released it)");
     expect(yourTaskFact(report({ holds: [hold({ active: false, release_action: "withdraw", released_at: "2026-10-19T01:20:00Z" })] }))).toEqual({ kind: "withdrawn", text: "Resumed when you withdrew the report", at: "2026-10-19T01:20:00Z" });
     expect(yourTaskFact(report()).at).toBe("2026-10-19T01:12:00Z");
@@ -49,12 +49,12 @@ describe("problem report labels", () => {
     ]);
     const mine = report({ events: [event(), event({ event_id: "e3", action: "resolve", actor_label: "lead-0002", own_task: false, reason: "Fixed" })] });
     const items = historyItems(mine);
-    expect(items.map(i => i.sentence)).toEqual(["You reported the problem. Your task paused.", "You resumed your task.", "lead-0002 closed the report."]);
+    expect(items.map(i => i.sentence)).toEqual(["You reported the problem. Your task paused.", "You resumed your task.", "The project lead closed the report."]);
     expect(items[2]).toMatchObject({ quoteLabel: "Outcome", quote: "Fixed" });
     expect(historyItems(report({ events: [event({ action: "withdraw" })] })).at(-1)?.sentence).toBe("You withdrew the report. Your task resumed.");
-    expect(historyItems(report({ events: [event({ action: "mystery", actor_label: "lead-0002" })] })).at(-1)?.sentence).toBe('lead-0002 recorded "mystery".');
+    expect(historyItems(report({ events: [event({ action: "mystery", actor_label: "lead-0002" })] })).at(-1)?.sentence).toBe('The project lead recorded "mystery".');
     const restarted = report({ round_ordinal: 1, current_round_ordinal: 3, events: [event({ action: "restart", actor_label: "lead-0002", own_task: true, round_ordinal: 3, abandoned_round_ordinal: 2 })] });
-    expect(historyItems(restarted).at(-1)?.sentence).toBe("lead-0002 restarted your task with an empty Round 3. Round 2 is kept. Report closed.");
+    expect(historyItems(restarted).at(-1)?.sentence).toBe("The project lead restarted your task with an empty Round 3. Round 2 is kept. Report closed.");
   });
   it("history_lead_sentences_for_release_restart_withdraw_and_reopen", () => {
     const other = { assignment_id: 7, owner_label: "ann-0005", case_id: "c", language: "de", task: "annotate" as const };
@@ -69,9 +69,9 @@ describe("problem report labels", () => {
     expect(lead([{ action: "withdraw", affected: [{ ...other, assignment_id: 4, owner_label: "ann-0004" }] }])).toBe("ann-0004 withdrew the report. Task 4 resumed.");
     expect(lead([{ action: "reopen", actor_label: "lead-0002" }])).toBe("lead-0002 reopened the report.");
     const reporter = historyItems(report({ events: [event({ action: "restart", actor_label: "lead-0002", round_ordinal: 3, abandoned_translation_draft: { text: "Draft", form: { a: 1 } } })] })).at(-1);
-    expect(reporter).toMatchObject({ sentence: "lead-0002 restarted your task with an empty Round 3. The previous round is kept. Report closed.", draft: { text: "Draft", form: { a: 1 } } });
-    expect(historyItems(report({ events: [event({ action: "extend_hold", actor_label: "lead-0002", own_task: true })] })).at(-1)?.sentence).toBe("lead-0002 paused your task again.");
-    expect(historyItems(report({ events: [event({ actor_label: "lead-0002", own_task: true })] })).at(-1)?.sentence).toBe("lead-0002 released the pause on your task.");
+    expect(reporter).toMatchObject({ sentence: "The project lead restarted your task with an empty Round 3. The previous round is kept. Report closed.", draft: { text: "Draft", form: { a: 1 } } });
+    expect(historyItems(report({ events: [event({ action: "extend_hold", actor_label: "lead-0002", own_task: true })] })).at(-1)?.sentence).toBe("The project lead paused your task again.");
+    expect(historyItems(report({ events: [event({ actor_label: "lead-0002", own_task: true })] })).at(-1)?.sentence).toBe("The project lead released the pause on your task.");
     expect(historyItems(report({ events: [event({ action: "extend_hold", actor_label: "lead-0002", own_task: false })] }))).toHaveLength(1);
   });
   it("toolbar_entry_states", () => {
@@ -131,7 +131,7 @@ describe("answerNotice (#18)", () => {
   it("names the outcome and says the reporter can continue unless the task stays paused", () => {
     expect(answerNotice(report({ state: "resolved", resolution: "Source fixed." }), false)).toBe("Your problem report was answered by the project lead: Source fixed. You can continue.");
     const released = report({ events: [event({ action: "resume", actor_label: "lead-0002", reason: null })] });
-    expect(answerNotice(released, false)).toBe("Your problem report was answered by the project lead: lead-0002 released the pause on your task. You can continue.");
+    expect(answerNotice(released, false)).toBe("The project lead released the pause on your task. You can continue.");
     const paused = report({ events: [event({ action: "extend_hold", actor_label: "lead-0002", reason: "Waiting for the source" })] });
     expect(answerNotice(paused, true)).toBe("Your problem report was answered by the project lead: Waiting for the source.");
     const named = report({ state: "resolved", resolution: "Fixed", events: [event({ action: "resolve", actor_label: "lead-0002", actor: { pseudonym: "lead-0002", display_name: "Lena Lead", is_me: false } })] });
