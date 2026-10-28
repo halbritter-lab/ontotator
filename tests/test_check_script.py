@@ -96,6 +96,7 @@ def test_default_runs_every_required_phase_serially_with_bounded_workers(gate):
         "uv run mypy src",
         "uv run python scripts/export_openapi.py --check",
         "uv run python scripts/export_admin_error_codes.py --check",
+        "uv run python scripts/check_handbook.py --check",
         "uv run pytest tests/test_admin_error_codes.py tests/test_check_wheel.py tests/test_check_script.py -q",
         "npm --prefix frontend run typecheck",
         "npm --prefix frontend run lint",

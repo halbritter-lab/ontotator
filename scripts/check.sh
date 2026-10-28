@@ -126,6 +126,7 @@ if runs static; then
     step "mypy" uv run mypy src
     step "OpenAPI drift" uv run python scripts/export_openapi.py --check
     step "admin error catalog drift" uv run python scripts/export_admin_error_codes.py --check
+    step "handbook labels" uv run python scripts/check_handbook.py --check
     step "source and wheel contract preflight" uv run pytest \
         tests/test_admin_error_codes.py tests/test_check_wheel.py tests/test_check_script.py -q
     step "frontend typecheck" npm --prefix frontend run typecheck

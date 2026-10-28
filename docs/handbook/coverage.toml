@@ -1,0 +1,22 @@
+# Maps UI source globs to the handbook chapter that documents them (checked by
+# scripts/check_handbook.py --base REF on every pull request).
+#
+#   [[map]]
+#   glob = "frontend/src/consolidation/**"   # fnmatch pattern, "*" also crosses "/"
+#   chapter = "consolidator.md"              # file in docs/handbook/
+#
+# When a pull request changes files matched by a glob but not the chapter, CI fails.
+# For changes without visible effect (refactors), add the commit trailer line
+#   Handbook: unchanged
+
+[[map]]
+glob = "frontend/src/consolidation/**"
+chapter = "consolidator.md"
+
+[[map]]
+glob = "frontend/src/editor/**"
+chapter = "annotator.md"
+
+[[map]]
+glob = "frontend/src/admin/**"
+chapter = "admin.md"

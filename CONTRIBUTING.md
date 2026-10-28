@@ -12,6 +12,8 @@ Run the full gate locally with `bash scripts/check.sh`, or `bash scripts/check.s
 
 API changes must keep the committed OpenAPI and TypeScript contracts in sync; the gate fails on drift.
 
+UI changes must keep the user handbook in [docs/handbook/](docs/handbook/) in sync. CI checks that every bold UI label in the handbook still exists in `frontend/src`, and that a chapter changes when the code mapped to it in `docs/handbook/coverage.toml` changes. For changes without a visible effect, such as refactors, add the trailer line `Handbook: unchanged` to a commit message.
+
 ## Branches and pull requests
 
 - Branch from `main` and name the branch after the change type, for example `fix/term-search`, `feat/export-filter`, `docs/readme` or `chore/repo-tidy`.
