@@ -15,12 +15,13 @@ import io
 import logging
 import os
 import tempfile
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import Row, select
+from sqlalchemy import Row, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from ontotator.application.uploads import (
@@ -37,11 +38,38 @@ from ontotator.storage.database import Database
 from ontotator.storage.tables import (
     OntologyFileRow,
     ProjectOntologyRow,
+    ProjectRow,
     StoredFileRow,
 )
 from ontotator.vendor.hpo_span_annotator.hpo import OntologyError
 
 logger = logging.getLogger(__name__)
+
+# An HPO release without these is cut down or another file (#97).
+_HPO_ROOTS = ("HP:0000001", "HP:0000118")
+# Share of the current (not obsolete) terms that must reach HP:0000001.
+_MIN_REACHING_ROOT = 0.98
+
+
+def release_problem(service: OntologyService) -> str | None:
+    """Why an HPO release is unusable: missing roots or a broken is_a graph."""
+    from ontotator.ontology.modifiers import subtree
+
+    ontology = service.ontology
+    if ontology.dominant_prefix != "HP":
+        return None
+    missing = [root for root in _HPO_ROOTS if root not in ontology.terms]
+    if missing:
+        return f"lacks the HPO root terms {', '.join(missing)}"
+    current = [t.hpo_id for t in ontology.terms.values() if not t.obsolete]
+    reached = subtree(service, _HPO_ROOTS[0])
+    share = sum(term_id in reached for term_id in current) / len(current)
+    if share < _MIN_REACHING_ROOT:
+        return (
+            f"has a broken is_a graph: only {share:.0%} of its current terms "
+            f"reach {_HPO_ROOTS[0]}"
+        )
+    return None
 
 
 @dataclass(frozen=True)
@@ -102,6 +130,9 @@ class OntologyStore:
         self.registry = registry
         self.translations_dir = Path(data_dir) / "translations"
         self._use_translations_dir()
+        # Filename -> sha256 of the translation files this worker has taken up.
+        self._translation_version: dict[str, str] = {}
+        registry.translation_sync = self.sync_translations
 
     # --- adding ---------------------------------------------------------
 
@@ -146,6 +177,9 @@ class OntologyStore:
         # built with them before another change starts.
         with self.registry.changing():
             service = self._parse(name, data, digest)
+            problem = release_problem(service)
+            if problem is not None:
+                raise DomainError("INVALID_ONTOLOGY", f"'{name}' {problem}.")
             created = False
             if known is None:
                 known, created = self._insert_with_result(
@@ -158,6 +192,8 @@ class OntologyStore:
                     language=None,
                 )
             self.registry.register_path(self.db.blobs.path(digest))
+            # The release the file states, as every other worker records it.
+            service.ref = OntologyRef(release=service.ontology.release, sha256=digest)
             self.registry.register_service(service)
         return known, service, created
 
@@ -230,6 +266,24 @@ class OntologyStore:
                 filename=name,
                 language=language,
             )
+        else:
+            # Uploading earlier content again makes it the latest of its name,
+            # under the name it was uploaded as now.
+            with self.db.transaction() as conn:
+                row = conn.execute(
+                    update(OntologyFileRow)
+                    .where(OntologyFileRow.sha256 == digest)
+                    .values(
+                        uploaded_at=func.now(),
+                        filename=name,
+                        prefix=prefix,
+                        language=language,
+                    )
+                    .returning(*_FILE_COLUMNS)
+                ).one()
+            known = _file(row)
+        with self.registry.changing():
+            self._translation_version[name] = digest
         return known, stored, created
 
     def _insert(
@@ -305,6 +359,48 @@ class OntologyStore:
             ).one()
             return _file(row), inserted is not None
 
+    def missing_roots(self, sha256: str, roots: Iterable[str]) -> list[str]:
+        """The ``roots`` the stored ontology ``sha256`` lacks.
+
+        Empty when there are none to check or the file is not a stored,
+        readable ontology; the pin checks report that case.
+        """
+        wanted = list(roots)
+        if not wanted:
+            return []
+        try:
+            service = self.registry.get_service(sha256)
+            known = self._get(sha256) if service is None else None
+            if known is not None and known.kind == "ontology":
+                self.registry.register_path(self.db.blobs.path(sha256))
+                service = self.registry.get_service(sha256)
+        except (DomainError, OntologyError, OSError, ValueError, KeyError):
+            return []
+        if service is None:
+            return []
+        return [root for root in wanted if service.ontology.get(root) is None]
+
+    def pins_missing_roots(self) -> list[tuple[str, str, str, list[str]]]:
+        """(project, ontology id, sha256, missing roots) of every pin whose
+        allowed roots its release lacks; such pins are not enforced."""
+        with self.db.transaction() as conn:
+            pins = conn.execute(
+                select(
+                    ProjectRow.project_key,
+                    ProjectOntologyRow.ontology_id,
+                    ProjectOntologyRow.sha256,
+                    ProjectOntologyRow.allowed_roots,
+                )
+                .join(ProjectRow, ProjectRow.id == ProjectOntologyRow.project_id)
+                .order_by(ProjectRow.project_key, ProjectOntologyRow.ontology_id)
+            ).all()
+        found = []
+        for project_key, ontology_id, sha256, roots in pins:
+            missing = self.missing_roots(sha256, roots or [])
+            if missing:
+                found.append((project_key, ontology_id, sha256, missing))
+        return found
+
     # --- reading ----------------------------------------------------------
 
     def _get(self, sha256: str) -> OntologyFile | None:
@@ -347,21 +443,9 @@ class OntologyStore:
         stop the start.
         """
         files = self.list()
-        latest: dict[str, OntologyFile] = {}
-        for item in files:
-            if item.kind == "translation":
-                # A later upload of the same name replaces an earlier one.
-                latest[item.filename] = item
-        for item in latest.values():
-            try:
-                self._place_translation(item)
-            except (OSError, ValueError) as exc:
-                logger.warning(
-                    "Could not place translation %s (sha256 %s): %s",
-                    item.filename,
-                    item.sha256,
-                    exc,
-                )
+        with self.registry.changing():
+            for item in self._place_translations(self._latest_translations(files)):
+                self._translation_version[item.filename] = item.sha256
         for item in files:
             if item.kind != "ontology":
                 continue
@@ -374,6 +458,59 @@ class OntologyStore:
                     item.sha256,
                     exc,
                 )
+
+    @staticmethod
+    def _latest_translations(files: Iterable[OntologyFile]) -> Sequence[OntologyFile]:
+        latest: dict[str, OntologyFile] = {}
+        for item in files:
+            if item.kind == "translation":
+                # A later upload of the same name replaces an earlier one.
+                latest[item.filename] = item
+        return list(latest.values())
+
+    def _place_translations(
+        self, items: Iterable[OntologyFile]
+    ) -> Sequence[OntologyFile]:
+        """Place files; return those that were placed."""
+        placed = []
+        for item in items:
+            try:
+                self._place_translation(item)
+            except (OSError, ValueError) as exc:
+                logger.warning(
+                    "Could not place translation %s (sha256 %s): %s",
+                    item.filename,
+                    item.sha256,
+                    exc,
+                )
+                continue
+            placed.append(item)
+        return placed
+
+    def sync_translations(self) -> None:
+        """Take up translation files another worker stored since this one looked.
+
+        Places the newer files and rebuilds the loaded ontologies of their
+        prefixes, so a new project never captures the old file (#84).
+        """
+        latest = self._latest_translations(self.list())
+        with self.registry.changing():
+            changed = [
+                item
+                for item in latest
+                if self._translation_version.get(item.filename) != item.sha256
+            ]
+            placed = self._place_translations(changed)
+            if not placed:
+                return
+            paths = self.registry.translation_files()
+            rebuilt: dict[str, OntologyService] = {}
+            for prefix in sorted({item.prefix for item in placed}):
+                rebuilt.update(self.registry.rebuild_for_prefix(prefix, paths))
+            if rebuilt:
+                self.registry.publish(rebuilt)
+            for item in placed:
+                self._translation_version[item.filename] = item.sha256
 
     def _place_translation(self, item: OntologyFile) -> None:
         target = self.translations_dir / item.filename

@@ -16,7 +16,7 @@ export interface LanguagesFieldProps {
 }
 
 export const commonLanguageCodes = ["de", "en", "es", "fr", "it", "nl", "pt", "pl"];
-const invalidCode = "Use a two-letter language code, e.g. de.";
+const invalidCode = "Use a two- or three-letter language code, e.g. de.";
 const pendingCode = "Add this language code before saving.";
 
 /** Commit on Enter/Add/blur. Parent forms must retain native validation so
@@ -28,12 +28,12 @@ export function LanguagesField({ id, label, value, onChange, disabled = false, h
   const inputRef = useRef<HTMLInputElement>(null);
   const validityMessage = (text: string) => {
     const code = text.trim().toLowerCase();
-    return !code ? "" : /^[a-z]{2}$/.test(code) ? pendingCode : invalidCode;
+    return !code ? "" : /^[a-z]{2,3}$/.test(code) ? pendingCode : invalidCode;
   };
   const commit = (text = draft) => {
     if (disabled) return;
     const code = text.trim().toLowerCase();
-    if (code && !/^[a-z]{2}$/.test(code)) {
+    if (code && !/^[a-z]{2,3}$/.test(code)) {
       setError(invalidCode);
       inputRef.current?.setCustomValidity(invalidCode);
       return;

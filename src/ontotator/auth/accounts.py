@@ -171,8 +171,10 @@ def normalize_display_name(value: str) -> str:
 
 def normalize_languages(values: Iterable[str]) -> frozenset[str]:
     languages = frozenset(value.lower() for value in values)
-    if any(re.fullmatch(r"[a-z]{2}", value) is None for value in languages):
-        raise DomainError("LANGUAGE_INVALID", "Languages use two-letter codes.")
+    if any(re.fullmatch(r"[a-z]{2,3}", value) is None for value in languages):
+        raise DomainError(
+            "LANGUAGE_INVALID", "Languages use two- or three-letter codes."
+        )
     return languages
 
 

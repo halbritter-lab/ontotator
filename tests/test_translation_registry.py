@@ -171,6 +171,22 @@ def _run_interleaved(
     assert errors == []
 
 
+def test_a_translation_upload_parses_no_unloaded_release(tmp_path: Path) -> None:
+    """Only loaded releases are rebuilt; the others read the file on first load (#82)."""
+    folder = _folder(tmp_path)
+    registry = OntologyRegistry(translation_dirs=[folder])
+    sha = registry.register_path(HP)
+
+    TranslationUploadService(registry, folder).store(
+        io.BytesIO(DE.read_bytes()), DE.name
+    )
+
+    assert registry.services() == []
+    service = registry.get_service(sha)
+    assert service is not None
+    assert service.languages == ["de"]
+
+
 def test_two_translation_uploads_at_once_keep_both_languages(tmp_path: Path) -> None:
     folder = _folder(tmp_path)
     registry = OntologyRegistry(translation_dirs=[folder])

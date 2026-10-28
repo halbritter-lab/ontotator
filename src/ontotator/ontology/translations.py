@@ -34,9 +34,10 @@ from ontotator.vendor.hpo_span_annotator.lexical import (
 )
 
 # <prefix>-<language>.<anything>.tsv, e.g. hp-de.babelon.tsv. The prefix is the
-# ontology's dominant id prefix in lower case, the language has two letters.
+# ontology's dominant id prefix in lower case, the language has two or three
+# letters (hp-dtp, hp-nna).
 _TRANSLATION_NAME = re.compile(
-    r"^(?P<prefix>[a-z][a-z0-9]*)-(?P<language>[a-z]{2})\.(?:[a-z0-9_-]+\.)*tsv$"
+    r"^(?P<prefix>[a-z][a-z0-9]*)-(?P<language>[a-z]{2,3})\.(?:[a-z0-9_-]+\.)*tsv$"
 )
 
 

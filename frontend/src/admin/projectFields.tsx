@@ -6,8 +6,12 @@ import { SettingsCard } from "./SettingsCard";
 
 export type PinDraft = Omit<ProjectPin, "allowed_roots"> & { rootsText: string };
 export const draftPins = (pins: ProjectPin[]): Record<string, PinDraft> => Object.fromEntries(pins.map(pin => [pin.ontology_id, { ontology_id: pin.ontology_id, sha256: pin.sha256, t1_profile: pin.t1_profile, rootsText: (pin.allowed_roots ?? []).join(", ") }]));
-// The HPO ontology gets the HPO phenotype scheme by default (#5); every other ontology the generic one.
-export const emptyPin = (id: string): PinDraft => ({ ontology_id: id, sha256: "", t1_profile: id.toUpperCase() === "HP" ? "hpo-phenotype" : "generic", rootsText: "" });
+// The HPO ontology gets the HPO phenotype scheme by default (#5) and only Phenotypic abnormality as findings (#85);
+// every other ontology the generic scheme and every term.
+export const emptyPin = (id: string): PinDraft => {
+  const hpo = id.toUpperCase() === "HP";
+  return { ontology_id: id, sha256: "", t1_profile: hpo ? "hpo-phenotype" : "generic", rootsText: hpo ? "HP:0000118" : "" };
+};
 export const serializePins = (ids: string[], pins: Record<string, PinDraft>): ProjectPin[] => ids.map(id => {
   const pin = pins[id] ?? emptyPin(id);
   return { ontology_id: id, sha256: pin.sha256, allowed_roots: pin.rootsText.split(",").map(root => root.trim()).filter(Boolean), t1_profile: pin.t1_profile };

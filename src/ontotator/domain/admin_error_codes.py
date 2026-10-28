@@ -7,6 +7,7 @@ This catalog changes no runtime exception codes, HTTP statuses or details.
 ADMIN_ERROR_CODES: tuple[str, ...] = (
     "ADJUDICATOR_IS_ANNOTATOR",
     "ADMIN_REQUIRED",
+    "ALLOWED_ROOTS_UNKNOWN",
     "AMBIGUOUS_REVIEW_ROUND",
     "AMBIGUOUS_SEARCH_EVENT",
     "AMBIGUOUS_SUBMISSION_ORIGIN",

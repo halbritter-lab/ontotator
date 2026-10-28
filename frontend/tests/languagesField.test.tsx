@@ -75,13 +75,13 @@ describe("LanguagesField", () => {
     expect((screen.getByLabelText("Languages you can read") as HTMLInputElement).value).toBe("");
   });
 
-  it.each(["deu", "d", "d1", "1a", "éé", "日本"])("refuses invalid code %j with the approved inline error", async (code) => {
+  it.each(["deut", "d", "d1", "1a", "éé", "日本"])("refuses invalid code %j with the approved inline error", async (code) => {
     const state = props();
     render(<LanguagesField {...state} />);
     const input = screen.getByLabelText("Languages you can read") as HTMLInputElement;
     await userEvent.setup().type(input, `${code}{Enter}`);
     const error = screen.getByRole("alert");
-    expect(error.textContent).toBe("Use a two-letter language code, e.g. de.");
+    expect(error.textContent).toBe("Use a two- or three-letter language code, e.g. de.");
     expect(input.getAttribute("aria-describedby")?.split(" ")).toContain(error.id);
     expect(input.getAttribute("aria-invalid")).toBe("true");
     expect(input.value).toBe(code);
@@ -139,11 +139,11 @@ describe("LanguagesField", () => {
     render(<Form onSave={onSave} />);
     const user = userEvent.setup();
     const input = screen.getByLabelText("Languages you can read") as HTMLInputElement;
-    await user.type(input, "deu");
+    await user.type(input, "deut");
     await user.click(screen.getByRole("button", { name: "Save" }));
     expect(onSave).not.toHaveBeenCalled();
-    expect(input.value).toBe("deu");
-    expect(screen.getByRole("alert").textContent).toBe("Use a two-letter language code, e.g. de.");
+    expect(input.value).toBe("deut");
+    expect(screen.getByRole("alert").textContent).toBe("Use a two- or three-letter language code, e.g. de.");
     await user.clear(input);
     await user.type(input, "de{Enter}");
     expect(screen.queryByRole("alert")).toBeNull();
