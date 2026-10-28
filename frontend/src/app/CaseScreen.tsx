@@ -1865,7 +1865,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     : undefined;
   const activeSpanlessType = view.layers?.find(l => l.layer_id === layerSelection.activeLayerId)?.annotation_types.find(t => t.type_id === layerSelection.activeTypeId)
     ?? view.layers?.find(l => l.layer_id === layerSelection.activeLayerId)?.annotation_types[0];
-  // #124: the task profile wins over the project setting. A type that requires a
+  // The task profile wins over the project setting. A type that requires a
   // text span offers no spanless finding at all (no disabled button to explain).
   const spanlessHiddenByProfile = activeSpanlessType?.evidence_policy === "required_on_complete";
   const spanlessBlockedReason = !spanlessHiddenByProfile && view.enforce_spanless_rules && !view.allow_spanless_findings
@@ -2162,6 +2162,13 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     return true;
   };
 
+  /** The proposal's annotation type requires a text span in the task profile. */
+  const targetRequiresSpan = (target: TargetProposal) => {
+    const annotation = targetSnapshotOf(target)?.annotation;
+    const layerId = target.layer_id ?? annotation?.layer_id, typeId = target.type_id ?? annotation?.type_id;
+    return view.layers?.find(l => l.layer_id === layerId)?.annotation_types.find(t => t.type_id === typeId)?.evidence_policy === "required_on_complete";
+  };
+
   // Adopt a review target as an editable draft copy and switch to editing it.
   // The "changed" decision is recorded only once the copy actually differs.
   // Resolves with the copy's id once it is open (null when nothing was copied).
@@ -2193,7 +2200,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
     const sourceSnapshot = targetSnapshotOf(target);
     if (!existingCopy && view.enforce_spanless_rules && !sourceSnapshot?.annotation.evidence_refs?.length && !supportingSegments?.length) {
-      if (!view.allow_spanless_findings) { setPendingEvidenceAdoption(target); setMobilePane("text"); return null; }
+      // No spanless copy is saved where spanless findings are not allowed; the copy starts with the selected text.
+      if (!view.allow_spanless_findings || targetRequiresSpan(target)) { setPendingEvidenceAdoption(target); setMobilePane("text"); return null; }
       if (spanlessNotesRequired && !(reason ?? sourceSnapshot?.annotation.note ?? "").trim()) { setPendingAdoption(target); return null; }
     }
 
@@ -3712,7 +3720,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           isAttachingMention={attachActive || !!linkSpan || isAttachingMention || !!activeReanchor || !!activeCarried || (!!pendingEvidenceAdoption && !confirmRequest)}
           attachMessage={attachActive && attachModifier ? attachCopy.banner(attachModifier.termLabel)
             : linkSpan ? `Select the text for ${linkSpan.term}, then press Enter. Esc cancels.`
-            : activeCarried ? `Select supporting text to re-create ${carriedTermText(activeCarried.source_snapshot)}.` : activeReanchor ? `Select supporting text to re-create ${activeReanchor.term_id}. Save the finding, review its values, then complete the text-change review.` : pendingEvidenceAdoption ? "Select supporting text to create an editable copy of this proposal. The current decision is kept until you confirm the replacement." : undefined}
+            : activeCarried ? `Select supporting text to re-create ${carriedTermText(activeCarried.source_snapshot)}.` : activeReanchor ? `Select supporting text to re-create ${activeReanchor.term_id}. Save the finding, review its values, then complete the text-change review.` : pendingEvidenceAdoption ? `${targetRequiresSpan(pendingEvidenceAdoption) ? "This annotation type requires a text span. " : ""}Select supporting text to create an editable copy of this proposal. The current decision is kept until you confirm the replacement.` : undefined}
           intentMessage={intentMessage}
           // TextPane owns Esc while a banner is shown (window capture): each mode cancels through its own handler.
           onCancelAttach={attachActive ? cancelAttachModifier : linkSpan ? cancelLinkSpan : cancelAttach}

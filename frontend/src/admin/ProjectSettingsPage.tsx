@@ -195,7 +195,7 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved,
   };
   const editAnnotation = (patch: Partial<typeof annotation>) => { setAnnotation({ ...annotation, ...patch }); setSaved(null); };
   const hidden = hiddenCount(annotation.hidden_axis_values);
-  // #124: the task profile wins. Its span-required types ignore the spanless setting.
+  // The task profile wins. Its span-required types ignore the spanless setting.
   const annotationTypes = model.profile.layers.flatMap(layer => layer.annotation_types.map(type => ({ layer, type })));
   const spanRequiredTypes = annotationTypes.filter(({ type }) => type.evidence_policy === "required_on_complete").map(({ type }) => type.label);
   const spanlessLocked = annotationTypes.length > 0 && spanRequiredTypes.length === annotationTypes.length;
