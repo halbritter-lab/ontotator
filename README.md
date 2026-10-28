@@ -1,49 +1,126 @@
 # Ontotator
 
-Ontotator is a self-hosted, multi-user web editor for annotating and reviewing biomedical ontology concepts on clinical text. Users sign in with individual accounts; projects, ontology releases and imports are managed through the administrator CLI.
+Ontotator is a self-hosted web service for collaborative annotation and curation of ontology terms in texts. Several people mark text spans, link them to concepts from an ontology such as the Human Phenotype Ontology (HPO), and review each other's work. Administrators load ontology releases and documents, set up projects and assign people to them. The server runs without internet access; operators supply the ontology releases.
 
-The server stores accounts, sessions, projects and annotations in PostgreSQL, with blobs, ontology files, translations and exports on a persistent data volume. The image includes the React frontend and local ontology search. It needs no internet access at runtime. Ontology releases are supplied by the operator.
+## Features
 
-## Deploy the server
+- Individual accounts with sessions and project roles.
+- Projects with a task profile, imported documents and optional tool proposals.
+- Span annotation with local, offline ontology search.
+- Independent annotation by several people, then review with visible source provenance.
+- Completion checks per annotation layer and detection of conflicting edits.
+- Optional Babelon translations of ontology labels.
+- Export of submissions and pseudonymised edit logs for later analysis.
+- Administrator CLI for users, ontologies and projects.
 
-This repository ships a Docker image and a Compose contract for PostgreSQL, schema migrations and the application. Your deployment repository supplies the host, DNS, HTTPS certificates and reverse proxy (for example Nginx Proxy Manager). The production application has no published host port.
+## Status
 
-Follow the [operations guide](docs/operations.md) for building with the private `ontospan` dependency, separate service secrets, first start, users and projects, upgrades, backups and offline administrator recovery. Copy [.env.docker.template](.env.docker.template) to a private `.env.docker`, link it as `.env` and replace its image and network settings; the template contains no production credentials. Deploy a verified image digest.
+Ontotator is in early development. Interfaces, data formats and the database schema can still change. There are no tagged releases yet.
 
-## Try a disposable development stack
+## Quick start
 
-Use Docker with Compose v2. All credentials in `docker-compose.dev.yml` and `docker/dev-passwords/` are **public, DEVELOPMENT ONLY** fixtures. Never expose or deploy this stack.
+The quickest way to try Ontotator is the disposable development stack. It runs PostgreSQL, the schema migrations and the application in Docker.
 
-The build needs a GitHub token with read access to the pinned private `ontospan` repository. Set `GITHUB_TOKEN_FILE` to the absolute path of a private token file; Compose passes it as a BuildKit secret. See the [build instructions](docs/operations.md#build-and-verify-an-image) for an alternative build using a process environment secret.
+### Prerequisites
+
+- Docker with Compose v2.
+- A GitHub token file. The Docker build installs the `ontospan` Python dependency from GitHub and requires a BuildKit secret named `github_token`: a token that can read the `ontospan` repository.
+
+### Start the stack
 
 ```bash
-export GITHUB_TOKEN_FILE=/absolute/path/to/private-github-token
+export GITHUB_TOKEN_FILE=/absolute/path/to/github-token
 docker compose -f docker-compose.dev.yml up -d --build --wait
 ```
 
-Open `http://127.0.0.1:8000` and log in as **`admin` / `development-only-password`**. PostgreSQL is bound to `127.0.0.1:55432`. Set `ONTOTATOR_DEV_PORT` and `ONTOTATOR_DEV_PG_PORT` before starting to choose other loopback ports; the application origin follows the selected HTTP port. Use `docker compose -f docker-compose.dev.yml` for every command against this stack. Its standalone configuration is not a production override.
+Open `http://127.0.0.1:8000` and sign in as `admin` with the password `development-only-password`.
 
-## Curation workflow
+All credentials in `docker-compose.dev.yml` and `docker/dev-passwords/` are public development fixtures. Never expose or deploy this stack. PostgreSQL listens on `127.0.0.1:55432`. Set `ONTOTATOR_DEV_PORT` and `ONTOTATOR_DEV_PG_PORT` before starting to use other loopback ports.
 
-An administrator loads pinned OBO Graph JSON ontology releases and optional Babelon translations, creates a project with its task profile, gives people project roles, and imports documents and tool proposals in T1 (ontospan) bundles. The browser supports independent annotation, review with visible source provenance, layer-specific completion checks and revision conflict detection. Exported submissions and pseudonymised edit logs support downstream analysis.
+### Demo data
 
-See the [scientific workflow](docs/scientific-workflow.md) for a small two-annotator pilot, and the [operations CLI examples](docs/operations.md#users-ontologies-and-projects) for server administration. Historical [V2 work-package documentation](docs/work-package-v2.md) describes the earlier interchange boundary; current server imports and exports use T1 bundles. The running server uses PostgreSQL. The [translation review JSONL contract](docs/translation-review-export.md) describes review artifacts and their ancestry metadata.
+Seed a fresh stack with synthetic users, an HPO fixture and a small project:
 
-## Development checks
+```bash
+uv sync --dev --locked
+uv run python scripts/seed_stack.py
+```
 
-Install Python 3.11+, `uv`, Node.js/npm and Docker. Dependency installation requires GitHub read access to `ontospan` (for example through your existing Git credential helper).
+The script fails on a database that is already seeded. Stop and remove the stack, including its volumes, with:
+
+```bash
+docker compose -f docker-compose.dev.yml down --volumes
+```
+
+### Run from source
+
+Install Python 3.11 or later, [uv](https://docs.astral.sh/uv/) and Node.js 20 or later. `uv` installs `ontospan` from GitHub automatically.
+
+```bash
+uv sync --dev --locked
+npm --prefix frontend ci
+npm --prefix frontend run build
+uv run ontotator --help
+uv run ontotator serve --help
+```
+
+`ontotator serve` needs a migrated PostgreSQL database (`ontotator db upgrade`) and serves the built frontend from `frontend/dist`.
+
+## Configuration
+
+The server reads `ONTOTATOR_*` environment variables. The main ones are:
+
+| Variable | Purpose |
+| --- | --- |
+| `ONTOTATOR_ENV` | `development` or `production` |
+| `ONTOTATOR_DATABASE_URL`, `ONTOTATOR_DATABASE_PASSWORD_FILE` | Application database connection |
+| `ONTOTATOR_MIGRATION_DATABASE_URL`, `ONTOTATOR_MIGRATION_DATABASE_PASSWORD_FILE` | Schema owner connection for migrations |
+| `ONTOTATOR_DATA_DIR` | Persistent directory for ontologies, translations, blobs and exports |
+| `ONTOTATOR_PUBLIC_ORIGIN` | Exact public origin, for example `https://editor.example.org` |
+| `ONTOTATOR_TRUSTED_PROXIES` | Address of the reverse proxy |
+| `ONTOTATOR_ADMIN_PASSWORD_HASH_FILE` | Argon2id hash for the initial `admin` account |
+| `ONTOTATOR_WORKERS` | Number of Uvicorn workers (1 to 6, default 2) |
+
+Production settings start from [.env.docker.template](.env.docker.template). The [operations guide](docs/operations.md#configuration-and-secrets) explains every setting and how to create the secret files.
+
+## Deployment
+
+The repository ships a `Dockerfile` and a production Compose file, [docker-compose.yml](docker-compose.yml), for PostgreSQL, migrations and the application. The host, DNS, HTTPS certificates and the reverse proxy are up to you; the application publishes no host port. See the [operations guide](docs/operations.md) for building an image, first start, users and projects, upgrades, backups, reverse proxy settings and internet exposure.
+
+Ontotator does not bundle ontology releases. Load OBO Graph JSON releases with the administrator CLI and follow the license and citation terms of each release, for example those of the [Human Phenotype Ontology](https://hpo.jax.org/license). The [scientific workflow](docs/scientific-workflow.md) describes a small two-annotator pilot.
+
+## Security
+
+Please report vulnerabilities privately through GitHub's private vulnerability reporting, or contact the maintainer through GitHub. Do not open a public issue. See [SECURITY.md](SECURITY.md).
+
+## Development
+
+Run the full local check from Git Bash, Linux or macOS. Docker must be running for the PostgreSQL and browser tests.
 
 ```bash
 uv sync --dev --locked
 npm --prefix frontend ci
 npm --prefix frontend exec -- playwright install chromium
 bash scripts/check.sh
-CHECK_CONTAINERS=1 bash scripts/check.sh
-CHECK_CONTAINERS=1 CHECK_IMAGE=ontotator:release bash scripts/check.sh
 ```
 
-Run the gate from Git Bash, Linux or macOS. It covers linting, formatting, typing, OpenAPI/TypeScript drift, wheel contents, unit tests and browser tests. Docker must be running for the PostgreSQL tests, or `ONTOTATOR_TEST_PG_URL` must name a disposable test PostgreSQL superuser database. Container checks add browser smoke on the same disposable stack and need Docker and a build secret or a verified reusable image; set `CHECK_IMAGE` to that local image reference. There is no active CI gate; run the local checks before merging. See [local verification](docs/operations.md#local-verification) and the [representative load-test harness](loadtest/README.md). A passing harness test is not a measured performance result.
+The check covers Ruff linting and formatting, mypy, OpenAPI and TypeScript drift, wheel contents, backend tests, frontend unit tests and Playwright browser tests. `CHECK_CONTAINERS=1 bash scripts/check.sh` adds container checks and a browser smoke test on a disposable stack. See [local checks](docs/operations/local-checks.md) for single phases and worker settings.
 
-## Licensing
+Single tools:
 
-Ontotator does not bundle ontology releases. Observe the license and citation requirements for every release you load, including the [Human Phenotype Ontology](https://hpo.jax.org/license). Bundled dependencies and third-party code are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+```bash
+uv run ruff check .
+uv run ruff format --check .
+uv run mypy src
+uv run pytest
+npm --prefix frontend run typecheck
+npm --prefix frontend test
+```
+
+There is no hosted CI. Run the checks locally before merging.
+
+## License
+
+Ontotator is released under the [MIT License](LICENSE).
+
+It includes adapted code from [hpo-span-annotator](https://github.com/JohannKaspar/hpo-span-annotator) (MIT) and icons from Lucide (ISC). Their license texts are in [LICENSES/](LICENSES/). [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) lists all bundled third-party code and runtime dependencies.

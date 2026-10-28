@@ -13,7 +13,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends git ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-COPY pyproject.toml uv.lock README.md THIRD_PARTY_NOTICES.md ./
+COPY pyproject.toml uv.lock README.md LICENSE THIRD_PARTY_NOTICES.md ./
 COPY LICENSES/ ./LICENSES/
 COPY src/ ./src/
 # Replace committed assets, so a renamed JS bundle cannot leave stale files.
