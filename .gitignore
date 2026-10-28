@@ -48,11 +48,7 @@ workspace/
 # Git worktrees & tooling
 .worktrees/
 worktrees/
-.superpowers/
-docs/superpowers/
 
-# Impeccable (per-developer state)
-.impeccable/
 # Private deployment configuration and generated load-test artifacts
 /secrets/
 /.env*
