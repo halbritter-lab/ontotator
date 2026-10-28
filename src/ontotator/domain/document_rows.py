@@ -201,11 +201,15 @@ def missing_final_counts(
     has_selection: bool,
     submission_count: int,
     assignments: Iterable[AssignmentFact],
-    per_text: int = 1,
 ) -> bool:
-    """Missing final result rule: no selection, at least ``per_text``
-    submissions ("Annotations per text"), all work submitted."""
-    if has_selection or submission_count == 0 or submission_count < per_text:
+    """Missing final result rule: no selection, at least one submission, all
+    work submitted.
+
+    "Annotators per text" is an upper limit (fewer is fine, issue #123): a
+    text with fewer submissions than the limit is ready for its final result
+    once nothing is open any more.
+    """
+    if has_selection or submission_count == 0:
         return False
     return all(
         item.status == "submitted" and not item.held

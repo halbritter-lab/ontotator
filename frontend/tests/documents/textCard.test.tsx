@@ -74,7 +74,7 @@ describe("path", () => {
     expect(within(card()).getByRole("heading", { name: "Translation" })).toBeTruthy();
     expect(within(card()).queryByRole("heading", { name: "Annotation" })).toBeNull();
     fireEvent.click(segmentButton("Finalization"));
-    expect(within(card()).getByText("Starts when all 2 annotations are submitted: compare the results, consolidate the differences, then accept the result.")).toBeTruthy();
+    expect(within(card()).getByText("Starts once an annotation is submitted (up to 2 per text, fewer is fine): compare the results, consolidate the differences, then accept the result.")).toBeTruthy();
   });
 });
 
