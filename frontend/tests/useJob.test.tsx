@@ -1,6 +1,6 @@
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { api } from "../src/api/client";
+import { api, ApiError, NetworkError } from "../src/api/client";
 import { useJob } from "../src/admin/useJob";
 
 const job = (id: number, status = "running") => ({ id, kind: "upload_preview", status, result: null, error: null, created_at: "2026-10-16T10:00:00Z", finished_at: null });
@@ -50,6 +50,30 @@ describe("useJob", () => {
     await act(async () => {});
     expect(result.current.error).toBe(error);
     expect(result.current.job).toBeNull();
+    await act(async () => { await vi.advanceTimersByTimeAsync(6000); });
+    expect(get).toHaveBeenCalledTimes(1);
+  });
+  it("keeps polling through a lost connection or a server error", async () => {
+    const get = vi.spyOn(api, "getJob")
+      .mockResolvedValueOnce(job(1) as never)
+      .mockRejectedValueOnce(new NetworkError(new TypeError("offline")))
+      .mockRejectedValueOnce(new ApiError(502, "Bad gateway"))
+      .mockResolvedValueOnce(job(1, "succeeded") as never);
+    const { result } = renderHook(() => useJob(1));
+    await act(async () => {});
+    await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+    expect(result.current.error).toBeUndefined();
+    expect(result.current.job).toMatchObject({ status: "running" });
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    expect(get).toHaveBeenCalledTimes(4);
+    expect(result.current.job).toMatchObject({ status: "succeeded" });
+  });
+  it("stops on a 4xx answer", async () => {
+    const error = new ApiError(404, "Not found");
+    const get = vi.spyOn(api, "getJob").mockRejectedValue(error);
+    const { result } = renderHook(() => useJob(1));
+    await act(async () => {});
+    expect(result.current.error).toBe(error);
     await act(async () => { await vi.advanceTimersByTimeAsync(6000); });
     expect(get).toHaveBeenCalledTimes(1);
   });
