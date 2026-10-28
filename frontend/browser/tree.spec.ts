@@ -127,8 +127,9 @@ test.describe("ontology tree", () => {
 
   test("open the tree at a term, pick a child and use it", async ({ page }) => {
     // Taller than the default: the monospace term IDs use the system font, which is wider
-    // on Linux and wraps a row, so the start term would not fit in 720 px there.
-    await openWithSeizure(page, "tree-pick", { width: 1280, height: 900 });
+    // on Linux and wraps a row, so the start term would not fit in 720 px there. Two more
+    // rows since the fixture holds the modifier roots beside Phenotypic abnormality.
+    await openWithSeizure(page, "tree-pick", { width: 1280, height: 1000 });
     const commands: string[] = [];
     page.on("request", (request) => {
       if (request.method() === "POST" && /\/api\/v1\/workspaces\/[^/]+\/commands$/.test(request.url())) {
