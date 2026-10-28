@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
-TEMPLATE = ROOT / "examples/t5-acceptance"
+TEMPLATE = ROOT / "examples/acceptance"
 SOURCES = TEMPLATE / "full-hpo-sources.json"
 
 
@@ -60,7 +60,7 @@ def prepare_inputs(
         ontology, [source / item["filename"] for item in specification["translations"]]
     )
     profile = json.loads((TEMPLATE / "profile.json").read_text(encoding="utf-8"))
-    profile["profile_id"] = "t5-full-hpo-acceptance/v1"
+    profile["profile_id"] = "full-hpo-acceptance/v1"
     pin = specification["ontology"]["sha256"]
     profile["ontologies"][0].update(release=specification["release"], sha256=pin)
     TaskProfile.model_validate(profile)
@@ -99,7 +99,7 @@ def prepare_inputs(
     ontospan.write_bundle(
         output / "demo.zip",
         units,
-        bundle_id="t5-full-hpo-acceptance-" + specification["release"],
+        bundle_id="full-hpo-acceptance-" + specification["release"],
         created_at=datetime(2026, 10, 18, tzinfo=UTC),
     )
     writer = importlib.metadata.distribution("ontospan")
@@ -145,12 +145,12 @@ def main() -> None:
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--source-manifest", type=Path, default=SOURCES)
     args = parser.parse_args()
-    allowed = (ROOT / "build/t5-acceptance").resolve()
+    allowed = (ROOT / "build/acceptance").resolve()
     if (
         args.output_dir.resolve() == allowed
         or not args.output_dir.resolve().is_relative_to(allowed)
     ):
-        parser.error("Output must be a new directory below ignored build/t5-acceptance")
+        parser.error("Output must be a new directory below ignored build/acceptance")
     manifest = prepare_inputs(args.source_dir, args.output_dir, args.source_manifest)
     print(
         json.dumps(

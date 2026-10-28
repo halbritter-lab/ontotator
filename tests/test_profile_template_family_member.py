@@ -11,7 +11,9 @@ from ontotator.ontology.store import OntologyFile
 from ontotator.projects.service import clinical_creation_defaults
 
 EXPERIENCER = ["patient", "family_member", "other"]
-T5_PROFILE = Path(__file__).parents[1] / "examples" / "t5-acceptance" / "profile.json"
+ACCEPTANCE_PROFILE = (
+    Path(__file__).parents[1] / "examples" / "acceptance" / "profile.json"
+)
 
 
 def template() -> TaskProfile:
@@ -45,8 +47,8 @@ def test_template_is_a_t1_hpo_profile() -> None:
     check_t1_profile(profile, pins)
 
 
-def test_t5_seed_profile_lists_family_member() -> None:
+def test_acceptance_seed_profile_lists_family_member() -> None:
     profile = TaskProfile.model_validate(
-        json.loads(T5_PROFILE.read_text(encoding="utf-8"))
+        json.loads(ACCEPTANCE_PROFILE.read_text(encoding="utf-8"))
     )
     assert experiencer_options(profile) == EXPERIENCER
