@@ -587,6 +587,8 @@ textarea.form-control {
 .data-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 .data-table th, .data-table td { padding: var(--cell-pad-y) var(--cell-pad-x); border-bottom: 1px solid var(--border); vertical-align: top; }
 .data-table th { font-weight: var(--weight-strong); background: var(--surface-sunken); }
+/* Row headers (rowHeader columns) read as body cells: no header shading. */
+.data-table tbody th { background: transparent; text-align: start; }
 .data-table .is-selected { background: var(--accent-light); }
 .data-table .is-selected > td:first-child { box-shadow: inset 2px 0 var(--accent); }
 .data-table-sort { display: inline-flex; align-items: center; gap: var(--space-1); padding: 0; border: 0; color: inherit; background: transparent; font: inherit; cursor: pointer; text-align: inherit; }
@@ -646,10 +648,12 @@ a.shell-product { color: inherit; text-decoration: none; }
 .shell-page:has(> .users-page) { max-width: none; }
 .users-page > .detail-section > .toolbar { align-items: end; }
 .users-page td .toolbar { flex-wrap: nowrap; }
+/* Ten columns fit 1280 px without sideways scrolling: tighter cell insets, as in the documents table. */
+.users-page .data-table { --cell-pad-x: var(--space-2); }
 /* The row of the last (de)activation or anonymisation (its result is the notice above the table). */
 .users-page .users-row--changed > td { background: var(--accent-light); }
 .users-page .users-row { cursor: pointer; }
-.users-page .users-row > td:first-child { overflow-wrap: anywhere; }
+.users-page .users-row > td:first-child { white-space: nowrap; }
 /* Each project on one line: its name, then the role badges (wrapping only when the cell is full). */
 .users-page td li { display: flex; flex-wrap: wrap; align-items: center; gap: 2px var(--space-1); }
 .users-page td li + li { margin-top: var(--space-1); }
