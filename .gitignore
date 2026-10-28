@@ -49,11 +49,10 @@ workspace/
 .worktrees/
 worktrees/
 .superpowers/
+docs/superpowers/
 
 # Impeccable (per-developer state)
-.impeccable/config.local.json
-.impeccable/review/
-.impeccable/hook.cache.json
+.impeccable/
 # Private deployment configuration and generated load-test artifacts
 /secrets/
 /.env*

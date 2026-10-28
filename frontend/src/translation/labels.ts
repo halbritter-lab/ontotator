@@ -122,7 +122,7 @@ export function checkLabel(code: unknown): string {
   return Object.prototype.hasOwnProperty.call(checkLabels, value) ? checkLabels[value] : humanize(value);
 }
 
-/** Draft explanations; confirmed by the user before release (docs/superpowers/reviews/2026-10-19-translation-check-explanations-review.md). */
+/** Draft explanations; confirmed by the maintainer before release. */
 export const checkExplanations: Readonly<Record<string, string>> = {
   units_added: "The translation run's check found a unit of measurement in the translation that it did not find in the source.",
   numbers_changed: "The translation run's check found numbers in the translation that differ from those in the source.",

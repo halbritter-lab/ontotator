@@ -339,7 +339,7 @@ describe("account status, projects at creation, history and erasure", () => {
 
   it("words audit actors", () => {
     expect(auditActor("user:lena")).toBe("lena");
-    expect(auditActor("cli:jan-p")).toBe("Command line (jan-p)");
+    expect(auditActor("cli:operator")).toBe("Command line (operator)");
     expect(auditActor("system:bootstrap")).toBe("System");
     expect(auditActor("odd")).toBe("odd");
   });

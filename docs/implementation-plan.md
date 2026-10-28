@@ -1,7 +1,5 @@
 # Local HPO Editor with Python — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Für dieses Vorhaben wird direkte Umsetzung mit `executing-plans` empfohlen; die Ausführungsmethode ist noch nicht gewählt.
-
 **Goal:** Eine eigenständige lokale Anwendung zum Annotieren und Prüfen von HPO-Annotationen beliebiger Herkunft bereitstellen, mit überprüfbarem Import-/Export-Rundlauf.
 
 **Architecture:** Ein lokaler Python-Prozess betreibt API, Ontologiesuche, SQLite-Arbeitsbereich und die gebaute Browseroberfläche. Pydantic definiert die Serververträge; TypeScript-API-Typen werden daraus über OpenAPI generiert. Unveränderliche Eingaben und Abgaben sind von veränderlichen, revisionsgeschützten Entwürfen getrennt.
@@ -12,7 +10,7 @@
 
 ## Global Constraints
 
-- Eigenständiges Repository `C:/Users/jan-p/Development/ontocurator`; vorhandene gleichnamige Verzeichnisse vor Anlage prüfen, nicht überschreiben.
+- Eigenständiges Repository (dieses Repository); vorhandene gleichnamige Verzeichnisse vor Anlage prüfen, nicht überschreiben.
 - Menschliche und maschinelle Eingaben verwenden dasselbe Annotationsmodell, dieselben Import-, Bearbeitungs-, Validierungs-, Review- und Exportregeln.
 - Zunächst genügt eine ärztliche Prüfung pro Fall; getrennte Datensätze für weitere Prüfende, keine Zusammenführungsoberfläche.
 - Der primäre Einstieg ist das Markieren von Text. Annotationen ohne Belegstelle sind ausdrücklich möglich.
