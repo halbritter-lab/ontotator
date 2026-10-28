@@ -331,7 +331,8 @@ export function answerNotice(r: ProblemReportView, held: boolean): string {
   const last = historyItems(r).at(-1);
   const lead = [...(r.events ?? [])].sort(byCreatedAt).filter(e => e.actor_label !== r.reporter_label).at(-1);
   const outcome = (r.state === "resolved" && r.resolution ? r.resolution : last?.quote ?? last?.sentence ?? reportStateFact(r)).trim().replace(/\.$/, "");
-  return `Your problem report was answered${lead ? ` by ${lead.actor_label}` : ""}: ${outcome}.${held ? "" : " You can continue."}`;
+  // The server fills names of others only where D1 allows; otherwise the pseudonym.
+  return `Your problem report was answered${lead ? ` by ${lead.actor?.display_name?.trim() || lead.actor_label}` : ""}: ${outcome}.${held ? "" : " You can continue."}`;
 }
 
 /** The viewer's own report on a task whose answer the task page shows: an unread answer, else one closed by someone else; newest. */
