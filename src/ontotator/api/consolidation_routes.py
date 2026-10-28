@@ -71,6 +71,9 @@ class ConsolidationResultView(_View):
     layer_id: str
     axes: dict[str, str]
     modifiers: list[ConsolidationModifierView] = []
+    # The kept finding's text (codepoint ranges; empty without a span). Two
+    # kept findings of one term are a duplicate only on overlapping spans (R-3).
+    spans: list[tuple[int, int]] = []
 
 
 class ConsolidationGroupView(_View):
