@@ -512,7 +512,9 @@ BABELON_VALUE_SEPARATOR = "|"
 
 
 def _babelon_language(row: dict[str, str], fallback: str) -> str:
-    return (row.get("translation_language") or fallback or "").strip().lower()[:2]
+    # The primary subtag in full: "nna" is Nynorsk, not "nn"; "pt-BR" is "pt".
+    raw = (row.get("translation_language") or fallback or "").strip().lower()
+    return raw.replace("_", "-").split("-", 1)[0]
 
 
 def _babelon_status(row: dict[str, str]) -> str:

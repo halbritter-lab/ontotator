@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from ontotator.packages.models import SearchEventRecord
 
 Digest = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
-Language = Annotated[str, Field(pattern=r"^[a-z]{2}$")]
+Language = Annotated[str, Field(pattern=r"^[a-z]{2,3}$")]
 
 
 class RuntimeIdentity(BaseModel):

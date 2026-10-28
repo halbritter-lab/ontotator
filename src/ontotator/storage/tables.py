@@ -800,7 +800,7 @@ class UserLanguageRow(Base):
     """A user's supported language codes."""
 
     __tablename__ = "user_languages"
-    __table_args__ = (CheckConstraint("language ~ '^[a-z]{2}$'", name="language"),)
+    __table_args__ = (CheckConstraint("language ~ '^[a-z]{2,3}$'", name="language"),)
 
     user_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey(UserRow.id, ondelete="CASCADE"), primary_key=True

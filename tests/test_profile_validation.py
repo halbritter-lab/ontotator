@@ -18,7 +18,7 @@ def test_languages_normalize_and_reject_long_codes():
     assert callable(validate), "language validation is missing"
     assert validate(["DE", "en", "de"]) == frozenset({"de", "en"})
     with pytest.raises(DomainError) as exc:
-        validate(["deu"])
+        validate(["deut"])
     assert exc.value.code == "LANGUAGE_INVALID"
 
 

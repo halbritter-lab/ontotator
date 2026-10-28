@@ -121,7 +121,7 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   INVALID_TARGET_SET: "The review targets do not match this workspace.",
   INVALID_TRANSLATION: "The translation file could not be read. Check its format and contents.",
   LANGUAGE_CONFIRMATION_REQUIRED: "This language is not in the assignee's profile. Confirm the assignment explicitly.",
-  LANGUAGE_INVALID: "Use two-letter language codes, such as de or en.",
+  LANGUAGE_INVALID: "Use two- or three-letter language codes, such as de or en.",
   LANGUAGE_NOT_IN_PROJECT: "This language is not enabled for the project.",
   LANGUAGE_REQUIRED: "Choose a language for the uploaded text.",
   LAST_LEAD: "Add another project lead before removing the last lead.",

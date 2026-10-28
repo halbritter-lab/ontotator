@@ -19964,7 +19964,7 @@
           "fitting_languages": {
             "items": {
               "type": "string",
-              "pattern": "^[a-z]{2}$"
+              "pattern": "^[a-z]{2,3}$"
             },
             "type": "array",
             "maxItems": 33,
