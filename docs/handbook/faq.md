@@ -10,7 +10,7 @@ Ask a system administrator for a reset code. Ontotator sends no e-mail. Then cli
 
 ### The login says "Username or password is wrong, or the account is temporarily locked."
 
-Check the spelling of your username. After several wrong passwords the account is locked for a while; wait and try again. If you no longer know the password, ask an administrator for a reset code.
+Check the spelling of your username. After 5 wrong passwords within 15 minutes, login for that username from your network is locked for up to 15 minutes; wait and try again. If you no longer know the password, ask an administrator for a reset code.
 
 ### My setup or reset code does not work
 
@@ -78,7 +78,7 @@ The same task was changed in another window or by someone else. Click **Reload c
 
 ### The save status says "Offline – changes not saved"
 
-The connection to the server is lost. Keep the window open; your input stays in the editor. When the connection is back, click **Retry**.
+The connection to the server is lost. Keep the window open; your input stays in the editor. When the connection is back, saving usually resumes on its own; if the status stays, click **Retry**.
 
 ## Translation review
 
@@ -112,7 +112,7 @@ Some texts still need your decision or have no final result. Either decide them 
 
 ### I cannot remove a lead
 
-A project needs at least one lead. Add another lead first, then remove the role. See [Change a member's roles](lead.md#change-a-members-roles-people).
+A project needs at least one lead. Add another lead first, then remove the role. See [Change a member's roles](lead.md#change-a-members-roles).
 
 ### "Save changes" is disabled in the settings
 

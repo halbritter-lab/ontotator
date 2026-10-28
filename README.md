@@ -85,6 +85,13 @@ uv run ontotator serve --help
 
 `ontotator serve` needs a migrated PostgreSQL database (`ontotator db upgrade`) and serves the web UI bundled in `src/ontotator/web` (as in the Docker image), falling back to a `frontend/dist` build in a source checkout; `--web-dir` overrides both.
 
+## Documentation
+
+- [User handbook](docs/handbook/README.md): how annotators, consolidators, leads and administrators work in the app.
+- [Operations guide](docs/operations.md): installation, configuration, upgrades, backups and internet exposure.
+- [Scientific workflow](docs/scientific-workflow.md): a small two-annotator pilot.
+- [Translation review export](docs/translation-review-export.md): the export format of translation reviews.
+
 ## Configuration
 
 The server reads `ONTOTATOR_*` environment variables. The main ones are:

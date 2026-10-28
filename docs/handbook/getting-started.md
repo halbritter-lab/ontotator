@@ -49,6 +49,7 @@ The header is the same on every page:
 - **Ontotator** on the left takes you to the start page.
 - The breadcrumb shows where you are, for example **My tasks** or **Documents**.
 - On the right are your display name, your pseudonym, your roles and **Log out**.
+- **Handbook** in the header opens this handbook in a new tab.
 
 The navigation lists **My tasks**, **Projects** and **Profile**. The number after **My tasks** counts your open tasks. Leads also see their project's pages (**Documents**, **Progress**, **Settings**, **Export**), and system administrators see **Administration**. In the editor the navigation folds into **Sections**; click it to open it.
 

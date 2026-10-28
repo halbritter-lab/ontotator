@@ -3,6 +3,9 @@ import type { CurrentUser } from "../api/client";
 import { personLabel } from "../app/identity";
 import { Button } from "./Button";
 import { ShortcutHelpHost } from "./ShortcutHelp";
+import { onSpaceActivate } from "./spaceActivates";
+
+export const HANDBOOK_URL = "https://github.com/halbritter-lab/ontotator/blob/main/docs/handbook/README.md";
 
 export interface Crumb {
   label: string; onClick?: () => void; href?: string;
@@ -68,6 +71,7 @@ export function AppShell({ user, onLogout, breadcrumb, actions, nav, navLabel = 
           <span className="current-user-name">{personLabel(user)}</span>
           {role && <span className="cell-secondary">{role}</span>}
         </span>}
+        <a className="btn btn-quiet btn-sm" href={HANDBOOK_URL} target="_blank" rel="noopener noreferrer" onKeyDown={onSpaceActivate}>Handbook</a>
         {onLogout && <Button size="sm" onClick={onLogout}>Log out</Button>}
       </div>
     </header>

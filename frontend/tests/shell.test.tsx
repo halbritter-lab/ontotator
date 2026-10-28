@@ -147,6 +147,14 @@ describe("role-based shell", () => {
     expect(window.location.hash).toBe("#/tasks/42");
   });
 
+  it("links the user handbook in a new tab", () => {
+    render(<Shell {...props()} />);
+    const link = screen.getByRole("link", { name: "Handbook" });
+    expect(link.getAttribute("href")).toBe("https://github.com/halbritter-lab/ontotator/blob/main/docs/handbook/README.md");
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(link.getAttribute("rel")).toBe("noopener noreferrer");
+  });
+
   it("uses reading density only for task routes", () => {
     const { rerender } = render(<Shell {...props({ route: { name: "task", assignmentId: 42 } })} />);
     expect(screen.getByRole("main").classList.contains("density-reading")).toBe(true);

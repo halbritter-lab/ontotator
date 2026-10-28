@@ -124,7 +124,7 @@ What for: see which releases are on the server and which projects use them.
 4. Click **Copy** next to a checksum to copy it.
 5. Click **Refresh inventory** to reload the list.
 
-To move a project to a newer release, upload it here, then follow [Move a started project to a newer ontology release](lead.md#move-a-started-project-to-a-newer-ontology-release).
+To move a project to a newer release, upload it here, then follow [Move a started project to a newer release](lead.md#move-a-started-project-to-a-newer-release).
 
 ## Create a project
 
@@ -136,7 +136,7 @@ What for: start a new project with its ontology and annotation scheme. Only syst
 4. Under **Profile source**, keep **Built-in template** and choose a template. Or choose **Upload profile JSON** and pick a task profile file.
 5. For each ontology, choose the release in its ontology file field. Optionally limit the allowed branches and choose the annotation scheme. For HPO, both are filled in for you.
 6. Click **Create project**.
-7. The project's settings open on **People**. Add the lead and the other members, see [Add a member](lead.md#add-a-member-people).
+7. The project's settings open on **People**. Add the lead and the other members, see [Add a member](lead.md#add-a-member).
 
 ![New project form with key, name, template and ontology file filled in](images/admin-new-project.png)
 
