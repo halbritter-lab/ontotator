@@ -719,3 +719,22 @@ def test_bundle_expansion_is_bounded_before_ontospan_reads_it(
     upload = _ready(app, admin, kind="t1", name=path.name, data=path.read_bytes())
     assert upload["status"] == "invalid"
     assert upload["preview"]["errors"][0]["code"] == "too_large"
+
+
+def test_commit_refuses_while_another_import_holds_the_lock(staged, monkeypatch):
+    from ontotator.exchange import uploads
+    from ontotator.storage.repository import _lock_id
+
+    app, admin = staged
+    upload = _ready(app, admin)
+    monkeypatch.setattr(uploads, "IMPORT_LOCK_TIMEOUT", "100ms")
+    before = _count(app, JobRow)
+    with app.state.repo.db.engine.begin() as holder:
+        holder.execute(select(func.pg_advisory_xact_lock(_lock_id("import"))))
+        response = admin.post(
+            f"{BASE}/{upload['id']}/commit", json={"plan_sha256": upload["plan_sha256"]}
+        )
+    assert response.status_code == 409
+    assert response.json()["code"] == "IMPORT_BUSY"
+    assert _count(app, JobRow) == before
+    assert _commit(app, admin, upload).status == "succeeded"

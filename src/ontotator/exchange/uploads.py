@@ -10,8 +10,10 @@ from typing import Any, Literal, cast
 
 import ontospan
 from ontospan.bundle import MAX_ENTRIES
+from psycopg.errors import LockNotAvailable
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import Connection, func, insert, select, update
+from sqlalchemy import Connection, func, insert, select, text, update
+from sqlalchemy.exc import OperationalError
 
 from ontotator.auth.audit import Actor, record_audit
 from ontotator.authz.policy import Action
@@ -122,6 +124,10 @@ class UploadView(BaseModel):
     preview_job_id: int | None = None
     commit_job_id: int | None
     created_at: datetime
+
+
+IMPORT_LOCK_TIMEOUT = "5s"
+"""How long a commit request waits for the import locks before ``IMPORT_BUSY``."""
 
 
 def lock_import(conn: Connection, key: str, actor: Actor) -> int:
@@ -1143,7 +1149,26 @@ class UploadService:
             if accept_external_review is not None
             else None,
         )
+        try:
+            return self._commit(key, upload_id, digest, normalized, choices)
+        except OperationalError as exc:
+            if not isinstance(exc.orig, LockNotAvailable):
+                raise
+            raise DomainError(
+                "IMPORT_BUSY", "Another import is running; try again shortly."
+            ) from None
+
+    def _commit(
+        self,
+        key: str,
+        upload_id: int,
+        digest: str,
+        normalized: Sequence[StatusOverride],
+        choices: PlanChoices,
+    ) -> dict[str, int]:
         with self.db.transaction() as conn:
+            # A request thread must not wait for an import in another project.
+            conn.execute(text(f"SET LOCAL lock_timeout = '{IMPORT_LOCK_TIMEOUT}'"))
             project_id = lock_import(conn, key, self.actor)
             row = self._row(conn, project_id, upload_id)
             if row.status != "ready" or row.plan_sha256 != digest:
