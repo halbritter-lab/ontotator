@@ -1,0 +1,122 @@
+# The complete local gate (scripts/check.sh, docs/operations/local-checks.md) split into parallel jobs.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "24"
+  # ontospan is a private Git dependency until it goes public; the token is optional.
+  ONTOSPAN_TOKEN: ${{ secrets.ONTOSPAN_TOKEN }}
+
+jobs:
+  backend:
+    name: Backend (lint, types, drift, pytest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The checkout's GITHUB_TOKEN header would override the ontospan token.
+          persist-credentials: false
+      - name: Authenticate the ontospan Git dependency
+        run: &ontospan-auth |
+          if [ -n "$ONTOSPAN_TOKEN" ]; then
+            for repo in janpower/ontospan halbritter-lab/ontospan; do
+              git config --global "url.https://x-access-token:${ONTOSPAN_TOKEN}@github.com/${repo}.insteadOf" "https://github.com/${repo}"
+            done
+          fi
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy src
+      - run: uv run python scripts/export_openapi.py --check
+      - run: uv run python scripts/export_admin_error_codes.py --check
+      # PostgreSQL comes from a testcontainer (tests/pg_harness.py); the runner has Docker.
+      - run: uv run pytest -q -n 4 --durations=20
+
+  frontend:
+    name: Frontend (types, API drift, vitest, bundle)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm --prefix frontend ci
+      - run: npm --prefix frontend run typecheck
+      - run: npm --prefix frontend run api:check
+      - run: npm --prefix frontend test
+      - run: npm --prefix frontend run build
+      - name: Embedded bundle matches the build
+        run: diff -r frontend/dist src/ontotator/web
+
+  browser:
+    name: Browser (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Authenticate the ontospan Git dependency
+        run: *ontospan-auth
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm --prefix frontend ci
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      # Builds the frontend, then runs all specs against tests/browser_server.py (testcontainer PostgreSQL).
+      - run: npm --prefix frontend run test:e2e
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results
+          path: |
+            frontend/test-results/
+            frontend/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  wheel:
+    name: Wheel (lock and contents)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Authenticate the ontospan Git dependency
+        run: *ontospan-auth
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - run: uv run python scripts/check_wheel.py --out-dir build/check-wheel
