@@ -10,7 +10,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path
 
-from sqlalchemy import Connection, Engine, create_engine
+from sqlalchemy import Connection, Engine, create_engine, func, select
 from sqlalchemy.engine import URL, make_url
 
 from ontotator.storage.blobs import BlobStore
@@ -229,6 +229,24 @@ class Database:
                 ) from ambient.failure
         finally:
             self._current.reset(token)
+
+    @staticmethod
+    def lock_blob(conn: Connection, sha256: str) -> None:
+        """Serialize writing, referencing and deleting one blob until ``conn`` ends."""
+        conn.execute(
+            select(func.pg_advisory_xact_lock(advisory_lock_id("blob", sha256)))
+        )
+
+    def put_blob(self, conn: Connection, data: bytes) -> str:
+        """Store ``data`` under the blob lock of ``conn``'s transaction.
+
+        Record its ``stored_files`` row and reference in that same transaction;
+        then a discard cannot delete the file before the reference exists.
+        """
+        digest = hashlib.sha256(data).hexdigest()
+        self.lock_blob(conn, digest)
+        self.blobs.put(data)
+        return digest
 
     def close(self) -> None:
         """Close all pooled connections (after the server has stopped)."""

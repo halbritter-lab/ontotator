@@ -9,15 +9,44 @@ import re
 import zipfile
 import zlib
 from collections.abc import Sequence
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 
 import ontospan
-from ontospan.bundle import MAX_TOTAL_BYTES
+from ontospan.bundle import MAX_ENTRIES
 
 from ontotator.domain.documents import Document
 from ontotator.exchange.plan import IncomingUnit, Issue
 
 DOCUMENT_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+MAX_EXPANDED_BYTES = 128 * 1024 * 1024
+"""Bytes all files of one web text upload may expand to.
+
+Its preview runs in the app process (2 GiB container) and holds several copies
+of the text, so this is well below ontospan's 512 MiB bound, which T1 bundles
+and the CLI import keep.
+"""
+
+
+def expanded_size(path: Path) -> tuple[int, int]:
+    """Bytes and entries a stored file expands to, from a ZIP's directory only."""
+    if not zipfile.is_zipfile(path):
+        return path.stat().st_size, 1
+    try:
+        with zipfile.ZipFile(path) as archive:
+            infos = _entries(archive)
+    except zipfile.BadZipFile:
+        return path.stat().st_size, 1  # the reader reports the broken archive
+    return sum(info.file_size for info in infos), len(infos)
+
+
+def _entries(archive: zipfile.ZipFile) -> list[zipfile.ZipInfo]:
+    """The files of an archive, without directories and macOS metadata."""
+    return [
+        i
+        for i in archive.infolist()
+        if not i.is_dir() and not i.filename.startswith("__MACOSX/")
+    ]
 
 
 def read_text_upload(
@@ -25,16 +54,20 @@ def read_text_upload(
     language: str,
     *,
     languages: Sequence[str] = (),
+    max_bytes: int | None = None,
 ) -> tuple[list[IncomingUnit], list[Issue]]:
     """Canonicalize text, preserving the hash of each file's original bytes.
 
     ``languages`` is the project's current allowlist; an empty list is unrestricted.
-    ZIP limits use the pinned ontospan reader's expansion bound, across all files.
+    ZIP limits (``max_bytes``, default ``MAX_EXPANDED_BYTES``, and ontospan's
+    ``MAX_ENTRIES``) apply across all files.
     """
     units: list[IncomingUnit] = []
     issues: list[Issue] = []
     seen: set[str] = set()
+    limit = MAX_EXPANDED_BYTES if max_bytes is None else max_bytes
     expanded = 0
+    entries = 0
 
     def error(code: str, label: str, message: str) -> None:
         issues.append(Issue(code=code, unit=label, message=message))
@@ -87,20 +120,18 @@ def read_text_upload(
     for name, data in files:
         if PurePosixPath(name).suffix.lower() != ".zip":
             expanded += len(data)
-            if expanded > MAX_TOTAL_BYTES:
+            entries += 1
+            if expanded > limit or entries > MAX_ENTRIES:
                 error("too_large", name, "Upload exceeds the expanded size limit")
                 continue
             text(name, name, data)
             continue
         try:
             with zipfile.ZipFile(io.BytesIO(data)) as archive:
-                infos = [
-                    i
-                    for i in archive.infolist()
-                    if not i.is_dir() and not i.filename.startswith("__MACOSX/")
-                ]
+                infos = _entries(archive)
                 expanded += sum(i.file_size for i in infos)
-                if expanded > MAX_TOTAL_BYTES:
+                entries += len(infos)
+                if expanded > limit or entries > MAX_ENTRIES:
                     error("too_large", name, "Upload exceeds the expanded size limit")
                     continue
                 names: set[str] = set()

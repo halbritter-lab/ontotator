@@ -440,6 +440,7 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
                     "DISTRIBUTION_STALE": 409,
                     "SELF_LOCKOUT": 409,
                     "UPLOAD_STALE": 409,
+                    "IMPORT_BUSY": 409,
                     "PASSWORD_WRONG": 403,
                     "PROJECT_EXISTS": 409,
                     "PROJECT_IN_USE": 409,

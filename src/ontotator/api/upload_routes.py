@@ -78,14 +78,21 @@ async def create_upload(
                 data.extend(chunk)
             received.append((file.filename or "upload", bytes(data)))
         db = request.app.state.repo.db
-        stored = []
-        for name, content in received:
-            sha = await run_in_threadpool(store_file, db, content)
-            stored.append(UploadFileInfo(filename=name, sha256=sha, size=len(content)))
-        result = await run_in_threadpool(
-            _service(request, principal).create, key, kind, language, stored
-        )
-        return UploadCreated(**result)
+        service = _service(request, principal)
+
+        def create() -> dict[str, int]:
+            # One transaction: a discard cannot delete a blob before this upload
+            # references it.
+            with db.transaction():
+                stored = [
+                    UploadFileInfo(
+                        filename=name, sha256=store_file(db, content), size=len(content)
+                    )
+                    for name, content in received
+                ]
+                return service.create(key, kind, language, stored)
+
+        return UploadCreated(**await run_in_threadpool(create))
     finally:
         for file in files:
             await file.close()

@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 import ontospan
-from sqlalchemy import select
+from sqlalchemy import Connection, Text, cast, delete, exists, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from ontotator.auth.audit import Actor, record_audit
@@ -39,22 +39,89 @@ from ontotator.exchange.uploads import upload_commit, upload_preview
 from ontotator.jobs.queue import Handler, Job, JobContext, StructuredJobError
 from ontotator.storage.database import Database
 from ontotator.storage.repository import ProjectExport
-from ontotator.storage.tables import JobRow, ProjectRow, StoredFileRow, UserRow
+from ontotator.storage.tables import (
+    JobRow,
+    OntologyFileRow,
+    ProjectResourceRow,
+    ProjectRow,
+    ProposalSetRow,
+    StoredFileRow,
+    UploadRow,
+    UserRow,
+)
 
 # How many ontospan issues a failed job names in its error.
 MAX_ISSUES = 20
 
 
 def store_file(db: Database, data: bytes) -> str:
-    """Put ``data`` in the blob store and record it in ``stored_files``."""
-    digest = db.blobs.put(data)
+    """Put ``data`` in the blob store and record it in ``stored_files``.
+
+    Record the reference in the same transaction, as uploads do, so that
+    ``delete_unreferenced_file`` cannot remove the file in between.
+    """
     with db.transaction() as conn:
+        digest = db.put_blob(conn, data)
         conn.execute(
             pg_insert(StoredFileRow)
             .values(sha256=digest, size=len(data))
             .on_conflict_do_nothing()
         )
     return digest
+
+
+def delete_unreferenced_file(conn: Connection, digest: str) -> bool:
+    """Delete the ``stored_files`` row of a file nothing references; whether it did.
+
+    References are uploads that are not discarded, job payloads and results
+    (imports, exports), proposal sets, project resources and ontology files.
+    Runs in the caller's transaction; after it commits, ``unlink_deleted_files``
+    removes the files. shortcut: a job payload or result is recorded after its
+    ``store_file`` commits, so a discard of identical bytes in between drops the
+    row and file it needs; hold the blob lock until the job row is written if
+    exports or CLI imports ever coincide byte-for-byte with discarded uploads.
+    """
+    Database.lock_blob(conn, digest)
+    referenced = conn.execute(
+        select(
+            or_(
+                exists().where(
+                    UploadRow.status != "discarded",
+                    cast(UploadRow.files, Text).contains(digest),
+                ),
+                exists().where(
+                    or_(
+                        cast(JobRow.payload, Text).contains(digest),
+                        cast(JobRow.result, Text).contains(digest),
+                    )
+                ),
+                exists().where(ProposalSetRow.source_sha256 == digest),
+                exists().where(ProjectResourceRow.sha256 == digest),
+                exists().where(OntologyFileRow.sha256 == digest),
+            )
+        )
+    ).scalar_one()
+    if referenced:
+        return False
+    conn.execute(delete(StoredFileRow).where(StoredFileRow.sha256 == digest))
+    return True
+
+
+def unlink_deleted_files(db: Database, digests: Sequence[str]) -> None:
+    """Remove the files whose ``stored_files`` rows a committed discard deleted.
+
+    Under the blob lock, a file stored again since then has its row back and stays.
+    """
+    for digest in digests:
+        with db.transaction() as conn:
+            Database.lock_blob(conn, digest)
+            if (
+                conn.execute(
+                    select(StoredFileRow.sha256).where(StoredFileRow.sha256 == digest)
+                ).first()
+                is None
+            ):
+                db.blobs.delete(digest)
 
 
 def operator_access(actor: Actor) -> Access:

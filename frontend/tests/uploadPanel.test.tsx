@@ -146,6 +146,8 @@ it("surfaces a failed restored preview job without offering import", async () =>
   fireEvent.click(await screen.findByRole("button", { name: "Resume upload 7" }));
   await screen.findByText("Job failed: T1_INVALID: invalid source");
   expect(screen.queryByRole("button", { name: "Import" })).toBeNull();
+  // A failed upload can still be discarded, which deletes its files.
+  await screen.findByRole("button", { name: "Discard" });
 });
 it("keeps a safe manual refresh for legacy previewing uploads without a job ID", async () => {
   const legacy: UploadView = { ...view, status: "previewing", preview: null, plan_sha256: null, preview_job_id: null };

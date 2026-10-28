@@ -113,6 +113,7 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   GUIDELINE_NOT_FOUND: "This guideline version does not exist.",
   HOST_NOT_ALLOWED: "This server address is not allowed. Use the configured application address.",
   IDENTITY_MISMATCH: "You can only work under your own pseudonym.",
+  IMPORT_BUSY: "Another import is running. Try again in a moment.",
   INCOMPLETE_AXES: "Choose all required axis values before submitting.",
   INCOMPLETE_REVIEW: "Complete the review decisions before submitting.",
   INVALID_ANNOTATION: "The annotation is invalid. Check its evidence and values.",

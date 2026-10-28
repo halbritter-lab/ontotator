@@ -78,16 +78,25 @@ def test_language_must_be_in_project_allowlist():
 
 
 def test_zip_expansion_is_bounded_before_reading_entries(monkeypatch):
-    monkeypatch.setattr("ontotator.exchange.text.MAX_TOTAL_BYTES", 4)
+    monkeypatch.setattr("ontotator.exchange.text.MAX_EXPANDED_BYTES", 4)
     units, issues = read_text_upload([("a.zip", archive([("a.txt", b"12345")]))], "de")
     assert not units
     assert issues[0].code == "too_large"
 
 
 def test_expansion_limit_applies_across_files(monkeypatch):
-    monkeypatch.setattr("ontotator.exchange.text.MAX_TOTAL_BYTES", 4)
+    monkeypatch.setattr("ontotator.exchange.text.MAX_EXPANDED_BYTES", 4)
     _, issues = read_text_upload(
         [("a.txt", b"123"), ("b.zip", archive([("b.txt", b"45")]))], "de"
+    )
+    assert issues[0].code == "too_large"
+
+
+def test_entry_count_is_bounded_across_files(monkeypatch):
+    monkeypatch.setattr("ontotator.exchange.text.MAX_ENTRIES", 2)
+    _, issues = read_text_upload(
+        [("a.txt", b"1"), ("b.zip", archive([("b.txt", b"2"), ("c.txt", b"3")]))],
+        "de",
     )
     assert issues[0].code == "too_large"
 

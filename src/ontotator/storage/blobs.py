@@ -12,7 +12,10 @@ _SHA256 = re.compile(r"[0-9a-f]{64}")
 
 
 class BlobStore:
-    """``<root>/<first two hex digits>/<sha256>``; written atomically, never changed."""
+    """``<root>/<first two hex digits>/<sha256>``; written atomically, never changed.
+
+    A file is only deleted when nothing references it any more (``delete``).
+    """
 
     def __init__(self, root: Path) -> None:
         self.root = Path(root)
@@ -52,6 +55,10 @@ class BlobStore:
             Path(tmp).unlink(missing_ok=True)
             raise
         return digest
+
+    def delete(self, sha256: str) -> None:
+        """Remove the stored file; the caller checked that nothing references it."""
+        self.path(sha256).unlink(missing_ok=True)
 
     def get(self, sha256: str) -> bytes:
         """The stored bytes; ``ValueError`` if they no longer match their hash."""

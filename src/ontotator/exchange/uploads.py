@@ -9,8 +9,11 @@ from datetime import datetime
 from typing import Any, Literal, cast
 
 import ontospan
+from ontospan.bundle import MAX_ENTRIES, MAX_TOTAL_BYTES
+from psycopg.errors import LockNotAvailable
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import Connection, func, insert, select, update
+from sqlalchemy import Connection, func, insert, select, text, update
+from sqlalchemy.exc import OperationalError
 
 from ontotator.auth.audit import Actor, record_audit
 from ontotator.authz.policy import Action
@@ -45,7 +48,7 @@ from ontotator.exchange.plan import (
     with_work_plan,
 )
 from ontotator.exchange.t1 import ImportCounts, ImportedDocument, ImportedSet
-from ontotator.exchange.text import read_text_upload
+from ontotator.exchange.text import expanded_size, read_text_upload
 from ontotator.exchange.variant_overrides import (
     StatusOverride,
     normalize_overrides,
@@ -119,6 +122,10 @@ class UploadView(BaseModel):
     created_at: datetime
 
 
+IMPORT_LOCK_TIMEOUT = "5s"
+"""How long a commit request waits for the import locks before ``IMPORT_BUSY``."""
+
+
 def lock_import(conn: Connection, key: str, actor: Actor) -> int:
     """Global import, members, structure, then actor; held through commit."""
     conn.execute(select(func.pg_advisory_xact_lock(_lock_id("import"))))
@@ -139,8 +146,14 @@ def read_sources(
     kind: str,
     language: str | None,
     files: Sequence[dict[str, Any]],
+    *,
+    text_limit: int | None = None,
 ) -> tuple[list[tuple[str, list[IncomingUnit]]], list[Issue]]:
-    """Read source bytes once, retaining original file and producer identities."""
+    """Read source bytes once, retaining original file and producer identities.
+
+    Text expands to at most ``text_limit`` bytes (default: the web upload cap);
+    T1 bundles to ontospan's bound.
+    """
     repo = Repository(db)
     row = conn.execute(select(ProjectRow).where(ProjectRow.id == project_id)).one()
     profile = TaskProfile.model_validate(row.task_profile)
@@ -161,6 +174,7 @@ def read_sources(
             [(f["filename"], db.blobs.get(f["sha256"])) for f in files],
             language or "",
             languages=row.languages,
+            max_bytes=text_limit,
         )
         for file in files:
             label = file["filename"]
@@ -175,6 +189,17 @@ def read_sources(
                 )
             )
     else:
+        # Bound the expansion from the ZIP directories before ontospan reads anything.
+        sizes = [expanded_size(db.blobs.path(f["sha256"])) for f in files]
+        if (
+            sum(size for size, _ in sizes) > MAX_TOTAL_BYTES
+            or sum(count for _, count in sizes) > MAX_ENTRIES
+        ):
+            message = "Upload exceeds the expanded size or entry limit"
+            return [(f["sha256"], []) for f in files], [
+                Issue(code="too_large", unit=f["filename"], message=message)
+                for f in files
+            ]
         for file in files:
             units, found = read_t1_upload(
                 db.blobs.path(file["sha256"]),
@@ -815,7 +840,17 @@ def run_import(job: Job, ctx: JobContext) -> dict[str, Any]:
     with db.transaction() as conn:
         expected = project_state(conn, key)
         project_id = Repository(db)._require_project(conn, key)
-        prepared = read_sources(db, conn, key, project_id, kind, language, files)
+        # The CLI import is not bound to the web upload's text cap.
+        prepared = read_sources(
+            db,
+            conn,
+            key,
+            project_id,
+            kind,
+            language,
+            files,
+            text_limit=MAX_TOTAL_BYTES,
+        )
     with db.transaction() as conn:
         project_id = lock_import(conn, key, actor)
         require_state(conn, key, expected)
@@ -1127,7 +1162,26 @@ class UploadService:
             if accept_external_review is not None
             else None,
         )
+        try:
+            return self._commit(key, upload_id, digest, normalized, choices)
+        except OperationalError as exc:
+            if not isinstance(exc.orig, LockNotAvailable):
+                raise
+            raise DomainError(
+                "IMPORT_BUSY", "Another import is running; try again shortly."
+            ) from None
+
+    def _commit(
+        self,
+        key: str,
+        upload_id: int,
+        digest: str,
+        normalized: Sequence[StatusOverride],
+        choices: PlanChoices,
+    ) -> dict[str, int]:
         with self.db.transaction() as conn:
+            # A request thread must not wait for an import in another project.
+            conn.execute(text(f"SET LOCAL lock_timeout = '{IMPORT_LOCK_TIMEOUT}'"))
             project_id = lock_import(conn, key, self.actor)
             row = self._row(conn, project_id, upload_id)
             if row.status != "ready" or row.plan_sha256 != digest:
@@ -1169,16 +1223,31 @@ class UploadService:
             return {"upload_id": upload_id, "job_id": job_id}
 
     def discard(self, key: str, upload_id: int) -> UploadView:
+        from ontotator.exchange.jobs import (
+            delete_unreferenced_file,
+            unlink_deleted_files,
+        )
+
         with self.db.transaction() as conn:
             project_id = self._project(conn, key)
             row = self._row(conn, project_id, upload_id)
-            if row.status not in ("ready", "invalid"):
+            if row.status not in ("ready", "invalid", "failed"):
                 raise DomainError(
-                    "UPLOAD_STALE", "Only ready or invalid uploads can be discarded."
+                    "UPLOAD_STALE",
+                    "Only ready, invalid or failed uploads can be discarded.",
                 )
             conn.execute(
                 update(UploadRow)
                 .where(UploadRow.id == upload_id)
                 .values(status="discarded", updated_at=func.now())
             )
-            return self.get(key, upload_id)
+            # Rejected text must not stay on disk (and in every backup).
+            deleted = [
+                digest
+                for digest in sorted({file["sha256"] for file in row.files})
+                if delete_unreferenced_file(conn, digest)
+            ]
+            view = self.get(key, upload_id)
+        # Only once the discard committed: a failed one keeps its files.
+        unlink_deleted_files(self.db, deleted)
+        return view

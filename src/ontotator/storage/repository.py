@@ -718,11 +718,11 @@ class Repository:
             validate_resources(
                 manifest.search_conditions, profile, package.embedded_files
             )
-        files = {
-            path: (self.db.blobs.put(data), len(data))
-            for path, data in package.embedded_files.items()
-        }
         with self.db.transaction() as conn:
+            files = {
+                path: (self.db.put_blob(conn, data), len(data))
+                for path, data in package.embedded_files.items()
+            }
             # Content identities are global, so imports of any two projects
             # check and write them one after the other.
             conn.execute(select(func.pg_advisory_xact_lock(_lock_id("import"))))
@@ -1085,11 +1085,11 @@ class Repository:
         expected_structure: str | None = None,
     ) -> list[SearchCondition]:
         """Store first-use conditions once; concurrent captures get the first ones."""
-        files = {
-            path: (self.db.blobs.put(data), len(data))
-            for path, data in resources.items()
-        }
         with self.db.transaction() as conn:
+            files = {
+                path: (self.db.put_blob(conn, data), len(data))
+                for path, data in resources.items()
+            }
             conn.execute(
                 select(
                     func.pg_advisory_xact_lock_shared(_lock_id("project", project_key))

@@ -6,31 +6,46 @@ the same one. CLI commands enqueue a job and run it inline with
 
 While a job runs, its claimer holds a session advisory lock on the job id
 (taken in the claim transaction). A job still ``running`` whose lock is free
-lost its process (deploy, SIGKILL); :meth:`JobQueue.reclaim` marks it failed.
+lost its process (deploy, SIGKILL, OOM); :meth:`JobQueue.reclaim` marks it
+failed, with its upload, at worker start and then every ``RECLAIM_INTERVAL``.
 """
 
 from __future__ import annotations
 
 import logging
 import threading
+import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import Connection, Row, func, insert, select, text, update
+from sqlalchemy import (
+    Connection,
+    Row,
+    and_,
+    func,
+    insert,
+    or_,
+    select,
+    text,
+    update,
+)
 
 from ontotator.auth.audit import Actor
 from ontotator.domain.errors import DomainError
 from ontotator.storage.database import Database
 from ontotator.storage.lease import _discard
-from ontotator.storage.tables import JobRow
+from ontotator.storage.tables import JobRow, UploadRow
 
 if TYPE_CHECKING:
     from ontotator.ontology.registry import OntologyRegistry
     from ontotator.ontology.store import OntologyStore
 
 logger = logging.getLogger(__name__)
+
+RECLAIM_INTERVAL = 60.0
+"""Seconds between a worker's checks for jobs whose process died."""
 
 
 @dataclass(frozen=True)
@@ -203,15 +218,36 @@ class JobQueue:
                 if not conn.execute(select(func.pg_try_advisory_lock(job_id))).scalar():
                     continue  # its owner still runs it
                 try:
-                    failed += conn.execute(
-                        update(JobRow)
-                        .where(JobRow.id == job_id, JobRow.status == "running")
-                        .values(
-                            status="failed",
-                            error="Interrupted: the process running it stopped.",
-                            finished_at=func.now(),
+                    # ``conn`` autocommits; fail the job and its upload together.
+                    with self.db.transaction() as tx:
+                        if not tx.execute(
+                            update(JobRow)
+                            .where(JobRow.id == job_id, JobRow.status == "running")
+                            .values(
+                                status="failed",
+                                error="Interrupted: the process running it stopped.",
+                                finished_at=func.now(),
+                            )
+                        ).rowcount:
+                            continue
+                        # As a failing upload job does, so the upload can be discarded.
+                        tx.execute(
+                            update(UploadRow)
+                            .where(
+                                or_(
+                                    and_(
+                                        UploadRow.preview_job_id == job_id,
+                                        UploadRow.status == "previewing",
+                                    ),
+                                    and_(
+                                        UploadRow.commit_job_id == job_id,
+                                        UploadRow.status == "committing",
+                                    ),
+                                )
+                            )
+                            .values(status="failed", updated_at=func.now())
                         )
-                    ).rowcount
+                        failed += 1
                 finally:
                     conn.execute(select(func.pg_advisory_unlock(job_id)))
         except BaseException:
@@ -317,12 +353,20 @@ class Worker:
         if self._thread is not None:
             self._thread.join(timeout)
 
-    def _loop(self) -> None:
+    def _reclaim(self) -> None:
         try:
             self.queue.reclaim()
         except Exception:
             logger.error("Could not reclaim interrupted jobs.", exc_info=True)
+
+    def _loop(self) -> None:
+        self._reclaim()
+        reclaimed = time.monotonic()
         while not self._stop.is_set():
+            # Another process may have died since (or this one failed to finish a job).
+            if time.monotonic() - reclaimed >= RECLAIM_INTERVAL:
+                self._reclaim()
+                reclaimed = time.monotonic()
             try:
                 job = self.queue.claim_next(self.name)
             except Exception:

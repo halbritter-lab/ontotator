@@ -702,3 +702,121 @@ def test_preview_with_existing_sets_and_new_set_only_change_is_stale(staged, tmp
     job = _commit(app, admin, upload)
     assert job.status == "failed" and "UPLOAD_STALE" in job.error
     assert app.state.repo.get_document("proj", "a") is None
+
+
+@pytest.mark.parametrize("limit", ["MAX_TOTAL_BYTES", "MAX_ENTRIES"])
+def test_bundle_expansion_is_bounded_before_ontospan_reads_it(
+    staged, tmp_path, monkeypatch, limit
+):
+    from ontotator.exchange import uploads
+
+    app, admin = staged
+    path = bundle(tmp_path / "big.zip", [unit("a")], "bundle-big")
+    monkeypatch.setattr(uploads, limit, 1)
+    monkeypatch.setattr(
+        uploads, "read_t1_upload", lambda *a, **k: pytest.fail("bundle was read")
+    )
+    upload = _ready(app, admin, kind="t1", name=path.name, data=path.read_bytes())
+    assert upload["status"] == "invalid"
+    assert upload["preview"]["errors"][0]["code"] == "too_large"
+
+
+def test_commit_refuses_while_another_import_holds_the_lock(staged, monkeypatch):
+    from ontotator.exchange import uploads
+    from ontotator.storage.repository import _lock_id
+
+    app, admin = staged
+    upload = _ready(app, admin)
+    monkeypatch.setattr(uploads, "IMPORT_LOCK_TIMEOUT", "100ms")
+    before = _count(app, JobRow)
+    with app.state.repo.db.engine.begin() as holder:
+        holder.execute(select(func.pg_advisory_xact_lock(_lock_id("import"))))
+        response = admin.post(
+            f"{BASE}/{upload['id']}/commit", json={"plan_sha256": upload["plan_sha256"]}
+        )
+    assert response.status_code == 409
+    assert response.json()["code"] == "IMPORT_BUSY"
+    assert _count(app, JobRow) == before
+    assert _commit(app, admin, upload).status == "succeeded"
+
+
+def test_an_upload_whose_job_process_died_fails_and_can_be_discarded(staged):
+    from ontotator.exchange.jobs import HANDLERS
+    from ontotator.jobs.queue import JobQueue
+
+    app, admin = staged
+    created = _create(admin).json()
+    dead = JobQueue(app.state.repo.db, HANDLERS)
+    assert dead.claim(created["job_id"], "gone") is not None
+    # The process dies mid-preview: its session (and the job lock) ends.
+    dead._held.pop(created["job_id"]).invalidate()
+    assert admin.post(f"{BASE}/{created['upload_id']}/discard").status_code == 409
+    assert app.state.jobs.reclaim() == 1
+    assert admin.get(f"{BASE}/{created['upload_id']}").json()["status"] == "failed"
+    discarded = admin.post(f"{BASE}/{created['upload_id']}/discard")
+    assert discarded.status_code == 200, discarded.text
+    assert discarded.json()["status"] == "discarded"
+
+
+def test_discard_deletes_the_blob_once_nothing_else_references_it(staged):
+    app, admin = staged
+    db = app.state.repo.db
+    first, second = _ready(app, admin), _ready(app, admin)
+    sha = first["files"][0]["sha256"]
+    assert second["files"][0]["sha256"] == sha
+
+    assert admin.post(f"{BASE}/{first['id']}/discard").status_code == 200
+    assert db.blobs.path(sha).is_file()  # the second upload still needs it
+
+    assert admin.post(f"{BASE}/{second['id']}/discard").status_code == 200
+    assert not db.blobs.path(sha).exists()
+    with db.transaction() as conn:
+        assert (
+            conn.execute(
+                select(func.count()).where(StoredFileRow.sha256 == sha)
+            ).scalar_one()
+            == 0
+        )
+    # The same bytes can be uploaded again afterwards.
+    assert _ready(app, admin)["status"] == "ready"
+    assert db.blobs.path(sha).is_file()
+
+
+def test_discard_keeps_a_blob_that_a_job_references(staged):
+    app, admin = staged
+    db = app.state.repo.db
+    upload = _ready(app, admin)
+    sha = upload["files"][0]["sha256"]
+    app.state.jobs.enqueue(
+        "t1_import", {"project": "proj", "blob_sha256": sha}, actor=Actor.cli()
+    )
+    assert admin.post(f"{BASE}/{upload['id']}/discard").status_code == 200
+    assert db.blobs.path(sha).is_file()
+
+
+def test_a_failed_discard_keeps_the_blob(staged, monkeypatch):
+    app, admin = staged
+    upload = _ready(app, admin)
+    sha = upload["files"][0]["sha256"]
+
+    def fail(*args):
+        raise RuntimeError("commit fails")
+
+    monkeypatch.setattr(UploadService, "get", fail)
+    with pytest.raises(RuntimeError):
+        UploadService(app.state.repo.db, app.state.jobs, Actor.cli()).discard(
+            "proj", upload["id"]
+        )
+    assert app.state.repo.db.blobs.path(sha).is_file()
+    monkeypatch.undo()
+    assert admin.get(f"{BASE}/{upload['id']}").json()["status"] == "ready"
+
+
+def test_unlinking_keeps_a_file_stored_again_since_the_discard(staged):
+    from ontotator.exchange.jobs import store_file, unlink_deleted_files
+
+    app, _ = staged
+    db = app.state.repo.db
+    sha = store_file(db, b"stored again")
+    unlink_deleted_files(db, [sha])
+    assert db.blobs.path(sha).is_file()
