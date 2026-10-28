@@ -12,7 +12,8 @@ text and a plan override ``scratch`` on ``EN100031``. It returns::
 
 ``ONE_ASSIGNED`` assigns Tom to ``EN100024`` (from proposals, not started),
 ``CHECKED`` has Tom and Mia submit their proposal checks of ``EN100024``, and
-``CONSOLIDATING`` adds the lead's consolidation round.
+``CONSOLIDATING`` adds the lead's consolidation round, ``CONSOLIDATING_ALI``
+Ali's (adjudicator), started by the lead and not yet submitted.
 """
 
 from __future__ import annotations
@@ -79,7 +80,7 @@ def proposals(text: str) -> list[dict[str, Any]]:
     ]
 
 
-def fresh(app: FastAPI) -> tuple[Scenario, dict[str, str]]:
+def fresh(app: FastAPI, adjudicator: bool = False) -> tuple[Scenario, dict[str, str]]:
     from t1_builders import native_unit
 
     scenario = lead_project(
@@ -88,8 +89,11 @@ def fresh(app: FastAPI) -> tuple[Scenario, dict[str, str]]:
         import_plan="review_and_annotate_translations",
         rule_on=False,
     )
-    for name in ("tom", "mia", "ali"):
+    for name in ("tom", "mia"):
         person(scenario, name, ["annotator"])
+    person(
+        scenario, "ali", ["annotator", "adjudicator"] if adjudicator else ["annotator"]
+    )
     with scenario.db.transaction() as conn:
         conn.execute(
             update(ProjectRow)
@@ -196,7 +200,7 @@ def check_and_submit(
 
 
 def build(app: FastAPI, scenario_name: str) -> dict[str, Any]:
-    scenario, cases = fresh(app)
+    scenario, cases = fresh(app, scenario_name == "CONSOLIDATING_ALI")
     assignments: dict[str, int] = {}
     submissions: dict[str, str] = {}
     extra: dict[str, Any] = {}
@@ -206,14 +210,17 @@ def build(app: FastAPI, scenario_name: str) -> dict[str, Any]:
             assignments[name] = batch_assign(
                 scenario, [WITH_PROPOSALS], "en", "annotate", [name]
             )[0].id
-    if scenario_name in {"CHECKED", "CONSOLIDATING"}:
+    if scenario_name in {"CHECKED", "CONSOLIDATING", "CONSOLIDATING_ALI"}:
         for name, outcomes in CHECKS.items():
             submissions[name] = check_and_submit(
                 scenario, assignments[name], name, outcomes
             )
-    if scenario_name == "CONSOLIDATING":
+    if scenario_name in {"CONSOLIDATING", "CONSOLIDATING_ALI"}:
         round_view = start_as_lead(
-            scenario, cases[WITH_PROPOSALS], list(submissions.values())
+            scenario,
+            cases[WITH_PROPOSALS],
+            list(submissions.values()),
+            "ali" if scenario_name == "CONSOLIDATING_ALI" else "lead",
         )
         extra = {
             "round_id": round_view.round_id,
@@ -229,7 +236,7 @@ def build(app: FastAPI, scenario_name: str) -> dict[str, Any]:
     )
 
 
-SCENARIOS = ("FRESH", "ONE_ASSIGNED", "CHECKED", "CONSOLIDATING")
+SCENARIOS = ("FRESH", "ONE_ASSIGNED", "CHECKED", "CONSOLIDATING", "CONSOLIDATING_ALI")
 
 
 def register_proposal_check_scenario_route(app: FastAPI) -> None:

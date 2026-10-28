@@ -174,8 +174,11 @@ def _annotate(
     return finish_round(scenario, name, key)
 
 
-def start_as_lead(scenario: Scenario, document_id: str, sources: list[str]) -> Any:
-    """The lead starts the consolidation as consolidator (self-grant)."""
+def start_as_lead(
+    scenario: Scenario, document_id: str, sources: list[str], reviewer: str = "lead"
+) -> Any:
+    """The lead starts the consolidation, as consolidator (self-grant) or for
+    ``reviewer``."""
     from ontotator.application.consolidation_start import (
         ConsolidationStartService,
         StartConsolidation,
@@ -190,7 +193,7 @@ def start_as_lead(scenario: Scenario, document_id: str, sources: list[str]) -> A
             scenario.key,
             StartConsolidation(
                 document_id=document_id,
-                reviewer=scenario.users["lead"],
+                reviewer=scenario.users[reviewer],
                 source_submission_ids=sources,
                 request_id=f"start-{uuid4().hex}",
             ),
