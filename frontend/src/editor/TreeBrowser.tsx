@@ -110,7 +110,7 @@ export const TreeBrowser: React.FC<TreeBrowserProps> = ({
         if (firstKey) setReveal({ key: firstKey, focus: focusOnOpen });
       })
       .catch((reason) => setError(messageOf(reason)));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- open the tree once on mount
   }, []);
 
   const loadNode = async (key: string, options: { expand?: boolean; viaParentId?: string }) => {

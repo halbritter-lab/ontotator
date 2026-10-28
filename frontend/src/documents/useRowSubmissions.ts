@@ -21,7 +21,6 @@ interface Snapshot { data: RowSubmissions | null; error: unknown | null; loading
 export function useRowSubmissions(projectKey: string, caseId: string, language: string, enabled: boolean): RowSubmissionsState {
   const generation = useRef(0);
   const [state, setState] = useState<Snapshot>({ data: null, error: null, loading: enabled });
-  const identity = JSON.stringify([projectKey, caseId, language, enabled]);
 
   const load = useCallback(() => {
     const current = ++generation.current;
@@ -31,14 +30,12 @@ export function useRowSubmissions(projectKey: string, caseId: string, language: 
       data => { if (current === generation.current) setState({ data, error: null, loading: false }); },
       error => { if (current === generation.current) setState({ data: null, error, loading: false }); },
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [identity]);
+  }, [projectKey, caseId, language, enabled]);
 
   useEffect(() => {
     setState({ data: null, error: null, loading: enabled });
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [load]);
+  }, [load, enabled]);
 
   useEffect(() => () => { generation.current += 1; }, []);
 

@@ -138,7 +138,7 @@ export function DecisionBlock(props: DecisionBlockProps): JSX.Element | null {
     setSuccess({ text, bar: "" });
     announce(text);
     setFocusHeading(value => value + 1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only a new refresh error reports
   }, [refreshError]);
 
   useEffect(() => {

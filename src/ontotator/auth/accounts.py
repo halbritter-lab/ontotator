@@ -667,7 +667,7 @@ class AccountService:
                 return candidate
 
     def issue_reset_code(self, actor: Actor, username: str) -> IssuedCode:
-        """A new code for an active user; it replaces the user's unused codes.
+        """A new code for an active user; replaces unused codes, ends sessions.
 
         A user who never set a password gets a fresh setup code (24 hours)
         instead of a reset code (2 hours).
@@ -684,13 +684,16 @@ class AccountService:
                 select(exists().where(PasswordCredentialRow.user_id == row.id))
             ).scalar()
             purpose: CodePurpose = "reset" if has_password else "setup"
+            # A reset often answers a suspected compromise: log the user out now,
+            # not only once the code is redeemed.
+            revoked = revoke_user_sessions(conn, row.id, "reset_code", now)
             record_audit(
                 conn,
                 actor,
                 "user.reset_code",
                 target_type="user",
                 target_id=row.username,
-                details={"purpose": purpose},
+                details={"purpose": purpose, "sessions_revoked": revoked},
                 at=now,
             )
             return self._issue_code(conn, actor, row, purpose, now)

@@ -116,9 +116,9 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   };
   const [state, setState] = useState<SearchState>(searchManager.getState());
   const [queryInput, setQueryInput] = useState<string>(initialQuery ?? "");
-  // The field's value as of the last change, for effects that may run with an older render's `queryInput`.
+  // The field's query as of the last keystroke, also before React renders it (see the language effect).
   const latestQuery = useRef(queryInput);
-  const setQuery = (value: string) => { latestQuery.current = value; setQueryInput(value); };
+  latestQuery.current = queryInput;
 
   useEffect(() => {
     return searchManager.subscribe((nextState) => {
@@ -135,10 +135,10 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
     const identity = [annotationId, workspaceKey, layerId, searchManager] as const;
     const isMount = identity.every((value, index) => Object.is(value, mountIdentity.current[index]));
     const query = isMount ? initialQuery ?? "" : "";
-    setQuery(query);
+    setQueryInput(query);
     if (!isMount) dropPrefixFilter();
     if (query.trim()) runSearch(query, true, isMount ? within ?? null : mode === "modifier" ? MODIFIER_ROOTS : null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only a new finding restarts the search
   }, [annotationId, workspaceKey, layerId, searchManager]);
 
   // The prefill follows the marked text (late search languages, an adjusted mark) until the user types or clears:
@@ -156,9 +156,9 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
     prefillSettled.current = true;
     lastPrefill.current = initialQuery;
     selectPrefill.current = true;
-    setQuery(initialQuery);
+    setQueryInput(initialQuery);
     runSearch(initialQuery, first);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only a new prefill runs a search
   }, [initialQuery]);
   useLayoutEffect(() => {
     if (!selectPrefill.current) return;
@@ -176,7 +176,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
     // Below the text (701–1024 px) the field may be out of view: bring only the inspector in, never the text pane.
     const rect = input.getBoundingClientRect();
     if (rect.top < 0 || rect.bottom > window.innerHeight) input.scrollIntoView?.({ block: "nearest" });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- focus once on mount
   }, []);
 
   // A changed language selection is a new question: ask the pending query again.
@@ -185,10 +185,9 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   useEffect(() => {
     if (lastLanguagesKey.current === languagesKey) return;
     lastLanguagesKey.current = languagesKey;
-    // Not `queryInput`: a keystroke handled before this effect ran is newer, and its debounced search must not be
-    // replaced by one for the older text (the field would then wait forever for hits that never match it).
+    // Not `queryInput`: typing right before the languages load would be dropped for the older query.
     if (latestQuery.current.trim()) runSearch(latestQuery.current, true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only a language change re-asks
   }, [languagesKey]);
 
   useShortcutHint(["↓ / ↑", "Enter"], "Move through term hits; add the active hit", { group: "Finding" });
@@ -244,7 +243,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
     const query = queuedEnter.current;
     queuedEnter.current = null;
     if (resultsCurrent && query === queryInput && shownActive >= 0) addCandidate(candidates[shownActive]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs when the pending search settles
   }, [searching, resultsCurrent, queryInput]);
 
   const handleQueryChange = (val: string) => {
@@ -254,12 +253,14 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
       const rest = start.slice(MODIFIER_PREFIX.length).trimStart();
       if (!modifiersOnly) modifiersFromPrefix.current = true;
       setModifiersOnly(true);
-      setQuery(rest);
+      setQueryInput(rest);
+      latestQuery.current = rest;
       runSearch(rest, false, MODIFIER_ROOTS);
       return;
     }
     if (!val.trim() && modifiersFromPrefix.current) dropPrefixFilter();
-    setQuery(val);
+    setQueryInput(val);
+    latestQuery.current = val;
     runSearch(val);
   };
 
@@ -279,7 +280,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
     userTyped.current = true;
     if (modifiersFromPrefix.current) dropPrefixFilter();
     cancelDebounce();
-    setQuery("");
+    setQueryInput("");
     searchManager.clear();
   };
 

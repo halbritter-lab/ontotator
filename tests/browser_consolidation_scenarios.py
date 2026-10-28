@@ -204,10 +204,11 @@ def start_as_lead(
 
 def _modifier_project(app: FastAPI) -> Scenario:
     """A fresh project ``documents-mods-{uuid8}`` pinned with ``MOD_PIN``."""
-    from modifier_fixtures import MOD_PATH, MOD_PIN, modifier_profile
+    from modifier_fixtures import MOD_DE, MOD_PATH, MOD_PIN, modifier_profile
     from t1_fixtures import ADMIN_ACCESS, OPERATOR
 
     from ontotator.authz.scoped import ScopedRepository
+    from ontotator.ontology.registry import OntologyRegistry
     from ontotator.ontology.store import OntologyStore
 
     key = f"documents-mods-{uuid4().hex[:8]}"
@@ -216,6 +217,12 @@ def _modifier_project(app: FastAPI) -> Scenario:
     # Stored through the app's registry, which classifies modifier terms for
     # the consolidation read (D-a).
     store = OntologyStore(db, registry, db.data_dir)
+    # The German names too, as the modifier scenario stores them (its own registry:
+    # the app's checks them against hp.json): the app caches the first build of
+    # MOD_PIN, and the modifier specs search "schwere" through it.
+    OntologyStore(db, OntologyRegistry(), db.data_dir).add(
+        OPERATOR, MOD_DE.name, MOD_DE.read_bytes()
+    )
     store.add(OPERATOR, MOD_PATH.name, MOD_PATH.read_bytes())
     ScopedRepository(db, ADMIN_ACCESS, OPERATOR).create_project(
         key, "Modifiers", None, modifier_profile(), {"hp": MOD_PIN}

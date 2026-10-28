@@ -158,7 +158,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
       setCurrent(best ? stepKey(best.task, best.language) : null);
     }, error => { if (active) setStepsError(error); });
     return () => { active = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the keys stand for caseIds and filters
   }, [props.projectKey, caseIdsKey, filtersKey, stepsRetry]);
 
   const [taskText, language] = current ? [current.slice(0, current.indexOf(":")), current.slice(current.indexOf(":") + 1)] : ["", ""];

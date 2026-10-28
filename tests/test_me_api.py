@@ -3,7 +3,7 @@
 from pathlib import Path
 
 import pytest
-from auth_harness import ORIGIN, PASSWORD, logged_in
+from auth_harness import ORIGIN, PASSWORD, ensure_user, logged_in
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import select
@@ -67,9 +67,11 @@ def test_an_invalid_orcid_is_refused(app):
 
 
 def test_changing_the_password_keeps_this_session_and_ends_others(app):
+    ensure_user(app, "alice")
+    # Issued first: issuing a reset code ends the user's sessions (#92).
+    code = app.state.accounts.issue_reset_code(Actor(None, "test"), "alice")
     client = logged_in(app, "alice")
     other = logged_in(app, "alice")
-    code = app.state.accounts.issue_reset_code(Actor(None, "test"), "alice")
     response = client.post(
         "/api/v1/me/password",
         json={"current_password": PASSWORD, "new_password": NEW_PASSWORD},
@@ -212,9 +214,11 @@ def test_consent_without_orcid_and_profile_audits_only_field_names(app):
 
 
 def test_invalid_new_password_leaves_credentials_codes_and_sessions_untouched(app):
+    ensure_user(app, "alice")
+    # Issued first: issuing a reset code ends the user's sessions (#92).
+    code = app.state.accounts.issue_reset_code(Actor(None, "test"), "alice")
     client = logged_in(app, "alice")
     other = logged_in(app, "alice")
-    code = app.state.accounts.issue_reset_code(Actor(None, "test"), "alice")
     response = client.post(
         "/api/v1/me/password",
         json={"current_password": PASSWORD, "new_password": "short"},

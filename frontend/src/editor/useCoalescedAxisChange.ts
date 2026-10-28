@@ -56,7 +56,6 @@ export function useCoalescedAxisChange(
       });
     }
     refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const change = useCallback((axisId: string, value: string | null) => {

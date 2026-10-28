@@ -39,7 +39,7 @@ export function ProjectNewPage({ onNavigate }: { onNavigate: (route: Route) => v
   // A refusal about the key moves focus to the key field, where its message is shown.
   // Any other refusal: back to Create project, which was disabled (and lost focus) while saving (#18).
   const createButton = useRef<HTMLButtonElement>(null);
-  useEffect(() => { if (error !== undefined) (keyError ? keyInput : createButton).current?.focus(); }, [error]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (error !== undefined) (keyError ? keyInput : createButton).current?.focus(); }, [error]); // eslint-disable-line react-hooks/exhaustive-deps -- keyError derives from error
   const create = async () => {
     if (writing.current || !metadata || (source === "upload" && !uploaded)) return;
     const epoch = lifetime.current;

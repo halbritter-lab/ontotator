@@ -61,14 +61,14 @@ export function ReporterReportCard({ report, assignment, confirm, onConfirmChang
     const kind = lastKind.current;
     lastKind.current = null;
     if (kind && !focusHeading) (triggers[kind].current ?? heading.current)?.focus();
-  }, [confirm]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [confirm]); // eslint-disable-line react-hooks/exhaustive-deps -- only closing a confirmation returns focus
   useEffect(() => { if (focusHeading) { heading.current?.focus(); setFocusHeading(false); } }, [focusHeading]);
   useEffect(() => { if (confirm?.askDiscard) discardKeep.current?.focus(); }, [confirm?.askDiscard]);
   // A reload can take an action away (a lead released or closed meanwhile): close its confirmation.
   useEffect(() => {
     if (!confirm || outcome || busy) return;
     if ((confirm.kind === "resume" && !paused) || (confirm.kind === "withdraw" && !report.withdrawable)) onConfirmChange(null);
-  }, [confirm, outcome, busy, paused, report.withdrawable]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [confirm, outcome, busy, paused, report.withdrawable]); // eslint-disable-line react-hooks/exhaustive-deps -- onConfirmChange is a parent callback
 
   const start = (kind: ReporterConfirmKind) => { setMessage(null); setOutcome(null); onConfirmChange({ reportId: report.report_id, kind, reason: "" }); };
 

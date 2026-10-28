@@ -43,7 +43,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ notice, overlay = fals
   // A dialog takes the focus to its first field; switching views moves it to the new heading.
   useEffect(() => {
     if (overlay) firstFieldRef.current?.focus();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- focus once on mount
   }, []);
   // DEMO ONLY: a loopback demo stack may offer one-click accounts on the login page (not in the
   // dialog after a session ended, which resumes the open work); otherwise the server answers 404.
@@ -56,7 +56,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ notice, overlay = fals
     return () => {
       current = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once on mount
   }, []);
   useEffect(() => {
     if (shownView.current === view) return;

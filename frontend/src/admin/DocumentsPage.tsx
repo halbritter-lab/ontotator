@@ -339,7 +339,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       onShowTranslationReviews: setReviewDocument,
       onRequestCorrection: (row, variant) => setCorrectionFor({ row, variant }),
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refreshAll only uses rows.reload and state setters
   }, [inventory, currentUser?.username, rows.reload]);
 
   // Deep link: focus the named row header (or the group header) once its data is shown.
@@ -432,7 +432,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   const selectAllLabel = filteredTotal > MAX_SELECTION
     ? `Select the first ${MAX_SELECTION} of ${filteredTotal} filtered texts`
     : filteredTotal === 1 ? "Select the only filtered text" : `Select all ${filteredTotal} filtered texts`;
-  const filters = useMemo(() => selectionFilters(request), [requestIdentity]); // eslint-disable-line react-hooks/exhaustive-deps
+  const filters = useMemo(() => selectionFilters(request), [requestIdentity]); // eslint-disable-line react-hooks/exhaustive-deps -- requestIdentity stands for request
   const toggleAll = async () => {
     if (selectingAll) return;
     setSelectionError(undefined);
