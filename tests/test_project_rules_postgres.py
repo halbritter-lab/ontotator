@@ -407,6 +407,125 @@ def test_new_draft_spanless_writes_are_transactional_and_setting_applies(tmp_pat
         assert conn.execute(select(DraftRow.spanless_policy_version)).scalar_one() == 1
 
 
+@pytest.mark.parametrize(
+    "rules",
+    [
+        {"allow_spanless_findings": True, "require_spanless_note": True},
+        {"allow_spanless_findings": True, "require_spanless_note": False},
+    ],
+    ids=["allowed-with-reason", "allowed-reason-optional"],
+)
+def test_profile_required_span_rejects_spanless_draft_saves(
+    tmp_path, monkeypatch, rules
+):
+    """#124: the task profile wins over the project setting already at draft save.
+
+    A finding saved spanless before the change stays in the draft: other edits
+    save, the finding itself only changes together with a text span (or is
+    deleted), and the submit check still flags it.
+    """
+    from ontotator.storage.tables import DraftRow
+
+    repo, _, ws, editor, _ = _setup_test_env(tmp_path)
+    set_rules(repo, "pkg-1", **rules)
+    required = repo.get_task_profile("pkg-1").model_copy(deep=True)
+    required.layers[0].annotation_types[0].evidence_policy = "required_on_complete"
+    monkeypatch.setattr(repo, "get_task_profile", lambda _project: required)
+    key = ws.open(
+        WorkspaceKey(
+            project_key="pkg-1",
+            document_id="doc-1",
+            annotator_id="annotator-1",
+            mode="independent",
+            target_set_id="targets-0",
+        )
+    ).key
+    spanless = {
+        "command": "create_annotation",
+        "annotation_id": "old",
+        "term_id": "HP:0001252",
+        "note": "Reason",
+    }
+    # A spanless finding saved before draft saves checked the profile: written
+    # without the edit-time check (as a legacy draft), then the draft is marked.
+    with repo.db.transaction() as conn:
+        conn.execute(update(DraftRow).values(spanless_policy_version=None))
+    editor.apply(
+        key, MutationEnvelope(mutation_id="old", expected_revision=0, payload=spanless)
+    )
+    with repo.db.transaction() as conn:
+        conn.execute(update(DraftRow).values(spanless_policy_version=1))
+    assert ws.open(key).enforce_spanless_rules is True
+
+    before = {
+        table: count_rows(repo, table)
+        for table in ("annotation_snapshots", "mutation_receipts", "edit_events")
+    }
+    for mutation_id, payload in (
+        ("new", {**spanless, "annotation_id": "new"}),
+        (
+            "keep",
+            {
+                "command": "set_annotation_note",
+                "annotation_id": "old",
+                "note": "Another",
+            },
+        ),
+    ):
+        with pytest.raises(DomainError) as exc:
+            editor.apply(
+                key,
+                MutationEnvelope(
+                    mutation_id=mutation_id, expected_revision=1, payload=payload
+                ),
+            )
+        assert exc.value.code == "MISSING_EVIDENCE"
+        assert ws.open(key).draft.revision == 1
+        assert {table: count_rows(repo, table) for table in before} == before
+
+    # Other edits save with the unchanged legacy finding still in the draft.
+    other = editor.apply(
+        key,
+        MutationEnvelope(
+            mutation_id="other",
+            expected_revision=1,
+            payload={
+                "command": "create_annotation",
+                "annotation_id": "other",
+                "term_id": "HP:0001252",
+                "evidence_id": "other-ev",
+                "segments": [{"start": 27, "end": 36}],
+            },
+        ),
+    )
+    assert {a.annotation.annotation_id for a in other.annotations} == {"old", "other"}
+    with pytest.raises(DomainError) as exc:
+        SubmissionService(repo).submit(
+            key,
+            MutationEnvelope(
+                mutation_id="submit",
+                expected_revision=2,
+                payload={"document_checked": True},
+            ),
+        )
+    assert exc.value.code == "MISSING_EVIDENCE"
+    # Adding a text span repairs the legacy finding.
+    repaired = editor.apply(
+        key,
+        MutationEnvelope(
+            mutation_id="repair",
+            expected_revision=2,
+            payload={
+                "command": "attach_mention",
+                "annotation_id": "old",
+                "evidence_id": "old-ev",
+                "segments": [{"start": 27, "end": 36}],
+            },
+        ),
+    )
+    assert all(a.annotation.evidence_refs for a in repaired.annotations)
+
+
 def test_legacy_draft_keeps_edit_marker_but_submits_under_current_spanless_policy(
     tmp_path,
 ):

@@ -41,7 +41,7 @@ describe("Annotation", () => {
   it("annotation with one of max 2 annotators is now (R-13); no proposal count, never 0 of 0", () => {
     const target = cardRow({ annotation: cell("partly_assigned", "todo", { assigned: 1, target: 2 }) }, { proposal_count: 17 });
     expect(annotationState(target)).toEqual({ state: "1 annotator · max 2", tone: "now" });
-    expect(annotationState(cardRow({ annotation: cell("unassigned", "todo", { assigned: 0, target: 2 }) }))).toEqual({ state: "No annotator yet · max 2", tone: "now" });
+    expect(annotationState(cardRow({ annotation: cell("unassigned", "todo", { assigned: 0, target: 2 }) }))).toEqual({ state: "Unassigned", tone: "now" });
     expect(annotationState(cardRow({ annotation: cell("unassigned", "todo") }, { proposal_count: 28 }))).toEqual({ state: "Unassigned", tone: "now" });
   });
   it("in progress counts the submissions", () => {

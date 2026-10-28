@@ -137,7 +137,8 @@ function detailText(row: DocumentRowView, detail: StepDetailView): string | null
 
 /** Muted second line under the step: "1 annotator · max 2" (limit > 1) and the detail. */
 export function secondaryLine(step: NextStepView, row: DocumentRowView): string {
-  const assigned = step.target != null && step.target > 1 ? annotatorCount(step.assigned ?? 0, step.target) : null;
+  // Nobody assigned yet: no count under "Assign annotation" (issue 129, U2).
+  const assigned = step.target != null && step.target > 1 && (step.assigned ?? 0) > 0 ? annotatorCount(step.assigned ?? 0, step.target) : null;
   const detail = step.detail ? detailText(row, step.detail) : null;
   return [assigned, detail].filter(Boolean).join(", ");
 }
