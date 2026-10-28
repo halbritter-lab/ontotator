@@ -54,8 +54,9 @@
   min-width: 0;
 }
 
-/* Three equal steps of a fixed total width: a long state wraps to a second line instead of widening its step. */
-.cons-heading > nav { width: min(100%, 36rem); }
+/* Three equal steps across the zone's width; the title keeps a gap below the path. */
+.cons-heading > nav { width: 100%; }
+.cons-heading > nav + .case-title { margin-top: var(--space-3); }
 
 .cons-header-progress { width: 340px; max-width: 100%; }
 @media (max-width: 760px) {

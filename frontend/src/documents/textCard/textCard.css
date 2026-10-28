@@ -98,7 +98,8 @@
 }
 .row-activity-empty { color: var(--text-muted); }
 .row-activity-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); padding-top: var(--space-2); border-top: 1px solid var(--border); }
-.stage-actions-reassign { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2); }
+/* One row per person: their name, then only their own actions. */
+.stage-actions-reassign { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2); }
 
 .text-version-record { margin: 0; color: var(--text-muted); font-size: var(--size-sm); line-height: var(--leading-sm); overflow-wrap: anywhere; }
 
