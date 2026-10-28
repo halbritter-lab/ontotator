@@ -102,7 +102,7 @@ async function overflow(page: Page) {
   return page.evaluate(() => {
     const width = window.innerWidth;
     // The tab strip scrolls on its own (a horizontal scroller inside the page); its tabs may sit outside the
-    // viewport while the page itself does not scroll. TODO(O9): revisit with the narrow tab layout.
+    // viewport while the page itself does not scroll. A narrower tab layout could make this exclusion unnecessary.
     const outside = [...document.querySelectorAll("main *, [role=dialog] *")]
       .filter(element => !element.closest("[role=tablist]"))
       .filter(element => {
