@@ -1213,9 +1213,10 @@ class UploadService:
         with self.db.transaction() as conn:
             project_id = self._project(conn, key)
             row = self._row(conn, project_id, upload_id)
-            if row.status not in ("ready", "invalid"):
+            if row.status not in ("ready", "invalid", "failed"):
                 raise DomainError(
-                    "UPLOAD_STALE", "Only ready or invalid uploads can be discarded."
+                    "UPLOAD_STALE",
+                    "Only ready, invalid or failed uploads can be discarded.",
                 )
             conn.execute(
                 update(UploadRow)

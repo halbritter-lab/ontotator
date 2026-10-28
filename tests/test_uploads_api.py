@@ -738,3 +738,21 @@ def test_commit_refuses_while_another_import_holds_the_lock(staged, monkeypatch)
     assert response.json()["code"] == "IMPORT_BUSY"
     assert _count(app, JobRow) == before
     assert _commit(app, admin, upload).status == "succeeded"
+
+
+def test_an_upload_whose_job_process_died_fails_and_can_be_discarded(staged):
+    from ontotator.exchange.jobs import HANDLERS
+    from ontotator.jobs.queue import JobQueue
+
+    app, admin = staged
+    created = _create(admin).json()
+    dead = JobQueue(app.state.repo.db, HANDLERS)
+    assert dead.claim(created["job_id"], "gone") is not None
+    # The process dies mid-preview: its session (and the job lock) ends.
+    dead._held.pop(created["job_id"]).invalidate()
+    assert admin.post(f"{BASE}/{created['upload_id']}/discard").status_code == 409
+    assert app.state.jobs.reclaim() == 1
+    assert admin.get(f"{BASE}/{created['upload_id']}").json()["status"] == "failed"
+    discarded = admin.post(f"{BASE}/{created['upload_id']}/discard")
+    assert discarded.status_code == 200, discarded.text
+    assert discarded.json()["status"] == "discarded"
