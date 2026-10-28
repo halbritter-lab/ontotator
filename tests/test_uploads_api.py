@@ -702,3 +702,20 @@ def test_preview_with_existing_sets_and_new_set_only_change_is_stale(staged, tmp
     job = _commit(app, admin, upload)
     assert job.status == "failed" and "UPLOAD_STALE" in job.error
     assert app.state.repo.get_document("proj", "a") is None
+
+
+@pytest.mark.parametrize("limit", ["MAX_EXPANDED_BYTES", "MAX_ENTRIES"])
+def test_bundle_expansion_is_bounded_before_ontospan_reads_it(
+    staged, tmp_path, monkeypatch, limit
+):
+    from ontotator.exchange import uploads
+
+    app, admin = staged
+    path = bundle(tmp_path / "big.zip", [unit("a")], "bundle-big")
+    monkeypatch.setattr(uploads, limit, 1)
+    monkeypatch.setattr(
+        uploads, "read_t1_upload", lambda *a, **k: pytest.fail("bundle was read")
+    )
+    upload = _ready(app, admin, kind="t1", name=path.name, data=path.read_bytes())
+    assert upload["status"] == "invalid"
+    assert upload["preview"]["errors"][0]["code"] == "too_large"

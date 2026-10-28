@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Any, Literal, cast
 
 import ontospan
+from ontospan.bundle import MAX_ENTRIES
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import Connection, func, insert, select, update
 
@@ -45,7 +46,11 @@ from ontotator.exchange.plan import (
     with_work_plan,
 )
 from ontotator.exchange.t1 import ImportCounts, ImportedDocument, ImportedSet
-from ontotator.exchange.text import read_text_upload
+from ontotator.exchange.text import (
+    MAX_EXPANDED_BYTES,
+    expanded_size,
+    read_text_upload,
+)
 from ontotator.exchange.variant_overrides import (
     StatusOverride,
     normalize_overrides,
@@ -175,6 +180,17 @@ def read_sources(
                 )
             )
     else:
+        # Bound the expansion from the ZIP directories before ontospan reads anything.
+        sizes = [expanded_size(db.blobs.path(f["sha256"])) for f in files]
+        if (
+            sum(size for size, _ in sizes) > MAX_EXPANDED_BYTES
+            or sum(count for _, count in sizes) > MAX_ENTRIES
+        ):
+            message = "Upload exceeds the expanded size or entry limit"
+            return [(f["sha256"], []) for f in files], [
+                Issue(code="too_large", unit=f["filename"], message=message)
+                for f in files
+            ]
         for file in files:
             units, found = read_t1_upload(
                 db.blobs.path(file["sha256"]),

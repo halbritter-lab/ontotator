@@ -9,15 +9,34 @@ import re
 import zipfile
 import zlib
 from collections.abc import Sequence
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 
 import ontospan
-from ontospan.bundle import MAX_TOTAL_BYTES
+from ontospan.bundle import MAX_ENTRIES
 
 from ontotator.domain.documents import Document
 from ontotator.exchange.plan import IncomingUnit, Issue
 
 DOCUMENT_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+MAX_EXPANDED_BYTES = 128 * 1024 * 1024
+"""Bytes all files of one upload may expand to.
+
+Parsing holds several copies of the expanded content in the app process
+(2 GiB container), so this is well below ontospan's 512 MiB bundle bound.
+"""
+
+
+def expanded_size(path: Path) -> tuple[int, int]:
+    """Bytes and entries a stored file expands to, from a ZIP's directory only."""
+    if not zipfile.is_zipfile(path):
+        return path.stat().st_size, 1
+    try:
+        with zipfile.ZipFile(path) as archive:
+            infos = archive.infolist()
+    except zipfile.BadZipFile:
+        return path.stat().st_size, 1  # the reader reports the broken archive
+    return sum(info.file_size for info in infos), len(infos)
 
 
 def read_text_upload(
@@ -29,12 +48,13 @@ def read_text_upload(
     """Canonicalize text, preserving the hash of each file's original bytes.
 
     ``languages`` is the project's current allowlist; an empty list is unrestricted.
-    ZIP limits use the pinned ontospan reader's expansion bound, across all files.
+    ZIP limits (``MAX_EXPANDED_BYTES``, ontospan's ``MAX_ENTRIES``) apply across all files.
     """
     units: list[IncomingUnit] = []
     issues: list[Issue] = []
     seen: set[str] = set()
     expanded = 0
+    entries = 0
 
     def error(code: str, label: str, message: str) -> None:
         issues.append(Issue(code=code, unit=label, message=message))
@@ -87,7 +107,8 @@ def read_text_upload(
     for name, data in files:
         if PurePosixPath(name).suffix.lower() != ".zip":
             expanded += len(data)
-            if expanded > MAX_TOTAL_BYTES:
+            entries += 1
+            if expanded > MAX_EXPANDED_BYTES or entries > MAX_ENTRIES:
                 error("too_large", name, "Upload exceeds the expanded size limit")
                 continue
             text(name, name, data)
@@ -100,7 +121,8 @@ def read_text_upload(
                     if not i.is_dir() and not i.filename.startswith("__MACOSX/")
                 ]
                 expanded += sum(i.file_size for i in infos)
-                if expanded > MAX_TOTAL_BYTES:
+                entries += len(infos)
+                if expanded > MAX_EXPANDED_BYTES or entries > MAX_ENTRIES:
                     error("too_large", name, "Upload exceeds the expanded size limit")
                     continue
                 names: set[str] = set()
