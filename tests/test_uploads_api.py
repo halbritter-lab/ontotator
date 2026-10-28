@@ -756,3 +756,39 @@ def test_an_upload_whose_job_process_died_fails_and_can_be_discarded(staged):
     discarded = admin.post(f"{BASE}/{created['upload_id']}/discard")
     assert discarded.status_code == 200, discarded.text
     assert discarded.json()["status"] == "discarded"
+
+
+def test_discard_deletes_the_blob_once_nothing_else_references_it(staged):
+    app, admin = staged
+    db = app.state.repo.db
+    first, second = _ready(app, admin), _ready(app, admin)
+    sha = first["files"][0]["sha256"]
+    assert second["files"][0]["sha256"] == sha
+
+    assert admin.post(f"{BASE}/{first['id']}/discard").status_code == 200
+    assert db.blobs.path(sha).is_file()  # the second upload still needs it
+
+    assert admin.post(f"{BASE}/{second['id']}/discard").status_code == 200
+    assert not db.blobs.path(sha).exists()
+    with db.transaction() as conn:
+        assert (
+            conn.execute(
+                select(func.count()).where(StoredFileRow.sha256 == sha)
+            ).scalar_one()
+            == 0
+        )
+    # The same bytes can be uploaded again afterwards.
+    assert _ready(app, admin)["status"] == "ready"
+    assert db.blobs.path(sha).is_file()
+
+
+def test_discard_keeps_a_blob_that_a_job_references(staged):
+    app, admin = staged
+    db = app.state.repo.db
+    upload = _ready(app, admin)
+    sha = upload["files"][0]["sha256"]
+    app.state.jobs.enqueue(
+        "t1_import", {"project": "proj", "blob_sha256": sha}, actor=Actor.cli()
+    )
+    assert admin.post(f"{BASE}/{upload['id']}/discard").status_code == 200
+    assert db.blobs.path(sha).is_file()

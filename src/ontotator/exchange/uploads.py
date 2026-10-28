@@ -1223,4 +1223,9 @@ class UploadService:
                 .where(UploadRow.id == upload_id)
                 .values(status="discarded", updated_at=func.now())
             )
+            from ontotator.exchange.jobs import delete_unreferenced_file
+
+            # Rejected text must not stay on disk (and in every backup).
+            for digest in sorted({file["sha256"] for file in row.files}):
+                delete_unreferenced_file(self.db, conn, digest)
             return self.get(key, upload_id)
