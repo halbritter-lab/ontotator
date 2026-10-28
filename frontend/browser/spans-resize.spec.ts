@@ -86,6 +86,9 @@ async function createHypotonia(page: Page, annotator: string) {
   await page.locator(".candidate-card").filter({ hasText: "HP:0001252" }).click();
   await expect(revision(page)).toHaveAttribute("title", "Revision 1");
   await expect(mentionWithOffsets(page, "[0:9]")).toBeVisible();
+  // The term label arrives after the save and re-renders every run and handle (their titles name the term): wait for
+  // it, so later measurements never hold a node that has just been replaced.
+  await expect(page.locator(".text-container .resize-handle--end")).toHaveAttribute("title", /the Hypotonia mention/);
 }
 
 /** Resolves with the payload of the next ``create_annotation`` command the page posts. */
@@ -249,7 +252,8 @@ test.describe("resizing mention spans", () => {
 
   test("the text stays put when a segment or a mention is being added", async ({ page }) => {
     await createHypotonia(page, "resize-still");
-    const top = () => page.locator(".text-container .run").first().evaluate((el) => el.getBoundingClientRect().top);
+    // Looked up and measured in one step: a run node replaced between the two reads as 0.
+    const top = () => page.evaluate(() => document.querySelector(".text-container .run")!.getBoundingClientRect().top);
     const before = await top();
     await page.getByRole("button", { name: "Add segment", exact: true }).click();
     await expect(page.locator(".pane-intent")).toBeVisible();

@@ -85,6 +85,15 @@ export async function openCase(page: Page, options: { task?: "annotate" | "revie
   const assignment = tasks.find(row => row.project_key === projectKey && row.document_id === documentId && row.task === task)!;
   await page.locator(`a[href="#/tasks/${assignment.assignment_id}"]`).click();
   await expect(page.locator(".case-toolbar [role=status]")).toBeVisible();
+  // Leads and adjudicators get a "Versions" bar above the text once its metadata has loaded (useVersionAccess,
+  // useCaseVersions). It moves the text down, so geometry measured before it arrives is stale: wait for it.
+  const projects = await page.request.get("/api/v1/projects");
+  expect(projects.ok()).toBeTruthy();
+  const project = (await projects.json() as Array<{ project_key: string; can_manage: boolean; roles: string[] }>)
+    .find(row => row.project_key === projectKey);
+  if (project && (project.can_manage || project.roles.includes("lead") || project.roles.includes("adjudicator"))) {
+    await expect(page.locator(".case-version-controls")).toBeAttached();
+  }
 }
 
 /**
