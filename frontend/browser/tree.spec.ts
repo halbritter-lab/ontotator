@@ -126,10 +126,12 @@ test.describe("ontology tree", () => {
   });
 
   test("open the tree at a term, pick a child and use it", async ({ page }) => {
-    // Taller than the default: the monospace term IDs use the system font, which is wider
-    // on Linux and wraps a row, so the start term would not fit in 720 px there. Two more
-    // rows since the fixture holds the modifier roots beside Phenotypic abnormality.
-    await openWithSeizure(page, "tree-pick", { width: 1280, height: 1000 });
+    // Tall enough that the rows down to the start term fit with room to spare. The docked
+    // tree gets about half of what the annotation panel leaves, rows are about 26 px (more
+    // where the system font wraps a row), and the start term is the eighth row since the
+    // fixture holds the modifier roots beside Phenotypic abnormality. At 1000 px it fit
+    // locally by about 10 px and missed by 10 px on CI; 1200 px leaves about 100 px.
+    await openWithSeizure(page, "tree-pick", { width: 1280, height: 1200 });
     const commands: string[] = [];
     page.on("request", (request) => {
       if (request.method() === "POST" && /\/api\/v1\/workspaces\/[^/]+\/commands$/.test(request.url())) {
@@ -168,6 +170,13 @@ test.describe("ontology tree", () => {
     // top, not scrolled to put the term in the middle. "All" is the first row, whole,
     // right under the header.
     const rowsBox = panel.locator(".tree-browser__tree");
+    // The premise first: if the rows down to the start term do not fit, the tree must scroll
+    // (the next test covers that), and the failure here says so instead of a bare offset.
+    const fits = await rowsBox.evaluate((element, id) => {
+      const row = element.querySelector(`[data-term-id="${id}"]`)!.getBoundingClientRect();
+      return row.bottom - element.getBoundingClientRect().top + element.scrollTop <= element.clientHeight;
+    }, SEIZURE);
+    expect(fits, "the rows down to the start term fit the tree's box").toBe(true);
     expect(await rowsBox.evaluate((element) => element.scrollTop)).toBe(0);
     await expect(treeItem(page, "HP:0000001")).toBeInViewport({ ratio: 1 });
     const first = await box(treeItem(page, "HP:0000001"));
@@ -247,6 +256,24 @@ test.describe("ontology tree", () => {
     await expect(treeItem(page, STATUS_EPILEPTICUS)).toBeFocused();
     await expect(treeItem(page, STATUS_EPILEPTICUS)).toBeInViewport({ ratio: 1 });
     await expect(treeItem(page, SEIZURE)).not.toHaveAttribute("aria-current", "true");
+  });
+
+  test("a tree that does not fit scrolls only as far as the start term needs, never to its middle", async ({ page }) => {
+    await openWithSeizure(page, "tree-nearest");
+    await showInTree(page).click();
+    const seizure = treeItem(page, SEIZURE);
+    await expect(seizure).toBeFocused();
+    const rowsBox = treePanel(page).locator(".tree-browser__tree");
+    const metrics = await rowsBox.evaluate((element, id) => {
+      const row = element.querySelector(`[data-term-id="${id}"]`)!.getBoundingClientRect();
+      const frame = element.getBoundingClientRect();
+      return { top: element.scrollTop, bottom: row.bottom - frame.top + element.scrollTop, client: element.clientHeight };
+    }, SEIZURE);
+    // At 1280x720 the rows down to the start term are taller than the box.
+    expect(metrics.bottom).toBeGreaterThan(metrics.client);
+    // Brought in at the bottom edge (2 px scroll padding), not centred and not past it.
+    expect(Math.abs(metrics.top - (metrics.bottom - metrics.client + 2))).toBeLessThanOrEqual(2);
+    await expect(seizure).toBeInViewport({ ratio: 1 });
   });
 
   test("the tree is operable by keyboard and never holds the focus", async ({ page }) => {
