@@ -88,7 +88,7 @@ export type CaseIdLookupResult = components["schemas"]["CaseIdLookupResult"];
 export type AnnotationTargetPreview = components["schemas"]["AnnotationTargetPreview"];
 export type DiscardRequest = Defaulted<components["schemas"]["DiscardRequest"], "confirm">;
 export type DiscardResult = components["schemas"]["DiscardResult"];
-// Annotation-mode change after submissions, and its restore (#109)
+// Annotation-mode change after submissions, and its restore
 export type ModeChangeTarget = components["schemas"]["ModeChangeTarget"];
 export type ModeChangeRequest = components["schemas"]["ModeChangeRequest"];
 export type ModeChangePreview = components["schemas"]["ModeChangePreview"];

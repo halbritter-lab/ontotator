@@ -215,7 +215,7 @@ export function CardPlanSelect({ row, step, groupRevision, saves, modeChange }: 
   step: "review" | "annotation";
   groupRevision: number;
   saves: PlanSaves;
-  /** Lead's "Change mode…" of a locked mode and "Restore…" of discarded work (#109); without it neither shows. */
+  /** Lead's "Change mode…" of a locked mode and "Restore…" of discarded work; without it neither shows. */
   modeChange?: { projectKey: string; onChanged: () => void };
 }): JSX.Element | null {
   const id = useId().replace(/:/g, "");

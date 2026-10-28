@@ -1,5 +1,5 @@
 /**
- * "Change mode…" for a text whose annotation mode is fixed by work (#109): the lead may still switch between
+ * "Change mode…" for a text whose annotation mode is fixed by work: the lead may still switch between
  * "from proposals" and "from scratch", but only after a warning that names whose submitted work is discarded
  * and whose assignment is removed. Nothing is deleted: the work is marked discarded and "Restore…" brings it back
  * while no new annotation work has started.
