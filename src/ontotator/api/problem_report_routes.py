@@ -1,6 +1,6 @@
 """Owner reports and lead hold handling, scoped to exact assignments."""
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from ontotator.api.identity import PrincipalDep
@@ -56,9 +56,11 @@ def reports(
     principal: PrincipalDep,
     document_id: str | None = None,
     assignment_id: int | None = None,
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
 ) -> list[ProblemReportView]:
     return ProblemReportService(request.app.state.repo.db).list(
-        get_access(request), key, document_id, assignment_id
+        get_access(request), key, document_id, assignment_id, limit, offset
     )
 
 
