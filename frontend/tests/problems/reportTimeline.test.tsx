@@ -58,10 +58,11 @@ describe("ReportTimeline", () => {
     expect(items[1]).toContain("Lea Lang (lead-0002, you) released the pause on Task 7 (ann-0005).");
     expect(items[2]).toContain("Max Mohr (lead-0003) closed the report.");
     cleanup();
-    // Reporters keep pseudonyms even if a reference carries a name.
+    // Reporters see the role, never the lead's name or pseudonym (D1).
     const reporterView = report({ events: [event({ event_id: "e3", action: "resolve", actor_label: "lead-0003", actor: { pseudonym: "lead-0003", display_name: "Max Mohr", is_me: false }, own_task: false, reason: null })] });
     const second = render(<ReportTimeline report={reporterView} />);
-    expect(second.container.textContent).toContain("lead-0003 closed the report.");
+    expect(second.container.textContent).toContain("The project lead closed the report.");
+    expect(second.container.textContent).not.toContain("lead-0003");
     expect(second.container.textContent).not.toContain("Max Mohr");
   });
 

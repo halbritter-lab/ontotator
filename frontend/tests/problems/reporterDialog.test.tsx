@@ -127,7 +127,7 @@ describe("reporter dialog", () => {
     expect(onRefresh).toHaveBeenCalledTimes(1);
     view.rerender(<TaskProblemActions assignment={task({ workflow_revision: 5 })} onSaveBeforeReport={vi.fn()} onRefresh={onRefresh} />);
     expect(screen.getByText("Your task: Active")).toBeTruthy();
-    expect(screen.getByText(/Resumed by lead-0002/)).toBeTruthy();
+    expect(screen.getByText(/Resumed by the project lead/)).toBeTruthy();
 
     // A lead pause added elsewhere.
     const leadPaused = task({ held: true, hold_reason: "Wait for the glossary", workflow_revision: 6,
