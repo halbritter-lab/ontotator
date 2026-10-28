@@ -3,6 +3,10 @@ from pathlib import Path
 
 import pytest
 
+# Typer forces Rich colour output when GITHUB_ACTIONS is set; ANSI codes split the
+# option names that the CLI help tests look for.
+os.environ.setdefault("_TYPER_FORCE_DISABLE_TERMINAL", "1")
+
 _SHARED_URL = "ontotator_test_pg_url"
 _SHARED_ERROR = "ontotator_test_pg_error"
 
