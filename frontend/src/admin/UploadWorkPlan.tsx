@@ -68,7 +68,7 @@ export function UploadWorkPlan({ workPlan, ruleOn = true, canAccept = false, acc
       if (flags.annotate && !flags.review) counts.set(item.language, (counts.get(item.language) ?? 0) + 1);
     }
     return counts;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- newCases and caseFlags derive from the listed inputs
   }, [workPlan, languageChoices, caseChoices, ruleOn, acceptedRows]);
   const acceptLanguages = [...needs.keys()].filter(language => canAccept && accept[language]).sort();
   const unresolved = [...needs.keys()].sort().find(language => !(canAccept && accept[language] && reason.trim()));
@@ -81,10 +81,10 @@ export function UploadWorkPlan({ workPlan, ruleOn = true, canAccept = false, acc
     })),
     plan_cases: Object.values(caseChoices).map(item => ({ case_id: item.case_id, language: item.language, review: item.review, annotate: item.annotate })),
     ...(acceptLanguages.length && reason.trim() ? { accept_external_review: { languages: acceptLanguages, reason: reason.trim() } } : {}),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the joined key stands for acceptLanguages
   }), [languageChoices, caseChoices, acceptLanguages.join(","), reason, workPlan]);
   const resultKey = JSON.stringify([plan, blockedReason]);
-  useEffect(() => { onChangeRef.current({ plan, blockedReason }); }, [resultKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { onChangeRef.current({ plan, blockedReason }); }, [resultKey]); // eslint-disable-line react-hooks/exhaustive-deps -- resultKey stands for plan and blockedReason
 
   const toggleLanguage = (language: PlanLanguage, flag: "review" | "annotate") => {
     if (disabled) return;

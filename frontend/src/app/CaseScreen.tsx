@@ -488,7 +488,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   useEffect(() => {
     if (!pendingAnnotation?.isSpanless || !spanlessNotesRequired || panesLayout) return;
     rootRef.current?.querySelector<HTMLTextAreaElement>("#spanless-reason")?.focus({ preventScroll: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only a new pending finding moves focus
   }, [pendingAnnotation?.annotationId]);
   // Narrow screens: the header and toolbar scroll away above the viewport-high workspace. Choosing
   // a pane or opening the tree brings the workspace to the top, so the whole pane is in view.
@@ -2577,7 +2577,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     }
     const listKey = attachTargets.find(target => target.annotationId === attachFocusId)?.listKey;
     [...rootRef.current?.querySelectorAll<HTMLElement>("[data-list-key]") ?? []].find(row => row.dataset.listKey === listKey)?.focus({ preventScroll: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only starting attach or a focus move refocuses
   }, [attachActive, attachFocusId]);
 
   const startLinkSpan = (annotationId: string, termId: string) => {
@@ -2597,7 +2597,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   // Another selection ends "Link a text span".
   useEffect(() => {
     if (linkSpan && linkSpan.annotationId !== selectedAnnotationId) modifierCommands.setLinkSpan(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only a selection change ends the link mode
   }, [selectedAnnotationId]);
 
   /** Mention ids (`mentions`) and modifier display ids of a finding, for `run--framed`. */
@@ -3068,7 +3068,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     if (focusInspector(inspector?.querySelector<HTMLElement>("[data-confirm-defaults]"))) return;
     if (panesLayout) focusInspector(inspector?.querySelector<HTMLElement>("[data-back-to-text]"));
     else setTextFocusRequest({ offset: markEndOf(snapshot, selectedEvidenceId) });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only a new loop focus request moves focus
   }, [loopFocus, selectedAnnotation, selectedAnnotationId]);
   useEffect(() => {
     if (!searchFocusRequest) return;

@@ -129,6 +129,7 @@ if runs static; then
     step "source and wheel contract preflight" uv run pytest \
         tests/test_admin_error_codes.py tests/test_check_wheel.py tests/test_check_script.py -q
     step "frontend typecheck" npm --prefix frontend run typecheck
+    step "frontend lint" npm --prefix frontend run lint
     step "TypeScript API drift" npm --prefix frontend run api:check
     step "wheel build (lock and contents)" uv run python scripts/check_wheel.py \
         --out-dir "$wheel_dir"

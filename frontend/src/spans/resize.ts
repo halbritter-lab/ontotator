@@ -15,6 +15,7 @@ const isHighSurrogate = (code: number) => code >= 0xd800 && code <= 0xdbff;
 
 const ZWJ = 0x200d;
 // Combining marks, variation selectors and emoji skin tones attach to the character before them.
+// eslint-disable-next-line no-misleading-character-class -- each code point is matched on its own
 const EXTENDS_PREVIOUS = /[\p{M}\u200d\ufe00-\ufe0f\u{1f3fb}-\u{1f3ff}]/u;
 
 /** True when `offset` would cut a visible character in two (accent, joined emoji, surrogate pair). */

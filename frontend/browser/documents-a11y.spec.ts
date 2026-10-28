@@ -472,7 +472,7 @@ test("390 px cards: every interactive target is at least 24 by 24 px, or meets a
     const MIN = 24;
     const selector = 'a[href], a[role="link"], button, input:not([type="hidden"]), select, textarea, summary, [tabindex]:not([tabindex="-1"])';
     const describe = (element: Element) => {
-      const name = element.getAttribute("aria-label") ?? ((element as HTMLInputElement).labels?.[0]?.textContent ?? "") ?? "";
+      const name = element.getAttribute("aria-label") ?? (element as HTMLInputElement).labels?.[0]?.textContent ?? "";
       return `${element.tagName.toLowerCase()} "${(name || element.textContent || "").trim().slice(0, 60)}"`;
     };
     // checkVisibility() also excludes the content of closed <details> (content-visibility: hidden).

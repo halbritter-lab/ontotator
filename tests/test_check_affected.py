@@ -16,6 +16,7 @@ STATIC = [
     "uv run python scripts/export_openapi.py --check",
     "uv run python scripts/export_admin_error_codes.py --check",
     "npm --prefix frontend run typecheck",
+    "npm --prefix frontend run lint",
     "npm --prefix frontend run api:check",
 ]
 
@@ -96,12 +97,12 @@ def test_changed_module_selects_named_and_importing_tests(quick):
     result, calls = quick("src/ontotator/auth/passwords.py", "frontend/src/a.ts")
     assert result.returncode == 0, result.stderr
     assert calls[0] == "docker info"
-    assert calls[1:8] == STATIC
-    assert calls[8] == (
+    assert calls[1:9] == STATIC
+    assert calls[9] == (
         "npm --prefix frontend run test:related --"
         " --maxWorkers=2 --minWorkers=1 src/a.ts"
     )
-    backend = calls[9].split()
+    backend = calls[10].split()
     assert backend[:6] == ["uv", "run", "pytest", "-q", "-n", "2"]
     assert sorted(backend[6:]) == [
         "tests/test_cli.py",
@@ -109,7 +110,7 @@ def test_changed_module_selects_named_and_importing_tests(quick):
         "tests/test_passwords.py",
         "tests/test_passwords_policy.py",
     ]
-    assert len(calls) == 10
+    assert len(calls) == 11
     assert "partial gate" in result.stdout
 
 

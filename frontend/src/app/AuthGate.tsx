@@ -123,7 +123,6 @@ export const AuthGate: React.FC = () => {
       stopExpired();
       stopCsrf();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const logout = async () => {

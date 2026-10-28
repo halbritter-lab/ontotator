@@ -91,7 +91,7 @@ export function useValuesLayout(
     evaluate();
   });
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- the caller passes the dependency list
   useLayoutEffect(() => { evaluate(); }, deps);
 
   useEffect(() => {

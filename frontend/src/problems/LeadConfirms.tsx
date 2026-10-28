@@ -69,7 +69,7 @@ export function LeadConfirm({ intent, report, finalText, preselect = [], lead, r
   const writing = useRef(false), alive = useRef(true);
   const reasonRef = useRef<HTMLTextAreaElement>(null);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
-  useEffect(() => { if (intent === "pause") lead.loadCandidates(); }, [intent]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (intent === "pause") lead.loadCandidates(); }, [intent]); // eslint-disable-line react-hooks/exhaustive-deps -- only a new pause intent loads candidates
 
   const activeHolds = (report.holds ?? []).filter(h => h.active);
 

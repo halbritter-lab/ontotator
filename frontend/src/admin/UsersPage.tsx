@@ -192,7 +192,7 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
   // A refusal about one field moves focus there, where its message is shown.
   // Any other refusal: back to Create user, which was unavailable (and lost focus) while saving (#18).
   const createButton = useRef<HTMLButtonElement>(null);
-  useEffect(() => { if (createError !== undefined) (usernameError ? usernameInput : displayNameError ? displayNameInput : createButton).current?.focus(); }, [createError]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (createError !== undefined) (usernameError ? usernameInput : displayNameError ? displayNameInput : createButton).current?.focus(); }, [createError]); // eslint-disable-line react-hooks/exhaustive-deps -- the field errors derive from createError
   const createUser = async () => {
     if (writing.current || blocked) return;
     const epoch = lifetime.current;

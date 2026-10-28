@@ -38,8 +38,7 @@ export function useFinalPanel(projectKey: string, caseId: string, language: stri
       ([panel, submissions]) => { if (current === generation.current) setState({ identity, data: { panel, submissions }, error: null, loading: false }); },
       error => { if (current === generation.current) setState({ identity, data: null, error, loading: false }); },
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [identity]);
+  }, [identity, projectKey, caseId, language]);
 
   // A row change loads at once; a new rows page reloads in place.
   useEffect(() => { load(); }, [load, refresh]);

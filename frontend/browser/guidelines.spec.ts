@@ -324,7 +324,7 @@ test("EMPTY: publish v1, read it in a task, publish v2, review under v2, export 
     const selected = annotationSets(archive.get("selected.t1.zip")!);
     expect(refOf(selected, firstSubmission)).toBe(ref(1));
     expect(refOf(selected, secondSubmission)).toBe(ref(2));
-    const index = archive.get("index.csv")!.toString("utf8").replace(/^﻿/, "").split(/\r?\n/)[0].split(",");
+    const index = archive.get("index.csv")!.toString("utf8").replace(/^\u{FEFF}/u, "").split(/\r?\n/)[0].split(",");
     expect(index.at(-1)).toBe("guideline_version");
 
     // 8. Lead withdraws v2: the task button disappears; Documents shows "Guidelines v2 (withdrawn)".
