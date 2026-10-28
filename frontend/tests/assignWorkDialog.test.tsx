@@ -554,7 +554,7 @@ it("one text the preview cannot assign says why instead of a made-up limit (R-12
   const why = "This text is still in translation review. Annotation can be assigned once the review is accepted.";
   expect(screen.getByText(why, { selector: ".assign-limit-hint" })).toBeDefined();
   expect(screen.queryByText(/possible/)).toBeNull();
-  expect(screen.getByText(why, { selector: ".assign-footer-reason" })).toBeDefined();
+  expect(screen.getByText(why, { selector: ".dialog-footer-reason" })).toBeDefined();
   expect(screen.getByRole("checkbox", { name: /Ana Weber/ }).getAttribute("aria-disabled")).toBe("true");
   expect(screen.queryByText(/limit reached/)).toBeNull();
 });
