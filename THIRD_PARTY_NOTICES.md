@@ -11,7 +11,7 @@ This project incorporates components from the following third-party software:
   - `src/ontotator/vendor/hpo_span_annotator/hpo.py`
   - `src/ontotator/vendor/hpo_span_annotator/lexical.py`
   - `src/ontotator/vendor/hpo_span_annotator/search.py`
-  - `frontend/src/vendor/spans.js` (adapted in Aufgabe 5)
+  - `frontend/src/vendor/spans.js` (adapted)
 - **Modifications:**
   - Integrated into isolated namespace under `ontotator.vendor`.
   - Non-semantic search and lexical indexing retained; dense embeddings, hub and server dependencies excluded.

@@ -1,36 +1,26 @@
-"""The four routes into HPO, and the shuffle that keeps the gold unanchored.
+"""The ontology search routes, and the shuffle of scored results.
 
-| Route     | What it does                          | Touches an encoder |
-|-----------|---------------------------------------|--------------------|
-| `dense`   | BioLORD nearest neighbours            | yes                |
-| `lexical` | char n-gram TF-IDF over HPO names     | no                 |
-| `exact`   | normalised label / synonym match      | no                 |
-| `id`      | a term id typed straight in           | no                 |
-| `browse`  | parents, children, siblings           | no                 |
+| Route     | What it does                           |
+|-----------|----------------------------------------|
+| `lexical` | char n-gram TF-IDF over ontology names |
+| `exact`   | normalised label / synonym match       |
+| `id`      | a term id typed straight in            |
+| `browse`  | parents, children, siblings            |
 
-``dense`` is the comfortable one and the other four are the reason the tool is
-trustworthy. ``lexical`` is the one that makes them usable rather than merely
-present: it is scored, so it answers a phrase the annotator has not matched
-exactly, while sharing nothing with the evaluated stack. See
-:mod:`hpo_span_annotator.lexical`.
-
-BioLORD-2023-M is phentrieve's own encoder, so a term the ``dense`` route cannot
-surface is a term the evaluated system also cannot surface; if it were the only
-way in, the gold's reachable space would be bounded by the system the gold is
-later used to score. Which route found each accepted term is recorded on the
-record, so that share is a number rather than an assumption.
+None of them uses an embedding model. ``lexical`` is scored, so it answers a
+phrase the annotator has not matched exactly; see
+:mod:`hpo_span_annotator.lexical`. Which route found each accepted term is
+recorded, so annotations can later be analysed by how they were found.
 
 ## Why the scored hits come back shuffled
 
 The annotator sees ranked candidates in a random order, and the true rank is
-carried along invisibly. Two reasons, and only the first is about this tool:
+carried along invisibly:
 
-- **A ranked list anchors.** On the sibling ICD gold the retriever put the right
-  answer first 42.3% of the time, so a first position that reads as a
-  recommendation is wrong more often than right. Shuffling makes the annotator
-  read the candidates.
-- **The ranking is the thing being measured.** A gold whose choices correlate
-  with display position cannot then be used to score display position.
+- **A ranked list anchors.** A first position reads as a recommendation even
+  when the score is wrong. Shuffling makes the annotator read the candidates.
+- **The ranking stays analysable.** Annotations whose choices correlate with
+  display position could not later be used to judge a ranking.
 
 The permutation is derived from a seed, not drawn fresh, so it is stable across
 a re-render and a page reload and differs between two annotators looking at the
@@ -39,11 +29,9 @@ the orders they each saw are on record.
 
 ## The line between a shuffled route and an ordered one
 
-**A route is shuffled when its order comes from a similarity score.** ``dense``
-and ``lexical`` both are: a score is one system's opinion about relevance, and a
-list sorted by it anchors the reader on position 1 whatever produced it. That the
-lexical route is not the system under evaluation does not make its ranking a
-fact, so it gets the same treatment.
+**A route is shuffled when its order comes from a similarity score.**
+``lexical`` is: a score is one system's opinion about relevance, and a list
+sorted by it anchors the reader on position 1 whatever produced it.
 
 ``exact``, ``id`` and ``browse`` are **not** shuffled. Their order encodes a fact
 about the match -- an exact label beats an exact synonym beats a looser
@@ -68,7 +56,7 @@ from ontotator.vendor.hpo_span_annotator.lexical import LexicalIndex
 
 PATHS = ("lexical", "exact", "id", "browse")
 
-# Routes whose accepted terms are independent of the evaluated retriever.
+# Routes that use no embedding model (all current routes).
 CLEAN_PATHS = frozenset({"lexical", "exact", "id", "browse"})
 
 # Routes whose order is a similarity score rather than a fact about the match.
@@ -107,8 +95,8 @@ def shuffled(hits: list[dict[str, Any]], seed: str) -> list[dict[str, Any]]:
     """Permute a ranked list, stamping both numbers onto every hit.
 
     ``rank`` is what the retriever said and never changes. ``display_pos`` is the
-    slot the annotator saw. Keeping both is the whole point: the gold stays free
-    of a position anchor while rank-1 and hit@k remain computable from it later.
+    slot the annotator saw. Keeping both is the whole point: annotations stay free
+    of a position anchor while rank-1 and hit@k remain computable from them later.
     """
     ordered = [dict(hit) for hit in hits]
     for index, hit in enumerate(ordered, start=1):

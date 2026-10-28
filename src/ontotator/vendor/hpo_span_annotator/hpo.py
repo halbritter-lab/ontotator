@@ -6,17 +6,16 @@ is the whole ontology source for this tool: labels, synonyms, definitions and
 ``is_a`` edges all come from it, so the release the tool is running is a single
 recorded string rather than a property of whichever files happen to be on disk.
 
-Three of the tool's four routes into HPO live here and none of them touches an
-embedding model:
+Three of the search routes live here; none of them uses an embedding model:
 
 ``exact``   normalised string match against labels and synonyms
 ``id``      a term id typed straight in
 ``browse``  parents, children and siblings
 
-That independence is the design and not redundancy. Phentrieve's retriever is
-what this annotation is later used to score, so if the only route to a term ran
-through an encoder, a term that encoder cannot surface could never enter the
-gold and recall measured against that gold would tend to 1.0 by construction.
+They let an annotator reach any term directly, by name, id or position in the
+hierarchy, independent of how a scored search ranks it.
+
+Adapted from hpo-span-annotator (MIT); see THIRD_PARTY_NOTICES.md.
 """
 
 from __future__ import annotations
@@ -137,18 +136,13 @@ class Term:
     ) -> list[str]:
         """The strings this term is findable by, best first.
 
-        The definition is offered rather than included by default. Phentrieve's
-        own result argues for embedding definitions, but ``BioLORD-2023-M`` caps
-        at 64 tokens and never overrides it, so a long definition is truncated
-        silently and the tail of it is simply not in the index. Whoever turns
-        this on should know they are choosing where the cut falls.
+        The definition is offered rather than included by default: definitions
+        are long and would dominate a term's short names in a string index.
 
         ``languages`` adds the translated names for those codes. It is a
-        parameter rather than a property of the term because the two scored
-        indexes want different answers: the lexical index wants every language it
-        can get, since a French query shares no characters with an English label,
-        while the dense index stays English-only by default so it remains
-        comparable to the retriever the benchmark scores.
+        parameter rather than a property of the term because callers want
+        different answers: the lexical index wants every language it can get,
+        since a French query shares no characters with an English label.
         """
         out = [self.label]
         for _, value in sorted(self.synonyms, key=lambda s: SYNONYM_RANK.get(s[0], 9)):
@@ -262,7 +256,7 @@ class Ontology:
         return term.label if term else hpo_id
 
     def live_terms(self) -> list[Term]:
-        """Non-obsolete terms, in id order. The feed the dense index embeds."""
+        """Non-obsolete terms, in id order."""
         return [
             t
             for t in sorted(self.terms.values(), key=lambda t: t.hpo_id)
@@ -274,8 +268,8 @@ class Ontology:
         """Terms whose label or a synonym equals the query after normalisation.
 
         Exact before synonym before looser predicate, which is a fact about the
-        match rather than a model's opinion about relevance. That is why this
-        route's order is left alone while the dense route's is shuffled.
+        match rather than a score's opinion about relevance. That is why this
+        route's order is kept while scored routes are shuffled.
         """
         hits = self._exact.get(normalise(query), [])
         ordered = sorted(
