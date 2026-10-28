@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type MouseEvent, type MutableRefObject } from "react";
-import { api, type CurrentUser, type OntologyInfo, type ProjectSettings } from "../api/client";
+import { api, type CurrentUser, type OntologyInfo, type ProjectPin, type ProjectSettings, type RepinReport } from "../api/client";
 import { DEFAULT_SETTINGS_SECTION, routeHref, SETTINGS_SECTIONS, type Route, type RouteLeaveGuard, type SettingsSection } from "../app/router";
 import { Button, Checkbox, Dialog, InlineMessage, Select, Textarea, TextInput } from "../ui";
 import { ErrorNotice } from "./ErrorNotice";
@@ -8,7 +8,8 @@ import { hiddenCount, HiddenAxisValuesField } from "./HiddenAxisValuesField";
 import { LanguagesField } from "./LanguagesField";
 import { MembersSection } from "./MembersSection";
 import { SettingsCard, SettingsHint } from "./SettingsCard";
-import { draftPins, PinFields, ProfileUpload, serializePins, ANNOTATION_SCHEME_LABELS, WorkflowFields, workflowOf, type UploadedProfile } from "./projectFields";
+import { draftPins, PinFields, ProfileUpload, ReleaseFields, serializePins, ANNOTATION_SCHEME_LABELS, WorkflowFields, workflowOf, type UploadedProfile } from "./projectFields";
+import { RepinReportPanel } from "./RepinReport";
 import { axisOptionLabel } from "../editor/axisLabels";
 export interface ProjectSettingsPageProps {
   projectKey: string;
@@ -52,6 +53,8 @@ const SECTION_PARTS: Record<SettingsSection, readonly Section[]> = {
   people: [], workflow: ["Workflow"], annotation: ["Annotation"], guidelines: [], general: ["General"], ontology: ["Pins", "Profile"],
 };
 const PART_LABELS: Record<Section, string> = { General: "General", Workflow: "Workflow", Annotation: "Annotation", Pins: "Ontology version", Profile: "Task profile" };
+/** A pin change waits for the lead to look at its check; not an error to show. */
+class RepinPending extends Error {}
 const settingsRoute = (key: string, section: SettingsSection): Route =>
   section === DEFAULT_SETTINGS_SECTION ? { name: "projectSettings", key } : { name: "projectSettings", key, section };
 const generalOf = (settings: ProjectSettings) => ({ name: settings.name, description: settings.description ?? "", languages: settings.languages ?? [] });
@@ -64,6 +67,7 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved,
   const [annotation, setAnnotation] = useState(() => annotationOf(initial));
   const [workflow, setWorkflow] = useState(() => workflowOf(initial));
   const [pins, setPins] = useState(() => draftPins(initial.pins));
+  const [repin, setRepin] = useState<{ pins: ProjectPin[]; report: RepinReport } | null>(null);
   const [uploaded, setUploaded] = useState<UploadedProfile | null>(null);
   const [profileGeneration, setProfileGeneration] = useState(0);
   const [busy, setBusy] = useState<Section | null>(null);
@@ -100,7 +104,7 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved,
       if (part === "Profile") { setUploaded(null); setProfileGeneration(value => value + 1); }
       setSaved(part); onSaved?.(response);
       return true;
-    } catch (failure: unknown) { if (active.current) setError({ section: part, error: failure }); return false; }
+    } catch (failure: unknown) { if (active.current && !(failure instanceof RepinPending)) setError({ section: part, error: failure }); return false; }
     finally { if (active.current) { writing.current = false; setBusy(null); } }
   };
   const ids = model.profile.ontologies.map(item => item.ontology_id);
@@ -108,7 +112,14 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved,
     General: () => api.updateProjectSettings(projectKey, { name: general.name, description: general.description.trim() ? general.description : null, languages: general.languages }),
     Annotation: () => api.updateProjectSettings(projectKey, annotation),
     Workflow: () => api.updateProjectSettings(projectKey, { import_plan: workflow.import_plan, annotations_per_text: workflow.annotations_per_text, tool_proposal_mode: workflow.tool_proposal_mode, annotate_accepted_translations_only: workflow.annotate_accepted_translations_only, adjudicator_not_annotator: workflow.adjudicator_not_annotator }),
-    Pins: () => api.updatePins(projectKey, serializePins(ids, pins)),
+    // The check first: a move that touches drafts, or any move once work was submitted, waits for the lead's look.
+    Pins: async () => {
+      const chosen = serializePins(ids, pins);
+      const report = await api.previewPins(projectKey, chosen);
+      if (!model.locked && !report.rewrites.length && !report.flagged.length) return api.updatePins(projectKey, chosen);
+      if (active.current) setRepin({ pins: chosen, report });
+      throw new RepinPending();
+    },
     Profile: () => api.updateProjectProfile(projectKey, uploaded!.profile),
   };
   const submit = (event: FormEvent<HTMLFormElement>, part: Section) => {
@@ -119,7 +130,7 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved,
     General: JSON.stringify(general) !== JSON.stringify(generalOf(model)),
     Annotation: JSON.stringify(annotation) !== JSON.stringify(annotationOf(model)),
     Workflow: JSON.stringify(workflow) !== JSON.stringify(workflowOf(model)),
-    Pins: !model.locked && JSON.stringify(pins) !== JSON.stringify(draftPins(model.pins)),
+    Pins: JSON.stringify(pins) !== JSON.stringify(draftPins(model.pins)),
     Profile: !model.locked && uploaded !== null,
   };
   const dirtyParts = (target: SettingsSection) => SECTION_PARTS[target].filter(part => dirty[part]);
@@ -159,7 +170,7 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved,
       if (part === "General") setGeneral(generalOf(model));
       if (part === "Annotation") setAnnotation(annotationOf(model));
       if (part === "Workflow") setWorkflow(workflowOf(model));
-      if (part === "Pins") setPins(draftPins(model.pins));
+      if (part === "Pins") { setPins(draftPins(model.pins)); setRepin(null); }
       if (part === "Profile") { setUploaded(null); setProfileGeneration(value => value + 1); }
     }
     setSaved(null);
@@ -195,6 +206,12 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved,
   };
   const editAnnotation = (patch: Partial<typeof annotation>) => { setAnnotation({ ...annotation, ...patch }); setSaved(null); };
   const hidden = hiddenCount(annotation.hidden_axis_values);
+  const editPins = (value: typeof pins) => { setPins(value); setRepin(null); setSaved(null); };
+  const applyRepin = () => {
+    const pending = repin;
+    if (pending) void save("Pins", () => api.applyPins(projectKey, pending.pins, pending.report.report_sha256)).then(done => { if (done && active.current) setRepin(null); });
+  };
+  const repinPanel = repin && <RepinReportPanel report={repin.report} busy={busy === "Pins"} onApply={applyRepin} onCancel={() => setRepin(null)} />;
   // The task profile wins. Its span-required types ignore the spanless setting.
   const annotationTypes = model.profile.layers.flatMap(layer => layer.annotation_types.map(type => ({ layer, type })));
   const spanRequiredTypes = annotationTypes.filter(({ type }) => type.evidence_policy === "required_on_complete").map(({ type }) => type.label);
@@ -277,8 +294,8 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved,
       </fieldset>
     </form>; break;
     case "ontology": content = <section ref={bindSection} tabIndex={-1} className="settings-section" aria-label="Ontology">
-      {model.locked ? <SettingsCard title="Ontology" hint="Fixed once work has been submitted."
-        why="The ontology cannot change once work has been submitted. Start a new project for another ontology version.">
+      {model.locked ? <><SettingsCard title="Ontology" hint="Only the release can change once work has been submitted."
+        why="Moving to another release rewrites draft terms the new release replaced or merged. Submitted work stays as it was submitted.">
         {/* D8: a plain summary; the technical details collapsed. */}
         <ul aria-label="Ontologies" className="settings-card-list">{model.pins.map(pin => <li key={pin.ontology_id}>
           {model.profile.ontologies.find(item => item.ontology_id === pin.ontology_id)?.label ?? pin.ontology_id} ({pin.ontology_id}), release {pin.release}
@@ -288,14 +305,29 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved,
           <ul>{model.pins.map(pin => <li key={pin.ontology_id}>{pin.ontology_id} {pin.release}: file checksum (SHA-256) <code>{pin.sha256}</code>; branches: {(pin.allowed_roots ?? []).join(", ") || "every term"}; annotation scheme: {ANNOTATION_SCHEME_LABELS[pin.t1_profile] ?? pin.t1_profile}</li>)}</ul>
           <ul aria-label="Current profile layers">{model.profile.layers.map(layer => <li key={layer.layer_id}>{layer.label} ({layer.layer_id})</li>)}</ul>
         </details>
-      </SettingsCard> : <>
+      </SettingsCard>
+        <form className="settings-card" aria-label="Ontology release" onSubmit={event => submit(event, "Pins")}>
+          <fieldset disabled={busy !== null}><legend className="settings-card-title">Move to another release</legend>
+            <ReleaseFields ids={ids} ontologies={ontologies} value={pins} onChange={editPins} disabled={busy !== null} />
+            <SettingsHint why="Terms with exactly one successor or merged into another term are rewritten in drafts. Obsolete terms without one stay and must be changed before submitting.">Check the changes before moving.</SettingsHint>
+            <div className="settings-section-actions" role="group" aria-label="Ontology release check">
+              <Button type="submit" variant="primary" disabled={!dirty.Pins || repin !== null} loading={busy === "Pins" && repin === null}>Check changes</Button>
+              {dirty.Pins && <Button onClick={() => discard(["Pins"])}>Discard changes</Button>}
+              {error?.section === "Pins" && <ErrorNotice error={error.error} />}
+              {saved === "Pins" && <InlineMessage tone="success">Ontology release changed.</InlineMessage>}
+            </div>
+          </fieldset>
+        </form>
+        {repinPanel}
+      </> : <>
         <form className="settings-card" aria-label="Ontology version" onSubmit={event => submit(event, "Pins")}>
           <fieldset disabled={busy !== null}><legend className="settings-card-title">Ontology version</legend>
-            <PinFields plain ids={ids} ontologies={ontologies} value={pins} onChange={value => { setPins(value); setSaved(null); }} disabled={busy !== null} />
-            <SettingsHint>Can change until work has been submitted.</SettingsHint>
+            <PinFields plain ids={ids} ontologies={ontologies} value={pins} onChange={editPins} disabled={busy !== null} />
+            <SettingsHint why="A change that rewrites or flags draft terms shows its check first.">Branches and the annotation scheme can change until work has been submitted.</SettingsHint>
             {saveBar("Pins")}
           </fieldset>
         </form>
+        {repinPanel}
         <section className="settings-card" aria-label="Task profile">
           <details className="settings-advanced"><summary className="settings-card-title">Advanced: task profile</summary>
             <ul aria-label="Current profile layers">{model.profile.layers.map(layer => <li key={layer.layer_id}>{layer.label} ({layer.layer_id})</li>)}</ul>

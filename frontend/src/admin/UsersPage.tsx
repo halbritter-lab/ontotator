@@ -36,6 +36,7 @@ const auditActions: Readonly<Record<string, string>> = {
   "project.member_remove": "Roles removed",
   "project.create": "Project created",
   "project.update": "Project settings changed",
+  "project.repin": "Ontology release changed",
   "project.import": "Texts imported",
   "project.edit_log_export": "Edit log exported",
   "project.export": "Export created",

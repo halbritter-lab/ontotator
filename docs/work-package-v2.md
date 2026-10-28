@@ -104,7 +104,7 @@ Use `ontotator analyze PACKAGE --annotator ID --output results.json` for version
       "ontology_id": "hp",
       "label": "Human Phenotype Ontology",
       "release": "2026-06-23",
-      "sha256": "279123a1ae5314e4632a0f85be2d82efd50f44ebf0d98e0100ed6859d7cb83e4",
+      "sha256": "20d4a647b8a3a15569423c96f29a7a9e8f3a14ce59867fe6f0a46fd409d193d0",
       "format": "obo-graph-json",
       "resource_path": "ontologies/hp.json"
     }

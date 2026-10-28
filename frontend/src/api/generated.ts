@@ -1638,6 +1638,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{key}/pins/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Pins
+         * @description What moving to these releases does to the drafts, without changing anything.
+         *
+         *     Also for a project with submitted work: there only the release of a
+         *     pin may change.
+         */
+        post: operations["preview_pins_api_v1_projects__key__pins_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{key}/pins/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply Pins
+         * @description Move to the releases of a previewed report; rewrites the draft terms it lists.
+         */
+        post: operations["apply_pins_api_v1_projects__key__pins_apply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{key}/profile": {
         parameters: {
             query?: never;
@@ -5264,6 +5307,22 @@ export interface components {
              */
             is_me: boolean;
         };
+        /**
+         * PinChange
+         * @description One ontology whose pin moves to another release.
+         */
+        PinChange: {
+            /** Ontology Id */
+            ontology_id: string;
+            /** From Sha256 */
+            from_sha256: string;
+            /** From Release */
+            from_release: string;
+            /** To Sha256 */
+            to_sha256: string;
+            /** To Release */
+            to_release: string;
+        };
         /** PinnedOntology */
         PinnedOntology: {
             /** Ontology Id */
@@ -6206,6 +6265,36 @@ export interface components {
             /** Code */
             code: string;
         };
+        /**
+         * RepinReport
+         * @description What moving to the chosen releases does (the dry run).
+         */
+        RepinReport: {
+            /** Project Key */
+            project_key: string;
+            /** Locked */
+            locked: boolean;
+            /** Changes */
+            changes: components["schemas"]["PinChange"][];
+            /** Rewrites */
+            rewrites: components["schemas"]["TermRewrite"][];
+            /** Flagged */
+            flagged: components["schemas"]["TermFlag"][];
+            /** Submitted */
+            submitted: components["schemas"]["SubmittedTerms"][];
+            /** Report Sha256 */
+            report_sha256: string;
+        };
+        /**
+         * RepinRequest
+         * @description Apply a re-pin whose dry run the lead has seen.
+         */
+        RepinRequest: {
+            /** Pins */
+            pins: components["schemas"]["ProjectPin"][];
+            /** Report Sha256 */
+            report_sha256: string;
+        };
         /** ReportEventView */
         ReportEventView: {
             /** Event Id */
@@ -7143,6 +7232,22 @@ export interface components {
             expected_revision: number;
         };
         /**
+         * SubmittedTerms
+         * @description Submitted annotations of one ontology; reported, never changed.
+         */
+        SubmittedTerms: {
+            /** Ontology Id */
+            ontology_id: string;
+            /** Annotations */
+            annotations: number;
+            /** Rewritable */
+            rewritable: number;
+            /** Obsolete */
+            obsolete: number;
+            /** Unknown */
+            unknown: number;
+        };
+        /**
          * TaskProfile
          * @description Complete specification of task profile, ontologies, layers, and types.
          */
@@ -7264,6 +7369,40 @@ export interface components {
             required_ontology_ids: string[];
         };
         /**
+         * TermFlag
+         * @description A draft term the move leaves for the annotator to change.
+         */
+        TermFlag: {
+            /** Ontology Id */
+            ontology_id: string;
+            /** Layer Id */
+            layer_id: string;
+            /** Document Id */
+            document_id: string;
+            /** Annotator Id */
+            annotator_id: string;
+            /** Mode */
+            mode: string;
+            /** Annotation Id */
+            annotation_id: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "finding" | "modifier";
+            /** Term Id */
+            term_id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "obsolete" | "unknown";
+            /** Replaced By */
+            replaced_by?: string[];
+            /** Consider */
+            consider?: string[];
+        };
+        /**
          * TermLabel
          * @description Display data for a term, resolved against the layer's pinned ontology.
          *
@@ -7315,6 +7454,40 @@ export interface components {
             layer_id: string;
             /** Term Id */
             term_id: string;
+        };
+        /**
+         * TermRewrite
+         * @description A draft term the move rewrites.
+         */
+        TermRewrite: {
+            /** Ontology Id */
+            ontology_id: string;
+            /** Layer Id */
+            layer_id: string;
+            /** Document Id */
+            document_id: string;
+            /** Annotator Id */
+            annotator_id: string;
+            /** Mode */
+            mode: string;
+            /** Annotation Id */
+            annotation_id: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "finding" | "modifier";
+            /** Old Term Id */
+            old_term_id: string;
+            /** New Term Id */
+            new_term_id: string;
+            /** New Label */
+            new_label: string;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "replaced_by" | "alt_id";
         };
         /** TextChangePreview */
         TextChangePreview: {
@@ -11408,6 +11581,76 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ProjectPin"][];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectSettings"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_pins_api_v1_projects__key__pins_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectPin"][];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepinReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    apply_pins_api_v1_projects__key__pins_apply_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RepinRequest"];
             };
         };
         responses: {

@@ -3185,60 +3185,14 @@ class Repository:
             new_revision = current_revision + 1
             response: dict[str, Any]
             if isinstance(result, Draft):
-                result.revision = new_revision
-                conn.execute(
-                    update(DraftRow)
-                    .where(DraftRow.id == draft_row.id)
-                    .values(
-                        revision=new_revision,
-                        checked_layer_ids=list(result.checked_layer_ids),
-                        round_input_resolutions=[
-                            r.model_dump(mode="json")
-                            for r in result.round_input_resolutions
-                        ],
-                        reanchor_inputs=[
-                            r.model_dump(mode="json") for r in result.reanchor_inputs
-                        ],
-                        reanchor_resolutions=[
-                            r.model_dump(mode="json")
-                            for r in result.reanchor_resolutions
-                        ],
-                        updated_at=now,
-                    )
-                )
-                conn.execute(
-                    delete(DraftAnnotationRow).where(
-                        DraftAnnotationRow.draft_id == draft_row.id
-                    )
-                )
-                conn.execute(
-                    delete(DraftEvidenceRow).where(
-                        DraftEvidenceRow.draft_id == draft_row.id
-                    )
-                )
-                conn.execute(
-                    delete(ReviewDecisionRow).where(
-                        ReviewDecisionRow.draft_id == draft_row.id
-                    )
-                )
-                self._insert_snapshots(
-                    conn, project_id, result.annotations, result.evidence
-                )
-                self._write_draft_content(
-                    conn,
-                    draft_row.id,
-                    result.annotations,
-                    result.evidence,
-                    result.decisions,
-                )
-                self._log_edit(
+                self._store_draft(
                     conn,
                     project_id,
                     draft_row.id,
+                    result,
                     envelope,
                     current_revision,
-                    DraftState.of(result),
-                    at=now,
+                    now,
                 )
                 response = _draft_payload(result)
             elif isinstance(result, Submission):
@@ -3289,6 +3243,110 @@ class Repository:
                 )
             )
             return result
+
+    def _store_draft(
+        self,
+        conn: Connection,
+        project_id: int,
+        draft_id: int,
+        result: Draft,
+        envelope: MutationEnvelope,
+        current_revision: int,
+        now: datetime,
+    ) -> None:
+        """Write ``result`` as the next revision of a draft and log the edit."""
+        new_revision = current_revision + 1
+        result.revision = new_revision
+        conn.execute(
+            update(DraftRow)
+            .where(DraftRow.id == draft_id)
+            .values(
+                revision=new_revision,
+                checked_layer_ids=list(result.checked_layer_ids),
+                round_input_resolutions=[
+                    r.model_dump(mode="json") for r in result.round_input_resolutions
+                ],
+                reanchor_inputs=[
+                    r.model_dump(mode="json") for r in result.reanchor_inputs
+                ],
+                reanchor_resolutions=[
+                    r.model_dump(mode="json") for r in result.reanchor_resolutions
+                ],
+                updated_at=now,
+            )
+        )
+        conn.execute(
+            delete(DraftAnnotationRow).where(DraftAnnotationRow.draft_id == draft_id)
+        )
+        conn.execute(
+            delete(DraftEvidenceRow).where(DraftEvidenceRow.draft_id == draft_id)
+        )
+        conn.execute(
+            delete(ReviewDecisionRow).where(ReviewDecisionRow.draft_id == draft_id)
+        )
+        self._insert_snapshots(conn, project_id, result.annotations, result.evidence)
+        self._write_draft_content(
+            conn, draft_id, result.annotations, result.evidence, result.decisions
+        )
+        self._log_edit(
+            conn,
+            project_id,
+            draft_id,
+            envelope,
+            current_revision,
+            DraftState.of(result),
+            at=now,
+        )
+
+    def _rewrite_draft_in(
+        self,
+        conn: Connection,
+        project_id: int,
+        draft_key: str,
+        operation: Callable[[Draft], Draft | None],
+        command: Callable[[], dict[str, Any]],
+        mutation_id: str,
+    ) -> Draft | None:
+        """Apply a server-side change to one stored draft as its next revision.
+
+        For changes no client sent (moving a project to another ontology
+        release, #81). The caller holds the project lock exclusively; this
+        takes the draft lock. ``operation`` returns ``None`` to leave the draft
+        unchanged; ``command``, called after it, gives the logged command. The
+        change is logged in ``edit_events`` like any edit, so
+        every revision stays reconstructable; a client still on the old
+        revision gets a revision conflict and reloads.
+        """
+        key = _decode_key_str(draft_key)
+        self._lock_draft(conn, key)
+        row = self._draft_row(conn, project_id, draft_key)
+        if row is None:
+            return None
+        draft = self._open_draft(conn, key, None)
+        result = operation(draft)
+        if result is None:
+            return None
+        revision = int(row.revision)
+        envelope = MutationEnvelope(
+            mutation_id=mutation_id, expected_revision=revision, payload=command()
+        )
+        self._store_draft(
+            conn, project_id, row.id, result, envelope, revision, datetime.now(UTC)
+        )
+        return result
+
+    def superseded_pins(self, project_key: str) -> dict[str, set[str]]:
+        """Ontology id -> the digests its pin pointed to before (#81)."""
+        with self.db.transaction() as conn:
+            rows = conn.execute(
+                select(
+                    ProjectOntologyRow.ontology_id,
+                    ProjectOntologyRow.superseded_sha256,
+                )
+                .join(ProjectRow, ProjectRow.id == ProjectOntologyRow.project_id)
+                .where(ProjectRow.project_key == project_key)
+            ).all()
+        return {row.ontology_id: set(row.superseded_sha256 or []) for row in rows}
 
     @staticmethod
     def _log_edit(

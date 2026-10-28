@@ -121,7 +121,7 @@ def test_without_translation_files_the_list_is_empty(tmp_path: Path) -> None:
     listed = _listed(_client(tmp_path, ontology_paths=[HP]))
 
     assert listed["hp"]["translations"] == []
-    assert listed["hp"]["term_count"] == 11
+    assert listed["hp"]["term_count"] == 16
 
 
 def test_two_files_of_one_language_are_listed_together(tmp_path: Path) -> None:

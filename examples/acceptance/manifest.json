@@ -7,9 +7,9 @@
   "documents": 6,
   "tool_proposals": 6,
   "sha256": {
-    "hp.json": "279123a1ae5314e4632a0f85be2d82efd50f44ebf0d98e0100ed6859d7cb83e4",
-    "profile.json": "1d65de7467e3a118e68d63c233c6f00c4f8a99b852ff648749dfdde3ffb5a869",
-    "demo.zip": "b7f33a2cb8a95e351470ab86b0949f7f4fea26b757eca20ea89a57019e56e557",
+    "hp.json": "20d4a647b8a3a15569423c96f29a7a9e8f3a14ce59867fe6f0a46fd409d193d0",
+    "profile.json": "b6f14ee65d7310c60e6d56d89815b2ae57cc831ebc0bdd2f6259d8b86520d7a6",
+    "demo.zip": "49216c9fb108b36b602a1124c2f6c4864d6e2707bf1563e90ce578bee4d13baa",
     "cases.json": "5f3ea06fff0a023b20340019e5e631b87e0eebc766a215afde673ae284ed706a"
   }
 }

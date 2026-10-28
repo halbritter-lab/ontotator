@@ -31,6 +31,9 @@ app_client = _shared_app_client
 # the root, then the children under each node of the path.
 SEIZURE_WALK = [
     "HP:0000001",
+    # The modifier roots beside Phenotypic abnormality (#97).
+    "HP:0012823",
+    "HP:0040279",
     "HP:0000118",
     "HP:0000707",
     "HP:0000365",
@@ -234,7 +237,7 @@ def test_open_returns_the_path_to_the_term_and_logs_everything_it_shows(walk):
         {
             "term_id": "HP:0000001",
             "label": "All",
-            "child_count": 1,
+            "child_count": 3,
             "external_url": "https://hpo.jax.org/browse/term/HP:0000001",
             "role": "finding",
         }
@@ -348,7 +351,7 @@ def test_expanding_a_node_returns_its_children_and_adds_them_to_the_walk(walk):
     client, _, ws_key = walk
     browse_id = _open_walk(client, ws_key, "HP:0001252")
     before = _event(client, browse_id).candidates
-    assert before == SEIZURE_WALK[:7]
+    assert before == SEIZURE_WALK[:9]
 
     resp = _tree(
         client, ws_key, "node", browse_id=browse_id, term_id="HP:0000365", expand=True
@@ -431,8 +434,8 @@ def test_a_shown_term_is_assigned_from_the_walk_and_logged_as_browse(walk):
     assert selection.query == "HP:0001250"
     assert selection.selected_term_id == "HP:0002133"
     assert selection.candidates == SEIZURE_WALK
-    assert selection.displayed_position == 9
-    assert selection.ranked_position == 9
+    assert selection.displayed_position == 11
+    assert selection.ranked_position == 11
     # The walk itself stays a search without a selection.
     assert _event(client, browse_id).selected_term_id is None
 
@@ -1022,7 +1025,7 @@ def test_the_export_carries_the_walk_with_everything_it_showed(walk):
     assert by_id[browse_id].selected_term_id is None
     selection = next(e for e in exported if e.selected_term_id == "HP:0000407")
     assert selection.source_search_event_id == browse_id
-    assert selection.displayed_position == 10
+    assert selection.displayed_position == 12
 
 
 def test_details_ignore_ambient_names_added_after_package_capture(walk):

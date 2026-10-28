@@ -11,6 +11,13 @@ from ontotator.config import AppConfig
 from ontotator.domain.errors import DomainError
 from ontotator.ontology.discovery import discover_ontologies
 
+# The modifier classifier roots an HPO release must hold (#97), with their parents.
+_MODIFIER_ROOTS = [
+    ("HP_0012823", "Clinical modifier", "HP_0000001"),
+    ("HP_0040279", "Frequency", "HP_0000001"),
+    ("HP_0012824", "Severity", "HP_0012823"),
+    ("HP_0003674", "Onset", "HP_0012823"),
+]
 SAMPLE_OBO_JSON = {
     "graphs": [
         {
@@ -27,13 +34,29 @@ SAMPLE_OBO_JSON = {
                     "lbl": "Phenotypic abnormality",
                     "type": "CLASS",
                 },
+                *(
+                    {
+                        "id": f"http://purl.obolibrary.org/obo/{term}",
+                        "lbl": label,
+                        "type": "CLASS",
+                    }
+                    for term, label, _ in _MODIFIER_ROOTS
+                ),
             ],
             "edges": [
                 {
                     "sub": "http://purl.obolibrary.org/obo/HP_0000118",
                     "pred": "is_a",
                     "obj": "http://purl.obolibrary.org/obo/HP_0000001",
-                }
+                },
+                *(
+                    {
+                        "sub": f"http://purl.obolibrary.org/obo/{term}",
+                        "pred": "is_a",
+                        "obj": f"http://purl.obolibrary.org/obo/{parent}",
+                    }
+                    for term, _, parent in _MODIFIER_ROOTS
+                ),
             ],
         }
     ]
@@ -74,7 +97,7 @@ def test_stored_ontologies_are_listed_once(tmp_path: Path) -> None:
 
     items = client.get("/api/v1/ontologies").json()
     assert [(i["sha256"], i["ontology_id"], i["term_count"]) for i in items] == [
-        (stored.sha256, "hp", 2)
+        (stored.sha256, "hp", 6)
     ]
     # Adding the same ontology again registers nothing new.
     assert store.add(HARNESS, "hp.json", file_bytes) == stored

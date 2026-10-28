@@ -254,3 +254,19 @@ summary.settings-card-title {
   display: grid;
   gap: var(--space-3);
 }
+
+/* The check before moving to another ontology release. */
+.settings-table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: var(--size-sm);
+}
+
+.settings-table th,
+.settings-table td {
+  padding: var(--space-1) var(--space-2);
+  text-align: start;
+  border-bottom: 1px solid var(--border);
+}

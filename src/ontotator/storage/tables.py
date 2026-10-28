@@ -721,6 +721,11 @@ class ProjectOntologyRow(Base):
     sha256: Mapped[str] = mapped_column(ForeignKey(OntologyFileRow.sha256))
     allowed_roots: Mapped[list[Any]] = mapped_column(server_default=text("'[]'::jsonb"))
     t1_profile: Mapped[str] = mapped_column(server_default=text("'generic'"))
+    # Digests this pin pointed to before, oldest first (0026, #81): work
+    # submitted under them stays a valid review target.
+    superseded_sha256: Mapped[list[Any]] = mapped_column(
+        server_default=text("'[]'::jsonb")
+    )
 
 
 class JobRow(Base):

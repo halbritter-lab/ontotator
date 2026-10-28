@@ -464,6 +464,10 @@ class ScopedRepository(Repository):
         self._visible(project_key)
         return super().project_pins(project_key)
 
+    def superseded_pins(self, project_key: str) -> dict[str, set[str]]:
+        self._visible(project_key)
+        return super().superseded_pins(project_key)
+
     def add_documents_and_proposals(
         self,
         project_key: str,

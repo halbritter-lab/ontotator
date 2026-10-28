@@ -6028,6 +6028,116 @@
         }
       }
     },
+    "/api/v1/projects/{key}/pins/preview": {
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Preview Pins",
+        "description": "What moving to these releases does to the drafts, without changing anything.\n\nAlso for a project with submitted work: there only the release of a\npin may change.",
+        "operationId": "preview_pins_api_v1_projects__key__pins_preview_post",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ProjectPin"
+                },
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepinReport"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/pins/apply": {
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Apply Pins",
+        "description": "Move to the releases of a previewed report; rewrites the draft terms it lists.",
+        "operationId": "apply_pins_api_v1_projects__key__pins_apply_post",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RepinRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectSettings"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{key}/profile": {
       "put": {
         "tags": [
@@ -15988,6 +16098,41 @@
         "title": "PersonRefView",
         "description": "``display_name`` only for lead callers or the caller's own record."
       },
+      "PinChange": {
+        "properties": {
+          "ontology_id": {
+            "type": "string",
+            "title": "Ontology Id"
+          },
+          "from_sha256": {
+            "type": "string",
+            "title": "From Sha256"
+          },
+          "from_release": {
+            "type": "string",
+            "title": "From Release"
+          },
+          "to_sha256": {
+            "type": "string",
+            "title": "To Sha256"
+          },
+          "to_release": {
+            "type": "string",
+            "title": "To Release"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "ontology_id",
+          "from_sha256",
+          "from_release",
+          "to_sha256",
+          "to_release"
+        ],
+        "title": "PinChange",
+        "description": "One ontology whose pin moves to another release."
+      },
       "PinnedOntology": {
         "properties": {
           "ontology_id": {
@@ -18465,6 +18610,86 @@
           "code"
         ],
         "title": "RefusedAssignment"
+      },
+      "RepinReport": {
+        "properties": {
+          "project_key": {
+            "type": "string",
+            "title": "Project Key"
+          },
+          "locked": {
+            "type": "boolean",
+            "title": "Locked"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/PinChange"
+            },
+            "type": "array",
+            "title": "Changes"
+          },
+          "rewrites": {
+            "items": {
+              "$ref": "#/components/schemas/TermRewrite"
+            },
+            "type": "array",
+            "title": "Rewrites"
+          },
+          "flagged": {
+            "items": {
+              "$ref": "#/components/schemas/TermFlag"
+            },
+            "type": "array",
+            "title": "Flagged"
+          },
+          "submitted": {
+            "items": {
+              "$ref": "#/components/schemas/SubmittedTerms"
+            },
+            "type": "array",
+            "title": "Submitted"
+          },
+          "report_sha256": {
+            "type": "string",
+            "title": "Report Sha256"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "project_key",
+          "locked",
+          "changes",
+          "rewrites",
+          "flagged",
+          "submitted",
+          "report_sha256"
+        ],
+        "title": "RepinReport",
+        "description": "What moving to the chosen releases does (the dry run)."
+      },
+      "RepinRequest": {
+        "properties": {
+          "pins": {
+            "items": {
+              "$ref": "#/components/schemas/ProjectPin"
+            },
+            "type": "array",
+            "title": "Pins"
+          },
+          "report_sha256": {
+            "type": "string",
+            "title": "Report Sha256"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "pins",
+          "report_sha256"
+        ],
+        "title": "RepinRequest",
+        "description": "Apply a re-pin whose dry run the lead has seen."
       },
       "ReportEventView": {
         "properties": {
@@ -21293,6 +21518,41 @@
         ],
         "title": "SubmitRequest"
       },
+      "SubmittedTerms": {
+        "properties": {
+          "ontology_id": {
+            "type": "string",
+            "title": "Ontology Id"
+          },
+          "annotations": {
+            "type": "integer",
+            "title": "Annotations"
+          },
+          "rewritable": {
+            "type": "integer",
+            "title": "Rewritable"
+          },
+          "obsolete": {
+            "type": "integer",
+            "title": "Obsolete"
+          },
+          "unknown": {
+            "type": "integer",
+            "title": "Unknown"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "ontology_id",
+          "annotations",
+          "rewritable",
+          "obsolete",
+          "unknown"
+        ],
+        "title": "SubmittedTerms",
+        "description": "Submitted annotations of one ontology; reported, never changed."
+      },
       "TaskProfile": {
         "properties": {
           "schema": {
@@ -21653,6 +21913,83 @@
         ],
         "title": "TemplateInfo"
       },
+      "TermFlag": {
+        "properties": {
+          "ontology_id": {
+            "type": "string",
+            "title": "Ontology Id"
+          },
+          "layer_id": {
+            "type": "string",
+            "title": "Layer Id"
+          },
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "annotator_id": {
+            "type": "string",
+            "title": "Annotator Id"
+          },
+          "mode": {
+            "type": "string",
+            "title": "Mode"
+          },
+          "annotation_id": {
+            "type": "string",
+            "title": "Annotation Id"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "finding",
+              "modifier"
+            ],
+            "title": "Role"
+          },
+          "term_id": {
+            "type": "string",
+            "title": "Term Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "obsolete",
+              "unknown"
+            ],
+            "title": "Status"
+          },
+          "replaced_by": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Replaced By"
+          },
+          "consider": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Consider"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "ontology_id",
+          "layer_id",
+          "document_id",
+          "annotator_id",
+          "mode",
+          "annotation_id",
+          "role",
+          "term_id",
+          "status"
+        ],
+        "title": "TermFlag",
+        "description": "A draft term the move leaves for the annotator to change."
+      },
       "TermLabel": {
         "properties": {
           "layer_id": {
@@ -21794,6 +22131,79 @@
           "term_id"
         ],
         "title": "TermLookup"
+      },
+      "TermRewrite": {
+        "properties": {
+          "ontology_id": {
+            "type": "string",
+            "title": "Ontology Id"
+          },
+          "layer_id": {
+            "type": "string",
+            "title": "Layer Id"
+          },
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "annotator_id": {
+            "type": "string",
+            "title": "Annotator Id"
+          },
+          "mode": {
+            "type": "string",
+            "title": "Mode"
+          },
+          "annotation_id": {
+            "type": "string",
+            "title": "Annotation Id"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "finding",
+              "modifier"
+            ],
+            "title": "Role"
+          },
+          "old_term_id": {
+            "type": "string",
+            "title": "Old Term Id"
+          },
+          "new_term_id": {
+            "type": "string",
+            "title": "New Term Id"
+          },
+          "new_label": {
+            "type": "string",
+            "title": "New Label"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "replaced_by",
+              "alt_id"
+            ],
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "ontology_id",
+          "layer_id",
+          "document_id",
+          "annotator_id",
+          "mode",
+          "annotation_id",
+          "role",
+          "old_term_id",
+          "new_term_id",
+          "new_label",
+          "reason"
+        ],
+        "title": "TermRewrite",
+        "description": "A draft term the move rewrites."
       },
       "TextChangePreview": {
         "properties": {
