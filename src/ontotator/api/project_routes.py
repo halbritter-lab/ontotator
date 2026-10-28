@@ -430,7 +430,7 @@ def preview_pins(
 ) -> RepinReport:
     """What moving to these releases does to the drafts, without changing anything.
 
-    Also for a project with submitted work (#81): there only the release of a
+    Also for a project with submitted work: there only the release of a
     pin may change.
     """
     _guard(request, Action.MANAGE_PROJECT_SETTINGS, key)

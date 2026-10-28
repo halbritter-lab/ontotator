@@ -1651,7 +1651,7 @@ export interface paths {
          * Preview Pins
          * @description What moving to these releases does to the drafts, without changing anything.
          *
-         *     Also for a project with submitted work (#81): there only the release of a
+         *     Also for a project with submitted work: there only the release of a
          *     pin may change.
          */
         post: operations["preview_pins_api_v1_projects__key__pins_preview_post"];
@@ -6261,7 +6261,7 @@ export interface components {
         };
         /**
          * RepinRequest
-         * @description Apply a re-pin whose dry run the lead has seen (#81).
+         * @description Apply a re-pin whose dry run the lead has seen.
          */
         RepinRequest: {
             /** Pins */

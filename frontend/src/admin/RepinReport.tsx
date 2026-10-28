@@ -5,7 +5,7 @@ const REASON_LABELS: Record<string, string> = { replaced_by: "replaced", alt_id:
 const STATUS_LABELS: Record<string, string> = { obsolete: "obsolete", unknown: "not in the new release" };
 
 /**
- * The dry run of moving a project to another ontology release (#81): what changes, which draft terms are rewritten and
+ * The dry run of moving a project to another ontology release: what changes, which draft terms are rewritten and
  * which stay for the annotator to change. Submitted work is counted, never changed.
  */
 export function RepinReportPanel({ report, busy, onApply, onCancel }: {

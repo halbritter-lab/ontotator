@@ -36,7 +36,7 @@ export const ANNOTATION_SCHEME_LABELS: Readonly<Record<ProjectPin["t1_profile"],
   "hpo-phenotype": "HPO phenotype (fixed qualifiers, modifiers)",
   generic: "Generic (free qualifiers)",
 };
-/** Only the version of each pin (a started project, #81): branches and scheme stay. */
+/** Only the version of each pin (a started project): branches and scheme stay. */
 export function ReleaseFields({ ids, ontologies, value, onChange, disabled }: {
   ids: string[]; ontologies: OntologyInfo[]; value: Record<string, PinDraft>; onChange: (value: Record<string, PinDraft>) => void; disabled?: boolean;
 }): JSX.Element {

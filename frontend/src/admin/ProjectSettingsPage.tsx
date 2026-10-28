@@ -50,7 +50,7 @@ const SECTION_PARTS: Record<SettingsSection, readonly Section[]> = {
   people: [], workflow: ["Workflow"], annotation: ["Annotation"], guidelines: [], general: ["General"], ontology: ["Pins", "Profile"],
 };
 const PART_LABELS: Record<Section, string> = { General: "General", Workflow: "Workflow", Annotation: "Annotation", Pins: "Ontology version", Profile: "Task profile" };
-/** A pin change waits for the lead to look at its check (#81); not an error to show. */
+/** A pin change waits for the lead to look at its check; not an error to show. */
 class RepinPending extends Error {}
 const settingsRoute = (key: string, section: SettingsSection): Route =>
   section === DEFAULT_SETTINGS_SECTION ? { name: "projectSettings", key } : { name: "projectSettings", key, section };
@@ -109,7 +109,7 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved,
     General: () => api.updateProjectSettings(projectKey, { name: general.name, description: general.description.trim() ? general.description : null, languages: general.languages }),
     Annotation: () => api.updateProjectSettings(projectKey, annotation),
     Workflow: () => api.updateProjectSettings(projectKey, { import_plan: workflow.import_plan, annotations_per_text: workflow.annotations_per_text, tool_proposal_mode: workflow.tool_proposal_mode, annotate_accepted_translations_only: workflow.annotate_accepted_translations_only, adjudicator_not_annotator: workflow.adjudicator_not_annotator }),
-    // The check first (#81): a move that touches drafts, or any move once work was submitted, waits for the lead's look.
+    // The check first: a move that touches drafts, or any move once work was submitted, waits for the lead's look.
     Pins: async () => {
       const chosen = serializePins(ids, pins);
       const report = await api.previewPins(projectKey, chosen);

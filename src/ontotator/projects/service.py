@@ -249,7 +249,7 @@ def _superseded(earlier: list[str], old: Pin | None, sha256: str) -> list[str]:
 
 
 class RepinRequest(BaseModel):
-    """Apply a re-pin whose dry run the lead has seen (#81)."""
+    """Apply a re-pin whose dry run the lead has seen."""
 
     model_config = ConfigDict(extra="forbid")
     pins: list[ProjectPin]

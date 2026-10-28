@@ -6034,7 +6034,7 @@
           "projects"
         ],
         "summary": "Preview Pins",
-        "description": "What moving to these releases does to the drafts, without changing anything.\n\nAlso for a project with submitted work (#81): there only the release of a\npin may change.",
+        "description": "What moving to these releases does to the drafts, without changing anything.\n\nAlso for a project with submitted work: there only the release of a\npin may change.",
         "operationId": "preview_pins_api_v1_projects__key__pins_preview_post",
         "parameters": [
           {
@@ -18599,7 +18599,7 @@
           "report_sha256"
         ],
         "title": "RepinRequest",
-        "description": "Apply a re-pin whose dry run the lead has seen (#81)."
+        "description": "Apply a re-pin whose dry run the lead has seen."
       },
       "ReportEventView": {
         "properties": {

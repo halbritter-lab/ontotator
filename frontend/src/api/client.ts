@@ -461,7 +461,7 @@ export class ApiClient {
   async getProjectSettings(key: string): Promise<ProjectSettings> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/settings`, { method: "GET" }); }
   async updateProjectSettings(key: string, change: ProjectSettingsPatch): Promise<ProjectSettings> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/settings`, { method: "PATCH", body: JSON.stringify(change) }); }
   async updatePins(key: string, pins: ProjectPin[]): Promise<ProjectSettings> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/pins`, { method: "PUT", body: JSON.stringify(pins) }); }
-  /** The dry run of moving to these releases: rewritten and flagged draft terms (#81). */
+  /** The dry run of moving to these releases: rewritten and flagged draft terms. */
   async previewPins(key: string, pins: ProjectPin[]): Promise<RepinReport> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/pins/preview`, { method: "POST", body: JSON.stringify(pins) }); }
   /** Apply a previewed move; refused with REPIN_REPORT_STALE when the report changed since. */
   async applyPins(key: string, pins: ProjectPin[], reportSha256: string): Promise<ProjectSettings> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/pins/apply`, { method: "POST", body: JSON.stringify({ pins, report_sha256: reportSha256 }) }); }
