@@ -164,7 +164,7 @@ it.each(["open", "submitted"] as const)("after a submit with a %s neighbor opens
     return { submission_id: "submission", created_at: "2026-10-14T12:00:00Z", draft_revision: 1, snapshots: [], decisions: [] } as any;
   });
   render(<App user={testUser("alice")} />);
-  fireEvent.click(await screen.findByRole("button", { name: /Finish & submit text/ }));
+  fireEvent.click(await screen.findByRole("button", { name: /Finish & submit/ }));
   const submit = await screen.findByRole("dialog", { name: "Submit text" });
   // The finding's empty assertion is an unconfirmed value (the server warns for empty axes too).
   const acknowledge = within(submit).getByRole("button", { name: "Submit with 1 warning" });
