@@ -260,6 +260,44 @@ def test_refused_modifier_terms(env: Env, term: str, code: str) -> None:
         assert refused.details == {"term_id": SEIZURE}
 
 
+def test_a_finding_outside_the_allowed_roots_is_refused(env: Env) -> None:
+    """HP:0000118 pinned: "All" is no finding; a modifier on its own still is (#85)."""
+    refused = env.refused(
+        {
+            "command": "create_annotation",
+            "annotation_id": "a1",
+            "term_id": "HP:0000001",
+            "segments": [seg(KRAMPF)],
+        }
+    )
+    assert refused.code == "TERM_OUTSIDE_ALLOWED_ROOTS"
+    env.run(
+        {
+            "command": "create_annotation",
+            "annotation_id": "a2",
+            "term_id": SEVERE,
+            "segments": [seg(SCHWERE)],
+        }
+    )
+    env.seizure()
+    refused = env.refused(
+        {"command": "set_term", "annotation_id": "a1", "term_id": "HP:0000001"}
+    )
+    assert refused.code == "TERM_OUTSIDE_ALLOWED_ROOTS"
+
+
+def test_without_allowed_roots_every_term_is_a_finding(tmp_path: Path) -> None:
+    env = _env(tmp_path, Pin(sha256=MOD_PIN.sha256, t1_profile="hpo-phenotype"))
+    env.run(
+        {
+            "command": "create_annotation",
+            "annotation_id": "a1",
+            "term_id": "HP:0000001",
+            "segments": [seg(KRAMPF)],
+        }
+    )
+
+
 def test_primary_id_is_stored(env: Env) -> None:
     env.seizure()
     draft = env.run(

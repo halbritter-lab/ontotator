@@ -813,7 +813,11 @@ def projects_create(
         list[str] | None,
         typer.Option(
             "--allowed-roots",
-            help="<ontology id>=<term>,<term>,... the allowed roots (repeatable).",
+            help=(
+                "<ontology id>=<term>,<term>,... the allowed roots (repeatable; "
+                "an hpo-phenotype ontology defaults to HP:0000118, '<id>=' "
+                "allows every term)."
+            ),
             show_default=False,
         ),
     ] = None,
@@ -874,7 +878,13 @@ def projects_create(
             sha256=sha,
             allowed_roots=tuple(
                 root.strip()
-                for root in roots.get(ontology_id, "").split(",")
+                for root in roots.get(
+                    ontology_id,
+                    # Phenotypic abnormality: findings, not inheritance or history.
+                    "HP:0000118"
+                    if profiles.get(ontology_id) == "hpo-phenotype"
+                    else "",
+                ).split(",")
                 if root.strip()
             ),
             t1_profile=cast(T1Profile, profiles.get(ontology_id, "generic")),

@@ -47,6 +47,7 @@ from ontotator.ontology.modifiers import (
     ModifierClassifier,
     classifier_of,
     modifier_layers,
+    subtree,
 )
 from ontotator.ontology.registry import OntologyRegistry
 from ontotator.ontology.service import OntologyService
@@ -839,6 +840,9 @@ class EditingService:
             term_id = self._primary_term_id(services[target_layer], cmd.term_id)
         else:
             term_id = self._validate_term_for_layer(services[target_layer], cmd.term_id)
+            self._check_allowed_roots(
+                draft, profile, pins, target_layer, services, term_id
+            )
 
         if (cmd.source_annotation_id or cmd.source_version) and source is None:
             raise DomainError(
@@ -984,6 +988,7 @@ class EditingService:
             )
 
         term_id = self._validate_term_for_layer(services[layer_id], cmd.term_id)
+        self._check_allowed_roots(draft, profile, pins, layer_id, services, term_id)
         # The finding keeps its modifiers.
         updated_ann = existing.annotation.model_copy(update={"term_id": term_id})
         new_snap = snapshot(updated_ann, existing.evidence, doc, profile)
@@ -1388,6 +1393,40 @@ class EditingService:
         if isinstance(service, Exception):
             raise service
         return classifier_of(service)
+
+    def _check_allowed_roots(
+        self,
+        draft: Draft,
+        profile: TaskProfile,
+        pins: Mapping[str, Pin] | None,
+        layer_id: str,
+        services: dict[str, OntologyService | Exception],
+        term_id: str,
+    ) -> None:
+        """A newly chosen finding term lies under its pin's allowed roots (#85).
+
+        Fail closed: a term outside every root is refused, unless it is a
+        modifier term recorded on its own (hpo-phenotype layers). Findings
+        already stored are not re-checked, so earlier work stays valid.
+        """
+        if pins is None:
+            pins = self.repo.project_pins(draft.key.project_key)
+        pin = pins.get(resolve_layer(profile, layer_id).ontology_id)
+        if pin is None or not pin.allowed_roots:
+            return
+        service = services[layer_id]
+        if isinstance(service, Exception):
+            raise service
+        if any(term_id in subtree(service, root) for root in pin.allowed_roots):
+            return
+        classifier = self._classifier(draft, profile, pins, layer_id, services)
+        if classifier is not None and classifier.kind(term_id) is not None:
+            return
+        raise DomainError(
+            "TERM_OUTSIDE_ALLOWED_ROOTS",
+            f"Term '{term_id}' is outside the branches this project allows "
+            f"({', '.join(pin.allowed_roots)}).",
+        )
 
     @staticmethod
     def _draft_annotation(draft: Draft, annotation_id: str) -> AnnotationSnapshot:
