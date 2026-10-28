@@ -44,6 +44,32 @@ from ontotator.vendor.hpo_span_annotator.hpo import OntologyError
 
 logger = logging.getLogger(__name__)
 
+# An HPO release without these is cut down or another file (#97).
+_HPO_ROOTS = ("HP:0000001", "HP:0000118")
+# Share of the current (not obsolete) terms that must reach HP:0000001.
+_MIN_REACHING_ROOT = 0.98
+
+
+def release_problem(service: OntologyService) -> str | None:
+    """Why an HPO release is unusable: missing roots or a broken is_a graph."""
+    from ontotator.ontology.modifiers import subtree
+
+    ontology = service.ontology
+    if ontology.dominant_prefix != "HP":
+        return None
+    missing = [root for root in _HPO_ROOTS if root not in ontology.terms]
+    if missing:
+        return f"lacks the HPO root terms {', '.join(missing)}"
+    current = [t.hpo_id for t in ontology.terms.values() if not t.obsolete]
+    reached = subtree(service, _HPO_ROOTS[0])
+    share = sum(term_id in reached for term_id in current) / len(current)
+    if share < _MIN_REACHING_ROOT:
+        return (
+            f"has a broken is_a graph: only {share:.0%} of its current terms "
+            f"reach {_HPO_ROOTS[0]}"
+        )
+    return None
+
 
 @dataclass(frozen=True)
 class OntologyFile:
@@ -150,6 +176,9 @@ class OntologyStore:
         # built with them before another change starts.
         with self.registry.changing():
             service = self._parse(name, data, digest)
+            problem = release_problem(service)
+            if problem is not None:
+                raise DomainError("INVALID_ONTOLOGY", f"'{name}' {problem}.")
             created = False
             if known is None:
                 known, created = self._insert_with_result(
@@ -320,6 +349,27 @@ class OntologyStore:
                 select(*_FILE_COLUMNS).where(OntologyFileRow.sha256 == digest)
             ).one()
             return _file(row), inserted is not None
+
+    def missing_roots(self, sha256: str, roots: Iterable[str]) -> list[str]:
+        """The ``roots`` the stored ontology ``sha256`` lacks.
+
+        Empty when there are none to check or the file is not a stored,
+        readable ontology; the pin checks report that case.
+        """
+        wanted = list(roots)
+        if not wanted:
+            return []
+        try:
+            service = self.registry.get_service(sha256)
+            known = self._get(sha256) if service is None else None
+            if known is not None and known.kind == "ontology":
+                self.registry.register_path(self.db.blobs.path(sha256))
+                service = self.registry.get_service(sha256)
+        except (DomainError, OntologyError, OSError, ValueError, KeyError):
+            return []
+        if service is None:
+            return []
+        return [root for root in wanted if service.ontology.get(root) is None]
 
     # --- reading ----------------------------------------------------------
 

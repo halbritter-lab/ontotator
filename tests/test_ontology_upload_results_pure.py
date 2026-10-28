@@ -243,6 +243,10 @@ def test_conflict_after_absent_pre_read_is_not_reported_as_added(monkeypatch):
     store.db = SimpleNamespace(blobs=SimpleNamespace(path=lambda _digest: "blob"))
     monkeypatch.setattr(store, "_get", lambda _digest: None)
     monkeypatch.setattr(store, "_parse", lambda *_args: service)
+    # The stub has no terms; the release checks have their own tests.
+    monkeypatch.setattr(
+        "ontotator.ontology.store.release_problem", lambda _service: None
+    )
     monkeypatch.setattr(
         store,
         "_insert_with_result",

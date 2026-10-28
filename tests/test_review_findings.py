@@ -505,7 +505,12 @@ def _app(tmp_path: Path, **overrides):  # type: ignore[no-untyped-def]
     return AutoLoginClient(app), config
 
 
-def _obo(version: str, labels: dict[str, str], **meta_by_id) -> bytes:  # type: ignore[no-untyped-def]
+def _obo(  # type: ignore[no-untyped-def]
+    version: str,
+    labels: dict[str, str],
+    is_a: dict[str, str] | None = None,
+    **meta_by_id,
+) -> bytes:
     nodes = []
     for term_id, label in labels.items():
         node: dict[str, object] = {
@@ -522,7 +527,14 @@ def _obo(version: str, labels: dict[str, str], **meta_by_id) -> bytes:  # type: 
             "version": f"http://purl.obolibrary.org/obo/hp/releases/{version}/hp.json"
         },
         "nodes": nodes,
-        "edges": [],
+        "edges": [
+            {
+                "sub": "http://purl.obolibrary.org/obo/" + child.replace(":", "_"),
+                "pred": "is_a",
+                "obj": "http://purl.obolibrary.org/obo/" + parent.replace(":", "_"),
+            }
+            for child, parent in (is_a or {}).items()
+        ],
     }
     return json.dumps({"graphs": [graph]}).encode("utf-8")
 
@@ -535,8 +547,14 @@ def test_ontology_upload_is_content_addressed_and_never_overwrites(
     client, _ = _app(tmp_path)
     store = client.app.state.ontology_store
     blobs = client.app.state.repo.db.blobs
-    old_release = _obo("2025-01-01", {"HP:0000001": "All"})
-    new_release = _obo("2026-01-01", {"HP:0000001": "All", "HP:0000118": "Pheno"})
+    labels = {"HP:0000001": "All", "HP:0000118": "Pheno"}
+    rooted = {"HP:0000118": "HP:0000001"}
+    old_release = _obo("2025-01-01", labels, rooted)
+    new_release = _obo(
+        "2026-01-01",
+        {**labels, "HP:0001250": "Seizure"},
+        {**rooted, "HP:0001250": "HP:0000118"},
+    )
 
     first = store.add(HARNESS, "hp.json", old_release)
     second = store.add(HARNESS, "hp.json", new_release)

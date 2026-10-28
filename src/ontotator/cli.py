@@ -839,6 +839,7 @@ def projects_create(
     from ontotator.domain.profiles import TaskProfile
     from ontotator.exchange.jobs import operator_access
     from ontotator.exchange.t1 import Pin, T1Profile
+    from ontotator.projects.service import check_allowed_roots
 
     try:
         task_profile = TaskProfile.model_validate_json(
@@ -893,6 +894,7 @@ def projects_create(
     }
     actor = Actor.cli()
     with _open_database(ctx) as db:
+        check_allowed_roots(_ontology_store(db), pins)
         ScopedRepository(db, operator_access(actor), actor).create_project(
             project, name, description, task_profile, pins
         )

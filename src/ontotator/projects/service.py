@@ -220,6 +220,21 @@ def validate_hidden_values(
             )
 
 
+def check_allowed_roots(store: OntologyStore, pins: Mapping[str, Pin]) -> None:
+    """Every allowed root of a pin is a term of its pinned release (#97).
+
+    A root the release lacks has an empty subtree, so every finding would be
+    refused (or, before the check, silently accepted).
+    """
+    for ontology_id, pin in sorted(pins.items()):
+        missing = store.missing_roots(pin.sha256, pin.allowed_roots)
+        if missing:
+            raise DomainError(
+                "ALLOWED_ROOTS_UNKNOWN",
+                {"ontology_id": ontology_id, "missing": missing},
+            )
+
+
 class ProjectService:
     def __init__(self, db: Database, store: OntologyStore) -> None:
         self.db, self.store, self.repo = db, store, Repository(db)
@@ -307,6 +322,7 @@ class ProjectService:
                 "Use 2-63 lower-case letters, digits or hyphens; start with a letter or digit.",
             )
         normalized = normalize_languages(languages)
+        check_allowed_roots(self.store, pins)
 
         def created(conn: Connection, project_id: int) -> None:
             conn.execute(
@@ -449,6 +465,8 @@ class ProjectService:
         profile: TaskProfile | None = None,
         pins: Mapping[str, Pin] | None = None,
     ) -> ProjectSettings:
+        if pins is not None:
+            check_allowed_roots(self.store, pins)
         with self.db.transaction() as conn:
             # Existing imports take global import first, then this project lock.
             conn.execute(

@@ -340,3 +340,61 @@ def test_a_worker_takes_up_a_translation_another_worker_stored(
     fresh = workers[0].get_service(HP_SHA)
     assert fresh is not None and fresh.languages == ["de"]
     assert [item.filename for item in condition.translations] == [DE.name]
+
+
+def _hpo(nodes: list[str], edges: list[tuple[str, str]]) -> bytes:
+    obo = "http://purl.obolibrary.org/obo/"
+
+    def iri(term: str) -> str:
+        return obo + term.replace(":", "_")
+
+    return json.dumps(
+        {
+            "graphs": [
+                {
+                    "id": f"{obo}hp.json",
+                    "meta": {"version": f"{obo}hp/releases/2026-01-01/hp.json"},
+                    "nodes": [{"id": iri(n), "lbl": n, "type": "CLASS"} for n in nodes],
+                    "edges": [
+                        {"sub": iri(s), "pred": "is_a", "obj": iri(o)} for s, o in edges
+                    ],
+                }
+            ]
+        }
+    ).encode()
+
+
+def test_a_cut_down_or_broken_hpo_release_is_refused(tmp_path: Path) -> None:
+    """Missing roots or terms that do not reach HP:0000001 (#97)."""
+    store = _store(_db(tmp_path))
+    with pytest.raises(DomainError) as missing:
+        store.add(Actor.cli(), "hp.json", _hpo(["HP:0000001", "HP:0001250"], []))
+    assert missing.value.code == "INVALID_ONTOLOGY"
+    assert "HP:0000118" in str(missing.value.details)
+
+    broken = _hpo(
+        ["HP:0000001", "HP:0000118", "HP:0001250"], [("HP:0000118", "HP:0000001")]
+    )
+    with pytest.raises(DomainError) as unreached:
+        store.add(Actor.cli(), "hp.json", broken)
+    assert "broken is_a graph" in str(unreached.value.details)
+    assert store.list() == []
+
+
+def test_an_allowed_root_the_release_lacks_is_refused(tmp_path: Path) -> None:
+    from ontotator.exchange.t1 import Pin
+    from ontotator.projects.service import check_allowed_roots
+
+    db = _db(tmp_path)
+    _store(db).add(Actor.cli(), "hp.json", HP.read_bytes())
+    # Another process: the release is not loaded there yet.
+    fresh = OntologyStore(db, OntologyRegistry(), db.data_dir)
+
+    phenotype = Pin(sha256=HP_SHA, allowed_roots=("HP:0000118",))
+    check_allowed_roots(fresh, {"hp": phenotype})
+    with pytest.raises(DomainError) as refused:
+        check_allowed_roots(
+            fresh, {"hp": Pin(sha256=HP_SHA, allowed_roots=("HP:0000005",))}
+        )
+    assert refused.value.code == "ALLOWED_ROOTS_UNKNOWN"
+    assert refused.value.details == {"ontology_id": "hp", "missing": ["HP:0000005"]}

@@ -78,6 +78,7 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   WORKFLOW_REVISION_CONFLICT: "The task changed in another session. Reload it and review the current state before continuing.",
   ADJUDICATOR_IS_ANNOTATOR: "This consolidator also has annotation work on this text. Choose another consolidator.",
   ADMIN_REQUIRED: "Only a system administrator may do this.",
+  ALLOWED_ROOTS_UNKNOWN: "An allowed root is not a term of the chosen ontology version. Check the term codes.",
   AMBIGUOUS_SEARCH_EVENT: "This search event has more than one source. Check its provenance.",
   AMBIGUOUS_REVIEW_ROUND: "More than one review round is available. Choose the intended round.",
   AMBIGUOUS_SUBMISSION_ORIGIN: "Work from multiple origins cannot be restored into one draft.",

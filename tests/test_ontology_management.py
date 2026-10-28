@@ -28,7 +28,13 @@ SAMPLE_OBO_JSON = {
                     "type": "CLASS",
                 },
             ],
-            "edges": [],
+            "edges": [
+                {
+                    "sub": "http://purl.obolibrary.org/obo/HP_0000118",
+                    "pred": "is_a",
+                    "obj": "http://purl.obolibrary.org/obo/HP_0000001",
+                }
+            ],
         }
     ]
 }
