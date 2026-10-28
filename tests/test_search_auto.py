@@ -95,7 +95,18 @@ def test_looks_like_code_rejects_keywords(query: str) -> None:
     assert looks_like_code(query) is False
 
 
-@pytest.mark.parametrize("query", ["HP:0001250", "hp:0001250", "1250", "HP_0001250"])
+@pytest.mark.parametrize(
+    "query",
+    [
+        "HP:0001250",
+        "hp:0001250",
+        "1250",
+        "HP_0001250",
+        "HP 1250",
+        "hp:1250",
+        "Hp 0001250",
+    ],
+)
 def test_code_query_returns_exactly_that_term(query: str) -> None:
     result = _service().search(_request(query))
 
@@ -109,6 +120,12 @@ def test_code_query_returns_exactly_that_term(query: str) -> None:
     assert result.ranked_ids == ["HP:0001250"]
     assert result.shuffled is False
     assert result.seed is None
+
+
+def test_spaced_code_needs_the_ontology_prefix() -> None:
+    assert looks_like_code("HP 1250", "HP") is True
+    assert looks_like_code("trisomy 21", "HP") is False
+    assert looks_like_code("HP 1250") is False
 
 
 def test_unknown_code_returns_nothing_and_no_similar_terms() -> None:
