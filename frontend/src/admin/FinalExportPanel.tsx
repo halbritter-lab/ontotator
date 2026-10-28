@@ -181,7 +181,8 @@ function FinalExportContent({ projectKey }: { projectKey: string }): JSX.Element
               <Group projectKey={projectKey} title="Not planned, not exported" muted lines={notInPlan.map(row => ({ ...row, why: "Annotate is off in the work plan. For information only." }))} />
             </table>}
           </>}
-        {!state.selections.length && <InlineMessage tone="warning"><span id="final-export-empty">Select at least one submitted result before exporting.</span></InlineMessage>}
+        {!state.selections.length && <InlineMessage tone="info"><span id="final-export-empty">No final results are selected yet. Accept submitted results in Documents to include them.</span>{" "}
+          <a href={routeHref({ name: "projectDocuments", key: projectKey })}>Go to Documents</a></InlineMessage>}
         {needsAck(state) && <Checkbox ref={acknowledgement} id="final-export-ack"
           label={`Export ${state.selections.length === 1 ? "the 1 result as it is" : `the ${state.selections.length} results as they are`}${state.omissions.length ? `; leave out the other ${state.omissions.length === 1 ? "text" : `${state.omissions.length} texts`}` : ""}`}
           checked={accepted} disabled={creating} onChange={event => setAccepted(event.target.checked)} />}

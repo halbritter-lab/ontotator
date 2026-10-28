@@ -37,7 +37,8 @@ it("blocks empty exports and offers Check again instead of a link back", async (
   vi.spyOn(api, "finalExportPreflight").mockResolvedValue({ ...preflight, selections: [], warnings: [] });
   const start = vi.spyOn(api, "startFinalExport");
   render(<FinalExportPanel projectKey="p" username="lead" />);
-  await screen.findByText("Select at least one submitted result before exporting.");
+  await screen.findByText("No final results are selected yet. Accept submitted results in Documents to include them.");
+  expect(screen.getByRole("link", { name: "Go to Documents" }).getAttribute("href")).toBe("#/projects/p/documents");
   expect(screen.getByRole("button", { name: "Create final export" }).getAttribute("aria-disabled")).toBe("true");
   fireEvent.click(screen.getByRole("button", { name: "Create final export" }));
   expect(start).not.toHaveBeenCalled();
