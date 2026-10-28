@@ -21,3 +21,7 @@ docker/dev-passwords/* text eol=lf
 
 # Keep bundled Fontsource licence copies byte-identical on Windows checkouts.
 frontend/public/licenses/*.txt text eol=lf
+
+# Vite copies index.html verbatim into the embedded bundle; CRLF here would make
+# the Windows build differ from the Linux CI build.
+frontend/index.html text eol=lf
