@@ -371,6 +371,73 @@ def test_long_repetitive_text_maps_without_quadratic_matching(change):
     assert map_span(m, last, last + 13) == (last + shift, last + shift + 13)
 
 
+def test_a_long_text_edited_at_both_ends_maps_by_lines_in_time():
+    """Edits at both ends leave no common prefix or suffix to trim; matching
+    the whole 46k-codepoint text by characters took about 10 s."""
+    import time
+
+    old = _clinical_text(36)
+    new = "Updated. " + old.replace("Paragraph 36.", "Paragraph thirty-six.")
+    new = new[:-7] + "detail (amended)."
+    assert len(old) > 45_000
+    started = time.perf_counter()
+    m = text_map(old, new)
+    assert time.perf_counter() - started < 0.5
+    for label in ("Paragraph 1.", "Paragraph 18.", "Paragraph 35."):
+        at, to = old.index(label), new.index(label)
+        assert map_span(m, at, at + len(label)) == (to, to + len(label))
+    # A span across a line edge into an unchanged line part still maps.
+    edge = old.index("\n\nParagraph 35.")
+    assert map_span(m, edge - 8, edge + 12) == (
+        new.index("\n\nParagraph 35.") - 8,
+        new.index("\n\nParagraph 35.") + 12,
+    )
+    assert map_span(m, old.index("Hypotonia."), old.index("Hypotonia.") + 10) == (
+        new.index("Hypotonia."),
+        new.index("Hypotonia.") + 10,
+    )
+    for a, b, n in m.blocks:
+        assert old[a : a + n] == new[b : b + n]
+    assert all(
+        x[0] + x[2] <= y[0] and x[1] + x[2] <= y[1]
+        for x, y in zip(m.blocks, m.blocks[1:], strict=False)
+    )
+
+
+def test_a_short_changed_middle_maps_exactly_as_the_character_matcher():
+    import random
+    from difflib import SequenceMatcher
+
+    def reference(old, new):
+        limit = min(len(old), len(new))
+        p = 0
+        while p < limit and old[p] == new[p]:
+            p += 1
+        s = 0
+        while s < limit - p and old[-1 - s] == new[-1 - s]:
+            s += 1
+        om, nm = old[p : len(old) - s], new[p : len(new) - s]
+        blocks = [(0, 0, p)] if p else []
+        if om and nm:
+            matcher = SequenceMatcher(None, om, nm, autojunk=False)
+            blocks += [(p + a, p + b, n) for a, b, n in matcher.get_matching_blocks()]
+        blocks = [block for block in blocks if block[2]]
+        if s:
+            blocks.append((len(old) - s, len(new) - s, s))
+        return tuple(blocks)
+
+    rnd = random.Random(7)
+    words = ["Hypotonia", "seizure", "the", "mg", "\n", "\n\n", "é😀", " "]
+    for _ in range(500):
+        old = "".join(rnd.choice(words) + " " for _ in range(rnd.randint(0, 60)))
+        new = list(old)
+        for _ in range(rnd.randint(1, 4)):
+            i = rnd.randint(0, len(new))
+            new[i : i + rnd.randint(0, 6)] = rnd.choice(words)
+        new = "".join(new)
+        assert text_map(old, new).blocks == reference(old, new)
+
+
 def test_common_prefix_and_suffix_stay_exact_blocks():
     assert text_map("abc", "abc") == TextMap(((0, 0, 3),))
     assert text_map("ab", "abab") == TextMap(((0, 0, 2),))
