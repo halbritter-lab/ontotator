@@ -820,3 +820,58 @@ def test_unlinking_keeps_a_file_stored_again_since_the_discard(staged):
     sha = store_file(db, b"stored again")
     unlink_deleted_files(db, [sha])
     assert db.blobs.path(sha).is_file()
+
+
+def _unfinished_and_finished(app, admin):
+    ready = _ready(app, admin)
+    committed = _ready(app, admin, data=b"Other text.\n", name="b.txt")
+    assert _commit(app, admin, committed).status == "succeeded"
+    discarded = _ready(app, admin, data=b"Third text.\n", name="c.txt")
+    assert admin.post(f"{BASE}/{discarded['id']}/discard").status_code == 200
+    created = _create(admin, data=b"Fourth text.\n", name="d.txt")
+    assert created.status_code == 200, created.text
+    return ready["id"], committed["id"], discarded["id"], created.json()["upload_id"]
+
+
+def test_list_filters_by_repeatable_status(staged):
+    app, admin = staged
+    ready, committed, discarded, previewing = _unfinished_and_finished(app, admin)
+
+    every = admin.get(BASE)
+    assert every.status_code == 200, every.text
+    assert [row["id"] for row in every.json()] == [
+        previewing,
+        discarded,
+        committed,
+        ready,
+    ]
+    unfinished = admin.get(
+        BASE,
+        params=[
+            ("status", "previewing"),
+            ("status", "ready"),
+            ("status", "committing"),
+        ],
+    )
+    assert unfinished.status_code == 200, unfinished.text
+    assert [row["id"] for row in unfinished.json()] == [previewing, ready]
+    one = admin.get(BASE, params={"status": "committed"})
+    assert [row["id"] for row in one.json()] == [committed]
+
+
+def test_list_refuses_an_unknown_status(staged):
+    _, admin = staged
+    response = admin.get(BASE, params=[("status", "ready"), ("status", "done")])
+    assert response.status_code == 422, response.text
+
+
+def test_service_list_keeps_only_the_given_statuses(staged):
+    app, admin = staged
+    ready, committed, discarded, _ = _unfinished_and_finished(app, admin)
+    service = UploadService(app.state.repo.db, app.state.jobs, Actor.cli())
+    assert [row.id for row in service.list("proj", statuses=["ready"])] == [ready]
+    assert [
+        row.id for row in service.list("proj", statuses=["discarded", "committed"])
+    ] == [discarded, committed]
+    assert len(service.list("proj")) == 4
+    assert len(service.list("proj", statuses=[])) == 4

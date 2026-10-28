@@ -39,6 +39,27 @@ export function panelStep(row: Pick<DocumentRowView, "next_step" | "steps">): Ne
   return leadSteps(row).find(step => step.action != null && PANEL_ACTIONS.has(step.action)) ?? null;
 }
 
+/** Annotate work of the row's current versions (not moved to a newer one). */
+function currentAnnotateWork(row: Pick<DocumentRowView, "work">): DocumentRowView["work"] {
+  return (row.work ?? []).filter(item => item.task === "annotate" && item.moved_to_version == null);
+}
+
+/** Annotate assignments not submitted yet (open, in progress, reopened or paused). */
+export function openAnnotateWork(row: Pick<DocumentRowView, "work">): DocumentRowView["work"] {
+  return currentAnnotateWork(row).filter(item => item.status !== "submitted");
+}
+
+/**
+ * "Annotators per text" is an upper limit (issue 123): once one annotation is submitted the lead may accept a
+ * result (or consolidate) while other annotations are still open. True for a row without a final whose annotate
+ * work is partly submitted and partly open, outside a running consolidation.
+ */
+export function earlyFinal(row: Pick<DocumentRowView, "work" | "final" | "stages">): boolean {
+  if (row.final || row.stages?.annotation.state === "consolidating") return false;
+  const work = currentAnnotateWork(row);
+  return work.some(item => item.status === "submitted") && work.some(item => item.status !== "submitted");
+}
+
 /** Content of the panel: "review" for "Review changes…", else "choose". */
 export function panelMode(row: Pick<DocumentRowView, "next_step" | "steps">): "choose" | "review" {
   return panelStep(row)?.action === "review_changes" ? "review" : "choose";

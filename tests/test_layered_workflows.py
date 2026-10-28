@@ -277,6 +277,22 @@ def test_required_axes_and_evidence_on_complete_enforced(
         term_id="MONDO:0000001",
         axes_values={"severity": "severe"},
     )
+    # A new draft refuses to save it (#124) ...
+    with pytest.raises(DomainError) as save_exc:
+        edit_svc.apply(
+            ws_key,
+            MutationEnvelope(
+                mutation_id="m0", expected_revision=0, payload=cmd.model_dump()
+            ),
+        )
+    assert save_exc.value.code == "MISSING_EVIDENCE"
+    # ... a legacy draft saves it, and its submission still enforces the profile.
+    from sqlalchemy import update
+
+    from ontotator.storage.tables import DraftRow
+
+    with repo.db.transaction() as conn:
+        conn.execute(update(DraftRow).values(spanless_policy_version=None))
     edit_svc.apply(
         ws_key,
         MutationEnvelope(
@@ -370,11 +386,12 @@ def test_review_replacement_must_match_target_layer_and_type(
     # Create a draft annotation with layer-2 (type-req), trying to use it as replacement for layer-1 target
     cmd_rep = CreateAnnotationCommand(
         annotation_id="ann-rep-1",
-        note="Fixture justification; required text evidence is still missing.",
         layer_id="layer-2",
         type_id="type-req",
         term_id="MONDO:0000001",
         axes_values={"severity": "severe"},
+        evidence_id="ev-rep-1",
+        segments=[Segment(start=0, end=3)],
     )
     draft1 = edit_svc.apply(
         ws_key,

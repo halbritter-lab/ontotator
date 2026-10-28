@@ -1,7 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import type { components } from '../src/api/generated';
-import { openFilters, openOlderVersions, openTextCard, showSegment, textCard } from './documentsHelpers';
 import { authenticatedRequest, loginExisting, selectText, TEST_PASSWORD } from './helpers';
 
 test.setTimeout(120_000);
@@ -66,23 +65,7 @@ async function finishedJob(page: Page, id: number): Promise<Job> {
   }, { timeout: 30_000 }).toMatch(/^(succeeded|failed)$/);
   expect(result!.status, result!.error ?? '').toBe('succeeded'); return result!;
 }
-/** The version list entry of one exact document in its Documents text card. */
-async function documentRow(page: Page, id: string) {
-  const project = decodeURIComponent(/#\/projects\/([^/?]+)\/documents/.exec(page.url())![1]);
-  const docs = await (await authenticatedRequest(page, `/api/v1/projects/${encodeURIComponent(project)}/documents`)).json() as components['schemas']['ProjectDocumentSummary'][];
-  const doc = docs.find(item => item.document_id === id)!; expect(doc).toBeTruthy();
-  // The text card (text name "Text …") on its Translation part with the version list; one card at a time.
-  const card = textCard(page, doc.case_id, doc.language);
-  const other = page.locator('.text-card[role="dialog"]');
-  if (!await card.count() && await other.count()) await other.getByRole('button', { name: 'Close', exact: true }).first().click();
-  await openTextCard(page, doc.case_id, doc.language);
-  await showSegment(card, 'Translation'); await openOlderVersions(card);
-  const version = card.locator('li.text-version').filter({ has: page.locator(`a[href*="${new URLSearchParams({ variant: id })}&"], a[href$="${new URLSearchParams({ variant: id })}"]`) });
-  await expect(version).toHaveCount(1);
-  return version;
-}
-
-test('ordinary lead imports an explicit reasoned override with the real preview SHA and authoritative accepted-without-review flag', async ({ page }) => {
+test('ordinary lead imports with the real preview SHA and no per-variant status override (the backend keeps status_overrides, the UI no longer sends it)', async ({ page }) => {
   const fixture = await page.request.post('/__test_admin_upload__'); expect(fixture.ok()).toBeTruthy();
   const s = await fixture.json() as { project: string; username: string; external_id: string; filename: string; base64: string; sha256: string };
   const bytes = Buffer.from(s.base64, 'base64'); expect(sha(bytes)).toBe(s.sha256);
@@ -93,29 +76,32 @@ test('ordinary lead imports an explicit reasoned override with the real preview 
   await expect(page.getByRole('heading', { name: 'No texts yet', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Upload texts…', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Upload texts', exact: true });
-  await dialog.getByLabel('Files (required)', { exact: true }).setInputFiles({ name: s.filename, mimeType: 'application/zip', buffer: bytes });
+  await dialog.getByLabel('Files', { exact: true }).setInputFiles({ name: s.filename, mimeType: 'application/zip', buffer: bytes });
   const checking = page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith(`${root(s)}/uploads`));
-  await dialog.getByRole('button', { name: 'Check', exact: true }).click();
+  await dialog.locator('.modal-actions').getByRole('button', { name: 'Check', exact: true }).click();
   const checked = await checking; expect(checked.ok()).toBeTruthy();
   const created = await checked.json() as { upload_id: number; job_id: number };
   const previewJob = await finishedJob(page, created.job_id); expect(previewJob.kind).toBe('upload_preview');
-  await expect(dialog.getByRole('table', { name: 'Variants', exact: true })).toContainText('units_added');
-  await expect(dialog.getByRole('table', { name: 'Variants', exact: true })).toContainText('Check failed');
+  await expect(dialog.getByText('Checked 1 file: ready to import.', { exact: true })).toBeFocused();
+  // The text list names the failed check in words; internal IDs stay in "Technical details".
+  await dialog.getByText('Texts in this upload (2)', { exact: true }).click();
+  const texts = dialog.getByRole('table', { name: 'Texts in this upload', exact: true });
+  await expect(texts).toContainText('Units added in translation');
+  await expect(texts).toContainText('Check failed');
   const response = await authenticatedRequest(page, `${root(s)}/uploads/${created.upload_id}`); expect(response.ok()).toBeTruthy();
   const upload = await response.json() as Upload; expect(upload.status).toBe('ready'); expect(upload.plan_sha256).toMatch(/^[a-f0-9]{64}$/);
   const planned = upload.preview!.variants!.find(v => v.language === 'de')!;
   expect(planned.external_id).toBe(s.external_id); expect(planned.failed_checks).toEqual(['units_added']);
   expect(planned.derived_in_upload).toBe(true); expect(planned.origin).toBe('machine_translation');
-  const checkbox = dialog.getByRole('checkbox', { name: new RegExp(`^Accept without review: ${s.external_id}\\W+de\\W+v1$`) });
+  expect(await dialog.innerText()).not.toContain(upload.plan_sha256.slice(0, 12));
+  // Q2: no per-variant "Accept without review" any more.
+  await expect(dialog.getByRole('checkbox', { name: /^Accept without review/ })).toHaveCount(0);
   const importButton = dialog.getByRole('button', { name: /^Import \d+ (texts?|cases?)$/ });
-  await checkbox.check(); await expect(importButton).toBeDisabled();
-  const reason = 'Independent lead accepts this generic example after checking its units.';
-  await dialog.getByRole('textbox', { name: new RegExp(`^Reason: ${s.external_id}\\W+de\\W+v1 \\(required\\)$`) }).fill(reason);
   const committing = page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith(`/uploads/${created.upload_id}/commit`));
   await importButton.click();
   const committed = await committing; expect(committed.ok(), await committed.text()).toBeTruthy();
-  // The Work plan step was left at the project default: no plan overrides.
-  expect(committed.request().postDataJSON()).toEqual({ plan_sha256: upload.plan_sha256, plan_cases: [], plan_languages: {}, status_overrides: [{ external_id: s.external_id, language: 'de', version: 1, reason }] });
+  // The Work plan step was left at the project default: no plan overrides, and no status overrides.
+  expect(committed.request().postDataJSON()).toEqual({ plan_sha256: upload.plan_sha256, plan_cases: [], plan_languages: {} });
   const commit = await committed.json() as { job_id: number };
   const job = await finishedJob(page, commit.job_id); expect(job.kind).toBe('upload_commit');
   // The upload dialog closes itself after the import; Documents reports the result in a toast.
@@ -123,20 +109,11 @@ test('ordinary lead imports an explicit reasoned override with the real preview 
   await expect(page.locator('.ui-toast-message')).toHaveText('Imported 2 documents and 0 proposals.');
   const inventory = await (await authenticatedRequest(page, `${root(s)}/documents`)).json() as components['schemas']['ProjectDocumentSummary'][];
   const target = inventory.find(d => d.external_id === s.external_id && d.language === 'de')!;
-  expect(target.accepted_without_review).toBe(true); expect(target.translation_status).toBe('accepted'); expect(target.status_reason).toBe(reason);
-  // The filter popover replaces "More filters" (V4): Origin "Machine translation" and Review "Accepted" (the translation status).
-  const filters = await openFilters(page);
-  await filters.getByRole('checkbox', { name: /^Machine translation, / }).check();
-  await filters.getByRole('group', { name: 'Translation review', exact: true }).getByRole('checkbox', { name: /^Accepted, / }).check();
-  await page.keyboard.press('Escape');
-  const row = await documentRow(page, target.document_id); await expect(row).toContainText('Accepted without review');
-  expect(new URL(page.url()).hash).toContain('origin=machine_translation'); expect(new URL(page.url()).hash).toContain('review_state=accepted');
-  // Text versions show the status; the recorded reason is read in the text's translation details.
-  await row.getByRole('link', { name: /^View text / }).click();
-  await page.getByText('Translation details', { exact: true }).click();
-  await expect(page.locator('.variant-details dt').filter({ hasText: /^Reason$/ }).locator('+ dd')).toHaveText(reason);
-  const records = await authenticatedRequest(page, `${root(s)}/documents/${encodeURIComponent(target.document_id)}/translation-reviews`);
-  expect(records.ok()).toBeTruthy(); expect(await records.json()).toEqual([]);
+  expect(target.accepted_without_review).toBe(false); expect(target.translation_status).toBe('automatic_check_failed');
+  // A committed upload is not listed as unfinished.
+  await page.getByRole('button', { name: 'Upload texts…', exact: true }).click();
+  await expect(dialog.getByLabel('Format', { exact: true })).toBeVisible();
+  await expect(dialog.getByText(/^Unfinished uploads/)).toHaveCount(0);
   await attach('real-upload-preview-and-commit', { project: s.project, public_bundle_sha256: s.sha256, upload_id: upload.id, plan_sha256: upload.plan_sha256, previewJob, commitJob: job, target });
 });
 

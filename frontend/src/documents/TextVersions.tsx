@@ -114,7 +114,7 @@ export interface TextVersionsProps {
   tools?: TextVersionsTools;
   /** Reference time for the current-year rule (tests). */
   now?: Date;
-  /** Text card: open current work is shown as chips with its actions beside them; list only submitted and moved work. */
+  /** Text card: its person rows show open work with its actions and carry every annotation's actions; list only submitted and moved work, annotations without actions. */
   hideOpenWork?: boolean;
   /** Text card: the newest version of each chain stays visible, older ones sit in a closed "Older versions (n)". */
   collapseOlder?: boolean;
@@ -168,7 +168,7 @@ export const TextVersions = forwardRef<HTMLUListElement, TextVersionsProps>(func
             return <li key={item.assignment_id}>
               <span>{personLabel(item.author_label, item.is_me, item.person)}, {labelFor(taskLabels, item.task)}, {moved != null ? `moved to v${moved}` : labelFor(assignmentStatusLabels, item.status)}</span>
               {item.held && <> <StatusBadge tone="warning">Paused</StatusBadge></>}
-              {assignment && tools && <AssignmentActions assignment={assignment} members={tools.members} onChanged={tools.onAssignmentsChanged} />}
+              {assignment && tools && !(hideOpenWork && item.task === "annotate") && <AssignmentActions assignment={assignment} members={tools.members} onChanged={tools.onAssignmentsChanged} />}
             </li>;
           })}
         </ul>}

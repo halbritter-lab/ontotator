@@ -765,6 +765,7 @@ def test_a_lead_finds_colleagues_by_name_and_others_only_by_exact_match(app):
     for name in ("maria.k", "mario", "marta", "mara.admin"):
         logged_in(app, name, projects={"other": ["annotator"]})
     app.state.accounts.update_profile(Actor.cli(), "marta", display_name="Marta Ruiz")
+    app.state.accounts.set_languages(Actor.cli(), "marta", ["es", "de"])
     app.state.accounts.set_active(Actor.cli(), "mario", False)
     app.state.accounts.set_system_admin(Actor.cli(), "mara.admin", True)
     logged_in(app, "markus", projects={"phenotypes": ["annotator"]})
@@ -779,15 +780,19 @@ def test_a_lead_finds_colleagues_by_name_and_others_only_by_exact_match(app):
     assert found.status_code == 200, found.text
     # Inactive users, admins, members and strangers are left out.
     assert found.json() == [
-        {"username": "maria.k", "display_name": "maria.k"},
-        {"username": "marta", "display_name": "Marta Ruiz"},
+        {"username": "maria.k", "display_name": "maria.k", "languages": []},
+        {"username": "marta", "display_name": "Marta Ruiz", "languages": ["de", "es"]},
     ]
     assert [c["username"] for c in lead.get(path, params={"q": "ruiz"}).json()] == [
         "marta"
     ]
     assert lead.get(path, params={"q": "ma"}).json() == []
     assert lead.get(path, params={"q": "marlene"}).json() == [
-        {"username": "marlene", "display_name": "marlene"}
+        {"username": "marlene", "display_name": "marlene", "languages": []}
+    ]
+    # A typed-out username still finds its person (the confirmation in the form).
+    assert [c["username"] for c in lead.get(path, params={"q": "marta"}).json()] == [
+        "marta"
     ]
     by_mail = lead.get(path, params={"q": "marlene@example.org"}).json()
     assert [c["username"] for c in by_mail] == ["marlene"]
@@ -802,6 +807,30 @@ def test_a_lead_finds_colleagues_by_name_and_others_only_by_exact_match(app):
     ]
     annotator = logged_in(app, "markus")
     assert annotator.get(path, params={"q": "mar"}).status_code == 403
+
+
+def test_an_exact_username_leads_the_member_candidates(app):
+    from auth_harness import ensure_user
+
+    admin = logged_in(app, "root", system_admin=True)
+    create_project(app, admin)
+    # More partial matches than the limit, all sorted before the exact one.
+    for number in range(11):
+        ensure_user(app, f"aanna{number:02d}")
+    ensure_user(app, "anna")
+    app.state.accounts.set_languages(Actor.cli(), "anna", ["en", "de"])
+
+    found = admin.get(
+        "/api/v1/projects/phenotypes/member-candidates", params={"q": "anna"}
+    ).json()
+
+    assert len(found) == 10
+    assert found[0] == {
+        "username": "anna",
+        "display_name": "anna",
+        "languages": ["de", "en"],
+    }
+    assert [c["username"] for c in found[1:]] == [f"aanna{n:02d}" for n in range(9)]
 
 
 def test_leads_see_the_account_status_of_members(app):

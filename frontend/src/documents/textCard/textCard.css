@@ -44,8 +44,13 @@
 .text-card-subheading { margin: 0; font-size: var(--size-md); line-height: var(--leading-md); font-weight: var(--weight-strong); }
 .text-card-subheading { margin-bottom: var(--space-2); }
 .text-card-muted { color: var(--text-muted); font-size: var(--size-sm); line-height: var(--leading-sm); }
-.text-card-chips,
 .text-card-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+/* The part's one next step (issue 129, U5): label and primary button, set apart from the secondary tools below. */
+.text-card-next {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-3); border: 1px solid var(--notice-info-border); border-radius: var(--radius-sm); background: var(--notice-info-fill);
+}
+.text-card-next-label { margin: 0; color: var(--notice-info-text); }
 .text-card-myself { display: grid; justify-items: start; gap: var(--space-1); }
 .text-card-details { display: grid; gap: var(--space-4); }
 .text-card-plan { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
@@ -55,25 +60,25 @@
 .text-card-footer { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--border); }
 .text-card-footer-end { margin-inline-start: auto; }
 
-/* A person on a step: name, state, assignment date (state in words, not colour). */
-.assignment-chip {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-1) var(--space-2);
-  padding: 2px var(--space-1) 2px var(--space-3);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--surface-sunken);
-  font-size: var(--size-sm);
-  line-height: var(--leading-sm);
+/* People of a step (person rows, mockup variant A): one row per person. Name and details on the left, the status pill in a
+   column aligned across the rows (subgrid), that person's own buttons right-aligned; hairlines between the rows. */
+.person-rows-box { container-type: inline-size; min-width: 0; }
+.person-rows { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; column-gap: var(--space-3); margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--border); }
+.person-row { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; grid-template-areas: "who status actions"; align-items: center; gap: var(--space-1) var(--space-3); padding: var(--space-2) 0; border-bottom: 1px solid var(--border); }
+.person-row-who { grid-area: who; display: grid; min-width: 0; overflow-wrap: anywhere; }
+.person-row-name { font-weight: var(--weight-strong); }
+.person-row-pseudonym,
+.person-row-details { color: var(--text-muted); font-size: var(--size-sm); line-height: var(--leading-sm); }
+.person-row-pseudonym { font-weight: var(--weight-regular); }
+.person-row-status { grid-area: status; justify-self: start; }
+.person-row-actions { grid-area: actions; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--space-2); }
+.person-row--removed .person-row-name { color: var(--text-muted); font-weight: var(--weight-regular); }
+/* Narrow (the sheet, a narrow warning box): name and status on line 1, the buttons on line 2 under the name. */
+@container (max-width: 520px) {
+  .person-rows { grid-template-columns: minmax(0, 1fr) auto; }
+  .person-row { grid-template-areas: "who status" "actions actions"; }
+  .person-row-actions { justify-content: flex-start; }
 }
-.assignment-chip-state,
-.assignment-chip-date { color: var(--text-muted); }
-/* The lead's chip is a menu button (Reassign, Remove, Assign another person): the chip look, a chevron at the end. */
-.btn.assignment-chip--menu { min-height: 28px; padding-inline-end: var(--space-2); color: var(--text); font-weight: var(--weight-regular); cursor: pointer; }
-.btn.assignment-chip--menu:hover { border-color: var(--border-strong); }
-.assignment-chip-chevron { flex: none; color: var(--text-muted); }
 
 /* V1: below 700 px a full-width sheet; long ids break, words do not. */
 @media (max-width: 699px) {
@@ -178,7 +183,7 @@ dl.technical-details dd { margin: 0; overflow-wrap: anywhere; font-family: var(-
 
 @media (forced-colors: active) {
   .text-card-banner { border-color: CanvasText; }
-  .assignment-chip { border-color: CanvasText; }
+  .person-rows, .person-row { border-color: CanvasText; }
   .segmented .segment[data-checked] { forced-color-adjust: none; background: Highlight; color: HighlightText; }
   .row-activity-line { border-left-color: CanvasText; }
   .selection-notice { border-color: CanvasText; }

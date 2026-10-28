@@ -9,9 +9,15 @@ import { group, page, row, version } from "./documents/fixtures";
 
 const project: ProjectSummary = { project_key: "p/key", name: "Research", description: null, roles: ["lead"], can_manage: true, allowed_modes: ["independent"], document_count: 1 };
 const ordinaryProject: ProjectSummary = { ...project, roles: ["annotator"], can_manage: false };
-const plan: ImportPlan = { input_sha256: "input", state_sha256: "state", plan_sha256: "plan", committable: true, counts: {}, documents: [], documents_only: [], duplicates: [], collisions: [], proposal_sets: [], errors: [], warnings: [], normalised_count: 0, variants: [{ document_id: "opaque/internal", external_id: "external", case_id: "case", language: "de", version: 2, origin: "correction", derived_from: "actual-predecessor", derived_in_upload: false, translation: null, status: "ready_for_review", failed_checks: [], marked_in_package: false }] };
+// A de translation planned for annotation without review: the work plan asks for the external-review acceptance,
+// which only a lead (or the system administrator) can give (Q2: per language, no per-variant overrides).
+const workPlan: NonNullable<ImportPlan["work_plan"]> = { setting: "review_and_annotate_translations", existing_rows_kept: 0,
+  languages: [{ key: "de", source_languages: [], rows: 1, versions: 1, review: false, annotate: true, source_rule: null, marked_in_package: 0, not_accepted: 1 }],
+  cases: [{ case_id: "case", language: "de", review: false, annotate: true, new_row: true, accepted: false, marked_in_package: false }] };
+const plan: ImportPlan = { input_sha256: "input", state_sha256: "state", plan_sha256: "plan", committable: true, counts: {}, documents: [{ document_id: "opaque/internal", language: "de", text_sha256: "t".repeat(64), action: "add", normalised: false, label: "bundle.zip/documents/1.json" }], documents_only: [], duplicates: [], collisions: [], proposal_sets: [], errors: [], warnings: [], normalised_count: 0, work_plan: workPlan, variants: [{ document_id: "opaque/internal", external_id: "external", case_id: "case", language: "de", version: 2, origin: "correction", derived_from: "actual-predecessor", derived_in_upload: false, translation: null, status: "ready_for_review", failed_checks: [], marked_in_package: false }] };
 const upload: UploadView = { id: 7, kind: "t1", language: null, files: [], status: "ready", preview: plan, plan_sha256: "plan", commit_job_id: null, preview_job_id: null, created_at: "2026-10-16T00:00:00Z" };
 const lead = testUser("lead", { is_system_admin: false });
+const ACCEPT = /reviewed outside Ontotator/;
 
 beforeEach(() => {
   window.history.replaceState(null, "", "#/projects/p%2Fkey/documents");
@@ -33,8 +39,9 @@ async function preview() {
   await waitFor(() => expect(upload.getAttribute("aria-disabled")).toBeNull());
   fireEvent.click(upload);
   const dialog = within(await screen.findByRole("dialog", { name: "Upload texts" }));
-  fireEvent.click(await dialog.findByRole("button", { name: "Resume upload 7" }));
-  await dialog.findByRole("table", { name: "Variants" });
+  fireEvent.click(await dialog.findByText("Unfinished uploads (1)"));
+  fireEvent.click(await dialog.findByRole("button", { name: "Open preview" }));
+  await dialog.findByRole("region", { name: "Work plan" });
   return dialog;
 }
 
@@ -43,20 +50,20 @@ async function leadOnlyNotice() {
   // A member sees the lead-only notice; an unknown project the not-found page (X-1).
   expect(await screen.findByRole("heading", { name: /^(Documents is for project leads|Project not found or no access)$/ })).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Upload texts…" })).toBeNull();
-  expect(screen.queryByLabelText(/^Accept without review:/)).toBeNull();
+  expect(screen.queryByLabelText(ACCEPT)).toBeNull();
 }
 
-it("wires the actual current project lead into real upload override controls", async () => {
+it("wires the actual current project lead into the work plan acceptance", async () => {
   render(<App user={lead} />);
   const dialog = await preview();
-  fireEvent.click(await dialog.findByLabelText(/^Accept without review:/));
-  expect(dialog.getByLabelText(/^Reason:/)).toBeTruthy();
+  fireEvent.click(await dialog.findByLabelText(ACCEPT));
+  expect(dialog.getByLabelText(/^Reason/)).toBeTruthy();
 });
 
 it("wires the system administrator exception only after the current project is known", async () => {
   vi.mocked(api.listProjects).mockResolvedValue([{ ...project, roles: [] }]);
   render(<App user={testUser("root", { is_system_admin: true })} />);
-  expect(await (await preview()).findByLabelText(/^Accept without review:/)).toBeTruthy();
+  expect(await (await preview()).findByLabelText(ACCEPT)).toBeTruthy();
 });
 
 it("does not adopt a lead role from another project for an ordinary current member", async () => {
@@ -78,18 +85,18 @@ it("keeps controls absent while current project inventory is loading", async () 
   expect(await screen.findByText("Loading project access…")).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Upload texts…" })).toBeNull();
   await act(async () => pending.resolve([project]));
-  expect(await (await preview()).findByLabelText(/^Accept without review:/)).toBeTruthy();
+  expect(await (await preview()).findByLabelText(ACCEPT)).toBeTruthy();
 });
 
 it("clears sysadmin-only override choices immediately when current user loses that flag", async () => {
   vi.mocked(api.listProjects).mockResolvedValue([{ ...project, roles: [] }]);
   const view = render(<App user={testUser("root", { is_system_admin: true })} />);
   const dialog = await preview();
-  fireEvent.click(await dialog.findByLabelText(/^Accept without review:/));
-  fireEvent.change(dialog.getByLabelText(/^Reason:/), { target: { value: "No longer authorized" } });
+  fireEvent.click(await dialog.findByLabelText(ACCEPT));
+  fireEvent.change(dialog.getByLabelText(/^Reason/), { target: { value: "No longer authorized" } });
   view.rerender(<App user={testUser("root", { is_system_admin: false })} />);
-  expect(dialog.queryByLabelText(/^Accept without review:/)).toBeNull();
-  expect(dialog.queryByLabelText(/^Reason:/)).toBeNull();
+  expect(dialog.queryByLabelText(ACCEPT)).toBeNull();
+  expect(dialog.queryByLabelText(/^Reason/)).toBeNull();
   await act(async () => {});
 });
 
@@ -98,11 +105,11 @@ it("replaces session identity without carrying former user's project rights or u
   vi.mocked(api.listProjects).mockResolvedValueOnce([project]).mockReturnValueOnce(pending.promise);
   const view = render(<App user={lead} />);
   const dialog = await preview();
-  fireEvent.click(await dialog.findByLabelText(/^Accept without review:/));
+  fireEvent.click(await dialog.findByLabelText(ACCEPT));
   view.rerender(<App user={testUser("reader", { is_system_admin: false })} />);
   await waitFor(() => expect(screen.queryByRole("dialog", { name: "Upload texts" })).toBeNull());
   expect(screen.queryByRole("button", { name: "Upload texts…" })).toBeNull();
-  expect(dialog.queryByLabelText(/^Accept without review:/)).toBeNull();
+  expect(dialog.queryByLabelText(ACCEPT)).toBeNull();
   await act(async () => pending.resolve([ordinaryProject]));
   await leadOnlyNotice();
 });
@@ -114,7 +121,7 @@ it("rejects a late former-user project response while the new session inventory 
   view.rerender(<App user={testUser("reader", { is_system_admin: false })} />);
   await act(async () => previous.resolve([project]));
   expect(screen.queryByRole("button", { name: "Upload texts…" })).toBeNull();
-  expect(screen.queryByLabelText(/^Accept without review:/)).toBeNull();
+  expect(screen.queryByLabelText(ACCEPT)).toBeNull();
   expect(screen.queryByRole("link", { name: "Settings" })).toBeNull();
   await act(async () => current.resolve([ordinaryProject]));
   await leadOnlyNotice();
@@ -154,7 +161,7 @@ it("does not treat a failed current-project request as override authority and ca
   render(<App user={lead} />);
   const retry = await screen.findByRole("button", { name: "Retry projects" });
   expect(screen.queryByRole("button", { name: "Upload texts…" })).toBeNull();
-  expect(screen.queryByLabelText(/^Accept without review:/)).toBeNull();
+  expect(screen.queryByLabelText(ACCEPT)).toBeNull();
   fireEvent.click(retry);
-  expect(await (await preview()).findByLabelText(/^Accept without review:/)).toBeTruthy();
+  expect(await (await preview()).findByLabelText(ACCEPT)).toBeTruthy();
 });

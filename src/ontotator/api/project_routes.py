@@ -5,7 +5,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import Connection, func, or_, select
+from sqlalchemy import Connection, case, func, or_, select
 
 from ontotator.api.document_projection import Assignee
 from ontotator.api.identity import PrincipalDep
@@ -117,6 +117,8 @@ class MemberCandidate(BaseModel):
 
     username: str
     display_name: str
+    # The languages the person reads: they confirm the right person is picked.
+    languages: list[str] = Field(default_factory=list)
 
 
 class ProgressDocument(BaseModel):
@@ -519,7 +521,9 @@ def member_candidates(
     username, and anybody else only by the exact username or e-mail, so the
     search does not browse the installation's user list. System
     administrators are never offered (they manage without membership); an
-    administrator caller searches everyone. Ten results at most.
+    administrator caller searches everyone. Ten results at most; an exact
+    username or e-mail comes first, so a typed-out username still shows its
+    person (display name and languages) as a confirmation.
     """
     _guard(request, Action.MANAGE_MEMBERS, key)
     query = q.strip().lower()
@@ -549,7 +553,7 @@ def member_candidates(
             )
             partial = partial & UserRow.id.in_(colleagues)
         rows = conn.execute(
-            select(UserRow.username, UserRow.display_name)
+            select(UserRow.id, UserRow.username, UserRow.display_name)
             .where(
                 UserRow.active.is_(True),
                 UserRow.anonymised_at.is_(None),
@@ -557,11 +561,22 @@ def member_candidates(
                 UserRow.id.not_in(members),
                 or_(partial, exact),
             )
-            .order_by(UserRow.username)
+            .order_by(case((exact, 0), else_=1), UserRow.username)
             .limit(MEMBER_CANDIDATE_LIMIT)
         ).all()
+        languages: dict[int, list[str]] = {row.id: [] for row in rows}
+        if languages:
+            for user_id, language in conn.execute(
+                select(UserLanguageRow.user_id, UserLanguageRow.language)
+                .where(UserLanguageRow.user_id.in_(languages))
+                .order_by(UserLanguageRow.language)
+            ).tuples():
+                languages[user_id].append(language)
     return [
-        MemberCandidate(username=r.username, display_name=r.display_name) for r in rows
+        MemberCandidate(
+            username=r.username, display_name=r.display_name, languages=languages[r.id]
+        )
+        for r in rows
     ]
 
 

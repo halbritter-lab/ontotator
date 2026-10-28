@@ -152,8 +152,9 @@ async function importTwoDocuments(page: Page) {
   ]);
   await upload.getByRole("button", { name: "Check", exact: true }).click();
   const preview = upload.getByRole("region", { name: "Upload preview", exact: true });
-  await expect(preview).toContainText("2 documents added");
-  await expect(preview).toContainText("1 with normalized text");
+  await expect(upload.getByText("Checked 2 files: ready to import.", { exact: true })).toBeFocused();
+  await expect(preview.locator(".upload-summary")).toContainText("Texts2 (en 2)");
+  await expect(preview).toContainText("1 text normalized to Unicode NFC.");
   const rows = page.getByRole("button", { name: /^Text / });
   await expect(rows).toHaveCount(0);
   await upload.getByRole("button", { name: "Import 2 texts", exact: true }).click();
@@ -317,15 +318,17 @@ test.describe("Administration through real accounts and jobs", () => {
     const headers = await row.getByRole("rowheader").count();
     await expect(row.getByRole("cell").nth(submittedColumn - headers)).toHaveText("1");
     await page.getByRole("link", { name: DOCUMENTS_LINK }).click();
+    // The submitted annotation's row in the Annotation part carries its Reopen… (#108); the version list does not repeat it.
     const document = await openTextVersions(page, "one");
-    await document.getByRole("button", { name: "Reopen", exact: true }).click();
+    await expect(document.getByRole("button", { name: /^Reopen/ })).toHaveCount(0);
+    await showSegment(textCard(page, "one", "en"), "Annotation");
+    await textCard(page, "one", "en").getByRole("list", { name: "Annotators", exact: true }).getByRole("button", { name: /^Reopen .+’s annotation$/ }).click();
     const reopen = page.getByRole("dialog", { name: "Reopen one", exact: true });
     await reopen.getByLabel("Reason (optional)").fill("Check this finding again.");
     await reopen.getByRole("button", { name: "Reopen assignment", exact: true }).click();
     await expect(reopen).toHaveCount(0);
-    // Reopened work is open work again: the version list leaves it to the Annotation part, where its chip says so.
-    await showSegment(textCard(page, "one", "en"), "Annotation");
-    await expect(textCard(page, "one", "en").getByRole("button", { name: /, in progress: actions$/ })).toBeVisible();
+    // Reopened work is open work again: its row in the Annotation part says so.
+    await expect(textCard(page, "one", "en").getByRole("list", { name: "Annotators", exact: true }).locator(".status-pill")).toHaveText("Reopened");
     // The text card is modal: close it before logging out.
     await textCard(page, "one", "en").getByRole("button", { name: "Close", exact: true }).click();
     await logout(page);

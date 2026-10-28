@@ -505,6 +505,25 @@ class EditingService:
                     for s in result.annotations
                     if (s.annotation.annotation_id, s.version) not in previous_refs
                 ]
+                # #124: the task profile wins over the project setting. A new
+                # or changed finding of a span-required type cannot be saved
+                # without a text span; unchanged ones (saved before) stay as
+                # they are and the submit check still flags them.
+                for item in changed:
+                    annotation = item.annotation
+                    if (
+                        not annotation.evidence_refs
+                        and resolve_type(
+                            profile, annotation.layer_id, annotation.type_id
+                        ).evidence_policy
+                        == "required_on_complete"
+                    ):
+                        raise DomainError(
+                            "MISSING_EVIDENCE",
+                            f"Annotation '{annotation.annotation_id}' in layer "
+                            f"'{annotation.layer_id}' requires a text span: "
+                            "select supporting text first",
+                        )
                 rules = self.repo.get_project_rules(key.project_key)
                 violations = rule_violations(
                     changed,

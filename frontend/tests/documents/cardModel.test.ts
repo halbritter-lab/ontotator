@@ -41,7 +41,7 @@ describe("Annotation", () => {
   it("annotation with one of max 2 annotators is now (R-13); no proposal count, never 0 of 0", () => {
     const target = cardRow({ annotation: cell("partly_assigned", "todo", { assigned: 1, target: 2 }) }, { proposal_count: 17 });
     expect(annotationState(target)).toEqual({ state: "1 annotator · max 2", tone: "now" });
-    expect(annotationState(cardRow({ annotation: cell("unassigned", "todo", { assigned: 0, target: 2 }) }))).toEqual({ state: "No annotator yet · max 2", tone: "now" });
+    expect(annotationState(cardRow({ annotation: cell("unassigned", "todo", { assigned: 0, target: 2 }) }))).toEqual({ state: "Unassigned", tone: "now" });
     expect(annotationState(cardRow({ annotation: cell("unassigned", "todo") }, { proposal_count: 28 }))).toEqual({ state: "Unassigned", tone: "now" });
   });
   it("in progress counts the submissions", () => {
@@ -65,6 +65,13 @@ describe("Finalization", () => {
     for (const state of ["none", "after_annotation", "after_review"]) {
       expect(finalizationState(cardRow({ final: cell(state, "waiting") }), now)).toEqual({ state: "waiting", tone: "later" });
     }
+  });
+  it("one of two submitted with the other open can be accepted now (issue 123)", () => {
+    const work = [annotateItem({ assignment_id: 1, status: "submitted" }), annotateItem({ assignment_id: 2, status: "in_progress" })];
+    expect(finalizationState(cardRow({ final: cell("after_annotation", "waiting") }, { work }), now)).toEqual({ state: "can be accepted", tone: "now" });
+    // Nothing submitted yet: still waiting.
+    const open = [annotateItem({ assignment_id: 3, status: "in_progress" })];
+    expect(finalizationState(cardRow({ final: cell("after_annotation", "waiting") }, { work: open }), now)).toEqual({ state: "waiting", tone: "later" });
   });
   it("2 of 2 submitted is done and finalization is ready to compare", () => {
     const target = cardRow({ annotation: cell("submitted", "done", { submitted: 2, total: 2 }), final: cell("choose", "decision", { submitted: 2 }) });

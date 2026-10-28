@@ -26,7 +26,7 @@ export interface StageActionsProps {
   onChangeFinal?: (row: DocumentRowView) => void;
   canChangeFinal?: (row: DocumentRowView) => boolean;
   textVersionTools?: TextVersionsTools;
-  /** The text card: its Translation part carries the reviewers' Reassign / Remove (chip menus) and Request correction (versions). */
+  /** The text card: its person rows carry every person's Reassign… / Reopen… / Remove…, its versions Request correction. */
   inCard?: boolean;
 }
 
@@ -39,12 +39,12 @@ export function StageActions({ row, stage, onAssign, onRequestCorrection, canReq
   const show = (name: PanelStage) => !stage || stage === name;
   const documents = new Set(row.versions.map(version => version.document_id));
   // Open work of the stage (reviewers under Translation, annotators under Annotation): Reassign… and the assignment actions.
-  const workIds = new Set(row.work.filter(item => item.status !== "submitted" && item.moved_to_version == null
-    && (item.task === "translation_review" ? show("review") && !inCard : show("annotation"))).map(item => item.assignment_id));
+  const workIds = new Set(inCard ? [] : row.work.filter(item => item.status !== "submitted" && item.moved_to_version == null
+    && (item.task === "translation_review" ? show("review") : show("annotation"))).map(item => item.assignment_id));
   const reassignable: AssignmentView[] = textVersionTools
     ? textVersionTools.assignments.filter(assignment => workIds.has(assignment.id) && documents.has(assignment.document_id) && !assignment.revoked_at) : [];
   // Submitted annotations: "Reopen…" with the stage (the version list's assignment actions offer it too).
-  const reopenable: AssignmentView[] = textVersionTools && show("annotation")
+  const reopenable: AssignmentView[] = textVersionTools && show("annotation") && !inCard
     ? textVersionTools.assignments.filter(assignment => assignment.task === "annotate" && assignment.status === "submitted" && documents.has(assignment.document_id) && !assignment.revoked_at) : [];
   const [reopening, setReopening] = useState<number | null>(null);
   const correction = show("review") && !inCard && onRequestCorrection && canRequestCorrection?.(row);

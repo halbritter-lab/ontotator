@@ -554,7 +554,27 @@ it("one text the preview cannot assign says why instead of a made-up limit (R-12
   const why = "This text is still in translation review. Annotation can be assigned once the review is accepted.";
   expect(screen.getByText(why, { selector: ".assign-limit-hint" })).toBeDefined();
   expect(screen.queryByText(/possible/)).toBeNull();
-  expect(screen.getByText(why, { selector: ".assign-footer-reason" })).toBeDefined();
+  expect(screen.getByText(why, { selector: ".dialog-footer-reason" })).toBeDefined();
   expect(screen.getByRole("checkbox", { name: /Ana Weber/ }).getAttribute("aria-disabled")).toBe("true");
   expect(screen.queryByText(/limit reached/)).toBeNull();
+});
+
+it("names the texts it assigns, the first six and Show all (issue 129, U4)", async () => {
+  skipped = [{ case_id: "case-0120", language: "de", reason: "already_assigned" }];
+  render(<AssignWorkDialog {...casesProps()} />);
+  await ready();
+  const line = screen.getByText("Texts (19)").closest("p")!;
+  expect(line.textContent).toBe("Texts (19) case-0101 de, case-0102 de, case-0103 de, case-0104 de, case-0105 de, case-0106 de, and 13 moreShow all");
+  fireEvent.click(within(line).getByRole("button", { name: "Show all" }));
+  expect(line.textContent).toContain("case-0119 de");
+  expect(line.textContent).not.toContain("case-0120 de");
+  expect(within(line).getByRole("button", { name: "Show fewer" }).getAttribute("aria-expanded")).toBe("true");
+});
+
+it("names one text without Show all (issue 129, U4)", async () => {
+  render(<AssignWorkDialog {...casesProps()} caseIds={["case-0101"]} />);
+  await ready();
+  const line = screen.getByText("Text", { exact: true }).closest("p")!;
+  expect(line.textContent).toBe("Text case-0101 de");
+  expect(within(line).queryByRole("button")).toBeNull();
 });

@@ -452,6 +452,75 @@ def rejected_translation_for_lead(app: FastAPI) -> dict[str, Any]:
     )
 
 
+UPLOAD_DIALOG_CASES = cases(301, 62)
+
+
+def upload_dialog_units() -> list[Any]:
+    """185 texts: per case an ``en`` source with two tool proposals and a ``de``
+    machine translation, plus ``fr`` for all but the last case."""
+    from t1_builders import native_unit, translation_unit
+    from t1_fixtures import annotation
+
+    units: list[Any] = []
+    for index, case in enumerate(UPLOAD_DIALOG_CASES):
+        text = f"{SYNTHETIC} ({case})"
+        seizures, hypotonia = text.index("seizures"), text.index("hypotonia")
+        source = native_unit(
+            case,
+            "en",
+            text,
+            case_id=case,
+            annotations=[
+                annotation("p1", (seizures, seizures + 8), text=text),
+                annotation(
+                    "p2", (hypotonia, hypotonia + 9), text=text, term_id="HP:0001252"
+                ),
+            ],
+        )
+        units.append(source)
+        languages = ("de", "fr") if index < len(UPLOAD_DIALOG_CASES) - 1 else ("de",)
+        for language in languages:
+            units.append(
+                translation_unit(
+                    case,
+                    language,
+                    f"{SYNTHETIC} ({case}, {language})",
+                    source=source,
+                    checks=(("units_added", index % 10 != 3),),
+                )
+            )
+    return units
+
+
+def build_upload_dialog(app: FastAPI) -> dict[str, Any]:
+    """Empty project (languages en and de, "Review and annotate all
+    translations") and a bundle of 185 texts in 62 cases (en, de, fr); fr is
+    not a project language (the preview warns, the import is allowed)."""
+    scenario = lead_project(
+        app, "UPLOAD_DIALOG", import_plan="review_and_annotate_translations"
+    )
+    with app.state.repo.db.transaction() as conn:
+        conn.execute(
+            update(ProjectRow)
+            .where(ProjectRow.project_key == scenario.key)
+            .values(languages=["en", "de"])
+        )
+    path = write_bundle(scenario, upload_dialog_units())
+    return result(
+        scenario,
+        [
+            *all_rows(UPLOAD_DIALOG_CASES[:-1], ("de", "fr")),
+            (UPLOAD_DIALOG_CASES[-1], "en"),
+            (UPLOAD_DIALOG_CASES[-1], "de"),
+        ],
+        bundle_path=str(path.resolve()),
+        case_ids={
+            "de": list(UPLOAD_DIALOG_CASES),
+            "fr": list(UPLOAD_DIALOG_CASES[:-1]),
+        },
+    )
+
+
 BUILDERS: dict[str, Builder] = {
     "D15": build_d15,
     "DEFAULT_IMPORT": build_default_import,
@@ -460,6 +529,7 @@ BUILDERS: dict[str, Builder] = {
     "ACCEPTANCE": build_acceptance,
     "ROWS": build_rows,
     "REJECTED_TRANSLATION_FOR_LEAD": rejected_translation_for_lead,
+    "UPLOAD_DIALOG": build_upload_dialog,
 }
 
 

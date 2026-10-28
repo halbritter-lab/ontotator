@@ -135,7 +135,7 @@ async function planReviewAndAnnotate(page: Page, clicks: ReturnType<typeof count
   await expect(dialog).toHaveCount(0);
   await expect(toast(page).locator(".ui-toast-message")).toHaveText(PLAN_SAVED);
   await expect(toast(page).getByRole("button", { name: "Undo", exact: true })).toBeVisible();
-  // The selection stays, so the next click can be "Assign…".
+  // The selection stays, so the next click can be "Assign review…".
   await expect(bar(page)).toContainText(` in ${count} cases selected`);
 }
 
@@ -183,8 +183,8 @@ test("D15: import, plan de, assign de, plan fr, assign fr", async ({ page }) => 
   await expect(rowCell(row(page, de[0], "fr"), "translation")).toContainText("not decided");
   await expect(documentsTab(page, "To assign", 20)).toBeVisible();
 
-  // 3. Assign the 20 de reviews to one person from the kept selection: Assign…, Ana Weber, Assign 20 (3; total 10).
-  await clicks.click(bar(page).getByRole("button", { name: "Assign…", exact: true }));
+  // 3. Assign the 20 de reviews to one person from the kept selection: Assign review…, Ana Weber, Assign 20 (3; total 10).
+  await clicks.click(bar(page).getByRole("button", { name: "Assign review…", exact: true }));
   let dialog = page.getByRole("dialog", { name: new RegExp(`^Assign${SEP}20 cases$`) });
   await expect(dialog.getByText(new RegExp(`^Translation review${SEP}de${SEP}20 versions$`))).toBeVisible();
   await expect(dialog.getByText("from the plan", { exact: true })).toBeVisible();
@@ -210,8 +210,8 @@ test("D15: import, plan de, assign de, plan fr, assign fr", async ({ page }) => 
   await planReviewAndAnnotate(page, clicks, "fr", 30);
   expect(clicks.total).toBe(16);
 
-  // 5. Assign the 30 fr reviews to Ben: Assign…, Ben, Assign 30 (3; total 19). Splitting is "Distribute evenly…".
-  await clicks.click(bar(page).getByRole("button", { name: "Assign…", exact: true }));
+  // 5. Assign the 30 fr reviews to Ben: Assign review…, Ben, Assign 30 (3; total 19). Splitting is "Distribute evenly…".
+  await clicks.click(bar(page).getByRole("button", { name: "Assign review…", exact: true }));
   dialog = page.getByRole("dialog", { name: new RegExp(`^Assign${SEP}30 cases$`) });
   await expect(dialog.getByText(new RegExp(`^Translation review${SEP}fr${SEP}30 versions$`))).toBeVisible();
   await clicks.click(dialog.getByRole("radio", { name: person(s, "ben"), exact: true }));
@@ -236,7 +236,7 @@ test("ANNOTATION_BATCH: later annotation batch via To assign (5 clicks) while 6 
 
   // With all 20 cases selected, the 6 still in review are skipped and named.
   await page.getByRole("checkbox", { name: "Select all 20 filtered texts", exact: true }).click();
-  await bar(page).getByRole("button", { name: "Assign…", exact: true }).click();
+  await bar(page).getByRole("button", { name: "Assign annotation…", exact: true }).click();
   let dialog = page.getByRole("dialog", { name: new RegExp(`^Assign${SEP}20 cases$`) });
   await expect(dialog.getByText(new RegExp(`^Annotation${SEP}de${SEP}14 versions$`))).toBeVisible();
   await expect(dialog.getByRole("status", { name: "Summary" })).toContainText("6 still in translation review: waiting for review, they join the next batch");
@@ -244,12 +244,12 @@ test("ANNOTATION_BATCH: later annotation batch via To assign (5 clicks) while 6 
   await bar(page).getByRole("button", { name: "Clear selection", exact: true }).click();
   await expect(bar(page)).toHaveCount(0);
 
-  // "To assign", header checkbox, Assign…, annotator, Assign 14 (5).
+  // "To assign", header checkbox, Assign annotation…, annotator, Assign 14 (5).
   const clicks = counter(page);
   await clicks.click(documentsTab(page, "To assign", 14));
   await clicks.click(page.getByRole("checkbox", { name: "Select all 14 filtered texts", exact: true }));
   await expect(bar(page)).toContainText(new RegExp(`${selected(14, 14)}${SEP}next step: Assign annotation \\(de\\)`));
-  await clicks.click(bar(page).getByRole("button", { name: "Assign…", exact: true }));
+  await clicks.click(bar(page).getByRole("button", { name: "Assign annotation…", exact: true }));
   dialog = page.getByRole("dialog", { name: new RegExp(`^Assign${SEP}14 cases$`) });
   await expect(dialog.getByText(new RegExp(`^Annotation${SEP}de${SEP}14 versions$`))).toBeVisible();
   await clicks.click(dialog.getByRole("checkbox", { name: person(s, "annotator"), exact: true }));

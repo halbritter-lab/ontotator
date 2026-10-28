@@ -29,6 +29,17 @@ interface TaskEditorProps {
   showToast?: (toast: Omit<ToastMessage, "id">) => void;
 }
 
+/**
+ * M2 M-6, for annotations and translation reviews alike (issue 125): no second modal; a toast names the submission
+ * ("View result" reopens it read-only) and the next open task of the project opens, else My tasks.
+ */
+function afterSubmit({ onNavigate, showToast }: Pick<TaskEditorProps, "onNavigate" | "showToast">) {
+  return ({ label, assignmentId, next }: { label: string; assignmentId: number; next?: number }) => {
+    showToast?.({ message: `${label} submitted.`, actionLabel: "View result", onAction: () => onNavigate({ name: "task", assignmentId }) });
+    onNavigate(next !== undefined ? { name: "task", assignmentId: next } : MY_TASKS);
+  };
+}
+
 export function TaskEditor(props: TaskEditorProps): JSX.Element {
   const identity = JSON.stringify([props.user.username, props.assignmentId]);
   const [state, setState] = useState<{ identity: string; assignment?: AssignmentView; error?: unknown } | null>(null);
@@ -54,7 +65,7 @@ export function TaskEditor(props: TaskEditorProps): JSX.Element {
         held={assignment.held} holdReason={assignment.hold_reason} saveBeforeReportRef={saveBeforeReportRef}
         guidelineActions={guidelines.button} guidelineNotice={guidelines.notice}
         reportActions={<TaskProblemActions assignment={assignment} onSaveBeforeReport={async () => { await saveBeforeReportRef.current?.(); }} onRefresh={value => setState({ identity, assignment: value })} />}
-        onNavigate={props.onNavigate} routeLeaveRef={props.routeLeaveRef} leaveGuardRef={props.leaveGuardRef} />
+        onNavigate={props.onNavigate} routeLeaveRef={props.routeLeaveRef} leaveGuardRef={props.leaveGuardRef} onSubmitted={afterSubmit(props)} />
       {guidelines.drawer}
     </>}</TaskGuidelines>;
   }
@@ -193,10 +204,7 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
       readOnly={workspace.read_only} routeLeaveRef={routeLeaveRef} leaveGuardRef={leaveGuardRef}
       assignmentNavigation={{ tasks, current, onNavigate: id => onNavigate({ name: "task", assignmentId: id }),
         // M2 M-6: no second modal; the next task opens (same order as My tasks), else My tasks.
-        onSubmitted: ({ label, assignmentId: submitted, next }) => {
-          showToast?.({ message: `${label} submitted.`, actionLabel: "View result", onAction: () => onNavigate({ name: "task", assignmentId: submitted }) });
-          onNavigate(next !== undefined ? { name: "task", assignmentId: next } : MY_TASKS);
-        } }}
+        onSubmitted: afterSubmit({ onNavigate, showToast }) }}
       onClose={back} onReload={() => load()} onReadonlyRequired={() => { if (active.current) { setSubmittedElsewhere(true); void load(); } }} onSubmitted={() => {
         setWorkspace(value => value ? { ...value, read_only: true } : value);
         // CaseScreen owns the successful-submission dialog; retain its mounted state.

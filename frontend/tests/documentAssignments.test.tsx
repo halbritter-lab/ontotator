@@ -81,12 +81,18 @@ it("assigns the selected cases from the selection bar and refreshes rows and inv
 it("wires actual assignment IDs through the card's stage actions and refreshes after removal", async () => {
   vi.mocked(api.listDocumentRows).mockImplementation(async () => page([group("z/doc", [zRow({ work: [work({ assignment_id: 3, document_id: "z/doc", author_label: "A" })] })])]));
   render(<DocumentsPage projectKey="p/key" canManage query={{ panel: "z/doc:en", panel_stage: "annotation" }} onNavigate={vi.fn()} />);
-  // Open work is a chip with its actions beside it, not a second line in Text versions.
+  vi.spyOn(api, "removeAssignment").mockResolvedValue({ ...assignment, revoked_at: "2026-10-16T12:00:00Z" });
+  // Open work is a person row with its own actions (#108), not a second list below the part.
   const card = await screen.findByRole("dialog", { name: "z/doc en" });
-  // Remove stands beside Reassign…, no disclosure (B8-1).
-  fireEvent.click(await within(card).findByRole("button", { name: "Remove assignment" }));
-  fireEvent.click(screen.getByRole("button", { name: "Confirm removal" }));
-  await waitFor(() => expect(api.listAssignments).toHaveBeenCalledTimes(2)); expect(api.revokeAssignment).toHaveBeenCalledWith(3);
+  const person = within(within(card).getByRole("list", { name: "Annotators" })).getByRole("listitem");
+  // Reassign… and Remove… stand side by side, no disclosure (B8-1); an unsubmitted annotation is removed with its draft.
+  expect(within(person).getByRole("button", { name: "Reassign A’s annotation" })).toBeTruthy();
+  const rowsBefore = vi.mocked(api.listDocumentRows).mock.calls.length;
+  fireEvent.click(await within(person).findByRole("button", { name: "Remove A’s assignment" }));
+  fireEvent.click(within(screen.getByRole("dialog", { name: "Remove assignment?" })).getByRole("button", { name: "Remove" }));
+  await waitFor(() => expect(api.removeAssignment).toHaveBeenCalledWith(3));
+  expect(api.revokeAssignment).not.toHaveBeenCalled();
+  await waitFor(() => expect(vi.mocked(api.listDocumentRows).mock.calls.length).toBeGreaterThan(rowsBefore));
 });
 
 it("closes an open assign dialog on project change and ignores its pending mutation", async () => {

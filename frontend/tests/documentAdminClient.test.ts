@@ -24,9 +24,9 @@ it("uses escaped project paths, native multipart and exact plan hash with sessio
 it("reads persisted uploads and jobs, and discards via POST", async () => {
   const fetch = vi.fn().mockImplementation(() => Promise.resolve(new Response("{}")));
   vi.stubGlobal("fetch", fetch); const client = new ApiClient();
-  await client.listUploads("p"); await client.getUpload("p", 7); await client.getJob(12); await client.discardUpload("p", 7); await client.getProjectSettings("p");
+  await client.listUploads("p"); await client.listUploads("p", ["previewing", "ready"]); await client.getUpload("p", 7); await client.getJob(12); await client.discardUpload("p", 7); await client.getProjectSettings("p");
   expect(fetch.mock.calls.map(call => [call[0], call[1].method])).toEqual([
-    ["/api/v1/projects/p/uploads", "GET"], ["/api/v1/projects/p/uploads/7", "GET"],
+    ["/api/v1/projects/p/uploads", "GET"], ["/api/v1/projects/p/uploads?status=previewing&status=ready", "GET"], ["/api/v1/projects/p/uploads/7", "GET"],
     ["/api/v1/jobs/12", "GET"], ["/api/v1/projects/p/uploads/7/discard", "POST"], ["/api/v1/projects/p/settings", "GET"],
   ]);
 });

@@ -2,6 +2,7 @@
 import type { DocumentRowView } from "../../api/client";
 import type { ProjectDocumentsQuery, Route } from "../../app/router";
 import type { PathSegment, PathTone } from "../../ui/StagePath";
+import { earlyFinal } from "../finalPanelText";
 import { annotatorCount, shortName, stageText } from "../stageLabels";
 
 export type SegmentId = "translation" | "annotation" | "finalization";
@@ -80,7 +81,9 @@ export function finalizationState(row: DocumentRowView, _now: Date): State {
     case undefined:
     case "none":
     case "after_annotation":
-    case "after_review": return { state: "waiting", tone: "later" };
+    case "after_review":
+      // "Annotators per text" is an upper limit (issue 123): a submitted annotation can be accepted while others run.
+      return cell?.state === "after_annotation" && earlyFinal(row) ? { state: "can be accepted", tone: "now" } : { state: "waiting", tone: "later" };
     // A preselected result (a submitted consolidation, the accept rule) waits for acceptance, not a comparison.
     case "choose": return (cell.detail.submitted ?? 0) < 2 ? { state: cellLabel(row, "final"), tone: "now" }
       : { state: cell.detail.label_rule === "accept" ? "ready to accept" : "ready to compare", tone: "now" };

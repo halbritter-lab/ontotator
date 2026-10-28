@@ -97,6 +97,14 @@ function LimitInfo({ projectKey, current, textName, onSaved }: { projectKey: str
   </>;
 }
 
+/** Texts the batch dialog names before "Show all" (issue 129, U4). */
+export const NAMED_TEXTS = 6;
+
+/** "case-0101 de, case-0102 de v2": the texts that get the task, in the preview's order, each once. */
+export function targetTextNames(targets: readonly { case_id: string; language: string; version: number }[]): string[] {
+  return [...new Set(targets.map(item => textLabel(item, { withVersion: item.version > 1 })))];
+}
+
 /** Why one text cannot get an annotator now (R-12), from the preview's skip reason. */
 function rowBlockedText(reason: BatchSkipView["reason"] | undefined, perText: number, language: string): string {
   switch (reason) {
@@ -136,6 +144,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
   const [randomOpen, setRandomOpen] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
   const [limitSaved, setLimitSaved] = useState<string | null>(null);
+  const [allTexts, setAllTexts] = useState(false);
   const randomChanged = useRef(false);
   const writing = useRef(false);
   const alive = useRef(true);
@@ -356,7 +365,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
   const closing = busy ? undefined : props.onClose;
 
   return <Dialog open title={title} size="md" onClose={closing} footer={<>
-    {reason && <span id={reasonId} className="assign-footer-reason">{reason}</span>}
+    {reason && <span id={reasonId} className="dialog-footer-reason">{reason}</span>}
     <Button disabled={busy} onClick={props.onClose}>Cancel</Button>
     <Button variant="primary" loading={busy} aria-disabled={reason ? "true" : undefined} aria-describedby={reason ? reasonId : undefined} onClick={assign}>{confirming ? "Assign anyway" : rowMulti
       ? (picked ? `Assign ${picked === 1 ? "1 person" : `${picked} people`}` : "Assign") : isRow && !usernames.length ? "Assign" : `Assign ${count}`}</Button>
@@ -380,6 +389,14 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
         ? <div className="assign-field"><Select id={`${id}-task`} label="Task" hint="from the plan" value={current ?? ""} disabled={busy} onChange={event => changeStep(event.target.value)}>{stepOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></div>
         : <p className="assign-field"><strong>Task</strong> <span className="assign-step">{stepOptions[0]?.label}</span> <span className="assign-muted">from the plan</span></p>)}
 
+      {props.mode === "cases" && shown && shown.targets.length > 0 && (() => {
+        // issue 129, U4: the dialog names the texts it assigns (the table behind it is covered).
+        const names = targetTextNames(shown.targets);
+        const listed = allTexts ? names : names.slice(0, NAMED_TEXTS);
+        return <p className="assign-texts"><strong>{names.length === 1 ? "Text" : `Texts (${names.length})`}</strong>{" "}
+          <span>{listed.join(", ")}{listed.length < names.length && `, and ${names.length - listed.length} more`}</span>
+          {names.length > NAMED_TEXTS && <Button size="sm" aria-expanded={allTexts} onClick={() => setAllTexts(value => !value)}>{allTexts ? "Show fewer" : "Show all"}</Button>}</p>;
+      })()}
       {multi && props.mode === "cases" && shown && <p id={limitId} className="assign-muted">Tick everyone who should annotate these texts. Each ticked person gets every selected text.</p>}
       {multi && shown && <p id={limitReachedId} className="assign-limit-hint">{rowMulti
         ? blocked ?? [`${assignedCount} assigned`, picked > 0 && `${picked} selected`,

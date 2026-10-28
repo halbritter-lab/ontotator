@@ -18,6 +18,8 @@ test.use({ viewport: { width: 1280, height: 900 } });
 
 const ANA = "Ana Weber", TOM = "Tom Reis", LUC = "Luc Martin";
 const WAITING: CellText = { state: "waiting", who: "" };
+/** One annotation submitted, another still open: the lead may accept now (issue 123). */
+const CAN_ACCEPT: CellText = { state: "can be accepted", who: "" };
 const SOURCE: CellText = { state: "source text", who: "" };
 const ACCEPTED: CellText = { state: "accepted", who: "" };
 const NOT_PLANNED: CellText = { state: "not planned", who: "" };
@@ -48,7 +50,7 @@ interface FoldedExpect {
 
 const SCENARIOS: Record<Exclude<OverviewScenarioName, "WALKTHROUGH">, (RowExpect | FoldedExpect)[]> = {
   S1: [
-    { case_id: "case-101", language: "de", translation: { state: "not decided", who: "" }, annotation: { state: /Unassigned|(No annotator yet|\d+ annotators?) · max \d+|\d+ · full/, who: "" }, finalization: WAITING, waiting: "You", action: "Plan…", edge: true },
+    { case_id: "case-101", language: "de", translation: { state: "not decided", who: "" }, annotation: { state: /Unassigned|\d+ annotators? · max \d+|\d+ · full/, who: "" }, finalization: WAITING, waiting: "You", action: "Plan…", edge: true },
     { case_id: "case-101", folded: "+1" },
   ],
   S2: [
@@ -62,10 +64,10 @@ const SCENARIOS: Record<Exclude<OverviewScenarioName, "WALKTHROUGH">, (RowExpect
     { case_id: "case-104", language: "fr", translation: { state: "Query", who: "" }, annotation: AFTER_REVIEW, finalization: WAITING, waiting: "You", action: "Resolve…", edge: true },
   ],
   S5: [
-    { case_id: "case-105", language: "de", translation: ACCEPTED, annotation: { state: /No annotator yet · max \d+/, who: "" }, finalization: WAITING, waiting: "You", action: "Assign annotation…", edge: false },
+    { case_id: "case-105", language: "de", translation: ACCEPTED, annotation: { state: "Unassigned", who: "" }, finalization: WAITING, waiting: "You", action: "Assign annotation…", edge: false },
   ],
   S6: [
-    { case_id: "case-106", language: "de", translation: ACCEPTED, annotation: { state: "1 of 2 submitted", who: TOM }, finalization: WAITING, waiting: [TOM], action: null, edge: false },
+    { case_id: "case-106", language: "de", translation: ACCEPTED, annotation: { state: "1 of 2 submitted", who: TOM }, finalization: CAN_ACCEPT, waiting: [TOM], action: null, edge: false },
   ],
   S7a: [
     { case_id: "case-107", language: "de", translation: ACCEPTED, annotation: SUBMITTED, finalization: { state: "Your choice", who: "" }, waiting: "You", action: "Accept result…", edge: true },

@@ -113,7 +113,7 @@ def codes(row: dict[str, Any]) -> list[str]:
     return [step["code"] for step in row["steps"]]
 
 
-def test_registry_has_seven_scenarios_and_unknown_is_404(client):
+def test_registry_has_eight_scenarios_and_unknown_is_404(client):
     assert set(BUILDERS) == {
         "D15",
         "DEFAULT_IMPORT",
@@ -122,6 +122,7 @@ def test_registry_has_seven_scenarios_and_unknown_is_404(client):
         "ACCEPTANCE",
         "ROWS",
         "REJECTED_TRANSLATION_FOR_LEAD",
+        "UPLOAD_DIALOG",
     }
     response = client.post("/__test_lead_workflow__", params={"scenario": "S99"})
     assert response.status_code == 404
@@ -143,6 +144,19 @@ def test_d15_empty_project_bundle_of_50_cases_imports_nothing_planned(client):
     assert set(rows) == {(r["case_id"], r["language"]) for r in built["rows"]}
     assert bar["in_plan"] == 0
     assert not any(row["in_plan"] for row in rows.values())
+
+
+def test_upload_dialog_bundle_of_185_texts_imports_a_language_the_project_lacks(
+    client,
+):
+    built = scenario(client, "UPLOAD_DIALOG")
+    assert len(built["rows"]) == 185
+    assert len({row["case_id"] for row in built["rows"]}) == 62
+    import_bundle(client, built)
+    _, rows = lead_rows(client, built)
+    # fr is not a project language (en, de): the preview warns, the import goes on.
+    assert set(rows) == {(r["case_id"], r["language"]) for r in built["rows"]}
+    assert sum(1 for _case, language in rows if language == "fr") == 61
 
 
 def test_default_import_plans_review_and_annotate_on_translations(client):
