@@ -8,7 +8,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-repository=ghcr.io/janpower/ontotator
+repository=ghcr.io/halbritter-lab/ontotator
 version="${1:-}"
 if [[ ! "$version" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ || "$version" == latest ]]; then
     echo "Usage: bash scripts/publish-image.sh VERSION (a Docker tag such as 0.4.0, not latest)" >&2

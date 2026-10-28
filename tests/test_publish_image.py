@@ -73,19 +73,19 @@ def test_builds_scans_pushes_the_version_tag_and_prints_digest_reference(publish
     assert result.returncode == 0, result.stderr
     docker = [call for call in calls if call.startswith("docker")]
     assert (
-        docker[0] == "docker buildx imagetools inspect ghcr.io/janpower/ontotator:0.4.0"
+        docker[0] == "docker buildx imagetools inspect ghcr.io/halbritter-lab/ontotator:0.4.0"
     )
     assert docker[1].startswith(
         "docker build --load --secret id=github_token,env=GITHUB_TOKEN"
     )
-    assert docker[1].endswith("-t ghcr.io/janpower/ontotator:0.4.0 .")
+    assert docker[1].endswith("-t ghcr.io/halbritter-lab/ontotator:0.4.0 .")
     assert docker[2].startswith("docker run --rm") and "aquasec/trivy" in docker[2]
-    assert docker[3] == "docker push ghcr.io/janpower/ontotator:0.4.0"
+    assert docker[3] == "docker push ghcr.io/halbritter-lab/ontotator:0.4.0"
     assert docker[4].startswith(
-        "docker buildx imagetools inspect ghcr.io/janpower/ontotator:0.4.0 --format"
+        "docker buildx imagetools inspect ghcr.io/halbritter-lab/ontotator:0.4.0 --format"
     )
     assert not any(":latest" in call for call in docker)
-    assert f"ONTOTATOR_IMAGE=ghcr.io/janpower/ontotator@{DIGEST}" in result.stdout
+    assert f"ONTOTATOR_IMAGE=ghcr.io/halbritter-lab/ontotator@{DIGEST}" in result.stdout
     assert "stub-token" not in result.stdout + result.stderr
 
 

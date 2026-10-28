@@ -47,7 +47,7 @@ docker buildx imagetools inspect postgres:16.15-alpine3.24
 
 Record the manifest digest, check the required architecture is present, update every corresponding `tag@sha256:...` reference and rebuild. Mutable tags alone are not verification. Run the local and container checks against the rebuilt image before approving it.
 
-There is no CI. Publish an approved commit from a clean working tree with `bash scripts/publish-image.sh VERSION` (needs `docker login ghcr.io` with a token that may write packages; the build token comes from `GITHUB_TOKEN_FILE` or `gh auth token`). It refuses a VERSION that already exists in the registry, builds the image as above with tag `ghcr.io/janpower/ontotator:VERSION`, fails on fixable HIGH or CRITICAL findings from a pinned Trivy scan, pushes the tag and prints `ONTOTATOR_IMAGE=ghcr.io/janpower/ontotator@sha256:...`. There is no `:latest` tag; put that digest reference in the private `.env.docker`. The image is built for the local machine's architecture; check it matches the server with `docker buildx imagetools inspect`. A local image ID is useful for local tests; a registry digest is the portable deployment input. Keep release identity and check results in the deployment record.
+There is no CI. Publish an approved commit from a clean working tree with `bash scripts/publish-image.sh VERSION` (needs `docker login ghcr.io` with a token that may write packages; the build token comes from `GITHUB_TOKEN_FILE` or `gh auth token`). It refuses a VERSION that already exists in the registry, builds the image as above with tag `ghcr.io/halbritter-lab/ontotator:VERSION`, fails on fixable HIGH or CRITICAL findings from a pinned Trivy scan, pushes the tag and prints `ONTOTATOR_IMAGE=ghcr.io/halbritter-lab/ontotator@sha256:...`. There is no `:latest` tag; put that digest reference in the private `.env.docker`. The image is built for the local machine's architecture; check it matches the server with `docker buildx imagetools inspect`. A local image ID is useful for local tests; a registry digest is the portable deployment input. Keep release identity and check results in the deployment record.
 
 ## Configuration and secrets
 
@@ -333,7 +333,7 @@ The app sets its own security headers (CSP with `frame-ancestors 'none'`, `X-Fra
 On the host, with NPM and Phentrieve already running:
 
 1. Network: `docker network ls` shows NPM's network (the `NPM_SHARED_NETWORK_NAME` Phentrieve uses). Pin NPM's IP as in [Reverse proxy settings](#reverse-proxy-settings).
-2. Checkout: clone `janpower/ontotator` into its own directory next to the Phentrieve checkout; only the Compose files, `docker/postgres-init.sh` and the template are used.
+2. Checkout: clone `halbritter-lab/ontotator` into its own directory next to the Phentrieve checkout; only the Compose files, `docker/postgres-init.sh` and the template are used.
 3. Secrets: create `secrets/` as in [Configuration and secrets](#configuration-and-secrets).
 4. Settings: `cp .env.docker.template .env.docker && ln -sf .env.docker .env`, then set `ONTOTATOR_IMAGE` (digest printed by `scripts/publish-image.sh`), `ONTOTATOR_PUBLIC_ORIGIN`, `NPM_SHARED_NETWORK_NAME` and `ONTOTATOR_TRUSTED_PROXIES` (NPM's fixed IP). If the GHCR package is private, `docker login ghcr.io` with a read-only package token.
 5. Start: `docker compose config --quiet && docker compose pull && docker compose up -d --wait && docker compose ps --all`, then finish the admin bootstrap as in [First start](#first-start).
