@@ -83,7 +83,7 @@ uv run ontotator --help
 uv run ontotator serve --help
 ```
 
-`ontotator serve` needs a migrated PostgreSQL database (`ontotator db upgrade`) and serves the built frontend from `frontend/dist`.
+`ontotator serve` needs a migrated PostgreSQL database (`ontotator db upgrade`) and serves the web UI bundled in `src/ontotator/web` (as in the Docker image), falling back to a `frontend/dist` build in a source checkout; `--web-dir` overrides both.
 
 ## Configuration
 
