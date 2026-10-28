@@ -148,8 +148,8 @@ export function UnconfirmedValuesSection({
               </Button>
             </span>
             <span className="submit-item__values">
-              {row.values.map(value => <span key={value.axisId} className="submit-item__value" title={value.axisLabel}>
-                <span className="visually-hidden">{value.axisLabel}: </span><AxisValue value={value.value} />
+              {row.values.map(value => <span key={value.axisId} className="submit-item__value">
+                <span className="submit-item__axis">{value.axisLabel}: </span><AxisValue value={value.value} />
               </span>)}
             </span>
             {row.reason && <span className="submit-item__line">{row.reason}</span>}

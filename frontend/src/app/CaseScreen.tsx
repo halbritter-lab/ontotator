@@ -57,7 +57,7 @@ import { newEvidenceId } from "../editor/ids";
 import { submissionHistoryLabel } from "../editor/submissionHistoryLabel";
 import { plural, reopenNotice } from "./labels";
 import { FindingRow, ModifierLine } from "../editor/FindingRow";
-import { SubmitCaseDialog } from "../editor/SubmitCaseDialog";
+import { SubmitCaseDialog, submitOpenCount } from "../editor/SubmitCaseDialog";
 import { SubmitControl } from "../editor/SubmitControl";
 import { collectOpenItems, nextOpenItem, type OpenItem } from "../editor/openItems";
 import { isModifierWarningKey, modifierWarningPairs, modifierWarnings, pairKey, rowPairs, sameSet, unconfirmedRows, type UnconfirmedRow } from "../editor/unconfirmedValues";
@@ -2730,21 +2730,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     }
   };
   const confirmUnavailableReason = queueState === "conflict" || queueState === "error" || isOffline ? statusText : null;
-  // Server axis warnings that still apply: the value is empty or still a default (as the server checks).
-  const unconfirmedEntries = axisWarning ? completionResults.flatMap(snapshot => {
-    const warned = new Set(axisWarning.warnings.filter(warning => warning.annotationId === snapshot.annotation.annotation_id && !isModifierWarningKey(warning.axis))
-      .map(warning => warning.axis));
-    const axes = axisDefinitions(snapshot);
-    const position = (id: string) => { const index = axes.findIndex(axis => axis.id === id); return index < 0 ? axes.length : index; };
-    const open = [...warned].filter(axis => {
-      const value = snapshot.annotation.axes_values?.[axis];
-      return value === null || value === undefined || value === "" || (snapshot.annotation.axes_defaulted ?? []).includes(axis);
-    }).sort((a, b) => position(a) - position(b));
-    if (!open.length) return [];
-    const label = (id: string) => axes.find(axis => axis.id === id)?.label ?? id;
-    return [{ ...findingRef(snapshot), axisId: open[0], axisLabel: label(open[0]),
-      values: open.map(axis => `${label(axis)} = ${axisOptionLabel(snapshot.annotation.axes_values?.[axis])}`).join(", ") }];
-  }) : [];
+  // The Submit dialog's value rows, so the header's open count and "Next open item" match the dialog.
+  const unconfirmedEntries = unconfirmed.map(row => ({ annotationId: row.annotationId, term: row.term, targetKey: row.targetKey, evidenceId: row.evidenceId,
+    axisId: row.values[0].axisId, axisLabel: row.values[0].axisLabel,
+    values: row.values.map(value => `${value.axisLabel} = ${axisOptionLabel(value.value)}`).join(", ") }));
   const openItems = collectOpenItems({
     carried: carried.states.filter(state => state.unchecked).map(state => {
       const home = state.homeId ? draft.annotations?.find(snapshot => snapshot.annotation.annotation_id === state.homeId) : undefined;
@@ -3393,7 +3382,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             onSubmit={() => { void handleSubmitWorkspace(); }}
             disabled={submitPending}
             pending={submitPending}
-            openCount={openItems.length}
+            openCount={submitOpenCount(openItems, unconfirmed)}
             onNextOpen={narrowHeader ? undefined : goToNextOpenItem}
           />}
         </div>

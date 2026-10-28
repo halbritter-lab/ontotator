@@ -340,6 +340,15 @@ describe("CaseScreen integration", () => {
     };
     const statusOf = (dialog: HTMLElement) => dialog.querySelector("[data-submit-status]")!.textContent;
 
+    it("the header counts an empty value as open, like the dialog", async () => {
+      const view = unconfirmedView([]);
+      view.draft.annotations![0].annotation.axes_values = { ...shown, temporality: null };
+      render(<CaseScreen view={view} workspaceId="empty-count" onClose={vi.fn()} />);
+      expect(screen.getByRole("button", { name: /Finish & submit/ }).textContent).toContain("(1 open)");
+      const dialog = await openSubmit();
+      expect(dialog.querySelector(".submit-summary")!.textContent).toBe("1 finding. 1 thing is still open:");
+    });
+
     it("auto-resends once when the warning lists exactly the acknowledged values", async () => {
       const view = unconfirmedView();
       const submit = vi.spyOn(api, "submitWorkspace").mockRejectedValueOnce(axisWarning(view, ["experiencer"]))

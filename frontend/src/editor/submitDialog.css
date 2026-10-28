@@ -95,6 +95,10 @@
   line-height: var(--leading-sm);
 }
 
+.submit-item__axis {
+  color: var(--text-muted);
+}
+
 .submit-item__value .axis-value {
   border: 1px solid var(--border);
 }
