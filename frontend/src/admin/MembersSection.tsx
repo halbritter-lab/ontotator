@@ -39,6 +39,13 @@ export function MembersSection(props: MembersSectionProps): JSX.Element {
   return <MemberEditor key={JSON.stringify([props.projectKey, props.isSystemAdmin])} {...props} />;
 }
 
+/** "Maria Klein · reads de, en": display name and languages of a candidate. */
+const candidateLabel = (user: MemberCandidate): string =>
+  [user.display_name, user.languages?.length ? `reads ${user.languages.join(", ")}` : "no languages listed"].filter(Boolean).join(" · ");
+
+/** One suggestion: username, display name and languages. */
+const candidateOption = (user: MemberCandidate): { value: string; label: string } => ({ value: user.username, label: candidateLabel(user) });
+
 function MemberEditor({ projectKey, isSystemAdmin }: MembersSectionProps): JSX.Element {
   const id = useId();
   const [members, setMembers] = useState<Member[] | null>(null);
@@ -96,6 +103,7 @@ function MemberEditor({ projectKey, isSystemAdmin }: MembersSectionProps): JSX.E
     } finally { if (epoch === lifetime.current) { writing.current = false; setBusy(false); } }
   };
   const blocked = busy || pending !== null || removal !== null || members === null;
+  const exact = username.trim() ? suggestions.find(user => user.username === username.trim()) : undefined;
   const closeAdd = () => { setAdding(false); setUsername(""); setNewRoles([]); setSuggestions([]); requestAnimationFrame(() => addButton.current?.focus()); };
   const memberName = (member: Member) => member.display_name?.trim() || member.username || personLabel(member);
   const columns: Column<Member>[] = [
@@ -129,7 +137,9 @@ function MemberEditor({ projectKey, isSystemAdmin }: MembersSectionProps): JSX.E
       void change(username, newRoles, false, true);
     }}><fieldset disabled={blocked}><legend className="settings-subheading">Add member</legend>
       <SuggestInput id={`${id}-username`} label="Username" hint="Type at least three letters of the name of someone from your projects, or the exact username or e-mail of anyone else." value={username} required autoFocus onChange={event => typeUsername(event.target.value)}
-        suggestions={suggestions.filter(user => user.username !== username).map(user => ({ value: user.username, label: user.display_name }))} onPick={typeUsername} />
+        suggestions={suggestions.filter(user => user.username !== username.trim()).map(candidateOption)} onPick={typeUsername} />
+      {/* Issue 129, W1: a typed-out username confirms its person under the field (an open list would cover the roles). */}
+      {exact && <p className="field-hint" role="status">{`Found ${exact.username}: ${candidateLabel(exact)}`}</p>}
       {roles.map(role => <Checkbox key={role} id={`${id}-new-${role}`} label={roleLabels[role]} aria-label={`New member: ${roleLabels[role]}`} checked={newRoles.includes(role)} onChange={event => setNewRoles(event.target.checked ? [...newRoles, role] : newRoles.filter(item => item !== role))} />)}
       <div className="settings-section-actions">
         <Button type="submit" variant="primary" loading={busy}>Add member</Button>
