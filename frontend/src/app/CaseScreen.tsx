@@ -1865,12 +1865,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     : undefined;
   const activeSpanlessType = view.layers?.find(l => l.layer_id === layerSelection.activeLayerId)?.annotation_types.find(t => t.type_id === layerSelection.activeTypeId)
     ?? view.layers?.find(l => l.layer_id === layerSelection.activeLayerId)?.annotation_types[0];
-  const spanlessBlockedReason = activeSpanlessType?.evidence_policy === "required_on_complete"
-    ? "This annotation type requires a text span."
-    : view.enforce_spanless_rules && !view.allow_spanless_findings ? "This project requires a text span for findings." : undefined;
+  // #124: the task profile wins over the project setting. A type that requires a
+  // text span offers no spanless finding at all (no disabled button to explain).
+  const spanlessHiddenByProfile = activeSpanlessType?.evidence_policy === "required_on_complete";
+  const spanlessBlockedReason = !spanlessHiddenByProfile && view.enforce_spanless_rules && !view.allow_spanless_findings
+    ? "This project requires a text span for findings." : undefined;
 
   const handleStartSpanless = () => {
-    if (readOnlyRef.current || spanlessBlockedReason) return;
+    if (readOnlyRef.current || spanlessHiddenByProfile || spanlessBlockedReason) return;
     if (!layerSelection.activeLayerId) {
       setActionError("No active editable layer selected. Please activate a layer.");
       return;
@@ -3597,7 +3599,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               <div className="sidebar-header sidebar-header--actions">
                 {/* Confirmed proposals stay in the proposal list: in review this section holds only the annotator's own findings. */}
                 <span>{isReviewLike(view.key.mode) ? "Your own findings" : "Findings"} ({visibleAnnotations.length})</span>
-                {!readOnly && <Button
+                {!readOnly && !spanlessHiddenByProfile && <Button
                   type="button"
                   size="sm"
                   disabled={!!spanlessBlockedReason} onClick={handleStartSpanless}

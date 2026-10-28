@@ -625,13 +625,15 @@ describe("CaseScreen integration", () => {
     expect(logout).not.toHaveBeenCalled();
   });
 
-  it("keeps profile-required evidence mandatory even when the project permits spanless findings", () => {
+  // #124: the task profile wins over the project setting; the editor offers no spanless finding.
+  it.each([true, false])("hides the spanless button for a span-required type whatever the project allows (%s)", allow => {
     const view = structuredClone(sampleView);
-    Object.assign(view, { enforce_spanless_rules: true, allow_spanless_findings: true });
+    Object.assign(view, { enforce_spanless_rules: true, allow_spanless_findings: allow });
     view.layers![0].annotation_types[0].evidence_policy = "required_on_complete";
     render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()} />);
-    expect((screen.getByRole("button", { name: "Add finding without a text span" }) as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByText("This annotation type requires a text span.")).toBeDefined();
+    expect(screen.queryByRole("button", { name: "Add finding without a text span" })).toBeNull();
+    expect(screen.queryByText("This annotation type requires a text span.")).toBeNull();
+    expect(screen.queryByText("This project requires a text span for findings.")).toBeNull();
   });
 
   it("creates spanless annotation without text segments", async () => {

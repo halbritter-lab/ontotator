@@ -357,6 +357,63 @@ def test_spanless_note_cannot_override_required_profile_evidence(profile, docume
     assert exc.value.code == "MISSING_EVIDENCE"
 
 
+@pytest.mark.parametrize("branch", ["own", "confirmed", "changed"])
+@pytest.mark.parametrize(
+    "rules",
+    [
+        ProjectRules(allow_spanless_findings=True, require_spanless_note=True),
+        ProjectRules(allow_spanless_findings=True, require_spanless_note=False),
+        ProjectRules(allow_spanless_findings=False),
+    ],
+    ids=["allowed-with-reason", "allowed-reason-optional", "prohibited"],
+)
+def test_profile_required_span_rejects_spanless_submission_under_any_project_rule(
+    profile, document, branch, rules
+):
+    """#124: the task profile wins over the project's spanless setting."""
+    from ontotator.domain.annotations import AnnotationRef, snapshot
+
+    profile.layers[1].annotation_types[1].evidence_policy = "required_on_complete"
+    item = annotation_snapshot(profile, document)
+    item = snapshot(
+        item.annotation.model_copy(update={"note": "Reported in the summary"}),
+        [],
+        document,
+        profile,
+    )
+    ref = AnnotationRef(annotation_id="ann", version=item.version)
+    decisions = (
+        []
+        if branch == "own"
+        else [
+            ReviewDecision(
+                decision_id="d",
+                reviewer_id="a",
+                target=ref,
+                outcome=branch,
+                replacement=ref if branch == "changed" else None,
+            )
+        ]
+    )
+    draft = draft_for(
+        profile,
+        mode="independent" if branch == "own" else "review",
+        annotations=[item] if branch in {"own", "changed"} else [],
+        targets=[] if branch == "own" else [ref],
+        decisions=decisions,
+    ).model_copy(update={"spanless_policy_version": 1})
+    repo = SimpleNamespace(
+        project_pins=lambda _: {},
+        get_task_profile=lambda _: profile,
+        get_submissions_for_workspace=lambda _: [],
+        get_project_rules=lambda _: rules,
+        workspace_input_snapshots=lambda *_: [item],
+    )
+    with pytest.raises(DomainError) as exc:
+        SubmissionService(repo)._create_submission(draft, SubmitCommand(), draft.key)
+    assert exc.value.code == "MISSING_EVIDENCE"
+
+
 def test_note_edit_invalidates_approved_exact_replacement_version(profile, document):
     from ontotator.application.editing import SetAnnotationNoteCommand
     from ontotator.domain.annotations import AnnotationRef

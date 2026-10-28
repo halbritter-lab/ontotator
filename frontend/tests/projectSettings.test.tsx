@@ -339,6 +339,39 @@ describe("project settings sections", () => {
     await waitFor(() => expect(api.updateProjectSettings).toHaveBeenCalledWith(settings.project_key, expect.objectContaining({ allow_spanless_findings: false, require_spanless_note: false })));
   });
 
+  // #124: the task profile wins over the project's spanless setting.
+  it("locks the spanless setting when the task profile requires a text span for every type", async () => {
+    const required = structuredClone(profile);
+    for (const type of required.layers[0].annotation_types) type.evidence_policy = "required_on_complete";
+    vi.mocked(api.getProjectSettings).mockResolvedValue({ ...settings, profile: required });
+    renderSettings("annotation");
+    const control = await screen.findByRole("combobox", { name: "Findings that point to no text passage" }) as HTMLSelectElement;
+    expect(control.disabled).toBe(true);
+    expect(control.value).toBe("prohibited");
+    expect(screen.getByText("The task profile requires a text span for Phenotype and Later type.")).toBeDefined();
+    // The stored project value is untouched: saving another rule sends it unchanged.
+    fireEvent.click(screen.getByRole("checkbox", { name: "Annotators must confirm every value before submitting" }));
+    fireEvent.click(saveIn("Annotation"));
+    await waitFor(() => expect(api.updateProjectSettings).toHaveBeenCalledWith(settings.project_key, expect.objectContaining({ allow_spanless_findings: true, require_spanless_note: true })));
+  });
+
+  it("keeps the spanless setting and names the types it does not apply to", async () => {
+    const partly = structuredClone(profile);
+    partly.layers[0].annotation_types[1].evidence_policy = "required_on_complete";
+    vi.mocked(api.getProjectSettings).mockResolvedValue({ ...settings, profile: partly });
+    renderSettings("annotation");
+    const control = await screen.findByRole("combobox", { name: "Findings that point to no text passage" }) as HTMLSelectElement;
+    expect(control.disabled).toBe(false);
+    expect(control.value).toBe("required");
+    expect(screen.getByText("Does not apply to Later type: the task profile requires a text span for this type.")).toBeDefined();
+  });
+
+  it("shows no profile hint when no type requires a text span", async () => {
+    renderSettings("annotation");
+    await screen.findByRole("combobox", { name: "Findings that point to no text passage" });
+    expect(screen.queryByText(/the task profile requires a text span/i)).toBeNull();
+  });
+
   it("uses the real server defaults and every annotation type without guessing", async () => {
     renderSettings("annotation");
     const actual = await screen.findByRole("button", { name: "Present" }) as HTMLButtonElement;
