@@ -1436,12 +1436,20 @@ if __name__ == "__main__":
 
         @app.post("/__test_ontology__")
         def test_ontology(name: str = Query(...)) -> dict[str, str]:
-            """Register only the public ontology fixtures through the real store."""
-            if name not in {"hp.json", "mondo.json"}:
+            """Register only the public ontology fixtures through the real store.
+
+            ``hp-newer.json`` is hp.json as a later release that retires and
+            merges terms (``tests/test_project_repin.py``), stored as hp.json.
+            """
+            if name == "hp-newer.json":
+                from test_project_repin import newer_release
+
+                name, data = "hp.json", newer_release()
+            elif name in {"hp.json", "mondo.json"}:
+                data = (ROOT / "tests/fixtures" / name).read_bytes()
+            else:
                 raise HTTPException(400, "not a fixture ontology")
-            stored = app.state.ontology_store.add(
-                Actor.cli(), name, (ROOT / "tests/fixtures" / name).read_bytes()
-            )
+            stored = app.state.ontology_store.add(Actor.cli(), name, data)
             return {"sha256": stored.sha256}
 
         app.router.routes.insert(0, app.router.routes.pop())
