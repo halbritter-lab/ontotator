@@ -11,7 +11,7 @@ function safeFilename(value: string): string | null {
 export function attachmentFilename(header: string | null): string | null {
   let ordinary: string | null = null;
   let extended: string | null = null;
-  const parameters = /(?:^|;)\s*(filename\*|filename)\s*=\s*("(?:\\.|[^\"])*"|[^;]*)/gi;
+  const parameters = /(?:^|;)\s*(filename\*|filename)\s*=\s*("(?:\\.|[^"])*"|[^;]*)/gi;
   for (const match of (header ?? "").matchAll(parameters)) {
     const raw = match[2].trim();
     const value = raw.startsWith('"') ? raw.slice(1, -1).replace(/\\"/g, '"') : raw;

@@ -131,7 +131,7 @@ export function PlanDialog({ projectKey, caseIds, rows, initial, onClose, onSave
       }
     }, () => undefined); // without it the quick choice stays hidden; the dialog itself still works
     return () => { active = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- rowsKey stands for rows
   }, [projectKey, rowsKey]);
   const selection = textsOnly && rows?.length ? { rows: [...rows] } : { case_ids: [...caseIds] };
 
@@ -153,7 +153,7 @@ export function PlanDialog({ projectKey, caseIds, rows, initial, onClose, onSave
     if (!hasPreview.current) { run(); return; }
     const timer = window.setTimeout(run, DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- caseKey and requestKey stand for selection and requestLanguages
   }, [projectKey, caseKey, requestKey, reload, textsOnly]);
 
   const fresh = preview !== null && preview.request === requestKey;

@@ -205,6 +205,7 @@ step "mypy" uv run mypy src
 step "OpenAPI drift" uv run python scripts/export_openapi.py --check
 step "admin error catalog drift" uv run python scripts/export_admin_error_codes.py --check
 step "frontend typecheck" npm --prefix frontend run typecheck
+step "frontend lint" npm --prefix frontend run lint
 step "TypeScript API drift" npm --prefix frontend run api:check
 
 if [ "${#frontend_files[@]}" -gt 0 ]; then
