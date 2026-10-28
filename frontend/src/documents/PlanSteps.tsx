@@ -179,7 +179,7 @@ export function TextPlanDialog({ row, groupRevision, saves, onClose }: TextPlanD
   };
 
   const footer = <>
-    <span id={reasonId} className="work-plan-save-reason" hidden={!blocked}>{blocked}</span>
+    <span id={reasonId} className="dialog-footer-reason" hidden={!blocked}>{blocked}</span>
     <Button onClick={onClose}>Cancel</Button>
     <Button variant="primary" loading={plan.saving} aria-disabled={blocked ? true : undefined} aria-describedby={blocked ? reasonId : undefined} onClick={() => void save()}>Save</Button>
   </>;

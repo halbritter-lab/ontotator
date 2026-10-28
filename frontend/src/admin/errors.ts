@@ -201,6 +201,10 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   duplicate_entry: "The archive contains duplicate file entries.",
   invalid_archive: "The archive could not be read. Check the ZIP file.",
   too_large: "The expanded upload exceeds the size limit.",
+  // Ontospan reader codes of the upload preview.
+  schema_version: "The file has no valid ontospan schema version. Is it an ontospan file, or plain text?",
+  unsupported_major: "This ontospan format version is not supported. Export the file with a supported ontospan version.",
+  schema_unavailable: "The ontospan schema for this file is not available on the server.",
   unsafe_path: "The archive contains an unsafe file path.",
   WORK_PLAN_CHANGED: "This plan changed. Reloaded the current plan.",
   WORK_PLAN_CONFIRMATION_REQUIRED: "This change affects existing work. Confirm to continue.",

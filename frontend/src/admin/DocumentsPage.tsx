@@ -842,10 +842,9 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     {inventoryError !== undefined && <ErrorNotice error={inventoryError} />}
     <div id={PANEL_ID} {...(page && !emptyProject ? { role: "tabpanel", "aria-labelledby": tabId(PANEL_ID, tab) } : {})}>{content}</div>
     <LiveRegion ref={liveRegion} />
-    <Dialog open={uploadOpen} title="Upload texts" size="lg" onClose={() => setUploadOpen(false)}>
-      {uploadOpen && settings && <UploadPanel key={projectKey} projectKey={projectKey} languages={settings.languages ?? []} canOverrideTranslationStatus={canOverrideTranslationStatus}
-        annotateAcceptedOnly={settings.annotate_accepted_translations_only ?? true} onImported={importDone} />}
-    </Dialog>
+    {/* The panel is the dialog: its footer holds the actions. Closing it during an import shows no toast (OQ2). */}
+    {uploadOpen && settings && <UploadPanel key={projectKey} projectKey={projectKey} languages={settings.languages ?? []} canOverrideTranslationStatus={canOverrideTranslationStatus}
+      annotateAcceptedOnly={settings.annotate_accepted_translations_only ?? true} onImported={importDone} onClose={() => setUploadOpen(false)} />}
     {/* The card first: dialogs it opens share its z-index, so they must come later in the DOM to sit on top. */}
     {textCard}
     {reviewDocument !== null && <ReviewHistory key={reviewDocument} projectKey={projectKey} documentId={reviewDocument} onClose={() => setReviewDocument(null)} />}
