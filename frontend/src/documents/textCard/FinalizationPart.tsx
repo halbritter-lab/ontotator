@@ -9,6 +9,8 @@ import { RouteLink } from "../RowCells";
 import { shortName } from "../stageLabels";
 import type { TextVersionsTools } from "../TextVersions";
 import { finalizationState, textViewRoute } from "./cardModel";
+import { PersonList, useFocusAfterRemoval } from "./PersonRow";
+import { assignedLine, workerName, WorkPersonRow } from "./WorkPersonRow";
 
 type WorkItem = DocumentRowView["work"][number];
 
@@ -25,8 +27,8 @@ function nameOf(items: readonly WorkItem[], assignmentId: number): string {
 
 /**
  * Finalization part of the text card: what happens next, the decision block, the final result. While a consolidation
- * runs: who consolidates with the open groups (plain text), "Open consolidation" for the consolidator and, for the lead, "Remove assignment…",
- * which frees the text for "Consolidate…" with someone else.
+ * runs: one row per consolidator with the open groups, "Open consolidation" for the consolidator and, for the
+ * lead, "Remove…", which frees the text for "Consolidate…" with someone else (no Reassign, D1).
  */
 export function FinalizationPart({ row, projectKey, query, decision, onNavigate, now, canManage = false, tools, onChanged }: {
   row: DocumentRowView;
@@ -37,7 +39,7 @@ export function FinalizationPart({ row, projectKey, query, decision, onNavigate,
   onNavigate: (route: Route) => void;
   now: Date;
   canManage?: boolean;
-  /** Assignments for "Remove assignment…". */
+  /** Assignments for the consolidator's "Remove…". */
   tools?: TextVersionsTools;
   onChanged?: () => void;
 }): JSX.Element {
@@ -51,8 +53,11 @@ export function FinalizationPart({ row, projectKey, query, decision, onNavigate,
   // Only its consolidator may open a running round (the server answers ROUND_NOT_FOUND to everyone else, U9); with
   // others consolidating too, the round may be theirs, so "Open my task" in the row is the way in.
   const openable = progress && consolidators.length > 0 && consolidators.every(person => person.is_me) ? progress : null;
-  const removable = consolidating && canManage ? row.work.filter(item => item.task === "review" && item.status !== "submitted" && item.moved_to_version == null)
-    .flatMap(item => tools?.assignments.find(entry => entry.id === item.assignment_id && !entry.revoked_at) ?? []) : [];
+  const running = consolidating ? row.work.filter(item => item.task === "review" && item.status !== "submitted" && item.moved_to_version == null) : [];
+  const focusAfterRemoval = useFocusAfterRemoval();
+  const consolidationLink = (label?: string) => openable && <RouteLink route={{ name: "projectConsolidation", key: projectKey, roundId: openable.round_id, ...(Object.keys(query).length ? { documents: query } : {}) }}
+    onNavigate={onNavigate} className="btn btn-secondary btn-sm" aria-label={label}>Open consolidation</RouteLink>;
+  const groups = progress ? `${progress.open} of ${progress.total} groups open` : null;
   // "Annotators per text" is an upper limit (issue 123): with one annotation submitted the lead may decide now; the
   // open annotations are a warning, each with "Remove assignment…", or are left to run.
   const early = earlyFinal(row);
@@ -71,12 +76,18 @@ export function FinalizationPart({ row, projectKey, query, decision, onNavigate,
           onClick={() => setRevoking(assignment)}>Remove assignment…</Button>)}
       </div>}
     </InlineMessage>}
-    {consolidators.length > 0 && <p>{`Consolidating with ${consolidators.map(person => (person.is_me ? "you" : shortName(person))).join(", ")}${progress ? ` · ${progress.open} of ${progress.total} groups open` : ""}`}</p>}
-    {(openable || removable.length > 0) && <div className="text-card-actions">
-      {openable && <RouteLink route={{ name: "projectConsolidation", key: projectKey, roundId: openable.round_id, ...(Object.keys(query).length ? { documents: query } : {}) }}
-        onNavigate={onNavigate} className="btn btn-secondary btn-sm">Open consolidation</RouteLink>}
-      {removable.map(assignment => <Button key={assignment.id} size="sm" variant="quiet" onClick={() => setRevoking(assignment)}>Remove assignment…</Button>)}
-    </div>}
+    {running.length > 0 ? <PersonList label="Consolidators">
+      {running.map(item => {
+        const assigned = assignedLine(item, now, !groups);
+        return <WorkPersonRow key={item.assignment_id} item={item} caseId={row.case_id} canManage={canManage} tools={tools} onChanged={() => onChanged?.()}
+          onRemoved={focusAfterRemoval} details={groups && assigned ? <>{groups} · {assigned}</> : groups ?? assigned}
+          open={item.is_me ? consolidationLink(`Open consolidation of ${workerName(item)}`) : undefined} />;
+      })}
+    </PersonList> : <>
+      {/* Without the work items (they name the assignments) the consolidators are a line of text. */}
+      {consolidators.length > 0 && <p>{`Consolidating with ${consolidators.map(person => (person.is_me ? "you" : shortName(person))).join(", ")}${groups ? ` · ${groups}` : ""}`}</p>}
+      {openable && <div className="text-card-actions">{consolidationLink()}</div>}
+    </>}
     {revoking && tools && <AssignmentActions assignment={revoking} members={tools.members} open="revoke"
       onChanged={() => { tools.onAssignmentsChanged(); onChanged?.(); }} onClose={() => setRevoking(null)} />}
     {decision}

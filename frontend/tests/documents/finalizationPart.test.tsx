@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FinalizationPart } from "../../src/documents/textCard/FinalizationPart";
 import { row, stageCell, stages, work } from "./fixtures";
@@ -20,13 +20,14 @@ it("shows the open groups and offers the lead only removal of someone else's run
   const item = work({ assignment_id: 9, document_id: "doc-w07", author_label: "ann-0007", task: "review", status: "in_progress", person: carla });
   render(<FinalizationPart row={consolidating({ consolidation_progress: { round_id: "r-7", open: 2, total: 3 }, work: [item] })} projectKey="p" query={{}}
     onNavigate={onNavigate} now={now} canManage tools={{ assignments: [{ id: 9, task: "review", status: "in_progress", document_id: "doc-w07", pseudonym: "ann-0007", username: "carla" }], members: [], onAssignmentsChanged: vi.fn() } as never} />);
-  expect(screen.getByText("Consolidating with Carla Consolidator · 2 of 3 groups open")).toBeTruthy();
+  // One row for the consolidator (#108): name, open groups, status, and the lead's one action naming her.
+  const person = within(screen.getByRole("list", { name: "Consolidators" })).getByRole("listitem");
+  expect(person.textContent).toBe("Carla Consolidator ann-00072 of 3 groups openConsolidatingRemove…");
   // The running round is Carla's draft: the lead gets no link to it (the server refuses it, U9).
   expect(screen.queryByText("Open consolidation")).toBeNull();
-  // The consolidator is named in plain text only; the lead's one action is a button of its own (no chip, no Reassign).
-  expect(screen.queryByRole("button", { name: /Carla Consolidator/ })).toBeNull();
-  expect(screen.queryByText("Reassign to someone else…")).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "Remove assignment…" }));
+  // A consolidation is not reassigned (D1).
+  expect(within(person).getAllByRole("button").map(button => button.getAttribute("aria-label"))).toEqual(["Remove Carla Consolidator’s consolidation assignment"]);
+  fireEvent.click(screen.getByRole("button", { name: "Remove Carla Consolidator’s consolidation assignment" }));
   expect(screen.getByRole("dialog", { name: /Remove assignment/ })).toBeTruthy();
 });
 

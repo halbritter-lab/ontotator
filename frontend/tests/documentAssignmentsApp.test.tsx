@@ -83,8 +83,8 @@ it("assigns the selected case through the selection bar and refreshes actual inv
   expect(window.location.hash).toBe("#/projects/p%2Fkey/documents");
 });
 
-it("reopens the submitted assignee from its real Text versions menu and reloads the assignment status", async () => {
-  window.history.replaceState(null, "", "#/projects/p%2Fkey/documents?panel=z%2Fdoc%3Aen&panel_tab=versions");
+it("reopens the submitted assignee from their person row in the card and reloads the assignment status", async () => {
+  window.history.replaceState(null, "", "#/projects/p%2Fkey/documents?panel=z%2Fdoc%3Aen&panel_stage=annotation");
   const submitted = { ...assignment, status: "submitted" as const };
   const reopened = { ...assignment, status: "reopened" as const };
   const z = (status: "submitted" | "reopened") => zRow({ work: [work({ assignment_id: 3, document_id: "z/doc", author_label: "A", status })] });
@@ -92,8 +92,9 @@ it("reopens the submitted assignee from its real Text versions menu and reloads 
   vi.mocked(api.listAssignments).mockResolvedValueOnce([submitted]).mockResolvedValue([reopened]);
   vi.spyOn(api, "reopenAssignment").mockResolvedValue(reopened);
   const user = userEvent.setup(); render(<App user={testUser("lead", { is_system_admin: false })} />);
-  const versions = await screen.findByRole("list", { name: "Assignments on v1" });
-  await user.click(await within(versions).findByRole("button", { name: "Reopen", hidden: true }));
+  // The submitted annotation's actions live in its row of the Annotation part (#108).
+  const people = await screen.findByRole("list", { name: "Annotators" });
+  await user.click(await within(people).findByRole("button", { name: "Reopen A’s annotation" }));
   const dialog = await screen.findByRole("dialog", { name: "Reopen z/doc" });
   fireEvent.change(within(dialog).getByLabelText("Reason (optional)"), { target: { value: "Recheck evidence" } });
   await user.click(within(dialog).getByRole("button", { name: "Reopen assignment" }));
