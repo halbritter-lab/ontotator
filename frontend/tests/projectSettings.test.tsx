@@ -5,7 +5,7 @@ import { api, ApiError } from "../src/api/client";
 import { ProjectNewPage } from "../src/admin/ProjectNewPage";
 import { ProjectSettingsPage, type ProjectSettingsPageProps } from "../src/admin/ProjectSettingsPage";
 import type { RouteLeaveGuard, SettingsSection } from "../src/app/router";
-import { currentUser, deferred, guidelineListing, guidelineSummary, ontologies, profile, settings } from "./projectFixtures";
+import { currentUser, deferred, guidelineListing, guidelineSummary, ontologies, profile, repinReport, settings } from "./projectFixtures";
 
 beforeEach(() => {
   vi.spyOn(api, "listTemplates").mockResolvedValue([{ id: "template", label: "Template", required_ontology_ids: ["HP"] }]);
@@ -14,6 +14,8 @@ beforeEach(() => {
   vi.spyOn(api, "createProject").mockResolvedValue(settings);
   vi.spyOn(api, "updateProjectSettings").mockResolvedValue(settings);
   vi.spyOn(api, "updatePins").mockResolvedValue(settings);
+  vi.spyOn(api, "previewPins").mockResolvedValue(repinReport());
+  vi.spyOn(api, "applyPins").mockResolvedValue(settings);
   vi.spyOn(api, "updateProjectProfile").mockResolvedValue(settings);
   vi.spyOn(api, "listMembers").mockResolvedValue([]);
   vi.spyOn(api, "listGuidelines").mockResolvedValue(guidelineListing([guidelineSummary(1)]));
@@ -351,7 +353,7 @@ describe("project settings sections", () => {
   it("Ontology when locked: a plain summary, the technical details collapsed (D8)", async () => {
     vi.mocked(api.getProjectSettings).mockResolvedValue({ ...settings, locked: true });
     const view = renderSettings("ontology");
-    expect(await screen.findByText("The ontology cannot change once work has been submitted. Start a new project for another ontology version.")).toBeDefined();
+    expect(await screen.findByText("Moving to another release rewrites draft terms the new release replaced or merged. Submitted work stays as it was submitted.")).toBeDefined();
     expect(within(screen.getByRole("list", { name: "Ontologies" })).getByRole("listitem").textContent).toBe("HPO (HP), release 2026");
     expect(screen.queryByRole("button", { name: "Save changes" })).toBeNull();
     const details = screen.getByText("a".repeat(64)).closest("details")!;
@@ -359,6 +361,56 @@ describe("project settings sections", () => {
     expect(details.textContent).toContain("HPO phenotype (fixed qualifiers, modifiers)");
     view.show("general");
     expect(saveIn("General")).toBeDefined();
+  });
+
+  it("Ontology when locked: moves to another release only after its check (#81)", async () => {
+    const locked = { ...settings, locked: true };
+    vi.mocked(api.getProjectSettings).mockResolvedValue(locked);
+    const report = repinReport({
+      locked: true,
+      rewrites: [{ ontology_id: "HP", layer_id: "findings", document_id: "doc-1", annotator_id: "alice", mode: "independent", annotation_id: "a-1", role: "finding", old_term_id: "HP:0011146", new_term_id: "HP:0001250", new_label: "Seizure", reason: "replaced_by" }],
+      flagged: [{ ontology_id: "HP", layer_id: "findings", document_id: "doc-1", annotator_id: "alice", mode: "independent", annotation_id: "a-2", role: "finding", term_id: "HP:0001252", status: "obsolete", replaced_by: [], consider: ["HP:0001284"] }],
+      submitted: [{ ontology_id: "HP", annotations: 3, rewritable: 1, obsolete: 1, unknown: 0 }],
+    });
+    vi.mocked(api.previewPins).mockResolvedValue(report);
+    vi.mocked(api.applyPins).mockResolvedValue({ ...locked, pins: [{ ...settings.pins[0], sha256: "b".repeat(64), release: "2027" }] });
+    renderSettings("ontology");
+    const release = await screen.findByLabelText(/^HP release/);
+    // Branches and scheme cannot change here.
+    expect(screen.queryByLabelText("Limit HP terms to these branches")).toBeNull();
+    const check = within(screen.getByRole("form", { name: "Ontology release" })).getByRole("button", { name: "Check changes" }) as HTMLButtonElement;
+    expect(check.disabled).toBe(true);
+    fireEvent.change(release, { target: { value: "b".repeat(64) } });
+    fireEvent.click(check);
+    const panel = await screen.findByRole("region", { name: "Release change check" });
+    expect(api.previewPins).toHaveBeenCalledWith(settings.project_key, [{ ontology_id: "HP", sha256: "b".repeat(64), allowed_roots: ["HP:1"], t1_profile: "hpo-phenotype" }]);
+    expect(api.applyPins).not.toHaveBeenCalled();
+    expect(within(panel).getByRole("table", { name: "Rewritten draft terms" }).textContent).toContain("HP:0001250 Seizure");
+    expect(within(panel).getByRole("table", { name: "Draft terms to change by hand" }).textContent).toContain("HP:0001284");
+    expect(panel.textContent).toContain("3 submitted finding(s)");
+    fireEvent.click(within(panel).getByRole("button", { name: "Move to this release" }));
+    await screen.findByText("Ontology release changed.");
+    expect(api.applyPins).toHaveBeenCalledWith(settings.project_key, [{ ontology_id: "HP", sha256: "b".repeat(64), allowed_roots: ["HP:1"], t1_profile: "hpo-phenotype" }], report.report_sha256);
+    expect(screen.queryByRole("region", { name: "Release change check" })).toBeNull();
+    expect(api.updatePins).not.toHaveBeenCalled();
+  });
+
+  it("Ontology when unlocked: a move that rewrites drafts shows its check; a stale check is refused", async () => {
+    const report = repinReport({ rewrites: [{ ontology_id: "HP", layer_id: "findings", document_id: "doc-1", annotator_id: "alice", mode: "independent", annotation_id: "a-1", role: "modifier", old_term_id: "HP:0002133", new_term_id: "HP:0001250", new_label: "Seizure", reason: "alt_id" }] });
+    vi.mocked(api.previewPins).mockResolvedValue(report);
+    vi.mocked(api.applyPins).mockRejectedValueOnce(new ApiError(409, "Stale", "REPIN_REPORT_STALE"));
+    renderSettings("ontology");
+    fireEvent.change(await screen.findByLabelText(/^HP version/), { target: { value: "b".repeat(64) } });
+    fireEvent.click(within(screen.getByRole("form", { name: "Ontology version" })).getByRole("button", { name: "Save changes" }));
+    const panel = await screen.findByRole("region", { name: "Release change check" });
+    expect(api.updatePins).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(panel.textContent).toContain("merged");
+    fireEvent.click(within(panel).getByRole("button", { name: "Move to this release" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("Check the changes again");
+    expect(screen.getByRole("region", { name: "Release change check" })).toBeDefined();
+    fireEvent.click(within(screen.getByRole("region", { name: "Release change check" })).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("region", { name: "Release change check" })).toBeNull();
   });
 
   it("shows a server refusal without losing edited values", async () => {

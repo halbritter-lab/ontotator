@@ -121,6 +121,10 @@ class Term:
     # (IAO:0100001 ``term replaced by``), and looser suggestions (``consider``).
     replaced_by: str | None = None
     consider: list[str] = field(default_factory=list)
+    # Every ``term replaced by`` value; ``replaced_by`` keeps the first. A term
+    # with more than one has no single successor (moving a project to a newer
+    # release rewrites a term only through exactly one, #81).
+    replaced_by_all: list[str] = field(default_factory=list)
     # Official translations, keyed by language code. Empty unless a babelon
     # file was loaded. These are additional names for the same class, never a
     # second class, so nothing downstream has to know a hit came from one.
@@ -425,6 +429,7 @@ def load(path: Path, prefix: str | None = None) -> Ontology:
         ]
         alt_ids: list[str] = []
         replaced_by: str | None = None
+        replaced_by_all: list[str] = []
         consider: list[str] = []
         for prop in meta.get("basicPropertyValues") or []:
             pred = str(prop.get("pred") or "")
@@ -433,8 +438,11 @@ def load(path: Path, prefix: str | None = None) -> Ontology:
                 continue
             if pred in ALT_ID_PREDICATES and value not in alt_ids:
                 alt_ids.append(value)
-            elif pred in REPLACED_BY_PREDICATES and replaced_by is None:
-                replaced_by = value
+            elif pred in REPLACED_BY_PREDICATES:
+                if replaced_by is None:
+                    replaced_by = value
+                if value not in replaced_by_all:
+                    replaced_by_all.append(value)
             elif pred in CONSIDER_PREDICATES and value not in consider:
                 consider.append(value)
         terms[term_id] = Term(
@@ -446,6 +454,7 @@ def load(path: Path, prefix: str | None = None) -> Ontology:
             alt_ids=alt_ids,
             replaced_by=replaced_by,
             consider=consider,
+            replaced_by_all=replaced_by_all,
         )
 
     for edge in graph.get("edges") or []:

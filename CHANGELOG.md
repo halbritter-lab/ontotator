@@ -6,8 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- A started project can move to a newer ontology release after a dry-run check; draft terms with one successor or merged ids are rewritten (#81).
+
 ### Fixed
 
+- HPO releases without a modifier classifier root (Clinical modifier, Frequency, Severity, Onset) are refused (#97).
 - Upload and background job robustness (#115).
 - Ontology release, translation and term search issues (#118).
 - Lead pseudonyms, result line punctuation and term search over-matching (#117).

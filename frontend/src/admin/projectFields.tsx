@@ -36,6 +36,21 @@ export const ANNOTATION_SCHEME_LABELS: Readonly<Record<ProjectPin["t1_profile"],
   "hpo-phenotype": "HPO phenotype (fixed qualifiers, modifiers)",
   generic: "Generic (free qualifiers)",
 };
+/** Only the version of each pin (a started project, #81): branches and scheme stay. */
+export function ReleaseFields({ ids, ontologies, value, onChange, disabled }: {
+  ids: string[]; ontologies: OntologyInfo[]; value: Record<string, PinDraft>; onChange: (value: Record<string, PinDraft>) => void; disabled?: boolean;
+}): JSX.Element {
+  const prefix = useId();
+  return <>{ids.map((id, index) => {
+    const pin = value[id] ?? emptyPin(id);
+    const choices = versionChoices(id, ontologies);
+    return <Select key={id} id={`${prefix}-${index}-release`} label={`${id} release`} required value={pin.sha256} disabled={disabled}
+      onChange={event => onChange({ ...value, [id]: { ...pin, sha256: event.target.value } })}>
+      {pin.sha256 && !choices.some(choice => choice.sha256 === pin.sha256) && <option value={pin.sha256} title={pin.sha256}>Current pin ({pin.sha256.slice(0, 12)})</option>}
+      {choices.map(choice => <option key={choice.sha256} value={choice.sha256} title={choice.sha256}>{choice.ontology_id} {choice.release} ({choice.sha256.slice(0, 12)})</option>)}
+    </Select>;
+  })}</>;
+}
 const SCHEME_HINT = "HPO phenotype: fixed qualifiers with closed value lists and HPO modifier terms. Generic: qualifiers as the profile defines them.";
 
 /**

@@ -24,11 +24,13 @@ from ontotator.domain.profile_templates import PROFILE_TEMPLATES
 from ontotator.domain.profiles import TaskProfile
 from ontotator.domain.variants import TranslationStatus
 from ontotator.exchange.t1 import Pin
+from ontotator.projects.repin import RepinReport
 from ontotator.projects.service import (
     ProjectPin,
     ProjectService,
     ProjectSettings,
     ProjectSettingsChange,
+    RepinRequest,
 )
 from ontotator.storage.tables import (
     AssignmentRow,
@@ -419,6 +421,35 @@ def update_pins(
     _guard(request, Action.MANAGE_PROJECT_SETTINGS, key)
     return _service(request).update_pins(
         Actor.user(principal.user_id, principal.username), key, _pins(body)
+    )
+
+
+@router.post("/{key}/pins/preview")
+def preview_pins(
+    key: str, body: list[ProjectPin], principal: PrincipalDep, request: Request
+) -> RepinReport:
+    """What moving to these releases does to the drafts, without changing anything.
+
+    Also for a project with submitted work (#81): there only the release of a
+    pin may change.
+    """
+    _guard(request, Action.MANAGE_PROJECT_SETTINGS, key)
+    return _service(request).preview_pins(
+        Actor.user(principal.user_id, principal.username), key, _pins(body)
+    )
+
+
+@router.post("/{key}/pins/apply")
+def apply_pins(
+    key: str, body: RepinRequest, principal: PrincipalDep, request: Request
+) -> ProjectSettings:
+    """Move to the releases of a previewed report; rewrites the draft terms it lists."""
+    _guard(request, Action.MANAGE_PROJECT_SETTINGS, key)
+    return _service(request).apply_pins(
+        Actor.user(principal.user_id, principal.username),
+        key,
+        _pins(body.pins),
+        body.report_sha256,
     )
 
 

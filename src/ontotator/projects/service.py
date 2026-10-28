@@ -16,15 +16,20 @@ from ontotator.authz.policy import ROLES, Action
 from ontotator.authz.project_authority import require_project_management
 from ontotator.domain.annotation_modes import AnnotationMode
 from ontotator.domain.canonical import canonical_hash
+from ontotator.domain.documents import Document
 from ontotator.domain.errors import DomainError
 from ontotator.domain.profiles import TaskProfile, profile_hash
 from ontotator.domain.work_plans import ImportPlanSetting
+from ontotator.domain.workspace import Draft
 from ontotator.exchange.t1 import Pin, T1Profile, check_t1_profile
+from ontotator.ontology.service import OntologyService
 from ontotator.ontology.store import OntologyStore
 from ontotator.packages.models import PackageManifest
+from ontotator.projects.repin import RepinReport, build_report, rewrite_draft
 from ontotator.storage.database import Database
 from ontotator.storage.repository import Repository, _lock_id
 from ontotator.storage.tables import (
+    DraftRow,
     OntologyFileRow,
     ProjectOntologyRow,
     ProjectResourceRow,
@@ -233,6 +238,22 @@ def check_allowed_roots(store: OntologyStore, pins: Mapping[str, Pin]) -> None:
                 "ALLOWED_ROOTS_UNKNOWN",
                 {"ontology_id": ontology_id, "missing": missing},
             )
+
+
+def _superseded(earlier: list[str], old: Pin | None, sha256: str) -> list[str]:
+    """The digests a pin replaced, oldest first, after it moves to ``sha256``."""
+    history = list(earlier)
+    if old is not None and old.sha256 != sha256 and old.sha256 not in history:
+        history.append(old.sha256)
+    return [digest for digest in history if digest != sha256]
+
+
+class RepinRequest(BaseModel):
+    """Apply a re-pin whose dry run the lead has seen (#81)."""
+
+    model_config = ConfigDict(extra="forbid")
+    pins: list[ProjectPin]
+    report_sha256: str
 
 
 class ProjectService:
@@ -457,6 +478,107 @@ class ProjectService:
             ):
                 raise DomainError("PIN_MISMATCH", {"ontology_id": ontology.ontology_id})
 
+    def _release_services(
+        self, conn: Connection, project_id: int, pins: Mapping[str, Pin]
+    ) -> dict[str, OntologyService]:
+        """The new release of every pin whose digest differs from the stored one."""
+        old = self.repo._pins(conn, project_id)
+        services: dict[str, OntologyService] = {}
+        for ontology_id, pin in sorted(pins.items()):
+            current = old.get(ontology_id)
+            if current is None or current.sha256 == pin.sha256:
+                continue
+            service = self.store.service(pin.sha256)
+            if service is None:
+                raise DomainError("PIN_MISMATCH", {"ontology_id": ontology_id})
+            services[ontology_id] = service
+        return services
+
+    def _repin_report(
+        self,
+        conn: Connection,
+        row: Any,
+        pins: Mapping[str, Pin],
+        services: Mapping[str, OntologyService],
+    ) -> RepinReport:
+        old = self.repo._pins(conn, row["id"])
+        digests = {pin.sha256 for pin in old.values()} | {
+            pin.sha256 for pin in pins.values()
+        }
+        releases = dict(
+            conn.execute(
+                select(OntologyFileRow.sha256, OntologyFileRow.release).where(
+                    OntologyFileRow.sha256.in_(sorted(digests))
+                )
+            )
+            .tuples()
+            .all()
+        )
+        return build_report(
+            conn,
+            project_key=row["project_key"],
+            project_id=row["id"],
+            locked=self._locked(conn, row["id"]),
+            profile=TaskProfile.model_validate(row["task_profile"]),
+            old_pins=old,
+            new_pins=pins,
+            releases={sha: release or "" for sha, release in releases.items()},
+            services=services,
+        )
+
+    @staticmethod
+    def _check_locked_repin(old: Mapping[str, Pin], pins: Mapping[str, Pin]) -> None:
+        """After the first submission only the release of a pin may change."""
+        for ontology_id, pin in pins.items():
+            current = old.get(ontology_id)
+            if current is None or (
+                tuple(current.allowed_roots) != tuple(pin.allowed_roots)
+                or current.t1_profile != pin.t1_profile
+            ):
+                raise DomainError(
+                    "PROJECT_IN_USE",
+                    "After the first submission only the ontology release can change.",
+                )
+
+    def preview_pins(
+        self, actor: Actor, key: str, pins: Mapping[str, Pin]
+    ) -> RepinReport:
+        """The dry run of :meth:`apply_pins`: what the new releases do to drafts."""
+        check_allowed_roots(self.store, pins)
+        self._load_releases(pins)
+        with self.db.transaction() as conn:
+            row = self._project(conn, key)
+            require_project_management(
+                conn, actor, key, row["id"], Action.MANAGE_PROJECT_SETTINGS
+            )
+            profile = TaskProfile.model_validate(row["task_profile"])
+            if set(pins) != {ont.ontology_id for ont in profile.ontologies}:
+                raise DomainError(
+                    "PIN_MISMATCH", "Pin every profile ontology, and no others."
+                )
+            check_t1_profile(profile, pins)
+            if self._locked(conn, row["id"]):
+                self._check_locked_repin(self.repo._pins(conn, row["id"]), pins)
+            services = self._release_services(conn, row["id"], pins)
+            return self._repin_report(conn, row, pins, services)
+
+    def apply_pins(
+        self, actor: Actor, key: str, pins: Mapping[str, Pin], report_sha256: str
+    ) -> ProjectSettings:
+        """Move the project to ``pins``, also once work has been submitted (#81).
+
+        ``report_sha256`` is the digest of the report :meth:`preview_pins`
+        gave; when the drafts or pins changed since, the move is refused
+        (``REPIN_REPORT_STALE``) and the lead looks at the new report.
+        """
+        self._load_releases(pins)
+        return self._structure(actor, key, pins=pins, repin_report=report_sha256)
+
+    def _load_releases(self, pins: Mapping[str, Pin]) -> None:
+        """Parse the chosen releases before any lock is taken (it can take seconds)."""
+        for pin in pins.values():
+            self.store.service(pin.sha256)
+
     def _structure(
         self,
         actor: Actor,
@@ -464,6 +586,7 @@ class ProjectService:
         *,
         profile: TaskProfile | None = None,
         pins: Mapping[str, Pin] | None = None,
+        repin_report: str | None = None,
     ) -> ProjectSettings:
         if pins is not None:
             check_allowed_roots(self.store, pins)
@@ -477,7 +600,23 @@ class ProjectService:
             require_project_management(
                 conn, actor, key, row["id"], Action.MANAGE_PROJECT_SETTINGS
             )
-            if self._locked(conn, row["id"]):
+            old_pins = self.repo._pins(conn, row["id"])
+            report: RepinReport | None = None
+            release_services: dict[str, OntologyService] = {}
+            if repin_report is not None and pins is not None:
+                if self._locked(conn, row["id"]):
+                    self._check_locked_repin(old_pins, pins)
+                release_services = self._release_services(conn, row["id"], pins)
+                report = self._repin_report(conn, row, pins, release_services)
+                if report.report_sha256 != repin_report:
+                    raise DomainError(
+                        "REPIN_REPORT_STALE",
+                        {
+                            "message": "The drafts or pins changed since the report.",
+                            "report_sha256": report.report_sha256,
+                        },
+                    )
+            elif self._locked(conn, row["id"]):
                 raise DomainError(
                     "PROJECT_IN_USE",
                     "Pins and profile cannot change after the first submission.",
@@ -548,6 +687,16 @@ class ProjectService:
                     updated_at=datetime.now(UTC),
                 )
             )
+            superseded = dict(
+                conn.execute(
+                    select(
+                        ProjectOntologyRow.ontology_id,
+                        ProjectOntologyRow.superseded_sha256,
+                    ).where(ProjectOntologyRow.project_id == row["id"])
+                )
+                .tuples()
+                .all()
+            )
             conn.execute(
                 delete(ProjectOntologyRow).where(
                     ProjectOntologyRow.project_id == row["id"]
@@ -563,9 +712,34 @@ class ProjectService:
                             "sha256": pin.sha256,
                             "allowed_roots": list(pin.allowed_roots),
                             "t1_profile": pin.t1_profile,
+                            "superseded_sha256": _superseded(
+                                list(superseded.get(oid) or []),
+                                old_pins.get(oid),
+                                pin.sha256,
+                            ),
                         }
                         for oid, pin in selected_pins.items()
                     ],
+                )
+            if report is not None:
+                self._rewrite_drafts(
+                    conn, key, row["id"], selected_profile, release_services
+                )
+                record_audit(
+                    conn,
+                    actor,
+                    "project.repin",
+                    target_type="project",
+                    target_id=key,
+                    project_id=row["id"],
+                    details={
+                        "report_sha256": report.report_sha256,
+                        "locked": report.locked,
+                        "changes": [c.model_dump() for c in report.changes],
+                        "rewrites": [r.model_dump() for r in report.rewrites],
+                        "flagged": len(report.flagged),
+                        "submitted": [s.model_dump() for s in report.submitted],
+                    },
                 )
             conn.execute(
                 delete(ProjectSearchConditionsRow).where(
@@ -596,6 +770,80 @@ class ProjectService:
                 },
             )
             return self.settings(key)
+
+    def _rewrite_drafts(
+        self,
+        conn: Connection,
+        key: str,
+        project_id: int,
+        profile: TaskProfile,
+        services: Mapping[str, OntologyService],
+    ) -> None:
+        """Rewrite every draft term the new releases move (see ``projects.repin``)."""
+        if not services:
+            return
+        ontology_of_layer = {
+            layer.layer_id: layer.ontology_id for layer in profile.layers
+        }
+        drafts = conn.execute(
+            select(DraftRow.draft_key, DraftRow.document_id)
+            .where(DraftRow.project_id == project_id)
+            .order_by(DraftRow.draft_key)
+        ).all()
+        target = {oid: service.ref.sha256 for oid, service in services.items()}
+        documents: dict[str, Document | None] = {}
+        for draft_key, document_id in drafts:
+            if document_id not in documents:
+                documents[document_id] = self.repo.get_document(key, document_id)
+            document = documents[document_id]
+            if document is None:
+                continue
+            self._rewrite_draft(
+                conn,
+                project_id,
+                draft_key,
+                document,
+                profile,
+                ontology_of_layer,
+                services,
+                target,
+            )
+
+    def _rewrite_draft(
+        self,
+        conn: Connection,
+        project_id: int,
+        draft_key: str,
+        document: Document,
+        profile: TaskProfile,
+        ontology_of_layer: Mapping[str, str],
+        services: Mapping[str, OntologyService],
+        target: Mapping[str, str],
+    ) -> None:
+        changes: list[dict[str, str]] = []
+
+        def operation(draft: Draft) -> Draft | None:
+            result, found = rewrite_draft(
+                draft, document, profile, ontology_of_layer, services
+            )
+            changes.extend(found)
+            return result
+
+        def command() -> dict[str, Any]:
+            return {
+                "command": "move_to_release",
+                "pins": dict(target),
+                "rewrites": changes,
+            }
+
+        self.repo.rewrite_draft_in(
+            conn,
+            project_id,
+            draft_key,
+            operation,
+            command,
+            "release-" + canonical_hash({"draft": draft_key, "pins": dict(target)}),
+        )
 
     def update_pins(
         self, actor: Actor, key: str, pins: Mapping[str, Pin]
