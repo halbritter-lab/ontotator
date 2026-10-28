@@ -174,7 +174,8 @@ export function DecisionBlock(props: DecisionBlockProps): JSX.Element | null {
   const close = () => { if (!busy) onClose(); };
   const headingId = useId();
   const headingRef = useRef<HTMLHeadingElement>(null);
-  const consolidable = state.data ? consolidationDocuments(listedSubmissions(state.data.panel.submissions ?? [])).length > 0 : false;
+  // R-1: a running consolidation offers no second one, so the optional block would stay empty.
+  const consolidable = state.data && row?.stages?.annotation.state !== "consolidating" ? consolidationDocuments(listedSubmissions(state.data.panel.submissions ?? [])).length > 0 : false;
   const optionalOnly = props.optional && !noneLeft && !success && !failure;
   if (props.optional && !consolidable && !noneLeft && !success && !failure) return null;
 
