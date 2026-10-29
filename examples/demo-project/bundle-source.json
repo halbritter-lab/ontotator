@@ -1,0 +1,137 @@
+{
+  "comment": "Source of demo-bundle.zip. Rebuild with: uv run python scripts/make_demo_bundle.py. Every case is invented; no real patient. 'demo' says what a careful annotator or reviewer should do; it is not written into the bundle.",
+  "cases": [
+    {
+      "case_id": "NEURO-2026-005",
+      "texts": [
+        {
+          "language": "en",
+          "text": "Neuromuscular clinic letter\n\nA 9-year-old boy was referred because of difficulty climbing stairs and frequent falls. Examination showed proximal muscle weakness of the hip and shoulder girdle. He rises from the floor using his hands. The weakness has progressed over the past year. Serum creatine kinase was markedly elevated at 12,400 U/l. Echocardiography showed no cardiomyopathy. A maternal uncle had muscle weakness and used a wheelchair from the age of 12.\n\nSynthetic demonstration case. No real patient.\n",
+          "proposals": [
+            {"quote": "proximal muscle weakness", "term": "HP:0003701", "assertion": "present", "experiencer": "patient", "temporality": "current", "demo": "correct; add 'The weakness' as a second mention"},
+            {"quote": "creatine kinase was markedly elevated", "term": "HP:0003236", "assertion": "present", "experiencer": "patient", "temporality": "current", "demo": "correct"},
+            {"quote": "cardiomyopathy", "term": "HP:0001638", "assertion": "present", "experiencer": "patient", "temporality": "current", "demo": "wrong assertion: the text says no cardiomyopathy, so Absent"},
+            {"quote": "muscle weakness", "occurrence": 2, "term": "HP:0001324", "assertion": "present", "experiencer": "patient", "temporality": "current", "demo": "wrong experiencer: the uncle, so Family member"}
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "NEURO-2026-006",
+      "texts": [
+        {
+          "language": "en",
+          "text": "Headache clinic letter\n\nA 28-year-old woman has had migraine with visual aura since her teens. Attacks occur about four times a month and last up to a day. During attacks she has a throbbing headache with nausea. She also reports a constant ringing in both ears. Examination showed no ptosis and normal eye movements. Her mother also has migraine.\n\nSynthetic demonstration case. No real patient.\n",
+          "proposals": [
+            {"quote": "migraine with visual aura", "term": "HP:0002076", "assertion": "present", "experiencer": "patient", "temporality": "current", "demo": "correct"},
+            {"quote": "throbbing headache", "term": "HP:0002315", "assertion": "present", "experiencer": "patient", "temporality": "current", "demo": "correct"},
+            {"quote": "ringing in both ears", "term": "HP:0000365", "assertion": "present", "experiencer": "patient", "temporality": "current", "demo": "wrong term: replace Hearing impairment with Tinnitus (HP:0000360)"},
+            {"quote": "ptosis", "term": "HP:0000508", "assertion": "present", "experiencer": "patient", "temporality": "current", "demo": "wrong assertion: no ptosis, so Absent"},
+            {"quote": "migraine", "occurrence": 2, "term": "HP:0002076", "assertion": "present", "experiencer": "family_member", "temporality": "current", "demo": "correct: the mother"}
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "NEURO-2026-007",
+      "texts": [
+        {
+          "language": "en",
+          "text": "Developmental clinic letter\n\nA 4-year-old boy was assessed for delayed speech. He speaks only single words and has poor eye contact. A diagnosis of autism was made by the developmental team last month. Hearing tests were normal. He is clumsy but has no ataxia. His older sister has epilepsy and still has seizures despite medication.\n\nSynthetic demonstration case. No real patient.\n",
+          "proposals": [
+            {"quote": "delayed speech", "term": "HP:0000750", "assertion": "present", "experiencer": "patient", "temporality": "current", "demo": "correct"},
+            {"quote": "autism", "term": "HP:0000717", "assertion": "present", "experiencer": "patient", "temporality": "current", "demo": "correct"},
+            {"quote": "ataxia", "term": "HP:0001251", "assertion": "absent", "experiencer": "patient", "temporality": "current", "demo": "correct: negated"},
+            {"quote": "seizures", "term": "HP:0001250", "assertion": "present", "experiencer": "patient", "temporality": "current", "demo": "wrong experiencer: the sister, so Family member"}
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "NEURO-2026-008",
+      "texts": [
+        {
+          "language": "en",
+          "text": "Movement disorders clinic letter\n\nA 67-year-old man reports a tremor of the left hand at rest for two years. Examination showed resting tremor and bradykinesia on the left. He has noticed a reduced sense of smell. His wife reports that he may act out his dreams at night; this needs further assessment. He had a depressive episode in 2015, which has resolved.\n\nSynthetic demonstration case. No real patient.\n",
+          "proposals": [
+            {"quote": "tremor", "term": "HP:0001337", "assertion": "present", "experiencer": "patient", "temporality": "current", "demo": "too general: replace Tremor with Resting tremor (HP:0002322)"},
+            {"quote": "bradykinesia", "term": "HP:0002067", "assertion": "present", "experiencer": "patient", "temporality": "current", "demo": "correct"},
+            {"quote": "reduced sense of smell", "term": "HP:0004409", "assertion": "present", "experiencer": "patient", "temporality": "current", "demo": "correct"},
+            {"quote": "act out his dreams at night", "term": "HP:5200291", "assertion": "uncertain", "experiencer": "patient", "temporality": "current", "demo": "correct: 'may', so Uncertain"},
+            {"quote": "depressive episode", "term": "HP:0000716", "assertion": "present", "experiencer": "patient", "temporality": "historical", "demo": "correct: resolved, so Historical"}
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "NEURO-2026-009",
+      "texts": [
+        {
+          "language": "de",
+          "text": "Neuropädiatrischer Arztbrief\n\nEin 6-jähriges Mädchen wurde wegen wiederholter Krampfanfälle vorgestellt. Seit dem Säuglingsalter besteht eine muskuläre Hypotonie. Die Sprachentwicklung ist verzögert. Eine Mikrozephalie liegt nicht vor. Der Vater hatte als Kind ebenfalls Fieberkrämpfe.\n\nSynthetischer Demonstrationsfall. Kein echter Patient.\n",
+          "proposals": []
+        },
+        {
+          "language": "en",
+          "translation_of": "de",
+          "checks": [{"code": "numbers_changed", "passed": true}],
+          "text": "Neuropaediatric letter\n\nA 6-year-old girl was referred because of recurrent seizures. She has had muscular hypotonia since infancy. Her speech development is delayed. There is no microcephaly. Her father also had febrile seizures as a child.\n\nSynthetic demonstration case. No real patient.\n",
+          "demo": "translation is correct: accept it",
+          "proposals": [
+            {"quote": "recurrent seizures", "term": "HP:0001250", "assertion": "present", "experiencer": "patient", "temporality": "current", "demo": "correct"},
+            {"quote": "muscular hypotonia", "term": "HP:0001252", "assertion": "present", "experiencer": "patient", "temporality": "current", "demo": "correct"},
+            {"quote": "speech development is delayed", "term": "HP:0000750", "assertion": "present", "experiencer": "patient", "temporality": "current", "demo": "correct"},
+            {"quote": "microcephaly", "term": "HP:0000252", "assertion": "absent", "experiencer": "patient", "temporality": "current", "demo": "correct: negated"},
+            {"quote": "febrile seizures", "term": "HP:0002373", "assertion": "present", "experiencer": "family_member", "temporality": "historical", "demo": "correct: the father, as a child"}
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "NEURO-2026-010",
+      "texts": [
+        {
+          "language": "de",
+          "text": "Neurologischer Arztbrief\n\nEin 45-jähriger Mann berichtet über zunehmende Schluckstörungen und Doppelbilder am Abend. Bei der Untersuchung fand sich keine Ptosis. Die Kraft der Arme lässt bei Belastung nach. Sein Bruder hat eine Myasthenia gravis.\n\nSynthetischer Demonstrationsfall. Kein echter Patient.\n",
+          "proposals": []
+        },
+        {
+          "language": "en",
+          "translation_of": "de",
+          "checks": [{"code": "numbers_changed", "passed": true}],
+          "text": "Neurology letter\n\nA 45-year-old man reports increasing difficulty swallowing and double vision in the evening. Examination showed ptosis. The strength of his arms decreases with exertion. His brother has myasthenia gravis.\n\nSynthetic demonstration case. No real patient.\n",
+          "demo": "translation error: 'keine Ptosis' became 'showed ptosis'; correct it to 'showed no ptosis'",
+          "proposals": [
+            {"quote": "difficulty swallowing", "term": "HP:0002015", "assertion": "present", "experiencer": "patient", "temporality": "current", "demo": "correct"},
+            {"quote": "double vision", "term": "HP:0000651", "assertion": "present", "experiencer": "patient", "temporality": "current", "demo": "correct"},
+            {"quote": "ptosis", "term": "HP:0000508", "assertion": "present", "experiencer": "patient", "temporality": "current", "demo": "follows the translation error: Absent after the correction"},
+            {"quote": "strength of his arms decreases with exertion", "term": "HP:0003473", "assertion": "present", "experiencer": "patient", "temporality": "current", "demo": "correct"}
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "NEURO-2026-011",
+      "texts": [
+        {
+          "language": "de",
+          "text": "Neuropädiatrischer Arztbrief\n\nEin 14-jähriger Junge hat seit zwei Jahren eine Gangataxie. Hinzu kommen eine Skoliose und Hohlfüße. Die Muskeleigenreflexe sind erloschen. Das Hörvermögen ist normal.\n\nSynthetischer Demonstrationsfall. Kein echter Patient.\n",
+          "proposals": []
+        },
+        {
+          "language": "en",
+          "translation_of": "de",
+          "checks": [{"code": "numbers_changed", "passed": false, "detail": "The number 14 of the source is missing in the translation."}],
+          "text": "Neuropaediatric letter\n\nA 4-year-old boy has had gait ataxia for two years. He also has scoliosis and pes cavus. The tendon reflexes are absent. Hearing is normal.\n\nSynthetic demonstration case. No real patient.\n",
+          "demo": "automatic check failed: the age is wrong (14, not 4); correct it",
+          "proposals": [
+            {"quote": "gait ataxia", "term": "HP:0002066", "assertion": "present", "experiencer": "patient", "temporality": "current", "demo": "correct"},
+            {"quote": "scoliosis", "term": "HP:0002650", "assertion": "present", "experiencer": "patient", "temporality": "current", "demo": "correct"},
+            {"quote": "pes cavus", "term": "HP:0001761", "assertion": "present", "experiencer": "patient", "temporality": "current", "demo": "correct"},
+            {"quote": "tendon reflexes are absent", "term": "HP:0001284", "assertion": "present", "experiencer": "patient", "temporality": "current", "demo": "correct"}
+          ]
+        }
+      ]
+    }
+  ]
+}

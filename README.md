@@ -88,6 +88,7 @@ uv run ontotator serve --help
 ## Documentation
 
 - [User handbook](docs/handbook/README.md): how annotators, consolidators, leads and administrators work in the app.
+- [Demo project](examples/demo-project/README.md): a fully synthetic project to set up in a real instance, step by step, with all files to upload.
 - [Operations guide](docs/operations.md): installation, configuration, upgrades, backups and internet exposure.
 - [Scientific workflow](docs/scientific-workflow.md): a small two-annotator pilot.
 - [Translation review export](docs/translation-review-export.md): the export format of translation reviews.

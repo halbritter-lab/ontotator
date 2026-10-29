@@ -17,6 +17,8 @@ The usual first day, in order:
 
 The lead then sets up the rest; see the [lead overview](lead.md).
 
+Try it with the demo project: the [demo project guide](../../examples/demo-project/README.md) has an HPO release link, suggested users and all files to upload for a fully synthetic project.
+
 ## Reach the administration pages
 
 What for: find the pages only system administrators see.
