@@ -135,6 +135,8 @@ export type Route =
   | { name: "projectProblemReport"; key: string; reportId: string; action?: "resume"; section?: "decide"; documents?: ProjectDocumentsQuery }
   /** Consolidation view of one round (acceptance fixes WP-E); `group` scrolls to a finding group. */
   | { name: "projectConsolidation"; key: string; roundId: string; group?: string; documents?: ProjectDocumentsQuery }
+  /** The bundled user handbook (docs/handbook); without `chapter` its README. `section` is a heading id to scroll to. */
+  | { name: "help"; chapter?: string; section?: string }
   | { name: "notFound"; hash: string };
 
 /** Every "My tasks" link: an explicit All, so a reload or a new tab never runs the last-used landing. */
@@ -164,6 +166,11 @@ export function parseRoute(hash: string): Route {
       case "#/admin/ontologies": return { name: "adminOntologies" };
       case "#/projects": return { name: "projects" };
       case "#/projects/new": return { name: "projectNew" };
+    }
+    const help = /^#\/help(?:\/([A-Za-z0-9_-]+))?$/.exec(path);
+    if (help) {
+      const section = params.get("section");
+      return { name: "help", ...(help[1] && help[1] !== "README" ? { chapter: help[1] } : {}), ...(section ? { section } : {}) };
     }
     const task = /^#\/tasks\/([1-9]\d*)$/.exec(path);
     if (task) {
@@ -266,6 +273,7 @@ export function routeHref(route: Route): string {
       ["action", route.action], ["section", route.section], ...documentsEntries(route.documents, "documents_"),
     ])}`;
     case "projectConsolidation": return `#/projects/${encodeURIComponent(route.key)}/consolidations/${encodeURIComponent(route.roundId)}${querySuffix([["group", route.group], ...documentsEntries(route.documents, "documents_")])}`;
+    case "help": return `#/help${route.chapter && route.chapter !== "README" ? `/${route.chapter}` : ""}${querySuffix([["section", route.section]])}`;
     case "notFound": return route.hash;
   }
 }

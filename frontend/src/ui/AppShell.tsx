@@ -5,7 +5,8 @@ import { Button } from "./Button";
 import { ShortcutHelpHost } from "./ShortcutHelp";
 import { onSpaceActivate } from "./spaceActivates";
 
-export const HANDBOOK_URL = "https://github.com/halbritter-lab/ontotator/blob/main/docs/handbook/README.md";
+/** The handbook bundled with the app (route `#/help`): it matches this version and needs no internet. */
+export const HANDBOOK_HREF = "#/help";
 
 export interface Crumb {
   label: string; onClick?: () => void; href?: string;
@@ -31,7 +32,9 @@ export interface AppShellProps {
 export function AppShell({ user, onLogout, breadcrumb, actions, nav, navLabel = "Sections", density = "compact", role, homeHref, onHome, children }: AppShellProps): JSX.Element {
   const mainRef = useRef<HTMLElement>(null);
   const hasNav = nav != null && nav !== false;
-  const navigation = hasNav ? <nav className="app-nav" aria-label={navLabel}>{nav}</nav> : null;
+  // On phones the reading header has no room for Handbook; the Sections menu carries it there (CSS).
+  const navigation = hasNav ? <nav className="app-nav" aria-label={navLabel}>{nav}
+    {density === "reading" && <a className="shell-nav-link shell-nav-help" href={HANDBOOK_HREF}>Handbook</a>}</nav> : null;
   return <div className={`shell${density === "reading" ? " shell-reading" : ""}`}>
     <a className="skip-link" href="#main" onClick={(event) => {
       event.preventDefault();
@@ -71,7 +74,7 @@ export function AppShell({ user, onLogout, breadcrumb, actions, nav, navLabel = 
           <span className="current-user-name">{personLabel(user)}</span>
           {role && <span className="cell-secondary">{role}</span>}
         </span>}
-        <a className="btn btn-quiet btn-sm" href={HANDBOOK_URL} target="_blank" rel="noopener noreferrer" onKeyDown={onSpaceActivate}>Handbook</a>
+        <a className="btn btn-quiet btn-sm shell-help" href={HANDBOOK_HREF} onKeyDown={onSpaceActivate}>Handbook</a>
         {onLogout && <Button size="sm" onClick={onLogout}>Log out</Button>}
       </div>
     </header>

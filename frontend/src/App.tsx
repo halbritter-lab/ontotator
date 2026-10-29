@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { api, type CurrentUser, type Profile, type ProjectSummary, type TaskSummary } from "./api/client";
 import { routeTitle, taskCrumbLabel } from "./app/labels";
 import { CaseViewer } from "./variants/CaseViewer";
@@ -24,7 +24,11 @@ import { ProblemReportDetail } from './tasks/ProblemReportDetail';
 import { ReporterReportPage } from "./problems/ReporterReportPage";
 import { GuidelinesPage } from "./guidelines/GuidelinesPage";
 import { ConsolidationScreen } from "./consolidation/ConsolidationScreen";
+import { HelpLink } from "./help/HelpLink";
 import { Button, EmptyState, InlineMessage, Toast, useDocumentTitle, useToast } from "./ui";
+
+// The handbook text is a chunk of its own, loaded on first use.
+const HelpPage = lazy(() => import("./help/HelpPage"));
 
 export interface AppProps { user?: CurrentUser | null; onLogout?: () => void }
 
@@ -314,9 +318,11 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
       break;
     }
     case "projectConsolidation": content = <ConsolidationScreen key={JSON.stringify([user.username, route.key, route.roundId])} projectKey={route.key}
-      roundId={route.roundId} group={route.group} onNavigate={go} readOnly
+      roundId={route.roundId} group={route.group} onNavigate={go} readOnly headerActions={<HelpLink screen="consolidationReadOnly" />}
       back={{ name: "projectDocuments", key: route.key, ...(route.documents ?? {}) }} />; break;
     case "me": content = <ProfilePage onSaved={setSavedIdentity} routeLeaveRef={routeLeaveRef} leaveGuardRef={logoutGuardRef} />; break;
+    case "help": content = <Suspense fallback={<InlineMessage tone="info">Loading the handbook…</InlineMessage>}>
+      <HelpPage chapter={route.chapter} section={route.section} /></Suspense>; break;
     case "notFound": content = <NotFound onNavigate={go} />; break;
     default: content = <EmptyState title="This page is not available yet.">This section is planned for a later step.</EmptyState>;
   }
