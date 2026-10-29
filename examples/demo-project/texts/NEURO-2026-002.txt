@@ -1,0 +1,5 @@
+Neurology outpatient letter
+
+A 34-year-old woman presented with gait ataxia that has slowly worsened over five years. She reports slurred speech, and examination confirmed dysarthria and gaze-evoked nystagmus. Hearing is normal. Brain MRI showed cerebellar atrophy. She had episodes of double vision in 2019 that resolved without treatment. Her father developed similar walking problems in his forties. The ataxia makes stairs difficult, and she now uses a walking stick.
+
+Synthetic demonstration case. No real patient.

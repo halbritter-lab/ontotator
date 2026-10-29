@@ -24,3 +24,5 @@ The lead's tasks are in three chapters:
 8. Accept one result per text, or start a consolidation when annotators disagree: [Accept a result or compare results](lead-results.md#accept-a-result-or-compare-results), [Start a consolidation](lead-results.md#start-a-consolidation).
 9. Read the consolidators' notes and flags, and improve the guidelines where they were unclear: [Accept a consolidation](lead-results.md#accept-a-consolidation).
 10. Export the final results: [Export final results](lead-results.md#export-final-results).
+
+Try it with the demo project: the [demo project guide](../../examples/demo-project/README.md) walks through every step with invented clinical letters, tool proposals, translations and guidelines.

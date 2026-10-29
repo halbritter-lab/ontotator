@@ -1,0 +1,5 @@
+Neuropaediatric outpatient letter
+
+A 7-year-old boy was seen for recurrent seizures. He had two febrile seizures at the age of 2 years, both during viral infections. Since March 2026 he has had focal-onset seizures with twitching of the right hand, about twice a month. There is no developmental regression, and his school performance is age-appropriate. Neurological examination was normal, with no ataxia. His mother had febrile seizures as a child. The EEG showed left centrotemporal spikes.
+
+Synthetic demonstration case. No real patient.
