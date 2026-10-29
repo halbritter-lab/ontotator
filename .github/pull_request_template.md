@@ -6,3 +6,4 @@
 
 - [ ] `bash scripts/check.sh` passes locally, or CI is green
 - [ ] Docs updated where behavior changed
+- [ ] Handbook (docs/handbook/) updated, or a commit carries `Handbook: unchanged`

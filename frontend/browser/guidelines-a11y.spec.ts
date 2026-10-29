@@ -172,9 +172,8 @@ test("keyboard-only path: Tab to More, the Guidelines item, Enter, Escape return
   await page.locator("body").focus();
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   await tabTo(page, entry(page));
-  // ArrowUp opens the menu at its last item ("Keyboard shortcuts (?)"); the guidelines item sits just above it.
-  await page.keyboard.press("ArrowUp");
-  await page.keyboard.press("ArrowUp");
+  // ArrowUp opens the menu at its last item ("Keyboard shortcuts (?)"); above it "Help for this screen", then the guidelines item.
+  for (let step = 0; step < 3; step += 1) await page.keyboard.press("ArrowUp");
   await expect(page.getByRole("menuitem", { name: /^Guidelines v1/ })).toBeFocused();
   await page.keyboard.press("Enter");
   const panel = aside(page);

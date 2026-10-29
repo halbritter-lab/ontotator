@@ -30,6 +30,8 @@ describe("hash route parsing and links", () => {
     { name: "projectExport", key: "study-a" },
     { name: "projectProblemReport", key: "study/a %", reportId: "report/1 %é" },
     { name: "notFound", hash: "#/missing-page" },
+    { name: "help" },
+    { name: "help", chapter: "lead-documents", section: "upload-texts" },
     { name: "projectDocuments", key: "study", language: "de", status: "in_progress", q: "doc prefix", select: "doc/1 % α" },
     { name: "projectDocuments", key: "study", language: "", status: "", q: "", select: "" },
   ];

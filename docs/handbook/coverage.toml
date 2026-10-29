@@ -1,0 +1,335 @@
+# Maps UI source globs to the handbook chapter that documents them (checked by
+# scripts/check_handbook.py --base REF on every pull request).
+#
+#   [[map]]
+#   glob = "frontend/src/consolidation/**"   # fnmatch pattern, "*" also crosses "/"
+#   chapter = "consolidator.md"              # file in docs/handbook/
+#
+# When a pull request changes files matched by a glob but not the chapter, CI fails.
+# For changes without visible effect (refactors), add the commit trailer line
+#   Handbook: unchanged
+#
+# A file described in two chapters has one entry per chapter. Left unmapped on purpose:
+# frontend/src/api, vendor, styles, shared ui/ components (covered by the label check),
+# CSS, tests and pure helpers without visible text.
+
+[[map]]
+glob = "frontend/src/app/LoginScreen.tsx"
+chapter = "getting-started.md"
+
+[[map]]
+glob = "frontend/src/app/AuthGate.tsx"
+chapter = "getting-started.md"
+
+[[map]]
+glob = "frontend/src/app/Shell.tsx"
+chapter = "getting-started.md"
+
+[[map]]
+glob = "frontend/src/ui/AppShell.tsx"
+chapter = "getting-started.md"
+
+[[map]]
+glob = "frontend/src/app/ProjectPicker.tsx"
+chapter = "getting-started.md"
+
+[[map]]
+glob = "frontend/src/app/ProjectsPage.tsx"
+chapter = "getting-started.md"
+
+[[map]]
+glob = "frontend/src/app/labels.ts"
+chapter = "getting-started.md"
+
+[[map]]
+glob = "frontend/src/tasks/MyTasks.tsx"
+chapter = "getting-started.md"
+
+[[map]]
+glob = "frontend/src/tasks/TaskEditor.tsx"
+chapter = "getting-started.md"
+
+[[map]]
+glob = "frontend/src/me/**"
+chapter = "getting-started.md"
+
+# The in-app handbook (#/help) and the Help links: the header section describes them.
+[[map]]
+glob = "frontend/src/help/**"
+chapter = "getting-started.md"
+
+[[map]]
+glob = "frontend/src/ui/ShortcutHelp.tsx"
+chapter = "annotator.md"
+
+[[map]]
+glob = "frontend/src/ui/shortcuts.ts"
+chapter = "annotator.md"
+
+[[map]]
+glob = "frontend/src/app/CaseScreen.tsx"
+chapter = "annotator.md"
+
+[[map]]
+glob = "frontend/src/app/CaseNavigation.tsx"
+chapter = "annotator.md"
+
+[[map]]
+glob = "frontend/src/app/submissionLabels.ts"
+chapter = "annotator.md"
+
+[[map]]
+glob = "frontend/src/editor/**"
+chapter = "annotator.md"
+
+[[map]]
+glob = "frontend/src/spans/**"
+chapter = "annotator.md"
+
+[[map]]
+glob = "frontend/src/tasks/TaskEditor.tsx"
+chapter = "annotator.md"
+
+[[map]]
+glob = "frontend/src/tasks/ProblemReportForm.tsx"
+chapter = "annotator.md"
+
+[[map]]
+glob = "frontend/src/tasks/TaskProblemActions.tsx"
+chapter = "annotator.md"
+
+[[map]]
+glob = "frontend/src/tasks/TaskGuidelines.tsx"
+chapter = "annotator.md"
+
+[[map]]
+glob = "frontend/src/tasks/WorkRound*.tsx"
+chapter = "annotator.md"
+
+[[map]]
+glob = "frontend/src/tasks/RoundInputEvidenceDialog.tsx"
+chapter = "annotator.md"
+
+[[map]]
+glob = "frontend/src/problems/Reporter*.tsx"
+chapter = "annotator.md"
+
+[[map]]
+glob = "frontend/src/problems/ReportAnswerNotice.tsx"
+chapter = "annotator.md"
+
+[[map]]
+glob = "frontend/src/problems/ReportTimeline.tsx"
+chapter = "annotator.md"
+
+[[map]]
+glob = "frontend/src/problems/labels.ts"
+chapter = "annotator.md"
+
+[[map]]
+glob = "frontend/src/translation/**"
+chapter = "annotator.md"
+
+[[map]]
+glob = "frontend/src/guidelines/GuidelineReader.tsx"
+chapter = "annotator.md"
+
+[[map]]
+glob = "frontend/src/guidelines/GuidelinesPage.tsx"
+chapter = "annotator.md"
+
+[[map]]
+glob = "frontend/src/consolidation/**"
+chapter = "consolidator.md"
+
+[[map]]
+glob = "frontend/src/variants/**"
+chapter = "consolidator.md"
+
+[[map]]
+glob = "frontend/src/tasks/RoundInputEvidenceDialog.tsx"
+chapter = "consolidator.md"
+
+[[map]]
+glob = "frontend/src/variants/**"
+chapter = "lead-results.md"
+
+[[map]]
+glob = "frontend/src/guidelines/GuidelinesPage.tsx"
+chapter = "lead-settings.md"
+
+[[map]]
+glob = "frontend/src/guidelines/fileChecks.ts"
+chapter = "lead-settings.md"
+
+[[map]]
+glob = "frontend/src/guidelines/submissionLabel.ts"
+chapter = "lead-results.md"
+
+[[map]]
+glob = "frontend/src/admin/DocumentsPage.tsx"
+chapter = "lead-documents.md"
+
+[[map]]
+glob = "frontend/src/documents/**"
+chapter = "lead-documents.md"
+
+[[map]]
+glob = "frontend/src/admin/AssignWorkDialog.tsx"
+chapter = "lead-documents.md"
+
+[[map]]
+glob = "frontend/src/admin/assignSummary.ts"
+chapter = "lead-documents.md"
+
+[[map]]
+glob = "frontend/src/admin/DistributionDialog.tsx"
+chapter = "lead-documents.md"
+
+[[map]]
+glob = "frontend/src/admin/AssignmentActions.tsx"
+chapter = "lead-documents.md"
+
+[[map]]
+glob = "frontend/src/admin/assignmentUI.tsx"
+chapter = "lead-documents.md"
+
+[[map]]
+glob = "frontend/src/admin/Upload*.tsx"
+chapter = "lead-documents.md"
+
+[[map]]
+glob = "frontend/src/admin/uploadModel.ts"
+chapter = "lead-documents.md"
+
+[[map]]
+glob = "frontend/src/admin/ProgressPage.tsx"
+chapter = "lead-documents.md"
+
+[[map]]
+glob = "frontend/src/admin/progressLabels.ts"
+chapter = "lead-documents.md"
+
+[[map]]
+glob = "frontend/src/admin/ExportPage.tsx"
+chapter = "lead-results.md"
+
+[[map]]
+glob = "frontend/src/admin/FinalExportPanel.tsx"
+chapter = "lead-results.md"
+
+[[map]]
+glob = "frontend/src/admin/ProjectSettingsPage.tsx"
+chapter = "lead-settings.md"
+
+[[map]]
+glob = "frontend/src/admin/SettingsCard.tsx"
+chapter = "lead-settings.md"
+
+[[map]]
+glob = "frontend/src/admin/projectFields.tsx"
+chapter = "lead-settings.md"
+
+[[map]]
+glob = "frontend/src/admin/LanguagesField.tsx"
+chapter = "lead-settings.md"
+
+[[map]]
+glob = "frontend/src/admin/HiddenAxisValuesField.tsx"
+chapter = "lead-settings.md"
+
+[[map]]
+glob = "frontend/src/admin/MembersSection.tsx"
+chapter = "lead-settings.md"
+
+[[map]]
+glob = "frontend/src/admin/GuidelinesSection.tsx"
+chapter = "lead-settings.md"
+
+[[map]]
+glob = "frontend/src/admin/RepinReport.tsx"
+chapter = "lead-settings.md"
+
+[[map]]
+glob = "frontend/src/admin/variantMetadata.ts"
+chapter = "lead-settings.md"
+
+[[map]]
+glob = "frontend/src/problems/Lead*.tsx"
+chapter = "lead-results.md"
+
+[[map]]
+glob = "frontend/src/problems/ReportTimeline.tsx"
+chapter = "lead-results.md"
+
+[[map]]
+glob = "frontend/src/problems/labels.ts"
+chapter = "lead-results.md"
+
+[[map]]
+glob = "frontend/src/tasks/ProblemReportDetail.tsx"
+chapter = "lead-results.md"
+
+[[map]]
+glob = "frontend/src/app/ProjectsPage.tsx"
+chapter = "admin.md"
+
+[[map]]
+glob = "frontend/src/admin/projectFields.tsx"
+chapter = "admin.md"
+
+[[map]]
+glob = "frontend/src/admin/LanguagesField.tsx"
+chapter = "admin.md"
+
+[[map]]
+glob = "frontend/src/admin/UsersPage.tsx"
+chapter = "admin.md"
+
+[[map]]
+glob = "frontend/src/admin/CodeOnceDialog.tsx"
+chapter = "admin.md"
+
+[[map]]
+glob = "frontend/src/admin/OntologiesPage.tsx"
+chapter = "admin.md"
+
+[[map]]
+glob = "frontend/src/admin/ProjectNewPage.tsx"
+chapter = "admin.md"
+
+[[map]]
+glob = "frontend/src/admin/useJob.ts"
+chapter = "admin.md"
+
+[[map]]
+glob = "frontend/src/app/NotFound.tsx"
+chapter = "faq.md"
+
+[[map]]
+glob = "frontend/src/app/ErrorBoundary.tsx"
+chapter = "faq.md"
+
+[[map]]
+glob = "frontend/src/admin/errors.ts"
+chapter = "faq.md"
+
+[[map]]
+glob = "frontend/src/admin/ErrorNotice.tsx"
+chapter = "faq.md"
+
+[[map]]
+glob = "frontend/src/variants/**"
+chapter = "lead-documents.md"
+
+[[map]]
+glob = "frontend/src/documents/**"
+chapter = "lead-results.md"
+
+[[map]]
+glob = "frontend/src/tasks/MyTasks.tsx"
+chapter = "first-task.md"
+
+[[map]]
+glob = "frontend/src/app/CaseScreen.tsx"
+chapter = "first-task.md"

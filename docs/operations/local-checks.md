@@ -27,6 +27,8 @@ CHECK_PLAYWRIGHT_WORKERS=1 bash scripts/check.sh --only browser   # serial, for 
 
 `CHECK_PYTEST_WORKERS` defaults to 4 and must be a non-negative integer; 0 or 1 runs pytest serially without xdist. Plain `uv run pytest` stays serial; add `-n 4` for a parallel run. `CHECK_PLAYWRIGHT_WORKERS` defaults to 3 and must be a positive integer; a direct `npx playwright test` also uses three workers unless `--workers=N` or `PLAYWRIGHT_WORKERS=N` says otherwise. Workers run spec files in parallel against the one fixture server. This is safe because no two spec files use the same mutable project: `tests/browser_server.py` seeds one small fixture project per spec that needs it (`browser-fixture-<spec>`), and the other specs build fresh projects through test-only scenario routes. Tests within a file stay serial because some change and restore the settings of their own project. A new spec must follow the same rule: build its own project through a scenario route, or add itself to `FIXTURE_SPECS` in `tests/browser_server.py`; never reuse another spec's project.
 
+Regenerate the user handbook images (`docs/handbook/images/`; without the variable the spec only walks the handbook steps): `HANDBOOK_SHOTS=1 npm --prefix frontend run test:e2e -- browser/handbook-screenshots.spec.ts --workers=1`.
+
 ## Inner loop
 
 Use the quick path while iterating; run the full gate (`bash scripts/check.sh`) before merge:

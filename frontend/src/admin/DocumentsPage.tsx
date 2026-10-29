@@ -59,6 +59,7 @@ import { useSessionRestored } from "../app/useSessionRestored";
 import { UploadPanel } from "./UploadPanel";
 import { onSpaceActivate } from "../ui/spaceActivates";
 import { reviewLanguages, translationStatusLabels } from "./variantMetadata";
+import { HelpLink } from "../help/HelpLink";
 
 export interface DocumentsPageProps {
   projectKey: string;
@@ -825,7 +826,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   return <section className="documents-page">
     <div className="documents-heading">
       <h1 ref={headingRef} tabIndex={-1}>Documents</h1>
-      {!emptyProject && uploadButton()}
+      <div className="toolbar"><HelpLink screen="documents" />{!emptyProject && uploadButton()}</div>
     </div>
     {page && !emptyProject && <DocumentsTabs bar={page.bar} query={query} projectKey={projectKey} panelId={PANEL_ID} onNavigate={navigateLink} updatedAt={rows.updatedAt} onRefresh={refreshAll} />}
     {!emptyProject && <Toolbar label="Document filters" className="documents-filters">

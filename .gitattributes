@@ -29,3 +29,6 @@ frontend/index.html text eol=lf
 # Tests pin the SHA-256 of this ontology fixture; it is stored with CRLF line
 # ends, so every checkout (Linux CI and Windows) gets the same bytes.
 tests/fixtures/hp.json -text
+
+# The web bundle inlines the handbook text: keep it LF on every checkout so local builds match CI.
+docs/handbook/*.md text eol=lf

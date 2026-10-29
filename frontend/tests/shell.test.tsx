@@ -147,6 +147,13 @@ describe("role-based shell", () => {
     expect(window.location.hash).toBe("#/tasks/42");
   });
 
+  it("links the bundled handbook in the app, also from the reading Sections menu", () => {
+    render(<Shell {...props({ route: { name: "task", assignmentId: 42 } })} />);
+    const links = screen.getAllByRole("link", { name: "Handbook", hidden: true });
+    expect(links.map(link => link.getAttribute("href"))).toEqual(["#/help", "#/help"]);
+    expect(links.every(link => !link.hasAttribute("target"))).toBe(true);
+  });
+
   it("uses reading density only for task routes", () => {
     const { rerender } = render(<Shell {...props({ route: { name: "task", assignmentId: 42 } })} />);
     expect(screen.getByRole("main").classList.contains("density-reading")).toBe(true);

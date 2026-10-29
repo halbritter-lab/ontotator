@@ -975,6 +975,13 @@ def build_walkthrough(app: FastAPI) -> dict[str, Any]:
         per_text=2,
         import_plan="review_and_annotate_translations",
     )
+    # A real-looking name for the handbook images (the default is "Project").
+    with app.state.repo.db.transaction() as conn:
+        conn.execute(
+            update(ProjectRow)
+            .where(ProjectRow.project_key == scenario.key)
+            .values(name="Neuro cohort 2026")
+        )
     folder = Path(tempfile.mkdtemp(prefix=f"{scenario.key}-"))
     path = write_bundle(folder, scenario.key, units(WALKTHROUGH_CASE, ("de",)))
     return result(

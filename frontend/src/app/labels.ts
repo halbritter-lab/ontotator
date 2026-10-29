@@ -33,7 +33,7 @@ const ROUTE_PAGES: Readonly<Record<Exclude<Route["name"], "task" | "projectCase"
   tasks: "My tasks", me: "Profile", adminUsers: "Users", adminOntologies: "Ontologies", projectNew: "New project",
   projects: "Projects", projectSettings: "Settings", projectDocuments: "Documents", projectProgress: "Progress",
   projectExport: "Export", projectGuidelines: "Guidelines", projectProblemReport: "Problem report",
-  projectConsolidation: "Consolidation", notFound: "Page not found",
+  projectConsolidation: "Consolidation", help: "Handbook", notFound: "Page not found",
 };
 
 /**
