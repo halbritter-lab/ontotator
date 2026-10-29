@@ -313,7 +313,7 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
     { id: "name", header: "Display name", cell: user => user.display_name },
     { id: "pseudonym", header: "Pseudonym", cell: user => user.pseudonym },
     { id: "languages", header: "Languages", cell: user => user.languages.join(", ") || <EmptyValue /> },
-    { id: "projects", header: "Projects", width: "20rem", cell: user => user.projects.length ? <ul>{user.projects.map(project => <li key={project.project_key} title={project.project_key}>{project.project_name || project.project_key}{project.roles.map(role => <Fragment key={role}>{" "}<StatusBadge tone="neutral">{labelFor(roleLabels, role)}</StatusBadge></Fragment>)}</li>)}</ul> : <EmptyValue /> },
+    { id: "projects", header: "Projects", width: "20rem", cell: user => user.projects.length ? <details className="users-projects"><summary>{user.projects.length} {user.projects.length === 1 ? "project" : "projects"}</summary><ul>{user.projects.map(project => <li key={project.project_key} title={project.project_key}>{project.project_name || project.project_key}{project.roles.map(role => <Fragment key={role}>{" "}<StatusBadge tone="neutral">{labelFor(roleLabels, role)}</StatusBadge></Fragment>)}</li>)}</ul></details> : <EmptyValue /> },
     { id: "admin", header: "Admin", cell: user => user.is_system_admin ? <StatusBadge tone="info">Admin</StatusBadge> : "No" },
     { id: "active", header: "Active", cell: user => user.anonymised ? "Anonymised" : user.active ? "Yes" : "No" },
     { id: "setup", header: "Setup", cell: user => user.setup_pending ? "Pending" : user.anonymised ? <EmptyValue /> : "Done", sortValue: user => user.setup_pending ? 0 : 1 },
@@ -342,7 +342,7 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
       {users !== null && <DataTable label="Users" columns={columns}
         // A click on the row (not on its buttons) highlights it; a second click clears it.
         rowProps={user => ({ className: ["users-row", user.username === notice?.username && "users-row--changed"].filter(Boolean).join(" "), selected: user.username === selectedUser,
-          onClick: event => { if (!(event.target as Element).closest("button, a, input")) setSelectedUser(current => current === user.username ? null : user.username); } })} rows={users.filter(user => user.username.toLowerCase().includes(query) || user.display_name.toLowerCase().includes(query))} rowKey={user => user.username} empty={<EmptyState title={query ? "No matching users." : "No users to display."} />} />}
+          onClick: event => { if (!(event.target as Element).closest("button, a, input, summary")) setSelectedUser(current => current === user.username ? null : user.username); } })} rows={users.filter(user => user.username.toLowerCase().includes(query) || user.display_name.toLowerCase().includes(query))} rowKey={user => user.username} empty={<EmptyState title={query ? "No matching users." : "No users to display."} />} />}
     </section>
     {creating && <Dialog open title="New user" onClose={busy ? undefined : () => setCreating(false)}>
       <form aria-label="New user" onSubmit={event => { event.preventDefault(); void createUser(); }}>

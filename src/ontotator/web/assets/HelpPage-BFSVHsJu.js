@@ -1,4 +1,4 @@
-import{r as i,a as p,j as a}from"./index-DKF8OBh_.js";import{M as m,r as g}from"./index-C8Pvi2i1.js";const f=`# Ontotator user handbook
+import{r as i,a as p,j as a}from"./index-V0d5S-9c.js";import{M as m,r as g}from"./index-CLkBN5bW.js";const f=`# Ontotator user handbook
 
 This handbook explains how to work with Ontotator in the browser. It is for everyone who uses the app: annotators, translation reviewers, consolidators, leads and system administrators. It describes the version of Ontotator that you open it from. If you run the server, read the [server operations guide (for server operators)](../operations.md) instead.
 
@@ -152,7 +152,7 @@ What for: check who has an account, whether they finished setup and when they la
 
 1. In the sidebar, open **Administration** › **Users**.
 2. Type a username or display name into **Filter users**.
-3. Read the table. **Setup** shows **Pending** until the person has set a password. **Last login** shows **Never** if they have not logged in yet. **Active** reads **Yes**, **No** or **Anonymised**.
+3. Read the table. **Setup** shows **Pending** until the person has set a password. **Last login** shows **Never** if they have not logged in yet. **Active** reads **Yes**, **No** or **Anonymised**. **Projects** shows how many projects the person belongs to; click it to see the projects and the person's roles in each.
 4. Click a row to highlight it. Click it again to clear the highlight.
 5. Click **Refresh users** to reload the list.
 

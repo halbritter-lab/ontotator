@@ -40,7 +40,8 @@ describe("users administration", () => {
   it("lists server fields and filters by username or display name", async () => {
     render(<UsersPage currentUser={currentUser} />); await load();
     const table = within(screen.getByRole("table", { name: "Users" }));
-    expect(table.getByText("ann-alex")).toBeTruthy(); expect(table.getByText("Study One").closest("li")?.textContent).toBe("Study One Lead Annotator"); expect(table.getAllByText(/^(Lead|Annotator)$/).every(node => node.closest(".status-pill"))).toBe(true);
+    expect(table.getByText("ann-alex")).toBeTruthy(); expect(table.getByText("1 project").tagName).toBe("SUMMARY"); expect(table.getByText("Study One").closest("details")?.open).toBe(false);
+    expect(table.getByText("Study One").closest("li")?.textContent).toBe("Study One Lead Annotator"); expect(table.getAllByText(/^(Lead|Annotator)$/).every(node => node.closest(".status-pill"))).toBe(true);
     expect(table.getByText("en")).toBeTruthy();
     expect(screen.queryByRole("form", { name: "New user" })).toBeNull(); expect(screen.getByRole("group", { name: "Users actions" }).textContent).toContain("New user…");
     fireEvent.change(screen.getByLabelText("Filter users"), { target: { value: "SMITH" } }); expect(table.queryByText("Root")).toBeNull();

@@ -35,7 +35,7 @@ What for: check who has an account, whether they finished setup and when they la
 
 1. In the sidebar, open **Administration** › **Users**.
 2. Type a username or display name into **Filter users**.
-3. Read the table. **Setup** shows **Pending** until the person has set a password. **Last login** shows **Never** if they have not logged in yet. **Active** reads **Yes**, **No** or **Anonymised**.
+3. Read the table. **Setup** shows **Pending** until the person has set a password. **Last login** shows **Never** if they have not logged in yet. **Active** reads **Yes**, **No** or **Anonymised**. **Projects** shows how many projects the person belongs to; click it to see the projects and the person's roles in each.
 4. Click a row to highlight it. Click it again to clear the highlight.
 5. Click **Refresh users** to reload the list.
 
