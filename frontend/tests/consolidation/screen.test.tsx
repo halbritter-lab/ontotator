@@ -427,7 +427,7 @@ describe("ConsolidationScreen", () => {
   it("adds a finding everyone missed from selected text through the draft save", async () => {
     mockViewport(1280);
     load(exampleView());
-    vi.spyOn(api, "searchOntology").mockResolvedValue({ route: "auto", query: "two", shuffled: false, search_id: "search-1",
+    const search = vi.spyOn(api, "searchOntology").mockResolvedValue({ route: "auto", query: "two", shuffled: false, search_id: "search-1",
       candidates: [{ term_id: "HP:0001250", label: "Seizure", definition: "", matched_term: "Seizure", rank: 1 }] } as never);
     const [start, end] = span("last week");
     const saved = draft(4, [{ annotation: { annotation_id: "ann-new", term_id: "HP:0001250" }, evidence: [{ mention: { segments: [{ start, end }] } }] }]);
@@ -454,6 +454,8 @@ describe("ConsolidationScreen", () => {
     const payload = save.mock.calls[0][1].payload;
     expect(payload).toMatchObject({ command: "create_annotation", layer_id: "phenotype", type_id: "default", term_id: "HP:0001250",
       segments: [{ start, end }], axes_values: { assertion: "present", experiencer: "patient", temporality: "current" } });
+    // The server accepts the search event only for the annotation it creates (INVALID_SEARCH_SELECTION).
+    expect(payload).toMatchObject({ search_event_id: "search-1", annotation_id: search.mock.calls.at(-1)![0].annotation_id });
     await waitFor(() => expect(document.querySelector(".cons-added")?.textContent).toBe("last week"));
     expect(TEXT.slice(start, end)).toBe("last week");
   });

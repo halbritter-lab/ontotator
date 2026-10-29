@@ -16,24 +16,26 @@ export interface TermPickerProps {
   workspace: WorkspaceView;
   layerId: string;
   initialQuery?: string;
+  /** The id of the annotation the pick creates: the server only accepts a search event made for that annotation. */
+  annotationId?: string;
   onPick: (candidate: SearchCandidate, searchId?: string) => void;
   onClose: () => void;
 }
 
 /** Search props of the consolidation's term searches; the Modifiers section of "Edit values…" adds the modifier mode (`within` = MODIFIER_ROOTS). */
-export function useTermSearch(workspace: WorkspaceView, layerId: string): Pick<SearchPanelProps, "searchManager" | "annotationId" | "workspaceKey" | "layerId" | "languages" | "languageHint"> {
+export function useTermSearch(workspace: WorkspaceView, layerId: string, annotationId?: string): Pick<SearchPanelProps, "searchManager" | "annotationId" | "workspaceKey" | "layerId" | "languages" | "languageHint"> {
   const manager = useMemo(() => new SearchManager(api), []);
   const [searchKey] = useState(() => `search-${randomId()}`);
   // The editor's search languages: the English-only hint shows only when the text's language is not searched (U6, C2).
   const languagesFor = useSearchLanguages(api, workspace.key.annotator_id, workspace.key.project_key, workspace.document.language, workspace.document.document_id);
   const ontologyId = (workspace.layers ?? []).find(layer => layer.layer_id === layerId)?.ontology_id;
   const languages = languagesFor((workspace.ontologies ?? []).find(item => item.ontology_id === ontologyId)?.sha256);
-  return { searchManager: manager, annotationId: searchKey, workspaceKey: workspace.key, layerId, languages,
+  return { searchManager: manager, annotationId: annotationId ?? searchKey, workspaceKey: workspace.key, layerId, languages,
     languageHint: prefillHint(workspace.document.language, languages?.active) ?? undefined };
 }
 
-export function TermPicker({ open, anchorRef, label, workspace, layerId, initialQuery, onPick, onClose }: TermPickerProps): JSX.Element | null {
-  const search = useTermSearch(workspace, layerId);
+export function TermPicker({ open, anchorRef, label, workspace, layerId, initialQuery, annotationId, onPick, onClose }: TermPickerProps): JSX.Element | null {
+  const search = useTermSearch(workspace, layerId, annotationId);
   if (!open) return null;
   return <Popover open anchorRef={anchorRef} label={label} onClose={onClose} width={420}>
     <SearchPanel {...search} initialQuery={initialQuery} autoFocus onEscape={onClose}

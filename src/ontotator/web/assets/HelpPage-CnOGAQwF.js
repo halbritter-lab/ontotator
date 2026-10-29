@@ -1,4 +1,4 @@
-import{r,a as p,j as a}from"./index-BzOnYAXm.js";import{M as m,r as g}from"./index-B3YIj6o8.js";const f=`# Ontotator user handbook
+import{r,a as p,j as a}from"./index-DM_VuOmU.js";import{M as m,r as g}from"./index-DF4DyYXQ.js";const f=`# Ontotator user handbook
 
 This handbook explains how to work with Ontotator in the browser. It is for everyone who uses the app: annotators, translation reviewers, consolidators, leads and system administrators. It describes the version of Ontotator that you open it from. If you run the server, read the [server operations guide (for server operators)](../operations.md) instead.
 
