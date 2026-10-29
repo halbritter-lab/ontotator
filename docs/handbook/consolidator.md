@@ -149,13 +149,13 @@ Before you start: after you submit, you cannot change the consolidation.
 1. When no group is open, the progress card reads **Ready to submit**.
 2. Click **Submit consolidation**.
 3. The dialog **Submit consolidation?** shows how many groups and findings the result has, and how many are not in the result.
-4. If there are warnings (values filled in by default, a modifier used as a finding, two severities), they are listed under **Check before you submit**. Click **Back** to fix them. Submit with warnings only if you checked that the values are right; the button then reads **Submit with** and the number of warnings.
-5. Click **Submit**.
+4. Click **Submit**.
+5. If there are warnings (values filled in by default, a modifier used as a finding, two severities), the dialog now lists them under **Check before you submit**, and the button reads **Submit with** and the number of warnings. Click **Back** to fix them, or submit with warnings only if you checked that the values are right.
 6. The screen confirms: *Consolidation submitted. The lead then accepts the result.* (If you are the lead yourself: *Consolidation submitted. Accept the result in Documents.*) Open your next task or click **Back to my tasks**.
 
 While groups are open, **Submit consolidation** stays inactive and says how many groups are left.
 
-![The Submit consolidation? dialog with the summary](images/consolidator-submit-dialog.png)
+![The Submit consolidation? dialog: the summary of groups and findings, Check before you submit with one warning, and the buttons Back and Submit with 1 warning](images/consolidator-submit-dialog.png)
 
 What happens next: the lead reads the result with your notes and flags, and accepts it as the final result or chooses another result. If you notice a mistake after submitting, tell the lead: they can start a new consolidation, which can include yours.
 

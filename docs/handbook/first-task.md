@@ -46,6 +46,8 @@ The new finding starts with the project's prefilled values, for example **Presen
 2. If a value is wrong, choose the right one under **Values**.
 3. If all shown values are right, click **Confirm defaults** (or press `d`).
 
+![A new finding on “seizure”: under Values, Present, Patient and Current are tagged Default, with the Confirm defaults (3) button above them](images/annotator-finding-values.png)
+
 Repeat steps 5 and 6 for every finding in the text.
 
 ## 7. Check the tool proposals (tasks from proposals only)
@@ -58,7 +60,7 @@ In a task *Annotation, from proposals*, the column **Review Proposals** lists fi
 4. The next open proposal is selected. Go on until every proposal is decided.
 5. Then read the whole text for findings the tool missed and add them as in step 5.
 
-![A proposal selected, with the Confirm, Reject, Edit & Replace and Unresolved buttons](images/annotator-proposal-review.png)
+![The tool proposed “Keine Krampfanfälle” (no seizures) as Present. The annotator chose Edit & Replace: the editable copy keeps Seizure and sets the assertion to Absent](images/annotator-proposal-review.png)
 
 Details: [Review tool proposals](annotator.md#review-tool-proposals).
 

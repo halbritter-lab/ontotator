@@ -1,6 +1,6 @@
 """Carried-review browser scenarios (editor plan F10); test server only, never shipped.
 
-``POST /__test_carry_forward__?scenario=t5|corrected|rounds3`` builds a fresh
+``POST /__test_carry_forward__?scenario=t5|t5span|corrected|rounds3`` builds a fresh
 project ``carry-{scenario}-{uuid8}`` through the real services
 (``WorkRoundService``, ``EditingService``, ``RoundInputResolutionService``,
 ``SubmissionService``) and returns its identities. One annotator
@@ -12,6 +12,7 @@ Scenarios:
 
 - ``t5``: Round 1 submitted with one spanless finding "Seizure"; Round 2
   continues from it (open) and has one added finding "Hypotonia" with a span.
+- ``t5span``: ``t5`` with "Seizure" on its span "Krampfanfälle" (handbook image).
 - ``corrected``: Round 1 submitted on v1 with "Seizure" on a span; v2
   corrects that span's text, so the Round 2 carry-forward on v2 cannot place
   it (needs-review input with a stored ``review_reason``).
@@ -231,9 +232,10 @@ def _result(
     }
 
 
-def build_t5(app: FastAPI) -> dict[str, Any]:
+def build_t5(app: FastAPI, *, seizure_span: bool = False) -> dict[str, Any]:
     scenario, documents = _setup(app, "t5", [TEXT_DE])
-    first = _first_round(scenario, documents[0], span=None)
+    span = _span(TEXT_DE, SEIZURE_SPAN) if seizure_span else None
+    first = _first_round(scenario, documents[0], span=span)
     carried = start_round(
         scenario,
         first["assignment_id"],
@@ -342,6 +344,7 @@ Builder = Callable[[FastAPI], dict[str, Any]]
 
 SCENARIOS: dict[str, Builder] = {
     "t5": build_t5,
+    "t5span": lambda app: build_t5(app, seizure_span=True),
     "corrected": build_corrected,
     "rounds3": build_rounds3,
 }

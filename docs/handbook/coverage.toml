@@ -53,6 +53,11 @@ chapter = "getting-started.md"
 glob = "frontend/src/me/**"
 chapter = "getting-started.md"
 
+# The in-app handbook (#/help) and the Help links: the header section describes them.
+[[map]]
+glob = "frontend/src/help/**"
+chapter = "getting-started.md"
+
 [[map]]
 glob = "frontend/src/ui/ShortcutHelp.tsx"
 chapter = "annotator.md"

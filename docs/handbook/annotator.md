@@ -16,7 +16,7 @@ New here? Start with [Your first task, start to finish](first-task.md). How to l
 
 ## The editor screen
 
-![The editor with the findings list on the left, the text in the middle and the selected finding's details on the right](images/annotator-new-finding.png)
+![The editor: the findings list on the left, the text in the middle and the selected finding Hypotonia with its values on the right; the toolbar shows Annotate from scratch and Saved](images/annotator-editor.png)
 
 The editor has three columns:
 
@@ -120,6 +120,8 @@ What for: record the context of a finding: whether it is present, who has it and
 
 Findings with open defaults show **Defaults to confirm** in the list.
 
+![A new finding on “seizure”: under Values, Present, Patient and Current are tagged Default, with the Confirm defaults (3) button above them](images/annotator-finding-values.png)
+
 ## Manage mentions of a finding
 
 What for: link a finding to every place in the text that supports it.
@@ -214,7 +216,7 @@ To undo a decision, click **Reset decision (open)** or press `0`.
 
 **Unresolved** is a flag for the lead, not clinical uncertainty. For clinical uncertainty ("possible seizures"), use the value **Uncertain**.
 
-![A proposal selected, with the Confirm, Reject, Edit & Replace and Unresolved buttons](images/annotator-proposal-review.png)
+![The tool proposed “Keine Krampfanfälle” (no seizures) as Present. The annotator chose Edit & Replace: the editable copy keeps Seizure and sets the assertion to Absent](images/annotator-proposal-review.png)
 
 ## Review carried findings
 
@@ -364,6 +366,8 @@ Steps:
 8. A message confirms the review, with **View result**. Your next open task opens on its own, or **My tasks** if none is left.
 
 If the source text was updated, **Source updates to review** appears. Open it, compare **Original source** and **Updated source**, and click **Submit review and resolve source update**.
+
+![A translation review: the source on the left, the translation on the right, the failed automatic check above them. On the right, Query is chosen with the category Number or unit and a rationale, above Submit review…](images/annotator-translation-review.png)
 
 ## Keyboard shortcuts
 

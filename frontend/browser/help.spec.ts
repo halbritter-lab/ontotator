@@ -9,6 +9,8 @@ test("opens the handbook in the app, follows a chapter link and an in-page ancho
   const article = page.locator("article.help-document");
   await expect(article.locator("h1")).toBeVisible();
   const chapters = page.getByRole("navigation", { name: "Handbook chapters" });
+  // Every chapter is listed by its title, not by its file name such as "lead-results".
+  for (const title of await chapters.locator("a").allTextContents()) expect(title).not.toMatch(/^[a-z]+(-[a-z]+)*$|^README$/);
 
   // A chapter link of the README opens that chapter in the app.
   const chapterLink = article.locator('a[href^="#/help/"]').first();

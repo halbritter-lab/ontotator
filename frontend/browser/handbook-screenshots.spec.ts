@@ -16,6 +16,7 @@ import { leadScenario } from "./leadWorkflowHelpers";
 import { loginOverviewUser, overviewAct, overviewScenario, type OverviewActBody, type OverviewScenario } from "./overviewHelpers";
 import { proposalCheckScenario, loginScenarioUser as loginProposalUser } from "./proposalCheckHelpers";
 import { loginScenarioUser, reviewFlowScenario } from "./reviewFlowHelpers";
+import { valuesScenario } from "./valuesHelpers";
 
 test.setTimeout(240_000);
 test.use({ viewport: { width: 1280, height: 800 }, actionTimeout: 15_000 });
@@ -60,14 +61,46 @@ async function loginLead(page: Page, project: string, username: string): Promise
 
 /** Close the toasts a step left (each has "Dismiss"), so they do not cover the next image. */
 async function dismissToasts(page: Page): Promise<void> {
-  for (const close of await page.locator(".ui-toast-close").all()) await close.click();
-  await expect(page.locator(".ui-toast")).toHaveCount(0);
+  // Retried: a toast of the last step can still appear after the first pass.
+  await expect(async () => {
+    for (const close of await page.locator(".ui-toast-close").all()) await close.click();
+    await expect(page.locator(".ui-toast-region .ui-toast")).toHaveCount(0, { timeout: 1_000 });
+  }).toPass();
 }
 
 /** Gives a scenario user a person's name, so the images show names instead of usernames. */
 async function rename(page: Page, username: string, displayName: string): Promise<void> {
   const response = await page.request.post("/__test_display_name__", { params: { username, display_name: displayName } });
   expect(response.ok(), await response.text()).toBeTruthy();
+}
+
+/** Every open group: a ✓ in each conflicting row, then Keep (consolidation-three.spec.ts resolveRest). */
+async function decideOpenGroups(page: Page): Promise<void> {
+  const groups = page.locator(".cons-group");
+  for (let index = 0; index < await groups.count(); index += 1) {
+    const group = groups.nth(index);
+    if (!(await group.locator(".cons-group-state").count())) continue;
+    const toggle = group.locator(".cons-group-toggle");
+    if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+    const conflicts = group.locator("tr.cons-row--conflict");
+    for (let row = 0; row < await conflicts.count(); row += 1) await conflicts.nth(row).locator("button.cons-take").first().click();
+    await group.getByRole("button", { name: /^Keep/ }).first().click();
+    await expect(group.locator(".cons-group-done")).toBeVisible();
+  }
+}
+
+/** All groups decided: "Ready to submit", then the Submit consolidation? dialog without a toast behind it. */
+async function openSubmitDialog(page: Page): Promise<Locator> {
+  const progress = page.locator(".cons-progress");
+  await expect(progress).toContainText("Ready to submit");
+  // The last group's inline "Decision saved / Undo" lives until the next action; a reload clears it.
+  await page.reload();
+  await expect(progress).toContainText("Ready to submit", { timeout: 30_000 });
+  await dismissToasts(page);
+  await progress.getByRole("button", { name: "Submit consolidation", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Submit consolidation?" });
+  await expect(dialog.getByRole("button", { name: "Back", exact: true })).toBeVisible();
+  return dialog;
 }
 
 const selectionBar = (page: Page) => page.getByRole("region", { name: "Selection", exact: true });
@@ -156,6 +189,7 @@ test.describe("getting-started.md", () => {
 test.describe("annotator.md", () => {
   test("Annotate from scratch, then the submit dialog", async ({ page }) => {
     const s = await reviewFlowScenario(page, "ANNOTATION_LOOP");
+    await rename(page, s.users.annotator, s.display_names.annotator = "Lena Vogt");
     await loginScenarioUser(page, s, "annotator");
     await page.goto(`/#/tasks/${s.assignments["loop-en"]}`);
     const text = s.texts["loop-en"];
@@ -174,6 +208,8 @@ test.describe("annotator.md", () => {
     await mark("hypotonia", "hypotonia", "HP:0001252");
     await page.keyboard.press("Enter");
     await expect(page.locator(".inspector-pane h2.term-heading")).toContainText("Hypotonia");
+    await expect(page.locator(".status-badge.status-saved")).toHaveText("Saved");
+    await shot(page, "annotator-editor");
 
     await page.getByRole("button", { name: /^Finish & submit/ }).click();
     const dialog = page.getByRole("dialog", { name: "Submit text", exact: true });
@@ -200,13 +236,17 @@ test.describe("annotator.md", () => {
     for (const name of ["Confirm", "Reject", "Edit & Replace", "Unresolved"]) {
       await expect(page.getByRole("button", { name: new RegExp(`^${name}\\b`) }).first()).toBeVisible();
     }
+    // The first proposal, "Keine Krampfanfälle", says Present: Edit & Replace, then Absent in the copy.
+    await page.getByRole("button", { name: /^Edit & Replace\b/ }).first().click();
+    const changed = page.waitForResponse(r => r.url().endsWith("/commands") && r.request().postDataJSON()?.payload?.command === "set_axes");
+    await page.locator('[data-axis-field="assertion"] input[type="radio"][value="absent"]').check();
+    expect((await changed).ok()).toBeTruthy();
+    await expect(page.locator(".status-badge.status-saved")).toHaveText("Saved");
     await shot(page, "annotator-proposal-review");
-    await page.getByRole("button", { name: /^Confirm\b/ }).first().click();
-    await expect(proposals.first()).toContainText("Confirmed");
   });
 
   test("Review carried findings", async ({ page }) => {
-    const response = await page.request.post("/__test_carry_forward__", { params: { scenario: "t5" }, timeout: 120_000 });
+    const response = await page.request.post("/__test_carry_forward__", { params: { scenario: "t5span" }, timeout: 120_000 });
     expect(response.ok(), await response.text()).toBeTruthy();
     const s = await response.json() as { username: string; assignment_id: number };
     await rename(page, s.username, "Ana Weber");
@@ -225,6 +265,54 @@ test.describe("annotator.md", () => {
     await check.click();
     await expect(page.locator(".carried-progress__status")).toHaveText("All carried findings checked");
   });
+
+  test("Set values and confirm defaults", async ({ page }) => {
+    const s = await valuesScenario(page, "VALUES_STANDARD");
+    await rename(page, s.users.annotator, s.display_names.annotator = "Lena Vogt");
+    await loginScenarioUser(page, s, "annotator");
+    await page.goto(`/#/tasks/${s.assignments.values}`);
+    const text = s.texts.values;
+    await expect(page.locator(".text-container")).toHaveText(text);
+    const start = text.indexOf("seizure");
+    await selectText(page, start, start + "seizure".length);
+    await page.getByLabel("Search term", { exact: true }).fill("seizure");
+    await expect(page.getByRole("listbox", { name: "Terms", exact: true }).getByRole("option").first()).toContainText("HP:0001250");
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".values-section .axis-default-tag").first()).toHaveText("Default");
+    const confirm = page.getByRole("button", { name: /^Confirm defaults \(\d+\)/ });
+    await expect(confirm).toBeVisible();
+    await expect(page.locator(".status-badge.status-saved")).toHaveText("Saved");
+    await shot(page, "annotator-finding-values");
+    await confirm.click();
+    await expect(confirm).toHaveCount(0);
+  });
+
+  test("Review a translation", async ({ page }) => {
+    const s = await reviewFlowScenario(page, "REVIEW_FLOW");
+    await loginScenarioUser(page, s, "ana");
+    await page.goto(`/#/tasks/${s.assignments["failed-translation"]}`);
+    await expect(page.getByRole("textbox", { name: "Translation (de)", exact: true })).toHaveValue(s.texts["failed-translation"]);
+    await expect(page.getByRole("region", { name: "Source (en)", exact: true })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Automatic translation checks", exact: true })).toBeVisible();
+    for (const name of ["Accepted unchanged", "Accepted with corrections", "Query", "Rejected"]) {
+      await expect(page.getByRole("radio", { name, exact: true })).toBeVisible();
+    }
+    await page.getByRole("radio", { name: "Query", exact: true }).check();
+    await page.getByRole("checkbox", { name: "Number or unit", exact: true }).check();
+    await page.getByRole("textbox", { name: "Rationale", exact: true }).fill("The automatic check flags the dose unit: please check it against the source.");
+    await page.locator(":focus").blur();
+    await expect(page.locator(".translation-save-status")).toHaveText("Saved");
+    const submit = page.getByRole("button", { name: "Submit review…", exact: true });
+    await expect(submit).not.toHaveAttribute("aria-disabled", "true");
+    // Tall enough for the four decisions, the categories, the rationale and Submit review… at once.
+    await page.setViewportSize({ width: 1280, height: 1200 });
+    await page.getByRole("radio", { name: "Accepted unchanged", exact: true }).scrollIntoViewIfNeeded();
+    await shot(page, "annotator-translation-review");
+    await submit.click();
+    const confirm = page.getByRole("dialog", { name: "Submit this review?", exact: true });
+    await confirm.getByRole("button", { name: "Submit review", exact: true }).click();
+    await expect(confirm).toHaveCount(0);
+  });
 });
 
 test.describe("consolidator.md", () => {
@@ -242,39 +330,39 @@ test.describe("consolidator.md", () => {
     const toggle = group.locator(".cons-group-toggle");
     if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
     const table = group.locator("table.cons-compare");
-    await table.getByRole("button", { name: /^Take Abnormality of the nervous system from .* for Term$/ }).click();
+    // Hypotonia, the term two people chose; Luc's broader parent term is not taken.
+    await table.getByRole("button", { name: /^Take Hypotonia from .* for Term$/ }).first().click();
     await table.getByRole("button", { name: /^Take Absent from .* for Assertion$/ }).click();
     await expect(group.locator(".cons-result")).toContainText("Result:");
     await expect(group.locator(".cons-result")).toContainText("Not taken:");
     const keep = group.getByRole("button", { name: "Keep", exact: true });
     await expect(keep).toBeEnabled();
-    await group.evaluate(element => element.scrollIntoView({ block: "start" }));
+    // Tall enough for the heading, the progress card and the open group together.
+    await page.setViewportSize({ width: 1280, height: 1100 });
     await shot(page, "consolidator-group-table");
     await keep.click();
     await expect(toggle).toContainText("decided");
 
-    // The remaining groups: a ✓ in each conflicting row, then Keep (consolidation-three.spec.ts resolveRest).
-    const groups = page.locator(".cons-group");
-    for (let index = 0; index < await groups.count(); index += 1) {
-      const other = groups.nth(index);
-      if (!(await other.locator(".cons-group-state").count())) continue;
-      const otherToggle = other.locator(".cons-group-toggle");
-      if ((await otherToggle.getAttribute("aria-expanded")) !== "true") await otherToggle.click();
-      const conflicts = other.locator("tr.cons-row--conflict");
-      for (let row = 0; row < await conflicts.count(); row += 1) await conflicts.nth(row).locator("button.cons-take").first().click();
-      await other.getByRole("button", { name: /^Keep/ }).first().click();
-      await expect(other.locator(".cons-group-done")).toBeVisible();
-    }
-    const progress = page.locator(".cons-progress");
-    await expect(progress).toContainText("Ready to submit");
-    await progress.getByRole("button", { name: "Submit consolidation", exact: true }).click();
-    const dialog = page.getByRole("dialog", { name: "Submit consolidation?" });
-    await expect(dialog.getByRole("button", { name: "Back", exact: true })).toBeVisible();
-    await expect(dialog.getByRole("button", { name: /^Submit/ })).toBeVisible();
-    await shot(page, "consolidator-submit-dialog");
-    await dialog.getByRole("button", { name: /^Submit/ }).click();
+    await decideOpenGroups(page);
+    await openSubmitDialog(page).then(dialog => dialog.getByRole("button", { name: /^Submit/ }).click());
+    await expect(page.getByText(/^Consolidation submitted\. /)).toBeVisible();
+  });
+
+  test("Finish a consolidation: the submit dialog with warnings", async ({ page }) => {
+    // Confirmed proposals keep default values, so the server warns on submit.
+    const s = await proposalCheckScenario(page, "CONSOLIDATING");
+    await rename(page, s.users.lead, s.display_names.lead = "Mia Kühn");
+    await loginProposalUser(page, s, "lead");
+    await page.goto(`/#/tasks/${s.consolidation_assignment_id}`);
+    await expect(page.getByRole("heading", { level: 1, name: /^Consolidate / })).toBeVisible({ timeout: 30_000 });
+    await decideOpenGroups(page);
+    const dialog = await openSubmitDialog(page);
+    await dialog.getByRole("button", { name: "Submit", exact: true }).click();
     const warned = dialog.getByRole("button", { name: /^Submit with \d+ warnings?$/ });
-    if (await warned.waitFor({ timeout: 3_000 }).then(() => true, () => false)) await warned.click();
+    await expect(warned).toBeVisible();
+    await expect(dialog.getByText("Check before you submit", { exact: true })).toBeVisible();
+    await shot(page, "consolidator-submit-dialog");
+    await warned.click();
     await expect(page.getByText(/^Consolidation submitted\. /)).toBeVisible();
   });
 });

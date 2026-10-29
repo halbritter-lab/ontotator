@@ -1,7 +1,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import HelpPage from "../src/help/HelpPage";
-import { CHAPTERS, chapterOrder, imageUrl, resolveLink, slug, slugger } from "../src/help/handbook";
+import { CHAPTERS, chapterOrder, chapterTitle, imageUrl, resolveLink, slug, slugger } from "../src/help/handbook";
 import { HELP_SECTIONS } from "../src/help/sections";
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
@@ -99,6 +99,14 @@ describe("HelpPage", () => {
   it.each(Object.keys(CHAPTERS))("renders %s without HTML comments", chapter => {
     const { container } = render(<HelpPage chapter={chapter} />);
     expect(container.querySelector("article")!.textContent).not.toContain("<!--");
+  });
+
+  it("names every chapter in the navigation by its title, never its file name", () => {
+    render(<HelpPage chapter="lead-results" />);
+    const links = [...screen.getByRole("navigation", { name: "Handbook chapters" }).querySelectorAll("a")].map(link => link.textContent);
+    expect(links).toEqual(chapterOrder().map(chapterTitle));
+    for (const name of chapterOrder()) expect(chapterTitle(name), name).not.toBe(name);
+    expect(chapterTitle("lead-results")).toBe("Lead: results, decisions and export");
   });
 
   it("says so for an unknown chapter", () => {

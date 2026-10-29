@@ -12,7 +12,7 @@ export const HELP_SECTIONS = {
   consolidationEditor: { chapter: "consolidator", section: "work-in-the-full-editor" },
   translationReview: { chapter: "annotator", section: "review-a-translation" },
   consolidation: { chapter: "consolidator", section: "read-the-text-and-walk-the-groups" },
-  consolidationReadOnly: { chapter: "consolidator", section: "read-a-submitted-consolidation-lead" },
+  consolidationReadOnly: { chapter: "lead-results", section: "read-a-submitted-consolidation" },
   documents: { chapter: "lead-documents", section: "the-documents-page" },
 } as const satisfies Record<string, { chapter: string; section: string }>;
 
