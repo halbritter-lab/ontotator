@@ -34,7 +34,7 @@ The editor has three columns: the list of **Findings** on the left, the text in 
 
 1. Read the text from the start. When it names a finding, for example "seizures", select the words with the mouse.
 2. The panel **New finding** opens. **Search term** already holds the marked words, and the hits are listed under **Terms**.
-3. Check the top hit. If it is the right term, press Enter. Otherwise, click another hit or change the words in **Search term**.
+3. Read the hits before you choose: the search matches words, not meaning, and only a term whose name or synonym equals your words is sure to be on top. If the top hit is the right term, press Enter. Otherwise, click another hit, or try another word or a synonym in **Search term**.
 
 ![The New finding panel with the marked text and the term search open](images/annotator-new-finding.png)
 
@@ -56,9 +56,9 @@ In a task *Annotation, from proposals*, the column **Review Proposals** lists fi
 
 1. Select the first proposal. The text shows where it was found.
 2. Check three things: the marked text, the term and every value.
-3. Click **Confirm** if all three are right, **Reject** if the proposal is wrong, or **Edit & Replace** to correct it. If you cannot decide, click **Unresolved** and write a **Reviewer note**.
+3. Click **Confirm** if all three are right, **Reject** if the proposal is wrong, or **Edit & Replace** to correct it. Only if you really cannot decide, click **Unresolved** and write a **Reviewer note** saying why.
 4. The next open proposal is selected. Go on until every proposal is decided.
-5. Then read the whole text for findings the tool missed and add them as in step 5.
+5. Then read the whole text for findings the tool missed. Mark text that has no proposal and add the finding as in step 5. It appears under **Your own findings**, next to the proposals.
 
 ![The tool proposed “Keine Krampfanfälle” (no seizures) as Present. The annotator chose Edit & Replace: the editable copy keeps Seizure and sets the assertion to Absent](images/annotator-proposal-review.png)
 
