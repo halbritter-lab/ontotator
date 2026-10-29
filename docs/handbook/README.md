@@ -44,6 +44,8 @@ You can have more than one role. Roles other than system administrator apply to 
 
 (translation review →) annotate → accept, or consolidate and accept → export
 
+![How work flows: the lead uploads clinical texts, some of them translated; a reviewer checks each translation against its source; several annotators each annotate the same text on their own; if their submissions agree, the lead accepts one as the result; if they differ, a consolidator merges them into one result; the lead exports one final result per text](images/workflow.png)
+
 1. **Translation review** (only for translated texts, if the project plans it): an annotator checks the translation against the source and accepts, corrects, queries or rejects it. The lead decides what happens with queried or rejected translations.
 2. **Annotate**: the lead assigns a text to one or more annotators. Each annotator marks findings, either from scratch or from tool proposals. In a task from proposals, the annotator confirms, rejects or replaces each proposal. Then they submit the text.
 3. **Accept**: on the **Documents** page, the lead sees all submissions of a text. If they agree, or if one is clearly right, the lead clicks **Accept result** or **Use as final**.

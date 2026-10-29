@@ -84,6 +84,10 @@ The same task was changed in another window or by someone else. Click **Reload c
 
 The connection to the server is lost. Keep the window open; your input stays in the editor. When the connection is back, saving usually resumes on its own; if the status stays, click **Retry**. See [The editor screen](annotator.md#the-editor-screen).
 
+### The term search does not find the right term
+
+The search compares your words with term names and synonyms; it does not understand meaning. Terms whose name or synonym equals your words come first, similar terms follow in a shuffled order. Read all hits, then try another word, a synonym, the English name or a code. See [Search a term](annotator.md#search-a-term).
+
 ## Translation review
 
 ### I cannot submit my review: "Your qualification is required to submit."
