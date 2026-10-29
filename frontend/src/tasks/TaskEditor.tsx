@@ -15,6 +15,8 @@ import { ReportAnswerNotice } from "../problems/ReportAnswerNotice";
 import { roundBadge as roundBadgeOf, roundIdentity } from "../editor/rounds/roundLabels";
 import { ConsolidationScreen } from "../consolidation/ConsolidationScreen";
 import { onSpaceActivate } from "../ui/spaceActivates";
+import { HelpLink } from "../help/HelpLink";
+import { helpHref, type HelpScreen } from "../help/sections";
 
 interface TaskEditorProps {
   assignmentId: number;
@@ -63,7 +65,7 @@ export function TaskEditor(props: TaskEditorProps): JSX.Element {
       onRefresh={assignment.lead_correction ? value => setState({ identity, assignment: value }) : undefined}>{guidelines => <>
       <TranslationReviewScreen key={identity} assignmentId={props.assignmentId} username={props.user.username}
         held={assignment.held} holdReason={assignment.hold_reason} saveBeforeReportRef={saveBeforeReportRef}
-        guidelineActions={guidelines.button} guidelineNotice={guidelines.notice}
+        guidelineActions={<>{guidelines.button}<HelpLink screen="translationReview" /></>} guidelineNotice={guidelines.notice}
         reportActions={<TaskProblemActions assignment={assignment} onSaveBeforeReport={async () => { await saveBeforeReportRef.current?.(); }} onRefresh={value => setState({ identity, assignment: value })} />}
         onNavigate={props.onNavigate} routeLeaveRef={props.routeLeaveRef} leaveGuardRef={props.leaveGuardRef} onSubmitted={afterSubmit(props)} />
       {guidelines.drawer}
@@ -160,7 +162,7 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
     return <TaskGuidelines assignment={assignment} readOnly={workspace.read_only || assignment.held}>{guidelines => <>
       <ConsolidationScreen projectKey={assignment.project_key} roundId={roundInfo.round_id} assignmentId={assignmentId}
         onNavigate={onNavigate} workspaceView={workspace.read_only ? null : workspace.view} notice={guidelines.notice}
-        headerActions={<>{guidelines.button}
+        headerActions={<>{guidelines.button}<HelpLink screen="consolidation" />
           {/* Group commands save at once: nothing to save before a report. */}
           <TaskProblemActions assignment={assignment} readOnly={workspace.read_only} onSaveBeforeReport={async () => undefined} onRefresh={value => {
             setWorkspace(current => current ? { ...current, assignment: value } : current); void loadTasks();
@@ -181,6 +183,10 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
   };
   // Toolbar identity (spec section 7): short badge, full identity line as its title.
   const roundBadge = roundBadgeOf(roundInfo);
+  const helpScreen: HelpScreen = roundInfo?.kind === "text_change" ? "editorTextChange"
+    : roundInfo?.kind === "carry_forward" || roundInfo?.kind === "handover" ? "editorCarried"
+    : workspace.view.key.mode === "review" ? "consolidationEditor"
+    : workspace.view.key.mode === "proposal_check" ? "editorProposals" : "editorScratch";
   const roundTitle = roundInfo ? roundIdentity(roundInfo) : undefined;
   return <TaskGuidelines assignment={assignment} readOnly={workspace.read_only || assignment.held}>{guidelines => <>{submittedElsewhere && <InlineMessage tone="info">Another session submitted this task. Your editor has been reloaded read-only.</InlineMessage>}
     {!!taskError && <><ErrorNotice error={taskError} /><Button onClick={() => { void loadTasks(); }}>Retry task list</Button></>}
@@ -193,7 +199,8 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
       menuItems={[{ id: "rounds", label: "Work rounds", onSelect: () => {
         // Save pending edits first: the dialog tells an untouched round from one with saved work.
         void (saveBeforeReportRef.current?.() ?? Promise.resolve()).catch(() => undefined).then(() => { if (active.current) setRoundDialogOpen(true); });
-      } }, problemItem, ...(guidelines.item ? [guidelines.item] : [])]}
+      } }, problemItem, ...(guidelines.item ? [guidelines.item] : []),
+        { id: "help", label: "Help for this screen", onSelect: () => window.open(helpHref(helpScreen), "_blank", "noopener,noreferrer") }]}
       roundInputs={roundInputs} roundKind={roundInfo?.kind} roundActive={roundInfo?.active} roundBadge={roundBadge} roundTitle={roundTitle}
       roundOrdinal={roundInfo?.round_ordinal} documentVersion={roundInfo?.document_version}
       held={assignment.held} holdReason={assignment.hold_reason} saveBeforeReportRef={saveBeforeReportRef}
