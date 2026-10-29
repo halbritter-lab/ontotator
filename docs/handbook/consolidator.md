@@ -126,7 +126,7 @@ What for: add a finding that no submission has.
 2. Search and pick the term.
 3. A message confirms the new finding. It is listed under **Added by you**.
 
-If the passage is not found, type it exactly as written, or select it in the text. If you see **Could not add the finding. Nothing changed.**, add it in the [full editor](#work-in-the-full-editor) instead.
+If the passage is not found, type it exactly as written, or select it in the text.
 
 ## Change or undo a decision
 

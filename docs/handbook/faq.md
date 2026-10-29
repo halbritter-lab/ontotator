@@ -106,7 +106,7 @@ A submitted consolidation cannot be changed. Tell the lead: they can start a new
 
 ### "Could not add the finding. Nothing changed."
 
-Add the finding in the full editor instead. See [Add a finding everyone missed](consolidator.md#add-a-finding-everyone-missed).
+The finding was not saved, for example because the connection dropped. Reload the page and add it again. If it keeps failing, tell your lead. See [Add a finding everyone missed](consolidator.md#add-a-finding-everyone-missed).
 
 ### The consolidation asks me to "Check before you submit"
 
