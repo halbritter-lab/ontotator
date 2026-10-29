@@ -20,11 +20,15 @@ Codes work once and expire: setup codes after 24 hours, reset codes after 2 hour
 
 Your session has ended. Log in again in that window. Your unsaved edits stay in the open editor and are saved after you log in. See [Log in](getting-started.md#log-in).
 
-### The page says it is out of date
+### The page says "The page is out of date; reload it." or "Your page is out of date."
 
-Reload the page in the browser, then repeat the last action.
+Reload the page in the browser, then repeat the last action. If the message asks you to, log in again ([Log in](getting-started.md#log-in)).
 
 ## Tasks and projects
+
+### After login I see Projects, not My tasks
+
+Ontotator opens the project you used last, or **Projects** the first time. Click **My tasks** in the sidebar. See [Log in](getting-started.md#log-in).
 
 ### My tasks is empty
 
@@ -32,11 +36,11 @@ A project lead has not assigned you a text yet. Assigned texts appear under **My
 
 ### I see "You are not a member of any project yet."
 
-Ask your project lead or an administrator to add you to a project, then reload the page.
+Ask your project lead or an administrator to add you to a project, then reload the page. Leads: see [Add a member](lead-settings.md#add-a-member).
 
 ### A task opens with "Task not found or not yours"
 
-The task was removed or given to someone else, or you followed a link meant for another person. Go back to **My tasks**.
+The task was removed or given to someone else, or you followed a link meant for another person. Go back to **My tasks** ([See your tasks](getting-started.md#see-your-tasks)).
 
 ### My task is paused
 
@@ -44,11 +48,11 @@ A problem report pauses the task, yours or the lead's. You can read your saved w
 
 ### My submitted task is read-only
 
-Submitted work cannot be changed. Ask the project lead to reopen it. A reopened task shows **Reopened** with the lead's reason.
+A submission cannot be edited. To change your work, open the task, choose **More** › **Work rounds** and click **Continue from this submission**. Your findings are carried into a new round; check them, make your changes and submit again. See [Start a new work round](annotator.md#start-a-new-work-round). A lead can also reopen your task; it then shows **Reopened** with the lead's reason.
 
 ### I cannot open project settings, Ontologies or New project
 
-Project settings are for project leads. **Ontologies**, **Users** and **New project** are for system administrators. The page tells you whom to ask.
+Project settings are for project leads. **Ontologies**, **Users** and **New project** are for system administrators. The page tells you whom to ask. See [Roles](README.md#roles).
 
 ## Annotating
 
@@ -74,11 +78,11 @@ Your project requires a text span for every finding. Mark the text passage inste
 
 ### The save status says "Changed elsewhere – reload required"
 
-The same task was changed in another window or by someone else. Click **Reload case**. See [Read the editor layout and status](annotator.md#read-the-editor-layout-and-status).
+The same task was changed in another window or by someone else. Click **Reload case**. See [The editor screen](annotator.md#the-editor-screen).
 
 ### The save status says "Offline – changes not saved"
 
-The connection to the server is lost. Keep the window open; your input stays in the editor. When the connection is back, saving usually resumes on its own; if the status stays, click **Retry**.
+The connection to the server is lost. Keep the window open; your input stays in the editor. When the connection is back, saving usually resumes on its own; if the status stays, click **Retry**. See [The editor screen](annotator.md#the-editor-screen).
 
 ## Translation review
 
@@ -88,13 +92,21 @@ Add your qualification (for example "physician, native German speaker") in your 
 
 ### What does "automatic check failed" mean?
 
-The translation tool checked its own output and found a possible problem, for example numbers or units that differ from the source. Click **Details** to read the check, what the tool reported and what to do if the translation is right anyway. Open **Technical details** for the technical code of the check. If Ontotator has no description for a check, ask the project lead what it checks. See [Translation review](annotator.md#translation-review).
+The translation tool checked its own output and found a possible problem, for example numbers or units that differ from the source. Click **Details** to read the check, what the tool reported and what to do if the translation is right anyway. Open **Technical details** for the technical code of the check. If Ontotator has no description for a check, ask the project lead what it checks. See [Review a translation](annotator.md#review-a-translation).
 
 ## Consolidating
 
 ### Why is "Submit consolidation" disabled?
 
 Some groups are still open. Decide each open group first; the progress card counts what is left. See [Finish a consolidation](consolidator.md#finish-a-consolidation).
+
+### I submitted a consolidation with a mistake
+
+A submitted consolidation cannot be changed. Tell the lead: they can start a new consolidation on the text, which can include yours as one of the submissions. See [Finish a consolidation](consolidator.md#finish-a-consolidation) and [Accept a consolidation](lead-results.md#accept-a-consolidation).
+
+### "Could not add the finding. Nothing changed."
+
+Add the finding in the full editor instead. See [Add a finding everyone missed](consolidator.md#add-a-finding-everyone-missed).
 
 ### The consolidation asks me to "Check before you submit"
 
@@ -104,19 +116,43 @@ The result has findings with values filled in by default, modifier terms used as
 
 ### I cannot accept a result
 
-In projects where the consolidator of a text may not be one of its annotators, you cannot choose a result you made yourself. Another lead must choose it. See [Accept a result or compare results](lead.md#accept-a-result-or-compare-results).
+In projects where the consolidator of a text may not be one of its annotators, you cannot choose a result you made yourself. Another lead must choose it. See [Accept a result or compare results](lead-results.md#accept-a-result-or-compare-results).
+
+### My uploaded texts do not show up
+
+An import runs in the background; reload **Documents** when it is done. If the project plan for new imports is **Plan nothing; I plan texts on Documents**, the new texts show as *Not decided* until you plan them. See [Upload texts](lead-documents.md#upload-texts).
+
+### I cannot change the ontology release or the task profile
+
+The ontology release can be chosen freely only until the first work is submitted; after that, use **Move to another release**. The task profile can only be replaced before work starts. See [Move a started project to a newer release](lead-settings.md#move-a-started-project-to-a-newer-release).
+
+### A text has no assign button
+
+The text is not in the work plan. Plan it first. See [Add a text to the plan](lead-documents.md#add-a-text-to-the-plan).
+
+### A task is still paused after I closed the report
+
+Closing a report does not always release the pause. The row shows **Resume task…**; click it and release the pause. See [Decide on a problem report](lead-results.md#decide-on-a-problem-report).
+
+### I chose myself as consolidator, but "Open consolidation" shows no actions
+
+**Open consolidation** in the text card is the read-only view. Open your task with **Open my task** in the row on **Documents**, or from **My tasks**. See [Start a consolidation](lead-results.md#start-a-consolidation).
+
+### The consolidator list does not show a person
+
+Only members with the **Consolidator** role are listed. Give the role first. See [Change a member's roles](lead-settings.md#change-a-members-roles).
 
 ### The export asks me to tick a box
 
-Some texts still need your decision or have no final result. Either decide them in **Documents** first, or tick the box to export the ready results and leave the others out. See [Export final results](lead.md#export-final-results).
+Some texts still need your decision or have no final result. Either decide them in **Documents** first, or tick the box to export the ready results and leave the others out. See [Export final results](lead-results.md#export-final-results).
 
 ### I cannot remove a lead
 
-A project needs at least one lead. Add another lead first, then remove the role. See [Change a member's roles](lead.md#change-a-members-roles).
+A project needs at least one lead. Add another lead first, then remove the role. See [Change a member's roles](lead-settings.md#change-a-members-roles).
 
 ### "Save changes" is disabled in the settings
 
-Nothing has changed yet. The button turns on as soon as you edit a field. **People** and **Guidelines** save on their own and have no save button.
+Nothing has changed yet. The button turns on as soon as you edit a field. **People** and **Guidelines** save on their own and have no save button. See [Open project settings](lead-settings.md#open-project-settings).
 
 ## Administration
 
@@ -124,9 +160,9 @@ Nothing has changed yet. The button turns on as soon as you edit a field. **Peop
 
 Tick **I have handed over or stored the code** first. The code is shown only once. See [Hand over a setup or reset code](admin.md#hand-over-a-setup-or-reset-code).
 
-### I cannot remove my own administrator role or deactivate myself
+### "You cannot remove your own administrator role."
 
-This protects you from locking yourself out. Another system administrator must do it. The last active system administrator always keeps the role.
+This protects you from locking yourself out. Another system administrator must do it; you also cannot deactivate yourself. The last active system administrator always keeps the role. See [Edit a user's profile and administrator role](admin.md#edit-a-users-profile-and-administrator-role).
 
 ### An ontology upload is refused
 
@@ -134,4 +170,4 @@ The file could not be read, is too large, or is an incomplete HPO release. Read 
 
 ### The administrator lost the password
 
-This is fixed on the server, not in the app. See [Lost admin password](../operations.md#lost-admin-password).
+This is fixed on the server, not in the app. See [Lost admin password](../operations.md#lost-admin-password) in the server operations guide.

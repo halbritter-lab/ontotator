@@ -147,123 +147,123 @@ chapter = "consolidator.md"
 
 [[map]]
 glob = "frontend/src/variants/**"
-chapter = "lead.md"
+chapter = "lead-results.md"
 
 [[map]]
 glob = "frontend/src/guidelines/GuidelinesPage.tsx"
-chapter = "lead.md"
+chapter = "lead-settings.md"
 
 [[map]]
 glob = "frontend/src/guidelines/fileChecks.ts"
-chapter = "lead.md"
+chapter = "lead-settings.md"
 
 [[map]]
 glob = "frontend/src/guidelines/submissionLabel.ts"
-chapter = "lead.md"
+chapter = "lead-results.md"
 
 [[map]]
 glob = "frontend/src/admin/DocumentsPage.tsx"
-chapter = "lead.md"
+chapter = "lead-documents.md"
 
 [[map]]
 glob = "frontend/src/documents/**"
-chapter = "lead.md"
+chapter = "lead-documents.md"
 
 [[map]]
 glob = "frontend/src/admin/AssignWorkDialog.tsx"
-chapter = "lead.md"
+chapter = "lead-documents.md"
 
 [[map]]
 glob = "frontend/src/admin/assignSummary.ts"
-chapter = "lead.md"
+chapter = "lead-documents.md"
 
 [[map]]
 glob = "frontend/src/admin/DistributionDialog.tsx"
-chapter = "lead.md"
+chapter = "lead-documents.md"
 
 [[map]]
 glob = "frontend/src/admin/AssignmentActions.tsx"
-chapter = "lead.md"
+chapter = "lead-documents.md"
 
 [[map]]
 glob = "frontend/src/admin/assignmentUI.tsx"
-chapter = "lead.md"
+chapter = "lead-documents.md"
 
 [[map]]
 glob = "frontend/src/admin/Upload*.tsx"
-chapter = "lead.md"
+chapter = "lead-documents.md"
 
 [[map]]
 glob = "frontend/src/admin/uploadModel.ts"
-chapter = "lead.md"
+chapter = "lead-documents.md"
 
 [[map]]
 glob = "frontend/src/admin/ProgressPage.tsx"
-chapter = "lead.md"
+chapter = "lead-documents.md"
 
 [[map]]
 glob = "frontend/src/admin/progressLabels.ts"
-chapter = "lead.md"
+chapter = "lead-documents.md"
 
 [[map]]
 glob = "frontend/src/admin/ExportPage.tsx"
-chapter = "lead.md"
+chapter = "lead-results.md"
 
 [[map]]
 glob = "frontend/src/admin/FinalExportPanel.tsx"
-chapter = "lead.md"
+chapter = "lead-results.md"
 
 [[map]]
 glob = "frontend/src/admin/ProjectSettingsPage.tsx"
-chapter = "lead.md"
+chapter = "lead-settings.md"
 
 [[map]]
 glob = "frontend/src/admin/SettingsCard.tsx"
-chapter = "lead.md"
+chapter = "lead-settings.md"
 
 [[map]]
 glob = "frontend/src/admin/projectFields.tsx"
-chapter = "lead.md"
+chapter = "lead-settings.md"
 
 [[map]]
 glob = "frontend/src/admin/LanguagesField.tsx"
-chapter = "lead.md"
+chapter = "lead-settings.md"
 
 [[map]]
 glob = "frontend/src/admin/HiddenAxisValuesField.tsx"
-chapter = "lead.md"
+chapter = "lead-settings.md"
 
 [[map]]
 glob = "frontend/src/admin/MembersSection.tsx"
-chapter = "lead.md"
+chapter = "lead-settings.md"
 
 [[map]]
 glob = "frontend/src/admin/GuidelinesSection.tsx"
-chapter = "lead.md"
+chapter = "lead-settings.md"
 
 [[map]]
 glob = "frontend/src/admin/RepinReport.tsx"
-chapter = "lead.md"
+chapter = "lead-settings.md"
 
 [[map]]
 glob = "frontend/src/admin/variantMetadata.ts"
-chapter = "lead.md"
+chapter = "lead-settings.md"
 
 [[map]]
 glob = "frontend/src/problems/Lead*.tsx"
-chapter = "lead.md"
+chapter = "lead-results.md"
 
 [[map]]
 glob = "frontend/src/problems/ReportTimeline.tsx"
-chapter = "lead.md"
+chapter = "lead-results.md"
 
 [[map]]
 glob = "frontend/src/problems/labels.ts"
-chapter = "lead.md"
+chapter = "lead-results.md"
 
 [[map]]
 glob = "frontend/src/tasks/ProblemReportDetail.tsx"
-chapter = "lead.md"
+chapter = "lead-results.md"
 
 [[map]]
 glob = "frontend/src/app/ProjectsPage.tsx"
@@ -312,3 +312,19 @@ chapter = "faq.md"
 [[map]]
 glob = "frontend/src/admin/ErrorNotice.tsx"
 chapter = "faq.md"
+
+[[map]]
+glob = "frontend/src/variants/**"
+chapter = "lead-documents.md"
+
+[[map]]
+glob = "frontend/src/documents/**"
+chapter = "lead-results.md"
+
+[[map]]
+glob = "frontend/src/tasks/MyTasks.tsx"
+chapter = "first-task.md"
+
+[[map]]
+glob = "frontend/src/app/CaseScreen.tsx"
+chapter = "first-task.md"

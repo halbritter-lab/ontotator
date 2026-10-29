@@ -1,9 +1,21 @@
 # Administration
 
-This chapter is for system administrators. You manage user accounts, ontology releases and projects in the app.
-Server set-up, the command line, backups, upgrades and deployment are in [Server operations](../operations.md). A lost administrator password is also handled there: see [Lost admin password](../operations.md#lost-admin-password).
+This chapter is for system administrators. You manage user accounts, ontology releases and projects in the app. Back to the [handbook overview](README.md).
+
+Server set-up, the command line, backups, upgrades and deployment are in the [server operations guide (for server operators)](../operations.md). A lost administrator password is also handled there: see [Lost admin password](../operations.md#lost-admin-password).
 
 Ontotator sends no e-mail. New users and users who forgot their password get a one-time code from you, by hand.
+
+## Set up a new project for a lead
+
+The usual first day, in order:
+
+1. [Upload the ontology release](#upload-ontology-releases-and-translation-files) the project needs.
+2. [Create the project](#create-a-project).
+3. [Create a user account](#create-a-user-account) for the lead, with the **Lead** role in the new project.
+4. [Hand over the setup code](#hand-over-a-setup-or-reset-code) to the lead.
+
+The lead then sets up the rest; see the [lead overview](lead.md).
 
 ## Reach the administration pages
 
@@ -19,7 +31,7 @@ Other users do not see this group. If they open such a page by its address, they
 
 What for: check who has an account, whether they finished setup and when they last logged in.
 
-1. Go to **Administration** › **Users** (http://127.0.0.1:8000/#/admin/users).
+1. In the sidebar, open **Administration** › **Users**.
 2. Type a username or display name into **Filter users**.
 3. Read the table. **Setup** shows **Pending** until the person has set a password. **Last login** shows **Never** if they have not logged in yet. **Active** reads **Yes**, **No** or **Anonymised**.
 4. Click a row to highlight it. Click it again to clear the highlight.
@@ -34,7 +46,7 @@ What for: give a new person access to Ontotator.
 3. Tick **System administrator** only if the person should manage the whole server.
 4. Optional: under **Add to projects (optional)**, tick a role per project: **Lead**, **Annotator** or **Consolidator**. With many projects, type into **Find project** to narrow the list.
 5. Click **Create user**.
-6. The setup-code dialog opens. Hand over the code (next section).
+6. The setup-code dialog opens. [Hand over the code](#hand-over-a-setup-or-reset-code).
 
 The username uses 3–64 lower-case letters, digits, dots, hyphens or underscores. If it is taken or invalid, the message appears at the field.
 
@@ -59,7 +71,7 @@ What for: a code expired, got lost, or someone forgot their password.
 1. On **Users**, click **More…** in the person's row.
 2. Choose **New setup code** (setup still pending) or **Reset code** (password already set).
 3. Confirm with **New setup code** or **Reset code**. Any earlier unused code stops working. With a reset code, the current password keeps working until the new code is used.
-4. Hand over the code as above.
+4. [Hand over the code](#hand-over-a-setup-or-reset-code).
 
 Deactivated accounts get no new code. Activate the account first.
 
@@ -97,50 +109,54 @@ What for: check what was changed on an account and by whom.
 
 What for: erase a person's personal data for good, while keeping their work.
 
-1. Deactivate the account first (see above).
-2. On **Users**, click **More…** in the row and choose **Anonymise…**.
-3. Read what is erased. The pseudonym and all work stay, so results and exports remain complete.
-4. Type the username into the confirmation field.
-5. Click **Anonymise permanently**. This cannot be undone.
+Warning: anonymising cannot be undone.
+
+Before you start: [deactivate the account](#deactivate-or-activate-an-account).
+
+1. On **Users**, click **More…** in the row and choose **Anonymise…**.
+2. Read what is erased. The pseudonym and all work stay, so results and exports remain complete.
+3. Type the username into the confirmation field.
+4. Click **Anonymise permanently**.
 
 ## Upload ontology releases and translation files
 
 What for: make a new ontology release (for example a newer HPO) or a translation file available to projects.
 
-1. Go to **Administration** › **Ontologies** (http://127.0.0.1:8000/#/admin/ontologies).
+1. In the sidebar, open **Administration** › **Ontologies**.
 2. In **Ontology files**, choose one or more files: OBO Graph JSON ontologies (`.json`) or Babelon translation files (`.tsv`).
 3. Click **Upload files**.
 4. Read **Upload results**: **Added** or **Already present** per file.
 
 Each file is stored on its own. If one file fails, earlier files may already be in the list below. Incomplete HPO releases are refused: a missing or obsolete main branch, or too many terms that do not reach the root. The message names the problem; upload a complete release instead.
 
-## Check the ontology inventory and which projects pin a file
+## Check the ontology inventory and which projects use a file
 
 What for: see which releases are on the server and which projects use them.
 
 1. On **Ontologies**, look at **Uploaded files**.
 2. The table lists file name, kind, release, language, checksum and upload time.
-3. **Pinned by** lists the projects that use a file. Click a project key to open its settings. Unused files read **Not pinned**.
+3. **Pinned by** lists the projects that use (*pin*) a file. Click a project key to open its settings; they open on **General**, so switch to the **Ontology** tab. Unused files read **Not pinned**.
 4. Click **Copy** next to a checksum to copy it.
 5. Click **Refresh inventory** to reload the list.
 
-To move a project to a newer release, upload it here, then follow [Move a started project to a newer release](lead.md#move-a-started-project-to-a-newer-release).
+To move a project to a newer release, upload it here, then follow [Move a started project to a newer release](lead-settings.md#move-a-started-project-to-a-newer-release).
 
 ## Create a project
 
 What for: start a new project with its ontology and annotation scheme. Only system administrators can do this.
 
-1. Upload the ontology release the project needs (see above).
-2. Go to **Administration** › **New project** (http://127.0.0.1:8000/#/projects/new).
-3. Fill **Project key** (2–63 lower-case letters, digits or hyphens) and **Name**. **Description** and **Languages of the texts** are optional.
-4. Under **Profile source**, keep **Built-in template** and choose a template. Or choose **Upload profile JSON** and pick a task profile file.
-5. For each ontology, choose the release in its ontology file field. Optionally limit the allowed branches and choose the annotation scheme. For HPO, both are filled in for you.
-6. Click **Create project**.
-7. The project's settings open on **People**. Add the lead and the other members, see [Add a member](lead.md#add-a-member).
+Before you start: [upload the ontology release](#upload-ontology-releases-and-translation-files) the project needs.
+
+1. In the sidebar, open **Administration** › **New project**.
+2. Fill **Project key** (2–63 lower-case letters, digits or hyphens) and **Name**. **Description** and **Languages of the texts** are optional.
+3. Under **Profile source**, keep **Built-in template** and choose a template. Or choose **Upload profile JSON** and pick a task profile file.
+4. For each ontology, choose the release in its ontology file field. Optionally limit the allowed branches and choose the annotation scheme. For HPO, both are filled in for you.
+5. Click **Create project**.
+6. The project's settings open on **People**. [Add the lead](lead-settings.md#add-a-member) and the other members.
 
 ![New project form with key, name, template and ontology file filled in](images/admin-new-project.png)
 
-The project key cannot be changed later. Everything else, such as name, workflow and members, is set in the project settings; see [lead.md](lead.md).
+The project key cannot be changed later. Everything else, such as name, workflow and members, is set in the [project settings](lead-settings.md).
 
 ## Open and manage any project
 
@@ -148,4 +164,4 @@ What for: as system administrator you can manage every project, also without a p
 
 1. Click **Projects** in the sidebar, or **All projects** in the project switcher.
 2. In the project's row, click **Open** to go to its documents, or **Settings** to change it.
-3. Work as a lead would, see [lead.md](lead.md).
+3. Work as a lead would; see the [lead overview](lead.md).
