@@ -180,3 +180,21 @@ test("keyboard only: J/K, the ✓ choices, Submit and the summary", async ({ pag
   await page.keyboard.press("Enter");
   await expect(page.getByText("Consolidation submitted. Accept the result in Documents.", { exact: true })).toBeVisible();
 });
+
+test("Add finding: a typed passage and a searched term are saved with the search's provenance", async ({ page }) => {
+  const s = await consolidationScenario(page, true);
+  await loginExisting(page, s.users.lead);
+  await openTask(page, s.assignment_id!);
+  await page.getByRole("button", { name: "Add finding", exact: true }).click();
+  const form = page.getByRole("dialog", { name: "Add finding" });
+  await form.getByLabel("Passage from the text").fill("Brief absence episodes");
+  await form.getByRole("button", { name: "Continue", exact: true }).click();
+  const picker = page.getByRole("dialog", { name: "Add finding" });
+  await picker.getByRole("combobox").fill("Seizure");
+  const saved = page.waitForResponse(r => r.request().method() === "POST" && /\/commands$/.test(new URL(r.url()).pathname));
+  await picker.getByRole("option", { name: /Seizure/ }).first().click();
+  const response = await saved;
+  expect(response.ok(), await response.text()).toBeTruthy();
+  await expect(page.getByText(/^Finding added: Seizure/)).toBeVisible();
+  await expect(page.locator(".cons-added")).toHaveText("Brief absence episodes");
+});

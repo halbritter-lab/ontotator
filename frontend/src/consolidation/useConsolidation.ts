@@ -28,6 +28,7 @@ const MODIFIER_RULES = new Set(["modifier_as_finding", "cohort_modifier", "exclu
 export type SubmitResult = { kind: "submitted"; submission: Submission } | { kind: "warning"; warning: AxisWarning };
 
 export interface NewFinding {
+  annotationId: string;
   layerId: string;
   typeId: string;
   termId: string;
@@ -140,7 +141,7 @@ export function useConsolidation(roundId: string, options: { workspaceView?: Wor
   /** "Add finding": the editor's `create_annotation` command on the same draft. */
   const addFinding = useCallback((finding: NewFinding): Promise<boolean> => command("add-finding", (id, envelope) => api.applyCommand(id, envelope), {
     command: "create_annotation",
-    annotation_id: `ann-${randomId()}`,
+    annotation_id: finding.annotationId,
     evidence_id: `ev-${randomId()}`,
     layer_id: finding.layerId,
     type_id: finding.typeId,

@@ -11,6 +11,7 @@ import type { WorkspaceView } from "../app/CaseScreen";
 import { nextOpenTask } from "../app/caseOrder";
 import { MY_TASKS, routeHref, type Route } from "../app/router";
 import { prefillQuery } from "../editor/termSearch";
+import { randomId } from "../editor/ids";
 import { nextTaskLabel, remainingTasksText } from "../translation/labels";
 import { Button, ConfirmDialog, EmptyState, InlineMessage, MenuButton, Popover, Select, TextInput, Toast, useMediaQuery, useToast } from "../ui";
 import { useShortcut } from "../ui/shortcuts";
@@ -113,6 +114,8 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
   const [textHidden, setTextHidden] = useState(false);
   const [range, setRange] = useState<TextRange | null>(null);
   const [adding, setAdding] = useState(false);
+  // Made before the search: its search event must name the annotation it creates (as in the editor).
+  const [newAnnotationId, setNewAnnotationId] = useState(() => `ann-${randomId()}`);
   const [typing, setTyping] = useState(false);
   const [announcement, setAnnouncement] = useState("");
   const [isLead, setIsLead] = useState<boolean | undefined>(props.lead);
@@ -233,8 +236,8 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
   const addFinding = async (candidate: SearchCandidate, searchId?: string) => {
     if (!range || !addTarget) return;
     setAdding(false); setLastDecision(null);
-    const ok = await data.addFinding({ ...addTarget, termId: candidate.term_id, searchId, segments: [range], axes: addTarget.axes });
-    if (ok) { setRange(null); show({ message: `Finding added: ${candidate.label} (${candidate.term_id}).` }); }
+    const ok = await data.addFinding({ ...addTarget, annotationId: newAnnotationId, termId: candidate.term_id, searchId, segments: [range], axes: addTarget.axes });
+    if (ok) { setRange(null); setNewAnnotationId(`ann-${randomId()}`); show({ message: `Finding added: ${candidate.label} (${candidate.term_id}).` }); }
     else show({ message: "Could not add the finding. Nothing changed." });
   };
 
@@ -347,7 +350,7 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
       </div>
     </div>
     {typing && <PassageForm text={view.text} anchorRef={addRef} onPick={pickPassage} onClose={() => setTyping(false)} />}
-    {data.workspace && addTarget && <TermPicker open={adding} anchorRef={addRef} label="Add finding" workspace={data.workspace} layerId={addTarget.layerId}
+    {data.workspace && addTarget && <TermPicker open={adding} anchorRef={addRef} label="Add finding" workspace={data.workspace} layerId={addTarget.layerId} annotationId={newAnnotationId}
       initialQuery={range ? prefillQuery(view.text, [range]) : undefined} onClose={() => setAdding(false)} onPick={(candidate, searchId) => { void addFinding(candidate, searchId); }} />}
     <SummaryDialog open={dialog.open} summary={summaryText(groups, added.length)} duplicates={duplicatesText(duplicateTerms(groups))} busy={dialog.busy} warning={dialog.warning} error={dialog.error}
       onSubmit={acknowledged => { void submit(acknowledged); }} onClose={() => setDialog({ open: false, busy: false, warning: null, error: null })} />
