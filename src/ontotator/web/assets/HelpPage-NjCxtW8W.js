@@ -1,285 +1,285 @@
-import{r as i,a as p,j as a}from"./index-CIHzyJgI.js";import{M as m,r as g}from"./index-BX88nrFH.js";const f=`# Ontotator user handbook\r
-\r
-This handbook explains how to work with Ontotator in the browser. It is for everyone who uses the app: annotators, translation reviewers, consolidators, leads and system administrators. It describes the version of Ontotator that you open it from. If you run the server, read the [server operations guide (for server operators)](../operations.md) instead.\r
-\r
-## Start here\r
-\r
-| You are… | Read first | Then |\r
-| --- | --- | --- |\r
-| New to Ontotator, any role | [Getting started](getting-started.md) | the chapter for your role |\r
-| Annotator or translation reviewer | [Your first task, start to finish](first-task.md) | [Annotator reference](annotator.md) |\r
-| Consolidator | [Typical consolidation, start to finish](consolidator.md#typical-consolidation-start-to-finish) | [Consolidator chapter](consolidator.md) |\r
-| Project lead | [Lead overview and typical project](lead.md) | [Settings](lead-settings.md), [Documents](lead-documents.md), [Results and export](lead-results.md) |\r
-| System administrator | [Administration](admin.md) | |\r
-\r
-Stuck? See the [frequently asked questions](faq.md).\r
-\r
-## What Ontotator is\r
-\r
-Ontotator is a web app for marking findings in clinical texts and linking each one to a term of an ontology, for example the Human Phenotype Ontology (HPO). Several people annotate the same text, each on their own. The project lead then chooses one final result per text, either one submission or a merged consolidation. The final results are exported for research.\r
-\r
-### Why people work independently\r
-\r
-Each annotator works blind: you never see other people's work on the same text, only your own and, in some tasks, a tool's proposals. This keeps the results independent, so that the project can measure how well annotators agree and find texts or rules that are unclear. Only leads and consolidators see everyone's work.\r
-\r
-### What happens to your work\r
-\r
-- While you work, everything is saved automatically as a draft. Nobody else sees your draft.\r
-- When you submit, your work becomes a fixed **submission**. The lead sees it; other annotators do not.\r
-- The lead accepts one result per text as the **final result**, or asks a consolidator to merge differing submissions. Only final results are exported. Exports show your pseudonym, not your name.\r
-\r
-## Roles\r
-\r
-You can have more than one role. Roles other than system administrator apply to one project. The header shows your roles under your name.\r
-\r
-| Role in the UI | What you do | Chapter |\r
-| --- | --- | --- |\r
-| **Annotator** | Mark findings in the texts assigned to you, check tool proposals, submit your work. Annotators also do translation reviews. | [Annotator reference](annotator.md) |\r
-| **Translation reviewer** | Not a separate role you can be given: any annotator can get a translation review task. The header shows this name while you work on one. | [Review a translation](annotator.md#review-a-translation) |\r
-| **Consolidator** | Merge the differing submissions on one text into one result. | [Consolidator chapter](consolidator.md) |\r
-| **Lead** | Set up the project, upload texts, plan and assign work, publish guidelines, accept results, export. | [Lead overview](lead.md) |\r
-| **System administrator** | Create user accounts, upload ontology releases, create projects. | [Administration](admin.md) |\r
-\r
-## How work flows\r
-\r
-(translation review →) annotate → accept, or consolidate and accept → export\r
-\r
-1. **Translation review** (only for translated texts, if the project plans it): an annotator checks the translation against the source and accepts, corrects, queries or rejects it. The lead decides what happens with queried or rejected translations.\r
-2. **Annotate**: the lead assigns a text to one or more annotators. Each annotator marks findings, either from scratch or from tool proposals. In a task from proposals, the annotator confirms, rejects or replaces each proposal. Then they submit the text.\r
-3. **Accept**: on the **Documents** page, the lead sees all submissions of a text. If they agree, or if one is clearly right, the lead clicks **Accept result** or **Use as final**.\r
-4. **Consolidate**: if the submissions differ, the lead clicks **Consolidate…** and picks a consolidator. The consolidator decides each difference and submits one merged result. The lead then accepts it.\r
-5. **Export**: the lead exports the final results of the project.\r
-\r
-A lead can also reopen a submission, and an annotator can continue from their own submission in a new work round. A problem report pauses a task until it is decided.\r
-\r
-## Glossary\r
-\r
-Words you meet in the app, in alphabetical order. The handbook uses one word per concept; where the app uses a second word, it is named here.\r
-\r
-| Word | Meaning |\r
-| --- | --- |\r
-| Agreement | On the lead's text card: how many findings of the submissions on a text match. Findings that match in term and passage but differ in a value "differ in context only". |\r
-| Annotation scheme | The set of value fields and modifiers a project uses, for example **HPO phenotype (fixed qualifiers, modifiers)**. |\r
-| Branch | A part of an ontology: one term and everything below it. A project can limit search to some branches. |\r
-| Carried finding | A finding taken over from an earlier round or text version into your current task. You check each one before you submit: it is marked **Check needed** until you do. To *carry* work means to take it over this way. |\r
-| Case | One clinical document in all its languages, identified by its **case ID**. A case has one text per language. |\r
-| Consolidation | A task that merges differing submissions on one text into one result. |\r
-| Consolidator | The person who does a consolidation. Needs the **Consolidator** role in the project. |\r
-| Default (prefilled value) | A value a new finding starts with, tagged **Default**. It counts as not confirmed until you confirm or change it. |\r
-| Document | The app's word for a text on the **Documents** page and in a few labels such as **People per document**. Same as *text* in this handbook. |\r
-| Final result | The one submission or consolidation per text that the lead accepts. Only final results are exported. |\r
-| Finalization | The third part of the lead's text card, where the lead accepts the final result or starts a consolidation. |\r
-| Finding | One ontology term marked in a text, with its values, modifiers and zero or more mentions. |\r
-| Group | In a consolidation: the findings from different submissions on overlapping passages, decided together. |\r
-| Guidelines | The project's annotation rules. Leads publish numbered versions (v1, v2, …); you read the version in force. |\r
-| Layer | Part of the annotation setup with its own ontology. Each required layer must be checked before you submit. A **Reference** layer is read-only; a **Locked** layer cannot be edited. |\r
-| Mention | A marked passage of text that supports a finding. A finding can have several mentions. |\r
-| Modifier | An HPO term such as a severity or an onset, attached to a finding. |\r
-| Ontology release | A loaded version of an ontology, for example one HPO release. Each project uses one release. |\r
-| Ontospan bundle | A file format for uploading texts together with their translations and tool proposals. See [Prepare files for upload](lead-documents.md#prepare-files-for-upload). |\r
-| Paused | A task that waits for a decision on a problem report. You can read it but not change or submit it. |\r
-| Pin | A project *pins* the ontology release it uses. **Pinned by** on the **Ontologies** page lists those projects. |\r
-| Problem report | A report that a text has a problem. It pauses your task until the lead decides. |\r
-| Project | A unit of work with its own texts, people, ontology release, guidelines and settings. |\r
-| Proposal layer | The tool proposals uploaded with a text. |\r
-| Pseudonym | Your stable ID, for example \`ann-0004\`. Exports show it instead of your name. |\r
-| Reopened | A submission the lead opened again for changes. Your task shows **Reopened** with the lead's reason. |\r
-| Round | One pass of work on a task. A task can have several rounds, for example after you continue from your submission or after the text changed. |\r
-| Spanless finding | A finding that points to no text passage. The project decides whether this is allowed and whether it needs a reason. |\r
-| Submission | The fixed result of a task or round. To change it, a new round starts. |\r
-| Task | Your piece of work on one text: Annotation, Translation review or Consolidation. |\r
-| Task profile | The JSON file that defines a project's layers, finding types and value fields. |\r
-| Text | One language version of a case, for example *CASE-1 en*. Tasks are always on one text. |\r
-| Text card | The panel that opens on the lead's **Documents** page for one text, with the parts **Translation**, **Annotation** and **Finalization**. |\r
-| Text version | One revision of a text (v1, v2, …). A correction creates a new version; the old one stays. |\r
-| Tool proposal | A finding suggested by an external tool and uploaded with the text. You confirm, reject or replace it. |\r
-| Translation review | A task in which you check a translated text and accept it, correct it, query it or reject it. |\r
-| Unresolved | A decision on a tool proposal: you cannot decide it and leave a note for the lead. Not the same as clinical uncertainty (the value **Uncertain**). |\r
-| Value field | One line under **Values** in a finding, with a fixed list of values, for example the assertion (**Present**, **Absent**, **Uncertain**). Scheme names call them *qualifiers*. |\r
-| Work plan | Per text: whether it gets a translation review, and whether and how it is annotated. |\r
-\r
-## Chapters\r
-\r
-1. [Getting started](getting-started.md): log in, set your password, find your tasks, edit your profile.\r
-2. [Your first task, start to finish](first-task.md): one annotation task from login to submission.\r
-3. [Annotator reference](annotator.md): the editor, findings, values, tool proposals, carried findings, submitting, problem reports, translation review.\r
-4. [Consolidator chapter](consolidator.md): how to decide, the groups, finishing a consolidation.\r
-5. [Lead overview](lead.md): the typical project, with [Settings](lead-settings.md), [Documents](lead-documents.md) and [Results and export](lead-results.md).\r
-6. [Administration](admin.md): user accounts, ontology releases, projects.\r
-7. [FAQ](faq.md): typical problems and what to do.\r
-\r
-## How the handbook writes things\r
-\r
-- **Bold** text is a label exactly as the app shows it, for example **My tasks**. <!-- handbook: not-a-label -->\r
-- *Italic* text is an example of a label or message that changes, for example *Publish as v2* or *CASE-1 en*.\r
-- Keys are written like \`Ctrl+Z\` (macOS: \`Cmd+Z\`). A letter key such as \`j\` means the plain key; \`Shift+K\` means with Shift.\r
-`,w=`# Administration\r
-\r
-This chapter is for system administrators. You manage user accounts, ontology releases and projects in the app. Back to the [handbook overview](README.md).\r
-\r
-Server set-up, the command line, backups, upgrades and deployment are in the [server operations guide (for server operators)](../operations.md). A lost administrator password is also handled there: see [Lost admin password](../operations.md#lost-admin-password).\r
-\r
-Ontotator sends no e-mail. New users and users who forgot their password get a one-time code from you, by hand.\r
-\r
-## Set up a new project for a lead\r
-\r
-The usual first day, in order:\r
-\r
-1. [Upload the ontology release](#upload-ontology-releases-and-translation-files) the project needs.\r
-2. [Create the project](#create-a-project).\r
-3. [Create a user account](#create-a-user-account) for the lead, with the **Lead** role in the new project.\r
-4. [Hand over the setup code](#hand-over-a-setup-or-reset-code) to the lead.\r
-\r
-The lead then sets up the rest; see the [lead overview](lead.md).\r
-\r
-## Reach the administration pages\r
-\r
-What for: find the pages only system administrators see.\r
-\r
-1. Log in. Your role line in the header reads **System administrator**.\r
-2. In the sidebar, open the group **Administration**.\r
-3. Click **Users**, **Ontologies** or **New project**.\r
-\r
-Other users do not see this group. If they open such a page by its address, they get a short explanation instead.\r
-\r
-## Find and review user accounts\r
-\r
-What for: check who has an account, whether they finished setup and when they last logged in.\r
-\r
-1. In the sidebar, open **Administration** › **Users**.\r
-2. Type a username or display name into **Filter users**.\r
-3. Read the table. **Setup** shows **Pending** until the person has set a password. **Last login** shows **Never** if they have not logged in yet. **Active** reads **Yes**, **No** or **Anonymised**.\r
-4. Click a row to highlight it. Click it again to clear the highlight.\r
-5. Click **Refresh users** to reload the list.\r
-\r
-## Create a user account\r
-\r
-What for: give a new person access to Ontotator.\r
-\r
-1. On **Users**, click **New user…**.\r
-2. Fill **Username** and **Display name**. **E-mail** and **Languages** are optional.\r
-3. Tick **System administrator** only if the person should manage the whole server.\r
-4. Optional: under **Add to projects (optional)**, tick a role per project: **Lead**, **Annotator** or **Consolidator**. With many projects, type into **Find project** to narrow the list.\r
-5. Click **Create user**.\r
-6. The setup-code dialog opens. [Hand over the code](#hand-over-a-setup-or-reset-code).\r
-\r
-The username uses 3–64 lower-case letters, digits, dots, hyphens or underscores. If it is taken or invalid, the message appears at the field.\r
-\r
-## Hand over a setup or reset code\r
-\r
-What for: let a person set their own password. Codes are shown only once.\r
-\r
-1. A dialog opens with the title **Setup code** or **Reset code** and the username. It shows the code and when it expires.\r
-2. Click **Copy hand-over text**. This copies short instructions with the login address, the username and the code. Open **Hand-over text** to read it first. **Copy** copies only the code.\r
-3. Give the text to the person in person or by a secure channel.\r
-4. Tick **I have handed over or stored the code**.\r
-5. Click **Close**.\r
-\r
-![Setup code dialog with the hand-over text open and the confirmation box](images/admin-setup-code.png)\r
-\r
-You cannot close the dialog or leave the page until the box is ticked. Setup codes last 24 hours, reset codes 2 hours. The person then uses **I have a setup or reset code** on the login page, see [Getting started](getting-started.md#set-your-password-with-a-setup-or-reset-code).\r
-\r
-## Issue a new setup or reset code\r
-\r
-What for: a code expired, got lost, or someone forgot their password.\r
-\r
-1. On **Users**, click **More…** in the person's row.\r
-2. Choose **New setup code** (setup still pending) or **Reset code** (password already set).\r
-3. Confirm with **New setup code** or **Reset code**. Any earlier unused code stops working. With a reset code, the current password keeps working until the new code is used.\r
-4. [Hand over the code](#hand-over-a-setup-or-reset-code).\r
-\r
-Deactivated accounts get no new code. Activate the account first.\r
-\r
-## Edit a user's profile and administrator role\r
-\r
-What for: correct a name, e-mail, qualification or languages, or grant or remove the administrator role.\r
-\r
-1. On **Users**, click **Edit** in the row.\r
-2. Change **Display name**, **E-mail**, **Qualification**, **Languages** or **System administrator**.\r
-3. Click **Save changes**.\r
-4. If you changed the administrator role, confirm with **Save changes** again. The person is logged out everywhere.\r
-\r
-You cannot remove your own administrator role. The last active system administrator cannot lose the role either; add another one first.\r
-\r
-## Deactivate or activate an account\r
-\r
-What for: stop someone from logging in, without deleting their work.\r
-\r
-1. On **Users**, click **More…** in the row.\r
-2. Choose **Deactivate…**.\r
-3. Confirm with **Deactivate**. The person is logged out everywhere.\r
-4. To undo, open **More…** again and choose **Activate**.\r
-\r
-You cannot deactivate your own account. In project member lists the person shows as **Inactive**.\r
-\r
-## See a user's history\r
-\r
-What for: check what was changed on an account and by whom.\r
-\r
-1. On **Users**, click **More…** in the row and choose **History**. For anonymised accounts, click the **History** button in the row.\r
-2. Read the table: **When**, **By**, **What**, **Whom**, **Project**, **Details**.\r
-3. The dialog shows the newest 200 entries. For the whole trail, use the command \`ontotator admin audit\`, see [Server operations](../operations.md#users-ontologies-and-projects).\r
-\r
-## Anonymise a deactivated account\r
-\r
-What for: erase a person's personal data for good, while keeping their work.\r
-\r
-Warning: anonymising cannot be undone.\r
-\r
-Before you start: [deactivate the account](#deactivate-or-activate-an-account).\r
-\r
-1. On **Users**, click **More…** in the row and choose **Anonymise…**.\r
-2. Read what is erased. The pseudonym and all work stay, so results and exports remain complete.\r
-3. Type the username into the confirmation field.\r
-4. Click **Anonymise permanently**.\r
-\r
-## Upload ontology releases and translation files\r
-\r
-What for: make a new ontology release (for example a newer HPO) or a translation file available to projects.\r
-\r
-1. In the sidebar, open **Administration** › **Ontologies**.\r
-2. In **Ontology files**, choose one or more files: OBO Graph JSON ontologies (\`.json\`) or Babelon translation files (\`.tsv\`).\r
-3. Click **Upload files**.\r
-4. Read **Upload results**: **Added** or **Already present** per file.\r
-\r
-Each file is stored on its own. If one file fails, earlier files may already be in the list below. Incomplete HPO releases are refused: a missing or obsolete main branch, or too many terms that do not reach the root. The message names the problem; upload a complete release instead.\r
-\r
-## Check the ontology inventory and which projects use a file\r
-\r
-What for: see which releases are on the server and which projects use them.\r
-\r
-1. On **Ontologies**, look at **Uploaded files**.\r
-2. The table lists file name, kind, release, language, checksum and upload time.\r
-3. **Pinned by** lists the projects that use (*pin*) a file. Click a project key to open its settings; they open on **General**, so switch to the **Ontology** tab. Unused files read **Not pinned**.\r
-4. Click **Copy** next to a checksum to copy it.\r
-5. Click **Refresh inventory** to reload the list.\r
-\r
-To move a project to a newer release, upload it here, then follow [Move a started project to a newer release](lead-settings.md#move-a-started-project-to-a-newer-release).\r
-\r
-## Create a project\r
-\r
-What for: start a new project with its ontology and annotation scheme. Only system administrators can do this.\r
-\r
-Before you start: [upload the ontology release](#upload-ontology-releases-and-translation-files) the project needs.\r
-\r
-1. In the sidebar, open **Administration** › **New project**.\r
-2. Fill **Project key** (2–63 lower-case letters, digits or hyphens) and **Name**. **Description** and **Languages of the texts** are optional.\r
-3. Under **Profile source**, keep **Built-in template** and choose a template. Or choose **Upload profile JSON** and pick a task profile file.\r
-4. For each ontology, choose the release in its ontology file field. Optionally limit the allowed branches and choose the annotation scheme. For HPO, both are filled in for you.\r
-5. Click **Create project**.\r
-6. The project's settings open on **People**. [Add the lead](lead-settings.md#add-a-member) and the other members.\r
-\r
-![New project form with key, name, template and ontology file filled in](images/admin-new-project.png)\r
-\r
-The project key cannot be changed later. Everything else, such as name, workflow and members, is set in the [project settings](lead-settings.md).\r
-\r
-## Open and manage any project\r
-\r
-What for: as system administrator you can manage every project, also without a project role.\r
-\r
-1. Click **Projects** in the sidebar, or **All projects** in the project switcher.\r
-2. In the project's row, click **Open** to go to its documents, or **Settings** to change it.\r
-3. Work as a lead would; see the [lead overview](lead.md).\r
+import{r,a as p,j as a}from"./index-BzOnYAXm.js";import{M as m,r as g}from"./index-B3YIj6o8.js";const f=`# Ontotator user handbook
+
+This handbook explains how to work with Ontotator in the browser. It is for everyone who uses the app: annotators, translation reviewers, consolidators, leads and system administrators. It describes the version of Ontotator that you open it from. If you run the server, read the [server operations guide (for server operators)](../operations.md) instead.
+
+## Start here
+
+| You are… | Read first | Then |
+| --- | --- | --- |
+| New to Ontotator, any role | [Getting started](getting-started.md) | the chapter for your role |
+| Annotator or translation reviewer | [Your first task, start to finish](first-task.md) | [Annotator reference](annotator.md) |
+| Consolidator | [Typical consolidation, start to finish](consolidator.md#typical-consolidation-start-to-finish) | [Consolidator chapter](consolidator.md) |
+| Project lead | [Lead overview and typical project](lead.md) | [Settings](lead-settings.md), [Documents](lead-documents.md), [Results and export](lead-results.md) |
+| System administrator | [Administration](admin.md) | |
+
+Stuck? See the [frequently asked questions](faq.md).
+
+## What Ontotator is
+
+Ontotator is a web app for marking findings in clinical texts and linking each one to a term of an ontology, for example the Human Phenotype Ontology (HPO). Several people annotate the same text, each on their own. The project lead then chooses one final result per text, either one submission or a merged consolidation. The final results are exported for research.
+
+### Why people work independently
+
+Each annotator works blind: you never see other people's work on the same text, only your own and, in some tasks, a tool's proposals. This keeps the results independent, so that the project can measure how well annotators agree and find texts or rules that are unclear. Only leads and consolidators see everyone's work.
+
+### What happens to your work
+
+- While you work, everything is saved automatically as a draft. Nobody else sees your draft.
+- When you submit, your work becomes a fixed **submission**. The lead sees it; other annotators do not.
+- The lead accepts one result per text as the **final result**, or asks a consolidator to merge differing submissions. Only final results are exported. Exports show your pseudonym, not your name.
+
+## Roles
+
+You can have more than one role. Roles other than system administrator apply to one project. The header shows your roles under your name.
+
+| Role in the UI | What you do | Chapter |
+| --- | --- | --- |
+| **Annotator** | Mark findings in the texts assigned to you, check tool proposals, submit your work. Annotators also do translation reviews. | [Annotator reference](annotator.md) |
+| **Translation reviewer** | Not a separate role you can be given: any annotator can get a translation review task. The header shows this name while you work on one. | [Review a translation](annotator.md#review-a-translation) |
+| **Consolidator** | Merge the differing submissions on one text into one result. | [Consolidator chapter](consolidator.md) |
+| **Lead** | Set up the project, upload texts, plan and assign work, publish guidelines, accept results, export. | [Lead overview](lead.md) |
+| **System administrator** | Create user accounts, upload ontology releases, create projects. | [Administration](admin.md) |
+
+## How work flows
+
+(translation review →) annotate → accept, or consolidate and accept → export
+
+1. **Translation review** (only for translated texts, if the project plans it): an annotator checks the translation against the source and accepts, corrects, queries or rejects it. The lead decides what happens with queried or rejected translations.
+2. **Annotate**: the lead assigns a text to one or more annotators. Each annotator marks findings, either from scratch or from tool proposals. In a task from proposals, the annotator confirms, rejects or replaces each proposal. Then they submit the text.
+3. **Accept**: on the **Documents** page, the lead sees all submissions of a text. If they agree, or if one is clearly right, the lead clicks **Accept result** or **Use as final**.
+4. **Consolidate**: if the submissions differ, the lead clicks **Consolidate…** and picks a consolidator. The consolidator decides each difference and submits one merged result. The lead then accepts it.
+5. **Export**: the lead exports the final results of the project.
+
+A lead can also reopen a submission, and an annotator can continue from their own submission in a new work round. A problem report pauses a task until it is decided.
+
+## Glossary
+
+Words you meet in the app, in alphabetical order. The handbook uses one word per concept; where the app uses a second word, it is named here.
+
+| Word | Meaning |
+| --- | --- |
+| Agreement | On the lead's text card: how many findings of the submissions on a text match. Findings that match in term and passage but differ in a value "differ in context only". |
+| Annotation scheme | The set of value fields and modifiers a project uses, for example **HPO phenotype (fixed qualifiers, modifiers)**. |
+| Branch | A part of an ontology: one term and everything below it. A project can limit search to some branches. |
+| Carried finding | A finding taken over from an earlier round or text version into your current task. You check each one before you submit: it is marked **Check needed** until you do. To *carry* work means to take it over this way. |
+| Case | One clinical document in all its languages, identified by its **case ID**. A case has one text per language. |
+| Consolidation | A task that merges differing submissions on one text into one result. |
+| Consolidator | The person who does a consolidation. Needs the **Consolidator** role in the project. |
+| Default (prefilled value) | A value a new finding starts with, tagged **Default**. It counts as not confirmed until you confirm or change it. |
+| Document | The app's word for a text on the **Documents** page and in a few labels such as **People per document**. Same as *text* in this handbook. |
+| Final result | The one submission or consolidation per text that the lead accepts. Only final results are exported. |
+| Finalization | The third part of the lead's text card, where the lead accepts the final result or starts a consolidation. |
+| Finding | One ontology term marked in a text, with its values, modifiers and zero or more mentions. |
+| Group | In a consolidation: the findings from different submissions on overlapping passages, decided together. |
+| Guidelines | The project's annotation rules. Leads publish numbered versions (v1, v2, …); you read the version in force. |
+| Layer | Part of the annotation setup with its own ontology. Each required layer must be checked before you submit. A **Reference** layer is read-only; a **Locked** layer cannot be edited. |
+| Mention | A marked passage of text that supports a finding. A finding can have several mentions. |
+| Modifier | An HPO term such as a severity or an onset, attached to a finding. |
+| Ontology release | A loaded version of an ontology, for example one HPO release. Each project uses one release. |
+| Ontospan bundle | A file format for uploading texts together with their translations and tool proposals. See [Prepare files for upload](lead-documents.md#prepare-files-for-upload). |
+| Paused | A task that waits for a decision on a problem report. You can read it but not change or submit it. |
+| Pin | A project *pins* the ontology release it uses. **Pinned by** on the **Ontologies** page lists those projects. |
+| Problem report | A report that a text has a problem. It pauses your task until the lead decides. |
+| Project | A unit of work with its own texts, people, ontology release, guidelines and settings. |
+| Proposal layer | The tool proposals uploaded with a text. |
+| Pseudonym | Your stable ID, for example \`ann-0004\`. Exports show it instead of your name. |
+| Reopened | A submission the lead opened again for changes. Your task shows **Reopened** with the lead's reason. |
+| Round | One pass of work on a task. A task can have several rounds, for example after you continue from your submission or after the text changed. |
+| Spanless finding | A finding that points to no text passage. The project decides whether this is allowed and whether it needs a reason. |
+| Submission | The fixed result of a task or round. To change it, a new round starts. |
+| Task | Your piece of work on one text: Annotation, Translation review or Consolidation. |
+| Task profile | The JSON file that defines a project's layers, finding types and value fields. |
+| Text | One language version of a case, for example *CASE-1 en*. Tasks are always on one text. |
+| Text card | The panel that opens on the lead's **Documents** page for one text, with the parts **Translation**, **Annotation** and **Finalization**. |
+| Text version | One revision of a text (v1, v2, …). A correction creates a new version; the old one stays. |
+| Tool proposal | A finding suggested by an external tool and uploaded with the text. You confirm, reject or replace it. |
+| Translation review | A task in which you check a translated text and accept it, correct it, query it or reject it. |
+| Unresolved | A decision on a tool proposal: you cannot decide it and leave a note for the lead. Not the same as clinical uncertainty (the value **Uncertain**). |
+| Value field | One line under **Values** in a finding, with a fixed list of values, for example the assertion (**Present**, **Absent**, **Uncertain**). Scheme names call them *qualifiers*. |
+| Work plan | Per text: whether it gets a translation review, and whether and how it is annotated. |
+
+## Chapters
+
+1. [Getting started](getting-started.md): log in, set your password, find your tasks, edit your profile.
+2. [Your first task, start to finish](first-task.md): one annotation task from login to submission.
+3. [Annotator reference](annotator.md): the editor, findings, values, tool proposals, carried findings, submitting, problem reports, translation review.
+4. [Consolidator chapter](consolidator.md): how to decide, the groups, finishing a consolidation.
+5. [Lead overview](lead.md): the typical project, with [Settings](lead-settings.md), [Documents](lead-documents.md) and [Results and export](lead-results.md).
+6. [Administration](admin.md): user accounts, ontology releases, projects.
+7. [FAQ](faq.md): typical problems and what to do.
+
+## How the handbook writes things
+
+- **Bold** text is a label exactly as the app shows it, for example **My tasks**. <!-- handbook: not-a-label -->
+- *Italic* text is an example of a label or message that changes, for example *Publish as v2* or *CASE-1 en*.
+- Keys are written like \`Ctrl+Z\` (macOS: \`Cmd+Z\`). A letter key such as \`j\` means the plain key; \`Shift+K\` means with Shift.
+`,w=`# Administration
+
+This chapter is for system administrators. You manage user accounts, ontology releases and projects in the app. Back to the [handbook overview](README.md).
+
+Server set-up, the command line, backups, upgrades and deployment are in the [server operations guide (for server operators)](../operations.md). A lost administrator password is also handled there: see [Lost admin password](../operations.md#lost-admin-password).
+
+Ontotator sends no e-mail. New users and users who forgot their password get a one-time code from you, by hand.
+
+## Set up a new project for a lead
+
+The usual first day, in order:
+
+1. [Upload the ontology release](#upload-ontology-releases-and-translation-files) the project needs.
+2. [Create the project](#create-a-project).
+3. [Create a user account](#create-a-user-account) for the lead, with the **Lead** role in the new project.
+4. [Hand over the setup code](#hand-over-a-setup-or-reset-code) to the lead.
+
+The lead then sets up the rest; see the [lead overview](lead.md).
+
+## Reach the administration pages
+
+What for: find the pages only system administrators see.
+
+1. Log in. Your role line in the header reads **System administrator**.
+2. In the sidebar, open the group **Administration**.
+3. Click **Users**, **Ontologies** or **New project**.
+
+Other users do not see this group. If they open such a page by its address, they get a short explanation instead.
+
+## Find and review user accounts
+
+What for: check who has an account, whether they finished setup and when they last logged in.
+
+1. In the sidebar, open **Administration** › **Users**.
+2. Type a username or display name into **Filter users**.
+3. Read the table. **Setup** shows **Pending** until the person has set a password. **Last login** shows **Never** if they have not logged in yet. **Active** reads **Yes**, **No** or **Anonymised**.
+4. Click a row to highlight it. Click it again to clear the highlight.
+5. Click **Refresh users** to reload the list.
+
+## Create a user account
+
+What for: give a new person access to Ontotator.
+
+1. On **Users**, click **New user…**.
+2. Fill **Username** and **Display name**. **E-mail** and **Languages** are optional.
+3. Tick **System administrator** only if the person should manage the whole server.
+4. Optional: under **Add to projects (optional)**, tick a role per project: **Lead**, **Annotator** or **Consolidator**. With many projects, type into **Find project** to narrow the list.
+5. Click **Create user**.
+6. The setup-code dialog opens. [Hand over the code](#hand-over-a-setup-or-reset-code).
+
+The username uses 3–64 lower-case letters, digits, dots, hyphens or underscores. If it is taken or invalid, the message appears at the field.
+
+## Hand over a setup or reset code
+
+What for: let a person set their own password. Codes are shown only once.
+
+1. A dialog opens with the title **Setup code** or **Reset code** and the username. It shows the code and when it expires.
+2. Click **Copy hand-over text**. This copies short instructions with the login address, the username and the code. Open **Hand-over text** to read it first. **Copy** copies only the code.
+3. Give the text to the person in person or by a secure channel.
+4. Tick **I have handed over or stored the code**.
+5. Click **Close**.
+
+![Setup code dialog with the hand-over text open and the confirmation box](images/admin-setup-code.png)
+
+You cannot close the dialog or leave the page until the box is ticked. Setup codes last 24 hours, reset codes 2 hours. The person then uses **I have a setup or reset code** on the login page, see [Getting started](getting-started.md#set-your-password-with-a-setup-or-reset-code).
+
+## Issue a new setup or reset code
+
+What for: a code expired, got lost, or someone forgot their password.
+
+1. On **Users**, click **More…** in the person's row.
+2. Choose **New setup code** (setup still pending) or **Reset code** (password already set).
+3. Confirm with **New setup code** or **Reset code**. Any earlier unused code stops working. With a reset code, the current password keeps working until the new code is used.
+4. [Hand over the code](#hand-over-a-setup-or-reset-code).
+
+Deactivated accounts get no new code. Activate the account first.
+
+## Edit a user's profile and administrator role
+
+What for: correct a name, e-mail, qualification or languages, or grant or remove the administrator role.
+
+1. On **Users**, click **Edit** in the row.
+2. Change **Display name**, **E-mail**, **Qualification**, **Languages** or **System administrator**.
+3. Click **Save changes**.
+4. If you changed the administrator role, confirm with **Save changes** again. The person is logged out everywhere.
+
+You cannot remove your own administrator role. The last active system administrator cannot lose the role either; add another one first.
+
+## Deactivate or activate an account
+
+What for: stop someone from logging in, without deleting their work.
+
+1. On **Users**, click **More…** in the row.
+2. Choose **Deactivate…**.
+3. Confirm with **Deactivate**. The person is logged out everywhere.
+4. To undo, open **More…** again and choose **Activate**.
+
+You cannot deactivate your own account. In project member lists the person shows as **Inactive**.
+
+## See a user's history
+
+What for: check what was changed on an account and by whom.
+
+1. On **Users**, click **More…** in the row and choose **History**. For anonymised accounts, click the **History** button in the row.
+2. Read the table: **When**, **By**, **What**, **Whom**, **Project**, **Details**.
+3. The dialog shows the newest 200 entries. For the whole trail, use the command \`ontotator admin audit\`, see [Server operations](../operations.md#users-ontologies-and-projects).
+
+## Anonymise a deactivated account
+
+What for: erase a person's personal data for good, while keeping their work.
+
+Warning: anonymising cannot be undone.
+
+Before you start: [deactivate the account](#deactivate-or-activate-an-account).
+
+1. On **Users**, click **More…** in the row and choose **Anonymise…**.
+2. Read what is erased. The pseudonym and all work stay, so results and exports remain complete.
+3. Type the username into the confirmation field.
+4. Click **Anonymise permanently**.
+
+## Upload ontology releases and translation files
+
+What for: make a new ontology release (for example a newer HPO) or a translation file available to projects.
+
+1. In the sidebar, open **Administration** › **Ontologies**.
+2. In **Ontology files**, choose one or more files: OBO Graph JSON ontologies (\`.json\`) or Babelon translation files (\`.tsv\`).
+3. Click **Upload files**.
+4. Read **Upload results**: **Added** or **Already present** per file.
+
+Each file is stored on its own. If one file fails, earlier files may already be in the list below. Incomplete HPO releases are refused: a missing or obsolete main branch, or too many terms that do not reach the root. The message names the problem; upload a complete release instead.
+
+## Check the ontology inventory and which projects use a file
+
+What for: see which releases are on the server and which projects use them.
+
+1. On **Ontologies**, look at **Uploaded files**.
+2. The table lists file name, kind, release, language, checksum and upload time.
+3. **Pinned by** lists the projects that use (*pin*) a file. Click a project key to open its settings; they open on **General**, so switch to the **Ontology** tab. Unused files read **Not pinned**.
+4. Click **Copy** next to a checksum to copy it.
+5. Click **Refresh inventory** to reload the list.
+
+To move a project to a newer release, upload it here, then follow [Move a started project to a newer release](lead-settings.md#move-a-started-project-to-a-newer-release).
+
+## Create a project
+
+What for: start a new project with its ontology and annotation scheme. Only system administrators can do this.
+
+Before you start: [upload the ontology release](#upload-ontology-releases-and-translation-files) the project needs.
+
+1. In the sidebar, open **Administration** › **New project**.
+2. Fill **Project key** (2–63 lower-case letters, digits or hyphens) and **Name**. **Description** and **Languages of the texts** are optional.
+3. Under **Profile source**, keep **Built-in template** and choose a template. Or choose **Upload profile JSON** and pick a task profile file.
+4. For each ontology, choose the release in its ontology file field. Optionally limit the allowed branches and choose the annotation scheme. For HPO, both are filled in for you.
+5. Click **Create project**.
+6. The project's settings open on **People**. [Add the lead](lead-settings.md#add-a-member) and the other members.
+
+![New project form with key, name, template and ontology file filled in](images/admin-new-project.png)
+
+The project key cannot be changed later. Everything else, such as name, workflow and members, is set in the [project settings](lead-settings.md).
+
+## Open and manage any project
+
+What for: as system administrator you can manage every project, also without a project role.
+
+1. Click **Projects** in the sidebar, or **All projects** in the project switcher.
+2. In the project's row, click **Open** to go to its documents, or **Settings** to change it.
+3. Work as a lead would; see the [lead overview](lead.md).
 `,y=`# Annotator reference
 
 This chapter is for annotators and translation reviewers. It explains the editor, how to mark findings, check tool proposals and carried findings, submit a text and review a translation. Back to the [handbook overview](README.md).
@@ -856,179 +856,179 @@ Groups you changed here are tagged **edited in editor** on the consolidation scr
 ## Read others' work in the text view
 
 Consolidators can open the text view of a text they consolidate to read each person's findings side by side. See [Read a text and other people's work in the text view](lead-documents.md#read-a-text-and-other-peoples-work-in-the-text-view).
-`,b=`# Frequently asked questions\r
-\r
-Short answers to problems people often meet. Each answer links to the chapter with the full steps.\r
-\r
-## Logging in\r
-\r
-### I forgot my password\r
-\r
-Ask a system administrator for a reset code. Ontotator sends no e-mail. Then click **I have a setup or reset code** on the login page and set a new password. See [Set your password with a setup or reset code](getting-started.md#set-your-password-with-a-setup-or-reset-code). Administrators: see [Issue a new setup or reset code](admin.md#issue-a-new-setup-or-reset-code).\r
-\r
-### The login says "Username or password is wrong, or the account is temporarily locked."\r
-\r
-Check the spelling of your username. After 5 wrong passwords within 15 minutes, login for that username from your network is locked for up to 15 minutes; wait and try again. If you no longer know the password, ask an administrator for a reset code.\r
-\r
-### My setup or reset code does not work\r
-\r
-Codes work once and expire: setup codes after 24 hours, reset codes after 2 hours. A newer code also cancels an older one. Ask an administrator for a new code. Capital letters, spaces and hyphens in the code do not matter.\r
-\r
-### A login window appears while I am working\r
-\r
-Your session has ended. Log in again in that window. Your unsaved edits stay in the open editor and are saved after you log in. See [Log in](getting-started.md#log-in).\r
-\r
-### The page says "The page is out of date; reload it." or "Your page is out of date."\r
-\r
-Reload the page in the browser, then repeat the last action. If the message asks you to, log in again ([Log in](getting-started.md#log-in)).\r
-\r
-## Tasks and projects\r
-\r
-### After login I see Projects, not My tasks\r
-\r
-Ontotator opens the project you used last, or **Projects** the first time. Click **My tasks** in the sidebar. See [Log in](getting-started.md#log-in).\r
-\r
-### My tasks is empty\r
-\r
-A project lead has not assigned you a text yet. Assigned texts appear under **My tasks** automatically. Also check the status tabs: **All** shows every task. See [See your tasks](getting-started.md#see-your-tasks).\r
-\r
-### I see "You are not a member of any project yet."\r
-\r
-Ask your project lead or an administrator to add you to a project, then reload the page. Leads: see [Add a member](lead-settings.md#add-a-member).\r
-\r
-### A task opens with "Task not found or not yours"\r
-\r
-The task was removed or given to someone else, or you followed a link meant for another person. Go back to **My tasks** ([See your tasks](getting-started.md#see-your-tasks)).\r
-\r
-### My task is paused\r
-\r
-A problem report pauses the task, yours or the lead's. You can read your saved work but not change or submit it. If you reported the problem yourself, you can resume with a reason. If the lead paused it, only the lead can release it. See [Resume a paused task or withdraw a report](annotator.md#resume-a-paused-task-or-withdraw-a-report).\r
-\r
-### My submitted task is read-only\r
-\r
-A submission cannot be edited. To change your work, open the task, choose **More** › **Work rounds** and click **Continue from this submission**. Your findings are carried into a new round; check them, make your changes and submit again. See [Start a new work round](annotator.md#start-a-new-work-round). A lead can also reopen your task; it then shows **Reopened** with the lead's reason.\r
-\r
-### I cannot open project settings, Ontologies or New project\r
-\r
-Project settings are for project leads. **Ontologies**, **Users** and **New project** are for system administrators. The page tells you whom to ask. See [Roles](README.md#roles).\r
-\r
-## Annotating\r
-\r
-### Why is "Finish & submit" disabled?\r
-\r
-Something is still open. Click **Next open item** to jump to it, or open the submit dialog: it lists every open item with **Go to**. Typical reasons are undecided proposals, carried findings not yet checked, findings after a text correction, or values not yet chosen. See [Submit the text](annotator.md#submit-the-text).\r
-\r
-### The submit dialog shows "Values not chosen yet"\r
-\r
-Some findings still have prefilled values you did not confirm. Click **Confirm as shown** per finding, or **Confirm all as shown**, or **Go to** the finding and choose another value. In some projects you must confirm them before you can submit. See [Confirm values and acknowledge warnings in the submit dialog](annotator.md#confirm-values-and-acknowledge-warnings-in-the-submit-dialog).\r
-\r
-### The submit dialog shows "Modifier warnings"\r
-\r
-A finding uses a modifier term (such as a severity) as the finding itself, or has two modifiers of one kind. Check it with **Go to**. If it is correct, submit anyway with the button that names the number of warnings. See [Add modifiers to a finding](annotator.md#add-modifiers-to-a-finding).\r
-\r
-### Submitting fails with "Replace obsolete terms" or "Replace unknown terms"\r
-\r
-The project moved to a newer ontology release and a term in your draft no longer exists there. Pick another term for that finding, or reject or replace the affected proposal. Then submit again. See [Change term, note or delete a finding](annotator.md#change-term-note-or-delete-a-finding).\r
-\r
-### "Add finding without a text span" is disabled\r
-\r
-Your project requires a text span for every finding. Mark the text passage instead. See [Add a finding without a text span](annotator.md#add-a-finding-without-a-text-span).\r
-\r
-### The save status says "Changed elsewhere – reload required"\r
-\r
-The same task was changed in another window or by someone else. Click **Reload case**. See [The editor screen](annotator.md#the-editor-screen).\r
-\r
-### The save status says "Offline – changes not saved"\r
-\r
-The connection to the server is lost. Keep the window open; your input stays in the editor. When the connection is back, saving usually resumes on its own; if the status stays, click **Retry**. See [The editor screen](annotator.md#the-editor-screen).\r
-\r
-## Translation review\r
-\r
-### I cannot submit my review: "Your qualification is required to submit."\r
-\r
-Add your qualification (for example "physician, native German speaker") in your profile, then submit again. Use the link **Add your qualification in your profile**. See [Edit your profile](getting-started.md#edit-your-profile).\r
-\r
-### What does "automatic check failed" mean?\r
-\r
-The translation tool checked its own output and found a possible problem, for example numbers or units that differ from the source. Click **Details** to read the check, what the tool reported and what to do if the translation is right anyway. Open **Technical details** for the technical code of the check. If Ontotator has no description for a check, ask the project lead what it checks. See [Review a translation](annotator.md#review-a-translation).\r
-\r
-## Consolidating\r
-\r
-### Why is "Submit consolidation" disabled?\r
-\r
-Some groups are still open. Decide each open group first; the progress card counts what is left. See [Finish a consolidation](consolidator.md#finish-a-consolidation).\r
-\r
-### I submitted a consolidation with a mistake\r
-\r
-A submitted consolidation cannot be changed. Tell the lead: they can start a new consolidation on the text, which can include yours as one of the submissions. See [Finish a consolidation](consolidator.md#finish-a-consolidation) and [Accept a consolidation](lead-results.md#accept-a-consolidation).\r
-\r
-### "Could not add the finding. Nothing changed."\r
-\r
-Add the finding in the full editor instead. See [Add a finding everyone missed](consolidator.md#add-a-finding-everyone-missed).\r
-\r
-### The consolidation asks me to "Check before you submit"\r
-\r
-The result has findings with values filled in by default, modifier terms used as findings, or modifier warnings. Check them; if they are correct, submit with the warnings. See [Finish a consolidation](consolidator.md#finish-a-consolidation).\r
-\r
-## Leading a project\r
-\r
-### I cannot accept a result\r
-\r
-In projects where the consolidator of a text may not be one of its annotators, you cannot choose a result you made yourself. Another lead must choose it. See [Accept a result or compare results](lead-results.md#accept-a-result-or-compare-results).\r
-\r
-### My uploaded texts do not show up\r
-\r
-An import runs in the background; reload **Documents** when it is done. If the project plan for new imports is **Plan nothing; I plan texts on Documents**, the new texts show as *Not decided* until you plan them. See [Upload texts](lead-documents.md#upload-texts).\r
-\r
-### I cannot change the ontology release or the task profile\r
-\r
-The ontology release can be chosen freely only until the first work is submitted; after that, use **Move to another release**. The task profile can only be replaced before work starts. See [Move a started project to a newer release](lead-settings.md#move-a-started-project-to-a-newer-release).\r
-\r
-### A text has no assign button\r
-\r
-The text is not in the work plan. Plan it first. See [Add a text to the plan](lead-documents.md#add-a-text-to-the-plan).\r
-\r
-### A task is still paused after I closed the report\r
-\r
-Closing a report does not always release the pause. The row shows **Resume task…**; click it and release the pause. See [Decide on a problem report](lead-results.md#decide-on-a-problem-report).\r
-\r
-### I chose myself as consolidator, but "Open consolidation" shows no actions\r
-\r
-**Open consolidation** in the text card is the read-only view. Open your task with **Open my task** in the row on **Documents**, or from **My tasks**. See [Start a consolidation](lead-results.md#start-a-consolidation).\r
-\r
-### The consolidator list does not show a person\r
-\r
-Only members with the **Consolidator** role are listed. Give the role first. See [Change a member's roles](lead-settings.md#change-a-members-roles).\r
-\r
-### The export asks me to tick a box\r
-\r
-Some texts still need your decision or have no final result. Either decide them in **Documents** first, or tick the box to export the ready results and leave the others out. See [Export final results](lead-results.md#export-final-results).\r
-\r
-### I cannot remove a lead\r
-\r
-A project needs at least one lead. Add another lead first, then remove the role. See [Change a member's roles](lead-settings.md#change-a-members-roles).\r
-\r
-### "Save changes" is disabled in the settings\r
-\r
-Nothing has changed yet. The button turns on as soon as you edit a field. **People** and **Guidelines** save on their own and have no save button. See [Open project settings](lead-settings.md#open-project-settings).\r
-\r
-## Administration\r
-\r
-### I cannot close the setup-code dialog\r
-\r
-Tick **I have handed over or stored the code** first. The code is shown only once. See [Hand over a setup or reset code](admin.md#hand-over-a-setup-or-reset-code).\r
-\r
-### "You cannot remove your own administrator role."\r
-\r
-This protects you from locking yourself out. Another system administrator must do it; you also cannot deactivate yourself. The last active system administrator always keeps the role. See [Edit a user's profile and administrator role](admin.md#edit-a-users-profile-and-administrator-role).\r
-\r
-### An ontology upload is refused\r
-\r
-The file could not be read, is too large, or is an incomplete HPO release. Read the detail below the message and upload a complete release. See [Upload ontology releases and translation files](admin.md#upload-ontology-releases-and-translation-files).\r
-\r
-### The administrator lost the password\r
-\r
-This is fixed on the server, not in the app. See [Lost admin password](../operations.md#lost-admin-password) in the server operations guide.\r
+`,b=`# Frequently asked questions
+
+Short answers to problems people often meet. Each answer links to the chapter with the full steps.
+
+## Logging in
+
+### I forgot my password
+
+Ask a system administrator for a reset code. Ontotator sends no e-mail. Then click **I have a setup or reset code** on the login page and set a new password. See [Set your password with a setup or reset code](getting-started.md#set-your-password-with-a-setup-or-reset-code). Administrators: see [Issue a new setup or reset code](admin.md#issue-a-new-setup-or-reset-code).
+
+### The login says "Username or password is wrong, or the account is temporarily locked."
+
+Check the spelling of your username. After 5 wrong passwords within 15 minutes, login for that username from your network is locked for up to 15 minutes; wait and try again. If you no longer know the password, ask an administrator for a reset code.
+
+### My setup or reset code does not work
+
+Codes work once and expire: setup codes after 24 hours, reset codes after 2 hours. A newer code also cancels an older one. Ask an administrator for a new code. Capital letters, spaces and hyphens in the code do not matter.
+
+### A login window appears while I am working
+
+Your session has ended. Log in again in that window. Your unsaved edits stay in the open editor and are saved after you log in. See [Log in](getting-started.md#log-in).
+
+### The page says "The page is out of date; reload it." or "Your page is out of date."
+
+Reload the page in the browser, then repeat the last action. If the message asks you to, log in again ([Log in](getting-started.md#log-in)).
+
+## Tasks and projects
+
+### After login I see Projects, not My tasks
+
+Ontotator opens the project you used last, or **Projects** the first time. Click **My tasks** in the sidebar. See [Log in](getting-started.md#log-in).
+
+### My tasks is empty
+
+A project lead has not assigned you a text yet. Assigned texts appear under **My tasks** automatically. Also check the status tabs: **All** shows every task. See [See your tasks](getting-started.md#see-your-tasks).
+
+### I see "You are not a member of any project yet."
+
+Ask your project lead or an administrator to add you to a project, then reload the page. Leads: see [Add a member](lead-settings.md#add-a-member).
+
+### A task opens with "Task not found or not yours"
+
+The task was removed or given to someone else, or you followed a link meant for another person. Go back to **My tasks** ([See your tasks](getting-started.md#see-your-tasks)).
+
+### My task is paused
+
+A problem report pauses the task, yours or the lead's. You can read your saved work but not change or submit it. If you reported the problem yourself, you can resume with a reason. If the lead paused it, only the lead can release it. See [Resume a paused task or withdraw a report](annotator.md#resume-a-paused-task-or-withdraw-a-report).
+
+### My submitted task is read-only
+
+A submission cannot be edited. To change your work, open the task, choose **More** › **Work rounds** and click **Continue from this submission**. Your findings are carried into a new round; check them, make your changes and submit again. See [Start a new work round](annotator.md#start-a-new-work-round). A lead can also reopen your task; it then shows **Reopened** with the lead's reason.
+
+### I cannot open project settings, Ontologies or New project
+
+Project settings are for project leads. **Ontologies**, **Users** and **New project** are for system administrators. The page tells you whom to ask. See [Roles](README.md#roles).
+
+## Annotating
+
+### Why is "Finish & submit" disabled?
+
+Something is still open. Click **Next open item** to jump to it, or open the submit dialog: it lists every open item with **Go to**. Typical reasons are undecided proposals, carried findings not yet checked, findings after a text correction, or values not yet chosen. See [Submit the text](annotator.md#submit-the-text).
+
+### The submit dialog shows "Values not chosen yet"
+
+Some findings still have prefilled values you did not confirm. Click **Confirm as shown** per finding, or **Confirm all as shown**, or **Go to** the finding and choose another value. In some projects you must confirm them before you can submit. See [Confirm values and acknowledge warnings in the submit dialog](annotator.md#confirm-values-and-acknowledge-warnings-in-the-submit-dialog).
+
+### The submit dialog shows "Modifier warnings"
+
+A finding uses a modifier term (such as a severity) as the finding itself, or has two modifiers of one kind. Check it with **Go to**. If it is correct, submit anyway with the button that names the number of warnings. See [Add modifiers to a finding](annotator.md#add-modifiers-to-a-finding).
+
+### Submitting fails with "Replace obsolete terms" or "Replace unknown terms"
+
+The project moved to a newer ontology release and a term in your draft no longer exists there. Pick another term for that finding, or reject or replace the affected proposal. Then submit again. See [Change term, note or delete a finding](annotator.md#change-term-note-or-delete-a-finding).
+
+### "Add finding without a text span" is disabled
+
+Your project requires a text span for every finding. Mark the text passage instead. See [Add a finding without a text span](annotator.md#add-a-finding-without-a-text-span).
+
+### The save status says "Changed elsewhere – reload required"
+
+The same task was changed in another window or by someone else. Click **Reload case**. See [The editor screen](annotator.md#the-editor-screen).
+
+### The save status says "Offline – changes not saved"
+
+The connection to the server is lost. Keep the window open; your input stays in the editor. When the connection is back, saving usually resumes on its own; if the status stays, click **Retry**. See [The editor screen](annotator.md#the-editor-screen).
+
+## Translation review
+
+### I cannot submit my review: "Your qualification is required to submit."
+
+Add your qualification (for example "physician, native German speaker") in your profile, then submit again. Use the link **Add your qualification in your profile**. See [Edit your profile](getting-started.md#edit-your-profile).
+
+### What does "automatic check failed" mean?
+
+The translation tool checked its own output and found a possible problem, for example numbers or units that differ from the source. Click **Details** to read the check, what the tool reported and what to do if the translation is right anyway. Open **Technical details** for the technical code of the check. If Ontotator has no description for a check, ask the project lead what it checks. See [Review a translation](annotator.md#review-a-translation).
+
+## Consolidating
+
+### Why is "Submit consolidation" disabled?
+
+Some groups are still open. Decide each open group first; the progress card counts what is left. See [Finish a consolidation](consolidator.md#finish-a-consolidation).
+
+### I submitted a consolidation with a mistake
+
+A submitted consolidation cannot be changed. Tell the lead: they can start a new consolidation on the text, which can include yours as one of the submissions. See [Finish a consolidation](consolidator.md#finish-a-consolidation) and [Accept a consolidation](lead-results.md#accept-a-consolidation).
+
+### "Could not add the finding. Nothing changed."
+
+Add the finding in the full editor instead. See [Add a finding everyone missed](consolidator.md#add-a-finding-everyone-missed).
+
+### The consolidation asks me to "Check before you submit"
+
+The result has findings with values filled in by default, modifier terms used as findings, or modifier warnings. Check them; if they are correct, submit with the warnings. See [Finish a consolidation](consolidator.md#finish-a-consolidation).
+
+## Leading a project
+
+### I cannot accept a result
+
+In projects where the consolidator of a text may not be one of its annotators, you cannot choose a result you made yourself. Another lead must choose it. See [Accept a result or compare results](lead-results.md#accept-a-result-or-compare-results).
+
+### My uploaded texts do not show up
+
+An import runs in the background; reload **Documents** when it is done. If the project plan for new imports is **Plan nothing; I plan texts on Documents**, the new texts show as *Not decided* until you plan them. See [Upload texts](lead-documents.md#upload-texts).
+
+### I cannot change the ontology release or the task profile
+
+The ontology release can be chosen freely only until the first work is submitted; after that, use **Move to another release**. The task profile can only be replaced before work starts. See [Move a started project to a newer release](lead-settings.md#move-a-started-project-to-a-newer-release).
+
+### A text has no assign button
+
+The text is not in the work plan. Plan it first. See [Add a text to the plan](lead-documents.md#add-a-text-to-the-plan).
+
+### A task is still paused after I closed the report
+
+Closing a report does not always release the pause. The row shows **Resume task…**; click it and release the pause. See [Decide on a problem report](lead-results.md#decide-on-a-problem-report).
+
+### I chose myself as consolidator, but "Open consolidation" shows no actions
+
+**Open consolidation** in the text card is the read-only view. Open your task with **Open my task** in the row on **Documents**, or from **My tasks**. See [Start a consolidation](lead-results.md#start-a-consolidation).
+
+### The consolidator list does not show a person
+
+Only members with the **Consolidator** role are listed. Give the role first. See [Change a member's roles](lead-settings.md#change-a-members-roles).
+
+### The export asks me to tick a box
+
+Some texts still need your decision or have no final result. Either decide them in **Documents** first, or tick the box to export the ready results and leave the others out. See [Export final results](lead-results.md#export-final-results).
+
+### I cannot remove a lead
+
+A project needs at least one lead. Add another lead first, then remove the role. See [Change a member's roles](lead-settings.md#change-a-members-roles).
+
+### "Save changes" is disabled in the settings
+
+Nothing has changed yet. The button turns on as soon as you edit a field. **People** and **Guidelines** save on their own and have no save button. See [Open project settings](lead-settings.md#open-project-settings).
+
+## Administration
+
+### I cannot close the setup-code dialog
+
+Tick **I have handed over or stored the code** first. The code is shown only once. See [Hand over a setup or reset code](admin.md#hand-over-a-setup-or-reset-code).
+
+### "You cannot remove your own administrator role."
+
+This protects you from locking yourself out. Another system administrator must do it; you also cannot deactivate yourself. The last active system administrator always keeps the role. See [Edit a user's profile and administrator role](admin.md#edit-a-users-profile-and-administrator-role).
+
+### An ontology upload is refused
+
+The file could not be read, is too large, or is an incomplete HPO release. Read the detail below the message and upload a complete release. See [Upload ontology releases and translation files](admin.md#upload-ontology-releases-and-translation-files).
+
+### The administrator lost the password
+
+This is fixed on the server, not in the app. See [Lost admin password](../operations.md#lost-admin-password) in the server operations guide.
 `,v=`# Your first task, start to finish
 
 This chapter takes you through one annotation task, from your first login to a submitted text. Do it once in this order; afterwards, look things up in the [annotator reference](annotator.md). Back to the [handbook overview](README.md).
@@ -1283,312 +1283,312 @@ What for: replace your password with a new one.
 6. Click **Change password**. You see **Password changed. Other sessions were logged out.**
 
 If you forgot your password, ask an administrator for a reset code and follow [Set your password with a setup or reset code](#set-your-password-with-a-setup-or-reset-code).
-`,C=`# Lead: texts, work plans and progress\r
-\r
-This chapter is for project leads. It covers the **Documents** page: uploading texts, the text card, planning and assigning work, and following progress. Back to the [lead overview](lead.md).\r
-\r
-On **Documents**, each row is one text: one language version of a case. See [case, text and document](README.md#glossary).\r
-\r
-## Upload texts\r
-\r
-### Prepare files for upload\r
-\r
-Ontotator takes two formats:\r
-\r
-| Format | Use it for | What goes in |\r
-| --- | --- | --- |\r
-| **Plain text** (.txt, or a .zip of .txt files) | Texts in one language, without tool proposals. | One UTF-8 text file per text. The file name without \`.txt\` becomes the text's ID: letters, digits, dots, hyphens and underscores, up to 128 characters, starting with a letter or digit. Each name may occur once. All files of one upload get the same **Upload language**. |\r
-| **Ontospan bundle** (.zip or .json) | Texts with translations and tool proposals. | A ZIP with \`manifest.json\` and one JSON file per text under \`documents/\`, or a single exchange file (.json). Each text file holds the text, its language and case ID, whether it is a translation, and the tool proposals for it. |\r
-\r
-Example of a plain-text ZIP:\r
-\r
-\`\`\`\r
-texts.zip\r
-  case-201.txt\r
-  case-202.txt\r
-\`\`\`\r
-\r
-Example of an Ontospan bundle:\r
-\r
-\`\`\`\r
-bundle.zip\r
-  manifest.json\r
-  documents/\r
-    case-201-de.json    (source text, with proposals)\r
-    case-201-en.json    (translation of case-201)\r
-\`\`\`\r
-\r
-Ontospan bundles are written by the Ontospan tools that produce the translations and proposals. Ask whoever runs those tools for a bundle.\r
-\r
-### Upload texts\r
-\r
-What for: bring texts into the project, with or without tool proposals.\r
-\r
-Before you start: [prepare the files](#prepare-files-for-upload). Check the [languages of the texts](lead-settings.md#set-the-languages-of-the-texts) and the [plan for new imports](lead-settings.md#choose-the-plan-for-new-imports).\r
-\r
-1. Open **Documents** and click **Upload texts…**.\r
-2. Choose the **Format**. For plain text, also choose the **Upload language**.\r
-3. Click **Choose files…** and select your files.\r
-4. Click **Check**. Nothing is imported yet; the dialog shows *Checking 2 files …*.\r
-5. Read the preview: the number of cases, proposals and texts already in the project, and any **Notes**.\r
-6. Check the **Work plan**: for each language, whether it gets a **Translation review** and an annotation. Click **Adjust per case…** for exceptions.\r
-7. Optional: if translations are not marked as reviewed and you want them annotated without review, tick **These translations were reviewed outside Ontotator — accept them as they are** and enter a **Reason**.\r
-8. Click the import button, for example *Import 20 cases*.\r
-\r
-![The Upload texts dialog after the check, with the summary and the work plan](images/lead-upload-preview.png)\r
-\r
-What you may see:\r
-\r
-| Message | Meaning |\r
-| --- | --- |\r
-| *…: problems found. Nothing can be imported.* | The dialog names the problems per file. Click **Discard**, fix the files and try again. |\r
-| **You can close this dialog; the import continues, and the texts appear after the next page load.** | The import runs. Reload **Documents** later. |\r
-| *Imported 20 documents and 35 proposals.* | The import is done. |\r
-| **This upload failed. Nothing was imported.** | **Discard it and upload the files again.** |\r
-\r
-If you chose **Plan nothing; I plan texts on Documents**, the new texts appear as *Not decided* until you plan them ([Plan several texts at once](#plan-several-texts-at-once)).\r
-\r
-## The Documents page\r
-\r
-The **Documents** page lists every text of the project and what it needs next. Open it with **Documents** in the sidebar. A number next to it counts the texts that need your decision.\r
-\r
-![The Documents page. The row with a coloured edge needs your decision; its Next step button opens that decision.](images/lead-documents.png)\r
-\r
-### Columns of the Documents table\r
-\r
-| Column or mark | Meaning |\r
-| --- | --- |\r
-| **Text** | The case ID, the language, the text version and a **NEW** badge for texts that are new since your last visit. |\r
-| **Translation**, **Annotation**, **Finalization** | The state of each stage, with the names of the people involved. |\r
-| Robot icon | The text has tool proposals. |\r
-| **Waiting on** | Who the text waits for. **You** in bold means it waits for you. |\r
-| **Next step** | A button for the next action on this text, for example **Assign annotation…** or **Accept result…**. Rows that need your decision also have a coloured left edge. |\r
-| **Last activity** | When something last happened on the text. |\r
-\r
-### Use the Documents tabs\r
-\r
-What for: work through texts by what they need.\r
-\r
-1. On **Documents**, choose a tab: **Needs your decision**, **To assign**, **In progress**, **Done** or **All**.\r
-2. Click **Refresh** to update the counts.\r
-\r
-A tab keeps your filters and search.\r
-\r
-### Do a text's next step\r
-\r
-What for: act on a text directly from its row.\r
-\r
-1. In the **Next step** column, click the row's button, for example **Assign annotation…**, **Accept result…** or **Decide on report…**.\r
-2. The matching dialog, card or page opens. The tasks in this chapter and in [Lead: results, decisions and export](lead-results.md) describe each one.\r
-\r
-If you have an open task on the text yourself, the row shows **Open my task** instead. It opens your task in the editor or on the consolidation screen.\r
-\r
-### Search texts\r
-\r
-What for: find a text by its case ID or by words in the text.\r
-\r
-1. Type into the search field **Case ID or text…**.\r
-2. The list updates after a short pause or when you press Enter.\r
-\r
-To clear the search, click ✕ in the field.\r
-\r
-### Filter the list\r
-\r
-What for: show only texts in a certain state, language or origin.\r
-\r
-1. Click **Filter**.\r
-2. Tick the options you need, for example under **Language**, **Translation review**, **Annotation** or **Final**. Each choice applies at once.\r
-3. Under **Order**, choose **Case ID**, **Import order** or **Last activity**.\r
-\r
-Active filters show as chips above the table. Remove one with its ✕, or click **Clear all**. Options without texts are hidden; click the button below the options, for example *Show 4 empty filters*, to see them.\r
-\r
-### Sort and page through the table\r
-\r
-- Click the column header **Text** to sort by case ID, up or down.\r
-- Click **Last activity** to sort newest or oldest first.\r
-- The other headers sort only the rows on the current page.\r
-- Below the table, click **Next** or **Previous** to see more rows.\r
-\r
-### On a narrow screen\r
-\r
-Below 700 px width, each case is a card with its texts. Click a stage status to see the latest activity and the actions for that stage. Click **Details** to open the full text card.\r
-\r
-## The text card\r
-\r
-The text card shows everything about one text and lets you act on it.\r
-\r
-### Open the text card\r
-\r
-1. Double-click a row, or focus the text name and press Enter.\r
-2. The card shows the path **Translation**, **Annotation**, **Finalization**. Click a part to see it.\r
-\r
-![The text card with its three parts. The Annotation part is open and lists the annotators.](images/lead-text-card.png)\r
-\r
-In the card:\r
-\r
-- **Open text** opens the [text view](#read-a-text-and-other-peoples-work-in-the-text-view).\r
-- **Previous text** and **Next text** walk through the table (keys \`K\` and \`J\`).\r
-- **Other languages** switches to another language of the same case.\r
-- ✕ or Esc closes the card.\r
-\r
-### Read the history and details of a text\r
-\r
-What for: see what happened to a text and its technical IDs.\r
-\r
-1. In the text card footer, click **History** or **Details**.\r
-   - **History** lists all activity, newest first, with reviewers' reasons.\r
-   - **Details** shows the **Plan**, the **Problem reports** and the **Technical details**.\r
-2. Click **Back** to return to the path.\r
-\r
-### Read a text and other people's work in the text view\r
-\r
-What for: read a text with other people's findings or the final result, and compare two of them side by side. Leads and consolidators see other people's work; everyone else sees only their own.\r
-\r
-1. Open the text view with **Open text** in the text card.\r
-2. Choose the language and version in **Language and version**.\r
-3. In **Show**, choose **Text only**, a proposal layer, someone's annotations or the result. Its findings are listed under **Findings**.\r
-4. Optional: click **Compare** to open a second pane with its own **Language and version** and **Show**. Tick **Couple scrolling** to scroll both together. Click **Close comparison** to close it.\r
-5. Optional: click **Submissions** to open the **Submission history**. Choose a row to show it, then click **Close**.\r
-\r
-**Open my task** goes to your own task on this text.\r
-\r
-### Review the translation versions of a text\r
-\r
-What for: see each version of a translation, its reviews and its origin.\r
-\r
-1. Open the text card and click **Translation**.\r
-2. The list shows each version with its origin and status. Older ones are under **Older versions**.\r
-3. Click **View text** to read a version, or **Translation reviews** to see every review decision.\r
-4. Click **Compare with source** to compare the translation with the source text.\r
-\r
-### Request a translation correction\r
-\r
-What for: have a translation corrected by a reviewer.\r
-\r
-1. Open the text card and click **Translation**.\r
-2. At the version, click **Request correction…**.\r
-3. Choose the **Translation reviewer** and enter the **Reason for another review**.\r
-4. Click **Assign correction review**, then **Close**.\r
-\r
-The corrected text becomes a new text version.\r
-\r
-## Work plans and assignments\r
-\r
-The work plan says, for each text, whether it gets a translation review and whether and how it is annotated. Planned texts show up in the main list; the others are hidden.\r
-\r
-### Add a text to the plan\r
-\r
-What for: start work on a text that is not planned yet.\r
-\r
-1. On **Documents**, tab **All**, tick **Show texts not in plan**. Unplanned texts appear muted.\r
-2. In the text's row, click **Add to plan…**.\r
-3. Choose **Translation review** **On** or **Off**.\r
-4. Choose the annotation: **Off (not annotated)**, **Annotate from proposals** or **Annotate from scratch**.\r
-5. Click **Save**. The message has an **Undo** button.\r
-\r
-### Select texts\r
-\r
-What for: plan or assign many texts at once.\r
-\r
-1. Click a row to select it. Shift+click selects a range; Ctrl+click (macOS: Cmd+click) adds single rows.\r
-2. To select every filtered text, tick the checkbox in the table header.\r
-3. The selection bar at the bottom shows how many texts are selected and their next step.\r
-\r
-To start over, click **Clear selection**.\r
-\r
-### Select texts by pasting case IDs\r
-\r
-What for: select texts from a list you have elsewhere, for example a spreadsheet.\r
-\r
-1. Click **Select by case IDs…**.\r
-2. Paste the IDs into **Paste case IDs**, one per line or separated by commas.\r
-3. Check how many were found. Click **Copy unknown IDs** to copy the ones that do not exist.\r
-4. Optional: to keep the current selection, tick **Add to the current selection instead**.\r
-5. Click the select button, for example *Select 20*.\r
-\r
-### Plan several texts at once\r
-\r
-What for: set the work plan for a selection.\r
-\r
-1. Select the texts, then click **Plan…** in the selection bar.\r
-2. Optional: under **Quick choice for the selected translations**, pick **Translation review and annotation** or **Annotation only, no translation review**.\r
-3. Or set it per language: **Translation review** and **Annotation**. **Leave as is** keeps the current plan.\r
-4. Read what will change.\r
-5. Click the save button, for example *Save for 20 cases*.\r
-6. If work already exists, the dialog lists what happens to it. Tick **I understand** (or **I understand — withdraw the open tasks**) and save again.\r
-\r
-![The Work plan dialog with the quick choice and one row per language](images/lead-work-plan.png)\r
-\r
-**Undo** in the message restores the plan, not withdrawn tasks.\r
-\r
-### Change the annotation mode of one text\r
-\r
-What for: switch one text between from proposals, from scratch and not annotated.\r
-\r
-Before you start: once someone started or submitted work in one mode, the mode is fixed.\r
-\r
-1. Open the text card and click **Annotation**.\r
-2. Under **Annotation**, choose **From proposals**, **From scratch** or **Off**. It saves at once.\r
-\r
-### Assign work to the selected texts\r
-\r
-What for: give translation reviews or annotations to people.\r
-\r
-1. Select the texts, then click the assign button in the selection bar, for example **Assign annotation…**.\r
-2. Check the **Task**, for example a translation review in one language.\r
-3. In the table of people (**Person**, **Reads**, **Open tasks**), pick the reviewer, or tick everyone who should annotate. Each ticked person gets every selected text.\r
-4. Read the summary below the table, for example *Ana Weber gets 3 translation reviews (de).*\r
-5. Click the assign button, for example *Assign 20*.\r
-\r
-![The assign dialog with members, their languages and open tasks](images/lead-assign.png)\r
-\r
-If someone does not read a language the task needs, the dialog asks again; click **Assign anyway** or **Back**. Ontotator sends no e-mail; the work appears in each person's **My tasks**.\r
-\r
-### Assign work for one text\r
-\r
-What for: assign a single review or annotation.\r
-\r
-1. In the row, click **Assign review…** or **Assign annotation…**. In the text card, use **Assign review…** or **Assign annotators…**.\r
-2. Tick the people. To annotate yourself without the Annotator role, click **Add me as annotator**.\r
-3. Click the assign button, for example *Assign 2 people*.\r
-\r
-To change the limit of annotators per text from here, click the info button (i) next to the limit, then **Change for all texts**.\r
-\r
-### Distribute work evenly\r
-\r
-What for: spread a batch of texts evenly across people.\r
-\r
-1. In the assign dialog, click **Distribute evenly…**.\r
-2. Set **People per document** and click **Propose**.\r
-3. Check the proposal. Change a person in any cell, or click **Propose again**.\r
-4. Click **Confirm**, then **Close**.\r
-\r
-### Remove, reassign or reopen an assignment\r
-\r
-What for: change who works on a text, or let someone change a submitted annotation.\r
-\r
-Warning: removing unsubmitted work deletes the draft for good. Submitted work stays in the history.\r
-\r
-1. Open the text card and click **Annotation** (or **Translation** for reviews).\r
-2. In the person's row, click one of these:\r
-   - **Reassign…**: choose the **New assignee** and click **Reassign**.\r
-   - **Reopen…**: optional **Reason (optional)**, then **Reopen assignment**.\r
-   - **Remove…**: confirm with **Remove** or **Confirm removal**.\r
-\r
-Consolidations cannot be reassigned. Annotators can also continue from their own submission themselves ([Start a new work round](annotator.md#start-a-new-work-round)).\r
-\r
-## Watch progress\r
-\r
-What for: see the whole project at a glance.\r
-\r
-1. In the sidebar, click **Progress**.\r
-2. The first line counts cases, reviews and annotations. Click **need your decision** or **to assign** to jump to those texts.\r
-3. The cards **Translation review**, **Annotation** and **Final result** count the texts per state. Each count opens **Documents** with the same texts.\r
-4. The **People** table shows each person's open and submitted work. Click a name to see their texts.\r
-\r
-![The Progress page with the stage cards and the People table](images/lead-progress.png)\r
-\r
-Click **Refresh progress** to update.\r
+`,C=`# Lead: texts, work plans and progress
+
+This chapter is for project leads. It covers the **Documents** page: uploading texts, the text card, planning and assigning work, and following progress. Back to the [lead overview](lead.md).
+
+On **Documents**, each row is one text: one language version of a case. See [case, text and document](README.md#glossary).
+
+## Upload texts
+
+### Prepare files for upload
+
+Ontotator takes two formats:
+
+| Format | Use it for | What goes in |
+| --- | --- | --- |
+| **Plain text** (.txt, or a .zip of .txt files) | Texts in one language, without tool proposals. | One UTF-8 text file per text. The file name without \`.txt\` becomes the text's ID: letters, digits, dots, hyphens and underscores, up to 128 characters, starting with a letter or digit. Each name may occur once. All files of one upload get the same **Upload language**. |
+| **Ontospan bundle** (.zip or .json) | Texts with translations and tool proposals. | A ZIP with \`manifest.json\` and one JSON file per text under \`documents/\`, or a single exchange file (.json). Each text file holds the text, its language and case ID, whether it is a translation, and the tool proposals for it. |
+
+Example of a plain-text ZIP:
+
+\`\`\`
+texts.zip
+  case-201.txt
+  case-202.txt
+\`\`\`
+
+Example of an Ontospan bundle:
+
+\`\`\`
+bundle.zip
+  manifest.json
+  documents/
+    case-201-de.json    (source text, with proposals)
+    case-201-en.json    (translation of case-201)
+\`\`\`
+
+Ontospan bundles are written by the Ontospan tools that produce the translations and proposals. Ask whoever runs those tools for a bundle.
+
+### Upload texts
+
+What for: bring texts into the project, with or without tool proposals.
+
+Before you start: [prepare the files](#prepare-files-for-upload). Check the [languages of the texts](lead-settings.md#set-the-languages-of-the-texts) and the [plan for new imports](lead-settings.md#choose-the-plan-for-new-imports).
+
+1. Open **Documents** and click **Upload texts…**.
+2. Choose the **Format**. For plain text, also choose the **Upload language**.
+3. Click **Choose files…** and select your files.
+4. Click **Check**. Nothing is imported yet; the dialog shows *Checking 2 files …*.
+5. Read the preview: the number of cases, proposals and texts already in the project, and any **Notes**.
+6. Check the **Work plan**: for each language, whether it gets a **Translation review** and an annotation. Click **Adjust per case…** for exceptions.
+7. Optional: if translations are not marked as reviewed and you want them annotated without review, tick **These translations were reviewed outside Ontotator — accept them as they are** and enter a **Reason**.
+8. Click the import button, for example *Import 20 cases*.
+
+![The Upload texts dialog after the check, with the summary and the work plan](images/lead-upload-preview.png)
+
+What you may see:
+
+| Message | Meaning |
+| --- | --- |
+| *…: problems found. Nothing can be imported.* | The dialog names the problems per file. Click **Discard**, fix the files and try again. |
+| **You can close this dialog; the import continues, and the texts appear after the next page load.** | The import runs. Reload **Documents** later. |
+| *Imported 20 documents and 35 proposals.* | The import is done. |
+| **This upload failed. Nothing was imported.** | **Discard it and upload the files again.** |
+
+If you chose **Plan nothing; I plan texts on Documents**, the new texts appear as *Not decided* until you plan them ([Plan several texts at once](#plan-several-texts-at-once)).
+
+## The Documents page
+
+The **Documents** page lists every text of the project and what it needs next. Open it with **Documents** in the sidebar. A number next to it counts the texts that need your decision.
+
+![The Documents page. The row with a coloured edge needs your decision; its Next step button opens that decision.](images/lead-documents.png)
+
+### Columns of the Documents table
+
+| Column or mark | Meaning |
+| --- | --- |
+| **Text** | The case ID, the language, the text version and a **NEW** badge for texts that are new since your last visit. |
+| **Translation**, **Annotation**, **Finalization** | The state of each stage, with the names of the people involved. |
+| Robot icon | The text has tool proposals. |
+| **Waiting on** | Who the text waits for. **You** in bold means it waits for you. |
+| **Next step** | A button for the next action on this text, for example **Assign annotation…** or **Accept result…**. Rows that need your decision also have a coloured left edge. |
+| **Last activity** | When something last happened on the text. |
+
+### Use the Documents tabs
+
+What for: work through texts by what they need.
+
+1. On **Documents**, choose a tab: **Needs your decision**, **To assign**, **In progress**, **Done** or **All**.
+2. Click **Refresh** to update the counts.
+
+A tab keeps your filters and search.
+
+### Do a text's next step
+
+What for: act on a text directly from its row.
+
+1. In the **Next step** column, click the row's button, for example **Assign annotation…**, **Accept result…** or **Decide on report…**.
+2. The matching dialog, card or page opens. The tasks in this chapter and in [Lead: results, decisions and export](lead-results.md) describe each one.
+
+If you have an open task on the text yourself, the row shows **Open my task** instead. It opens your task in the editor or on the consolidation screen.
+
+### Search texts
+
+What for: find a text by its case ID or by words in the text.
+
+1. Type into the search field **Case ID or text…**.
+2. The list updates after a short pause or when you press Enter.
+
+To clear the search, click ✕ in the field.
+
+### Filter the list
+
+What for: show only texts in a certain state, language or origin.
+
+1. Click **Filter**.
+2. Tick the options you need, for example under **Language**, **Translation review**, **Annotation** or **Final**. Each choice applies at once.
+3. Under **Order**, choose **Case ID**, **Import order** or **Last activity**.
+
+Active filters show as chips above the table. Remove one with its ✕, or click **Clear all**. Options without texts are hidden; click the button below the options, for example *Show 4 empty filters*, to see them.
+
+### Sort and page through the table
+
+- Click the column header **Text** to sort by case ID, up or down.
+- Click **Last activity** to sort newest or oldest first.
+- The other headers sort only the rows on the current page.
+- Below the table, click **Next** or **Previous** to see more rows.
+
+### On a narrow screen
+
+Below 700 px width, each case is a card with its texts. Click a stage status to see the latest activity and the actions for that stage. Click **Details** to open the full text card.
+
+## The text card
+
+The text card shows everything about one text and lets you act on it.
+
+### Open the text card
+
+1. Double-click a row, or focus the text name and press Enter.
+2. The card shows the path **Translation**, **Annotation**, **Finalization**. Click a part to see it.
+
+![The text card with its three parts. The Annotation part is open and lists the annotators.](images/lead-text-card.png)
+
+In the card:
+
+- **Open text** opens the [text view](#read-a-text-and-other-peoples-work-in-the-text-view).
+- **Previous text** and **Next text** walk through the table (keys \`K\` and \`J\`).
+- **Other languages** switches to another language of the same case.
+- ✕ or Esc closes the card.
+
+### Read the history and details of a text
+
+What for: see what happened to a text and its technical IDs.
+
+1. In the text card footer, click **History** or **Details**.
+   - **History** lists all activity, newest first, with reviewers' reasons.
+   - **Details** shows the **Plan**, the **Problem reports** and the **Technical details**.
+2. Click **Back** to return to the path.
+
+### Read a text and other people's work in the text view
+
+What for: read a text with other people's findings or the final result, and compare two of them side by side. Leads and consolidators see other people's work; everyone else sees only their own.
+
+1. Open the text view with **Open text** in the text card.
+2. Choose the language and version in **Language and version**.
+3. In **Show**, choose **Text only**, a proposal layer, someone's annotations or the result. Its findings are listed under **Findings**.
+4. Optional: click **Compare** to open a second pane with its own **Language and version** and **Show**. Tick **Couple scrolling** to scroll both together. Click **Close comparison** to close it.
+5. Optional: click **Submissions** to open the **Submission history**. Choose a row to show it, then click **Close**.
+
+**Open my task** goes to your own task on this text.
+
+### Review the translation versions of a text
+
+What for: see each version of a translation, its reviews and its origin.
+
+1. Open the text card and click **Translation**.
+2. The list shows each version with its origin and status. Older ones are under **Older versions**.
+3. Click **View text** to read a version, or **Translation reviews** to see every review decision.
+4. Click **Compare with source** to compare the translation with the source text.
+
+### Request a translation correction
+
+What for: have a translation corrected by a reviewer.
+
+1. Open the text card and click **Translation**.
+2. At the version, click **Request correction…**.
+3. Choose the **Translation reviewer** and enter the **Reason for another review**.
+4. Click **Assign correction review**, then **Close**.
+
+The corrected text becomes a new text version.
+
+## Work plans and assignments
+
+The work plan says, for each text, whether it gets a translation review and whether and how it is annotated. Planned texts show up in the main list; the others are hidden.
+
+### Add a text to the plan
+
+What for: start work on a text that is not planned yet.
+
+1. On **Documents**, tab **All**, tick **Show texts not in plan**. Unplanned texts appear muted.
+2. In the text's row, click **Add to plan…**.
+3. Choose **Translation review** **On** or **Off**.
+4. Choose the annotation: **Off (not annotated)**, **Annotate from proposals** or **Annotate from scratch**.
+5. Click **Save**. The message has an **Undo** button.
+
+### Select texts
+
+What for: plan or assign many texts at once.
+
+1. Click a row to select it. Shift+click selects a range; Ctrl+click (macOS: Cmd+click) adds single rows.
+2. To select every filtered text, tick the checkbox in the table header.
+3. The selection bar at the bottom shows how many texts are selected and their next step.
+
+To start over, click **Clear selection**.
+
+### Select texts by pasting case IDs
+
+What for: select texts from a list you have elsewhere, for example a spreadsheet.
+
+1. Click **Select by case IDs…**.
+2. Paste the IDs into **Paste case IDs**, one per line or separated by commas.
+3. Check how many were found. Click **Copy unknown IDs** to copy the ones that do not exist.
+4. Optional: to keep the current selection, tick **Add to the current selection instead**.
+5. Click the select button, for example *Select 20*.
+
+### Plan several texts at once
+
+What for: set the work plan for a selection.
+
+1. Select the texts, then click **Plan…** in the selection bar.
+2. Optional: under **Quick choice for the selected translations**, pick **Translation review and annotation** or **Annotation only, no translation review**.
+3. Or set it per language: **Translation review** and **Annotation**. **Leave as is** keeps the current plan.
+4. Read what will change.
+5. Click the save button, for example *Save for 20 cases*.
+6. If work already exists, the dialog lists what happens to it. Tick **I understand** (or **I understand — withdraw the open tasks**) and save again.
+
+![The Work plan dialog with the quick choice and one row per language](images/lead-work-plan.png)
+
+**Undo** in the message restores the plan, not withdrawn tasks.
+
+### Change the annotation mode of one text
+
+What for: switch one text between from proposals, from scratch and not annotated.
+
+Before you start: once someone started or submitted work in one mode, the mode is fixed.
+
+1. Open the text card and click **Annotation**.
+2. Under **Annotation**, choose **From proposals**, **From scratch** or **Off**. It saves at once.
+
+### Assign work to the selected texts
+
+What for: give translation reviews or annotations to people.
+
+1. Select the texts, then click the assign button in the selection bar, for example **Assign annotation…**.
+2. Check the **Task**, for example a translation review in one language.
+3. In the table of people (**Person**, **Reads**, **Open tasks**), pick the reviewer, or tick everyone who should annotate. Each ticked person gets every selected text.
+4. Read the summary below the table, for example *Ana Weber gets 3 translation reviews (de).*
+5. Click the assign button, for example *Assign 20*.
+
+![The assign dialog with members, their languages and open tasks](images/lead-assign.png)
+
+If someone does not read a language the task needs, the dialog asks again; click **Assign anyway** or **Back**. Ontotator sends no e-mail; the work appears in each person's **My tasks**.
+
+### Assign work for one text
+
+What for: assign a single review or annotation.
+
+1. In the row, click **Assign review…** or **Assign annotation…**. In the text card, use **Assign review…** or **Assign annotators…**.
+2. Tick the people. To annotate yourself without the Annotator role, click **Add me as annotator**.
+3. Click the assign button, for example *Assign 2 people*.
+
+To change the limit of annotators per text from here, click the info button (i) next to the limit, then **Change for all texts**.
+
+### Distribute work evenly
+
+What for: spread a batch of texts evenly across people.
+
+1. In the assign dialog, click **Distribute evenly…**.
+2. Set **People per document** and click **Propose**.
+3. Check the proposal. Change a person in any cell, or click **Propose again**.
+4. Click **Confirm**, then **Close**.
+
+### Remove, reassign or reopen an assignment
+
+What for: change who works on a text, or let someone change a submitted annotation.
+
+Warning: removing unsubmitted work deletes the draft for good. Submitted work stays in the history.
+
+1. Open the text card and click **Annotation** (or **Translation** for reviews).
+2. In the person's row, click one of these:
+   - **Reassign…**: choose the **New assignee** and click **Reassign**.
+   - **Reopen…**: optional **Reason (optional)**, then **Reopen assignment**.
+   - **Remove…**: confirm with **Remove** or **Confirm removal**.
+
+Consolidations cannot be reassigned. Annotators can also continue from their own submission themselves ([Start a new work round](annotator.md#start-a-new-work-round)).
+
+## Watch progress
+
+What for: see the whole project at a glance.
+
+1. In the sidebar, click **Progress**.
+2. The first line counts cases, reviews and annotations. Click **need your decision** or **to assign** to jump to those texts.
+3. The cards **Translation review**, **Annotation** and **Final result** count the texts per state. Each count opens **Documents** with the same texts.
+4. The **People** table shows each person's open and submitted work. Click a name to see their texts.
+
+![The Progress page with the stage cards and the People table](images/lead-progress.png)
+
+Click **Refresh progress** to update.
 `,T=`# Lead: results, decisions and export
 
 This chapter is for project leads. It covers choosing the final result of each text, consolidations, the decisions on translations, text changes and problem reports, and the export. Back to the [lead overview](lead.md).
@@ -1795,232 +1795,232 @@ What for: download raw material for analysis. People appear as pseudonyms.
 3. Click **Create**, then **Download** when it is ready.
 
 How to analyse these files is described in the [scientific workflow guide](../scientific-workflow.md).
-`,A=`# Lead: project settings\r
-\r
-This chapter is for project leads. It covers every tab under **Settings**: the project name and languages, the ontology, the submission rules, the workflow, the people and the guidelines. Back to the [lead overview](lead.md).\r
-\r
-General, Annotation, Workflow and Ontology have a **Save changes** button at the bottom. People and Guidelines save each change at once.\r
-\r
-| Tab | What you set there |\r
-| --- | --- |\r
-| **General** | [Name and description](#change-the-project-name-and-description), [languages of the texts](#set-the-languages-of-the-texts) |\r
-| **Annotation** | [Submission rules](#set-the-submission-rules), [prefilled values](#set-prefilled-values-for-new-findings), [values annotators can choose](#limit-the-values-annotators-can-choose) |\r
-| **Workflow** | [Plan for new imports](#choose-the-plan-for-new-imports), [texts with tool proposals](#choose-how-texts-with-tool-proposals-are-annotated), [annotators per text and consolidation rules](#set-annotators-per-text-and-the-consolidation-rules) |\r
-| **Guidelines** | [Publish](#publish-the-first-or-a-new-guideline-version), [see who read them](#see-who-has-read-the-guidelines), [republish](#republish-an-earlier-guideline-version), [withdraw](#withdraw-a-guideline-version) |\r
-| **People** | [Add](#add-a-member), [change roles](#change-a-members-roles), [remove](#remove-a-member) |\r
-| **Ontology** | [Ontology version and annotation scheme](#choose-the-ontology-version-branches-and-annotation-scheme), [task profile](#replace-the-task-profile), [move to a newer release](#move-a-started-project-to-a-newer-release) |\r
-\r
-## Open project settings\r
-\r
-What for: reach all settings of the current project.\r
-\r
-1. In the sidebar, click **Settings**. You can also click **Settings** in the project's row on **Projects**.\r
-2. Choose a tab: **General**, **Annotation**, **Workflow**, **Guidelines**, **People** or **Ontology**.\r
-3. After a change, click **Save changes**. The page then says, for example, *General saved.*\r
-4. To undo your edits before saving, click **Discard changes**.\r
-\r
-If you leave a tab with unsaved edits, a dialog asks you to **Save changes**, **Discard changes** or **Cancel**.\r
-\r
-## Change the project name and description\r
-\r
-What for: give the project a clear name and a short description on **Projects**.\r
-\r
-1. Open **Settings**, tab **General**.\r
-2. In the card **Name and description**, edit **Name** and **Description**.\r
-3. Click **Save changes**.\r
-\r
-## Set the languages of the texts\r
-\r
-What for: make sure every imported text is in a language you expect. An import refuses texts in other languages. Leave the list empty to allow any language.\r
-\r
-1. Open **Settings**, tab **General**, card **Languages**.\r
-2. Type a language code into **Languages of the texts**, for example \`de\`.\r
-3. Press Enter or click **Add language**.\r
-4. To remove a language, click ✕ next to its code (its name is *Remove de*, for example).\r
-5. Click **Save changes**.\r
-\r
-A typed code that you did not add blocks saving: **Add this language code before saving.**\r
-\r
-## Choose the ontology version, branches and annotation scheme\r
-\r
-What for: decide which ontology release annotators search in.\r
-\r
-Before you start: you can change this until the first work is submitted. After that, see [Move a started project to a newer release](#move-a-started-project-to-a-newer-release).\r
-\r
-1. Open **Settings**, tab **Ontology**.\r
-2. In **Ontology version**, choose the release for each ontology. Only releases an administrator uploaded on **Ontologies** are offered.\r
-3. Optional: open **Advanced**.\r
-   - Limit the terms to some branches (parts of the ontology below one term): enter term codes separated by commas, for example \`HP:0000118\`. Empty means every term.\r
-   - Choose the annotation scheme: **HPO phenotype (fixed qualifiers, modifiers)** or **Generic (free qualifiers)**. "Qualifiers" are the value fields of a finding.\r
-4. Click **Save changes**. If the change would rewrite or flag terms in drafts, a check opens first, as in [Move a started project to a newer release](#move-a-started-project-to-a-newer-release).\r
-\r
-## Replace the task profile\r
-\r
-What for: change the layers, finding types and value fields annotators work with. The task profile is the JSON file that defines them.\r
-\r
-Before you start: this is only possible before work starts.\r
-\r
-1. Open **Settings**, tab **Ontology**, and open **Advanced: task profile**.\r
-2. Check **Current profile layers**.\r
-3. Choose a JSON file in **Profile file (JSON)**. The new layers appear under **Profile layers**.\r
-4. Click **Save changes**. The page says *Task profile saved.*\r
-\r
-## Move a started project to a newer release\r
-\r
-What for: move to a newer ontology release after work was submitted. Drafts are updated; submitted work stays as it was submitted.\r
-\r
-Before you start: an administrator must have uploaded the new release ([Upload ontology releases](admin.md#upload-ontology-releases-and-translation-files)).\r
-\r
-1. Open **Settings**, tab **Ontology**. The card **Ontology** shows the current release.\r
-2. Under **Move to another release**, choose the new release.\r
-3. Click **Check changes**.\r
-4. Read the panel **Check before moving**:\r
-   - The first table (**Becomes**, **Why**) lists draft terms that will be replaced by their successor.\r
-   - The second table (**Status**, **Suggestions**) lists draft terms that are obsolete or missing in the new release. Their annotators must change them before submitting.\r
-5. Click **Move to this release**, or **Cancel**. The page says **Ontology release changed.**\r
-\r
-![The check before moving to another release. The first table shows which draft terms are replaced automatically, the second which ones annotators must change by hand.](images/lead-move-release-check.png)\r
-\r
-If drafts changed meanwhile, you see **Drafts or pins changed since the check. Check the changes again before moving.** Click **Check changes** again.\r
-\r
-## Set the submission rules\r
-\r
-What for: decide what annotators must do before they can submit.\r
-\r
-1. Open **Settings**, tab **Annotation**, card **When submitting**.\r
-2. In **Findings that point to no text passage**, choose **Not allowed**, **Allowed with a reason** or **Allowed, reason optional**.\r
-3. Tick **Annotators must confirm every value before submitting** if prefilled values may not be submitted unconfirmed.\r
-4. Tick **A finding must be one continuous passage** if a finding may not have several text segments.\r
-5. Click **Save changes**. The rules apply to every submission from now on.\r
-\r
-## Set prefilled values for new findings\r
-\r
-What for: new findings start with these values. They stay marked as not confirmed until the annotator confirms or changes them.\r
-\r
-1. Open **Settings**, tab **Annotation**, card **Prefilled values**.\r
-2. For each value field, choose a value, or **No prefill**.\r
-3. Click **Save changes**.\r
-\r
-## Limit the values annotators can choose\r
-\r
-What for: hide values the project does not use from the editor.\r
-\r
-1. Open **Settings**, tab **Annotation**, and open **Values annotators can choose**.\r
-2. Click a value to switch it off (hidden) or on (shown). The prefilled value of a value field cannot be hidden.\r
-3. Click **Save changes**.\r
-\r
-Existing findings keep their values. A finding with a hidden value must be changed before it is saved again.\r
-\r
-## Choose the plan for new imports\r
-\r
-What for: decide whether newly imported translations get a translation review and an annotation by default.\r
-\r
-1. Open **Settings**, tab **Workflow**, card **New imports**.\r
-2. Choose **Plan review and annotation for every translation** or **Plan nothing; I plan texts on Documents**.\r
-3. Click **Save changes**.\r
-\r
-With **Plan nothing; I plan texts on Documents**, new texts appear on **Documents** as *Not decided* (filter **Not decided**) until you plan them ([Plan several texts at once](lead-documents.md#plan-several-texts-at-once)).\r
-\r
-## Choose how texts with tool proposals are annotated\r
-\r
-What for: set the project default for texts that came with tool proposals.\r
-\r
-1. Open **Settings**, tab **Workflow**, card **Texts with tool proposals**.\r
-2. Choose **Annotators work from the proposals** (they confirm, reject, correct and add) or **Annotators start from scratch** (proposals are hidden).\r
-3. Click **Save changes**.\r
-\r
-A text's own plan can override this until work on it starts.\r
-\r
-## Set annotators per text and the consolidation rules\r
-\r
-What for: decide how many people annotate each text and who may consolidate.\r
-\r
-1. Open **Settings**, tab **Workflow**, card **Annotation and consolidation**.\r
-2. Set **Annotators per text** (1 to 5). It is an upper limit; fewer is fine.\r
-3. Tick **Annotate only after the translation review is accepted** if translations must be reviewed before annotation.\r
-4. Tick **Consolidator must not be one of the text's annotators** if annotators may not consolidate their own texts.\r
-5. Click **Save changes**.\r
-\r
-Lowering the number removes nobody; existing assignments stay.\r
-\r
-## Add a member\r
-\r
-What for: let a person work in this project.\r
-\r
-Before you start: the person needs an account ([Create a user account](admin.md#create-a-user-account)).\r
-\r
-1. Open **Settings**, tab **People**.\r
-2. Click **Add member…**.\r
-3. In **Username**, type at least three letters of the name, or the exact username or e-mail. Pick the person from the suggestions.\r
-4. Tick one or more roles: **Lead**, **Annotator**, **Consolidator**.\r
-5. Click **Add member**. The page confirms the new role.\r
-\r
-Annotators also do translation reviews. Only people with the **Consolidator** role can be chosen as consolidator of a text. Ontotator sends no e-mail; tell the person that they were added.\r
-\r
-## Change a member's roles\r
-\r
-What for: give or take away a role.\r
-\r
-1. Open **Settings**, tab **People**. The table **Project members** shows one row per person.\r
-2. Tick a role checkbox to give the role. It saves at once.\r
-3. Untick a role checkbox to take it away, then confirm with **Remove role**. This logs the person out on all devices; they can log in again right away.\r
-\r
-A project needs at least one lead: **Add another project lead before removing the last lead.**\r
-\r
-## Remove a member\r
-\r
-What for: take someone off the project.\r
-\r
-Warning: if the person still has open work, removing them revokes their open assignments. Submitted work stays in the history.\r
-\r
-1. Open **Settings**, tab **People**.\r
-2. In the person's row, click **Remove…**.\r
-3. Confirm with **Remove from project**.\r
-4. If the person still has open work, the dialog **Revoke affected assignments?** lists it. Click **Remove and revoke their open assignments**.\r
-\r
-## Publish the first or a new guideline version\r
-\r
-What for: give annotators and reviewers the rules they work by. They find the guidelines in every task.\r
-\r
-Before you start: published versions cannot be edited, only withdrawn. Check the file before you publish.\r
-\r
-1. Open **Settings**, tab **Guidelines**.\r
-2. Without guidelines, the form is already open (**No guidelines yet**). Otherwise, click **Publish a new version**.\r
-3. Choose a \`.md\` or \`.txt\` file (UTF-8, up to 256 KB) in **Guideline file (.md or .txt, up to 256 KB)**.\r
-4. Check the preview.\r
-5. Optional: describe the change in **What changed? (optional)**.\r
-6. Click the publish button, for example *Publish as v2*. Or click **Discard**.\r
-\r
-Everyone sees a notice in their next task.\r
-\r
-## See who has read the guidelines\r
-\r
-What for: check which version is in force and who has not opened it yet.\r
-\r
-1. Open **Settings**, tab **Guidelines**. The top card shows the version **In force**.\r
-2. Read **Seen by**. Open **who not yet?** to see the names.\r
-3. Click **Read** to read a version. Close it with ✕.\r
-\r
-Older versions are listed under **All versions**.\r
-\r
-## Republish an earlier guideline version\r
-\r
-What for: go back to an earlier text.\r
-\r
-1. Open **Settings**, tab **Guidelines**.\r
-2. In the row of the old version, click **More…**, then the republish item, for example *Republish v1…*.\r
-3. The form opens with the old text. Click the publish button, for example *Publish as v3*.\r
-\r
-## Withdraw a guideline version\r
-\r
-What for: remove a version that must no longer be read, for example because it contains a mistake.\r
-\r
-Warning: the text of the withdrawn version is deleted for good. The version number stays, and results made under it show it as withdrawn. No guideline is in force until you publish or republish one.\r
-\r
-1. Open **Settings**, tab **Guidelines**.\r
-2. In the version's row, click **More…**, then the withdraw item, for example *Withdraw v2…*.\r
-3. Optional: enter **Reason (optional)**. Do not repeat confidential content.\r
-4. Confirm, for example with *Withdraw v2*.\r
+`,A=`# Lead: project settings
+
+This chapter is for project leads. It covers every tab under **Settings**: the project name and languages, the ontology, the submission rules, the workflow, the people and the guidelines. Back to the [lead overview](lead.md).
+
+General, Annotation, Workflow and Ontology have a **Save changes** button at the bottom. People and Guidelines save each change at once.
+
+| Tab | What you set there |
+| --- | --- |
+| **General** | [Name and description](#change-the-project-name-and-description), [languages of the texts](#set-the-languages-of-the-texts) |
+| **Annotation** | [Submission rules](#set-the-submission-rules), [prefilled values](#set-prefilled-values-for-new-findings), [values annotators can choose](#limit-the-values-annotators-can-choose) |
+| **Workflow** | [Plan for new imports](#choose-the-plan-for-new-imports), [texts with tool proposals](#choose-how-texts-with-tool-proposals-are-annotated), [annotators per text and consolidation rules](#set-annotators-per-text-and-the-consolidation-rules) |
+| **Guidelines** | [Publish](#publish-the-first-or-a-new-guideline-version), [see who read them](#see-who-has-read-the-guidelines), [republish](#republish-an-earlier-guideline-version), [withdraw](#withdraw-a-guideline-version) |
+| **People** | [Add](#add-a-member), [change roles](#change-a-members-roles), [remove](#remove-a-member) |
+| **Ontology** | [Ontology version and annotation scheme](#choose-the-ontology-version-branches-and-annotation-scheme), [task profile](#replace-the-task-profile), [move to a newer release](#move-a-started-project-to-a-newer-release) |
+
+## Open project settings
+
+What for: reach all settings of the current project.
+
+1. In the sidebar, click **Settings**. You can also click **Settings** in the project's row on **Projects**.
+2. Choose a tab: **General**, **Annotation**, **Workflow**, **Guidelines**, **People** or **Ontology**.
+3. After a change, click **Save changes**. The page then says, for example, *General saved.*
+4. To undo your edits before saving, click **Discard changes**.
+
+If you leave a tab with unsaved edits, a dialog asks you to **Save changes**, **Discard changes** or **Cancel**.
+
+## Change the project name and description
+
+What for: give the project a clear name and a short description on **Projects**.
+
+1. Open **Settings**, tab **General**.
+2. In the card **Name and description**, edit **Name** and **Description**.
+3. Click **Save changes**.
+
+## Set the languages of the texts
+
+What for: make sure every imported text is in a language you expect. An import refuses texts in other languages. Leave the list empty to allow any language.
+
+1. Open **Settings**, tab **General**, card **Languages**.
+2. Type a language code into **Languages of the texts**, for example \`de\`.
+3. Press Enter or click **Add language**.
+4. To remove a language, click ✕ next to its code (its name is *Remove de*, for example).
+5. Click **Save changes**.
+
+A typed code that you did not add blocks saving: **Add this language code before saving.**
+
+## Choose the ontology version, branches and annotation scheme
+
+What for: decide which ontology release annotators search in.
+
+Before you start: you can change this until the first work is submitted. After that, see [Move a started project to a newer release](#move-a-started-project-to-a-newer-release).
+
+1. Open **Settings**, tab **Ontology**.
+2. In **Ontology version**, choose the release for each ontology. Only releases an administrator uploaded on **Ontologies** are offered.
+3. Optional: open **Advanced**.
+   - Limit the terms to some branches (parts of the ontology below one term): enter term codes separated by commas, for example \`HP:0000118\`. Empty means every term.
+   - Choose the annotation scheme: **HPO phenotype (fixed qualifiers, modifiers)** or **Generic (free qualifiers)**. "Qualifiers" are the value fields of a finding.
+4. Click **Save changes**. If the change would rewrite or flag terms in drafts, a check opens first, as in [Move a started project to a newer release](#move-a-started-project-to-a-newer-release).
+
+## Replace the task profile
+
+What for: change the layers, finding types and value fields annotators work with. The task profile is the JSON file that defines them.
+
+Before you start: this is only possible before work starts.
+
+1. Open **Settings**, tab **Ontology**, and open **Advanced: task profile**.
+2. Check **Current profile layers**.
+3. Choose a JSON file in **Profile file (JSON)**. The new layers appear under **Profile layers**.
+4. Click **Save changes**. The page says *Task profile saved.*
+
+## Move a started project to a newer release
+
+What for: move to a newer ontology release after work was submitted. Drafts are updated; submitted work stays as it was submitted.
+
+Before you start: an administrator must have uploaded the new release ([Upload ontology releases](admin.md#upload-ontology-releases-and-translation-files)).
+
+1. Open **Settings**, tab **Ontology**. The card **Ontology** shows the current release.
+2. Under **Move to another release**, choose the new release.
+3. Click **Check changes**.
+4. Read the panel **Check before moving**:
+   - The first table (**Becomes**, **Why**) lists draft terms that will be replaced by their successor.
+   - The second table (**Status**, **Suggestions**) lists draft terms that are obsolete or missing in the new release. Their annotators must change them before submitting.
+5. Click **Move to this release**, or **Cancel**. The page says **Ontology release changed.**
+
+![The check before moving to another release. The first table shows which draft terms are replaced automatically, the second which ones annotators must change by hand.](images/lead-move-release-check.png)
+
+If drafts changed meanwhile, you see **Drafts or pins changed since the check. Check the changes again before moving.** Click **Check changes** again.
+
+## Set the submission rules
+
+What for: decide what annotators must do before they can submit.
+
+1. Open **Settings**, tab **Annotation**, card **When submitting**.
+2. In **Findings that point to no text passage**, choose **Not allowed**, **Allowed with a reason** or **Allowed, reason optional**.
+3. Tick **Annotators must confirm every value before submitting** if prefilled values may not be submitted unconfirmed.
+4. Tick **A finding must be one continuous passage** if a finding may not have several text segments.
+5. Click **Save changes**. The rules apply to every submission from now on.
+
+## Set prefilled values for new findings
+
+What for: new findings start with these values. They stay marked as not confirmed until the annotator confirms or changes them.
+
+1. Open **Settings**, tab **Annotation**, card **Prefilled values**.
+2. For each value field, choose a value, or **No prefill**.
+3. Click **Save changes**.
+
+## Limit the values annotators can choose
+
+What for: hide values the project does not use from the editor.
+
+1. Open **Settings**, tab **Annotation**, and open **Values annotators can choose**.
+2. Click a value to switch it off (hidden) or on (shown). The prefilled value of a value field cannot be hidden.
+3. Click **Save changes**.
+
+Existing findings keep their values. A finding with a hidden value must be changed before it is saved again.
+
+## Choose the plan for new imports
+
+What for: decide whether newly imported translations get a translation review and an annotation by default.
+
+1. Open **Settings**, tab **Workflow**, card **New imports**.
+2. Choose **Plan review and annotation for every translation** or **Plan nothing; I plan texts on Documents**.
+3. Click **Save changes**.
+
+With **Plan nothing; I plan texts on Documents**, new texts appear on **Documents** as *Not decided* (filter **Not decided**) until you plan them ([Plan several texts at once](lead-documents.md#plan-several-texts-at-once)).
+
+## Choose how texts with tool proposals are annotated
+
+What for: set the project default for texts that came with tool proposals.
+
+1. Open **Settings**, tab **Workflow**, card **Texts with tool proposals**.
+2. Choose **Annotators work from the proposals** (they confirm, reject, correct and add) or **Annotators start from scratch** (proposals are hidden).
+3. Click **Save changes**.
+
+A text's own plan can override this until work on it starts.
+
+## Set annotators per text and the consolidation rules
+
+What for: decide how many people annotate each text and who may consolidate.
+
+1. Open **Settings**, tab **Workflow**, card **Annotation and consolidation**.
+2. Set **Annotators per text** (1 to 5). It is an upper limit; fewer is fine.
+3. Tick **Annotate only after the translation review is accepted** if translations must be reviewed before annotation.
+4. Tick **Consolidator must not be one of the text's annotators** if annotators may not consolidate their own texts.
+5. Click **Save changes**.
+
+Lowering the number removes nobody; existing assignments stay.
+
+## Add a member
+
+What for: let a person work in this project.
+
+Before you start: the person needs an account ([Create a user account](admin.md#create-a-user-account)).
+
+1. Open **Settings**, tab **People**.
+2. Click **Add member…**.
+3. In **Username**, type at least three letters of the name, or the exact username or e-mail. Pick the person from the suggestions.
+4. Tick one or more roles: **Lead**, **Annotator**, **Consolidator**.
+5. Click **Add member**. The page confirms the new role.
+
+Annotators also do translation reviews. Only people with the **Consolidator** role can be chosen as consolidator of a text. Ontotator sends no e-mail; tell the person that they were added.
+
+## Change a member's roles
+
+What for: give or take away a role.
+
+1. Open **Settings**, tab **People**. The table **Project members** shows one row per person.
+2. Tick a role checkbox to give the role. It saves at once.
+3. Untick a role checkbox to take it away, then confirm with **Remove role**. This logs the person out on all devices; they can log in again right away.
+
+A project needs at least one lead: **Add another project lead before removing the last lead.**
+
+## Remove a member
+
+What for: take someone off the project.
+
+Warning: if the person still has open work, removing them revokes their open assignments. Submitted work stays in the history.
+
+1. Open **Settings**, tab **People**.
+2. In the person's row, click **Remove…**.
+3. Confirm with **Remove from project**.
+4. If the person still has open work, the dialog **Revoke affected assignments?** lists it. Click **Remove and revoke their open assignments**.
+
+## Publish the first or a new guideline version
+
+What for: give annotators and reviewers the rules they work by. They find the guidelines in every task.
+
+Before you start: published versions cannot be edited, only withdrawn. Check the file before you publish.
+
+1. Open **Settings**, tab **Guidelines**.
+2. Without guidelines, the form is already open (**No guidelines yet**). Otherwise, click **Publish a new version**.
+3. Choose a \`.md\` or \`.txt\` file (UTF-8, up to 256 KB) in **Guideline file (.md or .txt, up to 256 KB)**.
+4. Check the preview.
+5. Optional: describe the change in **What changed? (optional)**.
+6. Click the publish button, for example *Publish as v2*. Or click **Discard**.
+
+Everyone sees a notice in their next task.
+
+## See who has read the guidelines
+
+What for: check which version is in force and who has not opened it yet.
+
+1. Open **Settings**, tab **Guidelines**. The top card shows the version **In force**.
+2. Read **Seen by**. Open **who not yet?** to see the names.
+3. Click **Read** to read a version. Close it with ✕.
+
+Older versions are listed under **All versions**.
+
+## Republish an earlier guideline version
+
+What for: go back to an earlier text.
+
+1. Open **Settings**, tab **Guidelines**.
+2. In the row of the old version, click **More…**, then the republish item, for example *Republish v1…*.
+3. The form opens with the old text. Click the publish button, for example *Publish as v3*.
+
+## Withdraw a guideline version
+
+What for: remove a version that must no longer be read, for example because it contains a mistake.
+
+Warning: the text of the withdrawn version is deleted for good. The version number stays, and results made under it show it as withdrawn. No guideline is in force until you publish or republish one.
+
+1. Open **Settings**, tab **Guidelines**.
+2. In the version's row, click **More…**, then the withdraw item, for example *Withdraw v2…*.
+3. Optional: enter **Reason (optional)**. Do not repeat confidential content.
+4. Confirm, for example with *Withdraw v2*.
 `,S=`# Lead overview
 
 This chapter is for project leads. A lead sets up the project, uploads texts, plans and assigns the work, accepts the results and exports them. Back to the [handbook overview](README.md).
@@ -2047,4 +2047,4 @@ The lead's tasks are in three chapters:
 8. Accept one result per text, or start a consolidation when annotators disagree: [Accept a result or compare results](lead-results.md#accept-a-result-or-compare-results), [Start a consolidation](lead-results.md#start-a-consolidation).
 9. Read the consolidators' notes and flags, and improve the guidelines where they were unclear: [Accept a consolidation](lead-results.md#accept-a-consolidation).
 10. Export the final results: [Export final results](lead-results.md#export-final-results).
-`,O="/assets/admin-new-project-Cir0O66s.png",j="/assets/admin-setup-code-C_NzEJeU.png",I="/assets/annotator-carried-finding-yADspK5V.png",R="/assets/annotator-editor-dqHteLqT.png",W="/assets/annotator-finding-values-DF2d7KaZ.png",_="/assets/annotator-new-finding-Ck1Vt4sY.png",D="/assets/annotator-proposal-review-BfFE3fNQ.png",P="/assets/annotator-submit-dialog-DEybG3Zm.png",E="/assets/annotator-translation-review-DA3-4k_Z.png",M="/assets/consolidator-group-table-Dp7hujX8.png",N="/assets/consolidator-submit-dialog-DJEkTQ6t.png",U="/assets/getting-started-my-tasks-ezmcCup8.png",F="/assets/getting-started-set-password-CC57Fe71.png",Y="/assets/lead-assign-9KxFl6dY.png",L="/assets/lead-compare-results-DC6HkQJ3.png",B="/assets/lead-documents-CjycjdEv.png",G="/assets/lead-export-KFM5Mz1P.png",H="/assets/lead-move-release-check-BHRNaFox.png",z="/assets/lead-problem-report-C6J_XPtm.png",K="/assets/lead-progress-B0_lg4T2.png",q="/assets/lead-text-card-DRw6CK7x.png",V="/assets/lead-upload-preview-64cXvoTU.png",Z="/assets/lead-work-plan-Dau0Rzps.png",$="https://github.com/halbritter-lab/ontotator/blob/main",h="https://handbook.invalid/docs/handbook/",Q=Object.assign({"../../../docs/handbook/README.md":f,"../../../docs/handbook/admin.md":w,"../../../docs/handbook/annotator.md":y,"../../../docs/handbook/consolidator.md":k,"../../../docs/handbook/faq.md":b,"../../../docs/handbook/first-task.md":v,"../../../docs/handbook/getting-started.md":x,"../../../docs/handbook/lead-documents.md":C,"../../../docs/handbook/lead-results.md":T,"../../../docs/handbook/lead-settings.md":A,"../../../docs/handbook/lead.md":S}),J=Object.assign({"../../../docs/handbook/images/admin-new-project.png":O,"../../../docs/handbook/images/admin-setup-code.png":j,"../../../docs/handbook/images/annotator-carried-finding.png":I,"../../../docs/handbook/images/annotator-editor.png":R,"../../../docs/handbook/images/annotator-finding-values.png":W,"../../../docs/handbook/images/annotator-new-finding.png":_,"../../../docs/handbook/images/annotator-proposal-review.png":D,"../../../docs/handbook/images/annotator-submit-dialog.png":P,"../../../docs/handbook/images/annotator-translation-review.png":E,"../../../docs/handbook/images/consolidator-group-table.png":M,"../../../docs/handbook/images/consolidator-submit-dialog.png":N,"../../../docs/handbook/images/getting-started-my-tasks.png":U,"../../../docs/handbook/images/getting-started-set-password.png":F,"../../../docs/handbook/images/lead-assign.png":Y,"../../../docs/handbook/images/lead-compare-results.png":L,"../../../docs/handbook/images/lead-documents.png":B,"../../../docs/handbook/images/lead-export.png":G,"../../../docs/handbook/images/lead-move-release-check.png":H,"../../../docs/handbook/images/lead-problem-report.png":z,"../../../docs/handbook/images/lead-progress.png":K,"../../../docs/handbook/images/lead-text-card.png":q,"../../../docs/handbook/images/lead-upload-preview.png":V,"../../../docs/handbook/images/lead-work-plan.png":Z}),l=e=>e.slice(e.lastIndexOf("/")+1),s=Object.fromEntries(Object.entries(Q).map(([e,t])=>[l(e).replace(/\.md$/,""),t])),X=Object.fromEntries(Object.entries(J).map(([e,t])=>[`images/${l(e)}`,t]));function ee(e){var t;return((t=/^# +(.+)$/m.exec(s[e]??""))==null?void 0:t[1].trim())??e}function te(){const e=[...(s.README??"").matchAll(/\]\(([A-Za-z0-9_-]+)\.md[)#]/g)].map(t=>t[1]);return[...new Set(["README",...e,...Object.keys(s).sort()])].filter(t=>t in s)}function ne(e){return e.toLowerCase().replace(/[^\p{L}\p{M}\p{N}\p{Pc} -]/gu,"").replace(/ /g,"-")}function oe(){const e=new Map;return t=>{const o=ne(t);let n=o;for(;e.has(n);){const r=e.get(o)+1;e.set(o,r),n=`${o}-${r}`}return e.set(n,0),n}}function ae(e,t){var d;if(/^[a-z][a-z0-9+.-]*:/i.test(e))return{kind:"external",href:e};const o=new URL(e,`${h}${t}.md`),n=decodeURIComponent(o.hash.slice(1)),r=(d=/^\/docs\/handbook\/([A-Za-z0-9_-]+)\.md$/.exec(o.pathname))==null?void 0:d[1];return r&&r in s?r===t&&n?{kind:"anchor",id:n}:{kind:"chapter",href:i({name:"help",chapter:r,...n?{section:n}:{}})}:{kind:"external",href:`${$}${o.pathname}${o.hash}`}}function re(e,t){if(/^[a-z][a-z0-9+.-]*:/i.test(e))return null;const o=new URL(e,`${h}${t}.md`).pathname.replace(/^\/docs\/handbook\//,"");return X[o]??null}const c=e=>e.type==="text"?e.value:"children"in e?e.children.map(c).join(""):"";function se(){return e=>{const t=oe(),o=n=>n.children.forEach(r=>{r.type==="element"&&(/^h[1-6]$/.test(r.tagName)?r.properties.id=t(c(r)):o(r))});o(e)}}function u(e){var t;(t=document.getElementById(e))==null||t.scrollIntoView()}const ie=e=>e.button===0&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey&&!e.altKey;function de(e){return{a:({href:t,children:o})=>{if(!t)return a.jsx(a.Fragment,{children:o});const n=ae(t,e);return n.kind==="external"?a.jsx("a",{href:n.href,target:"_blank",rel:"noopener noreferrer",children:o}):n.kind==="chapter"?a.jsx("a",{href:n.href,children:o}):a.jsx("a",{href:i({name:"help",chapter:e,section:n.id}),onClick:r=>{ie(r)&&(r.preventDefault(),u(n.id))},children:o})},img:({src:t,alt:o})=>{const n=t?re(t,e):null;return n?a.jsx("img",{className:"help-image",src:n,alt:o??"",loading:"lazy"}):a.jsx("span",{className:"guideline-image-text",children:o?`Image: ${o}`:"Image"})},table:({children:t})=>a.jsx("div",{className:"guideline-table-scroll",tabIndex:0,role:"region","aria-label":"Table",children:a.jsx("table",{children:t})})}}function ce({chapter:e="README",section:t}){const o=s[e];return p.useEffect(()=>{var n,r;t?u(t):(r=(n=document.getElementById("main"))==null?void 0:n.scrollTo)==null||r.call(n,0,0)},[e,t]),a.jsxs("div",{className:"help-page",children:[a.jsx("nav",{className:"help-chapters","aria-label":"Handbook chapters",children:a.jsx("ul",{children:te().map(n=>a.jsx("li",{children:a.jsx("a",{href:i({name:"help",chapter:n}),"aria-current":n===e?"page":void 0,children:ee(n)})},n))})}),a.jsx("article",{className:"guideline-document help-document",children:o===void 0?a.jsxs(a.Fragment,{children:[a.jsx("h1",{children:"Chapter not found"}),a.jsxs("p",{children:["This handbook has no chapter “",e,"”. Pick one from the list."]})]}):a.jsx("div",{className:"guideline-markdown",children:a.jsx(m,{remarkPlugins:[g],rehypePlugins:[se],skipHtml:!0,components:de(e),children:o})})})]})}export{ce as default};
+`,O="/assets/admin-new-project-Cir0O66s.png",j="/assets/admin-setup-code-C_NzEJeU.png",I="/assets/annotator-carried-finding-yADspK5V.png",R="/assets/annotator-editor-dqHteLqT.png",W="/assets/annotator-finding-values-DF2d7KaZ.png",_="/assets/annotator-new-finding-Ck1Vt4sY.png",D="/assets/annotator-proposal-review-BfFE3fNQ.png",P="/assets/annotator-submit-dialog-DEybG3Zm.png",E="/assets/annotator-translation-review-DA3-4k_Z.png",M="/assets/consolidator-group-table-Dp7hujX8.png",N="/assets/consolidator-submit-dialog-DJEkTQ6t.png",U="/assets/getting-started-my-tasks-ezmcCup8.png",F="/assets/getting-started-set-password-CC57Fe71.png",Y="/assets/lead-assign-9KxFl6dY.png",L="/assets/lead-compare-results-DC6HkQJ3.png",B="/assets/lead-documents-CjycjdEv.png",G="/assets/lead-export-KFM5Mz1P.png",H="/assets/lead-move-release-check-BHRNaFox.png",z="/assets/lead-problem-report-C6J_XPtm.png",K="/assets/lead-progress-B0_lg4T2.png",q="/assets/lead-text-card-DRw6CK7x.png",V="/assets/lead-upload-preview-64cXvoTU.png",Z="/assets/lead-work-plan-Dau0Rzps.png",$="https://github.com/halbritter-lab/ontotator/blob/main",h="https://handbook.invalid/docs/handbook/",Q=Object.assign({"../../../docs/handbook/README.md":f,"../../../docs/handbook/admin.md":w,"../../../docs/handbook/annotator.md":y,"../../../docs/handbook/consolidator.md":k,"../../../docs/handbook/faq.md":b,"../../../docs/handbook/first-task.md":v,"../../../docs/handbook/getting-started.md":x,"../../../docs/handbook/lead-documents.md":C,"../../../docs/handbook/lead-results.md":T,"../../../docs/handbook/lead-settings.md":A,"../../../docs/handbook/lead.md":S}),J=Object.assign({"../../../docs/handbook/images/admin-new-project.png":O,"../../../docs/handbook/images/admin-setup-code.png":j,"../../../docs/handbook/images/annotator-carried-finding.png":I,"../../../docs/handbook/images/annotator-editor.png":R,"../../../docs/handbook/images/annotator-finding-values.png":W,"../../../docs/handbook/images/annotator-new-finding.png":_,"../../../docs/handbook/images/annotator-proposal-review.png":D,"../../../docs/handbook/images/annotator-submit-dialog.png":P,"../../../docs/handbook/images/annotator-translation-review.png":E,"../../../docs/handbook/images/consolidator-group-table.png":M,"../../../docs/handbook/images/consolidator-submit-dialog.png":N,"../../../docs/handbook/images/getting-started-my-tasks.png":U,"../../../docs/handbook/images/getting-started-set-password.png":F,"../../../docs/handbook/images/lead-assign.png":Y,"../../../docs/handbook/images/lead-compare-results.png":L,"../../../docs/handbook/images/lead-documents.png":B,"../../../docs/handbook/images/lead-export.png":G,"../../../docs/handbook/images/lead-move-release-check.png":H,"../../../docs/handbook/images/lead-problem-report.png":z,"../../../docs/handbook/images/lead-progress.png":K,"../../../docs/handbook/images/lead-text-card.png":q,"../../../docs/handbook/images/lead-upload-preview.png":V,"../../../docs/handbook/images/lead-work-plan.png":Z}),l=e=>e.slice(e.lastIndexOf("/")+1),i=Object.fromEntries(Object.entries(Q).map(([e,t])=>[l(e).replace(/\.md$/,""),t])),X=Object.fromEntries(Object.entries(J).map(([e,t])=>[`images/${l(e)}`,t]));function ee(e){var t;return((t=/^# +(.+)$/m.exec(i[e]??""))==null?void 0:t[1].trim())??e}function te(){const e=[...(i.README??"").matchAll(/\]\(([A-Za-z0-9_-]+)\.md[)#]/g)].map(t=>t[1]);return[...new Set(["README",...e,...Object.keys(i).sort()])].filter(t=>t in i)}function ne(e){return e.toLowerCase().replace(/[^\p{L}\p{M}\p{N}\p{Pc} -]/gu,"").replace(/ /g,"-")}function oe(){const e=new Map;return t=>{const o=ne(t);let n=o;for(;e.has(n);){const s=e.get(o)+1;e.set(o,s),n=`${o}-${s}`}return e.set(n,0),n}}function ae(e,t){var d;if(/^[a-z][a-z0-9+.-]*:/i.test(e))return{kind:"external",href:e};const o=new URL(e,`${h}${t}.md`),n=decodeURIComponent(o.hash.slice(1)),s=(d=/^\/docs\/handbook\/([A-Za-z0-9_-]+)\.md$/.exec(o.pathname))==null?void 0:d[1];return s&&s in i?s===t&&n?{kind:"anchor",id:n}:{kind:"chapter",href:r({name:"help",chapter:s,...n?{section:n}:{}})}:{kind:"external",href:`${$}${o.pathname}${o.hash}`}}function se(e,t){if(/^[a-z][a-z0-9+.-]*:/i.test(e))return null;const o=new URL(e,`${h}${t}.md`).pathname.replace(/^\/docs\/handbook\//,"");return X[o]??null}const c=e=>e.type==="text"?e.value:"children"in e?e.children.map(c).join(""):"";function ie(){return e=>{const t=oe(),o=n=>n.children.forEach(s=>{s.type==="element"&&(/^h[1-6]$/.test(s.tagName)?s.properties.id=t(c(s)):o(s))});o(e)}}function u(e){var t;(t=document.getElementById(e))==null||t.scrollIntoView()}const re=e=>e.button===0&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey&&!e.altKey;function de(e){return{a:({href:t,children:o})=>{if(!t)return a.jsx(a.Fragment,{children:o});const n=ae(t,e);return n.kind==="external"?a.jsx("a",{href:n.href,target:"_blank",rel:"noopener noreferrer",children:o}):n.kind==="chapter"?a.jsx("a",{href:n.href,children:o}):a.jsx("a",{href:r({name:"help",chapter:e,section:n.id}),onClick:s=>{re(s)&&(s.preventDefault(),u(n.id))},children:o})},img:({src:t,alt:o})=>{const n=t?se(t,e):null;return n?a.jsx("img",{className:"help-image",src:n,alt:o??"",loading:"lazy"}):a.jsx("span",{className:"guideline-image-text",children:o?`Image: ${o}`:"Image"})},table:({children:t})=>a.jsx("div",{className:"guideline-table-scroll",tabIndex:0,role:"region","aria-label":"Table",children:a.jsx("table",{children:t})})}}function ce({chapter:e="README",section:t}){const o=i[e];return p.useEffect(()=>{var n,s;t?u(t):(s=(n=document.getElementById("main"))==null?void 0:n.scrollTo)==null||s.call(n,0,0)},[e,t]),a.jsxs("div",{className:"help-page",children:[a.jsx("nav",{className:"help-chapters","aria-label":"Handbook chapters",children:a.jsx("ul",{children:te().map(n=>a.jsx("li",{children:a.jsx("a",{href:r({name:"help",chapter:n}),"aria-current":n===e?"page":void 0,children:ee(n)})},n))})}),a.jsx("article",{className:"guideline-document help-document",children:o===void 0?a.jsxs(a.Fragment,{children:[a.jsx("h1",{children:"Chapter not found"}),a.jsxs("p",{children:["This handbook has no chapter “",e,"”. Pick one from the list."]})]}):a.jsx("div",{className:"guideline-markdown",children:a.jsx(m,{remarkPlugins:[g],rehypePlugins:[ie],skipHtml:!0,components:de(e),children:o})})})]})}export{ce as default};
