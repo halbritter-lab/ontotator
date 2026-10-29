@@ -60,7 +60,7 @@ Log in as `ana.weber`. Background: [Lead overview](../../docs/handbook/lead.md#t
 6. **Upload the bundle.** **Upload texts…** again: **Format** *Ontospan bundle: .zip or .json*, choose `demo-bundle.zip`, click **Check**. The preview shows **Cases** 7, **Texts per language** de 3, en 7, **Proposals** 31, and under **Notes** *1 translation failed an automatic check.* (on purpose, see below). The **Work plan** annotates the sources that have no translation and gives the three English machine translations (*en MT (3)*) a **Translation review** and an annotation. The German sources are not annotated. Click *Import 7 cases*.
 7. **Assign the translation reviews.** On **Documents**, tab **To assign**, tick NEURO-2026-009 en, 010 en and 011 en. In the selection bar click **Assign review…**, choose Mia Kühn and click *Assign 3*. See [Assign work to the selected texts](../../docs/handbook/lead-documents.md#assign-work-to-the-selected-texts).
 8. **Distribute the annotations.** The table keeps showing the assigned rows until you reopen the tab: click **In progress**, then **To assign** again, which now lists the eight remaining texts. Tick **Select all 8 filtered texts**, click **Assign annotation…** and then **Distribute evenly…**. Set **People per document** to `2`, click **Propose**, check the table (each text gets two of Luc Martin, Sam Okafor and Mia Kühn), click **Confirm**, then **Close**. See [Distribute work evenly](../../docs/handbook/lead-documents.md#distribute-work-evenly).
-9. **After the translation reviews** (Part 3), open **Documents** › **To assign** again: the three translations appear there with *✓ accepted*; two of them as *v2 corrected*. Tick **Select all 3 filtered texts**, click **Assign annotation…**, tick Luc Martin and Sam Okafor, and click the assign button.
+9. **After the translation reviews** (Part 3), open **Documents** › **To assign** again: the three translations appear there with *✓ accepted*; two of them as *v2 corrected*. Tick **Select all 3 filtered texts**, click **Assign annotation…**, tick Luc Martin and Sam Okafor, and click *Assign 6*.
 
 Ontotator sends no e-mail; tell the people that work waits in their **My tasks**.
 
@@ -111,10 +111,10 @@ Then submit each text: [Submit the text](../../docs/handbook/annotator.md#submit
 
 ## Part 5: lead and consolidator
 
-1. As `ana.weber`, open **Documents**, tab **Needs your decision**. Where both submissions agree, accept one: [Accept a result or compare results](../../docs/handbook/lead-results.md#accept-a-result-or-compare-results).
-2. Where they differ, click **Consolidate…** and choose Noor Haddad: [Start a consolidation](../../docs/handbook/lead-results.md#start-a-consolidation).
-3. As `noor.haddad`, open the consolidation from **My tasks**, decide every group and click **Submit consolidation**: [Typical consolidation, start to finish](../../docs/handbook/consolidator.md#typical-consolidation-start-to-finish).
-4. As `ana.weber`, accept the consolidation and export: [Accept a consolidation](../../docs/handbook/lead-results.md#accept-a-consolidation), [Export final results](../../docs/handbook/lead-results.md#export-final-results).
+1. As `ana.weber`, open **Documents**, tab **Needs your decision**, and click **Compare results…** in a row. Where the panel reads *All findings match*, click **Accept result**; the panel moves on to the next text: [Accept a result or compare results](../../docs/handbook/lead-results.md#accept-a-result-or-compare-results).
+2. Where they differ, click **Consolidate…**, choose Noor Haddad under **Consolidator** and click **Start consolidation**: [Start a consolidation](../../docs/handbook/lead-results.md#start-a-consolidation).
+3. As `noor.haddad`, open the consolidation from **My tasks**, click **Next open group**, decide it (✓ the right value in each highlighted row, then **Keep**) until no group is open, optionally **Add finding** for something everyone missed, and click **Submit consolidation**, then **Submit** (*Submit with 1 warning* if values are still defaults): [Typical consolidation, start to finish](../../docs/handbook/consolidator.md#typical-consolidation-start-to-finish).
+4. As `ana.weber`, accept each consolidation (**Needs your decision**, the row's **Accept result…**, then **Accept result**) and export (**Export** › **Create final export**, then **Download (ZIP)**): [Accept a consolidation](../../docs/handbook/lead-results.md#accept-a-consolidation), [Export final results](../../docs/handbook/lead-results.md#export-final-results).
 
 ## Reset or run it again
 
