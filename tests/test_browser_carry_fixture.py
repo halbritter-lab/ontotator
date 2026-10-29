@@ -55,7 +55,7 @@ def get(client: TestClient, path: str) -> Any:
 
 
 def test_unknown_scenario_is_404(client):
-    assert set(SCENARIOS) == {"t5", "corrected", "rounds3"}
+    assert set(SCENARIOS) == {"t5", "t5span", "corrected", "rounds3"}
     response = client.post("/__test_carry_forward__", params={"scenario": "nope"})
     assert response.status_code == 404
 
