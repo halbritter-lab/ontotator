@@ -89,6 +89,13 @@ export type CaseIdLookupResult = components["schemas"]["CaseIdLookupResult"];
 export type AnnotationTargetPreview = components["schemas"]["AnnotationTargetPreview"];
 export type DiscardRequest = Defaulted<components["schemas"]["DiscardRequest"], "confirm">;
 export type DiscardResult = components["schemas"]["DiscardResult"];
+// Annotation-mode change after submissions, and its restore
+export type ModeChangeTarget = components["schemas"]["ModeChangeTarget"];
+export type ModeChangeRequest = components["schemas"]["ModeChangeRequest"];
+export type ModeChangePreview = components["schemas"]["ModeChangePreview"];
+export type ModeChangeView = components["schemas"]["ModeChangeView"];
+export type ModeChangeList = components["schemas"]["ModeChangeList"];
+export type ModeChangeResult = components["schemas"]["ModeChangeResult"];
 export type UploadWorkPlan = components["schemas"]["UploadWorkPlan"];
 // Batch assignment and selection summary (lead workflow L1b)
 export type DocumentRowFilters = components["schemas"]["DocumentRowFilters"];
@@ -561,6 +568,27 @@ export class ApiClient {
 
   async discardVariant(key: string, documentId: string, body: DiscardRequest): Promise<DiscardResult> {
     return this.request<DiscardResult>(`/api/v1/projects/${encodeURIComponent(key)}/variants/${encodeURIComponent(documentId)}/discard`, { method: "POST", body: JSON.stringify(body) });
+  }
+
+  /** What changing a locked text's annotation mode discards and revokes (lead only, no write). */
+  async previewModeChange(key: string, body: ModeChangeTarget): Promise<ModeChangePreview> {
+    return this.request<ModeChangePreview>(`/api/v1/projects/${encodeURIComponent(key)}/annotation-mode-changes/preview`, { method: "POST", body: JSON.stringify(body) });
+  }
+
+  /** Change the mode: discard (mark) the listed submissions, revoke the text's assignments (lead only). */
+  async changeMode(key: string, body: ModeChangeRequest): Promise<ModeChangeResult> {
+    return this.request<ModeChangeResult>(`/api/v1/projects/${encodeURIComponent(key)}/annotation-mode-changes`, { method: "POST", body: JSON.stringify(body) });
+  }
+
+  /** The text's mode changes, newest first (lead only). */
+  async listModeChanges(key: string, caseId: string, language: string): Promise<ModeChangeList> {
+    const query = new URLSearchParams({ case_id: caseId, language });
+    return this.request<ModeChangeList>(`/api/v1/projects/${encodeURIComponent(key)}/annotation-mode-changes?${query.toString()}`, { method: "GET" });
+  }
+
+  /** Undo a mode change: the discarded work counts again (lead only). */
+  async restoreModeChange(key: string, changeId: number, expectedRevision: number): Promise<ModeChangeResult> {
+    return this.request<ModeChangeResult>(`/api/v1/projects/${encodeURIComponent(key)}/annotation-mode-changes/${changeId}/restore`, { method: "POST", body: JSON.stringify({ expected_revision: expectedRevision }) });
   }
 
   async discardUpload(key: string, id: number): Promise<UploadView> {

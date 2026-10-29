@@ -5187,6 +5187,233 @@
         }
       }
     },
+    "/api/v1/projects/{key}/annotation-mode-changes": {
+      "get": {
+        "tags": [
+          "annotation-mode-changes"
+        ],
+        "summary": "List Mode Changes",
+        "operationId": "list_mode_changes_api_v1_projects__key__annotation_mode_changes_get",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "case_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512,
+              "title": "Case Id"
+            }
+          },
+          {
+            "name": "language",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "title": "Language"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModeChangeList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "annotation-mode-changes"
+        ],
+        "summary": "Change Mode",
+        "operationId": "change_mode_api_v1_projects__key__annotation_mode_changes_post",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModeChangeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModeChangeResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/annotation-mode-changes/preview": {
+      "post": {
+        "tags": [
+          "annotation-mode-changes"
+        ],
+        "summary": "Preview Mode Change",
+        "operationId": "preview_mode_change_api_v1_projects__key__annotation_mode_changes_preview_post",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModeChangeTarget"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModeChangePreview"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/annotation-mode-changes/{change_id}/restore": {
+      "post": {
+        "tags": [
+          "annotation-mode-changes"
+        ],
+        "summary": "Restore Mode Change",
+        "operationId": "restore_mode_change_api_v1_projects__key__annotation_mode_changes__change_id__restore_post",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "change_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Change Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModeRestoreRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModeChangeResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{key}/documents/{doc}/translation-correction-assignment": {
       "post": {
         "tags": [
@@ -8243,6 +8470,10 @@
             "type": "integer",
             "title": "Proposal Count",
             "default": 0
+          },
+          "discarded_count": {
+            "type": "integer",
+            "title": "Discarded Count"
           }
         },
         "additionalProperties": false,
@@ -11435,6 +11666,39 @@
           "withdrawn"
         ],
         "title": "DiscardResult"
+      },
+      "DiscardedSubmissionView": {
+        "properties": {
+          "submission_id": {
+            "type": "string",
+            "title": "Submission Id"
+          },
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "mode": {
+            "type": "string",
+            "title": "Mode"
+          },
+          "recorded_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Recorded At"
+          },
+          "author": {
+            "$ref": "#/components/schemas/PersonRefView"
+          }
+        },
+        "type": "object",
+        "required": [
+          "submission_id",
+          "document_id",
+          "mode",
+          "recorded_at",
+          "author"
+        ],
+        "title": "DiscardedSubmissionView"
       },
       "DistributionContextView": {
         "properties": {
@@ -15092,6 +15356,318 @@
           "off"
         ],
         "title": "MixedCountView"
+      },
+      "ModeChangeList": {
+        "properties": {
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/ModeChangeView"
+            },
+            "type": "array",
+            "title": "Changes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "case_id",
+          "language",
+          "changes"
+        ],
+        "title": "ModeChangeList"
+      },
+      "ModeChangePreview": {
+        "properties": {
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "from_mode": {
+            "type": "string",
+            "enum": [
+              "proposals",
+              "scratch"
+            ],
+            "title": "From Mode"
+          },
+          "to_mode": {
+            "type": "string",
+            "enum": [
+              "proposals",
+              "scratch"
+            ],
+            "title": "To Mode"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "submissions": {
+            "items": {
+              "$ref": "#/components/schemas/DiscardedSubmissionView"
+            },
+            "type": "array",
+            "title": "Submissions"
+          },
+          "assignments": {
+            "items": {
+              "$ref": "#/components/schemas/RevokedAssignmentView"
+            },
+            "type": "array",
+            "title": "Assignments"
+          }
+        },
+        "type": "object",
+        "required": [
+          "case_id",
+          "language",
+          "from_mode",
+          "to_mode",
+          "revision",
+          "submissions",
+          "assignments"
+        ],
+        "title": "ModeChangePreview"
+      },
+      "ModeChangeRequest": {
+        "properties": {
+          "case_id": {
+            "type": "string",
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Case Id"
+          },
+          "language": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Language"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "proposals",
+              "scratch"
+            ],
+            "title": "Mode"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason"
+          },
+          "expected_revision": {
+            "type": "integer",
+            "title": "Expected Revision"
+          },
+          "expected_submission_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 10000,
+            "title": "Expected Submission Ids"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "case_id",
+          "language",
+          "mode",
+          "reason",
+          "expected_revision",
+          "expected_submission_ids"
+        ],
+        "title": "ModeChangeRequest"
+      },
+      "ModeChangeResult": {
+        "properties": {
+          "change": {
+            "$ref": "#/components/schemas/ModeChangeView"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          }
+        },
+        "type": "object",
+        "required": [
+          "change",
+          "revision"
+        ],
+        "title": "ModeChangeResult"
+      },
+      "ModeChangeTarget": {
+        "properties": {
+          "case_id": {
+            "type": "string",
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Case Id"
+          },
+          "language": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Language"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "proposals",
+              "scratch"
+            ],
+            "title": "Mode"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "case_id",
+          "language",
+          "mode"
+        ],
+        "title": "ModeChangeTarget"
+      },
+      "ModeChangeView": {
+        "properties": {
+          "change_id": {
+            "type": "integer",
+            "title": "Change Id"
+          },
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "from_mode": {
+            "type": "string",
+            "enum": [
+              "proposals",
+              "scratch"
+            ],
+            "title": "From Mode"
+          },
+          "to_mode": {
+            "type": "string",
+            "enum": [
+              "proposals",
+              "scratch"
+            ],
+            "title": "To Mode"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "changed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Changed At"
+          },
+          "changed_by": {
+            "$ref": "#/components/schemas/PersonRefView"
+          },
+          "restored_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Restored At"
+          },
+          "restored_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonRefView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "revoked_assignment_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Revoked Assignment Ids"
+          },
+          "submissions": {
+            "items": {
+              "$ref": "#/components/schemas/DiscardedSubmissionView"
+            },
+            "type": "array",
+            "title": "Submissions"
+          },
+          "restorable": {
+            "type": "boolean",
+            "title": "Restorable"
+          },
+          "restore_blocked": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Restore Blocked"
+          }
+        },
+        "type": "object",
+        "required": [
+          "change_id",
+          "case_id",
+          "language",
+          "from_mode",
+          "to_mode",
+          "reason",
+          "changed_at",
+          "changed_by",
+          "restored_at",
+          "restored_by",
+          "revoked_assignment_ids",
+          "submissions",
+          "restorable",
+          "restore_blocked"
+        ],
+        "title": "ModeChangeView"
+      },
+      "ModeRestoreRequest": {
+        "properties": {
+          "expected_revision": {
+            "type": "integer",
+            "title": "Expected Revision"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_revision"
+        ],
+        "title": "ModeRestoreRequest"
       },
       "Modifier": {
         "properties": {
@@ -19330,6 +19906,42 @@
           "submitted_record"
         ],
         "title": "ReviewWorkspace"
+      },
+      "RevokedAssignmentView": {
+        "properties": {
+          "assignment_id": {
+            "type": "integer",
+            "title": "Assignment Id"
+          },
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "task": {
+            "type": "string",
+            "enum": [
+              "annotate",
+              "review"
+            ],
+            "title": "Task"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "person": {
+            "$ref": "#/components/schemas/PersonRefView"
+          }
+        },
+        "type": "object",
+        "required": [
+          "assignment_id",
+          "document_id",
+          "task",
+          "status",
+          "person"
+        ],
+        "title": "RevokedAssignmentView"
       },
       "RoundInputResolution": {
         "properties": {

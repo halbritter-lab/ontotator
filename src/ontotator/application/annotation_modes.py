@@ -5,10 +5,11 @@ from __future__ import annotations
 from datetime import datetime
 from typing import cast
 
-from sqlalchemy import Connection, select
+from sqlalchemy import Connection, and_, select
 
 from ontotator.application.text_targets import text_documents, text_row
 from ontotator.domain.annotation_modes import AnnotationMode, TextMode, text_mode
+from ontotator.storage.live_submissions import live_submission, live_submission_ref
 from ontotator.storage.plan_tables import WorkPlanFlagsRow
 from ontotator.storage.proposal_queries import newest_proposal_refs
 from ontotator.storage.tables import (
@@ -32,7 +33,8 @@ def _work(
     """(case, language, time, mode) of annotation work (plan "Pure rule" 1):
     non-revoked annotate assignments, revoked ones with submitted work, and
     annotation submissions (also without an assignment); ``documents=None``
-    reads the whole project."""
+    reads the whole project. Discarded submissions (a mode change, #109) and
+    revoked assignments whose last submission is discarded are no work."""
     doc = (DocumentRow.project_id == project_id) & (
         DocumentRow.document_id == AssignmentRow.document_id
     )
@@ -48,7 +50,12 @@ def _work(
             AssignmentRow.project_id == project_id,
             AssignmentRow.task == "annotate",
             AssignmentRow.revoked_at.is_(None)
-            | AssignmentRow.last_submission_id.is_not(None),
+            | and_(
+                AssignmentRow.last_submission_id.is_not(None),
+                live_submission_ref(
+                    AssignmentRow.project_id, AssignmentRow.last_submission_id
+                ),
+            ),
         )
     )
     submissions = (
@@ -66,6 +73,7 @@ def _work(
         .where(
             SubmissionRow.project_id == project_id,
             SubmissionRow.mode.in_(list(SUBMISSION_MODES)),
+            live_submission(),
         )
     )
     if documents is not None:

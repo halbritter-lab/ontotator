@@ -23,6 +23,7 @@ from ontotator.domain.errors import DomainError
 from ontotator.domain.submission_labels import round_ordinals, submission_kind
 from ontotator.packages.models import PackageManifest
 from ontotator.storage.guidelines import guideline_facts
+from ontotator.storage.live_submissions import live_submission
 from ontotator.storage.tables import (
     AssignmentRow,
     DocumentRow,
@@ -375,6 +376,7 @@ def _submissions(conn: Connection, pid: int, documents: list[str]) -> list[Any]:
             .where(
                 SubmissionRow.project_id == pid,
                 SubmissionRow.document_id.in_(documents),
+                live_submission(),
             )
             .order_by(SubmissionRow.recorded_at, SubmissionRow.submission_id)
         )

@@ -10,6 +10,7 @@ import { ErrorNotice } from "../admin/ErrorNotice";
 import { Button, Checkbox, Dialog, InlineMessage, Textarea } from "../ui";
 import { IconCheck } from "../ui/icons";
 import { shortName } from "./stageLabels";
+import { ChangeModeDialog, ModeChangeNotice } from "./ChangeModeDialog";
 import { ACCEPT_EXTERNAL_LABEL, ACCEPTANCE_RECORDED, consequenceLines, PLAN_CHANGED_MESSAGE, WITHDRAW_CHECKBOX, type PlanSaves } from "./PlanChips";
 
 export type PlanMode = "proposals" | "scratch";
@@ -209,17 +210,20 @@ export function cardChoiceLine(step: "review" | "annotation", choice: string, co
  * another saves at once through the plan save of `TextPlanDialog`, one line below says what the choice means. A locked
  * mode or a missing proposal set keeps the choices focusable (`aria-disabled`) and says why.
  */
-export function CardPlanSelect({ row, step, groupRevision, saves }: {
+export function CardPlanSelect({ row, step, groupRevision, saves, modeChange }: {
   row: DocumentRowView;
   step: "review" | "annotation";
   groupRevision: number;
   saves: PlanSaves;
+  /** Lead's "Change mode…" of a locked mode and "Restore…" of discarded work; without it neither shows. */
+  modeChange?: { projectKey: string; onChanged: () => void };
 }): JSX.Element | null {
   const id = useId().replace(/:/g, "");
   const plan = usePlanRowSave(row, groupRevision, saves);
   const current: PlanStepsValue = { ...saves.flagsOf(row, groupRevision), mode: row.plan_row?.annotation_mode ?? "project" };
   const [chosen, setChosen] = useState<PlanStepsValue | null>(null);
   const [saved, setSaved] = useState(false);
+  const [changingMode, setChangingMode] = useState(false);
   // The refetched row carries the saved plan: the local choice gives way to it.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { setChosen(previous => (saved ? null : previous)); }, [row]);
@@ -241,7 +245,7 @@ export function CardPlanSelect({ row, step, groupRevision, saves }: {
   const starterName = starter ? (starter.person ? shortName(starter.person) : starter.author_label) : "an annotator";
   const modeWords = textMode?.mode === "scratch" ? "from scratch" : "from proposals";
   const lockLine = !locked ? null : submittedWork
-    ? `Fixed: ${starterName} has submitted work started ${modeWords}, so the mode no longer changes.`
+    ? `Fixed: ${starterName} has submitted work started ${modeWords}. Changing the mode discards that work.`
     : `Fixed: ${starterName} has started ${modeWords}. Remove the unsubmitted assignment below to change it.`;
   const choices = step === "review"
     ? [{ value: "on", label: "On" }, { value: "off", label: "Off" }]
@@ -267,6 +271,10 @@ export function CardPlanSelect({ row, step, groupRevision, saves }: {
     void run(next);
   };
   const cancel = () => { plan.reset(); setChosen(null); setSaved(false); };
+  // "Change mode…" switches to the other mode; "from proposals" needs proposals on the current version.
+  const otherMode: PlanMode | null = !textMode ? null : textMode.mode === "proposals" ? "scratch" : count > 0 ? "proposals" : null;
+  const canChangeMode = step === "annotation" && locked && !!modeChange && otherMode !== null;
+  const revision = saves.revisionOf(row.case_id, groupRevision);
   const lineId = `${id}-line`;
   const title = step === "review" ? "Review" : "Annotation plan";
 
@@ -290,6 +298,15 @@ export function CardPlanSelect({ row, step, groupRevision, saves }: {
     </span>
     <p id={lineId} className="text-card-muted text-card-plan-help">{lockLine ?? cardChoiceLine(step, selected, count)}
       {!lockLine && step === "annotation" && count === 0 && selected !== "proposals" && selected !== "scratch" ? ` ${NO_PROPOSALS_REASON}` : ""}</p>
+
+    {canChangeMode && <div className="text-card-actions">
+      <Button size="sm" onClick={() => setChangingMode(true)}>Change mode…</Button>
+    </div>}
+    {changingMode && modeChange && otherMode && <ChangeModeDialog projectKey={modeChange.projectKey} row={row} mode={otherMode} revision={revision}
+      onCancel={() => setChangingMode(false)}
+      onChanged={(_change, next) => { setChangingMode(false); saves.noteRevision(row.case_id, next); modeChange.onChanged(); }} />}
+    {step === "annotation" && modeChange && <ModeChangeNotice projectKey={modeChange.projectKey} row={row} revision={revision}
+      onChanged={modeChange.onChanged} />}
 
     {plan.open && <div className="text-card-plan-refusal">
       {plan.extras}

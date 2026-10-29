@@ -77,6 +77,7 @@ from ontotator.packages.models import (
 )
 from ontotator.storage.database import Database, advisory_lock_id
 from ontotator.storage.guidelines import current_guideline_version, guideline_facts
+from ontotator.storage.live_submissions import discarded_draft_keys, live_submission
 from ontotator.storage.tables import (
     AnnotationSnapshotRow,
     DocumentRow,
@@ -1528,9 +1529,13 @@ class Repository:
                 SubmissionRow.guideline_version,
             ).where(SubmissionRow.project_id == project.id)
             if submission_ids is not None:
+                # The exact closure of a final export (guarded on selection).
                 submission_query = submission_query.where(
                     SubmissionRow.submission_id.in_(submission_ids)
                 )
+            else:
+                # The work export skips discarded submissions (#109).
+                submission_query = submission_query.where(live_submission())
             submission_rows = conn.execute(
                 submission_query.order_by(
                     SubmissionRow.recorded_at, SubmissionRow.submission_id
@@ -2304,6 +2309,7 @@ class Repository:
             submissions = select(SubmissionRow.payload).where(
                 SubmissionRow.project_id == project_id,
                 SubmissionRow.annotator_id == annotator_id,
+                live_submission(),
             )
             if mode is not None:
                 drafts = drafts.where(DraftRow.mode == mode)
@@ -2313,7 +2319,12 @@ class Repository:
                 submissions = submissions.where(
                     SubmissionRow.document_id == document_id
                 )
-            draft_rows = conn.execute(drafts).all()
+            gone = discarded_draft_keys(
+                conn, project_id, annotator_id=annotator_id, mode=mode
+            )
+            draft_rows = [
+                row for row in conn.execute(drafts) if row.draft_key not in gone
+            ]
             payloads = conn.execute(submissions).scalars().all()
         keys: dict[str, WorkspaceKey] = {}
         for row in draft_rows:
@@ -3488,6 +3499,7 @@ class Repository:
                     SubmissionRow.project_id == project_id,
                     SubmissionRow.annotator_id == annotator_id,
                     SubmissionRow.mode == mode,
+                    live_submission(),
                 )
                 .order_by(SubmissionRow.created_at, SubmissionRow.submission_id)
             )
@@ -3496,7 +3508,12 @@ class Repository:
                 submissions = submissions.where(
                     SubmissionRow.document_id == document_id
                 )
-            draft_rows = conn.execute(drafts).all()
+            gone = discarded_draft_keys(
+                conn, project_id, annotator_id=annotator_id, mode=mode
+            )
+            draft_rows = [
+                row for row in conn.execute(drafts) if row.draft_key not in gone
+            ]
             submission_rows = conn.execute(submissions).all()
             from ontotator.storage.tables import AssignmentRow
             from ontotator.storage.workflow_tables import WorkRoundRow
@@ -3613,6 +3630,8 @@ class Repository:
                 .where(
                     SubmissionRow.project_id == project_id,
                     SubmissionRow.local_key.in_(_workspace_aliases(key)),
+                    # Discarded by a mode change (#109): not this chain's.
+                    live_submission(),
                 )
                 .order_by(SubmissionRow.created_at, SubmissionRow.submission_id)
             )
@@ -3645,6 +3664,7 @@ class Repository:
                     .where(
                         ProjectRow.project_key == project_key,
                         SubmissionRow.document_id == document_id,
+                        live_submission(),
                     )
                     .order_by(SubmissionRow.created_at, SubmissionRow.submission_id)
                 )

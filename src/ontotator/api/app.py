@@ -84,6 +84,7 @@ NOT_FOUND_CODES = frozenset(
         "ANNOTATION_NOT_FOUND",
         "EVIDENCE_NOT_FOUND",
         "GUIDELINE_NOT_FOUND",
+        "MODE_CHANGE_NOT_FOUND",
     }
 )
 
@@ -453,6 +454,10 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
                     "NOT_IN_WORK_PLAN": 409,
                     "CASE_IDS_TOO_MANY": 422,
                     "VARIANT_ALREADY_DISCARDED": 409,
+                    "MODE_CHANGE_STALE": 409,
+                    "MODE_CHANGE_ALREADY_RESTORED": 409,
+                    "MODE_CHANGE_NOT_LATEST": 409,
+                    "ANNOTATION_MODE_FINAL_SELECTED": 409,
                     "ASSIGNMENT_BATCH_REFUSED": 409,
                     "ASSIGNMENT_BATCH_STALE": 409,
                     "GUIDELINE_TOO_LARGE": 413,
@@ -509,6 +514,11 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
     from ontotator.api.work_plan_routes import router as work_plan_router
 
     app.include_router(work_plan_router)
+    from ontotator.api.annotation_mode_change_routes import (
+        router as annotation_mode_change_router,
+    )
+
+    app.include_router(annotation_mode_change_router)
     app.include_router(translation_workflow_router)
     from ontotator.api.guideline_routes import router as guideline_router
 

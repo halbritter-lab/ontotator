@@ -14,6 +14,14 @@ protocol alongside package/profile identities. Annotation is distributed
 in `independent` mode; `review` is the consolidator's mode of a consolidation
 round and is never distributed on its own.
 
+A text's annotation mode (from proposals or from scratch) is fixed by its
+first annotation work. A lead can still change it: the change names whose
+submitted work is discarded, revokes the text's assignments and records who
+changed it, when and why. Discarded submissions are kept but no longer count
+for progress, consolidation inputs, final results or the annotation export;
+"Restore…" makes them count again while no new annotation has started. The
+work-package export still carries every submission.
+
 Retain the original work package and the distributed application artifact. For
 language comparisons, fix the search resources and language selection for each
 condition. English remains available in every condition. Historical packages

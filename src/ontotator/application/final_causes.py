@@ -21,6 +21,7 @@ from ontotator.domain.work_rounds import CARRY_ROUND_KINDS
 from ontotator.domain.workspace import WorkspaceKey
 from ontotator.storage import work_plan_store
 from ontotator.storage.final_tables import FinalSelectionRow
+from ontotator.storage.live_submissions import live_submission
 from ontotator.storage.repository import Repository, _key_str, _lock_id
 from ontotator.storage.tables import (
     AssignmentRow,
@@ -418,6 +419,7 @@ def derive_final_state(
                 SubmissionRow.document_id.in_(row_documents),
                 SubmissionRow.recorded_at > row["selected_at"],
                 SubmissionRow.submission_id != row["submission_id"],
+                live_submission(),
             )
             .order_by(SubmissionRow.recorded_at, SubmissionRow.submission_id)
         ).all()

@@ -23,6 +23,7 @@ from ontotator.domain.review import ReviewDecision
 from ontotator.domain.work_rounds import CARRY_ROUND_KINDS, RoundInputView
 from ontotator.domain.workspace import RoundInputResolution, Submission
 from ontotator.storage.guidelines import guideline_facts
+from ontotator.storage.live_submissions import live_submission
 from ontotator.storage.repository import Repository
 from ontotator.storage.tables import SubmissionRow
 from ontotator.storage.workflow_tables import RoundSubmissionBindingRow
@@ -85,7 +86,9 @@ def _history(
         access = current_access(conn, repo.access, pid, key)
         require_case_text(conn, access, pid, key, doc)
         query = select(SubmissionRow).where(
-            SubmissionRow.project_id == pid, SubmissionRow.document_id == doc
+            SubmissionRow.project_id == pid,
+            SubmissionRow.document_id == doc,
+            live_submission(),
         )
         if sid is not None:
             query = query.where(SubmissionRow.submission_id == sid)

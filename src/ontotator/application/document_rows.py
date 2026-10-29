@@ -48,6 +48,8 @@ from ontotator.domain.workspace import WorkspaceKey
 from ontotator.storage import work_plan_store
 from ontotator.storage.database import Database
 from ontotator.storage.final_tables import FinalSelectionRow
+from ontotator.storage.live_submissions import live_submission, live_submission_ref
+from ontotator.storage.mode_change_tables import DiscardedSubmissionRow
 from ontotator.storage.overview_tables import TextChangeResolutionRow
 from ontotator.storage.plan_tables import WorkPlanFlagsRow
 from ontotator.storage.proposal_queries import newest_proposal_counts
@@ -323,6 +325,8 @@ class RowFacts:
     annotation_submissions: dict[str, list[tuple[datetime, AnnotationMode]]] = field(
         default_factory=dict
     )
+    # Submissions discarded by an annotation-mode change, per document (#109).
+    discarded_counts: dict[str, int] = field(default_factory=dict)
 
 
 def load_last_activity(
@@ -602,7 +606,7 @@ def _assignments(conn: Connection, pid: int) -> list[rules.AssignmentFact]:
             created_at=row.created_at,
             created_by=row.created_by,
             annotation_mode=row.annotation_mode,
-            submitted_work=row.last_submission_id is not None,
+            submitted_work=row.last_submission_id is not None and row.live_submission,
             unreviewed_translation=str(row.id) in confirmed,
         )
         for row in conn.execute(
@@ -620,6 +624,9 @@ def _assignments(conn: Connection, pid: int) -> list[rules.AssignmentFact]:
                 AssignmentRow.created_by,
                 AssignmentRow.annotation_mode,
                 AssignmentRow.last_submission_id,
+                live_submission_ref(
+                    AssignmentRow.project_id, AssignmentRow.last_submission_id
+                ).label("live_submission"),
                 UserRow.pseudonym,
             )
             .join(UserRow, UserRow.id == AssignmentRow.user_id)
@@ -668,7 +675,7 @@ def _submission_counts(conn: Connection, pid: int) -> dict[str, int]:
         row.document_id: row.total
         for row in conn.execute(
             select(SubmissionRow.document_id, func.count().label("total"))
-            .where(SubmissionRow.project_id == pid)
+            .where(SubmissionRow.project_id == pid, live_submission())
             .group_by(SubmissionRow.document_id)
         )
     }
@@ -873,6 +880,7 @@ def _findings(conn: Connection, pid: int) -> dict[int, int]:
                 AssignmentRow.status == "submitted",
                 AssignmentRow.held.is_(False),
                 AssignmentRow.revoked_at.is_(None),
+                live_submission(),
             )
         )
     }
@@ -911,6 +919,9 @@ def _last_submissions(conn: Connection, pid: int) -> dict[int, str]:
                 AssignmentRow.task == "annotate",
                 AssignmentRow.status == "submitted",
                 AssignmentRow.last_submission_id.is_not(None),
+                live_submission_ref(
+                    AssignmentRow.project_id, AssignmentRow.last_submission_id
+                ),
             )
         )
     }
@@ -961,6 +972,7 @@ def _annotation_submissions(
         .where(
             SubmissionRow.project_id == pid,
             SubmissionRow.mode.in_(list(SUBMISSION_MODES)),
+            live_submission(),
         )
         .order_by(SubmissionRow.recorded_at)
     ):
@@ -968,6 +980,25 @@ def _annotation_submissions(
             (row.recorded_at, SUBMISSION_MODES[row.mode])
         )
     return found
+
+
+def _discarded_counts(conn: Connection, pid: int) -> dict[str, int]:
+    """Discarded submissions per document (a mode change, restorable)."""
+    return {
+        row.document_id: int(row.total)
+        for row in conn.execute(
+            select(SubmissionRow.document_id, func.count().label("total"))
+            .join(
+                DiscardedSubmissionRow,
+                and_(
+                    DiscardedSubmissionRow.project_id == SubmissionRow.project_id,
+                    DiscardedSubmissionRow.submission_id == SubmissionRow.submission_id,
+                ),
+            )
+            .where(SubmissionRow.project_id == pid)
+            .group_by(SubmissionRow.document_id)
+        )
+    }
 
 
 def _draft_decisions(conn: Connection, pid: int, round_id: str) -> list[ReviewDecision]:
@@ -1171,6 +1202,7 @@ def load_facts(
         project_mode=project.tool_proposal_mode,
         mode_overrides=_mode_overrides(conn, pid),
         annotation_submissions=_annotation_submissions(conn, pid),
+        discarded_counts=_discarded_counts(conn, pid),
     )
 
 

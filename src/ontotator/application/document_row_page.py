@@ -630,6 +630,9 @@ def _annotation_mode(
         "locked": mode.locked,
         "override": override,
         "proposal_count": proposal_count,
+        "discarded_count": sum(
+            facts.discarded_counts.get(v.document_id, 0) for v in versions
+        ),
     }
 
 

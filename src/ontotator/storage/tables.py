@@ -967,6 +967,7 @@ class UploadRow(Base):
 # Register split final-result metadata with the shared schema.
 from ontotator.storage import final_tables as _final_tables  # noqa: E402,F401
 from ontotator.storage import guideline_tables as _guideline_tables  # noqa: E402,F401
+from ontotator.storage import mode_change_tables as _mode_tables  # noqa: E402,F401
 from ontotator.storage import overview_tables as _overview_tables  # noqa: E402,F401
 from ontotator.storage import plan_tables as _plan_tables  # noqa: E402,F401
 from ontotator.storage import workflow_tables as _workflow_tables  # noqa: E402, F401

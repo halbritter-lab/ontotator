@@ -6,6 +6,7 @@ from sqlalchemy import Connection, select
 
 from ontotator.authz.policy import Access, Action, can
 from ontotator.authz.visibility import current_access, qualifying_assignment
+from ontotator.storage.live_submissions import live_submission_ref
 from ontotator.storage.tables import AssignmentRow, SubmissionRow
 from ontotator.storage.workflow_tables import RoundInputRow, WorkRoundRow
 
@@ -162,6 +163,11 @@ def may_read_human_submission(
                 RoundInputRow.project_id == project_id,
                 RoundInputRow.source_submission_id == submission_id,
                 qualifying_assignment(fresh.user_id),
+                # Owners and leads keep reading discarded work; offered
+                # inputs of a discarded submission do not (#109).
+                live_submission_ref(
+                    RoundInputRow.project_id, RoundInputRow.source_submission_id
+                ),
             )
             .limit(1)
         ).first()

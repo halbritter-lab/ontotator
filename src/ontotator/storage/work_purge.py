@@ -26,6 +26,7 @@ S = "ontotator"
 # Leaf first; every table that references assignments, work_rounds, drafts,
 # draft_snapshots or submissions.
 _TABLES = (
+    "discarded_submissions",
     "task_hold_state",
     "task_holds",
     "problem_report_events",
@@ -146,6 +147,16 @@ def purge(
     """
     a, r, s, d = _closure(conn, set(assignments), set(subs), set(drafts))
     counts = dict.fromkeys(tables, 0)
+    # A database at an older revision lacks the later tables (the discard
+    # marks of 0027): they have nothing to delete.
+    tables = tuple(
+        table
+        for table in tables
+        if conn.execute(
+            text("SELECT to_regclass(:name)"), {"name": f"{S}.{table}"}
+        ).scalar_one()
+        is not None
+    )
     if not (a or s or d):
         return counts
     p: dict[str, Any] = {"a": sorted(a), "r": sorted(r), "d": sorted(d)}
@@ -179,6 +190,7 @@ def purge(
         " WHERE {col}::text LIKE '%\"' || ref || '\"%')"
     )
     deletes = {
+        "discarded_submissions": _IN_SUBS.format(col="submission_id"),
         "task_hold_state": "hold_id = ANY(:h)",
         "task_holds": "hold_id = ANY(:h)",
         "problem_report_events": "report_id = ANY(:rep)",

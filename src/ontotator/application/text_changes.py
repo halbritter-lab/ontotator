@@ -52,6 +52,7 @@ from ontotator.domain.workspace import Draft, Submission
 from ontotator.projects.assignments import revoke_assignments
 from ontotator.storage.database import Database
 from ontotator.storage.final_tables import FinalSelectionRow
+from ontotator.storage.live_submissions import live_submission
 from ontotator.storage.overview_tables import (
     DraftSnapshotRow,
     TextChangeResolutionRow,
@@ -433,6 +434,7 @@ class TextChangeService:
                     SubmissionRow.project_id == pid,
                     SubmissionRow.mode.in_(["independent", "proposal_check"]),
                     SubmissionRow.document_id.in_(documents),
+                    live_submission(),
                 )
             ).scalars()
         )

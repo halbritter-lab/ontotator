@@ -49,6 +49,8 @@ def client(monkeypatch):
         raise DomainError("FORWARDED")
 
     monkeypatch.setattr(routes, "open_workspace", opened)
+    # No database here: no earlier work of the person was discarded.
+    monkeypatch.setattr(routes, "_fresh_after_discard", lambda *_: False)
     app.include_router(routes.router)
 
     @app.exception_handler(DomainError)

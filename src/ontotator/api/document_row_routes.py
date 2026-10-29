@@ -299,6 +299,9 @@ class AnnotationModeView(_View):
     locked: bool
     override: AnnotationMode | None = None
     proposal_count: int = 0
+    # Submissions of the text discarded by a mode change (restorable, #109).
+    # A factory default keeps it optional in the generated types.
+    discarded_count: int = Field(default_factory=int)
 
     @classmethod
     def of(

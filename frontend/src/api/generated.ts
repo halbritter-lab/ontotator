@@ -1378,6 +1378,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{key}/annotation-mode-changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Mode Changes */
+        get: operations["list_mode_changes_api_v1_projects__key__annotation_mode_changes_get"];
+        put?: never;
+        /** Change Mode */
+        post: operations["change_mode_api_v1_projects__key__annotation_mode_changes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{key}/annotation-mode-changes/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview Mode Change */
+        post: operations["preview_mode_change_api_v1_projects__key__annotation_mode_changes_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{key}/annotation-mode-changes/{change_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore Mode Change */
+        post: operations["restore_mode_change_api_v1_projects__key__annotation_mode_changes__change_id__restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{key}/documents/{doc}/translation-correction-assignment": {
         parameters: {
             query?: never;
@@ -2522,6 +2574,8 @@ export interface components {
              * @default 0
              */
             proposal_count: number;
+            /** Discarded Count */
+            discarded_count?: number;
         };
         /**
          * AnnotationRef
@@ -3763,6 +3817,21 @@ export interface components {
             /** Withdrawn */
             withdrawn: components["schemas"]["WithdrawnTaskView"][];
         };
+        /** DiscardedSubmissionView */
+        DiscardedSubmissionView: {
+            /** Submission Id */
+            submission_id: string;
+            /** Document Id */
+            document_id: string;
+            /** Mode */
+            mode: string;
+            /**
+             * Recorded At
+             * Format: date-time
+             */
+            recorded_at: string;
+            author: components["schemas"]["PersonRefView"];
+        };
         /** DistributionContextView */
         DistributionContextView: {
             /** Document Ids */
@@ -4929,6 +4998,117 @@ export interface components {
             on: number;
             /** Off */
             off: number;
+        };
+        /** ModeChangeList */
+        ModeChangeList: {
+            /** Case Id */
+            case_id: string;
+            /** Language */
+            language: string;
+            /** Changes */
+            changes: components["schemas"]["ModeChangeView"][];
+        };
+        /** ModeChangePreview */
+        ModeChangePreview: {
+            /** Case Id */
+            case_id: string;
+            /** Language */
+            language: string;
+            /**
+             * From Mode
+             * @enum {string}
+             */
+            from_mode: "proposals" | "scratch";
+            /**
+             * To Mode
+             * @enum {string}
+             */
+            to_mode: "proposals" | "scratch";
+            /** Revision */
+            revision: number;
+            /** Submissions */
+            submissions: components["schemas"]["DiscardedSubmissionView"][];
+            /** Assignments */
+            assignments: components["schemas"]["RevokedAssignmentView"][];
+        };
+        /** ModeChangeRequest */
+        ModeChangeRequest: {
+            /** Case Id */
+            case_id: string;
+            /** Language */
+            language: string;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "proposals" | "scratch";
+            /** Reason */
+            reason: string;
+            /** Expected Revision */
+            expected_revision: number;
+            /** Expected Submission Ids */
+            expected_submission_ids: string[];
+        };
+        /** ModeChangeResult */
+        ModeChangeResult: {
+            change: components["schemas"]["ModeChangeView"];
+            /** Revision */
+            revision: number;
+        };
+        /** ModeChangeTarget */
+        ModeChangeTarget: {
+            /** Case Id */
+            case_id: string;
+            /** Language */
+            language: string;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "proposals" | "scratch";
+        };
+        /** ModeChangeView */
+        ModeChangeView: {
+            /** Change Id */
+            change_id: number;
+            /** Case Id */
+            case_id: string;
+            /** Language */
+            language: string;
+            /**
+             * From Mode
+             * @enum {string}
+             */
+            from_mode: "proposals" | "scratch";
+            /**
+             * To Mode
+             * @enum {string}
+             */
+            to_mode: "proposals" | "scratch";
+            /** Reason */
+            reason: string;
+            /**
+             * Changed At
+             * Format: date-time
+             */
+            changed_at: string;
+            changed_by: components["schemas"]["PersonRefView"];
+            /** Restored At */
+            restored_at: string | null;
+            restored_by: components["schemas"]["PersonRefView"] | null;
+            /** Revoked Assignment Ids */
+            revoked_assignment_ids: number[];
+            /** Submissions */
+            submissions: components["schemas"]["DiscardedSubmissionView"][];
+            /** Restorable */
+            restorable: boolean;
+            /** Restore Blocked */
+            restore_blocked: string | null;
+        };
+        /** ModeRestoreRequest */
+        ModeRestoreRequest: {
+            /** Expected Revision */
+            expected_revision: number;
         };
         /**
          * Modifier
@@ -6503,6 +6683,21 @@ export interface components {
              * @default false
              */
             lead_correction: boolean;
+        };
+        /** RevokedAssignmentView */
+        RevokedAssignmentView: {
+            /** Assignment Id */
+            assignment_id: number;
+            /** Document Id */
+            document_id: string;
+            /**
+             * Task
+             * @enum {string}
+             */
+            task: "annotate" | "review";
+            /** Status */
+            status: string;
+            person: components["schemas"]["PersonRefView"];
         };
         /** RoundInputResolution */
         RoundInputResolution: {
@@ -11026,6 +11221,146 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DiscardResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_mode_changes_api_v1_projects__key__annotation_mode_changes_get: {
+        parameters: {
+            query: {
+                case_id: string;
+                language: string;
+            };
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModeChangeList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_mode_api_v1_projects__key__annotation_mode_changes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModeChangeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModeChangeResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_mode_change_api_v1_projects__key__annotation_mode_changes_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModeChangeTarget"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModeChangePreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_mode_change_api_v1_projects__key__annotation_mode_changes__change_id__restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+                change_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModeRestoreRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModeChangeResult"];
                 };
             };
             /** @description Validation Error */

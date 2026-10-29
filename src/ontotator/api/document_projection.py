@@ -24,6 +24,7 @@ from ontotator.domain.scopes import is_review_like
 from ontotator.domain.variants import TranslationStatus, VariantOrigin
 from ontotator.domain.workspace import WorkspaceKey, WorkspaceMode
 from ontotator.storage.database import Database
+from ontotator.storage.live_submissions import discarded_draft_keys, live_submission
 from ontotator.storage.repository import (
     Repository,
     _decode_key_str,
@@ -120,6 +121,9 @@ def _legacy_statuses(
             DraftRow.mode == mode,
         )
     ).all()
+    # Work a mode change discarded is not the person's any more (#109).
+    gone = discarded_draft_keys(conn, project_id, annotator_id=annotator, mode=mode)
+    drafts = [row for row in drafts if row.draft_key not in gone]
     submissions = conn.execute(
         select(
             SubmissionRow.local_key,
@@ -130,6 +134,7 @@ def _legacy_statuses(
             _in_ids(SubmissionRow.document_id, documents),
             SubmissionRow.annotator_id == annotator,
             SubmissionRow.mode == mode,
+            live_submission(),
         )
     ).all()
     keys: dict[str, WorkspaceKey] = {}
