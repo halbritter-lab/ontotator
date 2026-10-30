@@ -348,13 +348,14 @@ NPM proxy host (Hosts, Proxy Hosts, Add Proxy Host):
 
 - Details: domain `editor.example.org`, scheme `http`, forward hostname `ontotator_app`, port `8000`. "Websockets Support" is not needed (the app uses none); "Block Common Exploits" may be on.
 - SSL: a Let's Encrypt certificate, "Force SSL" and "HTTP/2 Support" on. Leave NPM's "HSTS Enabled" off; the app sends its own HSTS header.
-- NPM already sets `Host $host`, `X-Forwarded-Proto $scheme` and `X-Forwarded-For $remote_addr` (it overwrites the client's header, as required). Nothing must be added for correctness; the Advanced tab takes the hardening below.
+- NPM sets `Host $host`, `X-Forwarded-Proto $scheme` and `X-Forwarded-For $remote_addr` (it overwrites the client's header). That is not enough on its own; see the next paragraph. The Advanced tab takes the hardening below.
 
-`$remote_addr` is the client's real address only if NPM does not itself take it from a client-supplied header. NPM's nginx accepts `X-Real-IP` from connections coming from private address ranges and, with its Cloudflare/CloudFront range fetch, from those ranges too. The per-address login lockout counts whatever NPM forwards, so a client that can set `X-Real-IP` chooses the address it is counted under. On NPM:
+`$remote_addr` is the client's real address only if NPM does not itself take it from a client-supplied header, and NPM's stock nginx does (checked against the 2.x image's `nginx.conf`, not on a live host): `real_ip_header X-Real-IP` with `real_ip_recursive on` and `set_real_ip_from` for 10/8, 172.16/12, 192.168/16 and the Cloudflare/CloudFront ranges in `conf.d/include/ip_ranges.conf`. Its realip module rewrites `$remote_addr` before the proxy configuration reads it. So a client that connects from one of those ranges, or arrives through Docker's userland proxy over IPv6 (from the bridge gateway, a 172.x address), chooses the address the app's login lockout counts by sending `X-Real-IP`: it can guess passwords without limit by rotating it, or lock a real user out from that user's own address. On NPM:
 
-- Set `IP_RANGES_FETCH_ENABLED: "false"` in NPM's environment unless the site really is behind Cloudflare or CloudFront.
-- Check how IPv6 clients arrive. Without IPv6 on the Docker network, Docker's userland proxy forwards them to NPM from the bridge gateway, a private address: they all share that address, and NPM may accept their `X-Real-IP`. Serve IPv6 natively to NPM, or make sure the gateway address is not trusted for `X-Real-IP`.
-- Verify from outside, over IPv4 and IPv6: NPM's access log must show your real public address, also for a request sent with a made-up `X-Real-IP` or `X-Forwarded-For` header.
+- Forward the TCP peer, which no header can change: in NPM's `proxy.conf` (or every Advanced `location` of this proxy host), set `proxy_set_header X-Forwarded-For $realip_remote_addr;` and `proxy_set_header X-Real-IP $realip_remote_addr;`. Key every `limit_req_zone` for this site on `$realip_remote_addr` too (see [Internet exposure](#internet-exposure)). This is the fix that holds.
+- Set `IP_RANGES_FETCH_ENABLED: "false"` in NPM's environment unless the site really is behind Cloudflare or CloudFront. This alone is not enough: it only skips the fetch at startup, and NPM's periodic range update can still write `ip_ranges.conf`.
+- Publish 80/443 on IPv4 only (`"0.0.0.0:80:80"`, `"0.0.0.0:443:443"`) until IPv6 reaches NPM natively; otherwise IPv6 clients arrive from the bridge gateway, which NPM trusts for `X-Real-IP`, and all share that address.
+- Verify from outside, over IPv4 and, if published, IPv6: send `curl -H 'X-Real-IP: 203.0.113.9' -H 'X-Forwarded-For: 203.0.113.9' https://editor.example.org/` and check that NPM's access log and the app log show your real public address, not `203.0.113.9`.
 
 For another proxy in front of app, forward the original `Host`, `X-Forwarded-For` and `X-Forwarded-Proto`. For nginx, configure `proxy_set_header Host $host;`, `proxy_set_header X-Forwarded-For $remote_addr;` (at the first proxy; `$proxy_add_x_forwarded_for` only behind another trusted proxy) and `proxy_set_header X-Forwarded-Proto $scheme;`. For a public nondefault port preserve its authority in Host. Ensure the first trusted proxy replaces untrusted incoming forwarded headers and any proxy chain is explicitly configured. Host validation, HTTPS session cookies, same-origin writes and per-client login throttling depend on these settings. Verify through the public origin after provisioning; TLS/proxy configuration is maintained outside this repository.
 
@@ -364,11 +365,12 @@ The app sets its own security headers (CSP with `frame-ancestors 'none'`, `X-Fra
 
 - Rate-limit `POST /api/v1/auth/login` and `/api/v1/auth/redeem-code` per client address, since the per-address lock does not stop attempts spread over many addresses, for example:
   ```nginx
-  limit_req_zone $binary_remote_addr zone=ontotator_auth:10m rate=10r/m;
+  # $realip_remote_addr: the TCP peer, not an address from X-Real-IP (see Reverse proxy settings).
+  limit_req_zone $realip_remote_addr zone=ontotator_auth:10m rate=10r/m;
   location ~ ^/api/v1/auth/(login|redeem-code)$ { limit_req zone=ontotator_auth burst=10 nodelay; include conf.d/include/proxy.conf; }
   ```
 - Set `client_max_body_size 1m;` by default and `300m` on `/api/v1/admin/ontologies` and `/api/v1/projects/` (uploads and bulk selections; the app enforces the exact limits).
-- Overwrite, never append to, `X-Forwarded-For` at the first proxy (`proxy_set_header X-Forwarded-For $remote_addr;`), so clients cannot choose the address the lockout counts.
+- Overwrite, never append to, `X-Forwarded-For` at the first proxy, with the TCP peer (`proxy_set_header X-Forwarded-For $realip_remote_addr;` on NPM, whose realip module may have rewritten `$remote_addr`), so clients cannot choose the address the lockout counts.
 - Block `/livez` and `/readyz` from outside (`location ~ ^/(livez|readyz)$ { deny all; }`); Docker health checks reach them directly.
 - Terminate TLS with a current configuration and redirect HTTP to HTTPS.
 
