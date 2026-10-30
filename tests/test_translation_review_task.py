@@ -485,7 +485,7 @@ def test_gate_after_receipt_replay_blocks_editable_open_new_commands_and_submit(
     refused = env.alice.post(url + "/commands", json=command(1, "new-edit"))
     assert (
         refused.status_code == 409
-        and refused.json()["code"] == "TASK_WAITING_FOR_TRANSLATION_REVIEW"
+        and refused.json()["code"] == "TRANSLATION_NOT_ACCEPTED"
     )
     submission = env.alice.post(
         url + "/submit",
@@ -497,12 +497,12 @@ def test_gate_after_receipt_replay_blocks_editable_open_new_commands_and_submit(
     )
     assert (
         submission.status_code == 409
-        and submission.json()["code"] == "TASK_WAITING_FOR_TRANSLATION_REVIEW"
+        and submission.json()["code"] == "TRANSLATION_NOT_ACCEPTED"
     )
     reopened = annotation_open(env, mode)
     assert (
         reopened.status_code == 409
-        and reopened.json()["code"] == "TASK_WAITING_FOR_TRANSLATION_REVIEW"
+        and reopened.json()["code"] == "TRANSLATION_NOT_ACCEPTED"
     )
     # Text/history visibility is not an acceptance gate.
     from test_case_api import path
@@ -591,7 +591,7 @@ def test_command_waiter_rechecks_gate_after_current_project_lock(case_env):
             response = future.result(timeout=15)
             assert (
                 response.status_code == 409
-                and response.json()["code"] == "TASK_WAITING_FOR_TRANSLATION_REVIEW"
+                and response.json()["code"] == "TRANSLATION_NOT_ACCEPTED"
             ), response.text
     finally:
         event.remove(env.db.engine, "before_cursor_execute", at_project)

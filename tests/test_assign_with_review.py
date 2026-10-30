@@ -552,7 +552,8 @@ def test_a_proposal_task_after_a_correction_waits_for_the_lead(env):
     assert summary["waiting_for_translation_review"] is False
     assert summary["waiting_for_lead"] is True
     refused = open_task(env, task)
-    assert refused.status_code == 409 and refused.json()["code"] == WAITING
+    assert refused.status_code == 409
+    assert refused.json()["code"] == "TRANSLATION_NOT_ACCEPTED"
     assert refused.json()["details"]["waiting_for_lead"] is True
     item = next(i for i in de_row(env)["work"] if i["assignment_id"] == task)
     assert item["waiting_for_lead"] is True

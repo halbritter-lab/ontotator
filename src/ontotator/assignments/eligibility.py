@@ -271,12 +271,12 @@ def require_annotation_gate(
     if annotation_waits(variant, variants.get):
         from ontotator.application.text_targets import superseded_versions
 
+        # No review opens a version the text moved on from: such a task is not
+        # waiting, the lead decides (started work keeps the old refusal).
+        for_lead = bool(superseded_versions(conn, project_id, [variant]))
         raise DomainError(
-            "TASK_WAITING_FOR_TRANSLATION_REVIEW",
-            {
-                "document_id": document_id,
-                "waiting_for_lead": bool(
-                    superseded_versions(conn, project_id, [variant])
-                ),
-            },
+            "TRANSLATION_NOT_ACCEPTED"
+            if for_lead
+            else "TASK_WAITING_FOR_TRANSLATION_REVIEW",
+            {"document_id": document_id, "waiting_for_lead": for_lead},
         )
