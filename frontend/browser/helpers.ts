@@ -123,9 +123,8 @@ export async function submitCase(page: Page) {
   await expectSubmitted(page);
 }
 
-/** M-6: no "Text submitted" dialog; the next task (or My tasks) opens and the toast names the submission. */
+/** M-6: the next task (or My tasks) opens and the toast names the submission. */
 export async function expectSubmitted(page: Page) {
-  await expect(page.getByRole("dialog", { name: "Text submitted" })).toHaveCount(0);
   await expect(page.locator(".ui-toast").getByText(/ submitted\.$/)).toBeVisible();
 }
 

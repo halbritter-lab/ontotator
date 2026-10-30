@@ -126,10 +126,10 @@ interface ResolveOptions { rowKey: string; mode: "resolve" | "not_accepted" }
 interface PanelOpenOptions { opener?: HTMLElement | null; focus?: boolean; changeFinal?: boolean }
 /** Where the text card goes next: another row, segment (`panel_stage`) or view (`panel_tab`). */
 interface CardTarget { key: string; stage?: PanelStage; tab?: PanelTab }
-/** Route `panel_stage` ↔ card segment, `panel_tab` ↔ card view (`activity` and `versions` show the path). */
+/** Route `panel_stage` ↔ card segment, `panel_tab` ↔ card view (`activity` shows the path, as does an old `versions` link). */
 const SEGMENT_OF: Readonly<Record<PanelStage, SegmentId>> = { review: "translation", annotation: "annotation", final: "finalization" };
 const STAGE_OF: Readonly<Record<SegmentId, PanelStage>> = { translation: "review", annotation: "annotation", finalization: "final" };
-const VIEW_OF: Readonly<Record<PanelTab, CardView>> = { activity: "path", versions: "path", history: "history", details: "details" };
+const VIEW_OF: Readonly<Record<PanelTab, CardView>> = { activity: "path", history: "history", details: "details" };
 
 /** The focused element (the control that ran a row action), as the row panel's opener. */
 const focusedElement = (): HTMLElement | null => (document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null);
@@ -652,7 +652,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       setPanelDirty(false);
       decisionKey.current = null;
       setReleasedKey(rowKeyOf(row));
-      // The lead consolidating themselves gets "Open consolidation" (and the role sentence) instead of the launcher's link.
+      // The lead consolidating themselves gets "Open consolidation" (and the role sentence).
       const toast = consolidationStartedToast(rowName(row), round.assignment_id, started);
       showToast({ message: toast.message, ...(toast.route ? { actionLabel: toast.actionLabel, onAction: () => onNavigate(toast.route!) } : {}) });
       refreshAll();

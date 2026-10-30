@@ -1,3 +1,4 @@
+import { ShortcutHelpHost } from "../../src/ui/ShortcutHelp";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, type AnnotationSnapshot, type RoundInputView } from "../../src/api/client";
@@ -77,6 +78,7 @@ describe("carried findings in the findings list", () => {
   });
 
   it("moves through unchecked rows with N and Shift+N and lists both keys in the help", async () => {
+    render(<ShortcutHelpHost />);
     const carried = finding("carried");
     const { container } = setup({
       annotations: [carried],

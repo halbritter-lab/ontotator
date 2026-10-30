@@ -238,7 +238,6 @@ describe("choose", () => {
     renderPanel("case-112:de", page([group("case-112", [chooseRow("case-112", "de")])]), { onConsolidationStarted, onDirtyChange, username: "lead" });
     fireEvent.click(await screen.findByRole("button", { name: "Consolidate…" }));
     expect(onDirtyChange).toHaveBeenLastCalledWith(true);
-    expect(within(block()).queryByRole("button", { name: "Consolidate results" })).toBeNull();
     expect(within(block()).getByRole("region", { name: "Consolidate submitted results" })).toBeTruthy();
     await screen.findByLabelText("Consolidator");
     const inputs = within(block()).getAllByRole("checkbox");

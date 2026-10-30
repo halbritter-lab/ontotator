@@ -56,7 +56,7 @@ If the button stays inactive, the form says why: *Select at least two submission
 After the start:
 
 - If you chose someone else: Ontotator sends no e-mail. Tell the person that a consolidation is waiting in their **My tasks**.
-- If you chose yourself: you get the Consolidator role for this project. Click **Open consolidation** in the text card, **Open my consolidation task** in the message, or **Open my task** in the text's row on **Documents**. Each opens your task, where you decide and submit.
+- If you chose yourself: you get the Consolidator role for this project. Click **Open consolidation** in the text card or **Open my task** in the text's row on **Documents**. Each opens your task, where you decide and submit.
 
 While the consolidation runs, the card shows the consolidator and how many groups are still open. What the consolidator does is in the [consolidator chapter](consolidator.md).
 
