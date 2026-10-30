@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- The final export leaves out texts without a final result only after a tick box that names the count (#194).
+
 ## [0.3.0] - 2026-10-30
 
 ### Added

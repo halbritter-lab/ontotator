@@ -89,7 +89,7 @@ it("shows the counts and the grouped table without moving focus", async () => {
   expect(actions.compareDocumentPosition(screen.getByText("What is in the file?")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
 
-it("lists left-out texts as information only: no checkbox, Create available", async () => {
+it("asks for a counted acknowledgement before leaving texts out", async () => {
   const leftOut = { ...preflight.warnings[0], id: "m", code: "MISSING_FINAL_SELECTION", case_id: "other", language: "de", reason: "No final result selected. This language will be omitted if you continue." };
   vi.spyOn(api, "finalExportPreflight").mockResolvedValue({ ...preflight, warnings: [leftOut], omissions: [{ case_id: "other", language: "de" }] });
   const start = vi.spyOn(api, "startFinalExport").mockResolvedValue({ job_id: 8 });
@@ -98,11 +98,16 @@ it("lists left-out texts as information only: no checkbox, Create available", as
   const group = await screen.findByRole("rowgroup", { name: "Left out: no final result" });
   expect(group.textContent).toContain("other de");
   expect(screen.queryByRole("rowgroup", { name: "Needs your decision" })).toBeNull();
-  expect(screen.queryByRole("checkbox")).toBeNull();
   const create = screen.getByRole("button", { name: "Create final export" });
+  expect(create.getAttribute("aria-disabled")).toBe("true");
+  fireEvent.click(create);
+  expect(start).not.toHaveBeenCalled();
+  const box = screen.getByLabelText("Export the 1 result as it is; leave out the other text");
+  expect(document.activeElement).toBe(box);
+  fireEvent.click(box);
   expect(create.getAttribute("aria-disabled")).toBeNull();
   fireEvent.click(create);
-  // The server still expects every warning and omission acknowledged.
+  // The server expects every warning and omission acknowledged.
   await waitFor(() => expect(start).toHaveBeenCalledWith("p", expect.objectContaining({ acknowledged_warnings: [{ id: "m", cause_revision: 2 }], accepted_omissions: [{ case_id: "other", language: "de" }] })));
 });
 
