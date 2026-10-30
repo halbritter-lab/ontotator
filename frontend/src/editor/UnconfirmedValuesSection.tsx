@@ -13,14 +13,23 @@ export interface UnconfirmedValuesSectionProps {
   onGoTo: (row: UnconfirmedRow) => void;
   /** No confirmable row is left to take the focus: the dialog focuses its next control. */
   onEmpty: () => void;
+  /** Project rule `require_chosen_axes`: open values block, so the dialog does not say how they are submitted. */
+  blocking?: boolean;
 }
+
+/**
+ * #164: what happens to a value left open. Mirrors the server: the value is submitted as shown and keeps
+ * `axes_defaulted` (T1 `basis: defaulted`); the lead's view marks it "(defaulted)", the export as defaulted.
+ */
+export const UNCONFIRMED_CONSEQUENCE =
+  "Values you leave are submitted as shown but recorded as defaulted, not chosen; an empty value stays not specified. The lead and the export see this.";
 
 const isConfirmable = (row: UnconfirmedRow) => row.confirmableAxisIds.length > 0;
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 /** "Values not chosen yet" in the Submit dialog (spec F2, S4): one row per finding, "Confirm as shown" in place. */
 export function UnconfirmedValuesSection({
-  rows, confirmUnavailableReason, onConfirmValues, onGoTo, onEmpty,
+  rows, confirmUnavailableReason, onConfirmValues, onGoTo, onEmpty, blocking = false,
 }: UnconfirmedValuesSectionProps) {
   const reasonId = useId();
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
@@ -112,7 +121,10 @@ export function UnconfirmedValuesSection({
           Confirm all as shown ({confirmable.length})
         </Button>
       )}
-      note={unavailable && <p id={reasonId} className="submit-item__line">{confirmUnavailableReason}</p>}>
+      note={<>
+        {!blocking && <p className="submit-item__line" data-unconfirmed-consequence>{UNCONFIRMED_CONSEQUENCE}</p>}
+        {unavailable && <p id={reasonId} className="submit-item__line">{confirmUnavailableReason}</p>}
+      </>}>
       {rows.map(row => {
         const isBusy = busy.has(row.annotationId);
         const isFailed = failed.has(row.annotationId) && !isBusy;

@@ -269,7 +269,7 @@ Check each value before you confirm it. **Confirm as shown** says "I checked thi
 1. The group **Values not chosen yet** lists findings with prefilled values.
 2. Click **Go to** to check a finding in the text and change a value. If the shown values are right, click **Confirm as shown** on the row, or, with more than one row, **Confirm all as shown**.
 3. The group **Modifier warnings** lists, for example, a modifier used as a finding or two severities on one finding. Click **Go to** to fix one.
-4. Click the submit button. Warnings you leave are submitted as they are.
+4. Click the submit button. Warnings you leave are submitted as they are; the group **Values not chosen yet** says so in one line.
 
 If the project requires chosen values, unconfirmed values block submitting instead of warning.
 

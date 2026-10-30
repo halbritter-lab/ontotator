@@ -135,7 +135,7 @@ export function SubmitCaseDialog({
         {items.length > listed && <p className="submit-item__line submit-open__more">and {items.length - listed} more</p>}
         <UnconfirmedValuesSection rows={unconfirmed}
           confirmUnavailableReason={confirmUnavailableReason} onConfirmValues={onConfirmValues}
-          onGoTo={onGoToRow} onEmpty={focusAfterRows} />
+          onGoTo={onGoToRow} onEmpty={focusAfterRows} blocking={requireChosenAxes} />
         <ModifierWarningsSection items={modifierWarnings} onGoTo={onGoTo} />
       </div>
       {/* The rule is said once: the blocking reason, else the text check (the reason re-mounts on a blocked click). */}
