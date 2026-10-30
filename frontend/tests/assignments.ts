@@ -3,7 +3,7 @@ import { vi } from "vitest";
 import { api, type AssignmentWorkspace, type TaskSummary, type OpenWorkspaceResponse } from "../src/api/client";
 
 export function taskOf(view: OpenWorkspaceResponse["view"], id = 1): TaskSummary {
-  return { assignment_id: id, workflow_revision: 0, held: false, report_answered: false, waiting_for_translation_review: false, project_key: view.key.project_key, project_name: view.key.project_key,
+  return { assignment_id: id, workflow_revision: 0, held: false, report_answered: false, waiting_for_translation_review: false, waiting_for_lead: false, project_key: view.key.project_key, project_name: view.key.project_key,
     document_id: view.document.document_id, language: view.document.language, task: view.key.mode === "review" ? "review" : "annotate",
     status: "open", updated_at: "2026-10-14T12:00:00Z" };
 }

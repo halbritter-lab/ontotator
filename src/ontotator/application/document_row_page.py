@@ -132,6 +132,8 @@ class _Context:
         self.has_final: dict[RowKey, bool] = {}
         # Annotation tasks closed until the translation review is accepted.
         self.waiting: set[int] = set()
+        # Of ``waiting``: on a version that is no target, so the lead decides.
+        self.waiting_for_lead: set[int] = set()
         self.segments: dict[RowKey, steps_rules.Segment | None] = {}
         self.owners: dict[RowKey, frozenset[str]] = {}
         self.in_plan: dict[RowKey, bool] = {}
@@ -457,12 +459,20 @@ def _build_row(ctx: _Context, case_id: str, language: str) -> dict[str, Any]:
     # Issue 213: the rule on, a task on a version not accepted stays closed
     # (``annotation_waits``, the server's gate on every annotation entry point).
     if facts.rule_on and not is_source:
-        ctx.waiting |= {
-            item.assignment_id
+        closed = [
+            item
             for item in active
             if item.task == "annotate"
             and item.status != "submitted"
             and version_of[item.document_id].translation_status != "accepted"
+        ]
+        current = {
+            [v for v in chain.versions if not v.not_newer][-1].document_id
+            for chain in chains
+        }
+        ctx.waiting |= {item.assignment_id for item in closed}
+        ctx.waiting_for_lead |= {
+            item.assignment_id for item in closed if item.document_id not in current
         }
     own_open = sorted(
         (
@@ -702,7 +712,9 @@ def _work_item(
         ),
         "annotation_mode": item.annotation_mode,
         "unreviewed_translation": item.unreviewed_translation,
-        "waiting_for_translation_review": item.assignment_id in ctx.waiting,
+        "waiting_for_translation_review": item.assignment_id in ctx.waiting
+        and item.assignment_id not in ctx.waiting_for_lead,
+        "waiting_for_lead": item.assignment_id in ctx.waiting_for_lead,
     }
 
 
@@ -840,7 +852,9 @@ def _old_work(
     ``annotations`` are the row's non-revoked annotate assignments on live
     versions. A held old task is decided through its report first (I5): it
     is no 3a item but still waits, so it counts for rule 8. Old open work of a
-    person who already holds the target is no 3a item either.
+    person who already holds the target is no 3a item either. Open work on a
+    correction that does not count (``not_newer``) is a 3a item as well: it
+    blocks the final result and nothing else reaches it.
     """
     version_of = {v.document_id: v for chain in live for v in chain.versions}
     old_open: list[steps_rules.OldItem] = []
@@ -848,8 +862,13 @@ def _old_work(
     finishing: list[steps_rules.OldItem] = []
     waiting: list[int] = []
     target_of: dict[int, rules.Version] = {}
-    for target in targets:
+    for chain, target in zip(live, targets, strict=True):
         ancestors = _ancestors(target, version_of)
+        later = {
+            v.document_id: v
+            for v in chain.versions
+            if v.not_newer and v.version > target.version
+        }
         holders = {
             item.user_id
             for item in annotations
@@ -858,6 +877,8 @@ def _old_work(
         people: set[int] = set()
         for item in annotations:
             old = ancestors.get(item.document_id)
+            if old is None and _open(item):
+                old = later.get(item.document_id)
             if old is None:
                 continue
             target_of[item.assignment_id] = target

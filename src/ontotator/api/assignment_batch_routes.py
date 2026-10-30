@@ -154,7 +154,10 @@ class BatchSkipView(BaseModel):
         "step_differs",
         "discarded",
         "no_proposals_on_version",
+        "other_root_in_review",
     ]
+    # Set when only this root of a text with parallel roots is skipped.
+    document_id: str | None = None
 
 
 class BatchTargetView(BaseModel):

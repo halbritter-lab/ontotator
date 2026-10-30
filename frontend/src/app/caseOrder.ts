@@ -50,9 +50,9 @@ export function orderTasks(
   tasks: readonly TaskSummary[],
   current: TaskSummary,
 ): { previous?: number; next?: number } {
-  // A task waiting for its translation review is no stop on the way (issue 213).
+  // A waiting task is no stop on the way (issue 213).
   const matching = tasks.filter((task) => task.project_key === current.project_key && task.task === current.task
-    && (!task.waiting_for_translation_review || task.assignment_id === current.assignment_id));
+    && ((!task.waiting_for_translation_review && !task.waiting_for_lead) || task.assignment_id === current.assignment_id));
   const index = matching.findIndex((task) => task.assignment_id === current.assignment_id);
   if (index < 0) return {};
   const adjacent: { previous?: number; next?: number } = {};
@@ -63,7 +63,7 @@ export function orderTasks(
 
 /**
  * Unsubmitted tasks of the same project in My tasks (server) order, without the current one (spec A.5) and without
- * tasks waiting for their translation review (issue 213). The next task is the first one of the current task's type
+ * waiting tasks (issue 213). The next task is the first one of the current task's type
  * (a translation review leads to the next translation review, issue 198), else the first open one.
  */
 export function nextOpenTask(
@@ -73,7 +73,7 @@ export function nextOpenTask(
 ): { next: TaskSummary | null; remaining: number } {
   const open = tasks.filter((task) =>
     task.project_key === projectKey && task.assignment_id !== currentAssignmentId && task.status !== "submitted"
-    && !task.waiting_for_translation_review);
+    && !task.waiting_for_translation_review && !task.waiting_for_lead);
   const kind = tasks.find(task => task.assignment_id === currentAssignmentId)?.task;
   const next = (kind !== undefined ? open.find(task => task.task === kind) : undefined) ?? open[0] ?? null;
   return { next, remaining: open.length };

@@ -9906,9 +9906,21 @@
               "already_assigned",
               "step_differs",
               "discarded",
-              "no_proposals_on_version"
+              "no_proposals_on_version",
+              "other_root_in_review"
             ],
             "title": "Reason"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
           }
         },
         "type": "object",
@@ -22662,6 +22674,11 @@
             "type": "boolean",
             "title": "Waiting For Translation Review",
             "default": false
+          },
+          "waiting_for_lead": {
+            "type": "boolean",
+            "title": "Waiting For Lead",
+            "default": false
           }
         },
         "type": "object",
@@ -24969,6 +24986,11 @@
           "waiting_for_translation_review": {
             "type": "boolean",
             "title": "Waiting For Translation Review",
+            "default": false
+          },
+          "waiting_for_lead": {
+            "type": "boolean",
+            "title": "Waiting For Lead",
             "default": false
           }
         },

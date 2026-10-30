@@ -535,15 +535,6 @@ class TranslationReviewService:
                         project_id=pid, text=proposed, **metadata
                     )
                 )
-                # Before the status write: it reads the reviewed version's.
-                move_waiting_tasks(
-                    conn,
-                    Actor.user(access.user_id, user["username"]),
-                    pid,
-                    variant.document_id,
-                    child.document_id,
-                    now,
-                )
             conn.execute(
                 update(DocumentRow)
                 .where(
@@ -552,6 +543,16 @@ class TranslationReviewService:
                 )
                 .values(translation_status=after)
             )
+            if child:
+                # After the status write: it decides whether the tasks wait.
+                move_waiting_tasks(
+                    conn,
+                    Actor.user(access.user_id, user["username"]),
+                    pid,
+                    variant.document_id,
+                    child.document_id,
+                    now,
+                )
             conn.execute(
                 update(TranslationReviewDraftRow)
                 .where(TranslationReviewDraftRow.assignment_id == assignment.id)

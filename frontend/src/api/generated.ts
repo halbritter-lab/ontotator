@@ -3159,7 +3159,9 @@ export interface components {
              * Reason
              * @enum {string}
              */
-            reason: "waiting_for_review" | "not_in_plan" | "already_assigned" | "step_differs" | "discarded" | "no_proposals_on_version";
+            reason: "waiting_for_review" | "not_in_plan" | "already_assigned" | "step_differs" | "discarded" | "no_proposals_on_version" | "other_root_in_review";
+            /** Document Id */
+            document_id?: string | null;
         };
         /** BatchTargetView */
         BatchTargetView: {
@@ -7645,6 +7647,11 @@ export interface components {
              * @default false
              */
             waiting_for_translation_review: boolean;
+            /**
+             * Waiting For Lead
+             * @default false
+             */
+            waiting_for_lead: boolean;
         };
         /** TemplateInfo */
         TemplateInfo: {
@@ -8458,6 +8465,11 @@ export interface components {
              * @default false
              */
             waiting_for_translation_review: boolean;
+            /**
+             * Waiting For Lead
+             * @default false
+             */
+            waiting_for_lead: boolean;
         };
         /** WorkRoundView */
         WorkRoundView: {

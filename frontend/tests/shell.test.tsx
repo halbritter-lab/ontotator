@@ -19,7 +19,7 @@ const props = (extra: Partial<ShellProps> = {}): ShellProps => ({
 });
 
 const task = (id: number, status: TaskSummary["status"]): TaskSummary => ({
-  assignment_id: id, workflow_revision: 0, held: false, report_answered: false, waiting_for_translation_review: false, project_key: "p", project_name: "P", document_id: `doc-${id}`,
+  assignment_id: id, workflow_revision: 0, held: false, report_answered: false, waiting_for_translation_review: false, waiting_for_lead: false, project_key: "p", project_name: "P", document_id: `doc-${id}`,
   case_id: `case-${id}`, language: "de", task: "annotate", status, updated_at: "2026-10-20T10:00:00Z",
 });
 

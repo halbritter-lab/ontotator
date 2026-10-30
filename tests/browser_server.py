@@ -841,6 +841,7 @@ def register_translation_review_scenario_route(app: FastAPI) -> None:
         workflow: bool = False,
         source_update: bool = False,
         single: bool = False,
+        waiting_proposal_task: bool = False,
     ) -> dict[str, object]:
         from t1_builders import bundle as variant_bundle
         from t1_builders import correction_unit, native_unit, translation_unit
@@ -980,6 +981,21 @@ def register_translation_review_scenario_route(app: FastAPI) -> None:
                 )
                 .id
             )
+        if waiting_proposal_task:
+            # A waiting annotation from proposals: no correction takes it along.
+            from sqlalchemy import update
+
+            from ontotator.storage.tables import AssignmentRow
+
+            task = AssignmentService(db).assign(
+                Actor.cli(), key, documents["target"], users["other"], "annotate"
+            )
+            with db.transaction() as conn:
+                conn.execute(
+                    update(AssignmentRow)
+                    .where(AssignmentRow.id == task.id)
+                    .values(annotation_mode="proposals")
+                )
         return {
             "project": key,
             "case_id": case_id,

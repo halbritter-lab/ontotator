@@ -5,7 +5,7 @@ import { nextOpenTask, orderTasks } from "../src/app/caseOrder";
 
 const task = (assignment_id: number, overrides: Partial<TaskSummary> = {}): TaskSummary => ({
   assignment_id,
-  workflow_revision: 0, held: false, report_answered: false, waiting_for_translation_review: false,
+  workflow_revision: 0, held: false, report_answered: false, waiting_for_translation_review: false, waiting_for_lead: false,
   project_key: "project-a",
   project_name: "Project A",
   document_id: `document-${assignment_id}`,
@@ -25,6 +25,7 @@ describe("tasks waiting for their translation review (issue 213)", () => {
 
   it("are never the next task", () => {
     expect(nextOpenTask([task(81), waiting], 81, "project-a")).toEqual({ next: null, remaining: 0 });
+    expect(nextOpenTask([task(81), task(6, { waiting_for_lead: true })], 81, "project-a")).toEqual({ next: null, remaining: 0 });
   });
 });
 

@@ -48,7 +48,7 @@ it("discards late task metadata after changing user and assignment", async () =>
   expect(review).not.toHaveBeenCalled(); expect(annotation).not.toHaveBeenCalled();
 });
 it("labels translation tasks with actual source/target languages and external identity", async () => {
-  vi.spyOn(api, "listMyTasks").mockResolvedValue([{ assignment_id: 17, workflow_revision: 0, held: false, report_answered: false, waiting_for_translation_review: false, project_key: "proj", project_name: "Project", document_id: "opaque-internal", external_id: "EN 1/7", language: "de", source_language: "en", target_language: "de", task: "translation_review", status: "submitted", updated_at: "2026-10-16T12:00:00Z" }]);
+  vi.spyOn(api, "listMyTasks").mockResolvedValue([{ assignment_id: 17, workflow_revision: 0, held: false, report_answered: false, waiting_for_translation_review: false, waiting_for_lead: false, project_key: "proj", project_name: "Project", document_id: "opaque-internal", external_id: "EN 1/7", language: "de", source_language: "en", target_language: "de", task: "translation_review", status: "submitted", updated_at: "2026-10-16T12:00:00Z" }]);
   render(<MyTasks projects={[]} onNavigate={vi.fn()} />);
   expect(await screen.findByText("Translation review (en to de)")).toBeDefined();
   expect(screen.getByText("EN 1/7 de")).toBeDefined();
@@ -202,7 +202,7 @@ it("names the task in the breadcrumb and keeps the assignment number in its titl
   expect(current().textContent).toBe("Task");
   expect(current().getAttribute("title")).toBe("Assignment 17");
   expect(breadcrumb.textContent).not.toMatch(/Task 17/);
-  await act(async () => { finish([{ assignment_id: 17, workflow_revision: 0, held: false, report_answered: false, waiting_for_translation_review: false, project_key: "proj", project_name: "Project", document_id: "opaque-internal", external_id: "EN 1/7", language: "de", source_language: "en", target_language: "de", task: "translation_review", status: "in_progress", updated_at: "2026-10-16T12:00:00Z" }]); });
+  await act(async () => { finish([{ assignment_id: 17, workflow_revision: 0, held: false, report_answered: false, waiting_for_translation_review: false, waiting_for_lead: false, project_key: "proj", project_name: "Project", document_id: "opaque-internal", external_id: "EN 1/7", language: "de", source_language: "en", target_language: "de", task: "translation_review", status: "in_progress", updated_at: "2026-10-16T12:00:00Z" }]); });
   await waitFor(() => expect(current().textContent).toBe("EN 1/7 de, Translation review"));
   expect(current().getAttribute("title")).toBe("Assignment 17");
   expect(within(breadcrumb).getByRole("button", { name: "My tasks" })).toBeDefined();

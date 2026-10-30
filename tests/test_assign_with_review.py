@@ -15,11 +15,17 @@ from t1_fixtures import create_project, run_import
 from test_auth_api import _app
 from work_plan_support import plan_all, revision_of, set_rule
 
-from ontotator.storage.tables import AssignmentRow, AuditEventRow, ProjectRow
+from ontotator.storage.tables import (
+    AssignmentRow,
+    AuditEventRow,
+    DocumentRow,
+    ProjectRow,
+)
 
 BASE = "/api/v1/projects/proj"
 SOURCE = "wait-en"
 TARGET = "wait-de"
+OTHER_ROOT = "wait-de-b"
 WAITING = "TASK_WAITING_FOR_TRANSLATION_REVIEW"
 
 
@@ -52,6 +58,7 @@ def env(tmp_path):
         alice=alice,
         reviewer=reviewer,
         lead=lead,
+        source=source,
         target=target,
         tmp_path=tmp_path,
     )
@@ -479,3 +486,182 @@ def test_a_batch_refuses_a_text_with_no_review_with_its_reason(env):
         },
     )
     assert preview.json()["skipped"][0]["reason"] == "waiting_for_review"
+
+
+def import_units(env, name, *units):
+    folder = env.tmp_path / name
+    folder.mkdir()
+    result = run_import(env.db, bundle(folder, list(units)))
+    assert result.status == "succeeded", result.error
+
+
+def set_status(env, document, status):
+    with env.db.transaction() as conn:
+        conn.execute(
+            update(DocumentRow)
+            .where(DocumentRow.document_id == document)
+            .values(translation_status=status)
+        )
+
+
+def set_from_proposals(env, task):
+    with env.db.transaction() as conn:
+        conn.execute(
+            update(AssignmentRow)
+            .where(AssignmentRow.id == task)
+            .values(annotation_mode="proposals")
+        )
+
+
+def withdraw(env, task, target):
+    revision = next(
+        item
+        for item in env.lead.get(f"{BASE}/assignments").json()
+        if item["id"] == task
+    )["workflow_revision"]
+    return env.lead.post(
+        f"/api/v1/assignments/{task}/text-change-resolution",
+        json={
+            "resolution": "withdrawn",
+            "target_document_id": target,
+            "expected_workflow_revision": revision,
+        },
+    )
+
+
+def test_a_task_on_a_reopened_accepted_version_follows_the_correction(env):
+    review, task = with_open_review(env)
+    # A review of an accepted version (D25, source change): the status stays
+    # accepted until the decision, and the decision makes it "reviewed".
+    set_status(env, TARGET, "accepted")
+    record = decide(env, review, "accepted_corrected", text="Korrigierter Zieltext")
+    summary = my_task(env.alice, task)
+    assert summary["document_id"] == record["created_variant_id"]
+    assert summary["waiting_for_translation_review"] is False
+    assert_opens(env, task)
+
+
+def test_a_proposal_task_after_a_correction_waits_for_the_lead(env):
+    review, task = with_open_review(env)
+    set_from_proposals(env, task)
+    corrected = decide(env, review, "accepted_corrected", text="Korrigiert")[
+        "created_variant_id"
+    ]
+    summary = my_task(env.alice, task)
+    assert summary["document_id"] == TARGET
+    assert summary["waiting_for_translation_review"] is False
+    assert summary["waiting_for_lead"] is True
+    refused = open_task(env, task)
+    assert refused.status_code == 409 and refused.json()["code"] == WAITING
+    assert refused.json()["details"]["waiting_for_lead"] is True
+    item = next(i for i in de_row(env)["work"] if i["assignment_id"] == task)
+    assert item["waiting_for_lead"] is True
+    assert item["waiting_for_translation_review"] is False
+    assert item["annotation_mode"] == "proposals"
+    done = withdraw(env, task, corrected)
+    assert done.is_success, done.text
+    assert "handle_text_change" not in {s["code"] for s in de_row(env)["steps"]}
+
+
+def test_an_unstarted_task_waiting_for_its_own_review_is_not_for_the_lead(env):
+    _, task = with_open_review(env)
+    refused = open_task(env, task)
+    assert refused.json()["details"]["waiting_for_lead"] is False
+    assert my_task(env.alice, task)["waiting_for_lead"] is False
+
+
+def test_a_task_on_a_rejected_correction_is_a_lead_step_once_v1_is_accepted(env):
+    review, task = with_open_review(env)
+    import_units(env, "second", correction_unit(env.target, "Importierte Korrektur"))
+    v2 = my_task(env.alice, task)["document_id"]
+    assert v2 != TARGET
+    assert env.lead.post(f"/api/v1/assignments/{review}/revoke", json={}).is_success
+    second = assigned(env, "translation_review", "rev", v2)
+    decide(env, second["id"], "rejected", text="Importierte Korrektur")
+    # The rejected v2 does not count: v1 is the target again and gets reviewed.
+    third = assigned(env, "translation_review", "rev", TARGET)
+    decide(env, third["id"], "accepted_unchanged")
+    assert my_task(env.alice, task)["document_id"] == v2
+    assert my_task(env.alice, task)["waiting_for_lead"] is True
+    row = de_row(env)
+    step = next(s for s in row["steps"] if s["code"] == "handle_text_change")
+    assert (step["assignment_id"], step["document_id"]) == (task, TARGET)
+    # Move and finish have no way back; withdraw clears the row.
+    done = withdraw(env, task, TARGET)
+    assert done.is_success, done.text
+    assert "handle_text_change" not in {s["code"] for s in de_row(env)["steps"]}
+    assert "assign_annotation" in {s["code"] for s in de_row(env)["steps"]}
+
+
+def batch_preview(env, usernames=("alice",)):
+    response = env.lead.post(
+        f"{BASE}/assignments/batch/preview",
+        json={
+            "task": "annotate",
+            "language": "de",
+            "case_ids": ["case"],
+            "mode": "one",
+            "usernames": list(usernames),
+        },
+    )
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def with_parallel_root(env):
+    second = translation_unit(
+        OTHER_ROOT, "de", "Zweiter Text", source=env.source, provider="other-mt"
+    )
+    import_units(env, "root", env.source, second)
+
+
+def test_a_review_of_one_root_lets_only_that_root_wait(env):
+    with_parallel_root(env)
+    assigned(env, "translation_review", "rev", TARGET)
+    refused = assign(env, "annotate", document=OTHER_ROOT)
+    assert refused["refused"][0]["code"] == "TRANSLATION_NOT_ACCEPTED"
+    preview = batch_preview(env)
+    assert [t["document_id"] for t in preview["targets"]] == [TARGET]
+    assert preview["skipped"] == [
+        {
+            "case_id": "case",
+            "language": "de",
+            "reason": "waiting_for_review",
+            "document_id": OTHER_ROOT,
+        }
+    ]
+    assert_closed(env, assigned(env, "annotate")["id"])
+
+
+def test_an_accepted_root_stays_refused_while_another_root_is_in_review(env):
+    with_parallel_root(env)
+    set_status(env, TARGET, "accepted")
+    review = assigned(env, "translation_review", "rev", OTHER_ROOT)
+    assert assign(env, "annotate")["refused"][0]["code"] == "TRANSLATION_NOT_ACCEPTED"
+    preview = batch_preview(env)
+    assert [t["document_id"] for t in preview["targets"]] == [OTHER_ROOT]
+    assert [s["reason"] for s in preview["skipped"]] == ["other_root_in_review"]
+    assert preview["skipped"][0]["document_id"] == TARGET
+    waiting = assigned(env, "annotate", document=OTHER_ROOT)
+    assert_closed(env, waiting["id"])
+    cell = de_row(env)["stages"]["annotation"]
+    assert cell["state"] == "after_review" and cell["detail"]["people"]
+    decide(env, review["id"], "accepted_unchanged", text="Zweiter Text")
+    assert_opens(env, waiting["id"])
+    assert assign(env, "annotate", "bob", TARGET)["refused"] == []
+
+
+def test_a_correction_of_a_native_source_leaves_its_tasks_alone(env):
+    task = assigned(env, "annotate", document=SOURCE)
+    import_units(env, "second", correction_unit(env.source, "Corrected source"))
+    assert my_task(env.alice, task["id"])["document_id"] == SOURCE
+
+
+def test_a_paused_waiting_task_is_not_moved(env):
+    review, task = with_open_review(env)
+    with env.db.transaction() as conn:
+        conn.execute(
+            update(AssignmentRow).where(AssignmentRow.id == task).values(held=True)
+        )
+    decide(env, review, "accepted_corrected", text="Korrigiert")
+    assert my_task(env.alice, task)["document_id"] == TARGET

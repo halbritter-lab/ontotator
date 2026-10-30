@@ -9,7 +9,7 @@ const project = (key: string, roles: ProjectSummary["roles"], name = `Project ${
   project_key: key, name, description: null, roles, allowed_modes: ["independent"], document_count: 0, can_manage: roles.includes("lead"),
 });
 const task = (id: number, project_key: string, status: TaskSummary["status"]): TaskSummary => ({
-  assignment_id: id, workflow_revision: 0, held: false, report_answered: false, waiting_for_translation_review: false, project_key, project_name: project_key, document_id: `doc-${id}`,
+  assignment_id: id, workflow_revision: 0, held: false, report_answered: false, waiting_for_translation_review: false, waiting_for_lead: false, project_key, project_name: project_key, document_id: `doc-${id}`,
   case_id: `case-${id}`, language: "de", task: "annotate", status, updated_at: "2026-10-20T10:00:00Z",
 });
 const projects = [project("p1", ["lead", "annotator"]), project("p2", ["annotator"]), project("p3", ["lead"], "p3")];

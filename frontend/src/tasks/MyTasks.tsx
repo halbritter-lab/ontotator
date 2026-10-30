@@ -33,6 +33,7 @@ const statusTabs: { id: TaskStatusTab; label: string; empty: string; matches: (t
 ];
 const STATUS_PANEL = "my-tasks-panel";
 const WAITING_FOR_REVIEW = "Waiting for translation review";
+const WAITING_FOR_LEAD = "Waiting for the project lead";
 
 type TaskState = { kind: "loading" } | { kind: "ready"; tasks: TaskSummary[] } | { kind: "error"; error: unknown };
 
@@ -187,7 +188,7 @@ export function MyTasks({ project, status, projects, onNavigate, username }: MyT
       {task.consolidation_reason && <p className="cell-secondary task-consolidation-reason">{consolidationReasonText(task.consolidation_reason)}</p>}
     </> },
     { id: "status", header: "Status", cell: task => <>
-      {task.waiting_for_translation_review ? <StatusBadge tone="neutral">{WAITING_FOR_REVIEW}</StatusBadge>
+      {task.waiting_for_translation_review || task.waiting_for_lead ? <StatusBadge tone="neutral">{task.waiting_for_lead ? WAITING_FOR_LEAD : WAITING_FOR_REVIEW}</StatusBadge>
         : reopenNotice(task) ? <ReopenedInfo notice={reopenNotice(task)!} /> : <StatusBadge status={task.status}>{assignmentStatusLabels[task.status]}</StatusBadge>}
       {task.report_answered && (task.answered_report_id ? <a className="task-answer-link" href={routeHref(answerRoute(task, task.answered_report_id))} onClick={event => {
         if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
@@ -197,7 +198,7 @@ export function MyTasks({ project, status, projects, onNavigate, username }: MyT
     </> },
     { id: "assigned", header: "Assigned", cell: task => <AssignedDate at={task.assigned_at} /> },
     { id: "changed", header: "Last change", cell: task => <time dateTime={task.updated_at}>{formatDateTime(task.updated_at)}</time> },
-    { id: "open", header: "Action", cell: task => task.waiting_for_translation_review ? <span className="cell-secondary">Opens after the review</span> : <a className="btn btn-secondary" href={routeHref({ name: "task", assignmentId: task.assignment_id })} onKeyDown={onSpaceActivate} onClick={event => {
+    { id: "open", header: "Action", cell: task => task.waiting_for_translation_review ? <span className="cell-secondary">Opens after the review</span> : task.waiting_for_lead ? <span className="cell-secondary">The lead decides how it continues</span> : <a className="btn btn-secondary" href={routeHref({ name: "task", assignmentId: task.assignment_id })} onKeyDown={onSpaceActivate} onClick={event => {
       if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
       event.preventDefault(); onNavigate({ name: "task", assignmentId: task.assignment_id });
     }}>{task.held ? "View paused task" : taskActionLabels[task.status]}</a> },
@@ -217,7 +218,7 @@ export function MyTasks({ project, status, projects, onNavigate, username }: MyT
     if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
     event.preventDefault(); onNavigate(allRoute);
   }}>Show all tasks</a>} />;
-  const table = <DataTable label="My tasks" className="data-table--pin-end" rows={shown} columns={columns} rowKey={task => String(task.assignment_id)} rowProps={task => ({ "data-testid": "task-row", "aria-label": `${projectLabel(task.project_name, task.project_key)}: ${taskText(task)}${failedChecks(task) > 0 ? `, ${failedChecksTitle(failedChecks(task))}` : ""}${task.waiting_for_translation_review ? `, ${WAITING_FOR_REVIEW}` : ""}` })} />;
+  const table = <DataTable label="My tasks" className="data-table--pin-end" rows={shown} columns={columns} rowKey={task => String(task.assignment_id)} rowProps={task => ({ "data-testid": "task-row", "aria-label": `${projectLabel(task.project_name, task.project_key)}: ${taskText(task)}${failedChecks(task) > 0 ? `, ${failedChecksTitle(failedChecks(task))}` : ""}${task.waiting_for_translation_review ? `, ${WAITING_FOR_REVIEW}` : task.waiting_for_lead ? `, ${WAITING_FOR_LEAD}` : ""}` })} />;
   return <section aria-label="My tasks">
     <h1>My tasks</h1>
     {state.kind === "loading" && <InlineMessage tone="info">Loading tasks…</InlineMessage>}

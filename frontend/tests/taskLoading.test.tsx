@@ -28,6 +28,14 @@ it("a waiting task's direct URL says what it waits for (issue 213)", async () =>
   expect(screen.getByRole("link", { name: "My tasks" })).toBeDefined();
 });
 
+it("a task only the lead can continue says so at its direct URL (issue 213)", async () => {
+  vi.spyOn(api, "getAssignmentMetadata").mockResolvedValue({ id: 1, task: "annotate" } as AssignmentView);
+  vi.spyOn(api, "openAssignment").mockRejectedValue(new ApiError(409, "waiting", "TASK_WAITING_FOR_TRANSLATION_REVIEW", { waiting_for_lead: true }));
+  vi.spyOn(api, "listMyTasks").mockResolvedValue([]);
+  render(<TaskEditor assignmentId={1} user={user} onNavigate={vi.fn()} routeLeaveRef={{ current: null }} leaveGuardRef={{ current: null }} />);
+  expect((await screen.findByRole("heading", { name: "Waiting for the project lead" }))).toBeDefined();
+});
+
 it("Opening translation review… is a calm status line, not an info notice", () => {
   vi.spyOn(api, "openTranslationReview").mockReturnValue(never());
   const { container } = render(<TranslationReviewScreen assignmentId={17} username="alice" onNavigate={vi.fn()} routeLeaveRef={{ current: null }} leaveGuardRef={{ current: null }} />);

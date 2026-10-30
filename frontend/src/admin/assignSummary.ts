@@ -30,7 +30,7 @@ export function onePersonSummary({ person, gets, task, language, openBefore, ope
   return `${personName(person)} gets ${taskNoun(task, gets)} (${language}). Open tasks: ${openBefore} → ${openAfter}.`;
 }
 
-const skipOrder: BatchSkipView["reason"][] = ["waiting_for_review", "not_in_plan", "already_assigned", "step_differs", "discarded", "no_proposals_on_version"];
+const skipOrder: BatchSkipView["reason"][] = ["waiting_for_review", "not_in_plan", "already_assigned", "step_differs", "discarded", "no_proposals_on_version", "other_root_in_review"];
 /** `task` names the work in the not-in-plan line: a case planned only in another language is skipped for this one (issue 195). */
 export function skippedLines(skipped: readonly BatchSkipView[], language: string, task: AssignTask = "annotate"): string[] {
   return skipOrder.flatMap(reason => {
@@ -43,6 +43,7 @@ export function skippedLines(skipped: readonly BatchSkipView[], language: string
       case "step_differs": return [`${n} at another step`];
       case "discarded": return [`${n} with the ${language} version discarded`];
       case "no_proposals_on_version": return [`${n} without tool proposals on the newest version: their annotation started from proposals`];
+      case "other_root_in_review": return [`${n} accepted while a parallel translation is in review: assign once that review is accepted`];
     }
   });
 }

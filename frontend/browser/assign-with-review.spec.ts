@@ -81,3 +81,41 @@ test("annotation assigned during the review waits, then opens without a lead ste
   await expect(annotator.getByRole("button", { name: "Finish & submit text", exact: true })).toBeVisible();
   await shot(annotator, "6-task-opened");
 });
+
+test("a task from proposals after a correction waits for the lead, who withdraws it", async ({ page, browser }) => {
+  const response = await page.request.post("/__test_translation_review__?assignment=target&single=true&waiting_proposal_task=true", { timeout: 60_000 });
+  expect(response.ok(), await response.text()).toBeTruthy();
+  const s = await response.json() as Scenario;
+
+  const reviewer = await session(browser, s.users.reviewer);
+  const url = `/api/v1/translation-reviews/${s.assignment_id}`;
+  const opened = await (await authenticatedRequest(reviewer, url)).json() as { draft: { revision: number; text: string } };
+  const saved = await authenticatedRequest(reviewer, `${url}/draft`, "PUT", {
+    expected_revision: opened.draft.revision, text: `${opened.draft.text} Korrigiert.`,
+    form: { decision: "accepted_corrected", clinical_change: false, categories: [], rationale: null },
+  });
+  expect(saved.ok(), await saved.text()).toBeTruthy();
+  const { revision } = await saved.json() as { revision: number };
+  const submitted = await authenticatedRequest(reviewer, `${url}/submit`, "POST", { expected_revision: revision });
+  expect(submitted.ok(), await submitted.text()).toBeTruthy();
+
+  const annotator = await session(browser, s.users.other);
+  const row = annotator.getByTestId("task-row").filter({ hasText: "Waiting for the project lead" });
+  await expect(row).toBeVisible();
+  await expect(row.getByText("The lead decides how it continues")).toBeVisible();
+  await expect(row.getByRole("link")).toHaveCount(0);
+  await expect(annotator.getByText("Opens after the review")).toHaveCount(0);
+  await shot(annotator, "7-my-tasks-waiting-for-lead");
+
+  const lead = await session(browser, s.users.lead);
+  await lead.goto(`/#/projects/${encodeURIComponent(s.project)}/documents`);
+  await rowAction(lead, "Handle text change…", s.case_id, "de").click();
+  const dialog = lead.getByRole("dialog", { name: /^Handle text change/ });
+  await expect(dialog.getByRole("radio", { name: "Withdraw", exact: true })).toBeChecked();
+  await expect(dialog.getByRole("radio")).toHaveCount(1);
+  await shot(lead, "8-lead-dialog-withdraw");
+  await dialog.getByRole("button", { name: "Apply", exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await annotator.reload();
+  await expect(annotator.getByText("Waiting for the project lead")).toHaveCount(0);
+});

@@ -49,6 +49,7 @@ const auditActions: Readonly<Record<string, string>> = {
   "project.translation_review_export": "Translation reviews exported",
   "assignment.create": "Task assigned",
   "assignment.distribute": "Tasks distributed",
+  "assignment.follow_correction": "Task followed a corrected text",
   "assignment.language_override": "Language rule overridden",
   "assignment.reassign": "Task reassigned",
   "assignment.reopen": "Task reopened",

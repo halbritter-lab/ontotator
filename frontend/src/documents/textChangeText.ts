@@ -17,6 +17,8 @@ export const unplacedLine = (unplaced: number, findings: number, person: string)
 export const finishLabel = (person: string, from: string): string => `Let ${person} finish on ${from}`;
 export const finishDescription = (person: string, to: string): string => `When ${person} submits, the result is carried to ${to} for them to check.`;
 export const WITHDRAW_LABEL = "Withdraw";
+export const fromProposalsLine = (to: string): string => `Annotation from proposals stays on its version: it cannot move to ${to}. Withdraw it, then assign ${to}.`;
+export const notNewerLine = (from: string, to: string): string => `The correction ${from} was not accepted, so this task cannot move to ${to}. Withdraw it, then assign ${to}.`;
 export const withdrawDescription = (person: string, to: string): string => `${person}’s draft stays with them. ${to} needs a new annotation.`;
 export const heldLine = (person: string): string => `${person}’s task is paused by a problem report. Decide the report first.`;
 

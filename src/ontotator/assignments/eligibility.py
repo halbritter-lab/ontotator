@@ -110,13 +110,13 @@ def annotation_waits(
     )
 
 
-def open_review_rows(
+def open_review_documents(
     conn: Connection, project_id: int, case_id: str | None = None
-) -> set[RowKey]:
-    """Texts with a translation review assigned or underway, of one case or
+) -> set[str]:
+    """Versions with a translation review assigned or underway, of one case or
     the whole project (the next steps' ``open_translation_reviews``)."""
     query = (
-        select(DocumentRow.case_id, DocumentRow.language)
+        select(DocumentRow.document_id)
         .join(
             AssignmentRow,
             (AssignmentRow.project_id == DocumentRow.project_id)
@@ -132,7 +132,22 @@ def open_review_rows(
     )
     if case_id is not None:
         query = query.where(DocumentRow.case_id == case_id)
-    return {RowKey(case, language) for case, language in conn.execute(query)}
+    return set(conn.execute(query).scalars())
+
+
+def review_covers(
+    variant: Any, lookup: Callable[[str], Any], reviewed: Collection[str]
+) -> bool:
+    """A review in ``reviewed`` runs on ``variant`` or its ancestor chain: a
+    review of another root never gets this version accepted."""
+    seen: set[str] = set()
+    current = variant
+    while current is not None and current.document_id not in seen:
+        if current.document_id in reviewed:
+            return True
+        seen.add(current.document_id)
+        current = lookup(current.derived_from) if current.derived_from else None
+    return False
 
 
 def check_variant_assignable(
@@ -149,8 +164,10 @@ def check_variant_assignable(
 
     ``row_statuses``: every live root's target status of the text (the
     next steps' test); ``variant`` itself must be accepted as well.
-    ``review_open``: the text's translation review is assigned or underway:
-    the task may be assigned and waits for the acceptance (issue 213)."""
+    ``review_open``: a translation review of this version or an ancestor is
+    assigned or underway: the task may be assigned and waits for the acceptance
+    (issue 213). An accepted version would not wait, so it stays refused until
+    every root of the text is accepted."""
     context = translation_context(variant, lookup)
     if task == "translation_review":
         if context is None or (
@@ -171,7 +188,7 @@ def check_variant_assignable(
         and not translations_accepted(
             False, (variant.translation_status, *(row_statuses or ()))
         )
-        and not review_open
+        and not (review_open and variant.translation_status != "accepted")
     ):
         raise DomainError("TRANSLATION_NOT_ACCEPTED")
     return required_languages(variant, task, lookup)
@@ -252,6 +269,14 @@ def require_annotation_gate(
     if variant is None:
         raise DomainError("DOCUMENT_NOT_FOUND")
     if annotation_waits(variant, variants.get):
+        from ontotator.application.text_targets import superseded_versions
+
         raise DomainError(
-            "TASK_WAITING_FOR_TRANSLATION_REVIEW", {"document_id": document_id}
+            "TASK_WAITING_FOR_TRANSLATION_REVIEW",
+            {
+                "document_id": document_id,
+                "waiting_for_lead": bool(
+                    superseded_versions(conn, project_id, [variant])
+                ),
+            },
         )

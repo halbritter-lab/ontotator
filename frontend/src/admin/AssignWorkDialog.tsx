@@ -114,6 +114,7 @@ function rowBlockedText(reason: BatchSkipView["reason"] | undefined, perText: nu
     case "step_differs": return "This text is at another step of the plan.";
     case "discarded": return `The ${language} version of this text is discarded.`;
     case "no_proposals_on_version": return "This text's annotation started from tool proposals, but its newest version has none. Change the plan to annotate from scratch.";
+    case "other_root_in_review": return "A parallel translation of this text is still in review. Annotation can be assigned once that review is accepted.";
     default: return "This text cannot get an annotator now.";
   }
 }

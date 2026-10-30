@@ -138,7 +138,7 @@ What for: decide what happens when a text gets a new version while someone is st
 
 Before you start: if the task is paused by a problem report, [decide the report](#decide-on-a-problem-report) first.
 
-1. In the row, click **Handle text change…**.
+1. In the row, click **Handle text change…**. A task from proposals, or a task on a correction that was not accepted, only offers **Withdraw**.
 2. Choose one:
    - Move to the new version: the annotator continues on the corrected text; their draft findings are carried and marked for checking.
    - Let the annotator finish on the old version: the result is carried to the new version for them to check.

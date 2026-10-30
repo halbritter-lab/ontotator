@@ -7,6 +7,7 @@ the derivation ``TextChangeService.current_target`` uses).
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from dataclasses import dataclass
 
 from sqlalchemy import Connection, select
@@ -14,12 +15,14 @@ from sqlalchemy import Connection, select
 from ontotator.application.work_plans import _chains, _live, _target
 from ontotator.domain.document_rows import Chain
 from ontotator.domain.errors import DomainError
+from ontotator.domain.variants import VariantInfo
 from ontotator.domain.work_plans import RowKey
 from ontotator.storage.plan_tables import DiscardedVariantRow
 from ontotator.storage.tables import DocumentRow
 
 __all__ = [
     "TextRow",
+    "superseded_versions",
     "text_documents",
     "text_row",
     "text_target_document",
@@ -84,6 +87,17 @@ def text_translation_statuses(
         _target(chain).translation_status
         for chain in _live_chains(conn, project_id, row)
     )
+
+
+def superseded_versions(
+    conn: Connection, project_id: int, variants: Collection[VariantInfo]
+) -> set[str]:
+    """Those of ``variants`` that are no target of their root: a counted
+    correction exists, or they are a correction that does not count. A task
+    closed on one opens only through the lead (issue 213)."""
+    chains = _chains(conn, project_id, sorted({v.case_id for v in variants}))
+    targets = {_target(chain).document_id for row in chains.values() for chain in row}
+    return {v.document_id for v in variants} - targets
 
 
 def text_target_document(conn: Connection, project_id: int, row: TextRow) -> str:

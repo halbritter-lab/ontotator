@@ -23,6 +23,7 @@ const STATUS: Readonly<Record<CardWorkItem["status"], { tone: StatusTone; label:
 export function workStatus(item: CardWorkItem): { tone: StatusTone; label: string } {
   if (item.task === "review" && item.status !== "submitted") return { tone: "info", label: "Consolidating" };
   if (item.waiting_for_translation_review) return { tone: "neutral", label: "Waiting for review" };
+  if (item.waiting_for_lead) return { tone: "neutral", label: "Waiting for the project lead" };
   return STATUS[item.status];
 }
 

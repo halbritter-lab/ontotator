@@ -12,7 +12,7 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
-function setup(options: { held?: boolean } = {}) {
+function setup(options: Parameters<typeof openOnOldText>[0] = {}) {
   const { row, step } = openOnOldText(options);
   const props = { onClose: vi.fn(), onDone: vi.fn(), onReload: vi.fn(), onDecideReport: vi.fn() };
   render(<HandleTextChangeDialog projectKey="demo" row={row} step={step} {...props} />);
@@ -30,6 +30,26 @@ describe("HandleTextChangeDialog", () => {
     expect((screen.getByRole("radio", { name: "Let Tom Reis finish on v1" }) as HTMLInputElement).checked).toBe(false);
     expect((screen.getByRole("radio", { name: "Withdraw" }) as HTMLInputElement).checked).toBe(false);
     await screen.findByText(/could not be placed/);
+  });
+
+  it("work from proposals offers only Withdraw, preselected, and asks no preview", async () => {
+    const resolve = vi.spyOn(api, "resolveTextChange").mockResolvedValue({} as AssignmentView);
+    const props = setup({ mode: "proposals" });
+    expect((screen.getByRole("radio", { name: "Withdraw" }) as HTMLInputElement).checked).toBe(true);
+    expect(screen.queryByRole("radio", { name: "Move to v2" })).toBeNull();
+    expect(screen.queryByRole("radio", { name: "Let Tom Reis finish on v1" })).toBeNull();
+    expect(within(dialog()).getByText(/Annotation from proposals stays on its version/)).toBeDefined();
+    expect(api.previewTextChange).not.toHaveBeenCalled();
+    fireEvent.click(apply());
+    await waitFor(() => expect(resolve).toHaveBeenCalledWith(41, { resolution: "withdrawn", target_document_id: V2, expected_workflow_revision: 7 }));
+    expect(props.onDone).toHaveBeenCalledWith("Tom Reis’s task is withdrawn. v2 needs a new annotation.");
+  });
+
+  it("a task on a later correction that does not count offers only Withdraw", () => {
+    setup({ onVersion: 3 });
+    expect((screen.getByRole("radio", { name: "Withdraw" }) as HTMLInputElement).checked).toBe(true);
+    expect(screen.queryByRole("radio", { name: "Move to v2" })).toBeNull();
+    expect(within(dialog()).getByText(/The correction v3 was not accepted/)).toBeDefined();
   });
 
   it("shows Checking… then {k} of {m} findings could not be placed from the preview", async () => {
