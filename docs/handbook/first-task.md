@@ -71,7 +71,7 @@ Before you start: submitting means you checked the whole text, not only the find
 1. Click **Next open item** until nothing is left. It takes you to every proposal, value or finding that still needs you.
 2. Click **Finish & submit text**.
 3. The dialog lists what is still open, with **Go to** for each item. Values you have not confirmed are under **Values not chosen yet**: confirm them only if you checked that they are right.
-4. Click **Submit text**.
+4. Click **Submit text**. The submission is then read-only; you can still change it in a new work round (see below).
 
 ![The submit dialog with the Values not chosen yet group](images/annotator-submit-dialog.png)
 

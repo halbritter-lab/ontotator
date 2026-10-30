@@ -143,7 +143,7 @@ export function SubmitCaseDialog({
         {blockedReason
           ? <p key={announcement?.count ?? 0} id={reasonId} className="form-hint" data-submit-blocked-reason>{blockedReason}</p>
           : <p className="form-hint" data-submit-checked-text>
-            Submitting also says you checked the whole text for further findings.{openCount === 0 && " Afterwards only the project lead can reopen it."}
+            Submitting also says you checked the whole text for further findings.{openCount === 0 && " Afterwards the submission is read-only; to change it, start a new work round under More › Work rounds."}
           </p>}
       </div>
       <div className="visually-hidden" aria-live="polite" data-submit-status>

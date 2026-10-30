@@ -258,7 +258,7 @@ Before you start: submitting says you checked the whole text for further finding
 4. When nothing blocks, click **Submit text**. If only warnings are left, the button reads **Submit with** and the number of warnings; see [Confirm values and acknowledge warnings](#confirm-values-and-acknowledge-warnings-in-the-submit-dialog) first.
 5. The next open task opens, preferably one of the same kind (another review after a review), or **My tasks** if none is left. To see what you sent, click **View result** in the message.
 
-The task is now read-only. To change it later, [start a new work round](#start-a-new-work-round).
+The task is now read-only. To change it later, [start a new work round](#start-a-new-work-round) yourself under **More** › **Work rounds**; you do not need the lead for that. The submit dialog says the same.
 
 ## Confirm values and acknowledge warnings in the submit dialog
 

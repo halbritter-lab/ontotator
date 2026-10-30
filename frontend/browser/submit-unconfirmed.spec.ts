@@ -86,7 +86,7 @@ test("confirm one row as shown, then the rest with Confirm all, and submit witho
   await section.getByRole("button", { name: "Confirm all as shown (2)", exact: true }).click();
   await expect(section).toHaveCount(0);
   await expect(dialog.getByText("3 findings, nothing open.", { exact: true })).toBeVisible();
-  await expect(dialog.getByText(/Afterwards only the project lead can reopen it\.$/)).toBeVisible();
+  await expect(dialog.getByText(/Afterwards the submission is read-only; to change it, start a new work round under More › Work rounds\.$/)).toBeVisible();
 
   await dialog.getByRole("button", { name: "Submit text", exact: true }).click();
   await expectSubmitted(page);

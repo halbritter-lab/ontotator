@@ -234,7 +234,7 @@ describe("Unconfirmed values section", () => {
     expect(screen.getByRole("heading", { name: "Submit doc?" })).toBeDefined();
     expect(screen.getByText("1 finding, nothing open.")).toBeDefined();
     expect(document.querySelector("[data-submit-checked-text]")!.textContent)
-      .toBe("Submitting also says you checked the whole text for further findings. Afterwards only the project lead can reopen it.");
+      .toBe("Submitting also says you checked the whole text for further findings. Afterwards the submission is read-only; to change it, start a new work round under More › Work rounds.");
     rerender(<SubmitCaseDialog {...dialogProps({ findingCount: 0 })} />);
     expect(screen.getByText("0 findings. 3 things are still open:")).toBeDefined();
   });
