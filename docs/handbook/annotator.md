@@ -116,7 +116,7 @@ What for: record the context of a finding: whether it is present, who has it and
 1. Select the finding. The section **Values** lists each value field, such as the assertion (**Present**, **Absent**, **Uncertain**) or the experiencer (**Patient**, **Family member**, …). Press `v` to jump there with the keyboard.
 2. Read the passage in context. "No seizures" is **Absent**; "his mother has seizures" is not the patient.
 3. To change a value, choose another one. Value fields with few values are buttons; others are a dropdown.
-4. Values the project prefills are tagged **Default**. They count as not confirmed until you confirm or change them. If all shown values are right, click **Confirm defaults** or press `d`. This confirms every default of this finding. On a button field you can also confirm one default by clicking its highlighted button.
+4. Values the project prefills are tagged **Default**. They count as not confirmed until you confirm or change them. If all shown values are right, click **Confirm defaults** or press `d`. This confirms every default of this finding. To confirm one default only, click its highlighted button on a button field, or **Confirm** next to a dropdown field.
 
 Findings with open defaults show **Defaults to confirm** in the list.
 

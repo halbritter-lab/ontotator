@@ -192,6 +192,8 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
     return defaultedAxes.has(axis.id) && typeof value === "string" && value === savedAxes[axis.id] && axis.options.includes(value);
   };
   const confirmableDefaults = (axesConfig ?? []).filter(isUnconfirmedDefault);
+  /** Axes with more than four options are a Select (see the Values block below). */
+  const hasSelectDefault = confirmableDefaults.some(axis => axis.options.length + (axis.allow_empty ? 1 : 0) > 4);
   const confirmDefaults = () => {
     if (readOnly || !onConfirmDefaults || confirmableDefaults.length === 0) return;
     const ids = confirmableDefaults.map(axis => axis.id);
@@ -382,20 +384,35 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
                     })}
                   </div>
                 ) : (
-                  <Select label={null} id={`axis-select-${axis.id}`} aria-label={unconfirmed ? `${axis.label} (default)` : axis.label}
-                    disabled={readOnly} value={val} onChange={(e) => updateAxis(e.target.value)}>
-                    {axis.allow_empty && <option value="">Not specified</option>}
-                    {!axis.allow_empty && <option value="" disabled>Please select</option>}
-                    {unavailable && <option value={val} disabled>{unavailableLabel}</option>}
-                    {axis.options.map((option) => <option key={option} value={option}>{axisOptionLabel(option)}</option>)}
-                  </Select>
+                  <div className="axis-select-row">
+                    <Select label={null} id={`axis-select-${axis.id}`} aria-label={unconfirmed ? `${axis.label} (default)` : axis.label}
+                      disabled={readOnly} value={val} onChange={(e) => updateAxis(e.target.value)}>
+                      {axis.allow_empty && <option value="">Not specified</option>}
+                      {!axis.allow_empty && <option value="" disabled>Please select</option>}
+                      {unavailable && <option value={val} disabled>{unavailableLabel}</option>}
+                      {axis.options.map((option) => <option key={option} value={option}>{axisOptionLabel(option)}</option>)}
+                    </Select>
+                    {/* #149: choosing the selected option again fires no change, so a dropdown default gets its own Confirm. */}
+                    {unconfirmed && !readOnly && onConfirmDefaults && (
+                      <Button type="button" variant="secondary" size="sm" className="axis-confirm" data-confirm-axis={axis.id}
+                        aria-label={`Confirm ${axis.label}: ${axisOptionLabel(val)}`} onClick={() => {
+                          // The button leaves once confirmed: the focus stays on the field.
+                          document.getElementById(`axis-select-${axis.id}`)?.focus();
+                          confirmAxis(axis.id);
+                        }}>
+                        Confirm
+                      </Button>
+                    )}
+                  </div>
                 )}
               </fieldset>
             );
           })}
           {/* The "Default" tag marks each axis; one short line says how to confirm. */}
           {confirmableDefaults.length > 0 && !readOnly && onConfirmDefaults
-            && <p className="form-hint">Click a highlighted default or “Confirm defaults” to confirm it.</p>}
+            && <p className="form-hint">{hasSelectDefault
+              ? "Click a highlighted default, Confirm next to a list, or “Confirm defaults” to confirm it."
+              : "Click a highlighted default or “Confirm defaults” to confirm it."}</p>}
           {valuesError && <InlineMessage tone="error">{valuesError}</InlineMessage>}
         </section>
       )}
