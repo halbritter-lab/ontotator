@@ -62,7 +62,7 @@ The header is the same on every page:
 - On the right are your display name, your pseudonym, your roles and **Log out**.
 - **Handbook** in the header opens this handbook inside the app. On the Documents, consolidation and translation review screens, **Help** opens the handbook section about that screen; in the editor it is **More** > **Help for this screen**.
 
-The sidebar lists **My tasks**, **Projects** and **Profile**. The number after **My tasks** counts your open tasks. Leads also see their project's pages (**Documents**, **Progress**, **Settings**, **Export**). System administrators also see **Administration** with **Users**, **Ontologies** and **New project** (see [Administration](admin.md)). In the editor, the sidebar folds into **Sections**; click it to open it.
+The sidebar lists **My tasks**, **Projects** and **Profile**. The number after **My tasks** counts your open tasks, the same tasks as the **To do** tab; it updates as soon as you submit a text. Leads also see their project's pages (**Documents**, **Progress**, **Settings**, **Export**). System administrators also see **Administration** with **Users**, **Ontologies** and **New project** (see [Administration](admin.md)). In the editor, the sidebar folds into **Sections**; click it to open it.
 
 ## Switch project
 
@@ -119,7 +119,7 @@ What for: check the annotation rules of the project.
 2. Open **More** in the toolbar and choose the guidelines, for example *Guidelines v2*. *(new)* after it means the guidelines changed since you last read them. In a translation review or consolidation, the guidelines are a button in the header instead, with a **New** badge.
 3. The guidelines open beside the text. Click **All versions** to see older versions, or **Close** to hide them.
 
-The first time you open a task in a project with guidelines, a notice asks you to read them. Click the read button in the notice, for example *Read guidelines v2*.
+The first time you open a task in a project with guidelines, a notice asks you to read them. Click the read button in the notice, for example *Read guidelines v2*. The notice also says where you find them later: under **More** › *Guidelines* in the editor, or the guidelines button in the header of a translation review or consolidation.
 
 The guidelines are your project's rules: what counts as a finding, how much text to mark, how to handle negation or family history. The handbook explains the app, not these rules. If the project has no guidelines or they do not answer your question, ask your lead.
 

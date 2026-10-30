@@ -3134,6 +3134,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   };
 
   const shortcutOptions = { scope: "screen" as const, root: rootRef };
+  // Keys that wait for a selection stay in the ? help, marked "not available right now": the finding keys
+  // always, the decision keys in review modes only.
+  const reviewMode = isReviewLike(view.key.mode);
   useShortcut(["Alt+ArrowLeft", "Alt+ArrowRight"], (event) => {
     if (assignmentNavigation) {
       const id = event.key === "ArrowLeft" ? adjacentTask.previous : adjacentTask.next;
@@ -3175,11 +3178,11 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     if (back >= 0) index = back;
     if (step > 0) for (let i = 1; i <= n; i++) if (!decisionsMap[refKey(reviewTargets[at(i)])]) { index = at(i); break; }
     selectProposal(reviewTargets[index]);
-  }, { ...shortcutOptions, enabled: isReviewLike(view.key.mode) && reviewTargets.length > 0,
+  }, { ...shortcutOptions, enabled: isReviewLike(view.key.mode) && reviewTargets.length > 0, listWhenDisabled: reviewMode,
     group: "Decisions", description: "Next / previous review proposal" });
   useShortcutHint(["K"], "Right after a decision: back to the proposal just decided", {
     group: "Decisions", enabled: isReviewLike(view.key.mode) && reviewTargets.length > 0 });
-  const reviewShortcutOptions = { ...shortcutOptions, enabled: !readOnly && isReviewLike(view.key.mode) && !!selectedTarget, group: "Decisions" };
+  const reviewShortcutOptions = { ...shortcutOptions, enabled: !readOnly && isReviewLike(view.key.mode) && !!selectedTarget, listWhenDisabled: reviewMode, group: "Decisions" };
   useShortcut("1", () => {
     if (!selectedTarget || selectedTarget.is_obsolete || selectedTarget.is_unknown) return false;
     if (repeatDecision(selectedTarget, "confirmed")) return;
@@ -3226,7 +3229,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const open = inspectorRef.current?.querySelector<HTMLInputElement>("#search-input");
     if (open) { open.focus({ preventScroll: true }); return; }
     setChangeTermRequest(count => count + 1);
-  }, { ...shortcutOptions, enabled: pendingSearchable || ownFindingActive, group: "Finding", description: "Focus the term search" });
+  }, { ...shortcutOptions, enabled: pendingSearchable || ownFindingActive, listWhenDisabled: true, group: "Finding", description: "Focus the term search" });
   useShortcut("v", event => {
     // Plain "v" only: Shift+V is not this shortcut.
     if (event.shiftKey) return false;
@@ -3239,14 +3242,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     // At <=700 px the details pane must be shown before its control can take focus.
     if (panesLayout && mobilePane !== "details") flushSync(() => setMobilePane("details"));
     control.focus({ preventScroll: true });
-  }, { ...shortcutOptions, enabled: ownFindingActive && currentAxesConfig.length > 0, group: "Finding", description: "Focus the values" });
+  }, { ...shortcutOptions, enabled: ownFindingActive && currentAxesConfig.length > 0, listWhenDisabled: true, group: "Finding", description: "Focus the values" });
   useShortcut("d", event => {
     // Plain "d" only: Shift+D is not this shortcut.
     if (event.shiftKey || readOnlyRef.current) return false;
     const button = inspectorRef.current?.querySelector<HTMLButtonElement>("[data-confirm-defaults]");
     if (!button || button.disabled || button.getAttribute("aria-disabled") === "true") return false;
     button.click();
-  }, { ...shortcutOptions, enabled: ownFindingActive && (selectedAnnotation?.annotation.axes_defaulted?.length ?? 0) > 0,
+  }, { ...shortcutOptions, enabled: ownFindingActive && (selectedAnnotation?.annotation.axes_defaulted?.length ?? 0) > 0, listWhenDisabled: true,
     group: "Finding", description: "Confirm all default values" });
   useShortcutHint(["←", "→", "Ctrl + ← / →"], "Move the focused mention edge (Tab to an edge handle of the selected annotation or the marked text)");
 

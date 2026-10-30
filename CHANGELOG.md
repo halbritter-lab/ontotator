@@ -16,6 +16,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - HPO releases without a modifier classifier root (Clinical modifier, Frequency, Severity, Onset) are refused (#97).
 - The consolidation's duplicate-term warning fires only for findings of the same term on overlapping spans (#132).
+- The Work rounds dialog says before "Continue from this submission" that the earlier submission no longer counts as submitted, what the lead sees, and that the new round must be submitted again (#152).
+- The text problem dialog no longer keeps "Your task is paused" after "Resume my task" (#155).
+- The sidebar's "My tasks (n)" updates right after a submit or a new work round (#156).
+- The first-time guidelines notice names where the guidelines are: "More › Guidelines" in the editor, the header button in translation review and consolidation (#154).
+- The keyboard shortcut help (`?`) in the editor also lists the finding keys, and in review modes the decision keys, while they need a selection first, marked "not available right now" (#158).
 
 ## [0.2.0] - 2026-10-28
 

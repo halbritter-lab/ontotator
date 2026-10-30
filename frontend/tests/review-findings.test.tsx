@@ -607,6 +607,8 @@ describe("Shortcuts and error handling", () => {
     const help = screen.getByRole("dialog", { name: /Keyboard shortcuts/i });
     expect(help.textContent).toMatch(/j \/ k/);
     expect(help.textContent).toMatch(/Esc/);
+    // The finding keys need an own finding selected; the help still lists them, marked (#158).
+    expect(within(help).getByText("Focus the term search").textContent).toBe("Focus the term search (not available right now)");
     fireEvent.keyDown(window, { key: "1" });
     expect(decide).not.toHaveBeenCalled();
     fireEvent.keyDown(window, { key: "Escape" });
