@@ -276,7 +276,7 @@ export function UploadPanel({ projectKey, languages, onImported, onClose, canOve
   })();
 
   const closing = onClose ?? (() => undefined);
-  // A checked upload with problems is never imported: leaving the dialog discards it (#196). A ready one stays under "Unfinished uploads".
+  // A checked upload with problems is never imported: leaving the dialog discards it (issue 196). A ready one stays under "Unfinished uploads".
   const refusedUpload = phase === "problems" && view && ["invalid", "failed"].includes(view.status) ? view : null;
   const cancel = () => {
     if (refusedUpload && !busy) void api.discardUpload(projectKey, refusedUpload.id).catch(() => undefined);

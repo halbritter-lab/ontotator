@@ -32,7 +32,7 @@ export function ProjectNewPage({ onNavigate }: { onNavigate: (route: Route) => v
     return () => { lifetime.current++; };
   }, [retry]);
   const ids = source === "template" ? metadata?.templates.find(item => item.id === template)?.required_ontology_ids ?? [] : uploaded?.ids ?? [];
-  // A profile file asks for no branches: they start empty (every term), not with the template's Phenotypic abnormality (#196).
+  // A profile file asks for no branches: they start empty (every term), not with the template's Phenotypic abnormality (issue 196).
   const startPins = source === "upload" ? Object.fromEntries(ids.map(id => [id, pins[id] ?? { ...emptyPin(id), rootsText: "" }])) : pins;
   // An ontology with one loaded version starts with it chosen (#47 A-18).
   const shownPins = metadata ? preselectOnlyVersions(ids, metadata.ontologies, startPins) : startPins;

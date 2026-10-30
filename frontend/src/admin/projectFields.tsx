@@ -88,7 +88,7 @@ export function PinFields({ ids, ontologies, value, onChange, disabled, plain = 
   })}</>;
 }
 
-/** The handbook's "Task profiles" in a new tab: template or own file, and what must match a bundle (#199). */
+/** The handbook's "Task profiles" in a new tab: template or own file, and what must match a bundle (issue 199). */
 export function TaskProfileHelp(): JSX.Element {
   return <p className="field-hint"><a href={helpHref("taskProfiles")} target="_blank" rel="noopener noreferrer">What is a task profile, and which do I need?</a></p>;
 }
