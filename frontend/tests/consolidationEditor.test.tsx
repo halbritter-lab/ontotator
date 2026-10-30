@@ -116,6 +116,22 @@ it("reads no consolidation and shows no link outside a consolidation round", () 
   expect(screen.queryByRole("link", { name: "Back to consolidation" })).toBeNull();
 });
 
+it("names the toolbar submit after the consolidation it submits (#162)", async () => {
+  vi.spyOn(api, "getConsolidation").mockResolvedValue(consolidation);
+  renderEditor();
+  await screen.findByText("Luc Martin (ann-0004)");
+  const submit = document.querySelector<HTMLButtonElement>("[data-finish-submit]")!;
+  expect(submit.textContent).toMatch(/^Submit consolidation/);
+  expect(submit.getAttribute("title")).toBe("Submits the whole consolidation, like Submit consolidation on the consolidation screen");
+  expect(screen.queryByText(/Finish & submit/)).toBeNull();
+});
+
+it("keeps Finish & submit text outside a consolidation round", () => {
+  vi.spyOn(api, "getConsolidation").mockResolvedValue(consolidation);
+  renderEditor("ordinary");
+  expect(document.querySelector("[data-finish-submit]")!.textContent).toMatch(/Finish & submit/);
+});
+
 it("shows no Back to consolidation once the round is no longer active", async () => {
   vi.spyOn(api, "getConsolidation").mockResolvedValue(consolidation);
   render(<CaseScreen view={consolidationView()} workspaceId="ws-c" onClose={vi.fn()} roundKind="consolidation" roundActive={false}

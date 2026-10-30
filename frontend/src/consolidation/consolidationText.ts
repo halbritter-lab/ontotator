@@ -67,9 +67,14 @@ export function readOnlyText(view: Pick<ConsolidationView, "read_only_reason" | 
   return READ_ONLY_REASONS[view.read_only_reason ?? ""] ?? "This consolidation is read-only.";
 }
 
+/** What follows the submit (issue 143): a lead accepts their own consolidation in Documents, everyone else waits for the lead. */
+export function nextStepText(lead: boolean): string {
+  return lead ? "Then accept the result in Documents." : "The lead then accepts the result.";
+}
+
 /** After submitting: a lead accepts their own consolidation in Documents. */
 export function submittedText(lead: boolean): string {
-  return lead ? "Consolidation submitted. Accept the result in Documents." : "Consolidation submitted. The lead then accepts the result.";
+  return lead ? "Consolidation submitted. Accept the result in Documents." : `Consolidation submitted. ${nextStepText(false)}`;
 }
 
 /** Heading of the findings added outside the groups. */
@@ -103,6 +108,9 @@ export function duplicatesText(terms: readonly string[]): string | null {
 }
 
 export const SUBMIT_LABEL = "Submit consolidation";
+
+/** Issue 162: "Replaced by" on a submitted finding in the consolidation's full editor. */
+export const REPLACED_BY_CONSOLIDATION_TITLE = "The result finding that takes the place of this submitted finding. Click to jump to it.";
 
 export function submitReason(open: number): string {
   return open === 1 ? "Resolve the open group first." : `Resolve the ${open} open groups first.`;

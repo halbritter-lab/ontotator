@@ -16,6 +16,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - HPO releases without a modifier classifier root (Clinical modifier, Frequency, Severity, Onset) are refused (#97).
 - The consolidation's duplicate-term warning fires only for findings of the same term on overlapping spans (#132).
+- "Open consolidation" in the text card opens the lead's own running consolidation as their task instead of the read-only view (#145).
+- The consolidator sees the lead's consolidation reason above the groups and in My tasks (`consolidation_reason` on the consolidation view and the task list) (#146).
+- The consolidation launcher says under "Consolidator" who is listed and links Settings → People (#147).
+- The "Submit consolidation?" dialog tells a lead consolidator to accept the result in Documents (#143).
+- In a consolidation's full editor the submit button reads "Submit consolidation", and "Replaced by" explains itself (#162).
 
 ## [0.2.0] - 2026-10-28
 

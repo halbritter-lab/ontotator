@@ -1,4 +1,4 @@
-import{r as i,a as p,j as a}from"./index-V0d5S-9c.js";import{M as m,r as g}from"./index-CLkBN5bW.js";const f=`# Ontotator user handbook
+import{r as i,a as p,j as a}from"./index-Io63ILKg.js";import{M as m,r as g}from"./index-DoZRL7f3.js";const f=`# Ontotator user handbook
 
 This handbook explains how to work with Ontotator in the browser. It is for everyone who uses the app: annotators, translation reviewers, consolidators, leads and system administrators. It describes the version of Ontotator that you open it from. If you run the server, read the [server operations guide (for server operators)](../operations.md) instead.
 
@@ -732,6 +732,8 @@ What for: start or continue your consolidation work.
 2. Click **Start**, **Continue** or **View**.
 3. The consolidation screen opens. Its heading reads, for example, *Consolidate CASE-1 en v1*. The path above it shows how many groups are still open.
 
+If the lead gave a reason when starting the consolidation, it shows above the groups, for example *Reason from the lead: Term and assertion differ*, and under the task in **My tasks**.
+
 The header holds **Open in full editor**, **Report a text problem** and, if the project has guidelines, a button such as *Guidelines v2*. **More…** appears once you decided a group.
 
 The screen is read-only after you submitted, when the task is no longer yours, when it is paused, or when a submission used here was withdrawn. A banner tells you which.
@@ -828,7 +830,7 @@ Before you start: after you submit, you cannot change the consolidation.
 
 1. When no group is open, the progress card reads **Ready to submit**.
 2. Click **Submit consolidation**.
-3. The dialog **Submit consolidation?** shows how many groups and findings the result has, and how many are not in the result.
+3. The dialog **Submit consolidation?** says who accepts the result (*The lead then accepts the result.*; if you are the lead yourself: *Then accept the result in Documents.*) and shows how many groups and findings the result has, and how many are not in the result.
 4. Click **Submit**.
 5. If there are warnings (values filled in by default, a modifier used as a finding, two severities), the dialog now lists them under **Check before you submit**, and the button reads **Submit with** and the number of warnings. Click **Back** to fix them, or submit with warnings only if you checked that the values are right.
 6. The screen confirms: *Consolidation submitted. The lead then accepts the result.* (If you are the lead yourself: *Consolidation submitted. Accept the result in Documents.*) Open your next task or click **Back to my tasks**.
@@ -844,10 +846,10 @@ What happens next: the lead reads the result with your notes and flags, and acce
 What for: change text spans or add findings that the comparison table cannot express.
 
 1. Click **Open in full editor**.
-2. The editor shows the mode **Consolidate** and the list **Selected submitted findings** with each finding's author. *Replaced by* on a submitted finding shows which result finding took its place. The editor works as described in the [annotator reference](annotator.md).
+2. The editor shows the mode **Consolidate** and the list **Selected submitted findings** with each finding's author. *Replaced by* on a submitted finding shows which result finding took its place; point at it for a short explanation, click it to jump to that finding. The editor works as described in the [annotator reference](annotator.md).
 3. Click **Back to consolidation** to return.
 
-Groups you changed here are tagged **edited in editor** on the consolidation screen. **Finish & submit text** in the full editor submits the whole consolidation, like **Submit consolidation**; it is refused while groups are open. Submitting from the consolidation screen shows you the summary first.
+Groups you changed here are tagged **edited in editor** on the consolidation screen. The editor's toolbar button reads **Submit consolidation** here, not *Finish & submit text*: it submits the whole consolidation, like the button on the consolidation screen, and is refused while groups are open. Submitting from the consolidation screen shows you the summary first, so prefer going **Back to consolidation** to submit.
 
 ## Keyboard shortcuts
 
@@ -1000,13 +1002,13 @@ The text is not in the work plan. Plan it first. See [Add a text to the plan](le
 
 Closing a report does not always release the pause. The row shows **Resume task…**; click it and release the pause. See [Decide on a problem report](lead-results.md#decide-on-a-problem-report).
 
-### I chose myself as consolidator, but "Open consolidation" shows no actions
+### I chose myself as consolidator: where do I work?
 
-**Open consolidation** in the text card is the read-only view. Open your task with **Open my task** in the row on **Documents**, or from **My tasks**. See [Start a consolidation](lead-results.md#start-a-consolidation).
+While your consolidation runs, **Open consolidation** in the text card opens your task, as does **Open my task** in the row on **Documents** or the row in **My tasks**. After you submitted, **Open consolidation** shows the read-only result. See [Start a consolidation](lead-results.md#start-a-consolidation).
 
 ### The consolidator list does not show a person
 
-Only members with the **Consolidator** role are listed. Give the role first. See [Change a member's roles](lead-settings.md#change-a-members-roles).
+Only you and the members with the **Consolidator** role are listed; the hint under the list says so and links **Settings → People**. Give the role first. See [Change a member's roles](lead-settings.md#change-a-members-roles).
 
 ### The export asks me to tick a box
 
@@ -1219,6 +1221,7 @@ What for: find the texts you have to work on.
 Each row is one task. The **Task** column says what to do, for example **Annotation, from scratch**, **Annotation, from proposals**, **Consolidation** or **Translation review**. The **Status** column shows **Open**, **In progress**, **Submitted** or **Reopened**.
 
 - **Reopened**: the lead reopened your submission. Click the badge to read why.
+- A **Consolidation** task shows the lead's reason under the task, for example *Reason from the lead: Term and assertion differ*, if the lead gave one.
 - **Paused**: the task waits for a decision on a problem report. **Answer to your report** means the lead has replied.
 
 If the project has guidelines, a link such as *Project guidelines v2* appears above the table. Read them before you start: they say what to mark and how.
@@ -1645,9 +1648,9 @@ Before you start: the text needs at least two submissions. The consolidator must
 
 1. In the text card, open **Finalization** and click **Consolidate…**. The form **Consolidate submitted results** opens with the compared submissions already ticked.
 2. Under **Submissions to merge**, check the ticked submissions (at least two).
-3. Under **Consolidator**, choose a person. The list starts with **Choose a consolidator**, then you (*You (Mia Lead)*), then every member with the Consolidator role. If the project rule forbids it, people who annotated this text are shown but cannot be chosen (*— Ana Weber annotated this text*).
-4. If the person's profile lacks the text's language, tick the box *Assign this consolidator despite missing en in their profile*.
-5. Optional: enter **Consolidation reason (optional)**. The reason is kept in the history; the consolidator does not see it.
+3. Under **Consolidator**, choose a person. The list starts with **Choose a consolidator**, then you (*You (Mia Lead)*), then every member with the Consolidator role; the hint under the list links **Settings → People**, where you give the role to someone who is missing. If the project rule forbids it, people who annotated this text are shown but cannot be chosen (*— Ana Weber annotated this text*).
+4. If the person's profile lacks the text's language, tick the box *Assign this consolidator despite missing en in their profile*, right under the list.
+5. Optional: enter **Consolidation reason (optional)**. The consolidator sees it in **My tasks** and above the groups; it is also kept in the history.
 6. Click **Start consolidation**.
 
 If the button stays inactive, the form says why: *Select at least two submissions.*, *Choose a consolidator.*, *Confirm the consolidator despite missing en.*, or someone already has a consolidation in progress on this text. If that is you, the button reads **Continue consolidation**.
@@ -1655,7 +1658,7 @@ If the button stays inactive, the form says why: *Select at least two submission
 After the start:
 
 - If you chose someone else: Ontotator sends no e-mail. Tell the person that a consolidation is waiting in their **My tasks**.
-- If you chose yourself: you get the Consolidator role for this project. Click **Open my consolidation task** in the message, or **Open my task** in the text's row on **Documents**. **Open consolidation** in the text card opens the read-only view, not your task.
+- If you chose yourself: you get the Consolidator role for this project. Click **Open consolidation** in the text card, **Open my consolidation task** in the message, or **Open my task** in the text's row on **Documents**. Each opens your task, where you decide and submit.
 
 While the consolidation runs, the card shows the consolidator and how many groups are still open. What the consolidator does is in the [consolidator chapter](consolidator.md).
 

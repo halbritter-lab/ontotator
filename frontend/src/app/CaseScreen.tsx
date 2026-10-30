@@ -59,6 +59,7 @@ import { plural, reopenNotice } from "./labels";
 import { FindingRow, ModifierLine } from "../editor/FindingRow";
 import { SubmitCaseDialog, submitOpenCount } from "../editor/SubmitCaseDialog";
 import { SubmitControl } from "../editor/SubmitControl";
+import { REPLACED_BY_CONSOLIDATION_TITLE, SUBMIT_LABEL } from "../consolidation/consolidationText";
 import { collectOpenItems, nextOpenItem, type OpenItem } from "../editor/openItems";
 import { isModifierWarningKey, modifierWarningPairs, modifierWarnings, pairKey, rowPairs, sameSet, unconfirmedRows, type UnconfirmedRow } from "../editor/unconfirmedValues";
 import { HistoricalSubmissionDialog } from "../editor/HistoricalSubmissionDialog";
@@ -3396,6 +3397,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             pending={submitPending}
             openCount={submitOpenCount(openItems, unconfirmed)}
             onNextOpen={narrowHeader ? undefined : goToNextOpenItem}
+            // Issue 162: in a consolidation's full editor the button submits the whole consolidation; say so.
+            {...(roundKind === "consolidation" ? { label: SUBMIT_LABEL, title: "Submits the whole consolidation, like Submit consolidation on the consolidation screen" } : {})}
           />}
         </div>
       </Toolbar>
@@ -3519,7 +3522,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                           onClick={() => {
                             if (dec.replacement?.annotation_id) selectListKey(`annotation:${dec.replacement.annotation_id}`, true);
                           }}
-                          title="Jump to replacement annotation in draft"
+                          title={roundKind === "consolidation" ? REPLACED_BY_CONSOLIDATION_TITLE : "Jump to replacement annotation in draft"}
                         >
                           <span className="replaced-by-label">Replaced by:</span> <strong>{displayText}</strong>
                         </Button>
