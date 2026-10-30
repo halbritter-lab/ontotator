@@ -146,7 +146,7 @@ const logInThrough = (dialog: HTMLElement, username: string) => {
 describe("sessions in the API client", () => {
   it("sends cookies, and the CSRF token on writes but not on reads", async () => {
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(jsonResponse(200, testUser("ann-0007")))
+      .mockResolvedValueOnce(jsonResponse(200, { user: testUser("ann-0007"), demo_logins: false }))
       .mockResolvedValueOnce(jsonResponse(200, []))
       .mockResolvedValueOnce(jsonResponse(200, { mode_by_package: {} }))
       .mockResolvedValueOnce({ ok: true, status: 204, json: async () => { throw new Error("no body"); } });
@@ -159,7 +159,7 @@ describe("sessions in the API client", () => {
     await expect(client.logout()).resolves.toBeUndefined();
 
     const [meUrl, meInit] = fetchMock.mock.calls[0];
-    expect(meUrl).toBe("/api/v1/auth/me");
+    expect(meUrl).toBe("/api/v1/auth/session");
     expect(meInit.credentials).toBe("same-origin");
     expect((meInit.headers as Headers).has("X-CSRF-Token")).toBe(false);
     const [, readInit] = fetchMock.mock.calls[1];
@@ -173,6 +173,24 @@ describe("sessions in the API client", () => {
     const [logoutUrl, logoutInit] = fetchMock.mock.calls[3];
     expect(logoutUrl).toBe("/api/v1/auth/logout");
     expect((logoutInit.headers as Headers).get("X-CSRF-Token")).toBe("csrf-test");
+  });
+
+  it("me() without a session is a quiet 200 that reads as 401, and skips demo logins when none are offered (#198)", async () => {
+    const seen: number[] = [];
+    const off = onSessionExpired(() => seen.push(1));
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse(200, { user: null, demo_logins: false }));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new ApiClient();
+
+    const anonymous = await client.me().catch((e) => e);
+    expect(anonymous).toBeInstanceOf(AuthError);
+    expect(anonymous.status).toBe(401);
+    expect(anonymous.code).toBe("NOT_AUTHENTICATED");
+    expect(await client.demoLogins()).toEqual([]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(client.getCsrfToken()).toBeNull();
+    expect(seen).toHaveLength(0);
+    off();
   });
 
   it("reports an ended session on 401, but not a failed login", async () => {

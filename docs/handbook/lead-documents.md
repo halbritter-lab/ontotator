@@ -35,6 +35,8 @@ bundle.zip
 
 Ontospan bundles are written by the Ontospan tools that produce the translations and proposals. Ask whoever runs those tools for a bundle.
 
+A bundle fits a project only if its ontology ID, layer IDs, ontology release, branches, annotation scheme and values match the project's [task profile](lead-settings.md#task-profiles) and ontology settings. The built-in template *HPO phenotype* fits only bundles with ontology `hp`, layer `hpo-layer` and exactly the branch `HP:0000118`. See [What must match a bundle](lead-settings.md#what-must-match-a-bundle).
+
 ### Upload texts
 
 What for: bring texts into the project, with or without tool proposals.
@@ -45,7 +47,7 @@ Before you start: [prepare the files](#prepare-files-for-upload). Check the [lan
 2. Choose the **Format**. For plain text, also choose the **Upload language**.
 3. Click **Choose files…** and select your files.
 4. Click **Check**. Nothing is imported yet; the dialog shows *Checking 2 files …*.
-5. Read the preview: the number of cases, proposals and texts already in the project, and any **Notes**. For plain text, the first note shows which text ID each file name became.
+5. Read the preview: the number of cases, proposals and texts already in the project, and any **Notes**. For plain text, the first note shows which text ID each file name became. A note says what, if anything, you need to do; **Show** lists the texts and proposals it concerns.
 6. Check the **Work plan**: for each language, whether it gets a **Translation review** and an annotation. Click **Adjust per case…** for exceptions.
 7. Optional: if translations are not marked as reviewed and you want them annotated without review, tick **These translations were reviewed outside Ontotator — accept them as they are** and enter a **Reason**.
 8. Click the import button, for example *Import 20 cases*.
@@ -56,7 +58,7 @@ What you may see:
 
 | Message | Meaning |
 | --- | --- |
-| *…: problems found. Nothing can be imported.* | The dialog names the problems per file. Click **Discard**, fix the files and try again. |
+| *…: problems found. Nothing can be imported.* | The dialog names the problems per file and, for a bundle that does not fit the project, what the bundle uses, what the project uses and who can change it. Click **Discard** (or **Cancel**): the upload is dropped and the dialog closes. Fix the files or the settings and upload again. |
 | **You can close this dialog; the import continues, and the texts appear after the next page load.** | The import runs. Reload **Documents** later. |
 | *Imported 20 documents and 35 proposals.* | The import is done. |
 | **This upload failed. Nothing was imported.** | **Discard it and upload the files again.** |
@@ -190,7 +192,7 @@ The corrected text becomes a new text version.
 
 ## Work plans and assignments
 
-The work plan says, for each text, whether it gets a translation review and whether and how it is annotated. Planned texts show up in the main list; the others are hidden.
+The work plan says, for each text, whether it gets a translation review and whether and how it is annotated. Planned texts show up in the main list; the others are hidden. Then the tab **All** says how many of its texts the table holds, for example *246 of 307*.
 
 ### Add a text to the plan
 
@@ -208,7 +210,7 @@ What for: plan or assign many texts at once.
 
 1. Click a row to select it. Shift+click selects a range; Ctrl+click (macOS: Cmd+click) adds single rows.
 2. To select every filtered text, tick the checkbox in the table header.
-3. The selection bar at the bottom shows how many texts are selected and their next step.
+3. The selection bar at the bottom shows how many texts are selected and their next steps, for example *next steps: Assign annotation (en, es)*.
 
 To start over, click **Clear selection**.
 
@@ -252,13 +254,15 @@ What for: give translation reviews or annotations to people.
 
 1. Select the texts, then click the assign button in the selection bar, for example **Assign annotation…**.
 2. Check the **Task**, for example a translation review in one language.
-3. In the table of people (**Person**, **Reads**, **Open tasks**), pick the reviewer, or tick everyone who should annotate. Each ticked person gets every selected text. *Administrator* marks a system administrator; the administrator who created the project is a member with all roles, so leave them unticked unless they take part.
+3. In the table of people (**Person**, **Reads**, **Open tasks**), pick the reviewer, or tick everyone who should annotate. The task has one language: each ticked person gets every selected text in that language that still has a free place. *Administrator* marks a system administrator; the administrator who created the project is a member with all roles, so leave them unticked unless they take part.
 4. Read the summary below the table, for example *Ana Weber gets 3 translation reviews (de).*
 5. Click the assign button, for example *Assign 20*.
 
 ![The assign dialog with members, their languages and open tasks](images/lead-assign.png)
 
-If someone does not read a language the task needs, the dialog asks again; click **Assign anyway** or **Back**. Ontotator sends no e-mail; the work appears in each person's **My tasks**.
+**Reads** shows the languages in each person's profile. If someone's profile lists languages but not one the task needs, the dialog asks again; click **Assign anyway** or **Back**. A person with no languages listed counts as unknown and gets no warning. Ontotator sends no e-mail; the work appears in each person's **My tasks**.
+
+If the selection has texts in several languages, the dialog assigns one language at a time. After the assign button, it stays open on the next language and lists what is already assigned; click **Close** when you are done. Cases that got nothing are offered in the message, for example *Select the 2 skipped cases*; the message stays until you close it.
 
 ### Assign work for one text
 
@@ -274,10 +278,14 @@ To change the limit of annotators per text from here, click the info button (i) 
 
 What for: spread a batch of texts evenly across people.
 
+The proposal uses the languages in each person's profile: a person is proposed for a text only if they read its languages, or list no languages at all. People who list the text's languages come first; people with no languages listed only fill the places left over. Among them, fewest open tasks come first.
+
 1. In the assign dialog, click **Distribute evenly…**.
 2. Set **People per document** and click **Propose**.
-3. Check the proposal. Change a person in any cell, or click **Propose again**.
-4. Click **Confirm**, then **Close**.
+3. Check the proposal. Change a person in any cell, or click **Propose again**. Texts nobody can take are listed under **Unassignable documents**.
+4. Click **Confirm**. Both dialogs close and the message says the assignments are saved.
+
+If you chose someone whose profile lists other languages than the text needs, the dialog stays open after **Confirm** and asks; click **Assign anyway**, then **Close**.
 
 ### Remove, reassign or reopen an assignment
 

@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../src/App";
 import { api, type ProjectSummary, type TaskSummary } from "../src/api/client";
@@ -204,5 +204,21 @@ describe("last-used landing (F8, D4)", () => {
     render(<App user={lead} />);
     expect(await screen.findByRole("heading", { name: "My tasks" })).toBeDefined();
     await waitFor(() => expect(window.location.hash).toBe("#/?project=p4"));
+  });
+});
+
+describe("project list freshness (#192)", () => {
+  it("reloads the projects on navigation to My tasks or Projects, keeping the shown list meanwhile", async () => {
+    window.history.replaceState(null, "", "#/me");
+    const projects = vi.spyOn(api, "listProjects").mockResolvedValue([project("p1", ["annotator"])]);
+    render(<App user={lead} />);
+    await waitFor(() => expect(projects).toHaveBeenCalledTimes(1));
+    projects.mockResolvedValue([project("p1", ["annotator"]), project("p2", ["annotator"])]);
+    fireEvent.click(await screen.findByRole("link", { name: "Projects" }));
+    expect(await screen.findByText("Project p2")).toBeDefined();
+    expect(projects).toHaveBeenCalledTimes(2);
+    fireEvent.click(screen.getByRole("link", { name: /^My tasks/ }));
+    await waitFor(() => expect(projects).toHaveBeenCalledTimes(3));
+    expect(screen.queryByText("Loading your projects…")).toBeNull();
   });
 });

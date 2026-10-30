@@ -12,6 +12,8 @@ export interface ToastMessage {
   /** The action reverts the reported change: it shows the undo icon and runs on Ctrl+Z / Meta+Z. */
   undo?: boolean;
   note?: string;
+  /** Stays until dismissed or replaced (an offer the user may need after the next action, e.g. skipped cases). */
+  persist?: boolean;
 }
 
 /** Controls that sit at the viewport bottom and must stay visible: the floating selection bar and dialog footers. */
@@ -43,7 +45,7 @@ export function useToast(): { toast: ToastMessage | null; show: (t: Omit<ToastMe
 
 /**
  * Polite toast for reversible saved changes. The region is always rendered so screen readers pick up new
- * messages; the toast never takes focus, closes after `durationMs` (paused while hovered or focused) and its
+ * messages; the toast never takes focus, closes after `durationMs` (paused while hovered or focused; never with `persist`) and its
  * Undo action also runs on Ctrl+Z / Meta+Z outside text fields. It sits above the floating selection bar or a
  * dialog footer at the viewport bottom (`--toast-offset`).
  */
@@ -84,7 +86,7 @@ export function Toast({ toast, onDismiss, durationMs = 10_000, undoDescription =
 
   useEffect(() => { setPaused({ hover: false, focus: false }); }, [toast?.id]);
   useEffect(() => {
-    if (!toast || holding) return;
+    if (!toast || holding || toast.persist) return;
     const timer = window.setTimeout(() => dismissRef.current(), durationMs);
     return () => window.clearTimeout(timer);
   }, [toast, holding, durationMs]);

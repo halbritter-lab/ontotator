@@ -352,7 +352,7 @@ test("S8 synthetic-accepted at 390 px: cards instead of a table", async ({ page 
   await expect(de).toContainText(names["ann-0004"]);
   await expect(de).toContainText("Waiting on: You");
   await expect(de.getByRole("button", { name: textNamePattern("Review changes…, ", caseId, "de") })).toBeVisible();
-  await expect(de.getByRole("link", { name: textNamePattern("Open in editor, ", caseId, "de") })).toBeVisible();
+  await expect(de.getByRole("link", { name: textNamePattern("Open text, ", caseId, "de") })).toBeVisible();
 
   // "Details" opens the text card as a full-width sheet (X19); ✕ closes it.
   await de.getByRole("button", { name: textNamePattern("Details, ", caseId, "de") }).click();

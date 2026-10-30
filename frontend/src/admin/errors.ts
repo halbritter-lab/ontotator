@@ -143,7 +143,7 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   PASSWORD_RULES: "The password does not meet the required rules. Use 12–256 characters and a password different from the username.",
   PAYLOAD_TOO_LARGE: "The upload exceeds the server's size limit. Select fewer or smaller files.",
   PER_DOCUMENT_INVALID: "Choose at least one assignee per document.",
-  PIN_MISMATCH: "The ontology references do not match the project's pinned ontologies.",
+  PIN_MISMATCH: "The ontology, release, branches or annotation scheme do not match this project's ontology settings.",
   PIN_MISSING: "Add the required ontology pin before continuing.",
   PROFILE_NOT_T1: "This project profile cannot be represented in the exchange format.",
   PROFILE_REQUIRED: "Choose a template or provide a task profile.",

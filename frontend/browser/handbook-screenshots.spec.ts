@@ -410,6 +410,10 @@ test.describe("lead.md", () => {
     await expect(assign.getByRole("status", { name: "Summary" })).toContainText(`${s.display_names.ana} gets 3 translation reviews (de).`);
     await shot(page, "lead-assign");
     await assign.getByRole("button", { name: "Assign 3", exact: true }).click();
+    // The three cases also have fr translations: the dialog stays open on the next language (issue 195) and Close ends it.
+    await expect(assign.getByRole("combobox", { name: /^Task/ })).toHaveValue("translation_review:fr");
+    await expect(assign.getByText(/Next language of the selection below; Close when you are done\.$/)).toBeVisible();
+    await assign.locator(".modal-actions").getByRole("button", { name: "Close", exact: true }).click();
     await expect(assign).toHaveCount(0);
   });
 

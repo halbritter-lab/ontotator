@@ -492,6 +492,8 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
           ...(rest.length ? {
             actionLabel: `Select the ${plural(rest.length, "skipped case")}`,
             onAction: () => selectCases(rest),
+            // The offer stays until dismissed: the next action often comes first (issue 195).
+            persist: true,
           } : {}),
         });
         refreshAll();
@@ -681,6 +683,8 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   // Texts outside the plan in the current filters: the plan facet's "not in plan" minus the undecided rows it also counts.
   const planFacet = page?.bar.facets?.plan;
   const notInPlanCount = Math.max(0, (planFacet?.not_in_plan ?? 0) - (planFacet?.not_decided ?? 0));
+  // The wide table of All leaves them out while the switch is off: the count says "246 of 307" (issue 198).
+  const hiddenNotInPlanCount = !narrow && activeTab(query) === "all" && !showNotInPlan ? Math.min(notInPlanCount, page?.bar.shown ?? 0) : 0;
   // A status-column sort of the loaded page (the server sorts by Text and Last activity only).
   const [columnSort, setColumnSort] = useState<ColumnSort | null>(null);
   const shownRows = useMemo(() => page ? tableRows(page, notInPlanShown, columnSort) : [], [page, notInPlanShown, columnSort]);
@@ -848,7 +852,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       {filtersActive(query) && <Button size="sm" onClick={clearAll}>Clear all</Button>}
       {page && !narrow && tab === "all" && <Checkbox id="documents-show-not-in-plan" className="checkbox-target" label={`Show texts not in plan (${notInPlanCount})`}
         checked={showNotInPlan} onChange={event => changeShowNotInPlan(event.currentTarget.checked)} />}
-      {page && filtersActive(query) && <p className="documents-filter-count">{`${page.bar.shown} of ${tabCount(page.bar, tab)}`}</p>}
+      {page && (filtersActive(query) || hiddenNotInPlanCount > 0) && <p className="documents-filter-count">{`${page.bar.shown - hiddenNotInPlanCount} of ${tabCount(page.bar, tab)}`}</p>}
     </Toolbar>}
     {settingsError !== undefined && <ErrorNotice error={settingsError} />}
     {inventoryError !== undefined && <ErrorNotice error={inventoryError} />}

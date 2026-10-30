@@ -44,7 +44,9 @@ What for: check who has an account, whether they finished setup and when they la
 What for: give a new person access to Ontotator.
 
 1. On **Users**, click **New user…**.
-2. Fill **Username** and **Display name**. **E-mail** and **Languages** are optional.
+2. Fill **Username** and **Display name**. **E-mail**, **Qualification** and **Languages** are optional.
+   - **Qualification**, for example *physician*, is needed before the person can submit a translation review.
+   - **Languages** are the languages the person reads. Leads see them when they assign work, and **Distribute evenly…** proposes only people who read a text's languages. Leave them empty if you do not know them: no languages count as unknown, not as "reads nothing", and such a person is proposed only where nobody who lists the language is left.
 3. Tick **System administrator** only if the person should manage the whole server.
 4. Optional: under **Add to projects (optional)**, tick a role per project: **Lead**, **Annotator** or **Consolidator**. With many projects, type into **Find project** to narrow the list.
 5. Click **Create user**.
@@ -151,8 +153,8 @@ Before you start: [upload the ontology release](#upload-ontology-releases-and-tr
 
 1. In the sidebar, open **Administration** › **New project**.
 2. Fill **Project key** (2–63 lower-case letters, digits or hyphens) and **Name**. **Description** and **Languages of the texts** are optional.
-3. Under **Profile source**, keep **Built-in template** and choose a template. Or choose **Upload profile JSON** and pick a task profile file.
-4. For each ontology, choose the release in its ontology file field. Optionally limit the allowed branches and choose the annotation scheme. For HPO, both are filled in for you.
+3. Under **Profile source**, keep **Built-in template** and choose a template. Or choose **Upload profile JSON** and pick a task profile file. Which one you need: see [Task profiles](lead-settings.md#task-profiles).
+4. For each ontology, choose the release in its ontology file field. With an uploaded profile, choose the file whose checksum the profile names. Optionally limit the allowed branches and choose the annotation scheme. With the template, HPO starts with the branch `HP:0000118` and the scheme **HPO phenotype (fixed qualifiers, modifiers)**; with an uploaded profile, the branches start empty (every term).
 5. Click **Create project**.
 6. The project's settings open on **People**. [Add the lead](lead-settings.md#add-a-member) and the other members.
 
@@ -160,7 +162,9 @@ You are now a member of the project with all three roles. The assign dialog for 
 
 ![New project form with key, name, template and ontology file filled in](images/admin-new-project.png)
 
-The project key cannot be changed later. Everything else, such as name, workflow and members, is set in the [project settings](lead-settings.md).
+The template fits only Ontospan bundles that use its ontology ID (`hp` or `HP`), its layer `hpo-layer`, exactly the branch `HP:0000118` and its values; for other bundles upload the matching profile. See [What must match a bundle](lead-settings.md#what-must-match-a-bundle).
+
+The project key and the ontology of the task profile cannot be changed later. Everything else, such as name, workflow and members, is set in the [project settings](lead-settings.md).
 
 ## Open and manage any project
 

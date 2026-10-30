@@ -1302,6 +1302,40 @@
   box-shadow: inset 3px 0 0 var(--accent);
 }
 
+/* Issue 190: the active hit's full definition, kept in view at the bottom while the hits scroll. One height for
+   every hit, so its edge never moves under the pointer; a longer definition scrolls inside. */
+.search-panel {
+  --candidate-preview-height: calc(var(--leading-sm) * 6 + var(--space-2) * 2 + 2px);
+}
+
+/* ↓ / ↑ scroll the active row into view above the preview, not behind it. */
+.search-panel .candidate-card {
+  scroll-margin-bottom: var(--candidate-preview-height);
+}
+
+.candidate-preview {
+  position: sticky;
+  bottom: 0;
+  box-sizing: border-box;
+  height: var(--candidate-preview-height);
+  overflow-y: auto;
+  padding: var(--space-2);
+  border-top: 2px solid var(--accent);
+  background: var(--surface-sunken);
+  font-size: var(--size-sm);
+  line-height: var(--leading-sm);
+}
+
+.candidate-preview-title {
+  font-weight: var(--weight-strong);
+  overflow-wrap: anywhere;
+}
+
+.candidate-preview-text {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .candidate-match {
   margin-bottom: var(--space-1);
   font-size: var(--size-sm);

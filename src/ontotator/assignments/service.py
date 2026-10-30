@@ -33,6 +33,7 @@ from ontotator.assignments.eligibility import (
     check_work_plan,
     conflicting_tasks,
     load_variants,
+    reads_all,
     translation_context,
 )
 from ontotator.auth.accounts import normalize_username
@@ -550,7 +551,7 @@ class AssignmentService:
                 .order_by(UserLanguageRow.language)
             ).scalars()
         )
-        mismatch = not set(languages) >= required
+        mismatch = not reads_all(languages, required)
         if mismatch and not confirm_language:
             raise DomainError(
                 "LANGUAGE_CONFIRMATION_REQUIRED",

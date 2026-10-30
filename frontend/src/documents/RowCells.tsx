@@ -272,7 +272,7 @@ export function RowOpenLinks({ row, projectKey, query, onNavigate }: {
   const descriptionId = useId();
   const { route, description } = openLink(row, projectKey, query);
   return <>
-    <RouteLink route={route} onNavigate={onNavigate} className="documents-open btn btn-secondary btn-sm" aria-label={`Open in editor, ${rowName(row)}`} aria-describedby={description ? descriptionId : undefined}>Open</RouteLink>
+    <RouteLink route={route} onNavigate={onNavigate} className="documents-open btn btn-secondary btn-sm" aria-label={`Open text, ${rowName(row)}`} aria-describedby={description ? descriptionId : undefined}>Open</RouteLink>
     {description && <span id={descriptionId} className="visually-hidden">{description}</span>}
   </>;
 }

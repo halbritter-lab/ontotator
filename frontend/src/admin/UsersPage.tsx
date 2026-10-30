@@ -17,6 +17,8 @@ type PendingChange = { username: string; change: AdminUserPatch; kind: "admin" |
 type EditState = { baseline: AdminUser; draft: AdminUser };
 /** From this many projects the New user grid gets a "Find project" field. */
 const PROJECT_FILTER_FROM = 8;
+/** Member languages drive the language warnings and Distribute evenly; none listed counts as unknown (issue 193). */
+const LANGUAGES_HINT = "The languages this person reads. Assigning work and Distribute evenly use them; leave empty if unknown.";
 const emptyCreate = (): CreateUserRequest => ({ username: "", display_name: "", email: "", languages: [], system_admin: false, projects: [] });
 const projectRoles = ["lead", "annotator", "adjudicator"] as const;
 type History = { username: string; events: AuditEvent[] | null; error?: unknown };
@@ -199,7 +201,7 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
     const epoch = lifetime.current;
     writing.current = true; setBusy(true); setCreateError(undefined);
     try {
-      const response = await api.adminCreateUser({ ...create, email: create.email?.trim() || null });
+      const response = await api.adminCreateUser({ ...create, email: create.email?.trim() || null, qualification: create.qualification?.trim() || null });
       if (epoch !== lifetime.current) return;
       replaceUser(response.user); setCreate(emptyCreate()); setCreating(false); showCode(response, "setup", response.user.username);
     } catch (error: unknown) {
@@ -349,7 +351,8 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
         <TextInput ref={usernameInput} id="new-username" label="Username" error={usernameError} required minLength={3} maxLength={64} value={create.username} disabled={blocked} onChange={event => { setCreateError(undefined); setCreate({ ...create, username: event.target.value }); }} />
         <TextInput ref={displayNameInput} id="new-name" label="Display name" error={displayNameError} required maxLength={120} value={create.display_name} disabled={blocked} onChange={event => { setCreateError(undefined); setCreate({ ...create, display_name: event.target.value }); }} />
         <TextInput id="new-email" label="E-mail" type="email" value={create.email ?? ""} disabled={blocked} onChange={event => setCreate({ ...create, email: event.target.value })} />
-        <LanguagesField id="new-languages" label="Languages" value={create.languages ?? []} disabled={blocked} onChange={languages => setCreate({ ...create, languages })} />
+        <TextInput id="new-qualification" label="Qualification" maxLength={200} hint="e.g. physician, native German speaker. Translation reviewers need one." value={create.qualification ?? ""} disabled={blocked} onChange={event => setCreate({ ...create, qualification: event.target.value })} />
+        <LanguagesField id="new-languages" label="Languages" hint={LANGUAGES_HINT} value={create.languages ?? []} disabled={blocked} onChange={languages => setCreate({ ...create, languages })} />
         <Checkbox id="new-admin" label="System administrator" checked={create.system_admin} disabled={blocked} onChange={event => setCreate({ ...create, system_admin: event.target.checked })} />
         {projects.length > 0 && <fieldset className="new-user-projects" disabled={blocked}><legend>Add to projects (optional)</legend>
           {/* One grid: the role names head the columns once; each checkbox keeps "Project: Role" as its name. */}
@@ -369,7 +372,7 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
         <TextInput id="edit-name" label="Display name" required maxLength={120} value={editing.draft.display_name} disabled={busy || !!confirmation} onChange={event => edit({ display_name: event.target.value })} />
         <TextInput id="edit-email" label="E-mail" type="email" value={editing.draft.email ?? ""} disabled={busy || !!confirmation} onChange={event => edit({ email: event.target.value })} />
         <TextInput id="edit-qualification" label="Qualification" maxLength={200} hint="e.g. physician, native German speaker" value={editing.draft.qualification ?? ""} disabled={busy || !!confirmation} onChange={event => edit({ qualification: event.target.value })} />
-        <LanguagesField id="edit-languages" label="Languages" value={editing.draft.languages} disabled={busy || !!confirmation} onChange={languages => edit({ languages })} />
+        <LanguagesField id="edit-languages" label="Languages" hint={LANGUAGES_HINT} value={editing.draft.languages} disabled={busy || !!confirmation} onChange={languages => edit({ languages })} />
         <Checkbox id="edit-admin" label="System administrator" checked={editing.draft.is_system_admin} disabled={busy || !!confirmation || editing.baseline.username === currentUser.username} title={editing.baseline.username === currentUser.username ? "You cannot remove your own administrator role." : undefined} onChange={event => edit({ is_system_admin: event.target.checked })} />
         {editError !== undefined && <ErrorNotice error={editError} />}
         <Toolbar label="Edit actions"><Button disabled={busy || !!confirmation} onClick={() => setEditing(null)}>Cancel</Button><Button type="submit" variant="primary" disabled={busy || !!confirmation}>Save changes</Button></Toolbar>

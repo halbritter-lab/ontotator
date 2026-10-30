@@ -65,7 +65,7 @@ describe("cards", () => {
     expect(action.classList.contains("documents-action--block")).toBe(true);
     fireEvent.click(action);
     expect(props.onAction).toHaveBeenCalledWith(expect.objectContaining({ language: "de" }), expect.objectContaining({ code: "assign_annotation" }));
-    expect(within(de).getByRole("link", { name: "Open in editor, case-106 de" })).toBeTruthy();
+    expect(within(de).getByRole("link", { name: "Open text, case-106 de" })).toBeTruthy();
     expect(cardOf("case-106 fr").textContent).toContain("Waiting on: Ana Weber, Tom Reis");
     expect(screen.queryByText(/not in plan ·/)).toBeNull();
   });
@@ -136,7 +136,7 @@ describe("cards", () => {
     const action = within(deCard).getByRole("button", { name: "Assign annotation…, case-108 de" });
     expect(action.classList.contains("documents-action--block")).toBe(true);
     expect(within(deCard).queryByRole("button", { name: /^More/ })).toBeNull();
-    expect(within(deCard).getByRole("link", { name: "Open in editor, case-108 de" })).toBeTruthy();
+    expect(within(deCard).getByRole("link", { name: "Open text, case-108 de" })).toBeTruthy();
     expect(within(deCard).getByRole("button", { name: "Details, case-108 de" })).toBeTruthy();
     // More than two people: the visible "+n" line, the full list for assistive technology (not only in a title).
     const waiting = within(cardOf("case-108 fr")).getByText(/^Waiting on:/).closest(".document-card-owner")!;
@@ -233,6 +233,6 @@ describe("cards", () => {
     const card = cardOf("case-150 de");
     expect(within(card).getAllByRole("link", { name: "Open my task" })).toHaveLength(1);
     expect(within(card).getByRole("link", { name: "Open my task" }).id).toBe("documents-row-case-150-de-action");
-    expect(within(card).getByRole("link", { name: "Open in editor, case-150 de" })).toBeTruthy();
+    expect(within(card).getByRole("link", { name: "Open text, case-150 de" })).toBeTruthy();
   });
 });

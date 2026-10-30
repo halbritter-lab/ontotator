@@ -402,6 +402,25 @@ def test_language_mismatch_needs_confirm_language(env):
     assert audits(env, "assignment.language_override") == before + 20
 
 
+def test_no_listed_languages_is_unknown_not_a_mismatch(env):
+    """#193: empty member languages need no Assign anyway."""
+    with env.db.transaction() as conn:
+        conn.execute(
+            UserLanguageRow.__table__.delete().where(
+                UserLanguageRow.user_id
+                == env.app.state.accounts.get_by_username("cyd").id
+            )
+        )
+    cyd = people(preview(env, "translation_review", usernames=["cyd"]))["cyd"]
+    assert cyd["reads"] == []
+    assert cyd["language_mismatch"] is False and cyd["unavailable"] is None
+    before = audits(env, "assignment.language_override")
+    response = commit(env, "translation_review", usernames=["cyd"])
+    assert response.status_code == 200, response.text
+    assert len(response.json()["created"]) == 20
+    assert audits(env, "assignment.language_override") == before
+
+
 def test_selection_summary_lists_assignable_steps_and_common_step(env):
     set_status(env, "accepted", *CASES[:14])
     for case in CASES[14:]:

@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The plain-text upload says that each file name without `.txt` becomes the text ID and which names are valid, and the preview lists file name → text ID (#174).
 - Handbook screenshots in the in-app Help open at full size in a new tab (#173).
 - The handbook in the app shows the running version and Git commit below its chapter list, for every logged-in user; `GET /api/v1/about` returns them. Published images carry the commit as `ONTOTATOR_REVISION`.
+- `GET /api/v1/auth/session` answers 200 with the logged-in user or `null` and whether demo logins are offered. The login page uses it, so an anonymous visit no longer logs a failed `401 /auth/me` and `404 /auth/demo-logins` in the browser console (#198). `/auth/me` is unchanged.
 
 ### Fixed
 
@@ -43,6 +44,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - A consolidation's note shows under the closed group in the list, not only after opening it; Undo updates the screen reader status (#198).
 - The submit dialog no longer says only the lead can reopen a submitted task: it points to More › Work rounds, which annotators can use themselves (#197).
 - After a submit, the next task is one of the same type when there is one, so a translation review leads to the next translation review (#198).
+- Opening **My tasks** or **Projects** reloads the project list and the *My tasks (n)* count, so a project you were added to while logged in shows up without a page reload (#192).
+- Documents, tab **All**: while texts not in plan are hidden, the toolbar says how many of the tab's texts the table holds, for example *246 of 307* (#198).
+- The final-result links in the text card read **Open submission** instead of "Open in editor", since they open the read-only text view; the row's **Open** is named "Open text, …" for screen readers (#198).
 
 ### Changed
 

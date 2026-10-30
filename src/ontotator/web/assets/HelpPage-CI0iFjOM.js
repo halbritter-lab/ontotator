@@ -1,4 +1,4 @@
-import{r as i,a as m,j as a,b as d}from"./index-B8ZshYNP.js";import{M as f,r as g}from"./index-DZdw75tQ.js";function w(){const[e,t]=i.useState(null);return i.useEffect(()=>{let o=!0;return m.getAbout().then(n=>{o&&t(n)},()=>{}),()=>{o=!1}},[]),e?a.jsxs("p",{className:"help-version",title:e.revision??void 0,children:["Ontotator ",e.version,e.revision&&a.jsxs(a.Fragment,{children:[" · commit ",e.revision.slice(0,7)]})]}):null}const y=`# Ontotator user handbook
+import{r,a as m,j as a,b as h}from"./index-m993e5Oz.js";import{M as f,r as g}from"./index-B1dMqpof.js";function w(){const[e,t]=r.useState(null);return r.useEffect(()=>{let o=!0;return m.getAbout().then(n=>{o&&t(n)},()=>{}),()=>{o=!1}},[]),e?a.jsxs("p",{className:"help-version",title:e.revision??void 0,children:["Ontotator ",e.version,e.revision&&a.jsxs(a.Fragment,{children:[" · commit ",e.revision.slice(0,7)]})]}):null}const y=`# Ontotator user handbook
 
 This handbook explains how to work with Ontotator in the browser. It is for everyone who uses the app: annotators, translation reviewers, consolidators, leads and system administrators. It describes the version of Ontotator that you open it from. If you run the server, read the [server operations guide (for server operators)](../operations.md) instead.
 
@@ -161,7 +161,9 @@ What for: check who has an account, whether they finished setup and when they la
 What for: give a new person access to Ontotator.
 
 1. On **Users**, click **New user…**.
-2. Fill **Username** and **Display name**. **E-mail** and **Languages** are optional.
+2. Fill **Username** and **Display name**. **E-mail**, **Qualification** and **Languages** are optional.
+   - **Qualification**, for example *physician*, is needed before the person can submit a translation review.
+   - **Languages** are the languages the person reads. Leads see them when they assign work, and **Distribute evenly…** proposes only people who read a text's languages. Leave them empty if you do not know them: no languages count as unknown, not as "reads nothing", and such a person is proposed only where nobody who lists the language is left.
 3. Tick **System administrator** only if the person should manage the whole server.
 4. Optional: under **Add to projects (optional)**, tick a role per project: **Lead**, **Annotator** or **Consolidator**. With many projects, type into **Find project** to narrow the list.
 5. Click **Create user**.
@@ -268,8 +270,8 @@ Before you start: [upload the ontology release](#upload-ontology-releases-and-tr
 
 1. In the sidebar, open **Administration** › **New project**.
 2. Fill **Project key** (2–63 lower-case letters, digits or hyphens) and **Name**. **Description** and **Languages of the texts** are optional.
-3. Under **Profile source**, keep **Built-in template** and choose a template. Or choose **Upload profile JSON** and pick a task profile file.
-4. For each ontology, choose the release in its ontology file field. Optionally limit the allowed branches and choose the annotation scheme. For HPO, both are filled in for you.
+3. Under **Profile source**, keep **Built-in template** and choose a template. Or choose **Upload profile JSON** and pick a task profile file. Which one you need: see [Task profiles](lead-settings.md#task-profiles).
+4. For each ontology, choose the release in its ontology file field. With an uploaded profile, choose the file whose checksum the profile names. Optionally limit the allowed branches and choose the annotation scheme. With the template, HPO starts with the branch \`HP:0000118\` and the scheme **HPO phenotype (fixed qualifiers, modifiers)**; with an uploaded profile, the branches start empty (every term).
 5. Click **Create project**.
 6. The project's settings open on **People**. [Add the lead](lead-settings.md#add-a-member) and the other members.
 
@@ -277,7 +279,9 @@ You are now a member of the project with all three roles. The assign dialog for 
 
 ![New project form with key, name, template and ontology file filled in](images/admin-new-project.png)
 
-The project key cannot be changed later. Everything else, such as name, workflow and members, is set in the [project settings](lead-settings.md).
+The template fits only Ontospan bundles that use its ontology ID (\`hp\` or \`HP\`), its layer \`hpo-layer\`, exactly the branch \`HP:0000118\` and its values; for other bundles upload the matching profile. See [What must match a bundle](lead-settings.md#what-must-match-a-bundle).
+
+The project key and the ontology of the task profile cannot be changed later. Everything else, such as name, workflow and members, is set in the [project settings](lead-settings.md).
 
 ## Open and manage any project
 
@@ -378,7 +382,7 @@ What for: find the right ontology term quickly.
 
 1. Press \`/\` or click **Change term** to focus the search.
 2. Type a name or a code. Hits appear in the list **Terms**.
-3. Move with \`↓\` and \`↑\`; press Enter to take the active hit, or Esc to cancel.
+3. Move with \`↓\` and \`↑\`, or point at a hit. Below the hits, the full definition of the active hit is shown. Read it, then press Enter or click the hit to take it, or press Esc to cancel. Enter and a click take the hit at once.
 
 Search options:
 
@@ -386,7 +390,7 @@ Search options:
 - The language of the text is searched too. To search names in other languages, click the language button next to the field (it lists the languages searched, for example *EN, DE*) and tick them under **Search languages**. English names are always searched.
 - Hits tagged **Modifier** are modifier terms. Use one as a finding only if it names the finding itself; otherwise add it under **Modifiers**. Obsolete terms cannot be chosen.
 
-The search compares the words you type with term names and synonyms, letter by letter; it does not understand what they mean. Terms whose name or synonym equals your words come first. Similar terms follow in a shuffled order, so the best one is not always on top. Read the hits before you choose one. If nothing matches, try another word or a synonym, type a code or switch search languages.
+The search compares the words you type with term names and synonyms, letter by letter; it does not understand what they mean. Terms whose name or synonym equals your words come first. Next come terms whose name or synonym contains all your words, those with the fewest other words first. Other similar terms follow in a shuffled order, so the best one is not always on top. Read the hits before you choose one. If nothing matches, try another word or a synonym, type a code or switch search languages.
 
 ## Browse the ontology tree
 
@@ -800,7 +804,7 @@ What for: keep a finding with a value or term that nobody chose.
 1. Open the group and click **More…**. It is offered when no row is in conflict or when the terms differ.
 2. Choose one:
    - **Edit values…**: set each value and the modifiers, then click **Keep with these values**. This is offered only when no row is in conflict.
-   - **Other term…**: search and pick a term. If there was no term conflict, it is saved at once; otherwise choose the remaining highlighted rows with ✓ and click **Keep**.
+   - **Other term…**: search and pick a term; the search works as in the editor ([Search a term](annotator.md#search-a-term)) and shows the full definition of the active hit below the hits. If there was no term conflict, it is saved at once; otherwise choose the remaining highlighted rows with ✓ and click **Keep**.
 
 Click **Cancel** to stop without changes.
 
@@ -809,7 +813,7 @@ Click **Cancel** to stop without changes.
 What for: add a finding that no submission has.
 
 1. Select the passage in the text. Or click **Add finding**, type the passage into **Passage from the text** (choose the **Occurrence** if it appears more than once) and click **Continue**.
-2. Search and pick the term.
+2. Search and pick the term. Read the definition of the active hit below the hits before you press Enter or click it.
 3. A message confirms the new finding. It is listed under **Added by you** with its values, which start as the project's defaults (for example *Present, Patient, Current*). Its value fields open right away: change what the text says, for example **Assertion** to *Absent* for a negated finding, and click **Save values**. Click **Cancel** to keep the defaults.
 4. To change the values later, click **Edit values…** next to the added finding.
 
@@ -905,7 +909,7 @@ A project lead has not assigned you a text yet. Assigned texts appear under **My
 
 ### I see "You are not a member of any project yet."
 
-Ask your project lead or an administrator to add you to a project, then reload the page. Leads: see [Add a member](lead-settings.md#add-a-member).
+Ask your project lead or an administrator to add you to a project, then click **My tasks** or reload the page. Leads: see [Add a member](lead-settings.md#add-a-member).
 
 ### A task opens with "Task not found or not yours"
 
@@ -955,7 +959,7 @@ The connection to the server is lost. Keep the window open; your input stays in 
 
 ### The term search does not find the right term
 
-The search compares your words with term names and synonyms; it does not understand meaning. Terms whose name or synonym equals your words come first, similar terms follow in a shuffled order. Read all hits, then try another word, a synonym, the English name or a code. See [Search a term](annotator.md#search-a-term).
+The search compares your words with term names and synonyms; it does not understand meaning. Terms whose name or synonym equals your words come first, then terms whose name or synonym contains all your words; other similar terms follow in a shuffled order. Read all hits, then try another word, a synonym, the English name or a code. See [Search a term](annotator.md#search-a-term).
 
 ## Translation review
 
@@ -1001,7 +1005,11 @@ For plain text, each file name without \`.txt\` becomes the text ID. Rename the 
 
 ### I cannot change the ontology release or the task profile
 
-The ontology release can be chosen freely only until the first work is submitted; after that, use **Move to another release**. The task profile can only be replaced before work starts. See [Move a started project to a newer release](lead-settings.md#move-a-started-project-to-a-newer-release).
+The ontology release can be chosen freely only until the first work is submitted; after that, use **Move to another release**. The task profile can only be replaced before work starts, and only by a file with the same ontology ID as the project (upper and lower case count as the same) and the checksum of the chosen release. See [Move a started project to a newer release](lead-settings.md#move-a-started-project-to-a-newer-release) and [Replace the task profile](lead-settings.md#replace-the-task-profile).
+
+### My bundle is refused: the ontology settings do not match
+
+The check names, per text, what the bundle uses, what the project uses and who can change it: a lead changes the release, branches or annotation scheme under **Settings**, tab **Ontology**; the ontology ID of a project cannot change. See [What must match a bundle](lead-settings.md#what-must-match-a-bundle).
 
 ### A text has no assign button
 
@@ -1167,7 +1175,7 @@ Before you start: you need a setup or reset code from your administrator. A code
 
 ![The Set your password form with the fields Username, Setup or reset code, New password and Repeat the new password](images/getting-started-set-password.png)
 
-If you see **Your password is set. Log in with it now.**, the password worked; [log in](#log-in). If you see **The two passwords differ.**, type both passwords again. To go back without a code, click **Back to login**.
+Ontotator sets the password and logs you in at once. The first time, you land on **Projects** (see [Log in](#log-in) for where you land later). Only if that login fails afterwards, for example because the account is locked for a while, the login screen opens with **Your password is set. Log in with it now.**; the password is set, so [log in](#log-in) with it later. If you see **The two passwords differ.**, type both passwords again. To go back without a code, click **Back to login**.
 
 ## Log in
 
@@ -1203,10 +1211,10 @@ The header is the same on every page:
 - **Ontotator** on the left takes you to the start page.
 - The breadcrumb shows where you are, for example **My tasks** or **Documents**.
 - On the right are your display name, your pseudonym, your roles and **Log out**.
-- **Handbook** in the header opens this handbook inside the app. On the Documents, consolidation and translation review screens, **Help** opens the handbook section about that screen; in the editor it is **More** > **Help for this screen**. Click a screenshot in the handbook to open it at full size in a new tab.
+- **Handbook** in the header opens this handbook inside the app. On the Documents, consolidation and translation review screens, **Help** opens the handbook section about that screen; in the editor it is **More** > **Help for this screen**. On the project forms, a link next to the task profile opens the section that explains it. Click a screenshot in the handbook to open it at full size in a new tab.
 - Below the chapter list, the handbook shows the app's version and commit, for example \`Ontotator 0.3.0 · commit cc65cea\`. Quote it when you report a problem.
 
-The sidebar lists **My tasks**, **Projects** and **Profile**. The number after **My tasks** counts your open tasks, the same tasks as the **To do** tab; it updates as soon as you submit a text. Leads also see their project's pages (**Documents**, **Progress**, **Settings**, **Export**). System administrators also see **Administration** with **Users**, **Ontologies** and **New project** (see [Administration](admin.md)). In the editor, the sidebar folds into **Sections**; click it to open it.
+The sidebar lists **My tasks**, **Projects** and **Profile**. The number after **My tasks** counts your open tasks, the same tasks as the **To do** tab; it updates as soon as you submit a text. Clicking **My tasks** or **Projects** loads your projects and the count again, so a project you were just added to shows up without reloading the page. Leads also see their project's pages (**Documents**, **Progress**, **Settings**, **Export**). System administrators also see **Administration** with **Users**, **Ontologies** and **New project** (see [Administration](admin.md)). In the editor, the sidebar folds into **Sections**; click it to open it.
 
 ## Switch project
 
@@ -1341,6 +1349,8 @@ bundle.zip
 
 Ontospan bundles are written by the Ontospan tools that produce the translations and proposals. Ask whoever runs those tools for a bundle.
 
+A bundle fits a project only if its ontology ID, layer IDs, ontology release, branches, annotation scheme and values match the project's [task profile](lead-settings.md#task-profiles) and ontology settings. The built-in template *HPO phenotype* fits only bundles with ontology \`hp\`, layer \`hpo-layer\` and exactly the branch \`HP:0000118\`. See [What must match a bundle](lead-settings.md#what-must-match-a-bundle).
+
 ### Upload texts
 
 What for: bring texts into the project, with or without tool proposals.
@@ -1351,7 +1361,7 @@ Before you start: [prepare the files](#prepare-files-for-upload). Check the [lan
 2. Choose the **Format**. For plain text, also choose the **Upload language**.
 3. Click **Choose files…** and select your files.
 4. Click **Check**. Nothing is imported yet; the dialog shows *Checking 2 files …*.
-5. Read the preview: the number of cases, proposals and texts already in the project, and any **Notes**. For plain text, the first note shows which text ID each file name became.
+5. Read the preview: the number of cases, proposals and texts already in the project, and any **Notes**. For plain text, the first note shows which text ID each file name became. A note says what, if anything, you need to do; **Show** lists the texts and proposals it concerns.
 6. Check the **Work plan**: for each language, whether it gets a **Translation review** and an annotation. Click **Adjust per case…** for exceptions.
 7. Optional: if translations are not marked as reviewed and you want them annotated without review, tick **These translations were reviewed outside Ontotator — accept them as they are** and enter a **Reason**.
 8. Click the import button, for example *Import 20 cases*.
@@ -1362,7 +1372,7 @@ What you may see:
 
 | Message | Meaning |
 | --- | --- |
-| *…: problems found. Nothing can be imported.* | The dialog names the problems per file. Click **Discard**, fix the files and try again. |
+| *…: problems found. Nothing can be imported.* | The dialog names the problems per file and, for a bundle that does not fit the project, what the bundle uses, what the project uses and who can change it. Click **Discard** (or **Cancel**): the upload is dropped and the dialog closes. Fix the files or the settings and upload again. |
 | **You can close this dialog; the import continues, and the texts appear after the next page load.** | The import runs. Reload **Documents** later. |
 | *Imported 20 documents and 35 proposals.* | The import is done. |
 | **This upload failed. Nothing was imported.** | **Discard it and upload the files again.** |
@@ -1496,7 +1506,7 @@ The corrected text becomes a new text version.
 
 ## Work plans and assignments
 
-The work plan says, for each text, whether it gets a translation review and whether and how it is annotated. Planned texts show up in the main list; the others are hidden.
+The work plan says, for each text, whether it gets a translation review and whether and how it is annotated. Planned texts show up in the main list; the others are hidden. Then the tab **All** says how many of its texts the table holds, for example *246 of 307*.
 
 ### Add a text to the plan
 
@@ -1514,7 +1524,7 @@ What for: plan or assign many texts at once.
 
 1. Click a row to select it. Shift+click selects a range; Ctrl+click (macOS: Cmd+click) adds single rows.
 2. To select every filtered text, tick the checkbox in the table header.
-3. The selection bar at the bottom shows how many texts are selected and their next step.
+3. The selection bar at the bottom shows how many texts are selected and their next steps, for example *next steps: Assign annotation (en, es)*.
 
 To start over, click **Clear selection**.
 
@@ -1558,13 +1568,15 @@ What for: give translation reviews or annotations to people.
 
 1. Select the texts, then click the assign button in the selection bar, for example **Assign annotation…**.
 2. Check the **Task**, for example a translation review in one language.
-3. In the table of people (**Person**, **Reads**, **Open tasks**), pick the reviewer, or tick everyone who should annotate. Each ticked person gets every selected text. *Administrator* marks a system administrator; the administrator who created the project is a member with all roles, so leave them unticked unless they take part.
+3. In the table of people (**Person**, **Reads**, **Open tasks**), pick the reviewer, or tick everyone who should annotate. The task has one language: each ticked person gets every selected text in that language that still has a free place. *Administrator* marks a system administrator; the administrator who created the project is a member with all roles, so leave them unticked unless they take part.
 4. Read the summary below the table, for example *Ana Weber gets 3 translation reviews (de).*
 5. Click the assign button, for example *Assign 20*.
 
 ![The assign dialog with members, their languages and open tasks](images/lead-assign.png)
 
-If someone does not read a language the task needs, the dialog asks again; click **Assign anyway** or **Back**. Ontotator sends no e-mail; the work appears in each person's **My tasks**.
+**Reads** shows the languages in each person's profile. If someone's profile lists languages but not one the task needs, the dialog asks again; click **Assign anyway** or **Back**. A person with no languages listed counts as unknown and gets no warning. Ontotator sends no e-mail; the work appears in each person's **My tasks**.
+
+If the selection has texts in several languages, the dialog assigns one language at a time. After the assign button, it stays open on the next language and lists what is already assigned; click **Close** when you are done. Cases that got nothing are offered in the message, for example *Select the 2 skipped cases*; the message stays until you close it.
 
 ### Assign work for one text
 
@@ -1580,10 +1592,14 @@ To change the limit of annotators per text from here, click the info button (i) 
 
 What for: spread a batch of texts evenly across people.
 
+The proposal uses the languages in each person's profile: a person is proposed for a text only if they read its languages, or list no languages at all. People who list the text's languages come first; people with no languages listed only fill the places left over. Among them, fewest open tasks come first.
+
 1. In the assign dialog, click **Distribute evenly…**.
 2. Set **People per document** and click **Propose**.
-3. Check the proposal. Change a person in any cell, or click **Propose again**.
-4. Click **Confirm**, then **Close**.
+3. Check the proposal. Change a person in any cell, or click **Propose again**. Texts nobody can take are listed under **Unassignable documents**.
+4. Click **Confirm**. Both dialogs close and the message says the assignments are saved.
+
+If you chose someone whose profile lists other languages than the text needs, the dialog stays open after **Confirm** and asks; click **Assign anyway**, then **Close**.
 
 ### Remove, reassign or reopen an assignment
 
@@ -1632,7 +1648,7 @@ What for: choose the final result of a text.
 1. On **Documents**, tab **Needs your decision**, click **Accept result…** or **Compare results…** in the row. The row reads **Accept result…** when there is one result to accept or all findings match, and **Compare results…** when submissions differ. The card opens at **Finalization**.
 2. With one submission or a submitted consolidation, check it and click **Accept result**.
 3. If all annotations agree, the card says so. Click **Accept result**.
-4. If they differ, the card shows the agreement, for example *Agreement: 5 of 9 findings match, 1 differs in context only*. **How is this counted?** explains the numbers. Open a submission with **Open in editor** to read it.
+4. If they differ, the card shows the agreement, for example *Agreement: 5 of 9 findings match, 1 differs in context only*. **How is this counted?** explains the numbers. Open a submission with **Open submission** to read it in the read-only text view.
 5. Warning: the next action saves at once, without a confirmation. Click **Use as final** in the row of the submission you want. Or [start a consolidation](#start-a-consolidation) instead.
 
 After saving, the card moves on to the next text that needs a decision. The decided row stays in the tab with a *Resolved* badge until you click **Refresh** or change the tab. To undo, [change the final result](#change-a-final-result).
@@ -1660,7 +1676,7 @@ Before you start: the text needs at least two submissions. The consolidator must
 1. In the text card, open **Finalization** and click **Consolidate…**. The form **Consolidate submitted results** opens with the compared submissions already ticked.
 2. Under **Submissions to merge**, check the ticked submissions (at least two).
 3. Under **Consolidator**, choose a person. The list starts with **Choose a consolidator**, then you (*You (Mia Lead)*), then every member with the Consolidator role; the hint under the list links **Settings → People**, where you give the role to someone who is missing. If the project rule forbids it, people who annotated this text are shown but cannot be chosen (*— Ana Weber annotated this text*).
-4. If the person's profile lacks the text's language, tick the box *Assign this consolidator despite missing en in their profile*, right under the list.
+4. If the person's profile lists languages but not the text's language, tick the box *Assign this consolidator despite missing en in their profile*, right under the list.
 5. Optional: enter **Consolidation reason (optional)**. The consolidator sees it in **My tasks** and above the groups; it is also kept in the history.
 6. Click **Start consolidation**.
 
@@ -1729,7 +1745,7 @@ What for: decide what happens after a reviewer rejected or queried a translation
 What for: fix a queried or rejected translation without assigning another review.
 
 1. In the row, click **Resolve…**, then **Correct the translation…** (or **Continue your correction**).
-2. Read the panel: you review the version yourself, and your corrected text becomes the next text version and counts as accepted. If your profile lacks the language, tick *Correct despite missing de in your profile*.
+2. Read the panel: you review the version yourself, and your corrected text becomes the next text version and counts as accepted. If your profile lists languages but not this one, tick *Correct despite missing de in your profile*.
 3. Click **Open translation review**. The screen says **You are correcting this translation as project lead.**
 4. Correct the translation as described in [Review a translation](annotator.md#review-a-translation). Only **Accepted with corrections** is offered.
 5. Submit with **Submit review…** (or \`Ctrl+Enter\`), then click **Back to Documents**.
@@ -1817,7 +1833,7 @@ What for: download raw material for analysis. People appear as pseudonyms.
 3. Click **Create**, then **Download** when it is ready.
 
 How to analyse these files is described in the [scientific workflow guide](../scientific-workflow.md).
-`,O=`# Lead: project settings
+`,j=`# Lead: project settings
 
 This chapter is for project leads. It covers every tab under **Settings**: the project name and languages, the ontology, the submission rules, the workflow, the people and the guidelines. Back to the [lead overview](lead.md).
 
@@ -1830,7 +1846,7 @@ General, Annotation, Workflow and Ontology have a **Save changes** button at the
 | **Workflow** | [Plan for new imports](#choose-the-plan-for-new-imports), [texts with tool proposals](#choose-how-texts-with-tool-proposals-are-annotated), [annotators per text and consolidation rules](#set-annotators-per-text-and-the-consolidation-rules) |
 | **Guidelines** | [Publish](#publish-the-first-or-a-new-guideline-version), [see who read them](#see-who-has-read-the-guidelines), [republish](#republish-an-earlier-guideline-version), [withdraw](#withdraw-a-guideline-version) |
 | **People** | [Add](#add-a-member), [change roles](#change-a-members-roles), [remove](#remove-a-member) |
-| **Ontology** | [Ontology version and annotation scheme](#choose-the-ontology-version-branches-and-annotation-scheme), [task profile](#replace-the-task-profile), [move to a newer release](#move-a-started-project-to-a-newer-release) |
+| **Ontology** | [Ontology version and annotation scheme](#choose-the-ontology-version-branches-and-annotation-scheme), [task profile](#task-profiles) and [replacing it](#replace-the-task-profile), [move to a newer release](#move-a-started-project-to-a-newer-release) |
 
 ## Open project settings
 
@@ -1876,11 +1892,76 @@ Before you start: you can change this until the first work is submitted. After t
    - Choose the annotation scheme: **HPO phenotype (fixed qualifiers, modifiers)** or **Generic (free qualifiers)**. "Qualifiers" are the value fields of a finding.
 4. Click **Save changes**. If the change would rewrite or flag terms in drafts, a check opens first, as in [Move a started project to a newer release](#move-a-started-project-to-a-newer-release).
 
+## Task profiles
+
+What it is: the task profile is a JSON file that defines what annotators work with: the ontology, the layers (for example *Phenotypes*), the finding types in each layer and the value fields of each finding type with their values (for example *Assertion*: present, absent, uncertain). It holds neither texts nor the ontology itself. Every project has exactly one. An administrator sets it when [creating the project](admin.md#create-a-project); a lead can [replace it](#replace-the-task-profile) until the first work is submitted.
+
+The other choices on the same form belong to the project, not to the profile: the ontology file (release), the allowed branches and the annotation scheme (*HPO phenotype* with fixed values and modifiers, or *Generic* with free values). They can change later under **Settings**, tab **Ontology**.
+
+### Template or own file
+
+The built-in template *HPO phenotype* is a ready profile: ontology \`HP\`, one layer \`hpo-layer\` (*Phenotypes*), finding type \`phenotype\`, and the value fields *Assertion* (present, absent, uncertain), *Experiencer* (patient, family_member, other) and *Temporality* (current, historical). New project fills in the branch \`HP:0000118\` (Phenotypic abnormality) and the scheme *HPO phenotype*.
+
+- Use the template if you upload only plain texts, or Ontospan bundles that fit it: layer \`hpo-layer\`, ontology \`hp\` (upper or lower case), branches exactly \`HP:0000118\`, and no value outside the lists above.
+- Use your own file in every other case, for example a bundle with another layer ID, another ontology, other branches or the value \`unknown\`. Whoever produces the bundles usually has the matching profile; ask them for it.
+
+### What a profile file looks like
+
+A shortened example. The checksum (\`sha256\`) and \`release\` are those of the ontology file uploaded on **Ontologies**; click **Copy** next to its checksum.
+
+\`\`\`json
+{
+  "schema_version": "ontotator-task-profile/v1",
+  "profile_id": "lab-phenotypes/v1",
+  "version": "1.0.0",
+  "ontologies": [
+    { "ontology_id": "hp", "label": "Human Phenotype Ontology",
+      "release": "2026-09-01", "sha256": "20d4a647…d193d0" }
+  ],
+  "layers": [
+    { "layer_id": "hpo-layer", "label": "Phenotypes", "ontology_id": "hp",
+      "access": "editable", "default_type_id": "phenotype",
+      "annotation_types": [
+        { "type_id": "phenotype", "label": "Phenotype",
+          "axes": [
+            { "id": "assertion", "label": "Assertion", "options": ["present", "absent", "uncertain"] },
+            { "id": "experiencer", "label": "Experiencer", "options": ["patient", "family_member", "other", "unknown"] },
+            { "id": "temporality", "label": "Temporality", "options": ["current", "historical", "unknown"] }
+          ] }
+      ] }
+  ],
+  "default_layer_id": "hpo-layer"
+}
+\`\`\`
+
+| Field | Meaning |
+| --- | --- |
+| \`ontology_id\` | The ontology's short ID, for example \`hp\`. Upper and lower case count as the same. It cannot change once the project exists. |
+| \`release\`, \`sha256\` | The ontology file the project uses. They must be those of the file chosen on the form. |
+| \`layer_id\` | The layer's ID. Bundles name it for each proposal. |
+| \`axes\` | The value fields and their allowed values. With the scheme *HPO phenotype* only \`assertion\`, \`experiencer\` and \`temporality\` with the values above are possible; a profile may leave values out. |
+| \`default_layer_id\` | The layer annotators start in. |
+
+### What must match a bundle
+
+An Ontospan bundle is checked against the project when you click **Check** in **Upload texts…**. Each layer of the bundle must fit:
+
+| In the bundle | Must match | Who can change it |
+| --- | --- | --- |
+| Ontology ID | The profile's \`ontology_id\` (case does not matter) | Nobody: it is fixed when the project is created. An administrator creates a new project. |
+| Layer ID | A \`layer_id\` of the profile | A lead, by [replacing the task profile](#replace-the-task-profile) until the first work is submitted |
+| Ontology release | The project's ontology version | A lead, under **Settings**, tab **Ontology**; an administrator uploads the release first if it is missing |
+| Allowed branches | Exactly the project's branches | A lead, under **Settings**, tab **Ontology**, **Advanced**, until the first work is submitted |
+| Annotation scheme | The project's annotation scheme | As for the branches |
+| Values of each proposal | One of the profile's values | A lead, by replacing the task profile |
+
+When something differs, the check names it per text, for example *Layer hpo-layer: the bundle uses release 2026-09-01, this project uses release 2026-06-23*, and says who can change it. Nothing is imported.
+
 ## Replace the task profile
 
-What for: change the layers, finding types and value fields annotators work with. The task profile is the JSON file that defines them.
+What for: change the layers, finding types and value fields annotators work with. See [Task profiles](#task-profiles).
 
-Before you start: this is only possible before work starts.
+Before you start: this is only possible until the first work is submitted. The new file must name the same ontologies as the project (the same \`ontology_id\`; upper and lower case count as the same) with the \`release\` and \`sha256\` of the version chosen under **Ontology version**. Otherwise saving is refused; the ontology of a project cannot change.
 
 1. Open **Settings**, tab **Ontology**, and open **Advanced: task profile**.
 2. Check **Current profile layers**.
@@ -2045,7 +2126,7 @@ Warning: the text of the withdrawn version is deleted for good. The version numb
 2. In the version's row, click **More…**, then the withdraw item, for example *Withdraw v2…*.
 3. Optional: enter **Reason (optional)**. Do not repeat confidential content.
 4. Confirm, for example with *Withdraw v2*.
-`,j=`# Lead overview
+`,O=`# Lead overview
 
 This chapter is for project leads. A lead sets up the project, uploads texts, plans and assigns the work, accepts the results and exports them. Back to the [handbook overview](README.md).
 
@@ -2073,4 +2154,4 @@ The lead's tasks are in three chapters:
 10. Export the final results: [Export final results](lead-results.md#export-final-results).
 
 Try it with the demo project: the [demo project guide](../../examples/demo-project/README.md) walks through every step with invented clinical letters, tool proposals, translations and guidelines.
-`,I="/assets/admin-new-project-Cir0O66s.png",R="/assets/admin-setup-code-C_NzEJeU.png",W="/assets/annotator-carried-finding-yADspK5V.png",_="/assets/annotator-editor-dqHteLqT.png",D="/assets/annotator-finding-values-DF2d7KaZ.png",P="/assets/annotator-new-finding-Ck1Vt4sY.png",E="/assets/annotator-proposal-review-BfFE3fNQ.png",M="/assets/annotator-submit-dialog-DEybG3Zm.png",N="/assets/annotator-translation-review-DA3-4k_Z.png",U="/assets/consolidator-group-table-Dp7hujX8.png",Y="/assets/consolidator-submit-dialog-DJEkTQ6t.png",F="/assets/getting-started-my-tasks-ezmcCup8.png",L="/assets/getting-started-set-password-CC57Fe71.png",B="/assets/lead-assign-9KxFl6dY.png",H="/assets/lead-compare-results-DC6HkQJ3.png",G="/assets/lead-documents-CjycjdEv.png",z="/assets/lead-export-KFM5Mz1P.png",q="/assets/lead-move-release-check-BHRNaFox.png",K="/assets/lead-problem-report-C6J_XPtm.png",V="/assets/lead-progress-B0_lg4T2.png",Z="/assets/lead-text-card-DRw6CK7x.png",$="/assets/lead-upload-preview-64cXvoTU.png",Q="/assets/lead-work-plan-Dau0Rzps.png",J="/assets/workflow-Dii9V6xB.png",X="https://github.com/halbritter-lab/ontotator/blob/main",l="https://handbook.invalid/docs/handbook/",ee=Object.assign({"../../../docs/handbook/README.md":y,"../../../docs/handbook/admin.md":k,"../../../docs/handbook/annotator.md":b,"../../../docs/handbook/consolidator.md":v,"../../../docs/handbook/faq.md":x,"../../../docs/handbook/first-task.md":T,"../../../docs/handbook/getting-started.md":C,"../../../docs/handbook/lead-documents.md":A,"../../../docs/handbook/lead-results.md":S,"../../../docs/handbook/lead-settings.md":O,"../../../docs/handbook/lead.md":j}),te=Object.assign({"../../../docs/handbook/images/admin-new-project.png":I,"../../../docs/handbook/images/admin-setup-code.png":R,"../../../docs/handbook/images/annotator-carried-finding.png":W,"../../../docs/handbook/images/annotator-editor.png":_,"../../../docs/handbook/images/annotator-finding-values.png":D,"../../../docs/handbook/images/annotator-new-finding.png":P,"../../../docs/handbook/images/annotator-proposal-review.png":E,"../../../docs/handbook/images/annotator-submit-dialog.png":M,"../../../docs/handbook/images/annotator-translation-review.png":N,"../../../docs/handbook/images/consolidator-group-table.png":U,"../../../docs/handbook/images/consolidator-submit-dialog.png":Y,"../../../docs/handbook/images/getting-started-my-tasks.png":F,"../../../docs/handbook/images/getting-started-set-password.png":L,"../../../docs/handbook/images/lead-assign.png":B,"../../../docs/handbook/images/lead-compare-results.png":H,"../../../docs/handbook/images/lead-documents.png":G,"../../../docs/handbook/images/lead-export.png":z,"../../../docs/handbook/images/lead-move-release-check.png":q,"../../../docs/handbook/images/lead-problem-report.png":K,"../../../docs/handbook/images/lead-progress.png":V,"../../../docs/handbook/images/lead-text-card.png":Z,"../../../docs/handbook/images/lead-upload-preview.png":$,"../../../docs/handbook/images/lead-work-plan.png":Q,"../../../docs/handbook/images/workflow.png":J}),c=e=>e.slice(e.lastIndexOf("/")+1),r=Object.fromEntries(Object.entries(ee).map(([e,t])=>[c(e).replace(/\.md$/,""),t])),ne=Object.fromEntries(Object.entries(te).map(([e,t])=>[`images/${c(e)}`,t]));function oe(e){var t;return((t=/^# +(.+)$/m.exec(r[e]??""))==null?void 0:t[1].trim())??e}function ae(){const e=[...(r.README??"").matchAll(/\]\(([A-Za-z0-9_-]+)\.md[)#]/g)].map(t=>t[1]);return[...new Set(["README",...e,...Object.keys(r).sort()])].filter(t=>t in r)}function se(e){return e.toLowerCase().replace(/[^\p{L}\p{M}\p{N}\p{Pc} -]/gu,"").replace(/ /g,"-")}function re(){const e=new Map;return t=>{const o=se(t);let n=o;for(;e.has(n);){const s=e.get(o)+1;e.set(o,s),n=`${o}-${s}`}return e.set(n,0),n}}function ie(e,t){var h;if(/^[a-z][a-z0-9+.-]*:/i.test(e))return{kind:"external",href:e};const o=new URL(e,`${l}${t}.md`),n=decodeURIComponent(o.hash.slice(1)),s=(h=/^\/docs\/handbook\/([A-Za-z0-9_-]+)\.md$/.exec(o.pathname))==null?void 0:h[1];return s&&s in r?s===t&&n?{kind:"anchor",id:n}:{kind:"chapter",href:d({name:"help",chapter:s,...n?{section:n}:{}})}:{kind:"external",href:`${X}${o.pathname}${o.hash}`}}function de(e,t){if(/^[a-z][a-z0-9+.-]*:/i.test(e))return null;const o=new URL(e,`${l}${t}.md`).pathname.replace(/^\/docs\/handbook\//,"");return ne[o]??null}const u=e=>e.type==="text"?e.value:"children"in e?e.children.map(u).join(""):"";function he(){return e=>{const t=re(),o=n=>n.children.forEach(s=>{s.type==="element"&&(/^h[1-6]$/.test(s.tagName)?s.properties.id=t(u(s)):o(s))});o(e)}}function p(e){var t;(t=document.getElementById(e))==null||t.scrollIntoView()}const le=e=>e.button===0&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey&&!e.altKey;function ce(e){return{a:({href:t,children:o})=>{if(!t)return a.jsx(a.Fragment,{children:o});const n=ie(t,e);return n.kind==="external"?a.jsx("a",{href:n.href,target:"_blank",rel:"noopener noreferrer",children:o}):n.kind==="chapter"?a.jsx("a",{href:n.href,children:o}):a.jsx("a",{href:d({name:"help",chapter:e,section:n.id}),onClick:s=>{le(s)&&(s.preventDefault(),p(n.id))},children:o})},img:({src:t,alt:o})=>{const n=t?de(t,e):null;return n?a.jsx("a",{className:"help-image-link",href:n,target:"_blank",rel:"noopener noreferrer",title:"Open the image at full size in a new tab",children:a.jsx("img",{className:"help-image",src:n,alt:o??"",loading:"lazy"})}):a.jsx("span",{className:"guideline-image-text",children:o?`Image: ${o}`:"Image"})},table:({children:t})=>a.jsx("div",{className:"guideline-table-scroll",tabIndex:0,role:"region","aria-label":"Table",children:a.jsx("table",{children:t})})}}function me({chapter:e="README",section:t}){const o=r[e];return i.useEffect(()=>{var n,s;t?p(t):(s=(n=document.getElementById("main"))==null?void 0:n.scrollTo)==null||s.call(n,0,0)},[e,t]),a.jsxs("div",{className:"help-page",children:[a.jsxs("nav",{className:"help-chapters","aria-label":"Handbook chapters",children:[a.jsx("ul",{children:ae().map(n=>a.jsx("li",{children:a.jsx("a",{href:d({name:"help",chapter:n}),"aria-current":n===e?"page":void 0,children:oe(n)})},n))}),a.jsx(w,{})]}),a.jsx("article",{className:"guideline-document help-document",children:o===void 0?a.jsxs(a.Fragment,{children:[a.jsx("h1",{children:"Chapter not found"}),a.jsxs("p",{children:["This handbook has no chapter “",e,"”. Pick one from the list."]})]}):a.jsx("div",{className:"guideline-markdown",children:a.jsx(f,{remarkPlugins:[g],rehypePlugins:[he],skipHtml:!0,components:ce(e),children:o})})})]})}export{me as default};
+`,I="/assets/admin-new-project-Cir0O66s.png",R="/assets/admin-setup-code-C_NzEJeU.png",W="/assets/annotator-carried-finding-yADspK5V.png",_="/assets/annotator-editor-dqHteLqT.png",P="/assets/annotator-finding-values-DF2d7KaZ.png",D="/assets/annotator-new-finding-Ck1Vt4sY.png",E="/assets/annotator-proposal-review-BfFE3fNQ.png",M="/assets/annotator-submit-dialog-DEybG3Zm.png",N="/assets/annotator-translation-review-DA3-4k_Z.png",U="/assets/consolidator-group-table-Dp7hujX8.png",Y="/assets/consolidator-submit-dialog-DJEkTQ6t.png",F="/assets/getting-started-my-tasks-ezmcCup8.png",L="/assets/getting-started-set-password-CC57Fe71.png",H="/assets/lead-assign-9KxFl6dY.png",B="/assets/lead-compare-results-DC6HkQJ3.png",G="/assets/lead-documents-CjycjdEv.png",q="/assets/lead-export-KFM5Mz1P.png",z="/assets/lead-move-release-check-BHRNaFox.png",K="/assets/lead-problem-report-C6J_XPtm.png",V="/assets/lead-progress-B0_lg4T2.png",Z="/assets/lead-text-card-DRw6CK7x.png",Q="/assets/lead-upload-preview-64cXvoTU.png",$="/assets/lead-work-plan-Dau0Rzps.png",J="/assets/workflow-Dii9V6xB.png",X="https://github.com/halbritter-lab/ontotator/blob/main",l="https://handbook.invalid/docs/handbook/",ee=Object.assign({"../../../docs/handbook/README.md":y,"../../../docs/handbook/admin.md":k,"../../../docs/handbook/annotator.md":b,"../../../docs/handbook/consolidator.md":v,"../../../docs/handbook/faq.md":x,"../../../docs/handbook/first-task.md":T,"../../../docs/handbook/getting-started.md":C,"../../../docs/handbook/lead-documents.md":A,"../../../docs/handbook/lead-results.md":S,"../../../docs/handbook/lead-settings.md":j,"../../../docs/handbook/lead.md":O}),te=Object.assign({"../../../docs/handbook/images/admin-new-project.png":I,"../../../docs/handbook/images/admin-setup-code.png":R,"../../../docs/handbook/images/annotator-carried-finding.png":W,"../../../docs/handbook/images/annotator-editor.png":_,"../../../docs/handbook/images/annotator-finding-values.png":P,"../../../docs/handbook/images/annotator-new-finding.png":D,"../../../docs/handbook/images/annotator-proposal-review.png":E,"../../../docs/handbook/images/annotator-submit-dialog.png":M,"../../../docs/handbook/images/annotator-translation-review.png":N,"../../../docs/handbook/images/consolidator-group-table.png":U,"../../../docs/handbook/images/consolidator-submit-dialog.png":Y,"../../../docs/handbook/images/getting-started-my-tasks.png":F,"../../../docs/handbook/images/getting-started-set-password.png":L,"../../../docs/handbook/images/lead-assign.png":H,"../../../docs/handbook/images/lead-compare-results.png":B,"../../../docs/handbook/images/lead-documents.png":G,"../../../docs/handbook/images/lead-export.png":q,"../../../docs/handbook/images/lead-move-release-check.png":z,"../../../docs/handbook/images/lead-problem-report.png":K,"../../../docs/handbook/images/lead-progress.png":V,"../../../docs/handbook/images/lead-text-card.png":Z,"../../../docs/handbook/images/lead-upload-preview.png":Q,"../../../docs/handbook/images/lead-work-plan.png":$,"../../../docs/handbook/images/workflow.png":J}),c=e=>e.slice(e.lastIndexOf("/")+1),i=Object.fromEntries(Object.entries(ee).map(([e,t])=>[c(e).replace(/\.md$/,""),t])),ne=Object.fromEntries(Object.entries(te).map(([e,t])=>[`images/${c(e)}`,t]));function oe(e){var t;return((t=/^# +(.+)$/m.exec(i[e]??""))==null?void 0:t[1].trim())??e}function ae(){const e=[...(i.README??"").matchAll(/\]\(([A-Za-z0-9_-]+)\.md[)#]/g)].map(t=>t[1]);return[...new Set(["README",...e,...Object.keys(i).sort()])].filter(t=>t in i)}function se(e){return e.toLowerCase().replace(/[^\p{L}\p{M}\p{N}\p{Pc} -]/gu,"").replace(/ /g,"-")}function ie(){const e=new Map;return t=>{const o=se(t);let n=o;for(;e.has(n);){const s=e.get(o)+1;e.set(o,s),n=`${o}-${s}`}return e.set(n,0),n}}function re(e,t){var d;if(/^[a-z][a-z0-9+.-]*:/i.test(e))return{kind:"external",href:e};const o=new URL(e,`${l}${t}.md`),n=decodeURIComponent(o.hash.slice(1)),s=(d=/^\/docs\/handbook\/([A-Za-z0-9_-]+)\.md$/.exec(o.pathname))==null?void 0:d[1];return s&&s in i?s===t&&n?{kind:"anchor",id:n}:{kind:"chapter",href:h({name:"help",chapter:s,...n?{section:n}:{}})}:{kind:"external",href:`${X}${o.pathname}${o.hash}`}}function he(e,t){if(/^[a-z][a-z0-9+.-]*:/i.test(e))return null;const o=new URL(e,`${l}${t}.md`).pathname.replace(/^\/docs\/handbook\//,"");return ne[o]??null}const u=e=>e.type==="text"?e.value:"children"in e?e.children.map(u).join(""):"";function de(){return e=>{const t=ie(),o=n=>n.children.forEach(s=>{s.type==="element"&&(/^h[1-6]$/.test(s.tagName)?s.properties.id=t(u(s)):o(s))});o(e)}}function p(e){var t;(t=document.getElementById(e))==null||t.scrollIntoView()}const le=e=>e.button===0&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey&&!e.altKey;function ce(e){return{a:({href:t,children:o})=>{if(!t)return a.jsx(a.Fragment,{children:o});const n=re(t,e);return n.kind==="external"?a.jsx("a",{href:n.href,target:"_blank",rel:"noopener noreferrer",children:o}):n.kind==="chapter"?a.jsx("a",{href:n.href,children:o}):a.jsx("a",{href:h({name:"help",chapter:e,section:n.id}),onClick:s=>{le(s)&&(s.preventDefault(),p(n.id))},children:o})},img:({src:t,alt:o})=>{const n=t?he(t,e):null;return n?a.jsx("a",{className:"help-image-link",href:n,target:"_blank",rel:"noopener noreferrer",title:"Open the image at full size in a new tab",children:a.jsx("img",{className:"help-image",src:n,alt:o??"",loading:"lazy"})}):a.jsx("span",{className:"guideline-image-text",children:o?`Image: ${o}`:"Image"})},table:({children:t})=>a.jsx("div",{className:"guideline-table-scroll",tabIndex:0,role:"region","aria-label":"Table",children:a.jsx("table",{children:t})})}}function me({chapter:e="README",section:t}){const o=i[e];return r.useEffect(()=>{var n,s;t?p(t):(s=(n=document.getElementById("main"))==null?void 0:n.scrollTo)==null||s.call(n,0,0)},[e,t]),a.jsxs("div",{className:"help-page",children:[a.jsxs("nav",{className:"help-chapters","aria-label":"Handbook chapters",children:[a.jsx("ul",{children:ae().map(n=>a.jsx("li",{children:a.jsx("a",{href:h({name:"help",chapter:n}),"aria-current":n===e?"page":void 0,children:oe(n)})},n))}),a.jsx(w,{})]}),a.jsx("article",{className:"guideline-document help-document",children:o===void 0?a.jsxs(a.Fragment,{children:[a.jsx("h1",{children:"Chapter not found"}),a.jsxs("p",{children:["This handbook has no chapter “",e,"”. Pick one from the list."]})]}):a.jsx("div",{className:"guideline-markdown",children:a.jsx(f,{remarkPlugins:[g],rehypePlugins:[de],skipHtml:!0,components:ce(e),children:o})})})]})}export{me as default};

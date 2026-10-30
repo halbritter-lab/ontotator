@@ -742,6 +742,10 @@ def test_cli_assignment_requires_explicit_audited_language_confirmation(assigned
     from ontotator.storage.tables import AuditEventRow
 
     app, _client, _row = assigned
+    # Listed languages without the document's; none listed would be unknown (#193).
+    from ontotator.auth.audit import Actor
+
+    app.state.accounts.set_languages(Actor.cli(), "alice", ["fr"])
     runner = CliRunner()
     arguments = [
         "admin",
@@ -776,7 +780,9 @@ def test_cli_assignment_requires_explicit_audited_language_confirmation(assigned
                 )
             ).scalars()
         )
-    assert actions.count("assignment.language_override") == 2
+    # doc-alpha only: the fixture's doc-beta was assigned while alice listed
+    # no languages (unknown, no override).
+    assert actions.count("assignment.language_override") == 1
 
 
 @pytest.mark.parametrize("revocation", ["assignment", "membership"])

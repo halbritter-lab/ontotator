@@ -243,7 +243,7 @@ describe("text cell", () => {
     const view = case107();
     view.rows[1] = { ...view.rows[1], own_open_assignment_id: 41 };
     renderTable(page([view]));
-    expect(screen.queryByRole("link", { name: /^Open in editor/ })).toBeNull();
+    expect(screen.queryByRole("link", { name: /^Open text/ })).toBeNull();
     expect(within(header("case-107 de")).queryByRole("link")).toBeNull();
   });
 });

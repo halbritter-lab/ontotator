@@ -152,7 +152,7 @@ it("Annotation for many texts: ticked people each get every text up to the limit
   perText = 2; remainingOf = id => id === "case-0101" ? 1 : 2;
   const props = casesProps(); render(<AssignWorkDialog {...props} />); await ready();
   expect(screen.queryByRole("radio", { name: "Split evenly" })).toBeNull();
-  expect(screen.getByText("Each ticked person gets every selected text.", { exact: false })).toBeDefined();
+  expect(screen.getByText("Each ticked person gets every selected de text that still has a free place.", { exact: false })).toBeDefined();
   expect(screen.getByText("Up to 2 per text")).toBeDefined();
   expect(screen.getByRole("columnheader", { name: "Gets" })).toBeDefined();
   fireEvent.click(screen.getByRole("checkbox", { name: /Ana Weber/ }));
@@ -206,6 +206,21 @@ it("closes and reports the result for one person and split", async () => {
   await waitForPreviewOf(["ana"]);
   fireEvent.click(screen.getByRole("button", { name: "Assign 19" }));
   await waitFor(() => expect(props.onAssigned).toHaveBeenCalledWith("19 translation reviews assigned to Ana Weber", ["case-0120"]));
+});
+
+it("walks a mixed selection through its steps before it closes (#195)", async () => {
+  vi.mocked(api.selectionSummary).mockResolvedValue(summary([{ task: "annotate", language: "de", versions: 20, cases: 20 }, { task: "translation_review", language: "de", versions: 20, cases: 20 }, { task: "annotate", language: "fr", versions: 12, cases: 12 }]));
+  const props = casesProps(); render(<AssignWorkDialog {...props} />); await ready();
+  fireEvent.click(screen.getByRole("checkbox", { name: /Ana Weber/ })); await waitForPreviewOf(["ana"]);
+  fireEvent.click(screen.getByRole("button", { name: "Assign 20" }));
+  // The same task in the next language; the translation review is another task and is not walked into.
+  await waitFor(() => expect(lastPreview()).toMatchObject({ task: "annotate", language: "fr", usernames: [] }));
+  expect(props.onAssigned).not.toHaveBeenCalled();
+  expect(screen.getByText(/^20 annotations assigned to Ana Weber\. Next language/)).toBeDefined();
+  expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
+  fireEvent.click(screen.getByRole("checkbox", { name: /Ben Roth/ })); await waitForPreviewOf(["ben"]);
+  fireEvent.click(screen.getByRole("button", { name: "Assign 20" }));
+  await waitFor(() => expect(props.onAssigned).toHaveBeenCalledWith("20 annotations assigned to Ana Weber. 20 annotations assigned to Ben Roth", []));
 });
 
 it("keeps the dialog open listing refused cases by text and person", async () => {

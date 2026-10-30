@@ -90,8 +90,37 @@ def _typo_distance(query_word: str, word: str, anywhere: bool = False) -> int:
     return min(rows[-1])
 
 
+# One name word against the query words: its tier (see ``word_tier``), the
+# indices of the query words it matches and of those it starts with.
+_WordMatch = tuple[int | None, frozenset[int], frozenset[int]]
+
+
+def _query_words(query: str) -> list[str]:
+    return [w for w in re.findall(r"\w+", normalise(query)) if len(w) >= MIN_WORD]
+
+
+def _word_match(word: str, query_words: list[str]) -> _WordMatch:
+    tiers: list[int] = []
+    matched: set[int] = set()
+    started: set[int] = set()
+    for index, q in enumerate(query_words):
+        # "Hypotonia" for "Muskelhypotonie": the name word inside the query word.
+        near_part = (
+            len(word) >= 5 and _typo_distance(word, q, anywhere=True) <= len(word) // 4
+        )
+        if not (near_part or q in word or _typo_distance(q, word) <= len(q) // 4):
+            continue
+        matched.add(index)
+        if word.startswith(q):
+            started.add(index)
+            tiers.append(0)
+        else:
+            tiers.append(1 if q in word or near_part else 2)
+    return min(tiers, default=None), frozenset(matched), frozenset(started)
+
+
 def word_tier(
-    query: str, name: str, memo: dict[str, int | None] | None = None
+    query: str, name: str, memo: dict[str, _WordMatch] | None = None
 ) -> int | None:
     """How a name matches the query word by word: 0 a word starts with a query
     word, 1 contains one or is (a typo away from) a part of one, as in compounds,
@@ -101,31 +130,40 @@ def word_tier(
     Char n-grams alone also score a shared ending: "patient" found "Transient"
     and "Deficient" (acceptance 21.4). A hit has to be near the query as a word.
     """
-    query_words = [
-        w for w in re.findall(r"\w+", normalise(query)) if len(w) >= MIN_WORD
-    ]
+    return word_cover(query, name, memo)[0]
+
+
+def word_cover(
+    query: str, name: str, memo: dict[str, _WordMatch] | None = None
+) -> tuple[int | None, int, int | None]:
+    """``(tier, covered, extra)`` of a name against the query.
+
+    ``tier`` is :func:`word_tier`. ``covered`` counts the query words that some
+    word of the name matches. ``extra`` counts the name's other words when every
+    query word starts a word of the name, else it is None: "hemorrhage" is all
+    in "Retinal hemorrhage" (one other word) and in "Hemorrhage of the eye" (two;
+    words shorter than ``MIN_WORD`` do not count), "esophageal hemorrhage" is
+    not all in "Epistaxis" with its synonym "Nasal hemorrhage" (#190).
+    """
+    query_words = _query_words(query)
     if not query_words:
-        return 0
+        return 0, 0, None
     memo = {} if memo is None else memo
     best: int | None = None
+    matched: set[int] = set()
+    started: set[int] = set()
+    extra = 0
     for word in re.findall(r"\w+", normalise(name)):
         if word not in memo:
-            tiers = [
-                0 if word.startswith(q) else 1 if q in word or near_part else 2
-                for q in query_words
-                # "Hypotonia" for "Muskelhypotonie": the name word inside the query word.
-                if (
-                    near_part := len(word) >= 5
-                    and _typo_distance(word, q, anywhere=True) <= len(word) // 4
-                )
-                or q in word
-                or _typo_distance(q, word) <= len(q) // 4
-            ]
-            memo[word] = min(tiers, default=None)
-        tier = memo[word]
+            memo[word] = _word_match(word, query_words)
+        tier, word_matched, word_started = memo[word]
+        matched |= word_matched
+        started |= word_started
+        if not word_started and len(word) >= MIN_WORD:
+            extra += 1
         if tier is not None and (best is None or tier < best):
             best = tier
-    return best
+    return best, len(matched), extra if len(started) == len(query_words) else None
 
 
 class LexicalIndexError(RuntimeError):
@@ -235,34 +273,35 @@ class LexicalIndex:
         scores = (self._vectorizer.transform([query]) @ self._matrix.T).toarray()[0]
         # Max over a term's strings, then top-k terms. Taking top-k *strings*
         # would let one term with nine names fill the whole list.
-        # Word matches before typo matches, each by score; no word near the query, no hit.
-        best: dict[str, tuple[int, float, str, str]] = {}
-        memo: dict[str, int | None] = {}
+        # A term is ranked by its best string: more query words matched first
+        # (a multi-word query prefers names with all its words, #190), word
+        # matches before typo matches, the term's label before its English
+        # synonyms, then by score. No word near the query, no hit.
+        best: dict[str, tuple[tuple[int, int, int, float], str, str, int | None]] = {}
+        memo: dict[str, _WordMatch] = {}
         for index in np.argsort(-scores)[: max(400, k * 40)]:
             score = float(scores[index])
             if score <= 0:
                 break
-            tier = word_tier(query, self._terms[index], memo)
+            text = self._terms[index]
+            tier, covered, extra = word_cover(query, text, memo)
             if tier is None:
                 continue
             hpo_id = self._ids[index]
-            if hpo_id not in best or (tier, -score) < (
-                best[hpo_id][0],
-                -best[hpo_id][1],
-            ):
-                best[hpo_id] = (
-                    tier,
-                    score,
-                    self._terms[index],
-                    self._term_language[index],
-                )
+            language = self._term_language[index]
+            # An English synonym: translated names are a language's own names.
+            synonym = language == "en" and text != self.ontology.terms[hpo_id].label
+            key = (-covered, tier, int(synonym), -score)
+            if hpo_id not in best or key < best[hpo_id][0]:
+                best[hpo_id] = (key, text, language, extra)
             if len(best) >= k * 4:
                 break
 
-        ranked = sorted(best.items(), key=lambda kv: (kv[1][0], -kv[1][1]))[:k]
+        ranked = sorted(best.items(), key=lambda kv: kv[1][0])[:k]
         out = []
-        for hpo_id, (_tier, score, matched, language) in ranked:
+        for hpo_id, (key, matched, language, extra) in ranked:
             term = self.ontology.terms[hpo_id]
+            score = -key[3]
             out.append(
                 {
                     **term.as_dict(),
@@ -273,6 +312,12 @@ class LexicalIndex:
                     # look at twice, and hiding that would make it look native.
                     "matched_language": language,
                     "match_kind": "ngram" if language == "en" else f"ngram:{language}",
+                    # Every query word starts a word of the matched name: the
+                    # hit is listed in fixed order before the shuffled ones
+                    # (see hpo_span_annotator.search). Not part of the API.
+                    "all_words": None
+                    if extra is None
+                    else {"extra": extra, "label": matched == term.label},
                 }
             )
         return out

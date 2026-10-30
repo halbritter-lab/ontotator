@@ -193,12 +193,11 @@ async function distributeAndSubmit(page: Page, setup: ProjectSetup) {
   await assign.getByRole("button", { name: "Distribute evenly…", exact: true }).click();
   const distribution = page.getByRole("dialog", { name: "Propose distribution", exact: true });
   await distribution.getByRole("button", { name: "Propose", exact: true }).click();
-  await expect(distribution.getByRole("combobox", { name: "one, slot 1", exact: true })).toHaveValue(setup.annotator.username);
+  await expect(distribution.getByRole("combobox", { name: "one, person 1", exact: true })).toHaveValue(setup.annotator.username);
   await distribution.getByRole("button", { name: "Confirm", exact: true }).click();
-  await expect(distribution).toContainText("Assignment request complete: 1 accepted; 0 refused.");
-  await distribution.locator(".modal-actions").getByRole("button", { name: "Close", exact: true }).click();
+  // A clean save closes both dialogs and reports it in the toast (#195).
   await expect(distribution).toHaveCount(0);
-  if (await assign.count()) await assign.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(page.locator(".ui-toast")).toContainText("Assignments from the even distribution saved.");
   // No dialog may stay open (the failure names the one that does).
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await logout(page);

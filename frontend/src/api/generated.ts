@@ -2078,6 +2078,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Session
+         * @description The logged-in user or ``None``; 200 without a session too.
+         *
+         *     The login page asks this instead of ``/me``, so an anonymous visit logs
+         *     no failed request, and learns whether to ask for demo logins.
+         */
+        get: operations["session_api_v1_auth_session_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects": {
         parameters: {
             query?: never;
@@ -3730,6 +3753,8 @@ export interface components {
             system_admin: boolean;
             /** Languages */
             languages?: string[];
+            /** Qualification */
+            qualification?: string | null;
             /** Projects */
             projects?: components["schemas"]["NewMembership"][];
         };
@@ -7175,6 +7200,15 @@ export interface components {
             /** Rows */
             rows?: components["schemas"]["RowRefView"][];
             filters?: components["schemas"]["DocumentRowFilters"];
+        };
+        /**
+         * SessionState
+         * @description Who this browser is logged in as, if anyone, for the login page.
+         */
+        SessionState: {
+            user: components["schemas"]["CurrentUser"] | null;
+            /** Demo Logins */
+            demo_logins: boolean;
         };
         /** SourceObligationView */
         SourceObligationView: {
@@ -12648,6 +12682,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CurrentUser"];
+                };
+            };
+        };
+    };
+    session_api_v1_auth_session_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionState"];
                 };
             };
         };

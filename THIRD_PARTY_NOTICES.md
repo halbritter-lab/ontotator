@@ -17,6 +17,7 @@ This project incorporates components from the following third-party software:
   - Non-semantic search and lexical indexing retained; dense embeddings, hub and server dependencies excluded.
   - Generalized CURIE parsing, case preservation, dominant prefix detection, and variable-width numeric ID matching without hardcoded HPO assumptions.
   - Store the fitted lexical matrix in CSC format to avoid repeated ontology-wide sparse conversion during search, preserving TF-IDF scores and ranking.
+  - Rank lexical hits by the number of query words a name matches and prefer labels over English synonyms; list names holding every query word in fixed order before the shuffled hits.
 
 ## Runtime dependencies
 

@@ -1,6 +1,6 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, ApiError, type AssignmentRow, type AssignmentView, type ProposalResponse } from "../api/client";
-import { Button, Dialog, InlineMessage, Select, TextInput } from "../ui";
+import { Button, Dialog, InlineMessage, TextInput } from "../ui";
 import { BatchFeedback, eligibleMembers, memberOptionLabel, TaskSelect, useAlive, useAssignmentBatch, useMembers, type Task, type TaskDocument, useCaseVariants, canReviewSelection, taskLanguages } from "./assignmentUI";
 import { personLabel } from "../app/identity";
 import type { CaseSummary } from "../api/client";
@@ -44,6 +44,9 @@ function DistributionEditor({ projectKey, documents, cases, task: initialTask, c
     } catch (failure: unknown) { if (alive.current) setError(failure); }
     finally { if (alive.current) { writing.current = false; setBusy(false); } }
   };
+  // A clean confirmation closes the dialog: the caller reports what was saved (issue 195).
+  const saved = batch.attempted && !batch.busy && batch.error === undefined && batch.refused.length === 0 && batch.accepted > 0;
+  useEffect(() => { if (saved) onClose(); }, [saved]); // eslint-disable-line react-hooks/exhaustive-deps -- once per clean save
   const stale = batch.error instanceof ApiError && batch.error.code === "DISTRIBUTION_STALE";
   const duplicate = slots.some((slot, index) => slot.username && slots.some((other, otherIndex) => index !== otherIndex && other.document_id === slot.document_id && other.username === slot.username));
   const editedRows: AssignmentRow[] = slots.filter(slot => slot.username).map(({ document_id, username }) => ({ document_id, username }));
@@ -66,12 +69,12 @@ function DistributionEditor({ projectKey, documents, cases, task: initialTask, c
     </form>
     {error !== undefined && <ErrorNotice error={error} />}
     {proposal && <>
-      <h3>Proposal #{proposal.seed}</h3>
+      <h3>Proposal</h3>
       <table><caption>Proposed assignments</caption><thead><tr><th>Document</th><th>Languages</th><th>Person</th></tr></thead><tbody>{slots.map((slot, index) => <tr key={JSON.stringify([slot.document_id, slot.place])}><td>{slot.document_id}</td><td>{languages.get(slot.document_id)?.join(", ") || "Required languages unavailable"}</td><td>
-        <Select id={`distribution-slot-${index}`} label={`${slot.document_id}, slot ${slot.place + 1}`} value={slot.username} disabled={batch.busy || batch.attempted || stale || busy} onChange={event => setSlots(current => current.map((item, itemIndex) => itemIndex === index ? { ...item, username: event.target.value } : item))}>
+        <select id={`distribution-slot-${index}`} className="form-select" aria-label={`${slot.document_id}, person ${slot.place + 1}`} value={slot.username} disabled={batch.busy || batch.attempted || stale || busy} onChange={event => setSlots(current => current.map((item, itemIndex) => itemIndex === index ? { ...item, username: event.target.value } : item))}>
           <option value="">Nobody</option>{slot.username && !eligible.some(member => member.username === slot.username) && <option value={slot.username}>{proposal.rows.find(row => row.username === slot.username)?.display_name || "Former member"}</option>}
           {eligible.map(member => <option key={member.username} value={member.username} disabled={slots.some((other, otherIndex) => index !== otherIndex && other.document_id === slot.document_id && other.username === member.username)}>{memberOptionLabel(member)}</option>)}
-        </Select></td></tr>)}</tbody></table>
+        </select></td></tr>)}</tbody></table>
       {duplicate && <InlineMessage tone="warning">Choose each person only once per document.</InlineMessage>}
       <section aria-label="Unassignable documents"><h3>Unassignable documents</h3>{proposal.unassignable.length ? <ul>{proposal.unassignable.map(row => <li key={row.document_id}>{row.document_id} ({row.language}): {unassignableLabel(row, proposal.per_document, languages.get(row.document_id))}</li>)}</ul> : <p>Every document has a proposal.</p>}</section>
       <section aria-label="Resulting load"><h3>Resulting load</h3><p>Open, in progress and reopened work across this project, before and after the selected rows.</p><ul>{eligible.map(member => <li key={member.username}>{personLabel(member)}: {loadBefore.has(member.username) || inventory !== null ? `${loadBefore.get(member.username) ?? 0} now, ${(loadBefore.get(member.username) ?? 0) + newRows.filter(row => row.username === member.username).length} after` : "Load unavailable"}</li>)}</ul></section>

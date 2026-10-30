@@ -47,8 +47,8 @@ from ontotator.vendor.hpo_span_annotator.hpo import (
 from ontotator.vendor.hpo_span_annotator.search import (
     SCORED_PATHS,
     SearchEngine,
+    ordered_then_shuffled,
     shuffle_seed,
-    shuffled,
 )
 
 logger = logging.getLogger(__name__)
@@ -495,7 +495,7 @@ class OntologyService:
             and isinstance(lexical, LanguageLexicalIndex)
             and lexical.ready
         ):
-            hits = shuffled(
+            hits = ordered_then_shuffled(
                 self._widened(
                     lambda depth: lexical.search(query, depth, languages=languages),
                     request.k,
@@ -593,9 +593,10 @@ class OntologyService:
                 ),
                 allowed is not None,
             )
-            # Shuffled because this order is a score. Ranks continue after the
-            # exact block so one event describes the whole list.
-            similar = shuffled(ranked, seed)
+            # Shuffled because this order is a score; names holding all the
+            # query words first, in fixed order (#190). Ranks continue after
+            # the exact block so one event describes the whole list.
+            similar = ordered_then_shuffled(ranked, seed)
             for hit in similar:
                 hit["route"] = "lexical"
                 hit["match_kind"] = "ngram"

@@ -45,6 +45,29 @@ def test_an_admin_creates_a_user_and_sees_the_code_once(app):
     assert body["code"] not in json.dumps([dict(row) for row in audits], default=str)
 
 
+def test_a_new_user_gets_a_qualification_at_creation(app):
+    """Translation reviewers need one: no Edit after the hand-over (#198)."""
+    admin = logged_in(app, "root", system_admin=True)
+    response = admin.post(
+        "/api/v1/admin/users/",
+        json={"username": "carol", "display_name": "Carol", "qualification": " MD "},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["user"]["qualification"] == "MD"
+    blank = admin.post(
+        "/api/v1/admin/users/",
+        json={"username": "dave", "display_name": "Dave", "qualification": "  "},
+    )
+    assert blank.status_code == 200, blank.text
+    assert blank.json()["user"]["qualification"] is None
+    too_long = admin.post(
+        "/api/v1/admin/users/",
+        json={"username": "erin", "display_name": "Erin", "qualification": "x" * 201},
+    )
+    assert too_long.status_code == 422
+    assert app.state.accounts.get_by_username("erin") is None
+
+
 def test_the_new_user_redeems_the_code_and_logs_in(app):
     admin = logged_in(app, "root", system_admin=True)
     issued = admin.post(
