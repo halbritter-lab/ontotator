@@ -15,7 +15,7 @@ export interface ProjectSettingsPageProps {
   projectKey: string;
   currentUser: CurrentUser;
   onSaved?: (settings: ProjectSettings) => void;
-  /** Section of the current address; absent means People. */
+  /** Section of the current address; absent means General (`DEFAULT_SETTINGS_SECTION`). */
   section?: SettingsSection;
   onNavigate?: (route: Route) => void;
   routeLeaveRef?: MutableRefObject<RouteLeaveGuard | null>;
@@ -61,7 +61,7 @@ const generalOf = (settings: ProjectSettings) => ({ name: settings.name, descrip
 /** Settings › Annotation (M-8c): submit rules, prefilled values and the values annotators can choose; one Save. */
 const annotationOf = (settings: ProjectSettings) => ({ allow_spanless_findings: settings.allow_spanless_findings ?? true, require_spanless_note: settings.require_spanless_note ?? true, require_chosen_axes: settings.require_chosen_axes, contiguous_mentions_only: settings.contiguous_mentions_only, hidden_axis_values: settings.hidden_axis_values ?? {}, creation_defaults: settings.creation_defaults ?? {} });
 
-function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved, section = DEFAULT_SETTINGS_SECTION, onNavigate, routeLeaveRef }: ProjectSettingsPageProps & { initial: ProjectSettings; ontologies: OntologyInfo[] }): JSX.Element {
+function SettingsEditor({ initial, ontologies, projectKey, onSaved, section = DEFAULT_SETTINGS_SECTION, onNavigate, routeLeaveRef }: ProjectSettingsPageProps & { initial: ProjectSettings; ontologies: OntologyInfo[] }): JSX.Element {
   const [model, setModel] = useState(initial);
   const [general, setGeneral] = useState(() => generalOf(initial));
   const [annotation, setAnnotation] = useState(() => annotationOf(initial));
@@ -224,7 +224,7 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved,
 
   let content: JSX.Element;
   switch (section) {
-    case "people": content = <div ref={bindSection} tabIndex={-1} className="settings-section"><MembersSection projectKey={projectKey} isSystemAdmin={currentUser.is_system_admin} /></div>; break;
+    case "people": content = <div ref={bindSection} tabIndex={-1} className="settings-section"><MembersSection projectKey={projectKey} /></div>; break;
     case "workflow": content = <form ref={bindSection} tabIndex={-1} className="settings-section" aria-label="Workflow" onSubmit={event => submit(event, "Workflow")}>
       <fieldset disabled={busy !== null}><legend className="visually-hidden">Workflow</legend>
         <WorkflowFields projectKey={projectKey} value={workflow} saved={workflowOf(model)} disabled={busy !== null} onChange={value => { setWorkflow(value); setSaved(null); }} />

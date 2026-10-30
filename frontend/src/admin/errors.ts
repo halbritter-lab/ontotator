@@ -171,6 +171,7 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   SEARCH_CONDITIONS_MISSING: "This project has no search conditions configured.",
   SEARCH_EVENT_EXISTS: "This search event already exists with different contents.",
   SEED_INVALID: "Use a valid integer seed.",
+  // The Users page offers neither (issue 168); the server guard stays, and this answers a direct or concurrent request.
   SELF_LOCKOUT: "You cannot deactivate yourself or remove your own administrator role.",
   SESSION_INVALID: "This session is no longer valid. Sign in again.",
   SETTINGS_INVALID: "One or more project settings are invalid.",

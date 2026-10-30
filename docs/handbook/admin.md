@@ -137,7 +137,7 @@ What for: see which releases are on the server and which projects use them.
 
 1. On **Ontologies**, look at **Uploaded files**.
 2. The table lists file name, kind, release, language, checksum and upload time.
-3. **Pinned by** lists the projects that use (*pin*) a file. Click a project key to open its settings; they open on **General**, so switch to the **Ontology** tab. Unused files read **Not pinned**.
+3. **Pinned by** lists the projects that use (*pin*) a file. Click a project key to open its settings on the **Ontology** tab. Unused files read **Not pinned**.
 4. Click **Copy** next to a checksum to copy it.
 5. Click **Refresh inventory** to reload the list.
 
