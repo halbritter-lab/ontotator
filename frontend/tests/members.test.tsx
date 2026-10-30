@@ -15,7 +15,7 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe("project members", () => {
   it("renders actual metadata and saves role toggles, including empty removal", async () => {
-    render(<MembersSection projectKey="p/key" isSystemAdmin={false} />);
+    render(<MembersSection projectKey="p/key" />);
     fireEvent.click(await screen.findByRole("checkbox", { name: "alice: Consolidator" }));
     expect(api.setMemberRoles).toHaveBeenCalledWith("p/key", "alice", ["annotator", "adjudicator"], false);
     await waitFor(() => expect((screen.getByRole("checkbox", { name: "alice: Consolidator" }) as HTMLInputElement).checked).toBe(true));
@@ -35,7 +35,7 @@ describe("project members", () => {
       { username: "anonymised-9", display_name: "Anonymised user", pseudonym: "ann-9", languages: [], roles: ["annotator"], account: "anonymised" },
       { username: "frank", display_name: "Frank", pseudonym: "ann-3", languages: [], roles: ["annotator"], account: "setup_pending" },
     ]);
-    render(<MembersSection projectKey="p" isSystemAdmin={false} />);
+    render(<MembersSection projectKey="p" />);
     expect(await screen.findByText("Inactive")).toBeDefined();
     expect(screen.getByText("Anonymised")).toBeDefined(); expect(screen.getByText("Setup pending")).toBeDefined(); expect(screen.getByText("Active")).toBeDefined();
     const anonymised = screen.getByRole("checkbox", { name: "anonymised-9: Annotator" }) as HTMLInputElement;
@@ -51,7 +51,7 @@ describe("project members", () => {
 
   it("shows LAST_LEAD inline without optimistically removing the role", async () => {
     vi.mocked(api.setMemberRoles).mockRejectedValue(new ApiError(409, "Cannot remove", "LAST_LEAD"));
-    render(<MembersSection projectKey="p" isSystemAdmin={false} />);
+    render(<MembersSection projectKey="p" />);
     fireEvent.click(await screen.findByRole("checkbox", { name: "lead: Lead" }));
     await confirmRemoval("Remove from project");
     expect(await screen.findByRole("alert")).toBeDefined();
@@ -60,7 +60,7 @@ describe("project members", () => {
 
   it("confirms all actual affected assignment details before resending with revocation", async () => {
     vi.mocked(api.setMemberRoles).mockRejectedValueOnce(new ApiError(409, "Has work", "MEMBER_HAS_ASSIGNMENTS", { assignments: [{ id: 2, document_id: "doc-reopened", task: "annotate" }, { id: 3, document_id: "doc-in-progress", task: "review" }] })).mockResolvedValueOnce({ ...members[0], roles: [] });
-    render(<MembersSection projectKey="p" isSystemAdmin={false} />);
+    render(<MembersSection projectKey="p" />);
     fireEvent.click(await screen.findByRole("checkbox", { name: "alice: Annotator" }));
     await confirmRemoval("Remove from project");
     const confirm = await screen.findByRole("button", { name: "Remove and revoke their open assignments" });
@@ -75,7 +75,7 @@ describe("project members", () => {
 
   it("cancels role-loss confirmation without another write", async () => {
     vi.mocked(api.setMemberRoles).mockRejectedValue(new ApiError(409, "Has work", "MEMBER_HAS_ASSIGNMENTS", { assignments: [{ id: 2, document_id: "doc", task: "annotate" }] }));
-    render(<MembersSection projectKey="p" isSystemAdmin={false} />);
+    render(<MembersSection projectKey="p" />);
     fireEvent.click(await screen.findByRole("checkbox", { name: "alice: Annotator" }));
     await confirmRemoval("Remove from project");
     fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
@@ -84,7 +84,7 @@ describe("project members", () => {
   });
 
   it("asks before taking a role away, says it logs the person out, and cancels without a write", async () => {
-    render(<MembersSection projectKey="p" isSystemAdmin={false} />);
+    render(<MembersSection projectKey="p" />);
     fireEvent.click(await screen.findByRole("checkbox", { name: "alice: Annotator" }));
     const dialog = await screen.findByRole("dialog", { name: "Remove Alice from the project?" });
     expect(dialog.textContent).toContain("Alice loses access to this project.");
@@ -96,7 +96,7 @@ describe("project members", () => {
 
   it("suggests matching people to a lead from three typed letters on", async () => {
     vi.mocked(api.listMemberCandidates).mockResolvedValue([{ username: "maria.k", display_name: "Maria Klein", languages: [] }]);
-    render(<MembersSection projectKey="p" isSystemAdmin={false} />);
+    render(<MembersSection projectKey="p" />);
     fireEvent.click(await screen.findByRole("button", { name: "Add member…" }));
     fireEvent.change(screen.getByLabelText(/^Username/), { target: { value: "ma" } });
     expect(api.listMemberCandidates).not.toHaveBeenCalled();
@@ -114,7 +114,7 @@ describe("project members", () => {
       { username: "maria.k", display_name: "Maria Klein", languages: ["de", "en"] },
       { username: "maria.kl", display_name: "Maria Klee", languages: [] },
     ]);
-    render(<MembersSection projectKey="p" isSystemAdmin={false} />);
+    render(<MembersSection projectKey="p" />);
     fireEvent.click(await screen.findByRole("button", { name: "Add member…" }));
     fireEvent.change(screen.getByLabelText(/^Username/), { target: { value: "maria.k" } });
     expect(api.listMemberCandidates).toHaveBeenCalledWith("p", "maria.k");
@@ -128,7 +128,7 @@ describe("project members", () => {
 
   it("says plainly when the typed username does not exist", async () => {
     vi.mocked(api.setMemberRoles).mockRejectedValue(new ApiError(409, "There is no user 'mraia'.", "USER_NOT_FOUND"));
-    render(<MembersSection projectKey="p" isSystemAdmin={false} />);
+    render(<MembersSection projectKey="p" />);
     fireEvent.click(await screen.findByRole("button", { name: "Add member…" }));
     fireEvent.change(screen.getByLabelText(/^Username/), { target: { value: "mraia" } });
     fireEvent.click(screen.getByRole("checkbox", { name: "New member: Annotator" }));
@@ -137,7 +137,7 @@ describe("project members", () => {
   });
 
   it("adds a typed username without loading the whole user list", async () => {
-    const view = render(<MembersSection projectKey="p" isSystemAdmin={true} />);
+    const view = render(<MembersSection projectKey="p" />);
     // The form stays closed until "Add member…".
     expect(screen.queryByRole("form", { name: "Add member" })).toBeNull();
     fireEvent.click(await screen.findByRole("button", { name: "Add member…" }));
@@ -151,7 +151,7 @@ describe("project members", () => {
     expect((screen.getByLabelText(/^Username/) as HTMLInputElement).value).toBe("");
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(screen.queryByRole("form", { name: "Add member" })).toBeNull();
-    view.rerender(<MembersSection projectKey="q" isSystemAdmin={false} />);
+    view.rerender(<MembersSection projectKey="q" />);
     await screen.findByRole("checkbox", { name: "alice: Annotator" });
     expect(api.adminListUsers).not.toHaveBeenCalled();
   });
@@ -159,7 +159,7 @@ describe("project members", () => {
   it("blocks repeated role changes while a write is pending and ignores unmounted replies", async () => {
     const pending = deferred<typeof members[0]>();
     vi.mocked(api.setMemberRoles).mockReturnValue(pending.promise);
-    const view = render(<MembersSection projectKey="p" isSystemAdmin={false} />);
+    const view = render(<MembersSection projectKey="p" />);
     const checkbox = await screen.findByRole("checkbox", { name: "alice: Consolidator" });
     fireEvent.click(checkbox); fireEvent.click(checkbox);
     expect(api.setMemberRoles).toHaveBeenCalledTimes(1);
@@ -176,7 +176,7 @@ describe("role change confirmation (M-8d)", () => {
     vi.spyOn(api, "listMembers").mockResolvedValue(members);
     vi.spyOn(api, "setMemberRoles").mockImplementation(async (_key, username, roles) => ({ ...members[0], username, roles }));
     vi.spyOn(api, "adminListUsers").mockResolvedValue([]);
-    render(<MembersSection projectKey="p/key" isSystemAdmin={false} />);
+    render(<MembersSection projectKey="p/key" />);
     expect(await screen.findByText(/^Role changes save immediately\./)).toBeDefined();
     fireEvent.click(await screen.findByRole("checkbox", { name: "alice: Consolidator" }));
     await waitFor(() => expect(screen.getByRole("status").textContent).toBe("Alice is now Consolidator."));

@@ -9,6 +9,7 @@ import { api, ApiError, type ConsolidationAnnotatePayload, type ConsolidationGro
 import { ErrorNotice } from "../admin/ErrorNotice";
 import type { WorkspaceView } from "../app/CaseScreen";
 import { nextOpenTask } from "../app/caseOrder";
+import { consolidationReasonText } from "../app/labels";
 import { MY_TASKS, routeHref, type Route } from "../app/router";
 import { prefillQuery } from "../editor/termSearch";
 import { randomId } from "../editor/ids";
@@ -16,6 +17,7 @@ import { nextTaskLabel, remainingTasksText } from "../translation/labels";
 import { Button, ConfirmDialog, EmptyState, InlineMessage, MenuButton, Popover, Select, TextInput, Toast, useMediaQuery, useToast } from "../ui";
 import { useShortcut } from "../ui/shortcuts";
 import { StagePath } from "../ui/StagePath";
+import { AddedFindings } from "./AddedFindings";
 import { addedHeading, duplicatesText, finalizationState, headerTitle, readOnlyText, submittedText, summaryText } from "./consolidationText";
 import { duplicateTerms, groupName, termLabel } from "./groupModel";
 import { GroupList, textOrder } from "./GroupList";
@@ -117,6 +119,8 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
   // Made before the search: its search event must name the annotation it creates (as in the editor).
   const [newAnnotationId, setNewAnnotationId] = useState(() => `ann-${randomId()}`);
   const [typing, setTyping] = useState(false);
+  /** The finding "Add finding" just saved: its values open for editing. */
+  const [editAdded, setEditAdded] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const [isLead, setIsLead] = useState<boolean | undefined>(props.lead);
   const [dialog, setDialog] = useState<{ open: boolean; busy: boolean; warning: AxisWarning | null; error: unknown }>({ open: false, busy: false, warning: null, error: null });
@@ -140,6 +144,16 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
     const first = routed ?? textOrder(view.groups, view.text).find(group => group.state === "open");
     setSelected(first?.group_id ?? null);
   }, [view, props.group]);
+
+  // Issue 143: the submit dialog already tells a lead consolidator that they accept the result themselves.
+  useEffect(() => {
+    if (props.assignmentId === undefined || props.lead !== undefined) return;
+    let live = true;
+    api.listProjects().then(projects => {
+      if (live) setIsLead(current => current ?? !!projects.find(project => project.project_key === props.projectKey)?.can_manage);
+    }, () => undefined);
+    return () => { live = false; };
+  }, [props.assignmentId, props.lead, props.projectKey]);
 
   useEffect(() => {
     if (!focusRequest) return;
@@ -239,7 +253,8 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
     if (!range || !addTarget) return;
     setAdding(false); setLastDecision(null);
     const ok = await data.addFinding({ ...addTarget, annotationId: newAnnotationId, termId: candidate.term_id, searchId, segments: [range], axes: addTarget.axes });
-    if (ok) { setRange(null); setNewAnnotationId(`ann-${randomId()}`); show({ message: `Finding added: ${candidate.label} (${candidate.term_id}).` }); }
+    // The new finding has the creation defaults; its values open for a check right away.
+    if (ok) { setRange(null); setEditAdded(newAnnotationId); setNewAnnotationId(`ann-${randomId()}`); show({ message: `Finding added: ${candidate.label} (${candidate.term_id}). Check its values.` }); }
     else show({ message: "Could not add the finding. Nothing changed." });
   };
 
@@ -321,6 +336,7 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
         onNextOpen={() => { const next = nextOpenAfter(groups, selected); if (next) select(next, true); }} /></div>}
     </header>
     {props.notice}
+    {view.consolidation_reason && <InlineMessage tone="info" live={false}><p className="cons-lead-reason">{consolidationReasonText(view.consolidation_reason)}</p></InlineMessage>}
     {reason && !submitted && <InlineMessage tone="info">{reason}</InlineMessage>}
     {submitted && <div className="cons-submitted" role="status">
       <p>{submittedText(!!isLead)}</p>
@@ -345,16 +361,20 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
           onReopen={group => { setRestoring(group.group_id); return reopen(group); }} draft={data.draft}
           onDismissOutcome={data.dismissOutcome} undo={lastDecision && !readOnly ? { groupId: lastDecision.group_id, run: undoLast } : null}
           toggleRef={groupId => element => { if (element) toggles.current.set(groupId, element); else toggles.current.delete(groupId); }} />
-        {added.length > 0 && <section className="cons-added-list" aria-label="Added findings">
-          <h2 className="cons-subheading">{addedHeading(props.assignmentId !== undefined, view.added_by)}</h2>
-          <ul>{added.map(finding => <li key={finding.annotationId}>{finding.label}, {finding.spans.map(([start, end]) => `“${Array.from(view.text).slice(start, end).join("")}”`).join(" … ")}</li>)}</ul>
-        </section>}
+        {added.length > 0 && <AddedFindings heading={addedHeading(props.assignmentId !== undefined, view.added_by)} added={view.added ?? []} text={view.text}
+          workspace={data.workspace} readOnly={readOnly} busy={data.busy === "add-finding"} editRequest={editAdded}
+          onSetValues={async (annotationId, axes) => {
+            setLastDecision(null); setEditAdded(null);
+            const ok = await data.setAddedValues(annotationId, axes);
+            if (!ok) show({ message: "Could not save the values. Nothing changed." });
+            return ok;
+          }} />}
       </div>
     </div>
     {typing && <PassageForm text={view.text} anchorRef={addRef} onPick={pickPassage} onClose={() => setTyping(false)} />}
     {data.workspace && addTarget && <TermPicker open={adding} anchorRef={addRef} label="Add finding" workspace={data.workspace} layerId={addTarget.layerId} annotationId={newAnnotationId}
       initialQuery={range ? prefillQuery(view.text, [range]) : undefined} onClose={() => setAdding(false)} onPick={(candidate, searchId) => { void addFinding(candidate, searchId); }} />}
-    <SummaryDialog open={dialog.open} summary={summaryText(groups, added.length)} duplicates={duplicatesText(duplicateTerms(groups))} busy={dialog.busy} warning={dialog.warning} error={dialog.error}
+    <SummaryDialog open={dialog.open} lead={!!isLead} summary={summaryText(groups, added.length)} duplicates={duplicatesText(duplicateTerms(groups))} busy={dialog.busy} warning={dialog.warning} error={dialog.error}
       onSubmit={acknowledged => { void submit(acknowledged); }} onClose={() => setDialog({ open: false, busy: false, warning: null, error: null })} />
     <p className="visually-hidden" role="status" aria-live="polite">{announcement}</p>
     <ConfirmDialog open={reopeningAll.open} busy={reopeningAll.busy} title={`Reopen ${decidedCount} decided ${decidedCount === 1 ? "group" : "groups"}?`}

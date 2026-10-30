@@ -37,6 +37,11 @@ it('lists You (Mia Kühn) first, then the members with the Consolidator role', a
   await openForm();
   expect(options()).toEqual(['Choose a consolidator', 'You (Mia Kühn)', 'Luc Martin (ann-0004)', 'Rita Rev (rev-0009)']);
   expect(screen.queryByText(/No member has the Consolidator role yet/)).toBeNull();
+  // #147: the field says who is listed and where the role is given.
+  const hint = screen.getByText(/^Lists you and the members with the Consolidator role\./);
+  expect(hint.textContent).toBe('Lists you and the members with the Consolidator role. Give the role in Settings → People.');
+  expect(within(hint).getByRole('link', { name: 'Settings → People' }).getAttribute('href')).toBe('#/projects/p/settings/people');
+  expect(reviewerSelect().getAttribute('aria-describedby')).toContain(hint.id);
 });
 
 it('choosing yourself says that you get the Consolidator role, and starts with one request', async () => {

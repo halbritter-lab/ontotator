@@ -202,6 +202,7 @@ describe("carried finding inspector", () => {
     const missing = input("input-failed", null);
     missing.source_snapshot.annotation.axes_values = { assertion: "present", temporality: "current" };
     missing.source_snapshot.annotation.axes_defaulted = ["temporality"];
+    missing.source_snapshot.annotation.note = "  Seen at the last visit  ";
     const { container } = setup({ annotations: [], inputs: [missing], adjustView: view => {
       view.layers![0].annotation_types[0].axes = [
         { id: "assertion", label: "Assertion", options: ["present", "absent"], allow_empty: true },
@@ -220,6 +221,8 @@ describe("carried finding inspector", () => {
     await waitFor(() => expect(apply).toHaveBeenCalledTimes(1));
     expect(payloadOf(apply)).toEqual(expect.objectContaining({
       command: "create_annotation", axes_values: { assertion: "present", temporality: "current" }, chosen_axis_ids: ["assertion"],
+      // #157: the original's note goes with the re-created finding.
+      note: "Seen at the last visit",
     }));
   });
 

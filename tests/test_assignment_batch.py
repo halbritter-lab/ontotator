@@ -20,6 +20,7 @@ from ontotator.storage.tables import (
     DocumentRow,
     ProjectRow,
     UserLanguageRow,
+    UserRow,
 )
 
 BASE = "/api/v1/projects/proj"
@@ -292,6 +293,21 @@ def test_preview_people_sorted_reads_then_open_tasks_then_name_with_reasons(env)
         "is_me": False,
     }
     assert skipped(result) == {CASES[19]: "already_assigned"}
+
+
+def test_preview_marks_system_administrators(env):
+    """#177: a project's creator (a system admin) holds every role; the
+    dialog marks such people instead of listing them like any member."""
+    with env.db.transaction() as conn:
+        conn.execute(
+            update(UserRow)
+            .where(UserRow.username == "ben")
+            .values(is_system_admin=True)
+        )
+    by_name = people(preview(env, "translation_review"))
+    assert by_name["ben"]["system_admin"] is True
+    assert by_name["ben"]["unavailable"] is None
+    assert {name for name, item in by_name.items() if item["system_admin"]} == {"ben"}
 
 
 def test_preview_split_reports_blocks_and_open_totals(env):

@@ -40,14 +40,16 @@ describe("GroupCard", () => {
     expect(result()).toContain("Not saved yet.");
     // R-18: no space before a comma, and a full stop before the staged note.
     expect(result()).toMatch(/Absent, \w+, \w+\. Not saved yet\./);
-    expect(result()).toContain("Not taken: Axial hypotonia (Ali)");
-    // The term is still open: Keep is unavailable with its reason.
+    // The term is still open: the line names no term and nothing as not taken (#160); Keep is unavailable with its reason.
+    expect(result()).toContain("Term not chosen yet");
+    expect(result()).not.toContain("Not taken");
     const button = screen.getByRole("button", { name: "Keep" });
     expect(button.getAttribute("aria-disabled")).toBe("true");
     expect(document.getElementById(button.getAttribute("aria-describedby")!)!.textContent).toBe("Choose a value in each highlighted row first.");
     keep();
     expect(props.onResolve).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Take Hypotonia from Tom Reis for Term" }));
+    expect(result()).toContain("Not taken: Axial hypotonia (Ali)");
     expect(props.onResolve).not.toHaveBeenCalled();
     keep();
     expect(props.onResolve).toHaveBeenCalledWith({
@@ -204,16 +206,45 @@ describe("GroupCard", () => {
     expect(document.querySelector(".cons-note-preview")).toBeNull();
   });
 
-  it("shows overlapping text and differing notes as information: Keep takes the default member", () => {
+  it("shows each person's overlapping passage, the default one marked: Keep takes the default member (#159)", () => {
     const value = { ...byId("g-dd"), kinds: ["span_differs", "notes_differ"],
       members: byId("g-dd").members.map((item, index) => ({ ...item, note: index ? "Late." : "Early." })) };
     const { props } = renderCard(value);
-    expect(screen.getByText("“Delayed development” (overlapping, comes with the chosen finding)")).toBeTruthy();
+    const row = screen.getByRole("rowheader", { name: "Text" }).closest("tr")!;
+    expect(row.className).not.toContain("cons-row--conflict");
+    expect([...row.querySelectorAll("td")].map(cell => cell.textContent)).toEqual(["“Delayed development”", "“development”"]);
+    expect(screen.getByRole("button", { name: "Take “Delayed development” from Luc Martin for Text" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Take “development” from Tom Reis for Text" }).getAttribute("aria-pressed")).toBe("false");
     expect(screen.getByRole("rowheader", { name: "Note" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /^Take .* for / })).toBeNull();
+    expect(result()).toBe("Result: 1 finding, Global developmental delay (HP:0001263), Present, Patient, Current, text “Delayed development”");
+    expect(screen.getByRole("button", { name: "Keep" }).getAttribute("aria-disabled")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Keep" }));
     expect(props.onResolve).toHaveBeenCalledWith({ input_ids: ["in-dl", "in-dt"], action: "keep" },
-      "Global developmental delay (HP:0001263), Present, Patient, Current");
+      "Global developmental delay (HP:0001263), Present, Patient, Current, text “Delayed development”");
+  });
+
+  it("a ✓ chooses another person's overlapping passage, with its evidence and note (#159)", () => {
+    const { props } = renderCard(byId("g-dd"));
+    fireEvent.click(screen.getByRole("button", { name: "Take “development” from Tom Reis for Text" }));
+    expect(screen.getByRole("button", { name: "Take “development” from Tom Reis for Text" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Take “Delayed development” from Luc Martin for Text" }).getAttribute("aria-pressed")).toBe("false");
+    expect(result()).toContain("text “development”. Not saved yet.");
+    keep();
+    expect(props.onResolve).toHaveBeenCalledWith({
+      input_ids: ["in-dl", "in-dt"], action: "choose", choice: { term_id: "HP:0001263", span_from_input_id: "in-dt", axes: {} },
+    }, "Global developmental delay (HP:0001263), Present, Patient, Current, text “development”");
+  });
+
+  it("marks the kept passage and modifiers in a decided group, also read-only (#163)", () => {
+    const decided = { ...byId("g-dd"), state: "choose" as const, annotation_ids: ["cons-2"],
+      result: { term_id: "HP:0001263", term_label: "Global developmental delay", layer_id: "phenotype", axes: { assertion: "present", experiencer: "patient", temporality: "current" },
+        modifiers: [], spans: [span("development")] } };
+    renderCard(decided, { readOnly: true });
+    expect(result()).toBe("Result: 1 finding, Global developmental delay (HP:0001263), Present, Patient, Current, text “development”");
+    const row = screen.getByRole("rowheader", { name: "Text" }).closest("tr")!;
+    expect(within(row).getAllByText("kept")).toHaveLength(1);
+    expect(within(row).getByText("kept").closest("td")!.textContent).toBe("“development”kept");
+    expect(within(row).queryByRole("button")).toBeNull();
   });
 
   it("asks the text when the spans conflict", () => {
@@ -223,7 +254,7 @@ describe("GroupCard", () => {
     keep();
     expect(props.onResolve).toHaveBeenCalledWith({
       input_ids: ["in-dl", "in-dt"], action: "choose", choice: { term_id: "HP:0001263", span_from_input_id: "in-dt", axes: {} },
-    }, "Global developmental delay (HP:0001263), Present, Patient, Current");
+    }, "Global developmental delay (HP:0001263), Present, Patient, Current, text “development”");
   });
 
   it("renders no text node inside a table row", () => {

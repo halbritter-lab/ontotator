@@ -51,7 +51,7 @@ describe("editor and page polish", () => {
 
   it("shows 'Saved' without the revision number (revision in the tooltip)", () => {
     render(<CaseScreen view={view()} workspaceId="ws" onClose={vi.fn()} />);
-    const status = screen.getByRole("status");
+    const status = document.querySelector<HTMLElement>(".app-actions [role=\"status\"]")!;
     expect(status.textContent).toMatch(/Saved/);
     expect(status.textContent).not.toMatch(/Rev/);
     expect(status.getAttribute("title")).toMatch(/7/);
