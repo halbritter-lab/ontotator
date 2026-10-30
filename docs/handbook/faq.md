@@ -150,6 +150,10 @@ Only members with the **Consolidator** role are listed. Give the role first. See
 
 Some texts still need your decision or have no final result. Either decide them in **Documents** first, or tick the box to export the ready results and leave the others out. See [Export final results](lead-results.md#export-final-results).
 
+### The upload says "The file name is not a valid text ID."
+
+For plain text, each file name without `.txt` becomes the text ID. Rename the file: letters, digits, dots, hyphens and underscores, up to 128 characters, starting with a letter or digit. See [Prepare files for upload](lead-documents.md#prepare-files-for-upload).
+
 ### I cannot remove a lead
 
 A project needs at least one lead. Add another lead first, then remove the role. See [Change a member's roles](lead-settings.md#change-a-members-roles).

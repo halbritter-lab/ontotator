@@ -23,6 +23,8 @@ texts.zip
   case-202.txt
 ```
 
+Here the text IDs are `case-201` and `case-202`. The upload dialog names this rule under **Choose files…**, and after the check the first note of the preview lists each file name with its text ID.
+
 Example of an Ontospan bundle:
 
 ```
