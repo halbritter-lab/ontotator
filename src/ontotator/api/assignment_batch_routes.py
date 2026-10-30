@@ -188,8 +188,7 @@ class BatchPersonView(BaseModel):
     language_mismatch: bool
     unavailable: Literal["does_not_read", "role_missing", "inactive"] | None
     already_assigned: int
-    # A system administrator; the creator of a project is a member with every
-    # role, so the dialog marks them (#177).
+    # A system administrator: the dialog marks them (#177).
     system_admin: bool = False
 
 

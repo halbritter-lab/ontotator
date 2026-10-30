@@ -74,8 +74,8 @@ def test_permissions(team) -> None:
         == 404
     )
     lead_view = team.lead.get(BASE).json()["current"]
-    # The creating admin holds every role, so two task members.
-    assert lead_view["reach"] == {"notified": 0, "opened": 0, "members": 2}
+    # The creating admin holds only the lead role, so one task member.
+    assert lead_view["reach"] == {"notified": 0, "opened": 0, "members": 1}
     assert "ann-0902" in [item["person"]["pseudonym"] for item in lead_view["not_seen"]]
     member_view = team.annotator.get(BASE).json()["current"]
     assert member_view["reach"] is None and member_view["not_seen"] is None
@@ -171,7 +171,7 @@ def test_reads_endpoint_returns_204_and_is_idempotent(team) -> None:
         assert response.content == b""
     assert team.annotator.get(BASE).json()["my_latest_seen"] == 1
     reach = team.lead.get(BASE).json()["current"]["reach"]
-    assert reach == {"notified": 1, "opened": 1, "members": 2}
+    assert reach == {"notified": 1, "opened": 1, "members": 1}
     bad = team.annotator.post(f"{BASE}/1/reads", json={"event": "read"})
     assert bad.status_code == 422
 

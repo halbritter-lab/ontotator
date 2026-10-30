@@ -14,6 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- Whoever creates a project gets only the Lead role, no longer every role; existing projects keep their members. **Add me as annotator** and a lead's self-consolidation add the other roles when needed (#177).
+- Login without a remembered project: people without a lead role in any project land on **My tasks**, leads stay on **Projects** (#153).
 - The assign dialog works through the whole selection: reviews first, then annotation, one language at a time. It stays open after each step and after *Distribute evenly…*, says what comes next, shows up front what the selection needs and where you are, and a step can be skipped with *Skip this task*. The closing message names what is left unassigned and offers to select those cases (#218).
 - The Documents search finds any part of a case, external or document ID in any case (`fr100994` and `100994` find `FR100994`). The field now reads "Case ID…", since it never searched the words of a text (#216).
 - A search without hits in the open tab says so and offers its hits under All, with the search kept (`all_tab_shown` on the decision bar) (#216).
@@ -21,6 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- At a width of exactly 700 px the annotation editor collapsed to no width, so the Document tab showed no text (#144).
 - The selection bar names what the filters hide, for example "4 texts in 2 cases selected (2 source texts not shown)", and the header checkbox counts texts, not cases (`text_count`, `not_shown_sources`) (#210).
 - *Distribute evenly…* replaces the assign dialog instead of opening on top of it; the walk-through goes on from there (#210).
 - An Edit & Replace copy is listed with the proposal it replaces, not under *Your own findings*, and the result line counts it as a replaced proposal (#211).

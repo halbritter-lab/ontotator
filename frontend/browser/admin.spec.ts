@@ -6,7 +6,7 @@ import { documentsTab, openTextCard, rowAction, showSegment, textCard, textName,
 import { openTasksHome, selectText, submitCase, TASKS_HOME, TEST_PASSWORD } from "./helpers";
 
 interface Actor { username: string; code: string }
-interface ProjectSetup { key: string; lead: Actor; annotator: Actor }
+interface ProjectSetup { key: string; admin: string; lead: Actor; annotator: Actor }
 
 async function redeemCode(page: Page, actor: Actor) {
   await openTasksHome(page);
@@ -18,7 +18,7 @@ async function redeemCode(page: Page, actor: Actor) {
   await form.getByLabel("Repeat the new password").fill(TEST_PASSWORD);
   await form.getByRole("button", { name: "Set password and log in" }).click();
   await expect(page.getByTestId("current-user")).toContainText(actor.username);
-  // Setting the password leaves "#/?status=all"; without a last-used project the landing would open Projects.
+  // Setting the password leaves "#/?status=all"; come back so every scenario continues from My tasks "All".
   await page.goto(TASKS_HOME);
 }
 
@@ -113,7 +113,7 @@ async function createProjectThroughUi(page: Page): Promise<ProjectSetup> {
     await members.getByRole("button", { name: "Add member", exact: true }).click();
     await expect(page.getByRole("checkbox", { name: `${actor.username}: ${role}`, exact: true })).toBeChecked();
   }
-  return { key, lead, annotator };
+  return { key, admin: username, lead, annotator };
 }
 
 async function selectProject(page: Page, key: string) {
@@ -178,7 +178,7 @@ async function distributeAndSubmit(page: Page, setup: ProjectSetup) {
   await page.getByRole("link", { name: DOCUMENTS_LINK }).click();
   await importTwoDocuments(page);
   // Plan annotation for "one" if the import left it outside the plan ("Plan…" opens the text card on Text details
-  // with the plan chips, VD2, U3), then assign it through the row's Assign dialog and its seeded "Distribute evenly…".
+  // with the plan chips, VD2, U3), then assign it through the row's Assign dialog.
   if (await rowAction(page, "Plan…", "one", "en").count()) {
     await rowAction(page, "Plan…", "one", "en").click();
     const card = textCard(page, "one", "en");
@@ -190,14 +190,13 @@ async function distributeAndSubmit(page: Page, setup: ProjectSetup) {
   }
   await rowAction(page, "Assign annotation…", "one", "en").click();
   const assign = page.getByRole("dialog", { name: "Assign annotation", exact: true });
-  await assign.getByRole("button", { name: "Distribute evenly…", exact: true }).click();
-  const distribution = page.getByRole("dialog", { name: "Propose distribution", exact: true });
-  await distribution.getByRole("button", { name: "Propose", exact: true }).click();
-  await expect(distribution.getByRole("combobox", { name: "one, person 1", exact: true })).toHaveValue(setup.annotator.username);
-  await distribution.getByRole("button", { name: "Confirm", exact: true }).click();
-  // A clean save closes both dialogs and reports it in the toast (#195).
-  await expect(distribution).toHaveCount(0);
-  await expect(page.locator(".ui-toast")).toContainText("Assignments from the even distribution saved");
+  // The creating administrator holds only the lead role (#177): the one annotator is the only choice.
+  const admin = assign.getByRole("row").filter({ hasText: setup.admin });
+  await expect(admin).toContainText("Cannot annotate in this project");
+  const annotator = assign.getByRole("row").filter({ hasText: setup.annotator.username });
+  await annotator.getByRole("radio").or(annotator.getByRole("checkbox")).check();
+  await assign.getByRole("button", { name: "Assign 1 person", exact: true }).click();
+  await expect(assign).toHaveCount(0);
   // No dialog may stay open (the failure names the one that does).
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await logout(page);

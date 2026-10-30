@@ -450,7 +450,7 @@ def test_an_upload_makes_the_uploader_a_member_of_the_new_project(
 
     assert response.status_code == 200, response.text
     assert app.state.memberships.members("C") == [
-        ("root", "ann-0001", frozenset({"lead", "annotator", "adjudicator"}))
+        ("root", "ann-0001", frozenset({"lead"}))
     ]
     # The uploader's session goes on.
     assert root.get("/api/v1/projects/C/documents").status_code == 200

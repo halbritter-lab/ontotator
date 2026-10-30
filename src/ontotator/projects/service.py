@@ -12,7 +12,7 @@ from sqlalchemy import Connection, delete, func, insert, select, update
 from ontotator.auth.accounts import normalize_languages
 from ontotator.auth.audit import Actor, record_audit
 from ontotator.authz.memberships import grant_roles
-from ontotator.authz.policy import ROLES, Action
+from ontotator.authz.policy import Action
 from ontotator.authz.project_authority import require_project_management
 from ontotator.domain.annotation_modes import AnnotationMode
 from ontotator.domain.canonical import canonical_hash
@@ -389,7 +389,7 @@ class ProjectService:
                     project_id,
                     actor.user_id,
                     username,
-                    ROLES,
+                    ["lead"],
                     datetime.now(UTC),
                 )
 

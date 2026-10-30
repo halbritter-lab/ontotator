@@ -81,7 +81,7 @@ describe("last-used landing (F8, D4)", () => {
     expect(api.documentsSummary).not.toHaveBeenCalledWith("p2");
   });
 
-  it("shows the Projects page when nothing is remembered", async () => {
+  it("shows the Projects page to a lead of any project when nothing is remembered", async () => {
     vi.spyOn(api, "listProjects").mockResolvedValue([project("a", ["annotator"]), project("b", ["lead"])]);
     render(<App user={lead} />);
     expect(await screen.findByRole("heading", { level: 1, name: "Projects" })).toBeDefined();
@@ -97,13 +97,19 @@ describe("last-used landing (F8, D4)", () => {
     expect(window.location.hash).toBe("#/projects");
   });
 
-  it("shows the Projects page with its empty state without any project", async () => {
-    remember("gone");
-    vi.spyOn(api, "listProjects").mockResolvedValue([]);
+  it.each([
+    ["nothing is remembered", null, [project("a", ["annotator"]), project("b", ["adjudicator"])]],
+    ["the remembered project is no longer accessible", "gone", [project("a", ["annotator"])]],
+    ["there is no project", "gone", []],
+  ])("stays on My tasks without a lead role when %s (#153)", async (_case, remembered, projects) => {
+    if (remembered) remember(remembered);
+    const list = vi.spyOn(api, "listProjects").mockResolvedValue(projects);
+    const before = window.history.length;
     render(<App user={lead} />);
-    expect(await screen.findByRole("heading", { level: 1, name: "Projects" })).toBeDefined();
-    expect(screen.getByText("You are not a member of any project yet.")).toBeDefined();
-    expect(window.location.hash).toBe("#/projects");
+    expect(await screen.findByRole("heading", { name: "My tasks" })).toBeDefined();
+    await waitFor(() => expect(list).toHaveBeenCalled());
+    expect(window.location.hash).toBe("#/");
+    expect(window.history.length).toBe(before);
   });
 
   it("lands on Documents even with own open tasks", async () => {

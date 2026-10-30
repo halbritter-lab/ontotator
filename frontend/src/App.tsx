@@ -209,7 +209,8 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
     if (route.name !== "tasks" || route.project !== undefined || route.status !== undefined || projectError) { setLanding(false); return; }
     if (!projectsReady || !baseUser) return;
     setLanding(false);
-    // Last-used project (D4): Documents for leads, My tasks filtered to it for others; else the Projects page.
+    // Last-used project (D4): Documents for leads, My tasks filtered to it for others;
+    // else Projects for a system admin or a lead of any project, and plain My tasks (no redirect) for anyone else.
     const key = landingProject(baseUser.username, projects);
     const project = projects.find(item => item.project_key === key);
     // The landing never takes over a navigation the user already started (link, Back/Forward).
@@ -221,7 +222,10 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
       setLandingSummary(true);
       void Promise.resolve(requestRef.current(next, undefined, { replace: true })).finally(() => setLandingSummary(false));
     };
-    if (key === undefined || !project) { redirect({ name: "projects" }); return; }
+    if (key === undefined || !project) {
+      if (baseUser.is_system_admin || projects.some(item => item.roles.includes("lead"))) redirect({ name: "projects" });
+      return;
+    }
     if (!(project.can_manage && project.roles.includes("lead"))) { redirect(projectDestination(project)); return; }
     // Needs your decision when the counter is > 0 (VD7), otherwise All; a failed summary lands on All.
     // The redirect is dropped if the user navigated while the summary loaded.
