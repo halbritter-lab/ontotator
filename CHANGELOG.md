@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- A finding added in the consolidation no longer keeps its default values unchangeable: its values open right after "Add finding" and "Edit values…" changes them later, so a negated finding is exported as absent (#178).
+- The consolidation group card shows each person's passage when overlapping passages differ, and a ✓ chooses which one goes into the result (#159).
+- The consolidation result line names no term and nothing as "Not taken" until the Term row is chosen (#160).
+- The read-only consolidation view tags the kept passage and modifiers with "kept", not only the term and values (#163).
+- "Open consolidation" in the text card opens the lead's own running consolidation as their task instead of the read-only view (#145).
+- The consolidator sees the lead's consolidation reason above the groups and in My tasks (`consolidation_reason` on the consolidation view and the task list) (#146).
+- The consolidation launcher says under "Consolidator" who is listed and links Settings → People (#147).
+- The "Submit consolidation?" dialog tells a lead consolidator to accept the result in Documents (#143).
+- The full editor of a consolidation has no submit any more; it points back to the consolidation screen, where you submit, and "Replaced by" explains itself (#162).
 - "Delete finding" in the editor can be undone with "Undo" in the message or Ctrl+Z, like removing a modifier (#150).
 - An unresolved proposal is counted as "unresolved proposal", not as confirmed, and its prefilled values read "Defaults not confirmed" (#148).
 - A default on a dropdown value field (such as Experiencer) can be confirmed on its own with "Confirm" (#149).
@@ -19,6 +28,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- A public project page with tutorial videos lives in `site/` and deploys to GitHub Pages.
 - Leads can change a text's annotation mode after submissions: "Change mode…" names whose submitted work is discarded, the work is kept as discarded (not deleted) and "Restore…" brings it back while no new annotation has started (#109).
 - A started project can move to a newer ontology release after a dry-run check; draft terms with one successor or merged ids are rewritten (#81).
 - The text card says how a consolidation came about ("6 matching, 2 decided by Carla"), and the final export records per finding whether it was matched automatically, decided or added by the consolidator (`consolidations` in `receipt.json`, export format `ontotator-final-export/v2`) (#133).

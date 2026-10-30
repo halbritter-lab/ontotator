@@ -25,12 +25,14 @@ export interface ComparisonTableProps {
   onChoose: (rowId: string, value: string) => void;
 }
 
-/** A member's modifiers, one line each; in a conflicting row each carries its ✓ toggle (DN-1). No "·" (DN-10). */
-function ModifierList({ owner, toggles, interactive, busy, onPress }: { owner: string; toggles: readonly ModifierToggleCell[]; interactive: boolean;
-  busy: boolean; onPress: (id: string) => void }): JSX.Element {
+/** A member's modifiers, one line each; in a conflicting row each carries its ✓ toggle (DN-1), read-only the kept ones
+ *  their "kept" tag. No "·" (DN-10). */
+function ModifierList({ owner, toggles, interactive, kept, busy, onPress }: { owner: string; toggles: readonly ModifierToggleCell[]; interactive: boolean;
+  kept: boolean; busy: boolean; onPress: (id: string) => void }): JSX.Element {
   return <ul className="cons-mod-list" aria-label={`Modifiers of ${owner}`}>{toggles.map(toggle => <li key={toggle.id}><span className="cons-value">
     <span>{toggle.label}{toggle.majority && ` ${toggle.majority}`}{toggle.cohort && COHORT}
       {toggle.otherText && <> <span className="cons-muted">other text chosen</span></>}</span>
+    {kept && toggle.pressed && <span className="cons-tag">kept</span>}
     {interactive && <button type="button" className="cons-take" aria-pressed={toggle.pressed} aria-disabled={busy || undefined} aria-label={toggle.name}
       onClick={() => { if (!busy) onPress(toggle.id); }}><IconCheck /></button>}
   </span></li>)}</ul>;
@@ -65,12 +67,14 @@ export function ComparisonTable({ name, group, people, rows, readOnly = false, b
           : row.agreed ?? `${row.cells[0].display} ${row.info}`}</td>
         : row.cells.map((cell, index) => <td key={cell.inputId}>
           {row.kind === "modifiers"
-            ? <ModifierList owner={personName(names[index].label)} toggles={cell.toggles ?? []} interactive={row.conflict && !readOnly} busy={busy}
+            ? <ModifierList owner={personName(names[index].label)} toggles={cell.toggles ?? []} interactive={row.conflict && !readOnly}
+              kept={row.conflict && readOnly} busy={busy}
               onPress={id => onChoose(row.id, id)} />
             : <span className="cons-value">
               {row.kind === "axis" ? <AxisValue value={cell.value} /> : cell.display}
-              {readOnly && row.conflict && cell.chosen && <span className="cons-tag">kept</span>}
-              {row.conflict && !readOnly && <button type="button" className="cons-take" aria-pressed={cell.chosen} aria-disabled={busy || undefined}
+              {/* Differing passages are choosable without being a conflict. */}
+              {readOnly && (row.conflict || row.choosable) && cell.chosen && <span className="cons-tag">kept</span>}
+              {(row.conflict || row.choosable) && !readOnly && <button type="button" className="cons-take" aria-pressed={cell.chosen} aria-disabled={busy || undefined}
                 aria-label={`Take ${cell.display} from ${personName(names[index].label)} for ${row.label}`}
                 onClick={() => { if (!busy) onChoose(row.id, cell.value); }}><IconCheck /></button>}
             </span>}
