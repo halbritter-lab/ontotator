@@ -342,6 +342,8 @@ Pick a subnet that is unused on the host (compare `docker network inspect` of th
 
 Check with `docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' NPM_CONTAINER`. If NPM ever gets another IP, fix the pin; do not widen the trust.
 
+The app fails closed if the pin is ever lost. In production it accepts connections only from the addresses in `ONTOTATOR_TRUSTED_PROXIES` (whose `X-Forwarded-For` and `X-Forwarded-Proto` it applies) and from loopback inside its own container (the Docker health check and `docker compose exec` tools, whose forwarded headers it ignores). Any other peer gets `503` with a plain-text note, never reaches login, and so cannot fill the shared lockout bucket. The app log then shows, at most once a minute per address, `Refused a request from 10.89.0.5: not in ONTOTATOR_TRUSTED_PROXIES (10.89.0.2) ...`. If the refused address is NPM's, NPM came back with a new address: restore the pin in the NPM stack (preferred) or set `ONTOTATOR_TRUSTED_PROXIES` to the address NPM now has and recreate `ontotator_app`. `ontotator serve --production` therefore runs uvicorn without its own proxy-header handling; the app does it.
+
 NPM proxy host (Hosts, Proxy Hosts, Add Proxy Host):
 
 - Details: domain `editor.example.org`, scheme `http`, forward hostname `ontotator_app`, port `8000`. "Websockets Support" is not needed (the app uses none); "Block Common Exploits" may be on.
