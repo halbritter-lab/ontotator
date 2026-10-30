@@ -16,6 +16,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - HPO releases without a modifier classifier root (Clinical modifier, Frequency, Severity, Onset) are refused (#97).
 - The consolidation's duplicate-term warning fires only for findings of the same term on overlapping spans (#132).
+- A finding added in the consolidation no longer keeps its default values unchangeable: its values open right after "Add finding" and "Edit values…" changes them later, so a negated finding is exported as absent (#178).
+- The consolidation group card shows each person's passage when overlapping passages differ, and a ✓ chooses which one goes into the result (#159).
+- The consolidation result line names no term and nothing as "Not taken" until the Term row is chosen (#160).
+- The read-only consolidation view tags the kept passage and modifiers with "kept", not only the term and values (#163).
 
 ## [0.2.0] - 2026-10-28
 

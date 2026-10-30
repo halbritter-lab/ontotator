@@ -74,7 +74,7 @@ What for: decide a group by choosing, per row, the value that is right.
 1. Open a group. The table has one column per person. A robot icon marks findings from a tool proposal.
 2. The rows are **Term**, one row per value field (for example the assertion), **Text**, **Modifiers** (only if someone used modifiers) and **Note**. Rows where people disagree come first and are highlighted; *(all agree)* marks rows that need no choice. You can mix: take the term from one person and a value from another.
 3. In each highlighted row, click the ✓ next to the value you want. Its button is named after the value, for example *Take Hypotonia … for Term*.
-4. Read the result line below the table. It starts with "Result:" and lists what is still not chosen, for example *text not chosen yet*. **Not taken:** lists other people's terms that are not in the result. Until you choose in the **Term** row, the line shows the first person's term as a preview.
+4. Read the result line below the table. It starts with "Result:" and lists what is still not chosen, for example *Term not chosen yet* or *text not chosen yet*. Once the term is chosen, **Not taken:** lists other people's terms that are not in the result.
 5. Optional: click **+ note** to write a **Note for the lead**, and tick **Guidelines unclear here** if the guidelines did not settle the case.
 6. Click **Keep**. The group reads **decided**, the message **Decision saved** appears with **Undo**, and the next open group opens.
 
@@ -85,7 +85,7 @@ What for: decide a group by choosing, per row, the value that is right.
 Special cases:
 
 - Not everyone marked it. The card names who did, for example *Ana Weber, Luc Martin marked this. Tom Reis has nothing here.* The button reads **Keep the finding**, or *Keep Luc Martin's finding* for one person. Keep it only if the text supports it.
-- Different passages. If people marked overlapping but different passages, the group is open without a highlighted row. The **Text** row shows the passage that comes with the chosen finding (*overlapping, comes with the chosen finding*). Compare the underlines in the text. If that passage is right, click **Keep**; to use another passage, [work in the full editor](#work-in-the-full-editor).
+- Different passages. If people marked overlapping but different passages, the group is open without a highlighted row. The **Text** row shows each person's passage; the ✓ of the passage that goes into the result is pressed, and the result line names it, for example *text "Absent reflexes"*. Compare the underlines in the text. To use another person's passage, click its ✓; its note comes with it. Then click **Keep**. For a passage nobody marked, [work in the full editor](#work-in-the-full-editor).
 - Modifiers. Each modifier has its own ✓, so you can combine modifiers that different people chose. Modifiers of one kind, such as two severities, exclude each other. If someone linked a modifier to a different finding, the card says so, for example *Ben Roth linked "Severe" (Severe) to Hypotonia.* Check which finding the text means.
 - Same term twice. If the same term is already in the result from another group, the card warns you. **Keep** then adds a second finding with that term.
 
@@ -124,7 +124,8 @@ What for: add a finding that no submission has.
 
 1. Select the passage in the text. Or click **Add finding**, type the passage into **Passage from the text** (choose the **Occurrence** if it appears more than once) and click **Continue**.
 2. Search and pick the term.
-3. A message confirms the new finding. It is listed under **Added by you**.
+3. A message confirms the new finding. It is listed under **Added by you** with its values, which start as the project's defaults (for example *Present, Patient, Current*). Its value fields open right away: change what the text says, for example **Assertion** to *Absent* for a negated finding, and click **Save values**. Click **Cancel** to keep the defaults.
+4. To change the values later, click **Edit values…** next to the added finding.
 
 If the passage is not found, type it exactly as written, or select it in the text.
 
