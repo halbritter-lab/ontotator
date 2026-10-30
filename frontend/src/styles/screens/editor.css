@@ -1302,7 +1302,7 @@
   box-shadow: inset 3px 0 0 var(--accent);
 }
 
-/* #190: the active hit's full definition, kept in view at the bottom while the hits scroll. One height for
+/* Issue 190: the active hit's full definition, kept in view at the bottom while the hits scroll. One height for
    every hit, so its edge never moves under the pointer; a longer definition scrolls inside. */
 .search-panel {
   --candidate-preview-height: calc(var(--leading-sm) * 6 + var(--space-2) * 2 + 2px);

@@ -343,6 +343,10 @@ describe("SearchPanel", () => {
     // Not inside an option: the list keeps its rows, the preview follows the active one.
     expect(preview().closest("[role=option]")).toBeNull();
     expect(preview().textContent).toBe(`Definition of Seizure (HP:0001250)${long}`);
+    // A long definition scrolls inside the pane: a named region a keyboard user can Tab to (axe
+    // scrollable-region-focusable).
+    expect(screen.getByRole("region", { name: "Definition of Seizure (HP:0001250)" })).toBe(preview());
+    expect(preview().tabIndex).toBe(0);
     fireEvent.keyDown(input, { key: "ArrowDown" });
     expect(preview().textContent).toBe("Definition of Febrile seizure (HP:0002373)This term has no definition in the ontology.");
     fireEvent.pointerEnter(options()[1]);

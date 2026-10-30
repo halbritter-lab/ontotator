@@ -438,11 +438,12 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
       )}
       {expanded && shownActive >= 0 && (
         // Issue 190: the active hit's full definition, read before Enter or a click takes it. Below the list, so a
-        // preview of another length never moves the rows under the pointer.
-        <div className="candidate-preview" data-testid="candidate-preview">
-          <div className="candidate-preview-title">{`Definition of ${candidates[shownActive].label} (${candidates[shownActive].term_id})`}</div>
+        // preview of another length never moves the rows under the pointer. A long definition scrolls inside the
+        // pane, so it is a named region in the Tab order: a keyboard user can reach it and scroll it with the arrows.
+        <section className="candidate-preview" data-testid="candidate-preview" aria-labelledby={`${listboxId}-preview`} tabIndex={0}>
+          <div id={`${listboxId}-preview`} className="candidate-preview-title">{`Definition of ${candidates[shownActive].label} (${candidates[shownActive].term_id})`}</div>
           <p className="candidate-preview-text">{candidates[shownActive].definition || "This term has no definition in the ontology."}</p>
-        </div>
+        </section>
       )}
     </div>
   );
