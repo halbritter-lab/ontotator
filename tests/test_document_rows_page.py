@@ -424,6 +424,7 @@ PAGE_KEYS = {
     "page",
     "page_count",
     "group_count",
+    "text_count",
     "bar",
     "case_found",
     "adjudicator_not_annotator",

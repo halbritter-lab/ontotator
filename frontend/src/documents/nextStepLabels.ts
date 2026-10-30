@@ -54,16 +54,16 @@ export const actionLabel = (action: RowAction): string => ACTION_LABELS[action] 
 /**
  * The action name of a step on its row: "Choose final" follows the server's `stages.final.detail.label_rule` (the
  * final-result panel's rule, VD16): "accept" reads "Accept result…", "compare" "Compare results…"; without the field
- * one submission reads "Accept result…". A "compare" row whose findings all match also reads "Accept result…" (issue
- * 198): the card then offers one "Accept result" under "All findings match (4 of 4)", or "Both submissions have no
- * findings" when neither has any. Like the card (`PanelContent`), not once a final exists or while other annotations
- * are still open (issue 123): the card compares there.
+ * one submission reads "Accept result…". A "compare" row in full agreement (`all_match`, also on notes and modifier
+ * text spans; issues 198, 211) also reads "Accept result…": the card then offers one "Accept result" under "All
+ * findings match (4 of 4)", or "Both submissions have no findings" when neither has any. Like the card
+ * (`PanelContent`), not once a final exists or while other annotations are still open (issue 123): the card compares there.
  */
 export function rowActionLabel(step: NextStepView, row: Pick<DocumentRowView, "stages"> & Partial<Pick<DocumentRowView, "versions" | "work" | "steps" | "next_step" | "final">>): string {
   if (step.action === "choose_final") {
     const final = row.stages?.final;
     const rule = final?.detail.label_rule ?? (final?.state === "choose" && final.detail.submitted === 1 ? "accept" : "compare");
-    const allMatch = final?.detail.compared != null && final.detail.matching === final.detail.compared && !row.final && !annotationsOpen(row);
+    const allMatch = final?.detail.all_match && !row.final && !annotationsOpen(row);
     return rule === "accept" || allMatch ? "Accept result…" : "Compare results…";
   }
   if (step.action === "handle_text_change" || step.action === "carry_text_change") {

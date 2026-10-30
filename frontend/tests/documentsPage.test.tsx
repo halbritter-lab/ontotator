@@ -507,8 +507,31 @@ describe("case selection", () => {
     await waitFor(() => expect(api.setWorkPlanRows).toHaveBeenCalledTimes(2));
   });
 
+  it("Show selected asks for the selection only, with one chip; leaving restores filters and page (#210)", async () => {
+    mockRows(casesPage(3));
+    const { onNavigate } = renderStateful({ language: "de", page: "2" });
+    await loaded();
+    fireEvent.click(caseBox("case-0102"));
+    fireEvent.click(within(selectionRegion()).getByRole("button", { name: "Show selected" }));
+    const selected = { selected: [{ case_id: "case-0102", language: "de" }], sort: undefined };
+    await waitFor(() => expect(api.listDocumentRows).toHaveBeenLastCalledWith("p", { ...selected, page: undefined }));
+    expect(onNavigate.mock.lastCall?.[0]).toMatchObject({ language: "de" });
+    expect(onNavigate.mock.lastCall?.[0]).not.toHaveProperty("page");
+    expect(screen.getByRole("button", { name: "Remove filter Selected texts" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Remove filter Language: de" })).toBeNull();
+    expect(screen.queryByRole("checkbox", { name: /filtered text/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Remove filter Selected texts" }));
+    await waitFor(() => expect(api.listDocumentRows).toHaveBeenLastCalledWith("p", { language: "de", page: 2 }));
+    expect(screen.getByRole("button", { name: "Remove filter Language: de" })).toBeTruthy();
+    // Clearing the selection ends the view too.
+    fireEvent.click(within(selectionRegion()).getByRole("button", { name: "Show selected" }));
+    await screen.findByRole("button", { name: "Remove filter Selected texts" });
+    fireEvent.click(within(selectionRegion()).getByRole("button", { name: "Clear selection" }));
+    await screen.findByRole("button", { name: "Remove filter Language: de" });
+  });
+
   it("header checkbox selects all filtered texts across pages", async () => {
-    mockRows(casesPage(3, { group_count: 50, page_count: 17 }));
+    mockRows(casesPage(3, { group_count: 40, text_count: 50, page_count: 14 }));
     const all = Array.from({ length: 50 }, (_, index) => `case-${String(101 + index).padStart(4, "0")}`);
     vi.spyOn(api, "documentRowKeys").mockResolvedValueOnce(deKeys(all));
     const view = renderPage({ query: { language: "de", segment: "assign", page: "2" } });
@@ -529,7 +552,7 @@ describe("case selection", () => {
     vi.mocked(api.documentRowKeys).mockResolvedValueOnce(deKeys(first, true));
     renderPage();
     await loaded();
-    fireEvent.click(screen.getByRole("checkbox", { name: "Select the first 2000 of 2500 filtered texts" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select the texts of the first 2000 of 2500 filtered cases" }));
     await waitFor(() => expect(within(selectionRegion()).getByText(selectedText(2000))).toBeTruthy());
     expect(within(selectionRegion()).getByText("Selection is limited to 2000 cases. Selected the first 2000.")).toBeTruthy();
   });
@@ -542,7 +565,7 @@ describe("case selection", () => {
     await loaded();
     // One case selected before: the header adds only 1999 more cases.
     fireEvent.click(rowBox("case-0101", "de"));
-    const header = screen.getByRole("checkbox", { name: "Select the first 2000 of 2500 filtered texts" }) as HTMLInputElement;
+    const header = screen.getByRole("checkbox", { name: "Select the texts of the first 2000 of 2500 filtered cases" }) as HTMLInputElement;
     fireEvent.click(header);
     await waitFor(() => expect(within(selectionRegion()).getByText(selectedText(2000))).toBeTruthy());
     expect(within(selectionRegion()).getByText("Selection is limited to 2000 cases. Selected the first 2000.")).toBeTruthy();

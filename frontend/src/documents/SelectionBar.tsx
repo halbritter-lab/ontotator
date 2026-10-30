@@ -1,7 +1,7 @@
 /**
  * Selection bar of Documents (spec "Selection bar"; documents overview VD4, VD21; owner decision R-3 of
- * 2026-10-26: it shows from one selected text on): "3 texts in 2 cases selected", the common next step,
- * "{k} not shown with these filters" (from the selection summary with the current filters) and
+ * 2026-10-26: it shows from one selected text on): "4 texts in 2 cases selected (2 source texts not shown)" (from the
+ * selection summary with the current filters), the common next step, the "Show selected" toggle and
  * "Clear selection"; primary "Assign…" (the page's only primary button; it names the work, "Assign review…" or
  * "Assign annotation…", once the summary knows it; issue 129, U3) and "Plan…" (M2 decision M-1: the two
  * translation plan presets live in the plan dialog's quick choice). Every plan save keeps the selection and shows an
@@ -25,8 +25,11 @@ export interface SelectionBarProps {
   projectKey: string;
   /** Selected texts `"{case}:{language}"`. */
   keys: ReadonlySet<string>;
-  /** The current Documents filters; "{k} not shown" counts selected texts without a matching row. */
+  /** The current Documents filters; "({k} texts not shown)" counts selected texts without a matching row. */
   filters: DocumentRowFilters;
+  /** The list shows only the selected texts (issue 210). */
+  showSelected?: boolean;
+  onToggleShowSelected?: () => void;
   /** Changes whenever the rows reload, so the summary follows plan and assignment changes. */
   refresh?: unknown;
   /** Below 700 px (cards layout): compact actions that start on their own line. */
@@ -78,6 +81,11 @@ export function assignButtonText(summary: Pick<SelectionSummary, "steps"> | null
   return words.length ? `Assign ${words.join(" or ")}…` : "Assign…";
 }
 
+/** " (2 source texts not shown)": what the filters hide of the selection, however many of them are source texts. */
+export function hiddenText({ not_shown: total = 0, not_shown_sources: sources = 0 }: Pick<SelectionSummary, "not_shown" | "not_shown_sources">): string {
+  return ` (${plural(total, sources === total ? "source text" : "text")} not shown)`;
+}
+
 /** Why a plan save changed nothing: presets skip source texts (`skipped_rows`), the rest already had the plan. */
 export function nothingChangedText(result: BulkResult, selected: number): string {
   const skipped = result.skipped_rows?.length ?? 0;
@@ -89,7 +97,7 @@ export function nothingChangedText(result: BulkResult, selected: number): string
 type Undo = { kind: "conflict"; undo: UndoView; consequences: ConsequencesView } | { kind: "changed" };
 
 export function SelectionBar({
-  projectKey, keys, filters, refresh, narrow = false, limitNote, onClear, onAssign, showToast, onAnnounce, onChanged, onRevisions,
+  projectKey, keys, filters, showSelected = false, onToggleShowSelected, refresh, narrow = false, limitNote, onClear, onAssign, showToast, onAnnounce, onChanged, onRevisions,
 }: SelectionBarProps): JSX.Element | null {
   const id = useId().replace(/:/g, "");
   const latest = useRef({ showToast, onAnnounce, onChanged, onRevisions });
@@ -182,12 +190,13 @@ export function SelectionBar({
       {keys.size >= MIN_TEXTS && <div className="selection-bar-line">
         <p className="selection-bar-summary">
           <strong>{`${plural(keys.size, "text")} in ${plural(caseIds.length, "case")} selected`}</strong>
+          {current && (current.not_shown ?? 0) > 0 && <span className="selection-bar-hidden">{hiddenText(current)}</span>}
           {current?.common && <span className="selection-bar-step">, {nextStepsText(current.steps.length ? current.steps : [current.common])}</span>}
-          {current && current.not_shown > 0 && <span className="selection-bar-hidden">, {current.not_shown} not shown with these filters</span>}
         </p>
         <div className="selection-bar-actions">
           <Button variant="primary" onClick={onAssign}>{assignButtonText(current)}</Button>
           <Button onClick={() => setPlan(caseIds)}>Plan…</Button>
+          <Button aria-pressed={showSelected} onClick={onToggleShowSelected}>Show selected</Button>
           <Button onClick={onClear}>Clear selection</Button>
         </div>
       </div>}

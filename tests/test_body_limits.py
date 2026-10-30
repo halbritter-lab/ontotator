@@ -114,6 +114,10 @@ def test_a_bulk_selection_gets_its_own_larger_limit(team) -> None:
         f"/api/v1/projects/{key}/document-rows/selection-summary", json={"rows": rows}
     )
     assert allowed.status_code != 413, allowed.text
+    shown = team.lead.post(
+        f"/api/v1/projects/{key}/document-rows/selected", json={"rows": rows}
+    )
+    assert shown.status_code != 413, shown.text
     refused = team.lead.post(
         f"/api/v1/projects/{key}/document-rows/selection-summary",
         content=b"x" * (SELECTION_BYTES + MULTIPART_ALLOWANCE + 1),

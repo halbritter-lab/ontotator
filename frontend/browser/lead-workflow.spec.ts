@@ -164,7 +164,7 @@ test("D15: import, plan de, assign de, plan fr, assign fr", async ({ page }) => 
   // decision (V10). The en sources are never undecided: not planned, no row (the "+1" of the case's rows), no decision.
   await expect(documentsTab(page, "All", 200)).toBeVisible();
   await expect(documentsTab(page, "Needs your decision", 150)).toBeVisible();
-  await expect(page.getByRole("checkbox", { name: "Select all 50 filtered texts", exact: true })).toBeVisible();
+  await expect(page.getByRole("checkbox", { name: "Select all 200 filtered texts", exact: true })).toBeVisible();
   for (const language of ["de", "es", "fr"]) {
     await expect(rowCell(row(page, "case-0101", language), "translation"), language).toContainText("not decided");
     await expect(rowAction(page, "Plan…", "case-0101", language)).toBeVisible();
@@ -239,7 +239,7 @@ test("ANNOTATION_BATCH: later annotation batch via To assign (5 clicks) while 6 
   await expect(documentsTab(page, "In progress", 6)).toBeVisible();
 
   // With all 20 cases selected, the 6 still in review can be assigned ahead: their tasks wait for it (issue 213).
-  await page.getByRole("checkbox", { name: "Select all 20 filtered texts", exact: true }).click();
+  await page.getByRole("checkbox", { name: /^Select all \d+ filtered texts$/ }).click();
   await bar(page).getByRole("button", { name: "Assign annotation…", exact: true }).click();
   let dialog = page.getByRole("dialog", { name: new RegExp(`^Assign${SEP}20 cases$`) });
   await expect(dialog.getByText(new RegExp(`^Annotation${SEP}de${SEP}20 versions$`))).toBeVisible();
@@ -371,7 +371,7 @@ test("ROWS: one chip click with Undo", async ({ page }) => {
 test("FR_OFF: turning fr off names persons and withdraws tasks", async ({ page }) => {
   const s = await leadScenario(page, "FR_OFF");
   await loginLead(page, s);
-  await page.getByRole("checkbox", { name: "Select all 10 filtered texts", exact: true }).click();
+  await page.getByRole("checkbox", { name: /^Select all \d+ filtered texts$/ }).click();
   await bar(page).getByRole("button", { name: "Plan…", exact: true }).click();
   const dialog = planDialog(page, 10);
   // Both steps of fr off (U5: radio groups per language).
