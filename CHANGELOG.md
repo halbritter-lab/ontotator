@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- The assign dialog marks system administrators with an *Administrator* badge (`system_admin` in the assignment batch preview), since the creator of a project is a member with every role (#177).
+- The plain-text upload says that each file name without `.txt` becomes the text ID and which names are valid, and the preview lists file name → text ID (#174).
+- Handbook screenshots in the in-app Help open at full size in a new tab (#173).
+
+### Fixed
+
+- **Refresh** on Documents starts a new visit of the tab, so rows that left it (for example texts just assigned under To assign) drop out instead of staying until a tab switch (#176).
+- **Pinned by** on Administration › Ontologies opens the project's Ontology settings tab; small settings cleanups (#168).
+
 ## [0.3.0] - 2026-10-30
 
 ### Added

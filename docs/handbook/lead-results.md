@@ -22,7 +22,7 @@ What for: choose the final result of a text.
 4. If they differ, the card shows the agreement, for example *Agreement: 5 of 9 findings match, 1 differs in context only*. **How is this counted?** explains the numbers. Open a submission with **Open in editor** to read it.
 5. Warning: the next action saves at once, without a confirmation. Click **Use as final** in the row of the submission you want. Or [start a consolidation](#start-a-consolidation) instead.
 
-After saving, the card moves on to the next text that needs a decision. To undo, [change the final result](#change-a-final-result).
+After saving, the card moves on to the next text that needs a decision. The decided row stays in the tab with a *Resolved* badge until you click **Refresh** or change the tab. To undo, [change the final result](#change-a-final-result).
 
 ![The Finalization part comparing two submissions, with the agreement line and Use as final](images/lead-compare-results.png)
 
