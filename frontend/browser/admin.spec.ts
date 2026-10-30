@@ -197,7 +197,7 @@ async function distributeAndSubmit(page: Page, setup: ProjectSetup) {
   await distribution.getByRole("button", { name: "Confirm", exact: true }).click();
   // A clean save closes both dialogs and reports it in the toast (#195).
   await expect(distribution).toHaveCount(0);
-  await expect(page.locator(".ui-toast")).toContainText("Assignments from the even distribution saved.");
+  await expect(page.locator(".ui-toast")).toContainText("Assignments from the even distribution saved");
   // No dialog may stay open (the failure names the one that does).
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await logout(page);

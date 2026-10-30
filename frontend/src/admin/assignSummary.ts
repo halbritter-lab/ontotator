@@ -23,6 +23,25 @@ export function stepLabel(task: AssignTask, language: string, versions: number):
   return `${stepNames[task]}, ${language}, ${versions} ${versions === 1 ? "version" : "versions"}`;
 }
 
+/** "translation review (de), annotation (en, fr)": the steps of a selection, reviews first. */
+export function stepsOverview(steps: readonly { task: AssignTask; language: string }[]): string {
+  return (["translation_review", "annotate"] as const).flatMap(task => {
+    const languages = [...new Set(steps.filter(step => step.task === task).map(step => step.language))].sort();
+    return languages.length ? [`${nouns[task][0]} (${languages.join(", ")})`] : [];
+  }).join(", ");
+}
+
+const NAMED_LEFT = 6;
+const someNames = (names: readonly string[]): string => names.length > NAMED_LEFT ? `${names.slice(0, NAMED_LEFT).join(", ")} and ${names.length - NAMED_LEFT} more` : names.join(", ");
+
+/** The closing message (issue 218): "Left unassigned: annotation of case-0102 en", "Also skipped: case-0120". */
+export function leftLines(open: readonly { task: AssignTask; texts: readonly string[] }[], skipped: readonly string[]): string[] {
+  return [
+    ...(open.length ? [`Left unassigned: ${open.map(item => `${nouns[item.task][0]} of ${someNames(item.texts)}`).join("; ")}`] : []),
+    ...(skipped.length ? [`Also skipped: ${someNames([...new Set(skipped)])}`] : []),
+  ];
+}
+
 /** Display name, else pseudonym (sentences; tables use `personLabel`). */
 export const personName = (person: PersonRef): string => person.display_name?.trim() || person.pseudonym;
 
