@@ -9,9 +9,8 @@ no imported set.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
-from sqlalchemy import Connection, Select, Subquery, and_, func, select
+from sqlalchemy import Connection, Subquery, and_, func, select
 
 from ontotator.domain.annotations import AnnotationRef
 from ontotator.storage.tables import (
@@ -33,33 +32,31 @@ class ProposalSetRef:
     annotation_set_id: str | None
 
 
-def _newest_set_ids(project_id: int) -> Subquery:
-    """(document_id, newest) per document with proposals; ``max`` skips NULL sets."""
-    return (
+def _in_newest_set(project_id: int) -> Subquery:
+    """(document_id, annotation_id, version) of each document's newest set.
+
+    One join on purpose: right after an import the planner has no statistics
+    for the project, and joining the proposals to a per-document ``max`` of
+    themselves then ran for minutes. NULLS LAST: seed proposals rank first
+    only without an imported set.
+    """
+    ranked = (
         select(
             AnnotationSnapshotRow.document_id,
-            func.max(ProposalAnnotationRow.proposal_set_id).label("newest"),
+            ProposalAnnotationRow.annotation_id,
+            ProposalAnnotationRow.version,
+            func.rank()
+            .over(
+                partition_by=AnnotationSnapshotRow.document_id,
+                order_by=ProposalAnnotationRow.proposal_set_id.desc().nulls_last(),
+            )
+            .label("set_rank"),
         )
         .join(AnnotationSnapshotRow, _SNAPSHOT_JOIN)
         .where(ProposalAnnotationRow.project_id == project_id)
-        .group_by(AnnotationSnapshotRow.document_id)
         .subquery()
     )
-
-
-def _in_newest_set(project_id: int, *columns: Any) -> Select[Any]:
-    """``columns`` of the proposals in each document's newest set."""
-    newest = _newest_set_ids(project_id)
-    return (
-        select(*columns)
-        .select_from(ProposalAnnotationRow)
-        .join(AnnotationSnapshotRow, _SNAPSHOT_JOIN)
-        .join(newest, newest.c.document_id == AnnotationSnapshotRow.document_id)
-        .where(
-            ProposalAnnotationRow.project_id == project_id,
-            ProposalAnnotationRow.proposal_set_id.is_not_distinct_from(newest.c.newest),
-        )
-    )
+    return select(ranked).where(ranked.c.set_rank == 1).subquery()
 
 
 def newest_proposal_set(
@@ -88,23 +85,19 @@ def newest_proposal_refs(
     conn: Connection, project_id: int, document_id: str
 ) -> list[AnnotationRef]:
     """Proposals of the document's newest set, ordered by (annotation id, version)."""
+    newest = _in_newest_set(project_id)
     rows = conn.execute(
-        _in_newest_set(
-            project_id,
-            ProposalAnnotationRow.annotation_id,
-            ProposalAnnotationRow.version,
-        )
-        .where(AnnotationSnapshotRow.document_id == document_id)
-        .order_by(ProposalAnnotationRow.annotation_id, ProposalAnnotationRow.version)
+        select(newest.c.annotation_id, newest.c.version)
+        .where(newest.c.document_id == document_id)
+        .order_by(newest.c.annotation_id, newest.c.version)
     ).all()
     return [AnnotationRef(annotation_id=row[0], version=row[1]) for row in rows]
 
 
 def newest_proposal_counts(conn: Connection, project_id: int) -> dict[str, int]:
     """Proposals of the newest set per document id (documents without proposals absent); one query."""
+    newest = _in_newest_set(project_id)
     rows = conn.execute(
-        _in_newest_set(
-            project_id, AnnotationSnapshotRow.document_id, func.count()
-        ).group_by(AnnotationSnapshotRow.document_id)
+        select(newest.c.document_id, func.count()).group_by(newest.c.document_id)
     ).all()
     return {document_id: count for document_id, count in rows}

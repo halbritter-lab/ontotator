@@ -115,28 +115,36 @@ def checker(tmp_path: Path) -> SimpleNamespace:
 def test_seed_rows_drop_out_next_to_a_real_set(tmp_path: Path) -> None:
     db = database_for(tmp_path / "editor.db")
     create_project(db)
-    item = unit("EN100017", set_id="set-a")
-    assert run_import(db, bundle(tmp_path / "a.zip", [item])).status == "succeeded"
+    items = [unit("EN100017", set_id="set-a"), unit("EN100018", set_id="set-b")]
+    assert run_import(db, bundle(tmp_path / "a.zip", items)).status == "succeeded"
     pid = _pid(db, "proj")
     with db.transaction() as conn:
         everything = newest_proposal_refs(conn, pid, "EN100017")
         assert len(everything) == 2
         seed = everything[0]
+        only_seed = newest_proposal_refs(conn, pid, "EN100018")
+        assert len(only_seed) == 2
         conn.execute(
             update(ProposalAnnotationRow)
             .where(
                 ProposalAnnotationRow.project_id == pid,
-                ProposalAnnotationRow.annotation_id == seed.annotation_id,
+                ProposalAnnotationRow.annotation_id.in_(
+                    [seed.annotation_id, *(r.annotation_id for r in only_seed)]
+                ),
             )
             .values(proposal_set_id=None)
         )
         refs = newest_proposal_refs(conn, pid, "EN100017")
         counts = newest_proposal_counts(conn, pid)
         newest = newest_proposal_set(conn, pid, "EN100017")
+        seed_refs = newest_proposal_refs(conn, pid, "EN100018")
+        seed_newest = newest_proposal_set(conn, pid, "EN100018")
 
     assert refs == everything[1:]
-    assert counts == {"EN100017": 1}
+    assert counts == {"EN100017": 1, "EN100018": 2}
     assert newest is not None and newest.annotation_set_id == "set-a"
+    assert seed_refs == only_seed
+    assert seed_newest is not None and seed_newest.id is None
 
 
 def test_may_read_proposals_denies_an_annotator_from_scratch(checker) -> None:

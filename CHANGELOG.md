@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- Opening the text list right after a bundle import no longer takes minutes and blocks the project: the query for each document's newest proposal set no longer depends on fresh planner statistics.
+
 ## [0.4.0] - 2026-10-30
 
 ### Added
