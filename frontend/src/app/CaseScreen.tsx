@@ -1,6 +1,7 @@
 import { ReanchorPanel, currentReanchorResolution, reanchorKey, reanchorRef, useReanchorContext } from "../variants/ReanchorPanel";
 import { useCarriedReview } from "../editor/carried/useCarriedReview";
 import { carriedChosenAxisIds, carriedListOrder as orderCarriedFirst, deriveCarriedStates, nextUncheckedKey, rowKeyOf, type CarriedState, type SnapshotLike } from "../editor/carried/checkState";
+import { canRestore, captureDeletedFinding, modifierRestoreCommands, restoreCommands, type DeletedFinding } from "../editor/restoreFinding";
 import { carriedOriginLine, TEXT_CHANGE_ORIGIN, instructionLine, missingReason, roundName, textSpanLine, valuesLines, whatToCheckContext, type WhatToCheckContext } from "../editor/carried/instructions";
 import { CarriedSection, type CarriedReadOnly } from "../editor/carried/CarriedSection";
 import { ExceptionPanel } from "../editor/carried/ExceptionPanel";
@@ -59,6 +60,7 @@ import { plural, reopenNotice } from "./labels";
 import { FindingRow, ModifierLine } from "../editor/FindingRow";
 import { SubmitCaseDialog, submitOpenCount } from "../editor/SubmitCaseDialog";
 import { SubmitControl } from "../editor/SubmitControl";
+import { BACK_TO_CONSOLIDATION, CONSOLIDATION_EDITOR_HINT, REPLACED_BY_CONSOLIDATION_TITLE } from "../consolidation/consolidationText";
 import { collectOpenItems, nextOpenItem, type OpenItem } from "../editor/openItems";
 import { isModifierWarningKey, modifierWarningPairs, modifierWarnings, pairKey, rowPairs, sameSet, unconfirmedRows, type UnconfirmedRow } from "../editor/unconfirmedValues";
 import { HistoricalSubmissionDialog } from "../editor/HistoricalSubmissionDialog";
@@ -294,7 +296,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     reanchorItem?: ReanchorItem;
     /** "Mark in text" of a carried input without a carried finding: re-create it with the original term. */
     carriedInput?: import("../api/client").RoundInputView;
-    selectedTerm?: { termId: string; searchId?: string };
+    /** `label`: the hit's name, shown until the term labels have resolved this term (issue 157). */
+    selectedTerm?: { termId: string; searchId?: string; label?: string };
   } | null>(null);
   // Segments of the pending mark moved by its handles, readable before the state update lands.
   const pendingSegments = useRef<{ evidenceId: string; segments: SelectionPayload["segments"] } | null>(null);
@@ -605,6 +608,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const entryAuthorOf = (annotationId: string): string | undefined =>
     entryAuthors && entryAuthors.roundId === consolidationRoundId ? entryAuthors.labels.get(annotationId) : undefined;
   // Only an active round opens the consolidation view; otherwise the task route opens this editor again.
+  // The full editor of a consolidation: no submit here, the consolidation screen submits (issue 162).
+  const consolidationEditor = roundKind === "consolidation";
   const consolidationAssignmentId = roundKind === "consolidation" && roundActive ? assignmentNavigation?.current.assignment_id ?? versionContext?.assignmentId : undefined;
 
   // Review mode targets
@@ -1537,6 +1542,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         values: valuesLines(carriedAxes(selectedAnnotation).filter(axis => defaulted.has(axis.id)).map(axis => axis.label)),
         noteFirstLine: sourceNote ? sourceNote.split("\n")[0] : undefined,
         noteFull: sourceNote || undefined,
+        // Issue 157: the note of a finding without a text span is its reason, as in the editor's field.
+        noteLabel: !input.source_snapshot.annotation.evidence_refs?.length ? "Reason for no text span" : undefined,
       }}
       readOnly={carriedReadOnly}
       onMarkChecked={() => markCarriedChecked(state)}
@@ -1550,6 +1557,31 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const carriedDeleteMessage = selectedAnnotationId && carried.byHome.has(selectedAnnotationId)
     ? "Delete this finding and all its mentions? This is a carried finding. After deleting it, you must link another finding or dismiss it with a reason."
     : undefined;
+  /** Issue 150: puts a deleted finding back (Undo in the toast or Ctrl+Z) and selects it. */
+  const restoreDeletedFinding = async (deleted: DeletedFinding) => {
+    if (readOnlyRef.current) return;
+    const ann = deleted.snapshot.annotation;
+    const type = view.layers?.find(layer => layer.layer_id === ann.layer_id)?.annotation_types.find(item => item.type_id === ann.type_id);
+    const axisIds = (type?.axes ?? view.axes_config ?? []).map(axis => axis.id);
+    const adoptable = (id: string, version: string) => (view.available_inputs ?? []).some(input =>
+      input.annotation.annotation_id === id && input.version === version
+      && input.annotation.layer_id === ann.layer_id && input.annotation.type_id === ann.type_id);
+    setActionError(null);
+    try {
+      for (const payload of restoreCommands(deleted, axisIds, adoptable)) await enqueueMutation(payload);
+      const current = latestDraft.current.annotations?.find(a => a.annotation.annotation_id === ann.annotation_id)?.annotation.modifiers ?? [];
+      for (const payload of modifierRestoreCommands(ann.annotation_id, ann.modifiers ?? [], current)) await enqueueMutation(payload);
+      for (const decision of deleted.decisions) {
+        await enqueueDecision(decision.target, decision.outcome as ReviewDecisionOutcome, ann.annotation_id, decision.note ?? undefined);
+      }
+    } catch (error) {
+      if (!(error instanceof DiscardedChangesError)) reportError(error);
+      return;
+    }
+    selectListKey(`annotation:${ann.annotation_id}`, true);
+    announceCarried(`Restored ${findingNameOf(deleted.snapshot)}.`);
+  };
+
   /** Delete; a deleted carried finding becomes its placeholder row, selected with "Dismiss with reason…" focused. */
   const deleteAnnotation = async (annotationId: string) => {
     const homes = carried.byHome.get(annotationId) ?? [];
@@ -1557,7 +1589,15 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const rowKeys = [...sidebarScrollRef.current?.querySelectorAll<HTMLElement>('[data-list-key^="annotation:"]') ?? []].map(row => row.dataset.listKey);
     const index = rowKeys.indexOf(`annotation:${annotationId}`);
     const neighbour = index < 0 ? undefined : rowKeys[index + 1] ?? rowKeys[index - 1];
+    const deleted = captureDeletedFinding(latestDraft.current, annotationId);
     await handleDeleteAnnotation(annotationId);
+    // Issue 150: like a removed modifier, a deleted finding can be undone (toast or Ctrl+Z).
+    if (deleted && !readOnlyRef.current) {
+      const name = findingNameOf(deleted.snapshot);
+      modifierCommands.showToast(canRestore(deleted)
+        ? { message: `Deleted ${name}`, actionLabel: "Undo", undo: true, onAction: () => { void restoreDeletedFinding(deleted); } }
+        : { message: `Deleted ${name}` });
+    }
     const after = homes.length ? carriedStateNow(homes[0].input.input_id) : undefined;
     if (!after || after.homeId) {
       if (neighbour && (!document.activeElement || document.activeElement === document.body)) {
@@ -1741,7 +1781,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     // A handle moved by keyboard reports after a pause: take that move along.
     flushTextResize.current?.();
     if (pendingAnnotation.isSpanless && spanlessNotesRequired && !spanlessReason.trim()) {
-      setPendingAnnotation({ ...pendingAnnotation, selectedTerm: { termId, searchId } });
+      setPendingAnnotation({ ...pendingAnnotation, selectedTerm: { termId, searchId, label: termText } });
       setSpanlessReasonError(true);
       inspectorRef.current?.querySelector<HTMLTextAreaElement>("#spanless-reason")?.focus();
       return;
@@ -1763,6 +1803,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         term_id: termId,
         ...(!pending.reanchorItem ? {search_event_id:searchId} : {}),
         ...(pending.isSpanless && spanlessReason.trim() ? { note: spanlessReason.trim() } : {}),
+        // Issue 157: a re-created carried finding keeps the original's note (for a spanless one, its reason).
+        ...(pending.carriedInput?.source_snapshot.annotation.note?.trim() ? { note: pending.carriedInput.source_snapshot.annotation.note.trim() } : {}),
         segments: pending.segments,
         axes_values: pending.reanchorItem?.axes_values ?? (pending.carriedInput ? { ...pending.carriedInput.source_snapshot.annotation.axes_values }
           : { ...initialAxisValues(type?.axes ?? [], termId), ...view.creation_defaults?.[pending.layerId]?.[pending.typeId] }),
@@ -2148,7 +2190,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     if (next === undefined) {
       handleDeselectAll();
       setAdvanceStatus({ listKey: null, text: `${done} Every proposal is decided.`, decidedKey: refKey(target), decidedTerm });
-      document.querySelector<HTMLButtonElement>("[data-finish-submit]")?.focus();
+      document.querySelector<HTMLElement>(consolidationEditor ? "[data-consolidation-back]" : "[data-finish-submit]")?.focus();
       return;
     }
     selectProposal(reviewTargets[next]);
@@ -2313,12 +2355,13 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const type = view.layers?.find(layer => layer.layer_id === ann.layer_id)?.annotation_types.find(item => item.type_id === ann.type_id);
     const axisIds = (type?.axes ?? view.axes_config ?? []).map(axis => axis.id);
     const newId = `ann-${crypto.randomUUID()}`;
+    const movedEvidenceId = newEvidenceId();
     setActionError(null);
     try {
       await enqueueMutation({
         command: "create_annotation",
         annotation_id: newId,
-        evidence_id: newEvidenceId(),
+        evidence_id: movedEvidenceId,
         layer_id: ann.layer_id,
         type_id: ann.type_id,
         term_id: ann.term_id,
@@ -2333,12 +2376,13 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     }
     const finding = findingNameOf(source);
     const modifiers = (ann.modifiers ?? []).map(modifier => termLabel(ann.layer_id, modifier.term_id) ?? modifier.term_id);
-    const stays = modifiers.length ? ` ${modifiers.join(", ")} ${modifiers.length === 1 ? "stays" : "stay"} with this finding.` : "";
+    const stays = modifiers.length ? ` ${modifiers.join(", ")} ${modifiers.length === 1 ? "stays" : "stay"} with the original finding.` : "";
+    // Issue 151: the new finding is selected (and scrolled to), so the next action does not hit the original by mistake.
     setSelectedTargetId(null); setSelectedSourceId(null); setSelectedInputId(null);
-    setSelectedAnnotationId(annotationId);
-    setSelectedEvidenceId(refs.find(ref => ref.evidence_id !== evidenceId)?.evidence_id ?? null);
-    setAdvanceStatus({ listKey: `annotation:${annotationId}`, decidedKey: "",
-      text: `Moved mention ${index + 1} “${quoteSegments(view.document.text, segments, 40)}” to a new finding ${finding}.${stays}` });
+    setSelectedAnnotationId(newId);
+    setSelectedEvidenceId(movedEvidenceId);
+    setAdvanceStatus({ listKey: `annotation:${newId}`, decidedKey: "",
+      text: `Moved mention ${index + 1} “${quoteSegments(view.document.text, segments, 40)}” to a new finding ${finding}. The new finding is selected.${stays}` });
   };
   /** R-7: a proposal replaced by a copy with a single mention has nothing left to move (the move acts on the copy). */
   const proposalCopyCanMove = (target: TargetProposal) => {
@@ -2859,7 +2903,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
   // Step 1: save pending edits, validate the saved draft and open the confirmation dialog.
   const handleSubmitWorkspace = async () => {
-    if (readOnlyRef.current) return;
+    if (readOnlyRef.current || consolidationEditor) return;
     flushPendingAxes();
     setSubmitError(null);
     if (invalidAnnotationNotes().length > 0) { setActionError(null); setSubmitError("A reason is required for findings without a text span."); return; }
@@ -3134,6 +3178,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   };
 
   const shortcutOptions = { scope: "screen" as const, root: rootRef };
+  // Keys that wait for a selection stay in the ? help, marked "not available right now": the finding keys
+  // always, the decision keys in review modes only.
+  const reviewMode = isReviewLike(view.key.mode);
   useShortcut(["Alt+ArrowLeft", "Alt+ArrowRight"], (event) => {
     if (assignmentNavigation) {
       const id = event.key === "ArrowLeft" ? adjacentTask.previous : adjacentTask.next;
@@ -3175,11 +3222,11 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     if (back >= 0) index = back;
     if (step > 0) for (let i = 1; i <= n; i++) if (!decisionsMap[refKey(reviewTargets[at(i)])]) { index = at(i); break; }
     selectProposal(reviewTargets[index]);
-  }, { ...shortcutOptions, enabled: isReviewLike(view.key.mode) && reviewTargets.length > 0,
+  }, { ...shortcutOptions, enabled: isReviewLike(view.key.mode) && reviewTargets.length > 0, listWhenDisabled: reviewMode,
     group: "Decisions", description: "Next / previous review proposal" });
   useShortcutHint(["K"], "Right after a decision: back to the proposal just decided", {
     group: "Decisions", enabled: isReviewLike(view.key.mode) && reviewTargets.length > 0 });
-  const reviewShortcutOptions = { ...shortcutOptions, enabled: !readOnly && isReviewLike(view.key.mode) && !!selectedTarget, group: "Decisions" };
+  const reviewShortcutOptions = { ...shortcutOptions, enabled: !readOnly && isReviewLike(view.key.mode) && !!selectedTarget, listWhenDisabled: reviewMode, group: "Decisions" };
   useShortcut("1", () => {
     if (!selectedTarget || selectedTarget.is_obsolete || selectedTarget.is_unknown) return false;
     if (repeatDecision(selectedTarget, "confirmed")) return;
@@ -3226,7 +3273,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const open = inspectorRef.current?.querySelector<HTMLInputElement>("#search-input");
     if (open) { open.focus({ preventScroll: true }); return; }
     setChangeTermRequest(count => count + 1);
-  }, { ...shortcutOptions, enabled: pendingSearchable || ownFindingActive, group: "Finding", description: "Focus the term search" });
+  }, { ...shortcutOptions, enabled: pendingSearchable || ownFindingActive, listWhenDisabled: true, group: "Finding", description: "Focus the term search" });
   useShortcut("v", event => {
     // Plain "v" only: Shift+V is not this shortcut.
     if (event.shiftKey) return false;
@@ -3239,14 +3286,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     // At <=700 px the details pane must be shown before its control can take focus.
     if (panesLayout && mobilePane !== "details") flushSync(() => setMobilePane("details"));
     control.focus({ preventScroll: true });
-  }, { ...shortcutOptions, enabled: ownFindingActive && currentAxesConfig.length > 0, group: "Finding", description: "Focus the values" });
+  }, { ...shortcutOptions, enabled: ownFindingActive && currentAxesConfig.length > 0, listWhenDisabled: true, group: "Finding", description: "Focus the values" });
   useShortcut("d", event => {
     // Plain "d" only: Shift+D is not this shortcut.
     if (event.shiftKey || readOnlyRef.current) return false;
     const button = inspectorRef.current?.querySelector<HTMLButtonElement>("[data-confirm-defaults]");
     if (!button || button.disabled || button.getAttribute("aria-disabled") === "true") return false;
     button.click();
-  }, { ...shortcutOptions, enabled: ownFindingActive && (selectedAnnotation?.annotation.axes_defaulted?.length ?? 0) > 0,
+  }, { ...shortcutOptions, enabled: ownFindingActive && (selectedAnnotation?.annotation.axes_defaulted?.length ?? 0) > 0, listWhenDisabled: true,
     group: "Finding", description: "Confirm all default values" });
   useShortcutHint(["←", "→", "Ctrl + ← / →"], "Move the focused mention edge (Tab to an edge handle of the selected annotation or the marked text)");
 
@@ -3299,8 +3346,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     <ProposalMetadataProvider scope={`${workspaceId}:${JSON.stringify(view.key)}`} projectKey={view.key.project_key} proposals={view.available_inputs ?? []} metadata={view.proposal_sets ?? []} allowPublicFetch={false}>
     <div ref={rootRef} className={compareOpen ? "case-screen case-comparing" : "case-screen"}>
       <div className="visually-hidden" aria-live="polite" data-carried-announcer>{carriedAnnouncement}</div>
-      {/* The Undo toast of a removed modifier; its live region exists only where modifiers can be edited. */}
-      {modifierLayerIds.size > 0 && <Toast toast={modifierCommands.toast} onDismiss={modifierCommands.dismissToast} undoDescription="Undo removing the modifier" undoGroup="Finding" />}
+      {/* The Undo toast of a removed modifier or a deleted finding; its live region exists only where findings can be edited. */}
+      {(modifierLayerIds.size > 0 || !readOnly) && <Toast toast={modifierCommands.toast} onDismiss={modifierCommands.dismissToast} undoDescription="Undo deleting a finding or removing a modifier" undoGroup="Finding" />}
       {/* Header */}
       <Toolbar className="case-toolbar" label="Case">
         <div className={(assignmentNavigation ? assignmentTasks?.length ?? 0 : documentList?.length ?? 0) <= 1 ? "app-title app-title--single-case" : "app-title"}>
@@ -3335,7 +3382,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           >
             {roundKind === "consolidation" ? modeBadge("review").label : roundKind === "text_change" ? TEXT_CHANGE_ORIGIN : isCarryKind(roundKind) ? roundBadge ?? "Review carried findings" : badge.label}
           </span>
-          {consolidationAssignmentId ? <a className="btn btn-secondary btn-sm" href={routeHref({ name: "task", assignmentId: consolidationAssignmentId })} onKeyDown={onSpaceActivate}>Back to consolidation</a> : null}
+          {readOnly && consolidationAssignmentId ? <a className="btn btn-secondary btn-sm" href={routeHref({ name: "task", assignmentId: consolidationAssignmentId })} onKeyDown={onSpaceActivate}>{BACK_TO_CONSOLIDATION}</a> : null}
           {/* The display name has a bounded width (full text in the title), so the header
               does not need another line; the pseudonym is never shortened. */}
           {/* "as …" only when the work is saved under another pseudonym than the user's own (the shell names the user). */}
@@ -3389,14 +3436,22 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             ...(narrowHeader && !readOnly && openItems.length > 0 ? [{ id: "next-open", label: "Next open item", onSelect: goToNextOpenItem }] : []),
             { id: "shortcuts", label: "Keyboard shortcuts (?)", onSelect: openShortcutHelp },
           ]} />
-          {/* Read-only (submitted, paused, an older version): no edit controls. */}
-          {!readOnly && <SubmitControl
+          {/* Read-only (submitted, paused, an older version): no edit controls. A consolidation is submitted only on
+              its own screen (issue 162): its full editor offers the way back instead of a submit. */}
+          {!readOnly && !consolidationEditor && <SubmitControl
             onSubmit={() => { void handleSubmitWorkspace(); }}
             disabled={submitPending}
             pending={submitPending}
             openCount={submitOpenCount(openItems, unconfirmed)}
             onNextOpen={narrowHeader ? undefined : goToNextOpenItem}
           />}
+          {!readOnly && consolidationEditor && !narrowHeader && openItems.length > 0
+            && <Button type="button" size="sm" onClick={goToNextOpenItem}>Next open item</Button>}
+          {!readOnly && consolidationAssignmentId ? <>
+            <span className="case-consolidation-hint">{CONSOLIDATION_EDITOR_HINT}</span>
+            <a className="btn btn-primary btn-sm" data-consolidation-back href={routeHref({ name: "task", assignmentId: consolidationAssignmentId })}
+              onKeyDown={onSpaceActivate}>{BACK_TO_CONSOLIDATION}</a>
+          </> : null}
         </div>
       </Toolbar>
 
@@ -3519,7 +3574,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                           onClick={() => {
                             if (dec.replacement?.annotation_id) selectListKey(`annotation:${dec.replacement.annotation_id}`, true);
                           }}
-                          title="Jump to replacement annotation in draft"
+                          title={roundKind === "consolidation" ? REPLACED_BY_CONSOLIDATION_TITLE : "Jump to replacement annotation in draft"}
                         >
                           <span className="replaced-by-label">Replaced by:</span> <strong>{displayText}</strong>
                         </Button>
@@ -3548,7 +3603,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                       >
                         <div className="doc-id doc-row">
                           <TermName termId={t.term_id ?? t.annotation_id} label={termLabel(t.layer_id, t.term_id ?? t.annotation_id)} />
-                          {defaultedKeys.has(refKey(t)) && <StatusBadge tone="warning">Defaults to confirm</StatusBadge>}
+                          {/* Issue 148: only Confirm decides a proposal's defaults; an unresolved one keeps them as defaults. */}
+                          {defaultedKeys.has(refKey(t)) && (dec?.outcome === "uncertain"
+                            ? <StatusBadge tone="warning" title="Submitted as Unresolved with your note; its prefilled values stay recorded as defaults.">Defaults not confirmed</StatusBadge>
+                            : <StatusBadge tone="warning">Defaults to confirm</StatusBadge>)}
                           {dec ? (
                             <span className={`decision-tag decision-tag--${dec.outcome}`}>
                               {dec.outcome === "confirmed" ? <><IconCheck />Confirmed</>
@@ -3617,10 +3675,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 </Button>}
               </div>
               {isReviewLike(view.key.mode) && (() => {
-                const proposals = completionResults.filter(s => reviewTargets.some(t => t.annotation_id === s.annotation.annotation_id && t.version === s.version)).length;
-                const own = completionResults.length - proposals;
+                const proposals = completionResults.filter(s => reviewTargets.some(t => t.annotation_id === s.annotation.annotation_id && t.version === s.version));
+                // Issue 148: a proposal in the result is confirmed or unresolved; count it by its decision.
+                const unresolved = proposals.filter(s => decisionsMap[refKey({ annotation_id: s.annotation.annotation_id, version: s.version })]?.outcome === "uncertain").length;
+                const confirmed = proposals.length - unresolved;
+                const own = completionResults.length - proposals.length;
                 // #35/#26: only the non-zero parts; nothing in the result shows no line.
-                const parts = [...(proposals ? [plural(proposals, "confirmed proposal")] : []), ...(own ? [plural(own, "own finding")] : [])];
+                const parts = [...(confirmed ? [plural(confirmed, "confirmed proposal")] : []),
+                  ...(unresolved ? [plural(unresolved, "unresolved proposal")] : []), ...(own ? [plural(own, "own finding")] : [])];
                 return parts.length > 0 && <p className="field-hint" data-result-count>{parts.join(", ")}</p>;
               })()}
               {spanlessBlockedReason && <p className="field-hint">{spanlessBlockedReason}</p>}
@@ -3843,7 +3905,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                   error={spanlessReasonError && !spanlessReason.trim() ? "A reason is required before adding this annotation." : undefined}
                   onChange={event => { setSpanlessReason(event.target.value); setSpanlessReasonError(false); }} />}
                 {pendingAnnotation.selectedTerm && <div className="pending-term-continuation">
-                  <p>Selected term: <TermName termId={pendingAnnotation.selectedTerm.termId} label={termLabel(pendingAnnotation.layerId, pendingAnnotation.selectedTerm.termId)} /></p>
+                  <p>Selected term: <TermName termId={pendingAnnotation.selectedTerm.termId} label={termLabel(pendingAnnotation.layerId, pendingAnnotation.selectedTerm.termId) ?? pendingAnnotation.selectedTerm.label} /></p>
                   <Button disabled={readOnly || queueState === "saving" || (spanlessNotesRequired && !spanlessReason.trim())}
                     onClick={() => { void createPendingAnnotation(pendingAnnotation.selectedTerm!.termId, pendingAnnotation.selectedTerm!.searchId); }}>Add annotation</Button>
                 </div>}
@@ -3854,7 +3916,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                   onPickModifier={pendingIsMarkedSpan && modifierLayerIds.has(pendingAnnotation.layerId) ? startAttach : undefined}
                   modifierFilter={modifierLayerIds.has(pendingAnnotation.layerId)}
                   onSelectCandidate={(candidate, searchId) => {
-                    if (pendingAnnotation.selectedTerm) setPendingAnnotation({ ...pendingAnnotation, selectedTerm: { termId: candidate.term_id, searchId } });
+                    if (pendingAnnotation.selectedTerm) setPendingAnnotation({ ...pendingAnnotation, selectedTerm: { termId: candidate.term_id, searchId, label: candidate.label ?? undefined } });
                     else void createPendingAnnotation(candidate.term_id, searchId, candidate.label ?? undefined);
                   }} />}
                 {!pendingIsMarkedSpan && <Button type="button" variant="secondary" disabled={queueState === "saving"} onClick={cancelPending}>Cancel</Button>}

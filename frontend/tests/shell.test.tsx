@@ -6,6 +6,7 @@ import { Shell, type ShellProps } from "../src/app/Shell";
 import { NotFound } from "../src/app/NotFound";
 import { routeHref } from "../src/app/router";
 import { notifyDocumentsChanged } from "../src/documents/documentsEvents";
+import { notifyTasksChanged } from "../src/tasks/tasksEvents";
 import { DOCUMENTS_SUMMARY_REFRESH_MS } from "../src/documents/useDocumentsSummary";
 
 const user: CurrentUser = { username: "alex", display_name: "Alex", pseudonym: "a1", is_system_admin: false, csrf_token: "test" };
@@ -263,6 +264,16 @@ describe("shell identity and task count", () => {
     vi.mocked(api.listMyTasks).mockResolvedValue([task(5, "open")]);
     act(() => { notifySessionRestored(); });
     expect(await screen.findByRole("link", { name: "My tasks (1)" })).toBe(link);
+  });
+
+  it("reloads My tasks (n) on tasks-changed, so a submitted task stops counting (#156)", async () => {
+    vi.mocked(api.listMyTasks).mockResolvedValue([task(1, "in_progress")]);
+    render(<Shell {...props()} />);
+    const link = await screen.findByRole("link", { name: "My tasks (1)" });
+    vi.mocked(api.listMyTasks).mockResolvedValue([task(1, "submitted")]);
+    act(() => { notifyTasksChanged(); });
+    expect(await screen.findByRole("link", { name: "My tasks (0)" })).toBe(link);
+    expect(api.listMyTasks).toHaveBeenCalledTimes(2);
   });
 
   it("keeps the plain My tasks label when the count cannot be loaded", async () => {

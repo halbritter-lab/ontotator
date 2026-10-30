@@ -51,6 +51,8 @@ it("is the Upload texts dialog with Format and Language side by side and a fixed
   expect(dialog.className).toContain("ui-dialog--lg");
   fireEvent.change(screen.getByLabelText("Format"), { target: { value: "text" } });
   expect(screen.getByLabelText("Format").closest(".upload-fields")).toBe(screen.getByLabelText(/^Upload language/).closest(".upload-fields"));
+  // #174: the hint names the file-name rule before files are chosen.
+  expect(screen.getByText(/Each file name without \.txt becomes the text ID: letters, digits/)).toBeTruthy();
   expect(footer().getAllByRole("button").map(button => button.textContent)).toEqual(["Cancel", "Check"]);
   fireEvent.click(footer().getByRole("button", { name: "Cancel" }));
   expect(close).toHaveBeenCalledOnce();
@@ -428,6 +430,16 @@ it("shows notes one line each with a Show disclosure", () => {
   fireEvent.click(show);
   expect(within(note).getByText("other en")).toBeTruthy();
   expect(within(note).getByRole("button", { name: /^Hide/ }).getAttribute("aria-expanded")).toBe("true");
+});
+
+it("plain text: a note maps each file name to its text ID, a bundle has none (#174)", () => {
+  const view = render(<UploadPreview kind="text" plan={{ ...plan, documents: [doc("case-1"), doc("case-2", "en", { label: "texts.zip/case-2.txt" })] }} />);
+  const note = screen.getByText("Text IDs are the file names without .txt, for example case-1.txt → case-1.").closest("li")!;
+  fireEvent.click(within(note).getByRole("button", { name: /^Show: Text IDs/ }));
+  expect(within(note).getByText("texts.zip/case-2.txt → case-2")).toBeTruthy();
+  view.unmount();
+  render(<UploadPreview kind="t1" plan={{ ...plan, documents: [doc("case-1")] }} />);
+  expect(screen.queryByText(/^Text IDs are the file names/)).toBeNull();
 });
 
 it("warns about bundle languages the project does not list but still allows the import (OQ1)", () => {

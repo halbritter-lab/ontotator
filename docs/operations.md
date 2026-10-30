@@ -49,6 +49,8 @@ Record the manifest digest, check the required architecture is present, update e
 
 CI builds the image on pull requests (`.github/workflows/docker.yml`) and, on a pushed `vX.Y.Z` tag, publishes it (`.github/workflows/docker-publish.yml`) as `ghcr.io/halbritter-lab/ontotator` with tags `X.Y.Z`, `X.Y`, `sha-<commit>` and, for non-prerelease tags, `latest`; the run summary shows the `ONTOTATOR_IMAGE` digest reference. Set the GHCR package visibility once in the organization's package settings after the first publish. For manual or server-side publishing, publish an approved commit from a clean working tree with `bash scripts/publish-image.sh VERSION` (needs `docker login ghcr.io` with a token that may write packages; the build token comes from `GITHUB_TOKEN_FILE` or `gh auth token`). It refuses a VERSION that already exists in the registry, builds the image as above with tag `ghcr.io/halbritter-lab/ontotator:VERSION`, fails on fixable HIGH or CRITICAL findings from a pinned Trivy scan, pushes the tag and prints `ONTOTATOR_IMAGE=ghcr.io/halbritter-lab/ontotator@sha256:...`. The script pushes no `:latest` tag; put the digest reference in the private `.env.docker`. The image is built for the local machine's architecture; check it matches the server with `docker buildx imagetools inspect`. A local image ID is useful for local tests; a registry digest is the portable deployment input. Keep release identity and check results in the deployment record.
 
+Both publish paths pass the Git commit as the build argument `ONTOTATOR_REVISION`. The app shows it with the version at the bottom of the handbook's chapter list and returns both to any logged-in user at `GET /api/v1/about` (`{"version": "0.3.0", "revision": "<commit>"}`); a local build without the argument shows the version alone.
+
 ## Configuration and secrets
 
 Copy `.env.docker.template` to `.env.docker`, link it as `.env` (`ln -sf .env.docker .env`, Compose reads `.env`) and set the verified image, exact HTTPS public origin, proxy network name and NPM's pinned address on it (see [Reverse proxy settings](#reverse-proxy-settings)). `.env.docker` holds private deployment configuration; passwords belong in separate files. Production secrets use the relevant `*_FILE` settings. App gets only its database password and initial admin hash. The schema owner's URL/password are available only to `migrate`; the bootstrap role is only for PostgreSQL initialization.
@@ -210,7 +212,7 @@ docker compose up -d --wait
 docker compose ps --all
 ```
 
-Compose runs the new image's `migrate` before the new app. For upgrades that cannot tolerate concurrent old workers, stop ontotator_app first. Confirm migration exited successfully and app becomes ready before resuming access.
+Compose runs the new image's `migrate` before the new app. For upgrades that cannot tolerate concurrent old workers, stop ontotator_app first. Confirm migration exited successfully and app becomes ready before resuming access. The handbook's chapter list (or `GET /api/v1/about`) then shows the new version and commit.
 
 Migrations are forward-only. `/readyz` refuses any schema differing from the image's head, including a newer database paired with an older image. An image downgrade alone is not a database rollback. Restore the matching pre-upgrade database and data snapshot with its matching image when rollback is required.
 

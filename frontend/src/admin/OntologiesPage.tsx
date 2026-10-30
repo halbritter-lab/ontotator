@@ -84,7 +84,8 @@ export function OntologiesPage({ onNavigate }: OntologiesPageProps): JSX.Element
     { id: "sha", header: "SHA-256", cell: item => <><code title={item.sha256}>{item.sha256.slice(0, 12)}</code>{" "}<Button size="sm" aria-label={`Copy SHA-256 for ${item.filename}`} disabled={copying !== null} onClick={() => { void copy(item); }}>Copy</Button></> },
     { id: "uploaded", header: "Uploaded at", cell: item => <time dateTime={item.uploaded_at}>{formatDateTime(item.uploaded_at)}</time> },
     { id: "projects", header: "Pinned by", cell: item => item.projects.length ? <ul className="pinned-projects">{item.projects.map(key => {
-      const route: Route = { name: "projectSettings", key };
+      // The Ontology tab holds the pins (issue 168).
+      const route: Route = { name: "projectSettings", key, section: "ontology" };
       return <li key={key}><a href={routeHref(route)} onClick={event => {
         if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
         event.preventDefault(); onNavigate(route);

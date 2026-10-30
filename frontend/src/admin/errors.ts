@@ -97,7 +97,7 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   DISTRIBUTION_CONTEXT_INVALID: "The assignment proposal context is invalid. Generate a new proposal.",
   DISTRIBUTION_ROWS_INVALID: "Check the assignment rows for missing or duplicate entries.",
   DOCUMENT_CONFLICT: "A document with this ID already has different content.",
-  DOCUMENT_ID_INVALID: "The document ID is invalid. Check its filename.",
+  DOCUMENT_ID_INVALID: "The file name is not a valid text ID. Use letters, digits, \".\", \"_\" and \"-\" (up to 128 characters), starting with a letter or digit.",
   DOCUMENT_NOT_CHECKED: "Check the document before submitting.",
   DOCUMENT_SELECTION_INVALID: "Choose a valid selection of documents.",
   DRAFT_NOT_CREATED: "The draft could not be created. Reload and try again.",
@@ -171,6 +171,7 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   SEARCH_CONDITIONS_MISSING: "This project has no search conditions configured.",
   SEARCH_EVENT_EXISTS: "This search event already exists with different contents.",
   SEED_INVALID: "Use a valid integer seed.",
+  // The Users page offers neither (issue 168); the server guard stays, and this answers a direct or concurrent request.
   SELF_LOCKOUT: "You cannot deactivate yourself or remove your own administrator role.",
   SESSION_INVALID: "This session is no longer valid. Sign in again.",
   SETTINGS_INVALID: "One or more project settings are invalid.",

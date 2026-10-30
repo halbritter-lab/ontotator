@@ -41,6 +41,16 @@ it("opens the running consolidation for its consolidator", () => {
   expect(onNavigate).toHaveBeenCalledWith({ name: "projectConsolidation", key: "p", roundId: "r-7" });
 });
 
+it("opens the viewer's own running consolidation as their editable task, not the read-only round (#145)", () => {
+  const onNavigate = vi.fn();
+  const me = { ...carla, is_me: true };
+  const item = work({ assignment_id: 9, document_id: "doc-w07", author_label: "ann-0007", task: "review", status: "in_progress", person: me, is_me: true });
+  render(<FinalizationPart row={row({ case_id: "W07", language: "en", stages: stages({ annotation: stageCell("consolidating", "running", { people: [me] }) }),
+    consolidation_progress: { round_id: "r-7", open: 2, total: 3 }, work: [item] })} projectKey="p" query={{}} onNavigate={onNavigate} now={now} />);
+  fireEvent.click(screen.getByText("Open consolidation"));
+  expect(onNavigate).toHaveBeenCalledWith({ name: "task", assignmentId: 9 });
+});
+
 it("gives no link while someone else consolidates alongside the viewer (the round may be theirs)", () => {
   render(<FinalizationPart row={row({ case_id: "W07", language: "en", stages: stages({ annotation: stageCell("consolidating", "running", { people: [carla, { ...carla, pseudonym: "ann-0002", display_name: "Lena Lead", is_me: true }] }) }),
     consolidation_progress: { round_id: "r-7", open: 2, total: 3 } })} projectKey="p" query={{}} onNavigate={vi.fn()} now={now} />);

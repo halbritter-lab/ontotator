@@ -149,6 +149,17 @@ describe("ComparisonTable, Modifiers row", () => {
     expect(screen.getAllByText("Severe “schwere” (2 of 3)")).toHaveLength(2);
   });
 
+  it("read-only tags the kept modifiers with kept (#163)", () => {
+    const value = s16();
+    const rows = comparisonRows(value, PEOPLE, MOD_TEXT, {});
+    const kept = rows.find(row => row.id === "modifiers")!.cells[0].toggles![0].id;
+    render(<ComparisonTable name="seizures" group={value} people={PEOPLE} readOnly onChoose={() => undefined}
+      rows={comparisonRows(value, PEOPLE, MOD_TEXT, { modifiers: kept })} />);
+    const ana = screen.getByRole("list", { name: "Modifiers of Ana Weber" });
+    expect(within(ana).getByText("kept")).toBeTruthy();
+    expect(screen.getAllByText("kept")).toHaveLength(2);
+  });
+
   it("agreed modifiers are one grey line", () => {
     render(<Harness group={seizure("g", ["match"], [[ANA, [severe("schwere")]], [BEN, [severe("schwere")]]])} people={PEOPLE} text={MOD_TEXT} />);
     expect(screen.getByText("Severe “schwere” (all agree)").getAttribute("colspan")).toBe("2");

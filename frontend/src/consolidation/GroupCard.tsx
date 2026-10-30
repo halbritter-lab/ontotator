@@ -10,7 +10,7 @@
  * modifier marked as a finding (S18) resolves only with "Attach to a finding…" or "Not in result" (DN-8).
  */
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import type { ConsolidationAnnotatePayload, ConsolidationGroupView, ConsolidationPersonView, ConsolidationResolvePayload } from "../api/client";
+import type { ConsolidationAnnotatePayload, ConsolidationGroupView, ConsolidationMemberView, ConsolidationPersonView, ConsolidationResolvePayload } from "../api/client";
 import type { WorkspaceView } from "../app/CaseScreen";
 import { axisOptionLabel } from "../editor/axisLabels";
 import { COHORT_TAG, type TermInfo } from "../editor/modifiers";
@@ -78,11 +78,28 @@ export interface EditedValues { axes: Record<string, string>; modifiers: Modifie
 const consolidationChip = (label: string, quote: string | null, role: TermInfo["role"]) =>
   [labelWithQuote(label, quote), role === "cohort" ? COHORT_TAG : null].filter(Boolean).join(" ");
 
+export interface AxisField { id: string; label: string; options: readonly string[] }
+
+/** The value fields of a finding's type; without the type in the editor view, the finding's own axes. */
+export function axisFields(workspace: WorkspaceView | null | undefined, finding: Pick<ConsolidationMemberView, "layer_id" | "type_id" | "axes">): AxisField[] {
+  const type = workspace?.layers?.find(layer => layer.layer_id === finding.layer_id)?.annotation_types.find(value => value.type_id === finding.type_id);
+  return type?.axes ?? Object.keys(finding.axes).map(id => ({ id, label: axisLabel(id), options: [finding.axes[id]] }));
+}
+
+/** One select per value field ("Not specified" while empty): "Edit values…" of a group and of an added finding. */
+export function AxisFields({ id, axes, values, onChange }: { id: string; axes: readonly AxisField[]; values: Readonly<Record<string, string>>;
+  onChange: (axis: string, value: string) => void }): JSX.Element {
+  return <>{axes.map(axis => <Select key={axis.id} id={`${id}-${axis.id}`} label={axis.label} value={values[axis.id] ?? ""}
+    onChange={event => onChange(axis.id, event.target.value)}>
+    {!values[axis.id] && <option value="">Not specified</option>}
+    {axis.options.map(option => <option key={option} value={option}>{axisOptionLabel(option)}</option>)}
+  </Select>)}</>;
+}
+
 /** "Edit values…": every axis of the finding's type and, on a modifier layer, its Modifiers, starting from the kept member's. */
 function EditValues({ group, workspace, text, busy, onKeep, onCancel }: { group: ConsolidationGroupView; workspace: WorkspaceView; text: string; busy: boolean; onKeep: (values: EditedValues) => void; onCancel: () => void }): JSX.Element {
   const base = group.members.find(member => member.input_id === group.keep_input_id) ?? group.members[0];
-  const type = workspace.layers?.find(layer => layer.layer_id === base.layer_id)?.annotation_types.find(value => value.type_id === base.type_id);
-  const axes = type?.axes ?? Object.keys(base.axes).map(id => ({ id, label: axisLabel(id), options: [base.axes[id]], allow_empty: false }));
+  const axes = axisFields(workspace, base);
   const [values, setValues] = useState<Record<string, string>>(() => ({ ...base.axes }));
   const withModifiers = !!workspace.modifier_layer_ids?.includes(base.layer_id);
   const [modifiers, setModifiers] = useState<ModifierView[]>(() => (base.modifiers ?? []).map(value => ({ ...value, exclusive_class: value.exclusive_class ?? null })));
@@ -105,11 +122,7 @@ function EditValues({ group, workspace, text, busy, onKeep, onCancel }: { group:
     requestAnimationFrame(() => document.querySelector<HTMLElement>(".cons-edit-values [data-modifiers-section] .mod-add")?.focus());
   };
   return <div className="cons-edit-values" role="group" aria-label="Edit values">
-    {axes.map(axis => <Select key={axis.id} id={`${id}-${axis.id}`} label={axis.label} value={values[axis.id] ?? ""}
-      onChange={event => setValues(current => ({ ...current, [axis.id]: event.target.value }))}>
-      {!values[axis.id] && <option value="">Not specified</option>}
-      {axis.options.map(option => <option key={option} value={option}>{axisOptionLabel(option)}</option>)}
-    </Select>)}
+    <AxisFields id={id} axes={axes} values={values} onChange={(axis, value) => setValues(current => ({ ...current, [axis]: value }))} />
     {withModifiers && <ModifiersSection finding={base.term_label || base.term_id} text={text} termInfo={termInfo} chipText={consolidationChip}
       modifiers={modifiers.map(value => ({ term_id: value.term_id, segments: value.segments.map(([start, end]) => ({ start, end })) }))}
       onAdd={async (termId, label, role) => { setRemoved(""); setModifiers(current => current.some(value => value.term_id === termId) ? current

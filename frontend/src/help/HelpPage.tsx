@@ -3,6 +3,7 @@ import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Element, Root, RootContent } from "hast";
 import { routeHref } from "../app/router";
+import { AppVersion } from "./AppVersion";
 import { CHAPTERS, chapterOrder, chapterTitle, imageUrl, resolveLink, slugger } from "./handbook";
 import "../ui/guidelineDocument.css";
 import "./help.css";
@@ -45,7 +46,10 @@ function components(chapter: string): Components {
     },
     img: ({ src, alt }) => {
       const url = src ? imageUrl(src, chapter) : null;
-      return url ? <img className="help-image" src={url} alt={alt ?? ""} loading="lazy" /> : <span className="guideline-image-text">{alt ? `Image: ${alt}` : "Image"}</span>;
+      // issue 173: the screenshots are scaled to the chapter column; the link opens one at full size in a new tab.
+      return url ? <a className="help-image-link" href={url} target="_blank" rel="noopener noreferrer" title="Open the image at full size in a new tab">
+        <img className="help-image" src={url} alt={alt ?? ""} loading="lazy" />
+      </a> : <span className="guideline-image-text">{alt ? `Image: ${alt}` : "Image"}</span>;
     },
     table: ({ children }) => <div className="guideline-table-scroll" tabIndex={0} role="region" aria-label="Table"><table>{children}</table></div>,
   };
@@ -65,6 +69,7 @@ export default function HelpPage({ chapter = "README", section }: { chapter?: st
           <a href={routeHref({ name: "help", chapter: name })} aria-current={name === chapter ? "page" : undefined}>{chapterTitle(name)}</a>
         </li>)}
       </ul>
+      <AppVersion />
     </nav>
     <article className="guideline-document help-document">
       {body === undefined ? <><h1>Chapter not found</h1><p>This handbook has no chapter “{chapter}”. Pick one from the list.</p></>

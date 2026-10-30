@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ontotator: ontology annotation of clinical text</title>
+    <meta
+      name="description"
+      content="A self-hosted web service for marking ontology terms such as HPO in clinical text, reviewing them one by one, and exporting traceable results."
+    />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230284c7'/%3E%3Ccircle cx='16' cy='16' r='8' fill='none' stroke='white' stroke-width='3.5'/%3E%3C/svg%3E" />
+    <link rel="preload" href="fonts/source-serif-4-latin-opsz-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="site-head">
+      <a class="wordmark" href="#top">Ontotator</a>
+      <nav aria-label="Main">
+        <a href="#tutorial">Tutorials</a>
+        <a href="#workflow">How it works</a>
+        <a href="#self-hosting">Self-hosting</a>
+        <a href="https://github.com/halbritter-lab/ontotator">GitHub</a>
+        <a class="sign-in" href="https://ontotator.phentrieve.org">Invited users: sign in</a>
+      </nav>
+    </header>
+
+    <main class="sheet" id="top">
+      <section class="hero page-row">
+        <figure class="example" aria-label="An invented sentence annotated with three ontology terms">
+          <p class="sentence">
+            Since March, he has had <mark class="m0" id="mark-seizure">focal-onset seizures</mark> and
+            <mark class="m1" id="mark-tone">low muscle tone</mark>, but no <mark class="m2 negated" id="mark-fever">fever</mark>.
+          </p>
+          <figcaption>Invented example</figcaption>
+        </figure>
+
+        <aside class="margin terms" aria-label="Terms marked in the example">
+          <dl class="term" id="term-seizure">
+            <dt class="m0">Focal-onset seizure</dt>
+            <dd class="term-id">HP:0007359</dd>
+            <dd class="values"><span class="ok">Present</span><span class="patient">Patient</span><span class="current">Current</span></dd>
+          </dl>
+          <dl class="term" id="term-tone">
+            <dt class="m1">Hypotonia</dt>
+            <dd class="term-id">HP:0001252</dd>
+            <dd class="values"><span class="ok">Present</span><span class="patient">Patient</span><span class="current">Current</span></dd>
+          </dl>
+          <dl class="term" id="term-fever">
+            <dt class="m2 negated">Fever</dt>
+            <dd class="term-id">HP:0001945</dd>
+            <dd class="values"><span class="no">Absent</span><span class="patient">Patient</span><span class="current">Current</span></dd>
+          </dl>
+        </aside>
+
+        <div class="offer">
+          <h1>
+            Ontotator is a self-hosted web service for marking ontology terms such as HPO in clinical text, deciding them
+            one by one, and exporting traceable results.
+          </h1>
+          <div class="actions">
+            <a class="button" href="#tutorial">
+              <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3.5 2.2v11.6L13.5 8z" /></svg>
+              Watch the 6-minute tutorial
+            </a>
+            <a class="text-link" href="https://github.com/halbritter-lab/ontotator">View on GitHub</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="page-row" id="tutorial">
+        <div class="column">
+          <h2>Watch one task, start to finish</h2>
+          <video controls preload="metadata" playsinline width="1920" height="1080" poster="images/onboarding-poster.png">
+            <source src="tutorials/ontotator-onboarding.mp4" type="video/mp4" />
+            <track default kind="subtitles" src="tutorials/ontotator-onboarding.vtt" srclang="en" label="English" />
+            <a href="tutorials/ontotator-onboarding.mp4">Download the tutorial video</a>
+          </video>
+        </div>
+        <aside class="margin note">
+          <h3>Your first task</h3>
+          <p>Six minutes, in English with subtitles. It follows the order of the work: translation review, annotation, consolidation.</p>
+          <p>All texts and people shown are synthetic.</p>
+        </aside>
+      </section>
+
+      <section class="page-row" id="guideline">
+        <div class="column">
+          <h2>Example: HPO span annotation guideline</h2>
+          <video controls preload="metadata" playsinline width="1920" height="1080" poster="images/guidelines-poster.png">
+            <source src="tutorials/ontotator-annotation-guidelines.mp4" type="video/mp4" />
+            <track default kind="subtitles" src="tutorials/ontotator-annotation-guidelines.vtt" srclang="en" label="English" />
+            <a href="tutorials/ontotator-annotation-guidelines.mp4">Download the guideline video</a>
+          </video>
+        </div>
+        <aside class="margin note">
+          <h3>What to mark, and how far</h3>
+          <p>Nine minutes, in English with subtitles: what HPO is, what counts as a finding, and how to set its values.</p>
+          <p>This is one example of a guideline; your project may set its own rules. All examples are invented.</p>
+        </aside>
+      </section>
+
+      <section id="workflow">
+        <div class="page-row intro">
+          <div class="column">
+            <h2>From independent readings to one result</h2>
+            <p>
+              The clinical text stays the primary object. Review treats proposals from people and from tools the same way,
+              keeps their origin visible, and nothing is decided silently.
+            </p>
+          </div>
+        </div>
+
+        <figure class="page-row shot shot-editor">
+          <img src="images/annotator-editor.png" width="1280" height="800" loading="lazy" alt="The editor: a text with two marked findings, the list of findings on the left, the selected term and its values on the right." />
+          <figcaption class="margin note">
+            <h3>Annotate independently</h3>
+            <p>Select text, search the ontology, set assertion, experiencer and temporality. In independent annotation the browser receives no proposals and nothing derived from them.</p>
+          </figcaption>
+        </figure>
+
+        <figure class="page-row shot shot-review">
+          <img src="images/annotator-proposal-review.png" width="1280" height="800" loading="lazy" alt="Proposal review: pending proposals from a tool on the left, one of them replaced by a human counterpart with its values on the right." />
+          <figcaption class="margin note">
+            <h3>Review proposals</h3>
+            <p>Confirm, reject, edit or mark as uncertain. An edit creates a linked human counterpart; the original stays unchanged.</p>
+          </figcaption>
+        </figure>
+
+        <figure class="page-row shot shot-consolidate">
+          <img src="images/consolidator-group-table.png" width="1280" height="1100" loading="lazy" alt="Consolidation: three annotators' findings for one text, compared field by field, with the differing fields marked for a decision." />
+          <figcaption class="margin note">
+            <h3>Consolidate</h3>
+            <p>Where annotators agree, the result is ready. Where they differ, the consolidator decides field by field and the decision is recorded.</p>
+          </figcaption>
+        </figure>
+      </section>
+
+      <section class="page-row" id="self-hosting">
+        <div class="column">
+          <h2>Run it on your own server</h2>
+          <p>
+            Ontotator runs with Docker Compose and PostgreSQL. Once the pinned ontology release is loaded, it needs no
+            external services, cloud accounts or LLM calls, so it also fits closed networks.
+          </p>
+          <div class="actions">
+            <a class="button" href="https://github.com/halbritter-lab/ontotator/blob/main/docs/operations.md">Read the operations guide</a>
+            <a class="text-link" href="https://github.com/halbritter-lab/ontotator/blob/main/docs/handbook/README.md">User handbook</a>
+          </div>
+        </div>
+        <aside class="margin note">
+          <h3>Open source</h3>
+          <p>MIT license. Works with HPO, MONDO and other OBO ontologies.</p>
+        </aside>
+      </section>
+    </main>
+
+    <footer class="site-foot">
+      <span>Created by <a href="https://jplerch.eu">Jan-Paul Lerch</a>, <a href="https://github.com/halbritter-lab">Halbritter Lab</a>. MIT license.</span>
+      <a href="https://github.com/halbritter-lab/ontotator">GitHub</a>
+      <a href="https://github.com/halbritter-lab/ontotator/blob/main/docs/handbook/README.md">Handbook</a>
+      <a class="sign-in" href="https://ontotator.phentrieve.org">Invited users: sign in</a>
+    </footer>
+  </body>
+</html>

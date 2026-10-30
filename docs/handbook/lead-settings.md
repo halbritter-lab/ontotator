@@ -235,6 +235,8 @@ What for: give or take away a role.
 
 A project needs at least one lead: **Add another project lead before removing the last lead.**
 
+The system administrator who created the project is a member with all three roles. If they do not annotate or consolidate, take away those roles so that they no longer appear in the assign lists.
+
 ## Remove a member
 
 What for: take someone off the project.

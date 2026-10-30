@@ -3,6 +3,7 @@ import type { AssignmentView, CreateRoundRequest, RoundSourceView, WorkRoundView
 import { Button, DataTable, IconChevronRight, useMediaQuery, type Column } from "../ui";
 import { ErrorNotice } from "../admin/ErrorNotice";
 import { carriedCell, carryUnavailableReason, roundStartingPoint, roundStateLabel, sourceOptionLabel, submissionCell } from "../editor/rounds/roundLabels";
+import { notifyTasksChanged } from "./tasksEvents";
 import "./workRounds.css";
 
 /** Start state shared by the dialog body (choices) and its footer (primary action). */
@@ -42,7 +43,8 @@ export function useRoundStart(assignment: AssignmentView, sources: readonly Roun
       requests.current.set(identity, request);
     }
     const exact = request;
-    run(() => onCreate(exact));
+    // A new round reopens a submitted task: the "My tasks (n)" counter reloads.
+    run(async () => { await onCreate(exact); notifyTasksChanged(); });
   };
   return { source, setSource, busy, error, run, start };
 }
@@ -164,6 +166,10 @@ export function WorkRoundActions({ assignment, rounds, sources, control, current
           </label>)}
         </div>
         <p className="work-rounds__consequence">{`${selected?.round_ordinal ? `Round ${selected.round_ordinal}` : "The round you continue from"} stays in the history. Every carried finding must be checked again; carried values are not confirmed.`}</p>
+        {/* carry_forward supersedes the earlier round and clears the task's submission. */}
+        <p className="work-rounds__consequence">{assignment.last_submission_id
+          ? "Your earlier submission is then marked as replaced and no longer counts as submitted: the project lead sees your task as not submitted, and a new consolidation cannot start from it. If the lead already chose it as the final result, the lead is asked to review that choice. Submit the new round to hand in your work again."
+          : "Submit the new round to hand in your work."}</p>
       </>}
       {availability.kind === "unavailable" && <p className="work-rounds__reason">{availability.reason}</p>}
       {availability.kind === "unknown" && <>

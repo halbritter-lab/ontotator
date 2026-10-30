@@ -437,6 +437,8 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
                 onChange={event => { if (!off && !atLimit && !busy) choose(person.username, event.target.checked); }}
                 onKeyDown={event => rove(event, person.username)} />
               <label htmlFor={inputId}>{personLabel(person.person)}{why ? <span id={whyId} className="assign-reason">, {why}</span> : atLimit && !blocked && <span className="assign-reason">, limit reached</span>}</label>
+              {/* issue 177: a project's creator is a system administrator with every role; mark them so they are not ticked by mistake. */}
+              {person.system_admin && <StatusBadge tone="neutral" title="System administrator; the creator of a project is a member with every role">Administrator</StatusBadge>}
               {addMe && <Button size="sm" disabled={busy} onClick={() => { void addMeAsAnnotator(); }}>Add me as annotator</Button>}
             </span></td>
             <td className="assign-reads"><span className="assign-narrow-label">Reads </span>{person.reads.length ? person.reads.map((item, at) => <span key={item}>{at > 0 && ", "}{item === language ? <strong>{item}</strong> : item}</span>) : "None listed"}</td>
