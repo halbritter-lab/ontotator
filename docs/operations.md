@@ -111,7 +111,7 @@ docker compose ps --all
 
 PostgreSQL initialization creates separate non-superuser owner and app roles and the application schema. `migrate` upgrades that schema as owner, and only successful completion allows app to start.
 
-If initialization fails, the data volume is left half-initialized: PostgreSQL restarts, reports healthy and skips initialization, but the roles `ontotator_owner` and `ontotator_app` and the `ontotator` schema are missing, so `migrate` fails (for example `password authentication failed` or `role "ontotator_owner" does not exist`) and app never starts. Look for the cause in the first lines of `docker compose logs ontotator_postgres`:
+If initialization fails, the data volume is left half-initialized: PostgreSQL restarts and skips initialization, so the roles `ontotator_owner` and `ontotator_app` and the `ontotator` schema stay missing. The `ontotator_postgres` health check looks for both roles and the schema, so the container stays `unhealthy`, `up --wait` fails, and `migrate` and app are not started (`dependency failed to start: container ... is unhealthy`). `docker inspect --format '{{json .State.Health}}' CONTAINER` shows `ontotator roles/schema missing: postgres-init.sh failed`. Look for the cause in the first lines of `docker compose logs ontotator_postgres`:
 
 - `Invalid generated credential (hex expected)`: a password file is not 64 lowercase hex characters; see [Configuration and secrets](#configuration-and-secrets).
 - `Permission denied` for `/docker-entrypoint-initdb.d/10-ontotator.sh`: the init script is not readable by UID 70; apply the `chmod` lines above.
@@ -249,7 +249,45 @@ docker compose up -d --wait ontotator_app
 
 Run the block in the source deployment directory (or set `COMPOSE_PROJECT_NAME` and the same `--file`/`--env-file` options) so every `docker compose` command addresses the source project. Keep the spaces in `{{ .Config.Image }}`: the Docker CLI on Windows turns a space-free `{{.Config.Image}}` passed from Git Bash into the literal `.Config.Image`. In Git Bash also set `MSYS_NO_PATHCONV=1`, otherwise container paths such as `/source` are rewritten into Windows paths. `image-reference.txt` holds the reference app was started with; it identifies the image only if `.env` pins a digest. The final `up` also reruns the one-shot `migrate`, which finds the schema current. The volume is resolved from app's actual `/data` mount, never guessed from a project name. The archive helper uses the same verified image, has no network, reads the source volume read-only and records numeric owners. If any command fails, app stays stopped; investigate before releasing the maintenance restriction. Keep deployed Compose settings, ontology release identities and protected role credentials with this recovery record. `pg_dump` does not back up role passwords. Protect backups as clinical data. Bash streams binary data safely; older PowerShell versions may corrupt native binary redirection.
 
-Schedule this backup rather than relying on manual runs: run it nightly (it stops app for the duration of the dump and archive, so pick a quiet hour), copy each recovery point off the host, encrypted, together with its `SHA256SUMS`, and keep several recovery points. A backup that exists only on the deployment host is lost with the host. Run it additionally right before every image switch (see [Upgrades](#upgrades)). Check regularly that the newest off-host copy verifies with `sha256sum --check`, and rehearse a restore as below after any change to this procedure or to the Compose files.
+### Scheduled and off-host backups
+
+Schedule this backup rather than relying on manual runs. [`scripts/backup.sh`](../scripts/backup.sh) is the block above made safe to run unattended; copy it from the release you deploy next to its `docker-compose.yml`:
+
+```bash
+bash backup.sh /private/backup --wait-jobs 600 --keep-days 14
+```
+
+It runs in the deployment directory (or with `COMPOSE_PROJECT_NAME`/`COMPOSE_FILE` set), waits up to `--wait-jobs` seconds for running import/export jobs and gives up with exit code 75 without touching app if they do not finish, stops app for the dump and archive (about 15 s for small data) and **always starts it again**, also when the backup fails. It writes into `BACKUP_ROOT/<UTC timestamp>.partial` and renames the directory to `BACKUP_ROOT/<UTC timestamp>` only once both files exist and `SHA256SUMS` is written; it prints that path as the last line. `--keep-days` deletes older recovery points it created (names `YYYYMMDDTHHMMSSZ`, and stale `.partial` directories); without it nothing is deleted. CLI writers are not blocked: do not schedule it while operators run `admin import`/`export`.
+
+A recovery point that exists only on the deployment host is lost with the host's disk. Copy every complete recovery point off the host, **encrypted**, with its `SHA256SUMS`, for example by a systemd service that runs the script and then an off-host step of your choice (an encrypting backup tool such as restic or borg with a remote repository, or `age`/`gpg` plus `rsync`/`rclone` to storage you control). Never copy `.partial` directories. For example, with systemd (a sketch; adapt paths, user and the off-host step):
+
+```bash
+#!/bin/bash
+# /usr/local/bin/ontotator-nightly-backup
+set -euo pipefail
+cd /opt/ontotator # the deployment directory
+point="$(bash backup.sh /private/backup --keep-days 14 | tail -n 1)"
+ontotator-offsite "$point" # your encrypt-and-upload command
+```
+
+```ini
+# /etc/systemd/system/ontotator-backup.service
+[Service]
+Type=oneshot
+User=deploy
+ExecStart=/usr/local/bin/ontotator-nightly-backup
+
+# /etc/systemd/system/ontotator-backup.timer
+[Timer]
+OnCalendar=*-*-* 03:30:00 UTC
+Persistent=true
+[Install]
+WantedBy=timers.target
+```
+
+Keep the off-host encryption key off the deployment host, or at least out of the backup. Alert on a failed unit (`OnFailure=` or your monitoring), not only on a missing file. Run the backup additionally right before every image switch (see [Upgrades](#upgrades)). Check regularly that the newest **off-host** copy decrypts and verifies with `sha256sum --check`, and rehearse a restore as below, from an off-host copy, after any change to this procedure or to the Compose files and at least once on the real host.
+
+### Restore
 
 Restore only into a **fresh isolated target**, using the same image digest and role names. Prepare a separate deployment directory containing the matching Compose file, `docker/postgres-init.sh` at the same relative path (the Compose file mounts it from `./docker/`), private `.env` and service-specific secrets in `./secrets/`. Generate fresh bootstrap/owner/app passwords for the target as in [Configuration and secrets](#configuration-and-secrets): the dump carries no role passwords, so initialization sets the target's roles from its own files, and the consuming files must match them. Remove app's bootstrap admin `_FILE` setting as described earlier: the restored database already contains admin. Configure a separate test origin/proxy; do not attach the target to the live proxy network or allow users/CLI writers during restoration.
 
@@ -344,17 +382,20 @@ Pick a subnet that is unused on the host (compare `docker network inspect` of th
 
 Check with `docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' NPM_CONTAINER`. If NPM ever gets another IP, fix the pin; do not widen the trust.
 
+The app fails closed if the pin is ever lost. In production it accepts connections only from the addresses in `ONTOTATOR_TRUSTED_PROXIES` (whose `X-Forwarded-For` and `X-Forwarded-Proto` it applies) and from loopback inside its own container (the Docker health check and `docker compose exec` tools, whose forwarded headers it ignores). Any other peer gets `503` with a plain-text note, never reaches login, and so cannot fill the shared lockout bucket. The app log then shows, at most once a minute per address, `Refused a request from 10.89.0.5: not in ONTOTATOR_TRUSTED_PROXIES (10.89.0.2) ...`. If the refused address is NPM's, NPM came back with a new address: restore the pin in the NPM stack (preferred) or set `ONTOTATOR_TRUSTED_PROXIES` to the address NPM now has and recreate `ontotator_app`. `ontotator serve --production` therefore runs uvicorn without its own proxy-header handling; the app does it.
+
 NPM proxy host (Hosts, Proxy Hosts, Add Proxy Host):
 
 - Details: domain `editor.example.org`, scheme `http`, forward hostname `ontotator_app`, port `8000`. "Websockets Support" is not needed (the app uses none); "Block Common Exploits" may be on.
 - SSL: a Let's Encrypt certificate, "Force SSL" and "HTTP/2 Support" on. Leave NPM's "HSTS Enabled" off; the app sends its own HSTS header.
-- NPM already sets `Host $host`, `X-Forwarded-Proto $scheme` and `X-Forwarded-For $remote_addr` (it overwrites the client's header, as required). Nothing must be added for correctness; the Advanced tab takes the hardening below.
+- NPM sets `Host $host`, `X-Forwarded-Proto $scheme` and `X-Forwarded-For $remote_addr` (it overwrites the client's header). That is not enough on its own; see the next paragraph. The Advanced tab takes the hardening below.
 
-`$remote_addr` is the client's real address only if NPM does not itself take it from a client-supplied header. NPM's nginx accepts `X-Real-IP` from connections coming from private address ranges and, with its Cloudflare/CloudFront range fetch, from those ranges too. The per-address login lockout counts whatever NPM forwards, so a client that can set `X-Real-IP` chooses the address it is counted under. On NPM:
+`$remote_addr` is the client's real address only if NPM does not itself take it from a client-supplied header, and NPM's stock nginx does (checked against the 2.x image's `nginx.conf`, not on a live host): `real_ip_header X-Real-IP` with `real_ip_recursive on` and `set_real_ip_from` for 10/8, 172.16/12, 192.168/16 and the Cloudflare/CloudFront ranges in `conf.d/include/ip_ranges.conf`. Its realip module rewrites `$remote_addr` before the proxy configuration reads it. So a client that connects from one of those ranges, or arrives through Docker's userland proxy over IPv6 (from the bridge gateway, a 172.x address), chooses the address the app's login lockout counts by sending `X-Real-IP`: it can guess passwords without limit by rotating it, or lock a real user out from that user's own address. On NPM:
 
-- Set `IP_RANGES_FETCH_ENABLED: "false"` in NPM's environment unless the site really is behind Cloudflare or CloudFront.
-- Check how IPv6 clients arrive. Without IPv6 on the Docker network, Docker's userland proxy forwards them to NPM from the bridge gateway, a private address: they all share that address, and NPM may accept their `X-Real-IP`. Serve IPv6 natively to NPM, or make sure the gateway address is not trusted for `X-Real-IP`.
-- Verify from outside, over IPv4 and IPv6: NPM's access log must show your real public address, also for a request sent with a made-up `X-Real-IP` or `X-Forwarded-For` header.
+- Forward the TCP peer, which no header can change: in NPM's `proxy.conf` (or every Advanced `location` of this proxy host), set `proxy_set_header X-Forwarded-For $realip_remote_addr;` and `proxy_set_header X-Real-IP $realip_remote_addr;`. Key every `limit_req_zone` for this site on `$realip_remote_addr` too (see [Internet exposure](#internet-exposure)). This is the fix that holds.
+- Set `IP_RANGES_FETCH_ENABLED: "false"` in NPM's environment unless the site really is behind Cloudflare or CloudFront. This alone is not enough: it only skips the fetch at startup, and NPM's periodic range update can still write `ip_ranges.conf`.
+- Publish 80/443 on IPv4 only (`"0.0.0.0:80:80"`, `"0.0.0.0:443:443"`) until IPv6 reaches NPM natively; otherwise IPv6 clients arrive from the bridge gateway, which NPM trusts for `X-Real-IP`, and all share that address.
+- Verify from outside, over IPv4 and, if published, IPv6: send `curl -H 'X-Real-IP: 203.0.113.9' -H 'X-Forwarded-For: 203.0.113.9' https://editor.example.org/` and check that NPM's access log and the app log show your real public address, not `203.0.113.9`.
 
 For another proxy in front of app, forward the original `Host`, `X-Forwarded-For` and `X-Forwarded-Proto`. For nginx, configure `proxy_set_header Host $host;`, `proxy_set_header X-Forwarded-For $remote_addr;` (at the first proxy; `$proxy_add_x_forwarded_for` only behind another trusted proxy) and `proxy_set_header X-Forwarded-Proto $scheme;`. For a public nondefault port preserve its authority in Host. Ensure the first trusted proxy replaces untrusted incoming forwarded headers and any proxy chain is explicitly configured. Host validation, HTTPS session cookies, same-origin writes and per-client login throttling depend on these settings. Verify through the public origin after provisioning; TLS/proxy configuration is maintained outside this repository.
 
@@ -364,11 +405,12 @@ The app sets its own security headers (CSP with `frame-ancestors 'none'`, `X-Fra
 
 - Rate-limit `POST /api/v1/auth/login` and `/api/v1/auth/redeem-code` per client address, since the per-address lock does not stop attempts spread over many addresses, for example:
   ```nginx
-  limit_req_zone $binary_remote_addr zone=ontotator_auth:10m rate=10r/m;
+  # $realip_remote_addr: the TCP peer, not an address from X-Real-IP (see Reverse proxy settings).
+  limit_req_zone $realip_remote_addr zone=ontotator_auth:10m rate=10r/m;
   location ~ ^/api/v1/auth/(login|redeem-code)$ { limit_req zone=ontotator_auth burst=10 nodelay; include conf.d/include/proxy.conf; }
   ```
 - Set `client_max_body_size 1m;` by default and `300m` on `/api/v1/admin/ontologies` and `/api/v1/projects/` (uploads and bulk selections; the app enforces the exact limits).
-- Overwrite, never append to, `X-Forwarded-For` at the first proxy (`proxy_set_header X-Forwarded-For $remote_addr;`), so clients cannot choose the address the lockout counts.
+- Overwrite, never append to, `X-Forwarded-For` at the first proxy, with the TCP peer (`proxy_set_header X-Forwarded-For $realip_remote_addr;` on NPM, whose realip module may have rewritten `$remote_addr`), so clients cannot choose the address the lockout counts.
 - Block `/livez` and `/readyz` from outside (`location ~ ^/(livez|readyz)$ { deny all; }`); Docker health checks reach them directly.
 - Terminate TLS with a current configuration and redirect HTTP to HTTPS.
 
@@ -396,7 +438,7 @@ When the server is managed from a separate infrastructure ("hosting") repository
 - Proxy: the NPM proxy host is a declared `npm-hosts` entry forwarding to `ontotator_app:8000` with `hsts_enabled: false` (the app sends its own HSTS header), on the edge network from [Reverse proxy settings](#reverse-proxy-settings).
 - Settings and secrets are still required as in [Configuration and secrets](#configuration-and-secrets): the base file needs `ONTOTATOR_IMAGE`, `ONTOTATOR_PUBLIC_ORIGIN`, `ONTOTATOR_TRUSTED_PROXIES` and `NPM_SHARED_NETWORK_NAME` set even when the override pins the images.
 
-A release is deployed from the hosting repository, not on the server:
+A release is deployed from the hosting repository, not on the server. The targets below are a sketch of that flow; the hosting repository's own documentation is authoritative for their names and arguments:
 
 ```bash
 make pin APP=ontotator VERSION=X.Y.Z # vendors the release's files and pins its image digests
@@ -404,13 +446,28 @@ git add server/apps/ontotator && git commit # review the vendored diff first
 make deploy APP=ontotator
 ```
 
-Take a backup before `make deploy` switches the image, as in [Upgrades](#upgrades). Read the release notes for changes to the Compose file or init script; the PostgreSQL init script only runs on an empty volume, so changing it does not affect an existing database.
+Take a backup before `make deploy` switches the image, as in [Upgrades](#upgrades) (the hosting playbook takes one automatically before an image switch; check that it did). The host needs no GitHub credential: the repository and, once its visibility is set to public, the GHCR package are readable anonymously, and the vendored files make even an anonymous clone unnecessary. Read the release notes for changes to the Compose file or init script; the PostgreSQL init script only runs on an empty volume, so changing it does not affect an existing database.
 
 ## Workers and resource limits
 
 The production default is two Uvicorn workers (`ONTOTATOR_WORKERS=2`, supported range 1–6, so the connection pools stay under PostgreSQL's `max_connections=100`). Sessions are shared in PostgreSQL, so routing needs no sticky session. Each worker has its own interpreter, ontology registry and search indexes: memory rises with worker count and loaded ontology size. Measure representative workloads before increasing workers.
 
-The app contract limits it to 2 CPUs / 2 GiB, PostgreSQL to 1 CPU / 1 GiB and migrations to 1 CPU / 512 MiB. Each has a 256-PID limit; app has a 35-second stop grace period. Temporary files also consume container memory. More workers under unchanged limits can cause memory pressure or worse latency; worker count is not a throughput guarantee.
+The app contract limits it to 2 CPUs / 2 GiB, PostgreSQL to 1 CPU / 1 GiB and migrations to 1 CPU / 512 MiB. Each has a 256-PID limit; app has a 70-second stop grace period (uvicorn's 30 s graceful shutdown plus the job worker's 30 s join). Temporary files on tmpfs also count toward a container's memory. More workers under unchanged limits can cause memory pressure or worse latency; worker count is not a throughput guarantee.
+
+The memory caps can be set in `.env`: `ONTOTATOR_APP_MEM_LIMIT` (default `2g`) and `ONTOTATOR_POSTGRES_MEM_LIMIT` (default `1g`). Do not lower the app's cap below what you have measured: a load test under these limits saw app peak at about 2.1 GB (deployment review, issue #72), and an app that hits its cap is killed and restarted by Docker, which ends running jobs and in-flight requests. `migrate` runs only before app starts and does not add to the steady-state sum.
+
+A cap is a ceiling per container, not a reservation: on a shared host the caps of all stacks can add up to more than the host has, and when the host itself runs out, the kernel's OOM killer picks a process anywhere on the host, possibly PostgreSQL. On a shared host:
+
+- Add up the caps of every stack, plus uncapped containers (for example the reverse proxy) and the OS (allow at least 1 GB), and compare with `free -h`. Measure real peaks with `docker stats --no-stream` under load before choosing caps.
+- Keep the sum below physical memory, or provide swap so a short peak slows the host instead of killing a process. Lower another stack's cap rather than this one's if that stack is measured well below its cap.
+- Optionally make the host OOM killer prefer other processes to the database with an override file next to `docker-compose.yml` (a rootless Docker daemon may refuse negative values):
+
+  ```yaml
+  # docker-compose.override.yml, or a file listed in COMPOSE_FILE
+  services:
+    ontotator_postgres:
+      oom_score_adj: -500
+  ```
 
 ## Local verification
 
