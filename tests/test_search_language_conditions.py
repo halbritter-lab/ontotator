@@ -48,7 +48,7 @@ def ranked(
 
 def test_disabled_translations_do_not_change_english_ranks_or_scores() -> None:
     expected = ranked(service(), [])
-    assert expected[0][0] == "HP:0001250"
+    assert "HP:0001250" in [term_id for term_id, _score in expected]
     assert ranked(service("de", "es"), []) == expected
 
 

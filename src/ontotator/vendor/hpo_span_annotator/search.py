@@ -37,6 +37,15 @@ sorted by it anchors the reader on position 1 whatever produced it.
 about the match -- an exact label beats an exact synonym beats a looser
 predicate, a child is a child -- and destroying it would cost the annotator
 information without removing a bias.
+
+The same holds for the head of a scored list: a hit whose name has every query
+word at the start of one of its words is listed before the shuffled hits, in
+fixed order: fewest other words first, a label before another name of the same
+length, then alphabetically (:func:`ordered_then_shuffled`). That a name holds
+all the words is a fact about the name, and without this head a single query
+word put any name holding it on top: "hemorrhage" showed "Hemorrhage of the
+eye", "esophageal hemorrhage" showed "Epistaxis" through its synonym "Nasal
+hemorrhage" (#190). ``rank`` stays the retriever's order.
 """
 
 from __future__ import annotations
@@ -107,6 +116,33 @@ def shuffled(hits: list[dict[str, Any]], seed: str) -> list[dict[str, Any]]:
     return ordered
 
 
+def ordered_then_shuffled(
+    hits: list[dict[str, Any]], seed: str
+) -> list[dict[str, Any]]:
+    """Scored hits for display: the hits whose name holds every query word in
+    fixed order, then the others shuffled.
+
+    ``rank`` and ``display_pos`` as in :func:`shuffled`.
+    """
+    ordered = [dict(hit) for hit in hits]
+    for index, hit in enumerate(ordered, start=1):
+        hit["rank"] = index
+    head = sorted(
+        (hit for hit in ordered if hit.get("all_words")),
+        key=lambda hit: (
+            hit["all_words"]["extra"],
+            not hit["all_words"]["label"],
+            normalise(hit.get("label", "")),
+        ),
+    )
+    rest = [hit for hit in ordered if not hit.get("all_words")]
+    random.Random(seed).shuffle(rest)
+    out = head + rest
+    for position, hit in enumerate(out, start=1):
+        hit["display_pos"] = position
+    return out
+
+
 class SearchEngine:
     """Entry point for model-free and lexical HPO search routes."""
 
@@ -145,11 +181,13 @@ class SearchEngine:
                 raise SearchError(
                     f"the {path} route is unavailable; {still} still answer"
                 )
-            hits = index.search(query, k)
-            # Shuffled because the order is a score.
+            # Shuffled because the order is a score; names with all the
+            # query words first, in fixed order.
             return {
                 "path": path,
-                "hits": shuffled(hits, seed or shuffle_seed("-", "-", query, k)),
+                "hits": ordered_then_shuffled(
+                    index.search(query, k), seed or shuffle_seed("-", "-", query, k)
+                ),
                 "shuffled": True,
                 "seed": seed,
             }

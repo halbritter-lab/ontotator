@@ -320,21 +320,23 @@ def _deafness_ontology(tmp_path: Path) -> Path:
 def test_similar_block_is_shuffled_by_the_annotators_seed(tmp_path: Path) -> None:
     service = _service(_deafness_ontology(tmp_path))
     annotators = ["dr-a", "dr-b", "dr-c", "dr-d", "dr-e", "dr-f"]
+    # No other name holds both words, so every similar hit is shuffled.
+    query = "congenital deafness"
     results = {
-        annotator: service.search(_request("deafness", workspace_key=_key(annotator)))
+        annotator: service.search(_request(query, workspace_key=_key(annotator)))
         for annotator in annotators
     }
 
     ranked = results["dr-a"].ranked_ids
-    assert ranked[0] == "TEST:0000002"
+    assert ranked[0] == "TEST:0000007"
     assert len(ranked) == 9
 
     for annotator, result in results.items():
         assert result.shuffled is True
         assert result.ranked_ids == ranked
         # The exact match stays on top; only the similar block moves.
-        assert result.displayed_ids[0] == "TEST:0000002"
-        seed = shuffle_seed(annotator, "ann-1", "deafness", 10)
+        assert result.displayed_ids[0] == "TEST:0000007"
+        seed = shuffle_seed(annotator, "ann-1", query, 10)
         assert result.seed == seed
         expected = shuffled([{"hpo_id": term_id} for term_id in ranked[1:]], seed)
         assert result.displayed_ids[1:] == [hit["hpo_id"] for hit in expected]
@@ -342,3 +344,41 @@ def test_similar_block_is_shuffled_by_the_annotators_seed(tmp_path: Path) -> Non
     orders = {tuple(result.displayed_ids) for result in results.values()}
     assert len(orders) > 1
     assert any(result.displayed_ids != ranked for result in results.values())
+
+
+def test_names_with_all_query_words_are_listed_in_fixed_order(tmp_path: Path) -> None:
+    """Every similar name holds "deafness": fewest other words, then A-Z (#190)."""
+    service = _service(_deafness_ontology(tmp_path))
+    labels = {
+        f"TEST:{index:07d}": label
+        for index, label in enumerate(
+            [
+                "Root",
+                "Deafness",
+                "Mild deafness",
+                "Severe deafness",
+                "Partial deafness",
+                "Profound deafness",
+                "Congenital deafness",
+                "Unilateral deafness",
+                "Bilateral deafness",
+                "Progressive deafness",
+            ],
+            start=1,
+        )
+    }
+    expected = [
+        "Deafness",
+        "Bilateral deafness",
+        "Congenital deafness",
+        "Mild deafness",
+        "Partial deafness",
+        "Profound deafness",
+        "Progressive deafness",
+        "Severe deafness",
+        "Unilateral deafness",
+    ]
+    for annotator in ("dr-a", "dr-b", "dr-c"):
+        result = service.search(_request("deafness", workspace_key=_key(annotator)))
+        assert [labels[term_id] for term_id in result.displayed_ids] == expected
+        assert result.ranked_ids[0] == "TEST:0000002"
