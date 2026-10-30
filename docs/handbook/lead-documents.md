@@ -256,7 +256,7 @@ Before you start: once someone started or submitted work in one mode, the mode i
 What for: give translation reviews or annotations to people.
 
 1. Select the texts, then click the assign button in the selection bar, for example **Assign annotation…**.
-2. Check the **Task**, for example a translation review in one language.
+2. Check what the selection needs. If it needs more than one task or language, the line **This selection needs** names them, for example *translation review (de), annotation (en)*, and shows the step you are on. Then check the **Task**.
 3. In the table of people (**Person**, **Reads**, **Open tasks**), pick the reviewer, or tick everyone who should annotate. The task has one language: each ticked person gets every selected text in that language that still has a free place. *Administrator* marks a system administrator; the administrator who created the project is a member with all roles, so leave them unticked unless they take part.
 4. Read the summary below the table, for example *Ana Weber gets 3 translation reviews (de).*
 5. Click the assign button, for example *Assign 20*.
@@ -275,7 +275,9 @@ What happens to a waiting task:
 - You remove the review: the task keeps waiting, and the text shows the next step for the review.
 - You turn Review off and accept the translation: the task opens. You turn Annotate off or discard the version: the task is withdrawn, as any open task.
 
-If the selection has texts in several languages, the dialog assigns one language at a time. After the assign button, it stays open on the next language and lists what is already assigned; click **Close** when you are done. Cases that got nothing are offered in the message, for example *Select the 2 skipped cases*; the message stays until you close it.
+The dialog works through the whole selection, one task and language at a time: translation reviews first, then annotation. After the assign button it stays open on the next step, lists what is already assigned and says what comes next. An annotation that waits for its review is the next step once the review is assigned. To pass a step without assigning it, click **Skip this task**; to go to another step, choose it under **Task**. Click **Close** when you are done, or assign the last step.
+
+The closing message names what is left unassigned, for example *Left unassigned: annotation of case-0102 en*, and offers those cases, for example *Select the 2 skipped cases*. The message stays until you close it.
 
 ### Assign work for one text
 
@@ -296,7 +298,7 @@ The proposal uses the languages in each person's profile: a person is proposed f
 1. In the assign dialog, click **Distribute evenly…**.
 2. Set **People per document** and click **Propose**.
 3. Check the proposal. Change a person in any cell, or click **Propose again**. Texts nobody can take are listed under **Unassignable documents**.
-4. Click **Confirm**. Both dialogs close and the message says the assignments are saved.
+4. Click **Confirm**. This covers only the task shown in the assign dialog. If the selection needs more, the assign dialog stays open on the next step; otherwise it closes and the message says the assignments are saved.
 
 If you chose someone whose profile lists other languages than the text needs, the dialog stays open after **Confirm** and asks; click **Assign anyway**, then **Close**.
 

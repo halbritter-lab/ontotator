@@ -193,9 +193,12 @@ test("D15: import, plan de, assign de, plan fr, assign fr", async ({ page }) => 
   await clicks.click(dialog.getByRole("radio", { name: person(s, "ana"), exact: true }));
   await expect(dialog.getByRole("status", { name: "Summary" })).toHaveText("Ana Weber gets 20 translation reviews (de). Open tasks: 0 → 20.");
   await clicks.click(dialog.getByRole("button", { name: "Assign 20", exact: true }));
-  expect(clicks.total).toBe(10);
+  // The annotation of these texts is the next step (#218): Close leaves it for later (1; total 11).
+  await expect(dialog.getByText("Next: annotation (de). Close when you are done.", { exact: false })).toBeVisible();
+  await clicks.click(dialog.locator(".modal-actions").getByRole("button", { name: "Close", exact: true }));
+  expect(clicks.total).toBe(11);
   await expect(dialog).toHaveCount(0);
-  await expect(toast(page).locator(".ui-toast-message")).toHaveText("20 translation reviews assigned to Ana Weber");
+  await expect(toast(page).locator(".ui-toast-message")).toContainText("20 translation reviews assigned to Ana Weber. Left unassigned: annotation of");
   // The selection is cleared after a successful assign.
   await expect(bar(page)).toHaveCount(0);
   for (const caseId of [de[0], de[19]]) {
@@ -205,12 +208,12 @@ test("D15: import, plan de, assign de, plan fr, assign fr", async ({ page }) => 
   await expect(documentsTab(page, "In progress", 20)).toBeVisible();
   await evidence(page, "d15-de-assigned");
 
-  // 4. Plan the 30 fr cases the same way (6 + paste; total 16).
+  // 4. Plan the 30 fr cases the same way (6 + paste; total 17).
   await selectByIds(page, clicks, fr);
   await planReviewAndAnnotate(page, clicks, "fr", 30);
-  expect(clicks.total).toBe(16);
+  expect(clicks.total).toBe(17);
 
-  // 5. Assign the 30 fr reviews to Ben: Assign review…, Ben, Assign 30 (3; total 19). Splitting is "Distribute evenly…".
+  // 5. Assign the 30 fr reviews to Ben: Assign review…, Ben, Assign 30, Close (4; total 21). Splitting is "Distribute evenly…".
   await clicks.click(bar(page).getByRole("button", { name: "Assign review…", exact: true }));
   dialog = page.getByRole("dialog", { name: new RegExp(`^Assign${SEP}30 cases$`) });
   await expect(dialog.getByText(new RegExp(`^Translation review${SEP}fr${SEP}30 versions$`))).toBeVisible();
@@ -218,9 +221,10 @@ test("D15: import, plan de, assign de, plan fr, assign fr", async ({ page }) => 
   await expect(dialog.getByRole("status", { name: "Summary" })).toHaveText("Ben Roth gets 30 translation reviews (fr). Open tasks: 0 → 30.");
   await evidence(page, "d15-fr-assigned", dialog);
   await clicks.click(dialog.getByRole("button", { name: "Assign 30", exact: true }));
-  expect(clicks.total).toBe(19);
+  await clicks.click(dialog.locator(".modal-actions").getByRole("button", { name: "Close", exact: true }));
+  expect(clicks.total).toBe(21);
   await expect(dialog).toHaveCount(0);
-  await expect(toast(page).locator(".ui-toast-message")).toHaveText("30 translation reviews assigned to Ben Roth");
+  await expect(toast(page).locator(".ui-toast-message")).toContainText("30 translation reviews assigned to Ben Roth. Left unassigned: annotation of");
   await expect(bar(page)).toHaveCount(0);
   await expect(rowCell(row(page, "case-0121", "fr"), "waiting")).toContainText(person(s, "ben"));
   await expect(rowCell(row(page, "case-0150", "fr"), "waiting")).toContainText(person(s, "ben"));
