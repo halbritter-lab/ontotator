@@ -482,6 +482,8 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
           ...(rest.length ? {
             actionLabel: `Select the ${plural(rest.length, "skipped case")}`,
             onAction: () => selectCases(rest),
+            // The offer stays until dismissed: the next action often comes first (#195).
+            persist: true,
           } : {}),
         });
         refreshAll();

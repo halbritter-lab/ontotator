@@ -207,7 +207,7 @@ What for: plan or assign many texts at once.
 
 1. Click a row to select it. Shift+click selects a range; Ctrl+click (macOS: Cmd+click) adds single rows.
 2. To select every filtered text, tick the checkbox in the table header.
-3. The selection bar at the bottom shows how many texts are selected and their next step.
+3. The selection bar at the bottom shows how many texts are selected and their next steps, for example *next steps: Assign annotation (en, es)*.
 
 To start over, click **Clear selection**.
 
@@ -251,13 +251,15 @@ What for: give translation reviews or annotations to people.
 
 1. Select the texts, then click the assign button in the selection bar, for example **Assign annotation…**.
 2. Check the **Task**, for example a translation review in one language.
-3. In the table of people (**Person**, **Reads**, **Open tasks**), pick the reviewer, or tick everyone who should annotate. Each ticked person gets every selected text.
+3. In the table of people (**Person**, **Reads**, **Open tasks**), pick the reviewer, or tick everyone who should annotate. The task has one language: each ticked person gets every selected text in that language that still has a free place.
 4. Read the summary below the table, for example *Ana Weber gets 3 translation reviews (de).*
 5. Click the assign button, for example *Assign 20*.
 
 ![The assign dialog with members, their languages and open tasks](images/lead-assign.png)
 
-If someone does not read a language the task needs, the dialog asks again; click **Assign anyway** or **Back**. Ontotator sends no e-mail; the work appears in each person's **My tasks**.
+**Reads** shows the languages in each person's profile. If someone's profile lists languages but not one the task needs, the dialog asks again; click **Assign anyway** or **Back**. A person with no languages listed counts as unknown and gets no warning. Ontotator sends no e-mail; the work appears in each person's **My tasks**.
+
+If the selection has texts in several languages, the dialog assigns one language at a time. After the assign button, it stays open on the next language and lists what is already assigned; click **Close** when you are done. Cases that got nothing are offered in the message, for example *Select the 2 skipped cases*; the message stays until you close it.
 
 ### Assign work for one text
 
@@ -273,10 +275,14 @@ To change the limit of annotators per text from here, click the info button (i) 
 
 What for: spread a batch of texts evenly across people.
 
+The proposal uses the languages in each person's profile: a person is proposed for a text only if they read its languages, or list no languages at all. Fewest open tasks come first.
+
 1. In the assign dialog, click **Distribute evenly…**.
 2. Set **People per document** and click **Propose**.
-3. Check the proposal. Change a person in any cell, or click **Propose again**.
-4. Click **Confirm**, then **Close**.
+3. Check the proposal. Change a person in any cell, or click **Propose again**. Texts nobody can take are listed under **Unassignable documents**.
+4. Click **Confirm**. Both dialogs close and the message says the assignments are saved.
+
+If you chose someone whose profile lists other languages than the text needs, the dialog stays open after **Confirm** and asks; click **Assign anyway**, then **Close**.
 
 ### Remove, reassign or reopen an assignment
 

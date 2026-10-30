@@ -55,9 +55,16 @@ const ASSIGN_STEP: Readonly<Record<string, string>> = {
   annotate: "Assign annotation",
 };
 
-/** "next step: Assign translation review (de)". */
-export const commonStepText = (step: { task: string; language: string }): string =>
-  `next step: ${ASSIGN_STEP[step.task] ?? step.task} (${step.language})`;
+/**
+ * "next step: Assign translation review (de)"; a mixed selection names every step, one language list per task:
+ * "next steps: Assign annotation (en, es)" (#195; the assign dialog takes one language at a time).
+ */
+export function nextStepsText(steps: readonly { task: string; language: string }[]): string {
+  const byTask = new Map<string, string[]>();
+  for (const step of steps) byTask.set(step.task, [...(byTask.get(step.task) ?? []), step.language]);
+  const parts = [...byTask].map(([task, languages]) => `${ASSIGN_STEP[task] ?? task} (${[...new Set(languages)].join(", ")})`);
+  return `${steps.length > 1 ? "next steps" : "next step"}: ${parts.join("; ")}`;
+}
 
 const ASSIGN_BUTTON: Readonly<Record<string, string>> = { translation_review: "review", annotate: "annotation" };
 
@@ -175,7 +182,7 @@ export function SelectionBar({
       {keys.size >= MIN_TEXTS && <div className="selection-bar-line">
         <p className="selection-bar-summary">
           <strong>{`${plural(keys.size, "text")} in ${plural(caseIds.length, "case")} selected`}</strong>
-          {current?.common && <span className="selection-bar-step">, {commonStepText(current.common)}</span>}
+          {current?.common && <span className="selection-bar-step">, {nextStepsText(current.steps.length ? current.steps : [current.common])}</span>}
           {current && current.not_shown > 0 && <span className="selection-bar-hidden">, {current.not_shown} not shown with these filters</span>}
         </p>
         <div className="selection-bar-actions">

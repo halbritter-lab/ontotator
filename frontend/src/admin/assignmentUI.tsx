@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError, type AssignRequest, type AssignResponse, type Member, type CaseSummary, type VariantSummary, type DocumentSummary } from "../api/client";
 import { Button, InlineMessage, Select, StatusBadge } from "../ui";
-import { assignmentStatusLabels, labelFor, taskLabels } from "../app/labels";
+import { assignmentStatusLabels, labelFor, plural, taskLabels } from "../app/labels";
 import { errorMessage } from "./errors";
 import { ErrorNotice } from "./ErrorNotice";
 import { reviewLanguages } from "./variantMetadata";
@@ -91,7 +91,7 @@ export function useAssignmentBatch(projectKey: string, onChanged: () => void) {
 export function BatchFeedback({ batch, onConfirmLanguage, disabled, languages }: { batch: ReturnType<typeof useAssignmentBatch>; onConfirmLanguage: () => void; disabled?: boolean; languages?: ReadonlyMap<string, readonly string[] | null> }) {
   return <>
     {batch.error !== undefined && <ErrorNotice error={batch.error} />}
-    {batch.attempted && <InlineMessage tone="info">Assignment request complete: {batch.accepted} accepted; {batch.refused.length} refused.</InlineMessage>}
+    {batch.attempted && <InlineMessage tone="info">{[`${plural(batch.accepted, "assignment")} saved`, batch.refused.length > 0 && `${batch.refused.length} not saved`].filter(Boolean).join(", ")}.</InlineMessage>}
     {batch.refused.length > 0 && <ul aria-label="Refused assignments">{batch.refused.map(row => <li key={rowKey(row)}>{row.document_id} — {row.username}: <span>{errorMessage(new ApiError(422, row.code, row.code))}</span></li>)}</ul>}
     {batch.languageRows.length > 0 && <section aria-label="Confirm document languages"><p>These people's profiles do not list the required document languages. Assign anyway?</p><ul>{batch.languageRows.map(row => <li key={rowKey(row)}>{row.document_id} — {row.username}: {languages?.get(row.document_id)?.join(", ") || "Required languages unavailable"}</li>)}</ul><Button disabled={disabled} loading={batch.busy} onClick={onConfirmLanguage}>Assign anyway</Button></section>}
   </>;
