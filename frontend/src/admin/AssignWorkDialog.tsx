@@ -145,7 +145,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
   const [acknowledged, setAcknowledged] = useState(false);
   const [limitSaved, setLimitSaved] = useState<string | null>(null);
   const [allTexts, setAllTexts] = useState(false);
-  /** Cases mode walks through the selection's steps (#195): what earlier runs of this dialog assigned. */
+  /** Cases mode walks through the selection's steps (issue 195): what earlier runs of this dialog assigned. */
   const [done, setDone] = useState<{ steps: string[]; messages: string[]; assigned: string[]; skipped: string[] }>({ steps: [], messages: [], assigned: [], skipped: [] });
   const randomChanged = useRef(false);
   const writing = useRef(false);

@@ -57,7 +57,7 @@ const ASSIGN_STEP: Readonly<Record<string, string>> = {
 
 /**
  * "next step: Assign translation review (de)"; a mixed selection names every step, one language list per task:
- * "next steps: Assign annotation (en, es)" (#195; the assign dialog takes one language at a time).
+ * "next steps: Assign annotation (en, es)" (issue 195; the assign dialog takes one language at a time).
  */
 export function nextStepsText(steps: readonly { task: string; language: string }[]): string {
   const byTask = new Map<string, string[]>();

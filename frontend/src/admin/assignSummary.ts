@@ -31,7 +31,7 @@ export function onePersonSummary({ person, gets, task, language, openBefore, ope
 }
 
 const skipOrder: BatchSkipView["reason"][] = ["waiting_for_review", "not_in_plan", "already_assigned", "step_differs", "discarded", "no_proposals_on_version"];
-/** `task` names the work in the not-in-plan line: a case planned only in another language is skipped for this one (#195). */
+/** `task` names the work in the not-in-plan line: a case planned only in another language is skipped for this one (issue 195). */
 export function skippedLines(skipped: readonly BatchSkipView[], language: string, task: AssignTask = "annotate"): string[] {
   return skipOrder.flatMap(reason => {
     const n = skipped.filter(item => item.reason === reason).length;

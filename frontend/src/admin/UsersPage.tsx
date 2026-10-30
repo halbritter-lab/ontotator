@@ -17,7 +17,7 @@ type PendingChange = { username: string; change: AdminUserPatch; kind: "admin" |
 type EditState = { baseline: AdminUser; draft: AdminUser };
 /** From this many projects the New user grid gets a "Find project" field. */
 const PROJECT_FILTER_FROM = 8;
-/** Member languages drive the language warnings and Distribute evenly; none listed counts as unknown (#193). */
+/** Member languages drive the language warnings and Distribute evenly; none listed counts as unknown (issue 193). */
 const LANGUAGES_HINT = "The languages this person reads. Assigning work and Distribute evenly use them; leave empty if unknown.";
 const emptyCreate = (): CreateUserRequest => ({ username: "", display_name: "", email: "", languages: [], system_admin: false, projects: [] });
 const projectRoles = ["lead", "annotator", "adjudicator"] as const;

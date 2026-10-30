@@ -44,7 +44,7 @@ function DistributionEditor({ projectKey, documents, cases, task: initialTask, c
     } catch (failure: unknown) { if (alive.current) setError(failure); }
     finally { if (alive.current) { writing.current = false; setBusy(false); } }
   };
-  // A clean confirmation closes the dialog: the caller reports what was saved (#195).
+  // A clean confirmation closes the dialog: the caller reports what was saved (issue 195).
   const saved = batch.attempted && !batch.busy && batch.error === undefined && batch.refused.length === 0 && batch.accepted > 0;
   useEffect(() => { if (saved) onClose(); }, [saved]); // eslint-disable-line react-hooks/exhaustive-deps -- once per clean save
   const stale = batch.error instanceof ApiError && batch.error.code === "DISTRIBUTION_STALE";
