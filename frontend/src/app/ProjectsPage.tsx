@@ -52,7 +52,7 @@ function useOpenTasks(enabled: boolean): Counts | null {
   return counts;
 }
 
-/** Every project of the user (spec F8, D4): the landing when no last-used project is accessible. */
+/** Every project of the user (spec F8, D4): the landing of a lead when no last-used project is accessible. */
 export function ProjectsPage({ projects, currentKey, onNavigate }: ProjectsPageProps): JSX.Element {
   const [search, setSearch] = useState("");
   const decisions = useDecisionCounts(projects);

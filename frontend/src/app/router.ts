@@ -124,7 +124,7 @@ export type Route =
   | { name: "adminUsers" }
   | { name: "adminOntologies" }
   | { name: "projectNew" }
-  /** Every project of the user (F8); the landing when no last-used project is accessible. */
+  /** Every project of the user (F8); the landing of a lead when no last-used project is accessible. */
   | { name: "projects" }
   | { name: "projectSettings"; key: string; section?: SettingsSection }
   | ({ name: "projectDocuments"; key: string } & ProjectDocumentsQuery)
