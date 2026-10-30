@@ -29,9 +29,9 @@ describe("ontology administration page", () => {
     expect(within(table).getByText("a".repeat(12)).getAttribute("title")).toBe(ontology.sha256);
     expect(within(table).getAllByText(formatDateTime(ontology.uploaded_at))).toHaveLength(2);
     const link = screen.getByRole("link", { name: "project / one" });
-    expect(link.getAttribute("href")).toBe("#/projects/project%20%2F%20one/settings");
+    expect(link.getAttribute("href")).toBe("#/projects/project%20%2F%20one/settings/ontology");
     fireEvent.click(link, { ctrlKey: true }); expect(navigate).not.toHaveBeenCalled();
-    fireEvent.click(link); expect(navigate).toHaveBeenCalledWith({ name: "projectSettings", key: "project / one" });
+    fireEvent.click(link); expect(navigate).toHaveBeenCalledWith({ name: "projectSettings", key: "project / one", section: "ontology" });
     expect(chosen().accept).toBe(".json,.tsv"); expect(chosen().multiple).toBe(true);
     expect(screen.getByText("OBO Graph JSON ontologies and Babelon translation files")).toBeTruthy();
   });

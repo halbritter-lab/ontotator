@@ -7093,6 +7093,28 @@
         }
       }
     },
+    "/api/v1/about": {
+      "get": {
+        "tags": [
+          "about"
+        ],
+        "summary": "About",
+        "description": "Version and Git commit of the running app.",
+        "operationId": "about_api_v1_about_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/About"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/auth/login": {
       "post": {
         "tags": [
@@ -8036,6 +8058,32 @@
   },
   "components": {
     "schemas": {
+      "About": {
+        "properties": {
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version",
+          "revision"
+        ],
+        "title": "About",
+        "description": "What a user quotes when reporting a problem."
+      },
       "AcceptExternalReview": {
         "properties": {
           "reason": {
@@ -9727,6 +9775,11 @@
           "already_assigned": {
             "type": "integer",
             "title": "Already Assigned"
+          },
+          "system_admin": {
+            "type": "boolean",
+            "title": "System Admin",
+            "default": false
           }
         },
         "type": "object",
@@ -11211,6 +11264,17 @@
               }
             ],
             "title": "Consolidator"
+          },
+          "consolidation_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consolidation Reason"
           },
           "workflow_revision": {
             "type": "integer",
@@ -22480,6 +22544,17 @@
               }
             ],
             "title": "Reopen Reason"
+          },
+          "consolidation_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consolidation Reason"
           },
           "report_answered": {
             "type": "boolean",

@@ -1029,6 +1029,23 @@ describe("Resolved and Changed badges", () => {
     await waitFor(() => expect(within(rowHeader("case-0042 en")).getByText("Resolved")).toBeTruthy());
   });
 
+  it("Refresh starts a new visit: an assigned row stops being retained and loses its badge (#176)", async () => {
+    serve(page([group("case-0042", [missing()])]));
+    renderPage({ query: { segment: "assign" } });
+    await waitFor(() => expect(lastRequest()).toEqual({ segment: "assign", retain: ["case-0042:en"] }));
+    serve(page([group("case-0042", [missing({
+      categories: [], matches_decision: false, retained: true, missing_final: { counts: false, reason: "work_open" },
+      work: [work({ assignment_id: 9, document_id: "case-0042-en" })],
+    })])]));
+    await refetch();
+    expect(await screen.findByText("Changed: Work assigned")).toBeTruthy();
+    serve(page([]));
+    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    await waitFor(() => expect(lastRequest()).toEqual({ segment: "assign" }));
+    await waitFor(() => expect(screen.queryByText("Changed: Work assigned")).toBeNull());
+    expect(sessionStorage.getItem(`ontotator:documents-visit:p:${JSON.stringify({ segment: "assign" })}`)).toBeNull();
+  });
+
   it("keeps the visit (retained rows and badges) when paging under the same filters", async () => {
     serve(page([group("case-0042", [missing()])], { page_count: 2 }));
     const onNavigate = vi.fn();

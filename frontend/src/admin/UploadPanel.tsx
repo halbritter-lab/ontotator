@@ -9,6 +9,9 @@ import type { UploadWorkPlanResult } from "./UploadWorkPlan";
 import { caseCount, importButtonLabel, unitWord, type UploadKind } from "./uploadModel";
 import { useJob } from "./useJob";
 
+/** issue 174: the plain-text rule of `exchange/text.py` (file name without .txt = text ID, `DOCUMENT_ID`). */
+const TEXT_FILES_HINT = "UTF-8 text files (.txt) or ZIP archives of them; checked before import. Each file name without .txt becomes the text ID: letters, digits, \".\", \"_\" and \"-\", starting with a letter or digit, up to 128 characters."
+
 export interface UploadPanelProps {
   projectKey: string; languages: readonly string[]; /** Called once after a finished import with its result ("Imported 9 documents and 0 proposals."); the caller closes the dialog and shows the toast (Q5). */
   onImported: (message: string) => void;
@@ -264,7 +267,7 @@ export function UploadPanel({ projectKey, languages, onImported, onClose, canOve
                 <IconButton size="sm" variant="quiet" label={`Remove ${file.name}`} icon={<IconClose />} disabled={busy} onClick={() => { setFiles(current => current.filter(other => !sameFile(file, other))); changed(); }} />
               </li>)}</ul>}
             </div>
-            <p id={`${ids}-files-hint`} className="field-hint">{kind === "t1" ? "Ontospan exchange files (.json) or bundles (.zip) with texts and any proposals; checked before import." : "UTF-8 text files (.txt) or ZIP archives of them; checked before import."}</p>
+            <p id={`${ids}-files-hint`} className="field-hint">{kind === "t1" ? "Ontospan exchange files (.json) or bundles (.zip) with texts and any proposals; checked before import." : TEXT_FILES_HINT}</p>
           </div>
         </form>}
         {phase === "choose" && <UnfinishedUploads uploads={uploads} error={listError} open={unfinishedOpen} onToggle={() => setUnfinishedOpen(value => !value)} busy={busy} onOpen={id => { void open(id); }} />}

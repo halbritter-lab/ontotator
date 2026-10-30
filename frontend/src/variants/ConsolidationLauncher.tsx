@@ -136,16 +136,18 @@ function ConsolidationContent(props: Props): JSX.Element {
         data-submission-id={row.submission_id} checked={selected.has(row.submission_id)} onChange={event => setSelected(previous => {
           const next = new Set(previous); if (event.target.checked) next.add(row.submission_id); else next.delete(row.submission_id); return next;
         })} />)}</fieldset>
+      {/* Issue 147: who is listed, and how someone else becomes eligible. */}
       <Select id={`${fieldId}-reviewer`} label="Consolidator" value={chosen ? reviewer : ''} disabled={busy}
+        hint={noConsolidator ? <>No member has the Consolidator role yet. Give it in <a href={membersHref}>Settings → People</a>.</>
+          : <>Lists you and the members with the Consolidator role. Give the role in <a href={membersHref}>Settings → People</a>.</>}
         onChange={event => { setReviewer(event.target.value); setConfirmLanguage(false); }}><option value="">Choose a consolidator</option>
         {candidates.map(row => <option key={row.username} value={row.username} disabled={row.reason !== null}>
           {row.reason ? `${row.label} — ${row.reason}` : row.label}
         </option>)}
       </Select>
-      {getsRole && <p className="cell-secondary">You will get the Consolidator role for this project.</p>}
-      {noConsolidator && <p className="cell-secondary">No member has the Consolidator role yet. Give it in <a href={membersHref}>Settings → People</a>.</p>}
       {missingLanguage && <Checkbox id={`${fieldId}-language`} label={`Assign this consolidator despite missing ${language} in their profile`} checked={confirmLanguage} disabled={busy} onChange={event => setConfirmLanguage(event.target.checked)} />}
-      <Textarea id={`${fieldId}-reason`} label="Consolidation reason (optional)" value={reason} disabled={busy} onChange={event => setReason(event.target.value)} />
+      {getsRole && <p className="cell-secondary">You will get the Consolidator role for this project.</p>}
+      <Textarea id={`${fieldId}-reason`} label="Consolidation reason (optional)" hint="The consolidator sees it in My tasks and above the groups." value={reason} disabled={busy} onChange={event => setReason(event.target.value)} />
       {error != null && <><ErrorNotice error={error} /><Button disabled={busy} onClick={() => { setError(undefined); setAttempt(value => value + 1); }}>Reload reviewer tasks</Button></>}
       {missing && <p id={`${fieldId}-missing`} className="action-reason">{missing}</p>}
       {ongoing ? chosen?.self && <a className="btn btn-secondary" href={`#/tasks/${ongoing.id}`} onKeyDown={onSpaceActivate}>Continue consolidation</a> : <Button aria-disabled={missing || busy ? true : undefined} aria-describedby={missing ? `${fieldId}-missing` : undefined} loading={busy}

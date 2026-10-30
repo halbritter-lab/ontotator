@@ -8,8 +8,8 @@
  * problem report page removed the category, else "Changed: {reason}".
  *
  * The state lives in `sessionStorage` per project and filter, so it survives the remount when
- * the lead returns from the report page. A filter change (`clearVisits`) or a reload
- * (`beforeunload`) clears it.
+ * the lead returns from the report page. A filter change (`clearVisits`), **Refresh**
+ * (`forgetVisit`) or a reload (`beforeunload`) clears it.
  */
 import type { DocumentRowView } from "../api/client";
 
@@ -155,6 +155,11 @@ export function clearVisits(projectKey?: string, keepFilterKey?: string): void {
     if (key?.startsWith(PREFIX)) doomed.push(key);
   }
   try { for (const key of doomed) if (key !== keep) store.removeItem(key); } catch { /* ignore */ }
+}
+
+/** Forget one visit (the page's **Refresh**): its retained rows drop out and its badges go. */
+export function forgetVisit(projectKey: string, filterKey: string): void {
+  try { storage()?.removeItem(visitStorageKey(projectKey, filterKey)); } catch { /* ignore */ }
 }
 
 // A reload starts a new visit.

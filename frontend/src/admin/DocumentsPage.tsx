@@ -51,7 +51,7 @@ import { isActiveRow } from "../documents/stageLabels";
 import { caseOfTextKey, languageOfTextKey, MAX_SELECTION_CASES as MAX_SELECTION, textKeyOf, useTextSelection } from "../documents/useTextSelection";
 import { useDocumentRows } from "../documents/useDocumentRows";
 import { notifyDocumentsChanged } from "../documents/documentsEvents";
-import { clearVisits, recordDecision, rememberShown, retainedKeys, rowBadges, type RowBadge } from "../documents/visitState";
+import { clearVisits, forgetVisit, recordDecision, rememberShown, retainedKeys, rowBadges, type RowBadge } from "../documents/visitState";
 import { notifyFinalSelectionChanged } from "../variants/finalSelectionState";
 import { AssignWorkDialog, type AssignWorkDialogProps } from "./AssignWorkDialog";
 import { ErrorNotice } from "./ErrorNotice";
@@ -308,6 +308,16 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   useSessionRestored(refreshAll);
   /** Refetch after an own action; the navigation counter reloads too ("documents-changed"). */
   const reloadAfterAction = () => { latestReload.current(); notifyDocumentsChanged(); };
+  /**
+   * The **Refresh** button starts a new visit of the tab (issue 176): rows kept visible after they stopped matching
+   * (for example assigned rows under To assign) drop out, as after reopening the tab. Own actions keep the visit.
+   */
+  const refreshVisit = () => {
+    forgetVisit(projectKey, filterIdentity);
+    if (decisionActive) setRetainState({ identity: filterIdentity, keys: [] });
+    setBadgeState(null);
+    refreshAll();
+  };
   // Assign dialog: one row (task preselected) or the selected cases (selection bar).
   const [assignDialog, setAssignDialog] = useState<AssignWorkDialogProps | null>(null);
   /** Assign dialog for one row; `options.newReviewOfAccepted` marks a new review of an accepted translation (D25). */
@@ -830,7 +840,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       <h1 ref={headingRef} tabIndex={-1}>Documents</h1>
       <div className="toolbar"><HelpLink screen="documents" />{!emptyProject && uploadButton()}</div>
     </div>
-    {page && !emptyProject && <DocumentsTabs bar={page.bar} query={query} projectKey={projectKey} panelId={PANEL_ID} onNavigate={navigateLink} updatedAt={rows.updatedAt} onRefresh={refreshAll} />}
+    {page && !emptyProject && <DocumentsTabs bar={page.bar} query={query} projectKey={projectKey} panelId={PANEL_ID} onNavigate={navigateLink} updatedAt={rows.updatedAt} onRefresh={refreshVisit} />}
     {!emptyProject && <Toolbar label="Document filters" className="documents-filters">
       <DocumentsSearch ref={search} q={query.q} onApply={q => changeFilter({ q })} />
       <FilterPopover query={query} bar={page?.bar ?? null} sourceLanguages={sourceLanguages} translations={translations} onChange={changeFilter} onClearAll={clearAll} people={people} />

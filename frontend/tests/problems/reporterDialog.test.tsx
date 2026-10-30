@@ -226,6 +226,27 @@ describe("reporter dialog", () => {
     await waitFor(() => expect(onRefresh).toHaveBeenCalledWith(expect.objectContaining({ held: true })));
   });
 
+  it("clears the paused notice after the reporter resumes the task (#155)", async () => {
+    const created = report({ report_id: "r1", reason: "Glossary term missing", revision: 1 });
+    vi.spyOn(api, "createProblemReport").mockResolvedValue(created);
+    vi.spyOn(api, "actOnProblemReport").mockResolvedValue(report({ report_id: "r1", reason: "Glossary term missing", revision: 2,
+      holds: [hold({ active: false, release_action: "resume", released_by_label: "ann-0004", released_at: T1 })] }));
+    const { list, meta } = setup();
+    await act(async () => undefined);
+    fireEvent.click(entry());
+    list.mockResolvedValue([created]);
+    meta.mockResolvedValue(pausedTask({ active_holds: [{ reason: "Glossary term missing", created_at: "2026-10-19T01:12:00Z", own_report_id: "r1" }] }));
+    fireEvent.change(screen.getByRole("textbox", { name: /What is the problem\?/ }), { target: { value: "Glossary term missing" } });
+    fireEvent.click(footer().getByRole("button", { name: "Report and pause my task" }));
+    expect(await screen.findByText("Reported. Your task is paused until you or a project lead resume it.")).toBeTruthy();
+    fireEvent.click(await screen.findByRole("button", { name: "Resume my task…" }));
+    const group = screen.getByRole("group", { name: "Resume Task 4" });
+    fireEvent.change(within(group).getByRole("textbox", { name: /Why can you continue\?/ }), { target: { value: "Fine now" } });
+    fireEvent.click(within(group).getByRole("button", { name: "Resume my task" }));
+    expect(await screen.findByText("Resumed. The report stays open.")).toBeTruthy();
+    expect(screen.queryByText("Reported. Your task is paused until you or a project lead resume it.")).toBeNull();
+  });
+
   it("maps a create conflict to a kept text and Try again with a reloaded task", async () => {
     const create = vi.spyOn(api, "createProblemReport").mockRejectedValueOnce(new ApiError(409, "conflict", "WORKFLOW_REVISION_CONFLICT")).mockResolvedValue(report());
     const { meta, onRefresh } = setup();

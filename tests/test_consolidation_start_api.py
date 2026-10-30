@@ -199,6 +199,31 @@ def test_lead_self_grant_creates_assignment_and_round_and_keeps_session(env):
     assert read.json()["read_only"] is False
 
 
+def test_the_consolidator_sees_the_leads_reason(env):
+    """#146: the start command's reason reaches the consolidation view and
+    the consolidator's My tasks row."""
+    response = env.lead.post(URL, json=body(env, reason="  Term and assertion differ "))
+    assert response.status_code == 200, response.text
+    started = response.json()["round"]
+    read = env.lead.get(f"/api/v1/rounds/{started['round_id']}/consolidation")
+    assert read.status_code == 200, read.text
+    assert read.json()["consolidation_reason"] == "Term and assertion differ"
+    tasks = env.lead.get("/api/v1/me/tasks")
+    assert tasks.status_code == 200, tasks.text
+    [review] = [t for t in tasks.json() if t["task"] == "review"]
+    assert review["consolidation_reason"] == "Term and assertion differ"
+
+
+def test_no_reason_reads_as_none(env):
+    response = env.lead.post(URL, json=body(env, reason="   "))
+    assert response.status_code == 200, response.text
+    started = response.json()["round"]
+    read = env.lead.get(f"/api/v1/rounds/{started['round_id']}/consolidation")
+    assert read.json()["consolidation_reason"] is None
+    tasks = env.lead.get("/api/v1/me/tasks").json()
+    assert [t["consolidation_reason"] for t in tasks if t["task"] == "review"] == [None]
+
+
 def test_same_request_id_answers_the_stored_response(env):
     first = env.lead.post(URL, json=body(env))
     assert first.status_code == 200, first.text
