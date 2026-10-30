@@ -292,6 +292,8 @@ describe("CaseScreen integration", () => {
     fireEvent.click(candidate);
     expect(apply).not.toHaveBeenCalled();
     const reason = screen.getByLabelText(/Reason for no text span/);
+    // #157: the hit's name shows while the term labels do not know the term yet.
+    expect(screen.getByText(/^Selected term:/).textContent).toBe("Selected term: HypotoniaHP:0001252");
     expect(screen.getByRole("button", { name: "Add annotation" })).toHaveProperty("disabled", true);
     fireEvent.change(reason, { target: { value: "  Summary outside this excerpt  " } });
     fireEvent.click(screen.getByRole("button", { name: "Add annotation" }));

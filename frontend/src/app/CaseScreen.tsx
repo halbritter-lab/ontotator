@@ -294,7 +294,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     reanchorItem?: ReanchorItem;
     /** "Mark in text" of a carried input without a carried finding: re-create it with the original term. */
     carriedInput?: import("../api/client").RoundInputView;
-    selectedTerm?: { termId: string; searchId?: string };
+    /** The term picked before the required reason; `label` is the hit's name, shown until the term labels resolve it (#157). */
+    selectedTerm?: { termId: string; searchId?: string; label?: string };
   } | null>(null);
   // Segments of the pending mark moved by its handles, readable before the state update lands.
   const pendingSegments = useRef<{ evidenceId: string; segments: SelectionPayload["segments"] } | null>(null);
@@ -1535,6 +1536,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       whatToCheck={{
         textSpan: carriedTextSpan(input),
         values: valuesLines(carriedAxes(selectedAnnotation).filter(axis => defaulted.has(axis.id)).map(axis => axis.label)),
+        // A finding without a text span carries its reason in the note: name it as the reason field does (#157).
+        noteLabel: (input.source_snapshot.annotation.evidence_refs ?? []).length ? undefined : "Reason for no text span",
         noteFirstLine: sourceNote ? sourceNote.split("\n")[0] : undefined,
         noteFull: sourceNote || undefined,
       }}
@@ -1741,7 +1744,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     // A handle moved by keyboard reports after a pause: take that move along.
     flushTextResize.current?.();
     if (pendingAnnotation.isSpanless && spanlessNotesRequired && !spanlessReason.trim()) {
-      setPendingAnnotation({ ...pendingAnnotation, selectedTerm: { termId, searchId } });
+      setPendingAnnotation({ ...pendingAnnotation, selectedTerm: { termId, searchId, label: termText } });
       setSpanlessReasonError(true);
       inspectorRef.current?.querySelector<HTMLTextAreaElement>("#spanless-reason")?.focus();
       return;
@@ -1762,7 +1765,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         type_id: pending.typeId,
         term_id: termId,
         ...(!pending.reanchorItem ? {search_event_id:searchId} : {}),
-        ...(pending.isSpanless && spanlessReason.trim() ? { note: spanlessReason.trim() } : {}),
+        ...(pending.isSpanless && spanlessReason.trim() ? { note: spanlessReason.trim() }
+          // A re-created carried finding keeps the original's note, such as its reason for no text span (#157).
+          : pending.carriedInput?.source_snapshot.annotation.note?.trim() ? { note: pending.carriedInput.source_snapshot.annotation.note.trim() } : {}),
         segments: pending.segments,
         axes_values: pending.reanchorItem?.axes_values ?? (pending.carriedInput ? { ...pending.carriedInput.source_snapshot.annotation.axes_values }
           : { ...initialAxisValues(type?.axes ?? [], termId), ...view.creation_defaults?.[pending.layerId]?.[pending.typeId] }),
@@ -3843,9 +3848,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                   error={spanlessReasonError && !spanlessReason.trim() ? "A reason is required before adding this annotation." : undefined}
                   onChange={event => { setSpanlessReason(event.target.value); setSpanlessReasonError(false); }} />}
                 {pendingAnnotation.selectedTerm && <div className="pending-term-continuation">
-                  <p>Selected term: <TermName termId={pendingAnnotation.selectedTerm.termId} label={termLabel(pendingAnnotation.layerId, pendingAnnotation.selectedTerm.termId)} /></p>
+                  <p>Selected term: <TermName termId={pendingAnnotation.selectedTerm.termId} label={termLabel(pendingAnnotation.layerId, pendingAnnotation.selectedTerm.termId) ?? pendingAnnotation.selectedTerm.label} /></p>
                   <Button disabled={readOnly || queueState === "saving" || (spanlessNotesRequired && !spanlessReason.trim())}
-                    onClick={() => { void createPendingAnnotation(pendingAnnotation.selectedTerm!.termId, pendingAnnotation.selectedTerm!.searchId); }}>Add annotation</Button>
+                    onClick={() => { void createPendingAnnotation(pendingAnnotation.selectedTerm!.termId, pendingAnnotation.selectedTerm!.searchId, pendingAnnotation.selectedTerm!.label); }}>Add annotation</Button>
                 </div>}
                 {!readOnly && !savedPendingReanchor && !pendingAnnotation.carriedInput && <SearchPanel key={pendingAnnotation.annotationId} searchManager={searchManager}
                   annotationId={pendingAnnotation.annotationId} workspaceKey={view.key} layerId={pendingAnnotation.layerId}
@@ -3854,7 +3859,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                   onPickModifier={pendingIsMarkedSpan && modifierLayerIds.has(pendingAnnotation.layerId) ? startAttach : undefined}
                   modifierFilter={modifierLayerIds.has(pendingAnnotation.layerId)}
                   onSelectCandidate={(candidate, searchId) => {
-                    if (pendingAnnotation.selectedTerm) setPendingAnnotation({ ...pendingAnnotation, selectedTerm: { termId: candidate.term_id, searchId } });
+                    if (pendingAnnotation.selectedTerm) setPendingAnnotation({ ...pendingAnnotation, selectedTerm: { termId: candidate.term_id, searchId, label: candidate.label ?? undefined } });
                     else void createPendingAnnotation(candidate.term_id, searchId, candidate.label ?? undefined);
                   }} />}
                 {!pendingIsMarkedSpan && <Button type="button" variant="secondary" disabled={queueState === "saving"} onClick={cancelPending}>Cancel</Button>}

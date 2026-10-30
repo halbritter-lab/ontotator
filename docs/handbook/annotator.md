@@ -224,14 +224,14 @@ What for: check findings that were carried over from an earlier round, for examp
 
 1. The toolbar names the round, for example *Round 2, continued from Round 1*, or reads **Review carried findings**. The progress line counts checked findings.
 2. Click **Next unchecked** (or press `n`) to select the next finding marked **Check needed**.
-3. Read **What to check**: the text span, the values or the note. Carried values are not confirmed.
+3. Read **What to check**: the text span, the values or the note. For a finding without a text span, the note is its **Reason for no text span**; it stays with the finding. Carried values are not confirmed.
 4. Optional: to see the finding as it was, click **Show original evidence**.
 5. If it is right (after any edits), click **Mark as checked** or press `c`.
 6. If it does not apply to this text, open **Does not apply…**, give a reason and click **Dismiss**.
 
 If you change a finding after checking it, it needs a new check.
 
-A row **Not on this text** means the finding could not be placed in this text. Select it and choose one: **Mark in text**, **Link to an existing finding**, or **Dismiss with reason…**.
+A row **Not on this text** means the finding could not be placed in this text. Select it and choose one: **Mark in text**, **Link to an existing finding**, or **Dismiss with reason…**. A finding re-created with **Mark in text** keeps the original's term, values and note.
 
 ![A carried finding with What to check and the Mark as checked button](images/annotator-carried-finding.png)
 

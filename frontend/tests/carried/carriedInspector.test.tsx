@@ -194,6 +194,33 @@ describe("carried finding inspector", () => {
     expect(resolve).not.toHaveBeenCalled();
   });
 
+  it("a carried finding without a text span names its note the reason; Mark in text keeps it (#157)", async () => {
+    const carried = finding("carried"); carried.annotation.note = "Reported by the parents";
+    const spanless = input("input-1", carried); spanless.source_snapshot.annotation.note = "Reported by the parents";
+    const { container, unmount } = setup({ annotations: [carried], inputs: [spanless] });
+    fireEvent.click(row(container, "annotation:carried"));
+    const term = within(section()).getByText("Reason for no text span");
+    expect(term.tagName).toBe("DT");
+    expect(term.nextElementSibling!.textContent).toBe("Reported by the parents");
+    unmount();
+
+    const apply = vi.spyOn(api, "applyCommand").mockImplementation(async (_workspace, envelope) =>
+      draftWith(1, [finding(String((envelope.payload as Record<string, unknown>).annotation_id), "new-v1")], []));
+    const failed = input("input-failed", null); failed.source_snapshot.annotation.note = "  Reported by the parents ";
+    const view = setup({ annotations: [], inputs: [failed] });
+    await screen.findByRole("button", { name: "Seizure, carried, not on this text, check needed" });
+    fireEvent.click(row(view.container, "input:input-failed"));
+    fireEvent.click(within(section()).getByRole("button", { name: "Mark in text" }));
+    const text = view.container.querySelector(".text-container")!;
+    const node = text.querySelector(".run")!.firstChild!;
+    const range = document.createRange(); range.setStart(node, 0); range.setEnd(node, 7);
+    window.getSelection()!.removeAllRanges(); window.getSelection()!.addRange(range);
+    fireEvent.mouseUp(text);
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Save re-created finding" })); });
+    await waitFor(() => expect(apply).toHaveBeenCalledTimes(1));
+    expect(payloadOf(apply)).toEqual(expect.objectContaining({ command: "create_annotation", note: "Reported by the parents" }));
+  });
+
   it("Mark in text keeps the original's chosen axis values chosen and its defaulted ones defaulted", async () => {
     const apply = vi.spyOn(api, "applyCommand").mockImplementation(async (_workspace, envelope) => {
       const payload = envelope.payload as Record<string, unknown>;

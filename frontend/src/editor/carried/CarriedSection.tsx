@@ -157,6 +157,8 @@ export function DismissControl({ label, blocked, onDismiss, onBusyChange, dataDi
 export interface WhatToCheck {
   textSpan: string;
   values: string[];
+  /** Term of the note row; "Note" when absent. */
+  noteLabel?: string;
   noteFirstLine?: string;
   noteFull?: string;
 }
@@ -272,7 +274,7 @@ export function CarriedSection({
             <dt>Values</dt>
             <dd>{whatToCheck.values.map(line => <span key={line} className="carried-check-list__line">{line}</span>)}</dd>
             {whatToCheck.noteFirstLine && <>
-              <dt>Note</dt>
+              <dt>{whatToCheck.noteLabel ?? "Note"}</dt>
               <dd>{whatToCheck.noteFirstLine}</dd>
             </>}
           </dl>
