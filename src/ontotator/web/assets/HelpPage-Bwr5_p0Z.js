@@ -1,4 +1,4 @@
-import{r as i,a as p,j as a}from"./index-V0d5S-9c.js";import{M as m,r as g}from"./index-CLkBN5bW.js";const f=`# Ontotator user handbook
+import{r as i,a as p,j as a}from"./index-ez7eQQx7.js";import{M as m,r as g}from"./index-CIbdS5xO.js";const f=`# Ontotator user handbook
 
 This handbook explains how to work with Ontotator in the browser. It is for everyone who uses the app: annotators, translation reviewers, consolidators, leads and system administrators. It describes the version of Ontotator that you open it from. If you run the server, read the [server operations guide (for server operators)](../operations.md) instead.
 
@@ -402,7 +402,7 @@ What for: record the context of a finding: whether it is present, who has it and
 1. Select the finding. The section **Values** lists each value field, such as the assertion (**Present**, **Absent**, **Uncertain**) or the experiencer (**Patient**, **Family member**, …). Press \`v\` to jump there with the keyboard.
 2. Read the passage in context. "No seizures" is **Absent**; "his mother has seizures" is not the patient.
 3. To change a value, choose another one. Value fields with few values are buttons; others are a dropdown.
-4. Values the project prefills are tagged **Default**. They count as not confirmed until you confirm or change them. If all shown values are right, click **Confirm defaults** or press \`d\`. This confirms every default of this finding. On a button field you can also confirm one default by clicking its highlighted button.
+4. Values the project prefills are tagged **Default**. They count as not confirmed until you confirm or change them. If all shown values are right, click **Confirm defaults** or press \`d\`. This confirms every default of this finding. To confirm one default only, click its highlighted button on a button field, or **Confirm** next to a dropdown field.
 
 Findings with open defaults show **Defaults to confirm** in the list.
 
@@ -417,7 +417,7 @@ What for: link a finding to every place in the text that supports it.
    - **Add mention**, then mark the text: adds another place. Esc cancels.
    - **Add segment** on a mention, then mark the text: adds a second piece to the same mention, for words that are apart.
    - Drag a mention's edge handles, or focus an edge and press \`←\` or \`→\` (\`Ctrl+←\` / \`Ctrl+→\` moves by word): resizes it.
-   - **Move to a new finding**: gives one mention its own finding with the same term and values. The original finding stays selected; the new one is added to the list. Select it there to change it.
+   - **Move to a new finding**: gives one mention its own finding with the same term and values. The new finding is selected, so you can change it right away; modifiers stay with the original finding.
    - **Remove**, then **Yes, remove**: detaches the mention.
 
 You cannot remove the last mention when the project requires a text span. If the project allows findings without a span, enter a reason in the note first.
@@ -443,9 +443,9 @@ What for: correct a finding you made.
 2. Use the action you need:
    - **Change term**, then search a new one: changes the term and keeps the mentions.
    - **Note**: type a comment. It is saved with the finding and the lead can read it.
-   - **Delete finding**, then **Yes, delete**: deletes the finding and all its mentions.
+   - **Delete finding**, then **Yes, delete**: deletes the finding and all its mentions. The message that follows offers **Undo**; \`Ctrl+Z\` (macOS: \`Cmd+Z\`) does the same while you are not typing in a field. Undo puts the finding back with its mentions, values, note and modifiers, and selects it.
 
-Warning: deleting a finding cannot be undone. Check that the right finding is selected first.
+Undo is offered only right after deleting, until the message closes. A restored carried finding may need a new check.
 
 If a term has become obsolete, the panel says so. Change the term or delete the finding.
 
@@ -494,7 +494,7 @@ Tools make mistakes. Check every proposal as if you had marked it yourself: the 
    - **Confirm**: the passage, term and all values are right. Values tagged **Defaulted** were not set by the tool but prefilled; Confirm accepts them as shown, so check them too.
    - **Reject**: the proposal is wrong and nothing should replace it.
    - **Edit & Replace**: the proposal is nearly right. You get an editable copy that replaces it; correct the term, values or text span in the copy.
-   - **Unresolved**: only if you really cannot decide; the other three decisions are the normal case. Write a **Reviewer note** saying why, then click **Save decision**. The proposal is submitted with your note and a reviewer flag. It does not block submitting; the lead (and a consolidator, if there is one) decides it.
+   - **Unresolved**: only if you really cannot decide; the other three decisions are the normal case. Write a **Reviewer note** saying why, then click **Save decision**. The proposal is submitted with your note and a reviewer flag. It does not block submitting; the lead (and a consolidator, if there is one) decides it. Only **Confirm** confirms a proposal's prefilled values: on an unresolved proposal they stay recorded as defaults, and its row shows **Defaults not confirmed**. The result line under **Your own findings** counts such a proposal as unresolved, for example "1 confirmed proposal, 1 unresolved proposal, 1 own finding".
 5. After each decision, the next open proposal is selected. Press \`k\` right after a decision to go back to it.
 6. When all proposals are decided, read the whole text again and add findings the tool missed: mark text that has no proposal, choose the term in **New finding** and set the values, as in [Mark text and add a finding](#mark-text-and-add-a-finding). Your additions appear under **Your own findings**, next to the proposals.
 
@@ -510,14 +510,14 @@ What for: check findings that were carried over from an earlier round, for examp
 
 1. The toolbar names the round, for example *Round 2, continued from Round 1*, or reads **Review carried findings**. The progress line counts checked findings.
 2. Click **Next unchecked** (or press \`n\`) to select the next finding marked **Check needed**.
-3. Read **What to check**: the text span, the values or the note. Carried values are not confirmed.
+3. Read **What to check**: the text span, the values or the note. For a finding without a text span the note is listed as its **Reason for no text span**. Carried values are not confirmed.
 4. Optional: to see the finding as it was, click **Show original evidence**.
 5. If it is right (after any edits), click **Mark as checked** or press \`c\`.
 6. If it does not apply to this text, open **Does not apply…**, give a reason and click **Dismiss**.
 
 If you change a finding after checking it, it needs a new check.
 
-A row **Not on this text** means the finding could not be placed in this text. Select it and choose one: **Mark in text**, **Link to an existing finding**, or **Dismiss with reason…**.
+A row **Not on this text** means the finding could not be placed in this text. Select it and choose one: **Mark in text**, **Link to an existing finding**, or **Dismiss with reason…**. A finding re-created with **Mark in text** keeps the original's term, values and note.
 
 ![A carried finding with What to check and the Mark as checked button](images/annotator-carried-finding.png)
 
@@ -555,7 +555,7 @@ Check each value before you confirm it. **Confirm as shown** says "I checked thi
 1. The group **Values not chosen yet** lists findings with prefilled values.
 2. Click **Go to** to check a finding in the text and change a value. If the shown values are right, click **Confirm as shown** on the row, or, with more than one row, **Confirm all as shown**.
 3. The group **Modifier warnings** lists, for example, a modifier used as a finding or two severities on one finding. Click **Go to** to fix one.
-4. Click the submit button. Warnings you leave are submitted as they are.
+4. Click the submit button. Warnings you leave are submitted as they are; the group **Values not chosen yet** says so in one line.
 
 If the project requires chosen values, unconfirmed values block submitting instead of warning.
 
@@ -673,7 +673,7 @@ What for: work without the mouse. Shortcuts are off while you type in a field or
 | \`0\` | Reset the decision to open |
 | \`n\` / \`Shift+N\` | Next / previous unchecked carried finding |
 | \`c\` | Mark carried finding as checked |
-| \`Ctrl+Z\` (macOS: \`Cmd+Z\`) | Undo removing a modifier |
+| \`Ctrl+Z\` (macOS: \`Cmd+Z\`) | Undo deleting a finding or removing a modifier |
 | \`Alt+←\` / \`Alt+→\` | Previous / next text |
 | \`Alt+P\` | Switch project |
 
@@ -1109,7 +1109,7 @@ Before you start: submitting means you checked the whole text, not only the find
 
 1. Click **Next open item** until nothing is left. It takes you to every proposal, value or finding that still needs you.
 2. Click **Finish & submit text**.
-3. The dialog lists what is still open, with **Go to** for each item. Values you have not confirmed are under **Values not chosen yet**: confirm them only if you checked that they are right.
+3. The dialog lists what is still open, with **Go to** for each item. Values you have not confirmed are under **Values not chosen yet**: confirm them only if you checked that they are right. A value you leave is submitted as shown but recorded as defaulted, not chosen; the lead and the export see this.
 4. Click **Submit text**.
 
 ![The submit dialog with the Values not chosen yet group](images/annotator-submit-dialog.png)
