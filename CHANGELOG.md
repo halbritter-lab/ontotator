@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-30
+
 ### Added
 
 - The assign dialog marks system administrators with an *Administrator* badge (`system_admin` in the assignment batch preview), since the creator of a project is a member with every role (#177).
@@ -110,7 +112,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 First public release.
 
-[Unreleased]: https://github.com/halbritter-lab/ontotator/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/halbritter-lab/ontotator/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/halbritter-lab/ontotator/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/halbritter-lab/ontotator/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/halbritter-lab/ontotator/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/halbritter-lab/ontotator/releases/tag/v0.1.0
