@@ -210,7 +210,7 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
     if (!projectsReady || !baseUser) return;
     setLanding(false);
     // Last-used project (D4): Documents for leads, My tasks filtered to it for others;
-    // else Projects for a lead of any project, and plain My tasks (no redirect) for anyone else.
+    // else Projects for a system admin or a lead of any project, and plain My tasks (no redirect) for anyone else.
     const key = landingProject(baseUser.username, projects);
     const project = projects.find(item => item.project_key === key);
     // The landing never takes over a navigation the user already started (link, Back/Forward).
@@ -223,7 +223,7 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
       void Promise.resolve(requestRef.current(next, undefined, { replace: true })).finally(() => setLandingSummary(false));
     };
     if (key === undefined || !project) {
-      if (projects.some(item => item.roles.includes("lead"))) redirect({ name: "projects" });
+      if (baseUser.is_system_admin || projects.some(item => item.roles.includes("lead"))) redirect({ name: "projects" });
       return;
     }
     if (!(project.can_manage && project.roles.includes("lead"))) { redirect(projectDestination(project)); return; }

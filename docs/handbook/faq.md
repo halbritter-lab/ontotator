@@ -32,7 +32,7 @@ Another operation, often a running import, is holding the project. What you just
 
 ### After login I see Projects, not My tasks
 
-Ontotator opens the project you used last. The first time, leads see **Projects** and everyone else **My tasks**. Click **My tasks** in the sidebar. See [Log in](getting-started.md#log-in).
+Ontotator opens the project you used last. The first time, leads and administrators see **Projects** and everyone else **My tasks**. Click **My tasks** in the sidebar. See [Log in](getting-started.md#log-in).
 
 ### My tasks is empty
 
