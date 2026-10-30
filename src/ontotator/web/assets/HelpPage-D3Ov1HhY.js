@@ -1,4 +1,4 @@
-import{r,a as m,j as a,b as h}from"./index-BQA_eK_K.js";import{M as f,r as g}from"./index-Djpcvcg6.js";function w(){const[e,t]=r.useState(null);return r.useEffect(()=>{let o=!0;return m.getAbout().then(n=>{o&&t(n)},()=>{}),()=>{o=!1}},[]),e?a.jsxs("p",{className:"help-version",title:e.revision??void 0,children:["Ontotator ",e.version,e.revision&&a.jsxs(a.Fragment,{children:[" · commit ",e.revision.slice(0,7)]})]}):null}const y=`# Ontotator user handbook
+import{r,a as m,j as a,b as h}from"./index-C-eISaqP.js";import{M as f,r as g}from"./index-EYZP0ZwN.js";function w(){const[e,t]=r.useState(null);return r.useEffect(()=>{let o=!0;return m.getAbout().then(n=>{o&&t(n)},()=>{}),()=>{o=!1}},[]),e?a.jsxs("p",{className:"help-version",title:e.revision??void 0,children:["Ontotator ",e.version,e.revision&&a.jsxs(a.Fragment,{children:[" · commit ",e.revision.slice(0,7)]})]}):null}const y=`# Ontotator user handbook
 
 This handbook explains how to work with Ontotator in the browser. It is for everyone who uses the app: annotators, translation reviewers, consolidators, leads and system administrators. It describes the version of Ontotator that you open it from. If you run the server, read the [server operations guide (for server operators)](../operations.md) instead.
 
@@ -275,7 +275,7 @@ Before you start: [upload the ontology release](#upload-ontology-releases-and-tr
 5. Click **Create project**.
 6. The project's settings open on **People**. [Add the lead](lead-settings.md#add-a-member) and the other members.
 
-You are now a member of the project with all three roles. The assign dialog for reviews and annotations marks system administrators with an *Administrator* badge so that nobody assigns you work by mistake. If you do not take part in the project, [remove your roles](lead-settings.md#change-a-members-roles) once a lead is added.
+You are now a member of the project with the Lead role only, so you can manage it but get no annotation or consolidation work. If you do take part, [give yourself the role](lead-settings.md#change-a-members-roles). If you do not, [remove your role](lead-settings.md#change-a-members-roles) once a lead is added.
 
 ![New project form with key, name, template and ontology file filled in](images/admin-new-project.png)
 
@@ -905,7 +905,7 @@ Another operation, often a running import, is holding the project. What you just
 
 ### After login I see Projects, not My tasks
 
-Ontotator opens the project you used last, or **Projects** the first time. Click **My tasks** in the sidebar. See [Log in](getting-started.md#log-in).
+Ontotator opens the project you used last. The first time, leads see **Projects** and everyone else **My tasks**. Click **My tasks** in the sidebar. See [Log in](getting-started.md#log-in).
 
 ### My tasks is empty
 
@@ -1179,7 +1179,7 @@ Before you start: you need a setup or reset code from your administrator. A code
 
 ![The Set your password form with the fields Username, Setup or reset code, New password and Repeat the new password](images/getting-started-set-password.png)
 
-Ontotator sets the password and logs you in at once. The first time, you land on **Projects** (see [Log in](#log-in) for where you land later). Only if that login fails afterwards, for example because the account is locked for a while, the login screen opens with **Your password is set. Log in with it now.**; the password is set, so [log in](#log-in) with it later. If you see **The two passwords differ.**, type both passwords again. To go back without a code, click **Back to login**.
+Ontotator sets the password and logs you in at once. The first time, you land on **My tasks**, or on **Projects** if you lead a project (see [Log in](#log-in) for where you land later). Only if that login fails afterwards, for example because the account is locked for a while, the login screen opens with **Your password is set. Log in with it now.**; the password is set, so [log in](#log-in) with it later. If you see **The two passwords differ.**, type both passwords again. To go back without a code, click **Back to login**.
 
 ## Log in
 
@@ -1194,7 +1194,7 @@ After logging in, Ontotator opens the project you used last on this browser:
 - annotators and consolidators see **My tasks** for that project;
 - leads see the project's **Documents** page.
 
-The first time, or if that project is no longer yours, you see **Projects**. Click **My tasks** in the sidebar to see your work. On **Projects**, **Needs your decision** counts texts that wait for a lead's decision, and **Your open tasks** counts your tasks.
+The first time, or if that project is no longer yours, you see **My tasks**; if you lead a project, you see **Projects** instead. Click **My tasks** in the sidebar to see your work. On **Projects**, **Needs your decision** counts texts that wait for a lead's decision, and **Your open tasks** counts your tasks.
 
 If your session ends while you work, a login box opens with **Your session has ended. Please log in again.** Log in there. Your unsaved input is kept.
 
@@ -1579,7 +1579,7 @@ What for: give translation reviews or annotations to people.
 
 1. Select the texts, then click the assign button in the selection bar, for example **Assign annotation…**.
 2. Check what the selection needs. If it needs more than one task or language, the line **This selection needs** names them, for example *translation review (de), annotation (en)*, and shows the step you are on. Then check the **Task**.
-3. In the table of people (**Person**, **Reads**, **Open tasks**), pick the reviewer, or tick everyone who should annotate. The task has one language: each ticked person gets every selected text in that language that still has a free place. *Administrator* marks a system administrator; the administrator who created the project is a member with all roles, so leave them unticked unless they take part.
+3. In the table of people (**Person**, **Reads**, **Open tasks**), pick the reviewer, or tick everyone who should annotate. The task has one language: each ticked person gets every selected text in that language that still has a free place. *Administrator* marks a system administrator; leave them unticked unless they take part.
 4. Read the summary below the table, for example *Ana Weber gets 3 translation reviews (de).*
 5. Click the assign button, for example *Assign 20*.
 
@@ -2096,8 +2096,6 @@ What for: give or take away a role.
 3. Untick a role checkbox to take it away, then confirm with **Remove role**. This logs the person out on all devices; they can log in again right away.
 
 A project needs at least one lead: **Add another project lead before removing the last lead.**
-
-The system administrator who created the project is a member with all three roles. If they do not annotate or consolidate, take away those roles so that they no longer appear in the assign lists.
 
 ## Remove a member
 
