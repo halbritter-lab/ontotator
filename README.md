@@ -10,6 +10,8 @@ Ontotator is a self-hosted web service for collaborative annotation of ontology 
 
 Several people mark text spans, link them to ontology concepts and review each other's work. Administrators load ontology releases and documents, set up projects and assign people to them. The server runs without internet access; operators supply the ontology releases.
 
+Website with a tutorial video: <https://halbritter-lab.github.io/ontotator/> (source in [`site/`](site/)).
+
 Ontotator is in early development. Interfaces, data formats and the database schema can still change. There are no tagged releases yet.
 
 ## How it works
