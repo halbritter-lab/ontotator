@@ -9727,6 +9727,11 @@
           "already_assigned": {
             "type": "integer",
             "title": "Already Assigned"
+          },
+          "system_admin": {
+            "type": "boolean",
+            "title": "System Admin",
+            "default": false
           }
         },
         "type": "object",

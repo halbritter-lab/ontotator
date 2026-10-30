@@ -3069,6 +3069,11 @@ export interface components {
             unavailable: ("does_not_read" | "role_missing" | "inactive") | null;
             /** Already Assigned */
             already_assigned: number;
+            /**
+             * System Admin
+             * @default false
+             */
+            system_admin: boolean;
         };
         /** BatchPreview */
         BatchPreview: {
