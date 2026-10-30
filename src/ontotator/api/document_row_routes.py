@@ -1,18 +1,23 @@
 """Lead-only Documents read API: grouped rows and per-row submissions."""
 
 from datetime import datetime
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, Self
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.exceptions import RequestValidationError
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ontotator.api.document_projection import AssignmentFilter, AssignmentStatus
 from ontotator.api.encoded_routes import EncodedParameterRoute
 from ontotator.api.identity import PrincipalDep
 from ontotator.api.person_views import PersonRefView
 from ontotator.api.routes import get_access
-from ontotator.api.work_plan_routes import PlanFlagsView
+from ontotator.api.work_plan_routes import (
+    MAX_SELECTED_ROWS,
+    PlanFlagsView,
+    RowRefView,
+    require_one_selection,
+)
 from ontotator.application.document_row_facets import FlagFilter
 from ontotator.application.document_rows import (
     MAX_RETAIN,
@@ -45,6 +50,7 @@ from ontotator.domain.stage_cells import (
 )
 from ontotator.domain.submission_labels import SubmissionKind
 from ontotator.domain.variants import TranslationStatus, VariantOrigin
+from ontotator.domain.work_plans import RowKey
 
 router = APIRouter(
     prefix="/api/v1/projects/{key}",
@@ -232,6 +238,10 @@ class StageCellDetailView(_View):
     # Final ``choose``: the final-result panel's label rule (VD16); None in
     # every other state.
     label_rule: Literal["accept", "compare"] | None = None
+    # Final ``choose`` under the rule "compare": the card's full agreement
+    # (W1), so also on notes and modifier text spans. A factory default keeps
+    # it optional in the generated types.
+    all_match: bool = Field(default_factory=bool)
 
 
 class StageCellView(_View):
@@ -445,10 +455,24 @@ class DocumentRowsPage(_View):
     page: int
     page_count: int
     group_count: int
+    text_count: int
     bar: DecisionBarView
     case_found: bool
     # The project's current rule.
     adjudicator_not_annotator: bool
+
+
+class SelectedRowsRequest(_View):
+    """Show selected: a selection is too long for a query string (VD21)."""
+
+    rows: list[RowRefView] = Field(max_length=MAX_SELECTED_ROWS)
+    page: int = Field(default=1, ge=1)
+    sort: Sort = "case"
+
+    @model_validator(mode="after")
+    def _one_selection(self) -> Self:
+        require_one_selection((), self.rows)
+        return self
 
 
 class DocumentsVisitView(_View):
@@ -682,6 +706,17 @@ def document_rows(
     """Documents rows grouped by text, with the decision bar (leads only)."""
     return _service(request, principal).page(
         key, RowQuery(**filters, page=page, retain=tuple(retain or ()))
+    )
+
+
+@router.post("/document-rows/selected", response_model=DocumentRowsPage)
+def selected_document_rows(
+    key: str, body: SelectedRowsRequest, principal: PrincipalDep, request: Request
+) -> dict[str, Any]:
+    """The rows page of exactly the selected texts; no other filter applies."""
+    selected = frozenset(RowKey(row.case_id, row.language) for row in body.rows)
+    return _service(request, principal).page(
+        key, RowQuery(selected=selected, page=body.page, sort=body.sort)
     )
 
 

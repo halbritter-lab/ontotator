@@ -4623,6 +4623,59 @@
         }
       }
     },
+    "/api/v1/projects/{key}/document-rows/selected": {
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Selected Document Rows",
+        "description": "The rows page of exactly the selected texts; no other filter applies.",
+        "operationId": "selected_document_rows_api_v1_projects__key__document_rows_selected_post",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SelectedRowsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentRowsPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{key}/document-rows/{case_id}/{language}/submissions": {
       "get": {
         "tags": [
@@ -13033,6 +13086,10 @@
             "type": "integer",
             "title": "Group Count"
           },
+          "text_count": {
+            "type": "integer",
+            "title": "Text Count"
+          },
           "bar": {
             "$ref": "#/components/schemas/DecisionBarView"
           },
@@ -13052,6 +13109,7 @@
           "page",
           "page_count",
           "group_count",
+          "text_count",
           "bar",
           "case_found",
           "adjudicator_not_annotator"
@@ -21367,6 +21425,43 @@
         "title": "Segment",
         "description": "Zero-based Unicode codepoint interval [start, end)."
       },
+      "SelectedRowsRequest": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/RowRefView"
+            },
+            "type": "array",
+            "maxItems": 200000,
+            "title": "Rows"
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Page",
+            "default": 1
+          },
+          "sort": {
+            "type": "string",
+            "enum": [
+              "case",
+              "-case",
+              "import",
+              "activity",
+              "-activity"
+            ],
+            "title": "Sort",
+            "default": "case"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "rows"
+        ],
+        "title": "SelectedRowsRequest",
+        "description": "Show selected: a selection is too long for a query string (VD21)."
+      },
       "SelectionSummary": {
         "properties": {
           "cases": {
@@ -21402,6 +21497,10 @@
             "title": "Not Shown",
             "default": 0
           },
+          "not_shown_sources": {
+            "type": "integer",
+            "title": "Not Shown Sources"
+          },
           "skipped_rows": {
             "items": {
               "$ref": "#/components/schemas/RowRefView"
@@ -21418,7 +21517,7 @@
           "common"
         ],
         "title": "SelectionSummary",
-        "description": "Assignable steps of the selected cases or texts (D21, VD21).\n\n``steps``: per (task, language) the versions and cases whose row has that\ntask's assign step, most versions first (then most cases, then task and\nlanguage). ``common`` is the first of ``steps`` (None when nothing is\nassignable), the step the dialog preselects; ``skipped`` counts the\nselected cases that ``common`` does not reach, by skip reason.\n``not_shown`` counts selected cases the current filters hide; filters\nnever change ``steps``, ``common`` or ``skipped``.\n\nWith ``rows`` only the selected texts count: ``steps`` count those texts,\n``skipped`` counts the selected texts in the language of ``common`` that\nit does not reach, ``skipped_rows`` names them and ``not_shown`` counts\nselected texts the filters hide. ``cases`` counts the cases with at\nleast one selected text the project knows. Selected texts outside the\nlanguage of ``common`` are not counted in ``skipped``."
+        "description": "Assignable steps of the selected cases or texts (D21, VD21).\n\n``steps``: per (task, language) the versions and cases whose row has that\ntask's assign step, most versions first (then most cases, then task and\nlanguage). ``common`` is the first of ``steps`` (None when nothing is\nassignable), the step the dialog preselects; ``skipped`` counts the\nselected cases that ``common`` does not reach, by skip reason.\n``not_shown`` counts selected cases the current filters hide; filters\nnever change ``steps``, ``common`` or ``skipped``.\n\nWith ``rows`` only the selected texts count: ``steps`` count those texts,\n``skipped`` counts the selected texts in the language of ``common`` that\nit does not reach, ``skipped_rows`` names them and ``not_shown`` counts\nselected texts the filters hide, ``not_shown_sources`` the source texts\namong them. ``cases`` counts the cases with at\nleast one selected text the project knows. Selected texts outside the\nlanguage of ``common`` are not counted in ``skipped``."
       },
       "SelectionSummaryRequest": {
         "properties": {
@@ -21763,6 +21862,10 @@
               }
             ],
             "title": "Label Rule"
+          },
+          "all_match": {
+            "type": "boolean",
+            "title": "All Match"
           }
         },
         "additionalProperties": false,

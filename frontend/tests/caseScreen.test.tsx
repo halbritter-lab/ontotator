@@ -3251,6 +3251,16 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
       return { view, target };
     };
 
+    it("lists the copy with the proposal it replaces, not under Your own findings (#211)", async () => {
+      const { view } = reviewView([], true);
+      const { container } = await setup(view, severeHits, false);
+      const copy = await waitFor(() => { const row = container.querySelector<HTMLElement>('[data-list-key="annotation:seizure"]'); expect(row).not.toBeNull(); return row!; });
+      const proposal = container.querySelector<HTMLElement>('[data-list-key^="target:"]')!;
+      expect(copy.closest("ul")).toBe(proposal.closest("ul"));
+      expect(copy.textContent).toContain("Your copy");
+      expect(screen.getByText("Your own findings (0)")).toBeDefined();
+    });
+
     it("a proposal's modifier is marked in the text, listed in its row and framed while it is selected (#29)", async () => {
       const { view } = reviewView([{ term_id: "HP:0012828", segments: [pos("schwere")] }], false);
       const { container } = await setup(view, severeHits, false);

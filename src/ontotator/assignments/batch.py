@@ -490,16 +490,12 @@ class BatchAssignmentService:
                     if texts:
                         skipped_rows.append({"case_id": case_id, "language": language})
         ctx = matcher.ctx
-        not_shown = (
-            sum(
-                1
-                for text in texts
-                if text not in ctx.rows
-                or not page.row_matches(ctx, ctx.rows[text], query)
-            )
-            if texts
-            else ctx.cases_not_shown(selected, query)
-        )
+        hidden = [
+            text
+            for text in texts
+            if text not in ctx.rows or not page.row_matches(ctx, ctx.rows[text], query)
+        ]
+        not_shown = len(hidden) if texts else ctx.cases_not_shown(selected, query)
         cases = (
             len({text[0] for text in texts if text in ctx.rows})
             if texts
@@ -512,6 +508,9 @@ class BatchAssignmentService:
             "skipped_rows": skipped_rows,
             "common": common,
             "not_shown": not_shown,
+            "not_shown_sources": sum(
+                1 for text in hidden if text in ctx.rows and ctx.rows[text]["is_source"]
+            ),
         }
 
     def row_keys(

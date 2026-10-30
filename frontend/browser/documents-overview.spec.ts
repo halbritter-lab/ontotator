@@ -73,7 +73,7 @@ const SCENARIOS: Record<Exclude<OverviewScenarioName, "WALKTHROUGH">, (RowExpect
     { case_id: "case-107", language: "de", translation: ACCEPTED, annotation: SUBMITTED, finalization: { state: "Your choice", who: "" }, waiting: "You", action: "Accept result…", edge: true },
   ],
   S7b: [
-    { case_id: "case-107", language: "en", translation: SOURCE, annotation: { state: "2 of 2 submitted", who: "" }, finalization: { state: "ready to compare", who: "" }, waiting: "You", action: "Accept result…", edge: true },
+    { case_id: "case-107", language: "en", translation: SOURCE, annotation: { state: "2 of 2 submitted", who: "" }, finalization: { state: "ready to accept", who: "" }, waiting: "You", action: "Accept result…", edge: true },
   ],
   // D1: Luc's open annotation review became a consolidation (tests/browser_overview_scenarios.py build_s8).
   S8: [

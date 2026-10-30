@@ -1175,6 +1175,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{key}/document-rows/selected": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Selected Document Rows
+         * @description The rows page of exactly the selected texts; no other filter applies.
+         */
+        post: operations["selected_document_rows_api_v1_projects__key__document_rows_selected_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{key}/document-rows/{case_id}/{language}/submissions": {
         parameters: {
             query?: never;
@@ -4167,6 +4187,8 @@ export interface components {
             page_count: number;
             /** Group Count */
             group_count: number;
+            /** Text Count */
+            text_count: number;
             bar: components["schemas"]["DecisionBarView"];
             /** Case Found */
             case_found: boolean;
@@ -7180,6 +7202,25 @@ export interface components {
             end: number;
         };
         /**
+         * SelectedRowsRequest
+         * @description Show selected: a selection is too long for a query string (VD21).
+         */
+        SelectedRowsRequest: {
+            /** Rows */
+            rows: components["schemas"]["RowRefView"][];
+            /**
+             * Page
+             * @default 1
+             */
+            page: number;
+            /**
+             * Sort
+             * @default case
+             * @enum {string}
+             */
+            sort: "case" | "-case" | "import" | "activity" | "-activity";
+        };
+        /**
          * SelectionSummary
          * @description Assignable steps of the selected cases or texts (D21, VD21).
          *
@@ -7194,7 +7235,8 @@ export interface components {
          *     With ``rows`` only the selected texts count: ``steps`` count those texts,
          *     ``skipped`` counts the selected texts in the language of ``common`` that
          *     it does not reach, ``skipped_rows`` names them and ``not_shown`` counts
-         *     selected texts the filters hide. ``cases`` counts the cases with at
+         *     selected texts the filters hide, ``not_shown_sources`` the source texts
+         *     among them. ``cases`` counts the cases with at
          *     least one selected text the project knows. Selected texts outside the
          *     language of ``common`` are not counted in ``skipped``.
          */
@@ -7213,6 +7255,8 @@ export interface components {
              * @default 0
              */
             not_shown: number;
+            /** Not Shown Sources */
+            not_shown_sources?: number;
             /** Skipped Rows */
             skipped_rows?: components["schemas"]["RowRefView"][];
         };
@@ -7312,6 +7356,8 @@ export interface components {
             round_ordinal?: number | null;
             /** Label Rule */
             label_rule?: ("accept" | "compare") | null;
+            /** All Match */
+            all_match?: boolean;
         };
         /** StageCellView */
         StageCellView: {
@@ -10959,6 +11005,41 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentRowsPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    selected_document_rows_api_v1_projects__key__document_rows_selected_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SelectedRowsRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

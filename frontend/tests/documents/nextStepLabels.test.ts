@@ -91,7 +91,7 @@ describe("next step labels", () => {
 
   it("reads Accept result… when every compared finding matches (issue 198)", () => {
     const choose = stepOf("choose_final");
-    const at = (matching: number, compared: number) => row({ case_id: "c", language: "de", stages: stages({ final: stageCell("choose", "decision", { submitted: 2, label_rule: "compare", matching, compared }) }) });
+    const at = (matching: number, compared: number) => row({ case_id: "c", language: "de", stages: stages({ final: stageCell("choose", "decision", { submitted: 2, label_rule: "compare", matching, compared, all_match: matching === compared }) }) });
     expect(rowActionLabel(choose, at(4, 4))).toBe("Accept result…");
     expect(rowActionLabel(choose, at(0, 0))).toBe("Accept result…");
     expect(rowActionLabel(choose, at(3, 4))).toBe("Compare results…");

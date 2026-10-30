@@ -430,6 +430,18 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
   const close = () => { if (done.steps.length) whileBusy(() => finish(done)); else props.onClose(); };
   const closing = busy ? undefined : close;
 
+  // "Distribute evenly…" takes the dialog's place (issue 210); after a save the walk-through goes on from here.
+  if (randomOpen && fresh && task) return <DistributionDialog projectKey={props.projectKey} task={task} confirmUnreviewedTranslation={acknowledged}
+    documents={fresh.targets.map(item => ({ document_id: item.document_id, language: item.language }))}
+    onChanged={() => { randomChanged.current = true; }}
+    onClose={() => {
+      if (!randomChanged.current) { setRandomOpen(false); return; }
+      whileBusy(async () => {
+        await advance({ message: "Assignments from the even distribution saved", skipped: fresh.skipped.map(item => item.case_id), assigned: fresh.targets.map(item => item.case_id) });
+        if (alive.current) setRandomOpen(false);
+      });
+    }} />;
+
   return <Dialog open title={title} size="md" onClose={closing} footer={<>
     {reason && <span id={reasonId} className="dialog-footer-reason">{reason}</span>}
     <Button disabled={busy} onClick={close}>{done.steps.length ? "Close" : "Cancel"}</Button>
@@ -552,13 +564,5 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
         <span className="assign-confirm-actions"><Button disabled={busy} onClick={() => setConfirming(false)}>Back</Button></span>
       </section>}
     </div>
-    {randomOpen && fresh && task && <DistributionDialog projectKey={props.projectKey} task={task} confirmUnreviewedTranslation={acknowledged}
-      documents={fresh.targets.map(item => ({ document_id: item.document_id, language: item.language }))}
-      onChanged={() => { randomChanged.current = true; }}
-      onClose={() => {
-        setRandomOpen(false);
-        if (!randomChanged.current) return;
-        whileBusy(() => advance({ message: "Assignments from the even distribution saved", skipped: fresh.skipped.map(item => item.case_id), assigned: fresh.targets.map(item => item.case_id) }));
-      }} />}
   </Dialog>;
 }

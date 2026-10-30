@@ -170,6 +170,7 @@ def submit(
             term_id=item["term"],
             axes_values=AXES | item["axes"],
             modifiers=item["modifiers"],
+            note=item.get("note"),
             evidence_refs=[
                 EvidenceRef(evidence_id=e.mention.evidence_id, version=e.version)
                 for e in evidence

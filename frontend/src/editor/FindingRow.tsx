@@ -36,6 +36,8 @@ export interface FindingRowProps {
   convertSource?: boolean;
   /** Pointer over or focus in the row (true) and away again (false): frames the finding's marks. */
   onFrame?: (on: boolean) => void;
+  /** An Edit & Replace copy, listed under the proposal it replaces (issue 211). */
+  copy?: boolean;
 }
 
 /** "Modifiers: Recurrent, Severe" (label order) under a finding or proposal row; nothing without modifiers. */
@@ -53,7 +55,7 @@ export function ModifierLine({ modifiers, layerId, termLabel }: {
 }
 
 /** One row of the saved findings list in the editor sidebar. */
-export function FindingRow({ snapshot: annSnap, selected: isSelected, termLabel, layerName, showLayer, axes, defaulted, proposal, onActivate, children, attachTarget, convertSource, onFrame }: FindingRowProps) {
+export function FindingRow({ snapshot: annSnap, selected: isSelected, termLabel, layerName, showLayer, axes, defaulted, proposal, onActivate, children, attachTarget, convertSource, onFrame, copy }: FindingRowProps) {
   const evCount = annSnap.annotation.evidence_refs?.length ?? 0;
   const termId = annSnap.annotation.term_id;
   const layerId = annSnap.annotation.layer_id;
@@ -62,7 +64,7 @@ export function FindingRow({ snapshot: annSnap, selected: isSelected, termLabel,
     .filter(Boolean).join(" ");
   // The button sits inside the list item: a list may only hold list items (axe "list").
   return (
-    <li className="doc-list-row"><div
+    <li className={copy ? "doc-list-row doc-list-row--copy" : "doc-list-row"}><div
       data-list-key={`annotation:${annSnap.annotation.annotation_id}`}
       className={className}
       role="button"
@@ -92,7 +94,7 @@ export function FindingRow({ snapshot: annSnap, selected: isSelected, termLabel,
         )}
       </div>
       <div className="doc-meta">
-        {evCount === 0 ? "Spanless" : plural(evCount, "mention")}
+        {copy && "Your copy, "}{evCount === 0 ? "Spanless" : plural(evCount, "mention")}
         {" "}<AiBadge provenance={annSnap.annotation.provenance} source={proposal} />
       </div>
       {convertSource && <div className="mod-attach-here">Becomes a modifier of the finding you choose</div>}

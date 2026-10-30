@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - With *Annotate only after the translation review is accepted* on, a lead can assign annotators (one by one, in bulk and with *Distribute evenly…*) while the text's translation review is assigned or underway. The task shows in *My tasks* as *Waiting for translation review*, the server refuses to open, save or submit it (`TASK_WAITING_FOR_TRANSLATION_REVIEW`), and it opens by itself once the review is accepted, also on a corrected version. The review must run on that version or an ancestor: with parallel translations, the others are skipped with a reason. A task that cannot follow a correction (from proposals, paused, or on a correction that was rejected) shows *Waiting for the project lead*, and the lead withdraws it in *Handle text change…* (#213).
+- Documents: **Show selected** in the selection bar lists only the selected texts, across pages and past the filters, with a chip; leaving it restores the filters and the page (`POST document-rows/selected`) (#210).
 - Documents: **Assigned to** in the Filter popover shows the texts given to one person, in every task, open and submitted, without revoked assignments. It shows as a chip, stays in the URL and works with the selection (`assignee` on the rows, case IDs and selection filters) (#215).
 
 ### Changed
@@ -20,6 +21,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- The selection bar names what the filters hide, for example "4 texts in 2 cases selected (2 source texts not shown)", and the header checkbox counts texts, not cases (`text_count`, `not_shown_sources`) (#210).
+- *Distribute evenly…* replaces the assign dialog instead of opening on top of it; the walk-through goes on from there (#210).
+- An Edit & Replace copy is listed with the proposal it replaces, not under *Your own findings*, and the result line counts it as a replaced proposal (#211).
+- A Documents row reads **Accept result…** only when submissions also agree on notes and modifier text spans, as the card does; otherwise it reads **Compare results…** (`all_match`) (#211).
 - Opening the text list right after a bundle import no longer takes minutes and blocks the project: the query for each document's newest proposal set no longer depends on fresh planner statistics.
 - One slow read or one queued writer can no longer stop a project or the instance (#217). Web requests wait at most 20 s for a lock (`ONTOTATOR_LOCK_TIMEOUT_MS`) and run a statement for at most 60 s (`ONTOTATOR_STATEMENT_TIMEOUT_MS`); a full connection pool fails after 10 s. All three answer 503 `PROJECT_BUSY` with `Retry-After`, the work is rolled back, and the user reads that the project is busy and nothing was changed. Jobs, the CLI, migrations and backups have no limit.
 - `admin projects create --allowed-roots <id>=` allows every term, as its help says, instead of failing with exit 2 (#208).

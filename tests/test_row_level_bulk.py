@@ -153,6 +153,7 @@ def test_selection_summary_with_rows_counts_texts(env):
         "skipped_rows": [],
         "common": step,
         "not_shown": 0,
+        "not_shown_sources": 0,
     }
     # With case IDs every text of the case counts (unchanged).
     cases = env.lead.post(

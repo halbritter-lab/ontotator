@@ -149,6 +149,8 @@ class RowQuery:
     owner: str | None = None  # "me" or a pseudonym (owner of the next step)
     # Pseudonym with work on the row: any task, open or submitted, not revoked.
     assignee: str | None = None
+    # Show selected: only these texts; empty = no such filter.
+    selected: frozenset[RowKey] = frozenset()
     # Exclusive per row: review / annotate = only that flag on,
     # review_and_annotate = both, not_in_plan = neither (effective flags).
     plan: tuple[PlanFilter, ...] = ()

@@ -88,9 +88,9 @@ export function finalizationState(row: DocumentRowView, _now: Date): State {
     case "after_review":
       // "Annotators per text" is an upper limit (issue 123): a submitted annotation can be accepted while others run.
       return cell?.state === "after_annotation" && earlyFinal(row) ? { state: "can be accepted", tone: "now" } : { state: "waiting", tone: "later" };
-    // A preselected result (a submitted consolidation, the accept rule) waits for acceptance, not a comparison.
+    // A preselected result (a submitted consolidation, the accept rule) or full agreement waits for acceptance, not a comparison.
     case "choose": return (cell.detail.submitted ?? 0) < 2 ? { state: cellLabel(row, "final"), tone: "now" }
-      : { state: cell.detail.label_rule === "accept" ? "ready to accept" : "ready to compare", tone: "now" };
+      : { state: cell.detail.label_rule === "accept" || (cell.detail.all_match && !earlyFinal(row)) ? "ready to accept" : "ready to compare", tone: "now" };
     case "confirm": return { state: "ready to accept", tone: "now" };
     case "final": {
       const day = dayMonth(row.final?.selected_at ?? cell.detail.at);

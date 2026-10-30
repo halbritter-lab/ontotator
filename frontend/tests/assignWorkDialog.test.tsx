@@ -279,6 +279,8 @@ it("Distribute evenly… covers the task shown and moves on (#218)", async () =>
   vi.mocked(api.selectionSummary).mockResolvedValue(mixed());
   const props = casesProps(); render(<AssignWorkDialog {...props} />); await ready();
   fireEvent.click(screen.getByRole("button", { name: "Distribute evenly…" }));
+  // One visible dialog (#210): the distribution takes the assign dialog's place.
+  expect(screen.getAllByRole("dialog").map(dialog => dialog.getAttribute("aria-label"))).toEqual(["Propose distribution"]);
   fireEvent.click(await screen.findByRole("button", { name: "Confirm distribution" }));
   await waitFor(() => expect(lastPreview()).toMatchObject({ task: "annotate", language: "en" }));
   expect(screen.queryByRole("dialog", { name: "Propose distribution" })).toBeNull();

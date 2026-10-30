@@ -76,3 +76,78 @@ def test_case_ids_endpoint_still_answers(env):
     )
     assert response.status_code == 200, response.text
     assert response.json() == {"case_ids": ["c1", "c2"], "total": 2, "truncated": False}
+
+
+def selected(env: Any, **body: Any) -> Any:
+    return env.lead.post(f"{BASE}/document-rows/selected", json=body)
+
+
+def shown(page: dict[str, Any]) -> list[tuple[str, str]]:
+    return [
+        (row["case_id"], row["language"])
+        for group in page["groups"]
+        for row in group["rows"]
+    ]
+
+
+def row(case_id: str, language: str) -> dict[str, str]:
+    return {"case_id": case_id, "language": language}
+
+
+def test_selected_rows_are_a_page_of_exactly_these_texts(env):
+    response = selected(
+        env,
+        rows=[row("c2", "en"), row("c1", "fr"), row("zz", "de")],
+        sort="-case",
+    )
+    assert response.status_code == 200, response.text
+    page = response.json()
+    assert shown(page) == [("c2", "en"), ("c1", "fr")]
+    assert (page["group_count"], page["text_count"]) == (2, 2)
+    # The tabs still count the whole project.
+    assert page["bar"]["all"] == 6
+    assert selected(env, rows=[row("c1", "fr")], page=2).json()["groups"] == []
+
+
+def test_selected_rows_are_bounded_and_for_leads(env):
+    assert selected(env, rows=[]).status_code == 422
+    assert selected(env, rows=[row("c1", "de")], page=0).status_code == 422
+    too_many = [row(f"c{n}", "de") for n in range(2001)]
+    refused = selected(env, rows=too_many)
+    assert refused.json()["code"] == "CASE_IDS_TOO_MANY"
+    ana = logged_in(env.app, "ana", assignments=[])
+    response = ana.post(
+        f"{BASE}/document-rows/selected", json={"rows": [row("c1", "de")]}
+    )
+    assert response.status_code == 403
+
+
+def test_text_count_is_what_the_header_checkbox_selects(env):
+    response = env.lead.get(
+        f"{BASE}/document-rows", params={"language": ["en", "de"], "q": "c1"}
+    )
+    page = response.json()
+    assert page["group_count"] == 1
+    assert (
+        page["text_count"]
+        == keys(env, filters={"language": ["en", "de"], "q": "c1"})["total"]
+    )
+    assert page["text_count"] == 2
+
+
+def test_summary_names_the_source_texts_the_filters_hide(env):
+    response = env.lead.post(
+        f"{BASE}/document-rows/selection-summary",
+        json={
+            "rows": [
+                row("c1", "en"),
+                row("c1", "de"),
+                row("c2", "en"),
+                row("c2", "fr"),
+            ],
+            "filters": {"language": ["de"]},
+        },
+    )
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert (result["not_shown"], result["not_shown_sources"]) == (3, 2)
