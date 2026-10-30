@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ProjectDocumentsQuery } from "../../src/app/router";
 import {
-  activeTab, chipsOf, clearAllPatch, FACET_GROUPS, facetGroups, filtersActive, optionChecked, optionCount, rowsRequest, tabRoute, toggleOption,
+  activeTab, assigneeOptions, chipsOf, clearAllPatch, FACET_GROUPS, facetGroups, filtersActive, optionChecked, optionCount, rowsRequest, tabRoute, toggleOption,
 } from "../../src/documents/filterModel";
 
 const optionOf = (label: string) => FACET_GROUPS.flatMap(group => group.options).find(option => option.label === label)!;
@@ -25,6 +25,7 @@ describe("filter model", () => {
     ["Decision category → chip under Needs your decision", { decision: "translation" }, { decision: "translation" }, ["Translation rejected or queried"]],
     ["Stage → chip", { stage: "final" }, { stage: "final" }, ["Stage: Final result"]],
     ["Owner → chip", { owner: "me" }, { owner: "me" }, ["Owner: You"]],
+    ["Assignee → chip", { assignee: "ann-0001" }, { assignee: "ann-0001" }, ["Assigned to: ann-0001"]],
     ["Paused → chip", { paused: "yes" }, { paused: "yes" }, ["Paused tasks"]],
     ["Review facet", { review_state: "in_progress,re_review,check_failed" }, { review_state: ["in_progress", "re_review", "check_failed"] }, ["Translation review: In progress", "Translation review: Check failed"]],
     ["Annotation facet", { annotation_state: "old_text_open" }, { annotation_state: "old_text_open" }, ["Annotation: On old text"]],
@@ -136,5 +137,20 @@ describe("filter model", () => {
     expect(filtersActive({ proposals: "with" })).toBe(true);
     expect(clearAllPatch({ proposals: "with" })).toMatchObject({ proposals: undefined });
     expect(tabRoute("p", { proposals: "with" }, "assign")).toMatchObject({ proposals: "with" });
+  });
+});
+
+describe("assignee", () => {
+  const people = new Map([["ann-0001", "Ana"]]);
+  it("names the person on the chip; removing it, Clear all and a tab change treat it as a filter", () => {
+    const chip = chipsOf({ assignee: "ann-0001" }, people)[0];
+    expect(chip.label).toBe("Assigned to: Ana");
+    expect(chip.patch).toEqual({ assignee: undefined });
+    expect(filtersActive({ assignee: "ann-0001" })).toBe(true);
+    expect(clearAllPatch({ assignee: "ann-0001" }).assignee).toBeUndefined();
+    expect(tabRoute("p", { assignee: "ann-0001", q: "fr1", segment: "done" }, "all")).toEqual({ name: "projectDocuments", key: "p", assignee: "ann-0001", q: "fr1" });
+  });
+  it("lists members by name and keeps a value that is no member any more", () => {
+    expect(assigneeOptions(["zed-1", "ann-0001"], { assignee: "gone-9" }, people)).toEqual([["ann-0001", "Ana"], ["gone-9", "gone-9"], ["zed-1", "zed-1"]]);
   });
 });

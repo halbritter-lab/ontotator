@@ -67,8 +67,8 @@ it("four fieldsets with counts, muted zero facets stay checkable when checked", 
     .toEqual(["Language", "Translation review", "Annotation", "Final", "Origin", "Plan", "Flags", "Tool proposals", "Waiting on", "Order"]);
   // X5: the flags facet with its count.
   expect(within(dialog).getByRole("checkbox", { name: /^Flagged: guidelines unclear, / })).toBeTruthy();
-  // Focus moves to the first checkbox.
-  expect(document.activeElement).toBe(within(dialog).getByRole("checkbox", { name: "de, 8 texts" }));
+  // Focus moves to the first control.
+  expect(document.activeElement).toBe(within(dialog).getByRole("combobox", { name: "Assigned to" }));
   expect(within(dialog).getByRole("checkbox", { name: "en (source), 3 texts" })).toBeTruthy();
   expect(within(dialog).getByRole("checkbox", { name: "Rejected / query, 2 texts" })).toBeTruthy();
   expect(within(dialog).getByRole("checkbox", { name: "No final yet, 9 texts" })).toBeTruthy();
@@ -148,4 +148,18 @@ it("shows With tool proposals and Without with counts", () => {
   fireEvent.click(within(group).getByRole("checkbox", { name: "With tool proposals, 4 texts" }));
   expect(onChange).toHaveBeenLastCalledWith({ proposals: "with" });
   expect(screen.getByRole("button", { name: "Filter, 1 active" })).toBeTruthy();
+});
+
+it("Assigned to picks a member by name; Anyone clears it", () => {
+  const onChange = vi.fn();
+  render(<FilterPopover query={{ assignee: "ann-0001" }} bar={counts} sourceLanguages={new Set()} onChange={onChange} onClearAll={vi.fn()}
+    members={["ann-0002", "ann-0001"]} people={new Map([["ann-0001", "Ana"]])} />);
+  fireEvent.click(screen.getByRole("button", { name: /^Filter, 1 active/ }));
+  const picker = screen.getByRole("combobox", { name: "Assigned to" }) as HTMLSelectElement;
+  expect(picker.value).toBe("ann-0001");
+  expect([...picker.options].map(item => item.text)).toEqual(["Anyone", "Ana", "ann-0002"]);
+  fireEvent.change(picker, { target: { value: "ann-0002" } });
+  expect(onChange).toHaveBeenLastCalledWith({ assignee: "ann-0002" });
+  fireEvent.change(picker, { target: { value: "" } });
+  expect(onChange).toHaveBeenLastCalledWith({ assignee: undefined });
 });

@@ -56,7 +56,7 @@ function renderStateful(initial: ProjectDocumentsQuery) {
 }
 
 const loaded = () => screen.findByRole("tablist", { name: "Documents views" });
-const searchField = () => screen.getByRole("searchbox", { name: "Case ID or text" });
+const searchField = () => screen.getByRole("searchbox", { name: "Search by case ID" });
 const filterTools = () => screen.getByRole("group", { name: "Document filters" });
 const live = () => document.querySelector(".documents-page > p[aria-live='polite']")!;
 
@@ -139,7 +139,7 @@ it("tabs, search, Filter popover and chips replace the filter selects (VD9)", as
   expect(document.querySelector(".documents-page select")).toBeNull();
   expect(screen.queryByText("More filters")).toBeNull();
   const tools = filterTools();
-  expect(within(tools).getByRole("searchbox", { name: "Case ID or text" }).getAttribute("placeholder")).toBe("Case ID or text…");
+  expect(within(tools).getByRole("searchbox", { name: "Search by case ID" }).getAttribute("placeholder")).toBe("Case ID…");
   // The table sits in the tab panel of the active tab.
   const panel = screen.getByRole("tabpanel");
   expect(panel.getAttribute("aria-labelledby")).toBe(screen.getByRole("tab", { selected: true }).id);
@@ -788,6 +788,39 @@ it("shows the empty states per tab, for filters and for an empty project", async
   expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", sort: "import" });
 });
 
+
+it("a search without hits in the tab offers All and keeps the search; without hits anywhere it only says so", async () => {
+  mockRows(page([], { bar: { ...page([]).bar, all: 3, to_assign: 1, all_tab_shown: 2 } }));
+  const { onNavigate } = renderPage({ query: { segment: "assign", q: "fr1" } });
+  expect(await screen.findByRole("heading", { name: "No texts in this tab match this search." })).toBeTruthy();
+  fireEvent.click(screen.getByRole("link", { name: "Show 2 texts under All" }));
+  expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", q: "fr1" });
+  cleanup();
+  // An empty tab tells the same, not its usual empty text.
+  mockRows(page([], { bar: { ...page([]).bar, all: 3, all_tab_shown: 1 } }));
+  renderPage({ query: { segment: "done", q: "fr1" } });
+  expect(await screen.findByRole("link", { name: "Show 1 text under All" })).toBeTruthy();
+  cleanup();
+  mockRows(page([], { bar: { ...page([]).bar, all: 3 } }));
+  renderPage({ query: { segment: "assign", q: "nope" } });
+  expect(await screen.findByRole("heading", { name: "No texts match this search." })).toBeTruthy();
+  expect(screen.queryByRole("link", { name: /under All/ })).toBeNull();
+  cleanup();
+  // Under All there is nowhere to go.
+  mockRows(page([], { bar: { ...page([]).bar, all: 3, all_tab_shown: 0 } }));
+  renderPage({ query: { q: "nope" } });
+  expect(await screen.findByRole("heading", { name: "No texts match this search." })).toBeTruthy();
+});
+
+it("the assignee filter shows its chip and goes to the rows and the header checkbox", async () => {
+  mockRows(casesPage(1));
+  vi.spyOn(api, "documentRowKeys").mockResolvedValueOnce(deKeys(["case-0101"]));
+  renderPage({ query: { assignee: "ann-0001" } });
+  expect(await screen.findByRole("button", { name: "Remove filter Assigned to: ann-0001" })).toBeTruthy();
+  expect(api.listDocumentRows).toHaveBeenLastCalledWith("p", expect.objectContaining({ assignee: "ann-0001" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "Select the only filtered text" }));
+  await waitFor(() => expect(api.documentRowKeys).toHaveBeenCalledWith("p", { filters: { assignee: "ann-0001" }, sort: "case" }));
+});
 
 it("explains a preflight-only missing final result on a deep-linked row", async () => {
   const s4 = scenarioS4();

@@ -407,6 +407,8 @@ class DecisionBarView(BaseModel):
     missing_final: int = Field(validation_alias="missing-final")
     no_final: int
     shown: int
+    # What ``shown`` would be under the All tab; only with a search, else 0.
+    all_tab_shown: int = 0
     # Rows with a final result in the whole project, independent of filters
     # and paging (FD12: Documents shows "Export final results…" when > 0).
     finals: int = 0
@@ -589,7 +591,7 @@ def _filters(
     status: AssignmentFilter | None = None,
     q: Annotated[
         str | None,
-        Query(description='Case/external/document ID prefix or "case-104 de"'),
+        Query(description='Part of a case/external/document ID or "case-104 de"'),
     ] = None,
     origin: Annotated[list[VariantOrigin] | None, Query()] = None,
     translation_status: TranslationStatus
@@ -602,6 +604,9 @@ def _filters(
     step: Annotated[list[StepCode] | None, Query()] = None,
     stage: Annotated[list[Stage] | None, Query()] = None,
     owner: Annotated[str | None, Query(description='"me" or a pseudonym')] = None,
+    assignee: Annotated[
+        str | None, Query(description="Pseudonym with non-revoked work on the row")
+    ] = None,
     plan: Annotated[list[PlanFilter] | None, Query()] = None,
     paused: Paused | None = None,
     sort: Sort = "case",
@@ -637,6 +642,7 @@ def _filters(
         "step": tuple(step or ()),
         "stage": tuple(stage or ()),
         "owner": owner,
+        "assignee": assignee,
         "plan": tuple(plan or ()),
         "paused": paused,
         "sort": sort,

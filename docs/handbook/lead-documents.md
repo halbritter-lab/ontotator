@@ -102,20 +102,23 @@ If you have an open task on the text yourself, the row shows **Open my task** in
 
 ### Search texts
 
-What for: find a text by its case ID or by words in the text.
+What for: find a text by its ID. The search does not look at the words in the text.
 
-1. Type into the search field **Case ID or text…**.
+1. Type into the search field **Case ID…**. Any part of the ID is enough, in upper or lower case: `fr100994` and `100994` both find `FR100994`. To find one language, add it: `FR100994 fr`.
 2. The list updates after a short pause or when you press Enter.
+
+The search stays inside the open tab. If it finds nothing there but finds texts under another tab, the list says so and offers a button to show them under **All**, with your search kept.
 
 To clear the search, click ✕ in the field.
 
 ### Filter the list
 
-What for: show only texts in a certain state, language or origin.
+What for: show only texts in a certain state, language or origin, or the texts of one person.
 
 1. Click **Filter**.
-2. Tick the options you need, for example under **Language**, **Translation review**, **Annotation** or **Final**. Each choice applies at once.
-3. Under **Order**, choose **Case ID**, **Import order** or **Last activity**.
+2. To see what a person was given, choose them under **Assigned to**. The list shows their texts in every task, open and submitted; revoked assignments are left out.
+3. Tick the options you need, for example under **Language**, **Translation review**, **Annotation** or **Final**. Each choice applies at once.
+4. Under **Order**, choose **Case ID**, **Import order** or **Last activity**.
 
 Active filters show as chips above the table. Remove one with its ✕, or click **Clear all**. Options without texts are hidden; click the button below the options, for example *Show 4 empty filters*, to see them.
 

@@ -14,7 +14,7 @@ export interface ProjectDocumentsQuery {
   select?: string;
   origin?: string;
   translation_status?: string;
-  /** Exact case ID (unlike the `q` prefix search). */
+  /** Exact case ID (unlike the `q` search). */
   case?: string;
   decision?: string;
   /** Final result filter (`none` | `any`; legacy `missing`). */
@@ -27,6 +27,8 @@ export interface ProjectDocumentsQuery {
   stage?: string;
   /** Owner of the next step: `me` or a pseudonym. */
   owner?: string;
+  /** Assigned person (pseudonym): non-revoked work of any task, open or submitted. */
+  assignee?: string;
   /** Plan filter (`review` | `annotate` | `review_and_annotate` | `not_in_plan`); comma-joined for several. */
   plan?: string;
   /** Rows with (`yes`) or without (`no`) a held annotate or review task. */
@@ -69,7 +71,7 @@ export interface NavigateOptions { replace?: boolean }
 
 export const DOCUMENT_FIELDS = [
   "language", "status", "q", "select", "origin", "translation_status", "case", "decision", "final",
-  "segment", "step", "stage", "owner", "plan", "paused", "sort", "page",
+  "segment", "step", "stage", "owner", "assignee", "plan", "paused", "sort", "page",
   "review_state", "annotation_state", "final_state", "waiting_on", "flags", "proposals", "panel", "panel_stage", "panel_tab",
 ] as const;
 

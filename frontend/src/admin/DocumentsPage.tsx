@@ -24,7 +24,7 @@ import { submissionGuidelineLabel } from "../guidelines/submissionLabel";
 import { Button, Checkbox, Dialog, EmptyState, FilterChip, InlineMessage, StatusBadge, tabId, Toast, Toolbar, useMediaQuery, useToast, type GroupSelectMode } from "../ui";
 import { DocumentsTabs, TabEmptyState } from "../documents/DocumentsTabs";
 import { DocumentsSearch, LiveRegion, type DocumentsSearchHandle, type LiveRegionHandle } from "../documents/DocumentsSearch";
-import { activeTab, chipsOf, clearAllPatch, filtersActive, listOf, rowsRequest, tabCount } from "../documents/filterModel";
+import { activeTab, chipsOf, clearAllPatch, filtersActive, listOf, rowsRequest, tabCount, tabRoute } from "../documents/filterModel";
 import { FilterPopover } from "../documents/FilterPopover";
 import { DocumentCards } from "../documents/DocumentCards";
 import { DocumentsTable, tableRows, type ColumnSort, type HeaderSort, type TableSelection } from "../documents/DocumentsTable";
@@ -259,6 +259,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   const [chipFocus, setChipFocus] = useState<number | null>(null);
   const people = useMemo(() => new Map((inventory?.members ?? []).filter(member => member.display_name?.trim())
     .map(member => [member.pseudonym, member.display_name.trim()] as const)), [inventory]);
+  const members = useMemo(() => (inventory?.members ?? []).map(member => member.pseudonym), [inventory]);
   const chips = chipsOf(query, people);
   const chipIdentity = chips.map(chip => chip.id).join("\n");
   useEffect(() => {
@@ -777,8 +778,12 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   const navigateLink = (target: Route) => onNavigate(target);
   const sourceLanguages = useMemo(() => new Set(pageRows.filter(row => row.is_source).map(row => row.language)), [pageRows]);
 
-  /** No rows: the tab is empty (tab counts ignore facets and search), or the filters exclude every row of the tab. */
+  /** No rows: the search hit nothing here (All may still have hits), the tab is empty (tab counts ignore facets and search), or the filters exclude every row of the tab. */
   const emptyState = (bar: DocumentRowsPage["bar"]): JSX.Element => {
+    if (query.q && !emptyProject) {
+      if (tab === "all" || !bar.all_tab_shown) return <EmptyState title="No texts match this search." />;
+      return <EmptyState title="No texts in this tab match this search." action={<RouteLink route={tabRoute(projectKey, query, "all")} className="btn btn-secondary" onNavigate={navigateLink}>{`Show ${plural(bar.all_tab_shown, "text")} under All`}</RouteLink>} />;
+    }
     if (tabCount(bar, tab) === 0) return <TabEmptyState tab={emptyProject ? "all" : tab} projectKey={projectKey} onNavigate={navigateLink} onUpload={uploadButton} />;
     return <EmptyState title="No texts match these filters." action={<Button size="sm" onClick={clearAll}>Clear all</Button>} />;
   };
@@ -845,7 +850,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     {page && !emptyProject && <DocumentsTabs bar={page.bar} query={query} projectKey={projectKey} panelId={PANEL_ID} onNavigate={navigateLink} updatedAt={rows.updatedAt} onRefresh={refreshVisit} />}
     {!emptyProject && <Toolbar label="Document filters" className="documents-filters">
       <DocumentsSearch ref={search} q={query.q} onApply={q => changeFilter({ q })} />
-      <FilterPopover query={query} bar={page?.bar ?? null} sourceLanguages={sourceLanguages} translations={translations} onChange={changeFilter} onClearAll={clearAll} people={people} />
+      <FilterPopover query={query} bar={page?.bar ?? null} sourceLanguages={sourceLanguages} translations={translations} onChange={changeFilter} onClearAll={clearAll} people={people} members={members} />
       {chips.length > 0 && <div ref={chipList} className="documents-filter-chips">
         {chips.map((chip, index) => <FilterChip key={chip.id} label={chip.label} language={chip.language} onRemove={() => removeChip(index)} />)}
       </div>}

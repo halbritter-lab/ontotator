@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Documents: **Assigned to** in the Filter popover shows the texts given to one person, in every task, open and submitted, without revoked assignments. It shows as a chip, stays in the URL and works with the selection (`assignee` on the rows, case IDs and selection filters) (#215).
+
+### Changed
+
+- The Documents search finds any part of a case, external or document ID in any case (`fr100994` and `100994` find `FR100994`). The field now reads "Case ID…", since it never searched the words of a text (#216).
+- A search without hits in the open tab says so and offers its hits under All, with the search kept (`all_tab_shown` on the decision bar) (#216).
+
 ## [0.4.0] - 2026-10-30
 
 ### Added
