@@ -1,6 +1,7 @@
 import { ReanchorPanel, currentReanchorResolution, reanchorKey, reanchorRef, useReanchorContext } from "../variants/ReanchorPanel";
 import { useCarriedReview } from "../editor/carried/useCarriedReview";
 import { carriedChosenAxisIds, carriedListOrder as orderCarriedFirst, deriveCarriedStates, nextUncheckedKey, rowKeyOf, type CarriedState, type SnapshotLike } from "../editor/carried/checkState";
+import { canRestore, captureDeletedFinding, modifierRestoreCommands, restoreCommands, type DeletedFinding } from "../editor/restoreFinding";
 import { carriedOriginLine, TEXT_CHANGE_ORIGIN, instructionLine, missingReason, roundName, textSpanLine, valuesLines, whatToCheckContext, type WhatToCheckContext } from "../editor/carried/instructions";
 import { CarriedSection, type CarriedReadOnly } from "../editor/carried/CarriedSection";
 import { ExceptionPanel } from "../editor/carried/ExceptionPanel";
@@ -1554,13 +1555,46 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     ? "Delete this finding and all its mentions? This is a carried finding. After deleting it, you must link another finding or dismiss it with a reason."
     : undefined;
   /** Delete; a deleted carried finding becomes its placeholder row, selected with "Dismiss with reason…" focused. */
+  /** #150: puts a deleted finding back (Undo in the toast or Ctrl+Z) and selects it. */
+  const restoreDeletedFinding = async (deleted: DeletedFinding) => {
+    if (readOnlyRef.current) return;
+    const ann = deleted.snapshot.annotation;
+    const type = view.layers?.find(layer => layer.layer_id === ann.layer_id)?.annotation_types.find(item => item.type_id === ann.type_id);
+    const axisIds = (type?.axes ?? view.axes_config ?? []).map(axis => axis.id);
+    const adoptable = (id: string, version: string) => (view.available_inputs ?? []).some(input =>
+      input.annotation.annotation_id === id && input.version === version
+      && input.annotation.layer_id === ann.layer_id && input.annotation.type_id === ann.type_id);
+    setActionError(null);
+    try {
+      for (const payload of restoreCommands(deleted, axisIds, adoptable)) await enqueueMutation(payload);
+      const current = latestDraft.current.annotations?.find(a => a.annotation.annotation_id === ann.annotation_id)?.annotation.modifiers ?? [];
+      for (const payload of modifierRestoreCommands(ann.annotation_id, ann.modifiers ?? [], current)) await enqueueMutation(payload);
+      for (const decision of deleted.decisions) {
+        await enqueueDecision(decision.target, decision.outcome as ReviewDecisionOutcome, ann.annotation_id, decision.note ?? undefined);
+      }
+    } catch (error) {
+      if (!(error instanceof DiscardedChangesError)) reportError(error);
+      return;
+    }
+    selectListKey(`annotation:${ann.annotation_id}`, true);
+    announceCarried(`Restored ${findingNameOf(deleted.snapshot)}.`);
+  };
+
   const deleteAnnotation = async (annotationId: string) => {
     const homes = carried.byHome.get(annotationId) ?? [];
     // Focus moves to the next finding row, else the previous one, not to <body> (#18).
     const rowKeys = [...sidebarScrollRef.current?.querySelectorAll<HTMLElement>('[data-list-key^="annotation:"]') ?? []].map(row => row.dataset.listKey);
     const index = rowKeys.indexOf(`annotation:${annotationId}`);
     const neighbour = index < 0 ? undefined : rowKeys[index + 1] ?? rowKeys[index - 1];
+    const deleted = captureDeletedFinding(latestDraft.current, annotationId);
     await handleDeleteAnnotation(annotationId);
+    // #150: like a removed modifier, a deleted finding can be undone (toast or Ctrl+Z).
+    if (deleted && !readOnlyRef.current) {
+      const name = findingNameOf(deleted.snapshot);
+      modifierCommands.showToast(canRestore(deleted)
+        ? { message: `Deleted ${name}`, actionLabel: "Undo", undo: true, onAction: () => { void restoreDeletedFinding(deleted); } }
+        : { message: `Deleted ${name}` });
+    }
     const after = homes.length ? carriedStateNow(homes[0].input.input_id) : undefined;
     if (!after || after.homeId) {
       if (neighbour && (!document.activeElement || document.activeElement === document.body)) {
@@ -3306,8 +3340,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     <ProposalMetadataProvider scope={`${workspaceId}:${JSON.stringify(view.key)}`} projectKey={view.key.project_key} proposals={view.available_inputs ?? []} metadata={view.proposal_sets ?? []} allowPublicFetch={false}>
     <div ref={rootRef} className={compareOpen ? "case-screen case-comparing" : "case-screen"}>
       <div className="visually-hidden" aria-live="polite" data-carried-announcer>{carriedAnnouncement}</div>
-      {/* The Undo toast of a removed modifier; its live region exists only where modifiers can be edited. */}
-      {modifierLayerIds.size > 0 && <Toast toast={modifierCommands.toast} onDismiss={modifierCommands.dismissToast} undoDescription="Undo removing the modifier" undoGroup="Finding" />}
+      {/* The Undo toast of a removed modifier or a deleted finding; its live region exists only where findings can be edited. */}
+      {(modifierLayerIds.size > 0 || !readOnly) && <Toast toast={modifierCommands.toast} onDismiss={modifierCommands.dismissToast} undoDescription="Undo deleting a finding or removing a modifier" undoGroup="Finding" />}
       {/* Header */}
       <Toolbar className="case-toolbar" label="Case">
         <div className={(assignmentNavigation ? assignmentTasks?.length ?? 0 : documentList?.length ?? 0) <= 1 ? "app-title app-title--single-case" : "app-title"}>

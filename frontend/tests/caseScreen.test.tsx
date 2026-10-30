@@ -956,6 +956,43 @@ describe("CaseScreen integration", () => {
     yes.focus(); fireEvent.click(yes);
     await waitFor(() => expect(document.activeElement).toBe(container.querySelector('[data-list-key="annotation:ann-second"]')));
   });
+  it("Delete finding offers Undo (toast and Ctrl+Z) that puts the finding back as it was (#150)", async () => {
+    const deleted = {
+      schema_version: "ontotator-annotation/v3" as const,
+      annotation: { annotation_id: "ann-undo", document_id: "doc-test-1", layer_id: "phenotype", type_id: "default", term_id: "HP:0001252",
+        axes_values: { assertion: "absent", experiencer: "patient" }, axes_defaulted: ["experiencer"], note: "Checked twice",
+        evidence_refs: [{ evidence_id: "ev-undo", version: "ev-v" }],
+        provenance: { actor: { actor_id: "user-test", kind: "human" as const }, method: "manual", source_refs: [] } },
+      evidence: [], document_id: "doc-test-1", text_sha256: "sha-test-text", ontology_sha256: "sha-ont", layer_config_sha256: "test-layer-sha", version: "v-1",
+    };
+    const evidence = { version: "ev-v", document_id: "doc-test-1", text_sha256: "sha-test-text", mention: { evidence_id: "ev-undo", segments: [{ start: 0, end: 3 }], cue_segments: [] } };
+    const view = { ...sampleView, draft: { ...sampleView.draft, revision: 1, annotations: [deleted], evidence: [evidence] } } as WorkspaceView;
+    const apply = vi.spyOn(api, "applyCommand").mockImplementation(async (_ws, envelope) => {
+      const payload = envelope.payload as Record<string, unknown>;
+      return (payload.command === "delete_draft_annotation"
+        ? { ...view.draft, revision: 2, annotations: [], evidence: [] }
+        : { ...view.draft, revision: 3 }) as any;
+    });
+    const { container } = render(<CaseScreen view={view} workspaceId="ws-undo" onClose={vi.fn()} />);
+    fireEvent.click(container.querySelector('[data-list-key="annotation:ann-undo"]')!);
+    fireEvent.click(screen.getByText("Delete finding"));
+    fireEvent.click(screen.getByRole("button", { name: /Yes, delete/i }));
+    const toast = await waitFor(() => {
+      const element = container.querySelector<HTMLElement>(".ui-toast");
+      expect(element?.textContent).toContain("Deleted");
+      return element!;
+    });
+    // Ctrl+Z outside a text field runs the toast's Undo.
+    (document.activeElement as HTMLElement | null)?.blur?.();
+    fireEvent.keyDown(document.body, { key: "z", ctrlKey: true });
+    await waitFor(() => expect(apply).toHaveBeenCalledTimes(2));
+    expect(apply.mock.calls[1][1].payload).toEqual({
+      command: "create_annotation", annotation_id: "ann-undo", layer_id: "phenotype", type_id: "default", term_id: "HP:0001252",
+      axes_values: { assertion: "absent", experiencer: "patient" }, chosen_axis_ids: ["assertion"],
+      segments: [{ start: 0, end: 3 }], evidence_id: "ev-undo", note: "Checked twice", method: "manual",
+    });
+    expect(toast.isConnected).toBe(false);
+  });
   it("keeps a pending span local and creates only the term chosen in a configured ontology", async () => {
     const view = structuredClone(sampleView);
     view.layers![0].ontology_id = "custom-ontology";

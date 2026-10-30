@@ -157,9 +157,9 @@ What for: correct a finding you made.
 2. Use the action you need:
    - **Change term**, then search a new one: changes the term and keeps the mentions.
    - **Note**: type a comment. It is saved with the finding and the lead can read it.
-   - **Delete finding**, then **Yes, delete**: deletes the finding and all its mentions.
+   - **Delete finding**, then **Yes, delete**: deletes the finding and all its mentions. The message that follows offers **Undo**; `Ctrl+Z` (macOS: `Cmd+Z`) does the same while you are not typing in a field. Undo puts the finding back with its mentions, values, note and modifiers, and selects it.
 
-Warning: deleting a finding cannot be undone. Check that the right finding is selected first.
+Undo is offered only right after deleting, until the message closes. A restored carried finding may need a new check.
 
 If a term has become obsolete, the panel says so. Change the term or delete the finding.
 
@@ -387,7 +387,7 @@ What for: work without the mouse. Shortcuts are off while you type in a field or
 | `0` | Reset the decision to open |
 | `n` / `Shift+N` | Next / previous unchecked carried finding |
 | `c` | Mark carried finding as checked |
-| `Ctrl+Z` (macOS: `Cmd+Z`) | Undo removing a modifier |
+| `Ctrl+Z` (macOS: `Cmd+Z`) | Undo deleting a finding or removing a modifier |
 | `Alt+←` / `Alt+→` | Previous / next text |
 | `Alt+P` | Switch project |
 
