@@ -2484,7 +2484,7 @@ describe("CaseScreen integration", () => {
       save.reject(new TypeError("Failed to fetch"));
 
       expect((await screen.findByRole("alert")).textContent).toMatch(/Pending changes could not be saved/);
-      expect(screen.getByRole("status").textContent).toMatch(/Offline – changes not saved/);
+      expect(document.querySelector(".app-actions [role=\"status\"]")!.textContent).toMatch(/Offline – changes not saved/);
       await waitFor(() => expect(finishButton().getAttribute("aria-busy")).not.toBe("true"));
       expect(screen.queryByRole("dialog", { name: /Submit text/i })).toBeNull();
     });

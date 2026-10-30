@@ -20,7 +20,7 @@ const draftOf = (annotation: AnnotationSnapshot, decisions: unknown[] = []): Dra
     { version: "e1", document_id: "doc", text_sha256: "t", mention: { evidence_id: "ev-1", segments: [{ start: 0, end: 4 }], cue_segments: [] } },
     { version: "e2", document_id: "doc", text_sha256: "t", mention: { evidence_id: "ev-2", segments: [{ start: 10, end: 14 }, { start: 20, end: 22 }], cue_segments: [] } },
   ] as never,
-} as Draft);
+} as unknown as Draft);
 
 describe("restore a deleted finding (#150)", () => {
   it("recreates the finding with its ID, mentions, chosen values and note", () => {
