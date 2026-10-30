@@ -36,7 +36,7 @@ A project lead has not assigned you a text yet. Assigned texts appear under **My
 
 ### I see "You are not a member of any project yet."
 
-Ask your project lead or an administrator to add you to a project, then reload the page. Leads: see [Add a member](lead-settings.md#add-a-member).
+Ask your project lead or an administrator to add you to a project, then click **My tasks** or reload the page. Leads: see [Add a member](lead-settings.md#add-a-member).
 
 ### A task opens with "Task not found or not yours"
 
@@ -86,7 +86,7 @@ The connection to the server is lost. Keep the window open; your input stays in 
 
 ### The term search does not find the right term
 
-The search compares your words with term names and synonyms; it does not understand meaning. Terms whose name or synonym equals your words come first, similar terms follow in a shuffled order. Read all hits, then try another word, a synonym, the English name or a code. See [Search a term](annotator.md#search-a-term).
+The search compares your words with term names and synonyms; it does not understand meaning. Terms whose name or synonym equals your words come first, then terms whose name or synonym contains all your words; other similar terms follow in a shuffled order. Read all hits, then try another word, a synonym, the English name or a code. See [Search a term](annotator.md#search-a-term).
 
 ## Translation review
 

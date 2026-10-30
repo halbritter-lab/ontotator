@@ -28,8 +28,14 @@ SESSION_COOKIE = "ontotator_session"
 CSRF_HEADER = "x-csrf-token"
 UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 # demo-logins exists only while demo logins are configured (404 otherwise).
+# session resolves the cookie itself and answers without a session too.
 PUBLIC_PATHS = frozenset(
-    {"/api/v1/auth/login", "/api/v1/auth/redeem-code", "/api/v1/auth/demo-logins"}
+    {
+        "/api/v1/auth/login",
+        "/api/v1/auth/redeem-code",
+        "/api/v1/auth/demo-logins",
+        "/api/v1/auth/session",
+    }
 )
 CROSS_SITE_MESSAGE = "The request does not come from this site."
 

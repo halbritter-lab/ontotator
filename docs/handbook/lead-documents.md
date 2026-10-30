@@ -192,7 +192,7 @@ The corrected text becomes a new text version.
 
 ## Work plans and assignments
 
-The work plan says, for each text, whether it gets a translation review and whether and how it is annotated. Planned texts show up in the main list; the others are hidden.
+The work plan says, for each text, whether it gets a translation review and whether and how it is annotated. Planned texts show up in the main list; the others are hidden. Then the tab **All** says how many of its texts the table holds, for example *246 of 307*.
 
 ### Add a text to the plan
 

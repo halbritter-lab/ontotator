@@ -154,6 +154,23 @@ def test_logout_ends_the_session(app: FastAPI) -> None:
     assert stale.get("/api/v1/auth/me").status_code == 401
 
 
+def test_session_answers_200_with_or_without_a_session(app: FastAPI) -> None:
+    anonymous = TestClient(app).get("/api/v1/auth/session")
+    assert anonymous.status_code == 200
+    assert anonymous.json() == {"user": None, "demo_logins": False}
+    stale = TestClient(app, cookies={"ontotator_session": "not-a-session"})
+    assert stale.get("/api/v1/auth/session").json()["user"] is None
+
+    client = logged_in(app, "alice")
+    me = client.get("/api/v1/auth/me").json()
+    assert client.get("/api/v1/auth/session").json() == {
+        "user": me,
+        "demo_logins": False,
+    }
+    assert client.post("/api/v1/auth/logout").status_code == 204
+    assert client.get("/api/v1/auth/session").json()["user"] is None
+
+
 def test_a_setup_code_logs_the_new_user_in(app: FastAPI) -> None:
     issued = app.state.accounts.create_user(ADMIN, "carol", "Carol Example")
     client = TestClient(app)

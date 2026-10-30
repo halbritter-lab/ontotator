@@ -1127,7 +1127,7 @@ describe("row actions", () => {
     const { onNavigate } = renderPage({ query: { segment: "decision", panel: "case-0042:en" } });
     const panel = await textCard("case-0042 en");
     expect(api.finalPanel).toHaveBeenCalledWith("p", "case-0042", "en");
-    fireEvent.click(await within(panel).findByRole("link", { name: "Open in editor" }));
+    fireEvent.click(await within(panel).findByRole("link", { name: "Open submission" }));
     expect(onNavigate).toHaveBeenLastCalledWith(expect.objectContaining({ name: "projectCase", caseId: "case-0042", documents: { segment: "decision", panel: "case-0042:en" } }));
   });
 
@@ -1412,12 +1412,15 @@ describe("lead review fixes", () => {
     window.localStorage.clear();
     const planned = planRow("case-2", "de", stepOf("assign_annotation"));
     const view = page([group("case-1", [notInPlanRow("case-1", "en", { is_source: true }), notInPlanRow("case-1", "fr")]), group("case-2", [planned])]);
-    mockRows({ ...view, bar: { ...view.bar, facets: { plan: { not_in_plan: 3, not_decided: 1, annotate: 1 } } } });
+    mockRows({ ...view, bar: { ...view.bar, shown: 3, all: 3, facets: { plan: { not_in_plan: 3, not_decided: 1, annotate: 1 } } } });
     renderPage();
     const toggle = await screen.findByRole("checkbox", { name: "Show texts not in plan (2)" });
     expect((toggle as HTMLInputElement).checked).toBe(false);
     expect(screen.queryByRole("button", { name: "Text case-1 fr" })).toBeNull();
+    // The tab says 3, the table holds 1 (#198).
+    expect(within(filterTools()).getByText("1 of 3")).toBeTruthy();
     fireEvent.click(toggle);
+    expect(within(filterTools()).queryByText(/ of 3$/)).toBeNull();
     const fr = screen.getByRole("button", { name: "Text case-1 fr" }).closest("tr")!;
     expect(fr.className).toContain("documents-row--not-in-plan");
     expect(within(fr).getAllByRole("button").map(button => button.getAttribute("aria-label"))).toEqual(["Text case-1 fr", "Add to plan…, case-1 fr"]);

@@ -181,6 +181,18 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
   requestRef.current = requestRoute;
 
   const projectsReady = !!baseUser && projectContext?.identity === projectIdentity;
+  // Opening My tasks or Projects reloads the project list in place (issue 192): a project the user was added to
+  // while logged in shows up without a page reload. The shown list stays until the new one arrives.
+  const navigationRoute = route.name === "tasks" || route.name === "projects" ? route : null;
+  useEffect(() => {
+    if (!navigationRoute || !projectsReady) return;
+    const identity = projectIdentity;
+    api.listProjects().then(next => {
+      if (alive.current) setProjectContext(context => context?.identity === identity ? { identity, projects: next } : context);
+    }, () => { /* The loaded list stays; the next navigation tries again. */ });
+    // Only a navigation reloads; the first load is the effect above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navigationRoute]);
   useSessionRestored(() => { if (projectError) setRetry(value => value + 1); });
   // A navigation that left focus nowhere (the next task after a submit) starts at the page's main region (#18).
   const shownRoute = useRef(route);
@@ -326,7 +338,7 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
     case "notFound": content = <NotFound onNavigate={go} />; break;
     default: content = <EmptyState title="This page is not available yet.">This section is planned for a later step.</EmptyState>;
   }
-  return <Shell user={user} projects={projects} route={route} onNavigate={go} onLogout={logout}
+  return <Shell user={user} projects={projects} route={route} onNavigate={go} onLogout={logout} navigation={navigationRoute}
     taskProject={taskProject?.identity === taskIdentity ? taskProject.key : undefined}
     taskKind={crumbTask?.identity === taskIdentity ? crumbTask.task?.task : undefined}
     breadcrumb={route.name === "task" ? [
