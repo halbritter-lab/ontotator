@@ -319,6 +319,7 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
             # Never let a failing clean-up hide why the start failed.
             with contextlib.suppress(Exception):
                 db.close()
+            with contextlib.suppress(Exception):
                 unlimited_db.close()
             raise
 
