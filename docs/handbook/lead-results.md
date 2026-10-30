@@ -16,7 +16,7 @@ How to choose:
 
 What for: choose the final result of a text.
 
-1. On **Documents**, tab **Needs your decision**, click **Accept result…** or **Compare results…** in the row. The card opens at **Finalization**.
+1. On **Documents**, tab **Needs your decision**, click **Accept result…** or **Compare results…** in the row. The row reads **Accept result…** when there is one result to accept or all findings match, and **Compare results…** when submissions differ. The card opens at **Finalization**.
 2. With one submission or a submitted consolidation, check it and click **Accept result**.
 3. If all annotations agree, the card says so. Click **Accept result**.
 4. If they differ, the card shows the agreement, for example *Agreement: 5 of 9 findings match, 1 differs in context only*. **How is this counted?** explains the numbers. Open a submission with **Open in editor** to read it.

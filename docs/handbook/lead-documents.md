@@ -77,7 +77,7 @@ The **Documents** page lists every text of the project and what it needs next. O
 | **Translation**, **Annotation**, **Finalization** | The state of each stage, with the names of the people involved. |
 | Robot icon | The text has tool proposals. |
 | **Waiting on** | Who the text waits for. **You** in bold means it waits for you. |
-| **Next step** | A button for the next action on this text, for example **Assign annotation…** or **Accept result…**. Rows that need your decision also have a coloured left edge. |
+| **Next step** | A button for the next action on this text, for example **Assign annotation…**, **Accept result…** or, when submissions differ, **Compare results…**. Rows that need your decision also have a coloured left edge. |
 | **Last activity** | When something last happened on the text. |
 
 ### Use the Documents tabs

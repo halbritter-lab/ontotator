@@ -89,6 +89,14 @@ describe("next step labels", () => {
     expect(rowActionLabel(choose, single)).toBe("Compare results…");
   });
 
+  it("reads Accept result… when every compared finding matches (#198)", () => {
+    const choose = stepOf("choose_final");
+    const at = (matching: number, compared: number) => row({ case_id: "c", language: "de", stages: stages({ final: stageCell("choose", "decision", { submitted: 2, label_rule: "compare", matching, compared }) }) });
+    expect(rowActionLabel(choose, at(4, 4))).toBe("Accept result…");
+    expect(rowActionLabel(choose, at(0, 0))).toBe("Accept result…");
+    expect(rowActionLabel(choose, at(3, 4))).toBe("Compare results…");
+  });
+
   it("names the text-change actions by target version and person when one row has several (VD18)", () => {
     const versions = [version({ document_id: "d1", version: 1, is_newest_in_chain: false }), version({ document_id: "d3", version: 3 })];
     const tom = { pseudonym: "ann-0004", display_name: "Tom Reis", is_me: false };
