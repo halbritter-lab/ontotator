@@ -291,6 +291,9 @@ describe("CaseScreen integration", () => {
     const candidate = await candidateCard("Hypotonia");
     fireEvent.click(candidate);
     expect(apply).not.toHaveBeenCalled();
+    // #157: the hit's name, not only its code, while the term labels have not resolved it.
+    const selected = document.querySelector<HTMLElement>(".pending-term-continuation p")!;
+    expect(selected.textContent).toContain("Hypotonia");
     const reason = screen.getByLabelText(/Reason for no text span/);
     expect(screen.getByRole("button", { name: "Add annotation" })).toHaveProperty("disabled", true);
     fireEvent.change(reason, { target: { value: "  Summary outside this excerpt  " } });
