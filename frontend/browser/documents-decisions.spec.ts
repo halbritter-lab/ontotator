@@ -133,7 +133,7 @@ test("first selection: Accept result… opens the text card, saves, announces an
   // "Choose final…" became "Accept result…" (one submission, V6, X14, D2); the row shows "Carry to v2…", the card the decision.
   const panel = await openDecisionBlock(page, caseId, "en");
   await expect(panel.getByText(/^Accept .+ as the result\?$/)).toBeVisible();
-  await expect(panel.getByRole("link", { name: "Open in editor", exact: true })).toBeVisible();
+  await expect(panel.getByRole("link", { name: "Open submission", exact: true })).toBeVisible();
   await panel.getByRole("button", { name: "Accept result", exact: true }).click();
 
   // Success line with the bar change; nothing else to decide; focus stays in the card.

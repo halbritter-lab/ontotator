@@ -10,7 +10,6 @@ from pg_harness import database_url_for, unmigrated_database_url
 from sqlalchemy import select
 from sqlalchemy.engine import make_url
 from typer.testing import CliRunner
-from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from ontotator import settings
 from ontotator.cli import app as cli_app
@@ -160,7 +159,9 @@ def test_app_from_env_hides_the_api_docs_in_production(
 
     install_env(monkeypatch, real_env(tmp_path, database_url_for(tmp_path / "db")))
     api = app_from_env()
-    client = TestClient(api, base_url="https://editor.example.org")
+    client = TestClient(
+        api, client=("127.0.0.1", 1234), base_url="https://editor.example.org"
+    )
     for path in ("/docs", "/redoc", "/openapi.json"):
         assert client.get(path).status_code == 404
     assert client.get("/livez").status_code == 200
@@ -171,7 +172,15 @@ def test_app_from_env_hides_the_api_docs_in_production(
 
 
 @pytest.mark.parametrize(
-    ("peer", "expected"), [("10.0.0.2", "198.51.100.7"), ("10.0.0.3", "10.0.0.3")]
+    ("peer", "expected"),
+    [
+        ("10.0.0.2", "198.51.100.7"),
+        ("::1", "198.51.100.7"),
+        ("::ffff:10.0.0.2", "198.51.100.7"),
+        # Loopback (health checks, in-container tools) is served, but its
+        # forwarded headers are not believed.
+        ("127.0.0.1", "127.0.0.1"),
+    ],
 )
 def test_forwarded_addresses_are_used_only_from_trusted_proxies(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, peer: str, expected: str
@@ -181,18 +190,13 @@ def test_forwarded_addresses_are_used_only_from_trusted_proxies(
     env = real_env(tmp_path, database_url_for(tmp_path / "db"))
     install_env(monkeypatch, env)
     api = app_from_env()
-    wrapped = ProxyHeadersMiddleware(
-        api, trusted_hosts=",".join(settings.server_settings(env).trusted_proxies)
-    )
-    client = TestClient(
-        wrapped, client=(peer, 1234), base_url="https://editor.example.org"
-    )
+    client = TestClient(api, client=(peer, 1234), base_url="https://editor.example.org")
     response = client.post(
         "/api/v1/auth/login",
         json={"username": "unknown", "password": "wrong"},
         headers={
             "Origin": env["ONTOTATOR_PUBLIC_ORIGIN"],
-            "X-Forwarded-For": "198.51.100.7",
+            "X-Forwarded-For": "203.0.113.1, 198.51.100.7",
         },
     )
     assert response.status_code == 401
@@ -200,6 +204,61 @@ def test_forwarded_addresses_are_used_only_from_trusted_proxies(
         assert conn.execute(select(LoginAttemptRow.client_ip)).scalars().all() == [
             expected
         ]
+
+
+@pytest.mark.parametrize("peer", ["10.0.0.3", "172.18.0.1", "testclient"])
+def test_production_refuses_peers_other_than_the_trusted_proxy(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    peer: str,
+) -> None:
+    """A recreated proxy with a new address must not share one lockout bucket.
+
+    Without the check, uvicorn would ignore its X-Forwarded-For and count
+    every user under the proxy's own address (issue #66).
+    """
+    from ontotator.api.server import app_from_env
+
+    env = real_env(tmp_path, database_url_for(tmp_path / "db"))
+    install_env(monkeypatch, env)
+    api = app_from_env()
+    client = TestClient(api, client=(peer, 1234), base_url="https://editor.example.org")
+    with caplog.at_level("ERROR", logger="ontotator.api.proxy_guard"):
+        for _ in range(3):
+            response = client.post(
+                "/api/v1/auth/login",
+                json={"username": "admin", "password": "wrong"},
+                headers={
+                    "Origin": env["ONTOTATOR_PUBLIC_ORIGIN"],
+                    "X-Forwarded-For": "198.51.100.7",
+                },
+            )
+            assert response.status_code == 503
+            assert "ONTOTATOR_TRUSTED_PROXIES" in response.text
+        assert client.get("/livez").status_code == 503
+    # Logged once per peer and interval, naming the peer and the setting.
+    refusals = [r for r in caplog.records if r.name == "ontotator.api.proxy_guard"]
+    assert len(refusals) == 1
+    assert peer in refusals[0].getMessage()
+    assert "10.0.0.2" in refusals[0].getMessage()
+    with api.state.repo.db.transaction() as conn:
+        assert conn.execute(select(LoginAttemptRow.client_ip)).scalars().all() == []
+
+
+def test_development_does_not_install_the_peer_check(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from ontotator.api.server import app_from_env
+
+    env = real_env(tmp_path, database_url_for(tmp_path / "db"))
+    env["ONTOTATOR_ENV"] = "development"
+    install_env(monkeypatch, env)
+    api = app_from_env()
+    client = TestClient(
+        api, client=("10.0.0.3", 1234), base_url="https://editor.example.org"
+    )
+    assert client.get("/livez").status_code == 200
 
 
 def test_production_cli_forces_validation_and_factory_workers(
@@ -220,8 +279,7 @@ def test_production_cli_forces_validation_and_factory_workers(
         host="0.0.0.0",
         port=8000,
         workers=2,
-        proxy_headers=True,
-        forwarded_allow_ips="10.0.0.2,::1",
+        proxy_headers=False,
         access_log=True,
         timeout_graceful_shutdown=30,
     )
@@ -243,7 +301,9 @@ def test_production_pending_schema_exposes_only_unready_health(
         monkeypatch, real_env(tmp_path, unmigrated_database_url(tmp_path / "db"))
     )
     api = app_from_env()
-    with TestClient(api, base_url="https://editor.example.org") as client:
+    with TestClient(
+        api, client=("127.0.0.1", 1234), base_url="https://editor.example.org"
+    ) as client:
         assert client.get("/livez").status_code == 200
         response = client.get("/readyz")
         assert response.status_code == 503

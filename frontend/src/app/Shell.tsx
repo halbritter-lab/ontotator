@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api, onSessionRestored, type CurrentUser, type ProjectSummary } from "../api/client";
 import { roleLabels } from "./labels";
 import { AppShell, type Crumb } from "../ui/AppShell";
@@ -19,6 +19,8 @@ export interface ShellProps {
   taskProject?: string;
   /** The open task's kind: an annotator on a translation review reads as "Translation reviewer". */
   taskKind?: string;
+  /** Changes on each navigation to My tasks or Projects; the My tasks count reloads then (issue 192). */
+  navigation?: unknown;
 }
 
 function NavigationLink({ destination, current, onNavigate, label, children }: {
@@ -50,11 +52,14 @@ export function shellRole(user: CurrentUser, projects: readonly ProjectSummary[]
 }
 
 /**
- * Unsubmitted own tasks, loaded once per session and again on window focus, a restored session or a tasks-changed
- * event (an own submit or new work round, so the count never lags behind it).
+/**
+ * Unsubmitted own tasks, loaded once per session and again on window focus, a restored session, a tasks-changed
+ * event (an own submit or new work round, so the count never lags behind it) or a change of `navigation` (opening
+ * My tasks or Projects).
  */
-function useOpenTaskCount(username: string): number | null {
+function useOpenTaskCount(username: string, navigation: unknown): number | null {
   const [count, setCount] = useState<{ username: string; value: number } | null>(null);
+  const reload = useRef<(() => void) | null>(null);
   useEffect(() => {
     let active = true;
     let generation = 0;
@@ -65,20 +70,28 @@ function useOpenTaskCount(username: string): number | null {
       }, () => { /* The nav keeps its plain label; My tasks itself reports errors. */ });
     };
     load();
+    reload.current = load;
     window.addEventListener("focus", load);
     window.addEventListener(TASKS_CHANGED, load);
     const stopRestored = onSessionRestored(load);
     return () => {
       active = false;
+      reload.current = null;
       window.removeEventListener("focus", load);
       window.removeEventListener(TASKS_CHANGED, load);
       stopRestored();
     };
   }, [username]);
+  const seenNavigation = useRef(navigation);
+  useEffect(() => {
+    if (seenNavigation.current === navigation) return;
+    seenNavigation.current = navigation;
+    if (navigation) reload.current?.();
+  }, [navigation]);
   return count?.username === username ? count.value : null;
 }
 
-export function Shell({ user, projects, route, onNavigate, onLogout, breadcrumb, children, taskProject, taskKind }: ShellProps): JSX.Element {
+export function Shell({ user, projects, route, onNavigate, onLogout, breadcrumb, children, taskProject, taskKind, navigation }: ShellProps): JSX.Element {
   const [choice, setChoice] = useState<{ username: string; key: string } | null>(null);
   const explicitKey = 'key' in route ? route.key : route.name === 'tasks' ? route.project : route.name === 'task' ? taskProject : undefined;
   // Without a project in the route: the switcher's last choice, else the remembered (last-used) project.
@@ -86,7 +99,7 @@ export function Shell({ user, projects, route, onNavigate, onLogout, breadcrumb,
   const currentKey = explicitKey ?? (choice?.username === user.username ? choice.key : undefined)
     ?? (remembered !== null && projects.some(project => project.project_key === remembered) ? remembered : undefined);
   const current = projects.find(project => project.project_key === currentKey);
-  const openTasks = useOpenTaskCount(user.username);
+  const openTasks = useOpenTaskCount(user.username, navigation);
   // "Documents (n)": rows needing the lead's decision (V3); the summary is lead only.
   const needsDecision = useDocumentsSummary(current?.project_key, !!current?.can_manage && current.roles.includes("lead"));
   const switcher = projects.length > 0 && <ProjectSwitcher projects={projects} current={current} route={route}

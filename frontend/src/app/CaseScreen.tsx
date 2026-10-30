@@ -3907,7 +3907,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 {pendingAnnotation.selectedTerm && <div className="pending-term-continuation">
                   <p>Selected term: <TermName termId={pendingAnnotation.selectedTerm.termId} label={termLabel(pendingAnnotation.layerId, pendingAnnotation.selectedTerm.termId) ?? pendingAnnotation.selectedTerm.label} /></p>
                   <Button disabled={readOnly || queueState === "saving" || (spanlessNotesRequired && !spanlessReason.trim())}
-                    onClick={() => { void createPendingAnnotation(pendingAnnotation.selectedTerm!.termId, pendingAnnotation.selectedTerm!.searchId); }}>Add annotation</Button>
+                    onClick={() => { void createPendingAnnotation(pendingAnnotation.selectedTerm!.termId, pendingAnnotation.selectedTerm!.searchId, pendingAnnotation.selectedTerm!.label); }}>Add annotation</Button>
                 </div>}
                 {!readOnly && !savedPendingReanchor && !pendingAnnotation.carriedInput && <SearchPanel key={pendingAnnotation.annotationId} searchManager={searchManager}
                   annotationId={pendingAnnotation.annotationId} workspaceKey={view.key} layerId={pendingAnnotation.layerId}

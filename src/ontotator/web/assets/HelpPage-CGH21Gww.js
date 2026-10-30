@@ -1,4 +1,4 @@
-import{r as i,a as m,j as a,b as d}from"./index-BBadUOCC.js";import{M as f,r as g}from"./index-ZWmFM7TA.js";function w(){const[e,t]=i.useState(null);return i.useEffect(()=>{let o=!0;return m.getAbout().then(n=>{o&&t(n)},()=>{}),()=>{o=!1}},[]),e?a.jsxs("p",{className:"help-version",title:e.revision??void 0,children:["Ontotator ",e.version,e.revision&&a.jsxs(a.Fragment,{children:[" · commit ",e.revision.slice(0,7)]})]}):null}const y=`# Ontotator user handbook
+import{r as i,a as m,j as a,b as d}from"./index-CKvIV8EA.js";import{M as f,r as g}from"./index-DHOACssU.js";function w(){const[e,t]=i.useState(null);return i.useEffect(()=>{let o=!0;return m.getAbout().then(n=>{o&&t(n)},()=>{}),()=>{o=!1}},[]),e?a.jsxs("p",{className:"help-version",title:e.revision??void 0,children:["Ontotator ",e.version,e.revision&&a.jsxs(a.Fragment,{children:[" · commit ",e.revision.slice(0,7)]})]}):null}const y=`# Ontotator user handbook
 
 This handbook explains how to work with Ontotator in the browser. It is for everyone who uses the app: annotators, translation reviewers, consolidators, leads and system administrators. It describes the version of Ontotator that you open it from. If you run the server, read the [server operations guide (for server operators)](../operations.md) instead.
 
@@ -905,7 +905,7 @@ A project lead has not assigned you a text yet. Assigned texts appear under **My
 
 ### I see "You are not a member of any project yet."
 
-Ask your project lead or an administrator to add you to a project, then reload the page. Leads: see [Add a member](lead-settings.md#add-a-member).
+Ask your project lead or an administrator to add you to a project, then click **My tasks** or reload the page. Leads: see [Add a member](lead-settings.md#add-a-member).
 
 ### A task opens with "Task not found or not yours"
 
@@ -1167,7 +1167,7 @@ Before you start: you need a setup or reset code from your administrator. A code
 
 ![The Set your password form with the fields Username, Setup or reset code, New password and Repeat the new password](images/getting-started-set-password.png)
 
-If you see **Your password is set. Log in with it now.**, the password worked; [log in](#log-in). If you see **The two passwords differ.**, type both passwords again. To go back without a code, click **Back to login**.
+Ontotator sets the password and logs you in at once. The first time, you land on **Projects** (see [Log in](#log-in) for where you land later). Only if that login fails afterwards, for example because the account is locked for a while, the login screen opens with **Your password is set. Log in with it now.**; the password is set, so [log in](#log-in) with it later. If you see **The two passwords differ.**, type both passwords again. To go back without a code, click **Back to login**.
 
 ## Log in
 
@@ -1206,7 +1206,7 @@ The header is the same on every page:
 - **Handbook** in the header opens this handbook inside the app. On the Documents, consolidation and translation review screens, **Help** opens the handbook section about that screen; in the editor it is **More** > **Help for this screen**. Click a screenshot in the handbook to open it at full size in a new tab.
 - Below the chapter list, the handbook shows the app's version and commit, for example \`Ontotator 0.3.0 · commit cc65cea\`. Quote it when you report a problem.
 
-The sidebar lists **My tasks**, **Projects** and **Profile**. The number after **My tasks** counts your open tasks, the same tasks as the **To do** tab; it updates as soon as you submit a text. Leads also see their project's pages (**Documents**, **Progress**, **Settings**, **Export**). System administrators also see **Administration** with **Users**, **Ontologies** and **New project** (see [Administration](admin.md)). In the editor, the sidebar folds into **Sections**; click it to open it.
+The sidebar lists **My tasks**, **Projects** and **Profile**. The number after **My tasks** counts your open tasks, the same tasks as the **To do** tab; it updates as soon as you submit a text. Clicking **My tasks** or **Projects** loads your projects and the count again, so a project you were just added to shows up without reloading the page. Leads also see their project's pages (**Documents**, **Progress**, **Settings**, **Export**). System administrators also see **Administration** with **Users**, **Ontologies** and **New project** (see [Administration](admin.md)). In the editor, the sidebar folds into **Sections**; click it to open it.
 
 ## Switch project
 
@@ -1496,7 +1496,7 @@ The corrected text becomes a new text version.
 
 ## Work plans and assignments
 
-The work plan says, for each text, whether it gets a translation review and whether and how it is annotated. Planned texts show up in the main list; the others are hidden.
+The work plan says, for each text, whether it gets a translation review and whether and how it is annotated. Planned texts show up in the main list; the others are hidden. Then the tab **All** says how many of its texts the table holds, for example *246 of 307*.
 
 ### Add a text to the plan
 
@@ -1632,7 +1632,7 @@ What for: choose the final result of a text.
 1. On **Documents**, tab **Needs your decision**, click **Accept result…** or **Compare results…** in the row. The card opens at **Finalization**.
 2. With one submission or a submitted consolidation, check it and click **Accept result**.
 3. If all annotations agree, the card says so. Click **Accept result**.
-4. If they differ, the card shows the agreement, for example *Agreement: 5 of 9 findings match, 1 differs in context only*. **How is this counted?** explains the numbers. Open a submission with **Open in editor** to read it.
+4. If they differ, the card shows the agreement, for example *Agreement: 5 of 9 findings match, 1 differs in context only*. **How is this counted?** explains the numbers. Open a submission with **Open submission** to read it in the read-only text view.
 5. Warning: the next action saves at once, without a confirmation. Click **Use as final** in the row of the submission you want. Or [start a consolidation](#start-a-consolidation) instead.
 
 After saving, the card moves on to the next text that needs a decision. The decided row stays in the tab with a *Resolved* badge until you click **Refresh** or change the tab. To undo, [change the final result](#change-a-final-result).

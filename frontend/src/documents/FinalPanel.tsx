@@ -315,7 +315,7 @@ function useEditorRoute(props: ContentProps) {
     ...(submissionId ? { annotations: refKey({ kind: "submission", id: submissionId }) } : {}),
     ...(Object.keys(query).length ? { documents: query } : {}),
   });
-  // Commands ("Open in editor", "Open result") look like buttons; `info` keeps a text link for views that only show information.
+  // Commands ("Open submission", "Open result") look like buttons; `info` keeps a text link for views that only show information.
   const link = (target: Route, text: string, label?: string, info = false) => <a className={info ? undefined : "btn btn-secondary btn-sm"} href={routeHref(target)} aria-label={label} onKeyDown={info ? undefined : onSpaceActivate} onClick={event => {
     if (!isPlainClick(event)) return;
     event.preventDefault(); onNavigate(target);
@@ -362,7 +362,7 @@ function AcceptContent(props: ContentProps & { submission: FinalPanelSubmissionV
     <div className="final-panel-actions">
       {!isFinal && <ChoiceButton id={triggerId} label="Accept result" variant="primary" blocked={!submission.eligible} busy={busy} onAnnounce={onAnnounce}
         onChoose={() => onSave(selectRequest(row, data.submissions, submission, triggerId), triggerId)} />}
-      {link(route(submission.document_id, submission.submission_id), "Open in editor")}
+      {link(route(submission.document_id, submission.submission_id), "Open submission")}
       {consolidation && link(consolidation, "Open consolidation")}
       {submission.kind === "consolidation" && compared > 1 && <Button size="sm" variant="quiet" onClick={props.onCompareAll}>Choose another result…</Button>}
     </div>
@@ -380,7 +380,7 @@ function DecidedContent(props: ContentProps & { onChange: () => void }): JSX.Ele
     {final && <>
       <p className="cell-secondary">
         {submissionLine(final, row.language, row.parallel_roots, now)}{", "}
-        {link(route(final.document_id, final.submission_id), "Open in editor")}
+        {link(route(final.document_id, final.submission_id), "Open submission")}
       </p>
       <p className="cell-secondary">{submissionGuidelineLabel(final.guideline_version, final.guideline_withdrawn, guidelineCurrent)}</p>
     </>}
@@ -425,7 +425,7 @@ function CompareContent(props: ContentProps): JSX.Element {
   </div>;
 }
 
-/** Submission, Findings, Only here, with "Open in editor" and "Use as final" per submission. */
+/** Submission, Findings, Only here, with "Open submission" and "Use as final" per submission. */
 function SubmissionTable(props: ContentProps & { listed: FinalPanelSubmissionView[] }): JSX.Element {
   const { row, data, listed, busy, onSave, onAnnounce, guidelineCurrent, now } = props;
   const id = useId();
@@ -451,7 +451,7 @@ function SubmissionTable(props: ContentProps & { listed: FinalPanelSubmissionVie
           <td>{submission.finding_count}</td>
           <td>{onlyHereText(submission, row.parallel_roots)}</td>
           <td className="final-panel-row-actions">
-            {link(route(submission.document_id, submission.submission_id), "Open in editor", `Open in editor, ${personName(submission)}`)}
+            {link(route(submission.document_id, submission.submission_id), "Open submission", `Open submission, ${personName(submission)}`)}
             {" "}
             {isFinal ? <span>Final</span> : <ChoiceButton id={triggerId} label="Use as final" blocked={!submission.eligible} busy={busy} describedBy={nameId}
               onAnnounce={onAnnounce} onChoose={() => onSave(selectRequest(row, data.submissions, submission, triggerId), triggerId)} />}
