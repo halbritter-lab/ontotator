@@ -108,7 +108,7 @@ export function targetTextNames(targets: readonly { case_id: string; language: s
 /** Why one text cannot get an annotator now (R-12), from the preview's skip reason. */
 function rowBlockedText(reason: BatchSkipView["reason"] | undefined, perText: number, language: string): string {
   switch (reason) {
-    case "waiting_for_review": return "This text is still in translation review. Annotation can be assigned once the review is accepted.";
+    case "waiting_for_review": return "This text has no translation review under way. Annotation can be assigned once a review is assigned or the translation is accepted.";
     case "not_in_plan": return `Annotation of this text is not in the plan for ${language}. Turn it on with Plan… first.`;
     case "already_assigned": return `Limit reached: ${perText === 1 ? "1 annotator" : `${perText} annotators`} already assigned.`;
     case "step_differs": return "This text is at another step of the plan.";
@@ -354,6 +354,9 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
     if (chosenPeople.length && assignments) {
       for (const person of sortMembers(chosenPeople)) summaryLines.push(onePersonSummary({ person: person.person, gets: person.gets, task, language, openBefore: person.open_before, openAfter: person.open_after }));
     }
+    const waiting = fresh.targets.filter(target => target.waiting_for_translation_review).length;
+    if (waiting) summaryLines.push(isRow ? "Still in translation review: the task opens once the review is accepted."
+      : `${plural(waiting, "text")} still in translation review: their tasks open once the review is accepted`);
     if (!isRow) summaryLines.push(...partlyAssignedLines(fresh.targets, fresh.per_text));
     summaryLines.push(...skippedLines(fresh.skipped, language, task));
   }

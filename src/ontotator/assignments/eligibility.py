@@ -17,7 +17,7 @@ from ontotator.domain.variants import (
 from ontotator.domain.work_plans import PlanFlags, RowKey
 from ontotator.storage import work_plan_store
 from ontotator.storage.plan_tables import DiscardedVariantRow
-from ontotator.storage.tables import DocumentRow, ProjectRow
+from ontotator.storage.tables import AssignmentRow, DocumentRow, ProjectRow
 
 # These are immutable metadata inputs, never document text or annotation payload.
 VARIANT_COLUMNS = tuple(
@@ -99,6 +99,42 @@ def reads_all(known: Collection[str], required: Collection[str]) -> bool:
     return not known or set(known) >= set(required)
 
 
+def annotation_waits(
+    variant: VariantInfo, lookup: Callable[[str], VariantInfo | None]
+) -> bool:
+    """With the rule on, an annotation task on ``variant`` stays closed: the
+    one derived definition of "waiting for the translation review"."""
+    return (
+        variant.translation_status != "accepted"
+        and translation_context(variant, lookup) is not None
+    )
+
+
+def open_review_rows(
+    conn: Connection, project_id: int, case_id: str | None = None
+) -> set[RowKey]:
+    """Texts with a translation review assigned or underway, of one case or
+    the whole project (the next steps' ``open_translation_reviews``)."""
+    query = (
+        select(DocumentRow.case_id, DocumentRow.language)
+        .join(
+            AssignmentRow,
+            (AssignmentRow.project_id == DocumentRow.project_id)
+            & (AssignmentRow.document_id == DocumentRow.document_id),
+        )
+        .where(
+            DocumentRow.project_id == project_id,
+            AssignmentRow.task == "translation_review",
+            AssignmentRow.revoked_at.is_(None),
+            AssignmentRow.status != "submitted",
+        )
+        .distinct()
+    )
+    if case_id is not None:
+        query = query.where(DocumentRow.case_id == case_id)
+    return {RowKey(case, language) for case, language in conn.execute(query)}
+
+
 def check_variant_assignable(
     project: Mapping[Any, Any],
     variant: VariantInfo,
@@ -107,11 +143,14 @@ def check_variant_assignable(
     *,
     allow_accepted_translation_review: bool = False,
     row_statuses: Sequence[str | None] | None = None,
+    review_open: bool = False,
 ) -> frozenset[str]:
     """New allocations only; existing exact retries/reopen bypass this rule.
 
     ``row_statuses``: every live root's target status of the text (the
-    next steps' test); ``variant`` itself must be accepted as well."""
+    next steps' test); ``variant`` itself must be accepted as well.
+    ``review_open``: the text's translation review is assigned or underway:
+    the task may be assigned and waits for the acceptance (issue 213)."""
     context = translation_context(variant, lookup)
     if task == "translation_review":
         if context is None or (
@@ -132,6 +171,7 @@ def check_variant_assignable(
         and not translations_accepted(
             False, (variant.translation_status, *(row_statuses or ()))
         )
+        and not review_open
     ):
         raise DomainError("TRANSLATION_NOT_ACCEPTED")
     return required_languages(variant, task, lookup)
@@ -211,4 +251,7 @@ def require_annotation_gate(
     variant = variants.get(document_id)
     if variant is None:
         raise DomainError("DOCUMENT_NOT_FOUND")
-    check_variant_assignable(project, variant, "annotate", variants.get)
+    if annotation_waits(variant, variants.get):
+        raise DomainError(
+            "TASK_WAITING_FOR_TRANSLATION_REVIEW", {"document_id": document_id}
+        )

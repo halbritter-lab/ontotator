@@ -37,7 +37,7 @@ export function skippedLines(skipped: readonly BatchSkipView[], language: string
     const n = skipped.filter(item => item.reason === reason).length;
     if (!n) return [];
     switch (reason) {
-      case "waiting_for_review": return [`${n} still in translation review: waiting for review, they join the next batch`];
+      case "waiting_for_review": return [`${n} without a translation review under way: assign the review first`];
       case "not_in_plan": return [`${n} without ${nouns[task][0]} of ${language} in the plan (other languages are separate tasks)`];
       case "already_assigned": return [`${n} already assigned`];
       case "step_differs": return [`${n} at another step`];

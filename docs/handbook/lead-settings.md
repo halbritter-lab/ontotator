@@ -205,7 +205,7 @@ What for: decide how many people annotate each text and who may consolidate.
 
 1. Open **Settings**, tab **Workflow**, card **Annotation and consolidation**.
 2. Set **Annotators per text** (1 to 5). It is an upper limit; fewer is fine.
-3. Tick **Annotate only after the translation review is accepted** if translations must be reviewed before annotation.
+3. Tick **Annotate only after the translation review is accepted** if translations must be reviewed before annotation. Nobody can then annotate a translation that is not accepted; you can still assign annotators while the review is underway ([Assign work to the selected texts](lead-documents.md#assign-work-to-the-selected-texts)).
 4. Tick **Consolidator must not be one of the text's annotators** if annotators may not consolidate their own texts.
 5. Click **Save changes**.
 

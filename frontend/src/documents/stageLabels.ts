@@ -133,8 +133,9 @@ function annotationText(cell: StageCellView): StageText {
   switch (cell.state) {
     case "not_planned": return { symbol: "—", word: "not planned", detail: detail.note === "review_only" ? "Review only" : "" };
     case "undecided": return { symbol: "?", word: "not decided", detail: "" };
-    case "after_review": return { symbol: "○", word: "after review", detail: waiting ?? "" };
-    case "blocked": return { symbol: "○", word: "blocked", detail: (detail.note && BLOCKED_TEXT[detail.note]) || "" };
+    // A person named here holds a task that opens once the review is accepted (issue 213).
+    case "after_review": return { symbol: "○", word: people ? "Waiting for review" : "after review", detail: join(people, waiting) };
+    case "blocked": return { symbol: "○", word: "blocked", detail: join(detail.note && BLOCKED_TEXT[detail.note], people && `${people} waiting`) };
     case "unassigned": return { symbol: "○", word: counted("Unassigned"), detail: join(people && `${people} working`, waiting) };
     case "partly_assigned": return { symbol: "○", word: counted("Unassigned"), detail: join(people && `${people} working`, waiting) };
     case "in_progress": {

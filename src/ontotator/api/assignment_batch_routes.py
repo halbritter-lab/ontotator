@@ -167,6 +167,9 @@ class BatchTargetView(BaseModel):
     # Annotate: the rule is off and the translation is not accepted (the
     # dialog's acknowledgement, spec 2026-10-25 §2).
     unreviewed_translation: bool = False
+    # Annotate: the rule is on and the review is underway: the task opens
+    # once the review is accepted (issue 213).
+    waiting_for_translation_review: bool = False
 
 
 class BatchPersonView(BaseModel):

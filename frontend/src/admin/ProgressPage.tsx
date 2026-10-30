@@ -12,6 +12,7 @@ const updatedFormat = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute
 const WORKLOAD_COLUMNS = [
   ["translation_reviews_open", "Translation reviews open"],
   ["annotations_open", "Annotations open"],
+  ["annotations_waiting", "Waiting for review"],
   ["reviews_open", "Consolidations open"],
   ["paused", "Paused"],
   ["submitted", "Submitted"],

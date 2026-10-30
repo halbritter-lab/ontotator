@@ -2491,7 +2491,7 @@ describe("CaseScreen integration", () => {
   });
 
   describe("editor polish", () => {
-    const task = { assignment_id: 17, workflow_revision: 0, held: false, report_answered: false, project_key: "pkg-1", project_name: "Project", document_id: "doc-test-1",
+    const task = { assignment_id: 17, workflow_revision: 0, held: false, report_answered: false, waiting_for_translation_review: false, project_key: "pkg-1", project_name: "Project", document_id: "doc-test-1",
       external_id: "accepted-translation", language: "de", source_language: "en", target_language: "de", task: "annotate" as const,
       status: "in_progress" as const, updated_at: "2026-10-16T12:00:00Z" };
     const assignmentNavigation = { tasks: [task], current: task, onNavigate: vi.fn() };

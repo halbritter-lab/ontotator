@@ -840,6 +840,7 @@ def register_translation_review_scenario_route(app: FastAPI) -> None:
         manager: bool = False,
         workflow: bool = False,
         source_update: bool = False,
+        single: bool = False,
     ) -> dict[str, object]:
         from t1_builders import bundle as variant_bundle
         from t1_builders import correction_unit, native_unit, translation_unit
@@ -902,7 +903,8 @@ def register_translation_review_scenario_route(app: FastAPI) -> None:
             provider="Review fixture alternative",
             run_id="review failed run /2",
         )
-        imported_units = [source, target, failed]
+        # ``single``: one translation, no parallel root.
+        imported_units = [source, target] if single else [source, target, failed]
         if source_update:
             imported_units.append(
                 correction_unit(
@@ -931,7 +933,7 @@ def register_translation_review_scenario_route(app: FastAPI) -> None:
             for name, unit in [
                 ("source", source),
                 ("target", target),
-                ("failed", failed),
+                *(() if single else (("failed", failed),)),
             ]
         }
         accounts = app.state.accounts

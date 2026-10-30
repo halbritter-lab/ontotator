@@ -29,10 +29,12 @@ from sqlalchemy import (
 )
 
 from ontotator.assignments.eligibility import (
+    annotation_waits,
     check_variant_assignable,
     check_work_plan,
     conflicting_tasks,
     load_variants,
+    open_review_rows,
     reads_all,
     translation_context,
 )
@@ -54,6 +56,7 @@ from ontotator.domain.annotation_modes import AnnotationMode, workspace_mode
 from ontotator.domain.errors import DomainError
 from ontotator.domain.next_steps import translations_accepted
 from ontotator.domain.variants import VariantInfo
+from ontotator.domain.work_plans import RowKey
 from ontotator.domain.workspace import WorkspaceMode
 from ontotator.projects.assignments import revoke_assignments
 from ontotator.storage.database import Database
@@ -144,6 +147,9 @@ class TaskSummary:
     # The answered report to open (the latest answered one), for the
     # "Answer to your report" link.
     answered_report_id: str | None = None
+    # Issue 213: an annotation task that opens once the translation review of
+    # its version is accepted; not startable until then.
+    waiting_for_translation_review: bool = False
 
 
 def _assignments() -> Select[tuple[object, ...]]:
@@ -257,6 +263,63 @@ def source_obligation_documents(
         cause.document_id
         for cause in derive_source_obligations(project_key, variants.values(), resolved)
     )
+
+
+def move_waiting_tasks(
+    conn: Connection,
+    actor: Actor,
+    project_id: int,
+    from_document_id: str,
+    to_document_id: str,
+    now: datetime,
+) -> None:
+    """Waiting tasks follow a correction of their version, so that they open
+    on the accepted text without a lead step (issue 213).
+
+    Only tasks nobody ever opened: no draft or round exists to carry, so the
+    assignment itself moves and keeps its id. Started work and tasks from
+    proposals (a new version needs its own proposals, plan review R10) stay
+    with the lead's "Handle text change". The caller holds the project lock.
+    """
+    rule_on, status = conn.execute(
+        select(
+            ProjectRow.annotate_accepted_translations_only,
+            DocumentRow.translation_status,
+        )
+        .join(DocumentRow, DocumentRow.project_id == ProjectRow.id)
+        .where(ProjectRow.id == project_id, DocumentRow.document_id == from_document_id)
+    ).one()
+    if not rule_on or status == "accepted":
+        return
+    moved = conn.execute(
+        update(AssignmentRow)
+        .where(
+            AssignmentRow.project_id == project_id,
+            AssignmentRow.document_id == from_document_id,
+            AssignmentRow.task == "annotate",
+            AssignmentRow.revoked_at.is_(None),
+            AssignmentRow.status == "open",
+            AssignmentRow.active_round_id.is_(None),
+            AssignmentRow.annotation_mode != "proposals",
+        )
+        .values(
+            document_id=to_document_id,
+            workflow_revision=AssignmentRow.workflow_revision + 1,
+            updated_at=now,
+        )
+        .returning(AssignmentRow.id)
+    ).scalars()
+    for assignment_id in moved.all():
+        record_audit(
+            conn,
+            actor,
+            "assignment.follow_correction",
+            target_type="assignment",
+            target_id=assignment_id,
+            project_id=project_id,
+            details={"from_document_id": from_document_id, "to": to_document_id},
+            at=now,
+        )
 
 
 def enable_source_change_review(
@@ -521,6 +584,7 @@ class AssignmentService:
         if variant is None:
             raise DomainError("DOCUMENT_NOT_FOUND")
         statuses = None
+        review_open = False
         if (
             task == "annotate"
             and translation_context(variant, variants.get) is not None
@@ -533,6 +597,11 @@ class AssignmentService:
             statuses = text_translation_statuses(
                 conn, project["id"], TextRow(variant.case_id, variant.language)
             )
+            # A reassignment hands on a task that exists: it may wait on,
+            # whatever happened to the review meanwhile.
+            review_open = excluding is not None or RowKey(
+                variant.case_id, variant.language
+            ) in open_review_rows(conn, project["id"], variant.case_id)
         required = check_variant_assignable(
             project,
             variant,
@@ -540,6 +609,7 @@ class AssignmentService:
             variants.get,
             allow_accepted_translation_review=allow_accepted_translation_review,
             row_statuses=statuses,
+            review_open=review_open,
         )
         if check_plan:
             check_work_plan(conn, project["id"], variant, task)
@@ -1099,8 +1169,27 @@ class AssignmentService:
         )
         with self.db.transaction() as conn:
             rows = list(conn.execute(query).mappings())
+            # Issue 213: unsubmitted annotation tasks under the rule may wait.
+            ruled = set(
+                conn.execute(
+                    select(ProjectRow.project_key).where(
+                        ProjectRow.project_key.in_({r["project_key"] for r in rows}),
+                        ProjectRow.annotate_accepted_translations_only,
+                    )
+                ).scalars()
+            )
+
+            def may_wait(row: RowMapping) -> bool:
+                return (
+                    row["task"] == "annotate"
+                    and row["status"] != "submitted"
+                    and row["project_key"] in ruled
+                )
+
             projects = {
-                r["project_key"] for r in rows if r["task"] == "translation_review"
+                r["project_key"]
+                for r in rows
+                if r["task"] == "translation_review" or may_wait(r)
             }
             # One metadata query across all task projects, never one per task/doc.
             from ontotator.assignments.eligibility import VARIANT_COLUMNS
@@ -1225,9 +1314,14 @@ class AssignmentService:
                     except ValidationError:
                         # A malformed stored run must not hide every task.
                         failed = None
+                waiting = may_wait(row) and annotation_waits(
+                    variants[row["project_key"]][row["document_id"]],
+                    variants[row["project_key"]].get,
+                )
                 result.append(
                     TaskSummary(
                         **row,
+                        waiting_for_translation_review=waiting,
                         source_language=source,
                         target_language=target,
                         failed_check_count=failed,

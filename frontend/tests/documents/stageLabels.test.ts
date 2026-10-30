@@ -52,6 +52,8 @@ describe("Annotation cell", () => {
   it("undecided", () => expect(text("annotation", cell("undecided", "undecided"))).toEqual(["? not decided", ""]));
   it("after_review", () => {
     expect(text("annotation", cell("after_review", "waiting"))).toEqual(["○ after review", ""]);
+    // A waiting task names its person (issue 213).
+    expect(text("annotation", cell("after_review", "waiting", { people: [{ pseudonym: "ann-1", display_name: "Ana", is_me: false }] }))).toEqual(["○ Waiting for review", "Ana"]);
     expect(text("annotation", cell("after_review", "waiting", { note: "text_change_waiting" }))).toEqual(["○ after review", "text change waiting for review"]);
   });
   it("blocked", () => {

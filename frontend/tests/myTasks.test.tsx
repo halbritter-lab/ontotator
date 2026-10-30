@@ -8,7 +8,7 @@ const project = (key: string, name: string, can_manage = false): ProjectSummary 
   project_key: key, name, description: null, roles: [], allowed_modes: [], document_count: 0, can_manage,
 });
 const task = (id: number, status: TaskSummary["status"], key = "p", name = "Project P"): TaskSummary => ({
-  assignment_id: id, workflow_revision: 0, held: false, report_answered: false, project_key: key, project_name: name, document_id: `doc-${id}`, language: "de", task: id === 2 ? "review" : "annotate", status, updated_at: "2026-10-15T10:30:00Z",
+  assignment_id: id, workflow_revision: 0, held: false, report_answered: false, waiting_for_translation_review: false, project_key: key, project_name: name, document_id: `doc-${id}`, language: "de", task: id === 2 ? "review" : "annotate", status, updated_at: "2026-10-15T10:30:00Z",
 });
 const tasks = [task(4, "reopened"), task(2, "in_progress", "q", "Project Q"), task(3, "open"), task(1, "submitted")];
 /** Accessible names of the status tabs ("To do, 3"), in order. */
@@ -26,6 +26,16 @@ beforeEach(() => { vi.spyOn(api, "listGuidelines").mockResolvedValue(guidelineLi
 describe("My tasks component", () => {
   beforeEach(() => { vi.spyOn(api, "listMyTasks").mockResolvedValue(tasks); });
   afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+
+  it("shows a waiting task as not startable (issue 213)", async () => {
+    vi.mocked(api.listMyTasks).mockResolvedValue([{ ...task(3, "open"), waiting_for_translation_review: true }]);
+    render(<MyTasks projects={[]} onNavigate={vi.fn()} />);
+    const row = await screen.findByTestId("task-row");
+    expect(within(row).getByText("Waiting for translation review")).toBeDefined();
+    expect(within(row).getByText("Opens after the review")).toBeDefined();
+    expect(within(row).queryByRole("link")).toBeNull();
+    expect(within(row).queryByText("Open")).toBeNull();
+  });
 
   it("tells the reporter that a lead answered their report (#49 R-26)", async () => {
     vi.mocked(api.listMyTasks).mockResolvedValue([{ ...task(3, "open"), report_answered: true }, task(1, "submitted")]);

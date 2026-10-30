@@ -14,7 +14,7 @@ const zRow = (overrides: Partial<DocumentRowView> = {}) =>
 /** Batch preview for the selection: one annotation per case; Alice reads en. */
 function batchPreview(body: BatchAssignRequest): BatchPreview {
   const usernames = body.usernames ?? [];
-  const targets = body.case_ids.map(caseId => ({ case_id: caseId, language: body.language, document_id: caseId, version: 1, remaining: 1, usernames: usernames.slice(0, 1) }));
+  const targets = body.case_ids.map(caseId => ({ case_id: caseId, language: body.language, document_id: caseId, version: 1, remaining: 1, usernames: usernames.slice(0, 1), unreviewed_translation: false, waiting_for_translation_review: false }));
   return {
     task: body.task, language: body.language, versions: targets.length, targets, skipped: [], per_text: 1, digest: "digest-1",
     people: [{

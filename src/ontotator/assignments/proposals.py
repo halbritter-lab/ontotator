@@ -27,6 +27,7 @@ from ontotator.assignments.eligibility import (
     VARIANT_COLUMNS,
     check_variant_assignable,
     conflicting_tasks,
+    open_review_rows,
     outside_work_plan,
 )
 from ontotator.auth.audit import Actor
@@ -344,10 +345,16 @@ class DistributionService:
         if missing:
             plan |= work_plan_store.effective_plan(conn, project_id, missing)
         discarded = {row["document_id"] for row in inventory if row["discarded_id"]}
+        review_rows = open_review_rows(conn, project_id)
         for d in documents:
             try:
+                variant = variants[d["document_id"]]
                 needed = check_variant_assignable(
-                    project, variants[d["document_id"]], task, variants.get
+                    project,
+                    variant,
+                    task,
+                    variants.get,
+                    review_open=RowKey(variant.case_id, d["language"]) in review_rows,
                 )
                 if outside_work_plan(plan, discarded, variants[d["document_id"]], task):
                     eligibility[d["document_id"]] = ((), "NOT_IN_WORK_PLAN")

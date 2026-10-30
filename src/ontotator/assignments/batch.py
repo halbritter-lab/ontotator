@@ -131,6 +131,8 @@ class _Target:
     no_proposals: bool = False
     # Annotate: the rule is off and the translation is not accepted.
     unreviewed_translation: bool = False
+    # Annotate: the rule is on and the task waits for the review (issue 213).
+    waiting_for_translation_review: bool = False
     usernames: list[str] = field(default_factory=list)
 
 
@@ -337,12 +339,27 @@ class _Rows:
                 return _Match((), "not_in_plan", holders)
             if ASSIGN_STEPS[task] in codes:
                 candidates = [self._target(v, task) for v in newest]
-                for candidate in candidates:
+                for candidate, version in zip(candidates, newest, strict=True):
                     candidate.unreviewed_translation = row["unreviewed_translation"]
+                    candidate.waiting_for_translation_review = (
+                        self.facts.rule_on
+                        and not row["is_source"]
+                        and version.translation_status != "accepted"
+                    )
         targets = tuple(t for t in candidates if t.remaining > 0)
         if targets:
             return _Match(targets, None, holders)
-        if task != "translation_review" and codes & WAITING_FOR_REVIEW_STEPS:
+        # No review in sight (Rule 8 offers the others); a full text is not
+        # "waiting", it has its annotators.
+        if (
+            task != "translation_review"
+            and not candidates
+            and codes & WAITING_FOR_REVIEW_STEPS
+            and any(
+                self.held[v.document_id] < self.facts.annotations_per_text
+                for v in newest
+            )
+        ):
             return _Match((), "waiting_for_review", holders)
         if any(t.no_proposals for t in candidates):
             return _Match((), "no_proposals_on_version", holders)
@@ -602,6 +619,7 @@ class BatchAssignmentService:
                 "remaining": t.remaining,
                 "usernames": list(t.usernames),
                 "unreviewed_translation": t.unreviewed_translation,
+                "waiting_for_translation_review": t.waiting_for_translation_review,
             }
             for t in flat
         ]

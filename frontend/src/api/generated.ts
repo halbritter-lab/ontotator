@@ -3180,6 +3180,11 @@ export interface components {
              * @default false
              */
             unreviewed_translation: boolean;
+            /**
+             * Waiting For Translation Review
+             * @default false
+             */
+            waiting_for_translation_review: boolean;
         };
         /** Body_create_upload_api_v1_projects__key__uploads_post */
         Body_create_upload_api_v1_projects__key__uploads_post: {
@@ -6077,6 +6082,11 @@ export interface components {
              */
             annotations_open: number;
             /**
+             * Annotations Waiting
+             * @default 0
+             */
+            annotations_waiting: number;
+            /**
              * Reviews Open
              * @default 0
              */
@@ -7626,6 +7636,11 @@ export interface components {
             report_answered: boolean;
             /** Answered Report Id */
             answered_report_id?: string | null;
+            /**
+             * Waiting For Translation Review
+             * @default false
+             */
+            waiting_for_translation_review: boolean;
         };
         /** TemplateInfo */
         TemplateInfo: {
@@ -8434,6 +8449,11 @@ export interface components {
              * @default false
              */
             unreviewed_translation: boolean;
+            /**
+             * Waiting For Translation Review
+             * @default false
+             */
+            waiting_for_translation_review: boolean;
         };
         /** WorkRoundView */
         WorkRoundView: {

@@ -269,7 +269,7 @@ class TextChangeService:
         try:
             require_annotation_gate(conn, pid, target_id)
         except DomainError as error:
-            if error.code in {"TRANSLATION_NOT_ACCEPTED", "NOT_A_TRANSLATION"}:
+            if error.code == "TASK_WAITING_FOR_TRANSLATION_REVIEW":
                 raise _not_applicable("target_not_annotatable") from None
             raise
         return source, target

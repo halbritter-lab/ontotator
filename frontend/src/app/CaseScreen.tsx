@@ -3091,7 +3091,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     };
   }, [selectedAnnotation, view.key.mode, draft.decisions, reviewTargets, termLabel]);
 
-  const assignmentTasks = assignmentNavigation?.tasks.filter(task => task.project_key === assignmentNavigation.current.project_key && task.task === assignmentNavigation.current.task);
+  const assignmentTasks = assignmentNavigation?.tasks.filter(task => task.project_key === assignmentNavigation.current.project_key && task.task === assignmentNavigation.current.task && !task.waiting_for_translation_review);
   const adjacentTask = assignmentNavigation ? orderTasks(assignmentNavigation.tasks, assignmentNavigation.current) : {};
   const navigateAssignment = (id: number) => assignmentNavigation?.onNavigate(id);
   // Legacy direct component callers retain their document navigation contract.

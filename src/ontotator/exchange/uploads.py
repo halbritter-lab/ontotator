@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Literal, cast
 
 import ontospan
@@ -454,6 +454,7 @@ def apply_plan(
         )
         for name in ("sets_added", "sets_skipped", "proposals"):
             counts[name] += result[name]
+    from ontotator.assignments.service import move_waiting_tasks
     from ontotator.exchange.reanchor_job import CorrectionPair, enqueue_import_pairs
 
     added = {
@@ -472,6 +473,16 @@ def apply_plan(
         with db.transaction() as conn:
             project_id = Repository._project_id(conn, project)
             assert project_id is not None
+            now = datetime.now(UTC)
+            for pair in pairs:
+                move_waiting_tasks(
+                    conn,
+                    actor,
+                    project_id,
+                    pair.old_document_id,
+                    pair.new_document_id,
+                    now,
+                )
             enqueue_import_pairs(db, project, project_id, job_id, actor, pairs)
     return counts
 

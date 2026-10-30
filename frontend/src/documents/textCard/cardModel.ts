@@ -46,7 +46,11 @@ export function annotationState(row: DocumentRowView): State {
   switch (cell?.state) {
     case "not_planned": return { state: "not planned", tone: "optional" };
     case "after_review":
-    case "blocked": return { state: "after translation review", tone: "later" };
+    case "blocked": {
+      // People here hold a task that opens once the review is accepted (issue 213).
+      const people = (detail.people ?? []).map(shortName).join(", ");
+      return { state: people ? `waiting for review (${people})` : "after translation review", tone: "later" };
+    }
     case "unassigned":
     case "partly_assigned":
     case "undecided": {

@@ -244,7 +244,6 @@ def test_preview_targets_newest_version_per_root_and_skips_with_reasons(env, tmp
     result = preview(env, "annotate", case_ids=[*CASES, "case-9999"])
 
     assert skipped(result) == {
-        CASES[1]: "waiting_for_review",
         CASES[2]: "not_in_plan",
         CASES[3]: "already_assigned",
         CASES[4]: "step_differs",
@@ -252,7 +251,9 @@ def test_preview_targets_newest_version_per_root_and_skips_with_reasons(env, tmp
         "case-9999": "not_in_plan",
     }
     targets = {t["case_id"]: t for t in result["targets"]}
-    assert set(targets) == set(CASES) - {CASES[n] for n in range(1, 6)}
+    assert set(targets) == set(CASES) - {CASES[n] for n in range(2, 6)}
+    # The review is open: the task may be assigned and waits (issue 213).
+    assert targets[CASES[1]]["waiting_for_translation_review"] is True
     assert (targets[CASES[0]]["document_id"], targets[CASES[0]]["version"]) == (
         corrected,
         2,
@@ -265,8 +266,9 @@ def test_preview_targets_newest_version_per_root_and_skips_with_reasons(env, tmp
         "remaining": 1,
         "usernames": [],
         "unreviewed_translation": False,
+        "waiting_for_translation_review": False,
     }
-    assert result["versions"] == 15 and result["per_text"] == 1
+    assert result["versions"] == 16 and result["per_text"] == 1
     assert result["task"] == "annotate" and result["language"] == "de"
 
 
@@ -426,11 +428,11 @@ def test_selection_summary_lists_assignable_steps_and_common_step(env):
     for case in CASES[14:]:
         assign(env, de(case), "ana", "translation_review")
     result = summary(env, CASES)
-    step = {"task": "annotate", "language": "de", "versions": 14, "cases": 14}
+    step = {"task": "annotate", "language": "de", "versions": 20, "cases": 20}
     assert result == {
         "cases": 20,
         "steps": [step],
-        "skipped": {"waiting_for_review": 6},
+        "skipped": {},
         "common": step,
         "not_shown": 0,
         "skipped_rows": [],

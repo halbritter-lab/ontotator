@@ -426,6 +426,7 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
                     "CONSOLIDATION_ACTIVE": 409,
                     "ROUND_ALREADY_EXISTS": 409,
                     "TASK_HELD": 409,
+                    "TASK_WAITING_FOR_TRANSLATION_REVIEW": 409,
                     "TEXT_CHANGE_CHANGED": 409,
                     "VARIANT_REVIEW_STALE": 409,
                     "TRANSLATION_NOT_ACCEPTED": 409,
