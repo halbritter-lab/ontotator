@@ -12,6 +12,8 @@ from pathlib import Path
 
 from sqlalchemy import Connection, Engine, create_engine, func, select
 from sqlalchemy.engine import URL, make_url
+from sqlalchemy.exc import DBAPIError
+from sqlalchemy.exc import TimeoutError as PoolTimeoutError
 
 from ontotator.storage.blobs import BlobStore
 
@@ -23,6 +25,29 @@ CONNECT_TIMEOUT_SECONDS = 10
 Without it, a host that drops packets keeps a CLI command waiting for the
 operating system's TCP timeout (minutes) instead of failing fast.
 """
+
+POOL_TIMEOUT_SECONDS = 10
+"""Seconds a request may wait for a free pooled connection."""
+
+BUSY_SQLSTATES = frozenset({"55P03", "57014"})
+"""lock_not_available (lock limit) and query_canceled (statement limit)."""
+
+
+def busy_cause(exc: BaseException | None) -> str | None:
+    """The SQLSTATE of the limit behind ``exc``, ``"pool"``, or None for anything else.
+
+    Follows ``__cause__``, as a caught failure of a joined scope surfaces as
+    ``TransactionRollbackOnly``.
+    """
+    while exc is not None:
+        if isinstance(exc, PoolTimeoutError):
+            return "pool"
+        if isinstance(exc, DBAPIError):
+            sqlstate = getattr(exc.orig, "sqlstate", None)
+            if sqlstate in BUSY_SQLSTATES:
+                return str(sqlstate)
+        exc = exc.__cause__
+    return None
 
 
 def psycopg_url(url: str | URL) -> URL:
@@ -94,15 +119,25 @@ class Database:
         data_dir: Path,
         pool_size: int = 5,
         max_overflow: int = 10,
+        lock_timeout_ms: int = 0,
+        statement_timeout_ms: int = 0,
     ) -> None:
+        """Open the engine; the limits are per lock and per statement, 0 is none."""
         parsed = psycopg_url(url)
         self.url = parsed
+        args = connect_args(parsed)
+        if lock_timeout_ms or statement_timeout_ms:
+            args["options"] = (
+                f"-c lock_timeout={lock_timeout_ms} "
+                f"-c statement_timeout={statement_timeout_ms}"
+            )
         self.engine: Engine = create_engine(
             parsed,
             pool_size=pool_size,
             max_overflow=max_overflow,
+            pool_timeout=POOL_TIMEOUT_SECONDS,
             pool_pre_ping=True,
-            connect_args=connect_args(parsed),
+            connect_args=args,
             # Never repeat statement parameters (password hashes, codes) in
             # errors and logs.
             hide_parameters=True,

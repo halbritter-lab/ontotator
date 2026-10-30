@@ -18,6 +18,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
+from sqlalchemy.exc import SQLAlchemyError
 from starlette.concurrency import run_in_threadpool
 
 from ontotator import __version__, settings
@@ -35,7 +36,11 @@ from ontotator.api.me_routes import router as me_router
 from ontotator.api.ontology_routes import router as ontology_router
 from ontotator.api.project_routes import router as project_router
 from ontotator.api.routes import router
-from ontotator.api.security import SecurityHeadersMiddleware, install_security
+from ontotator.api.security import (
+    SecurityHeadersMiddleware,
+    install_security,
+    project_busy,
+)
 from ontotator.api.submission_history_routes import (
     router as submission_history_router,
 )
@@ -62,7 +67,11 @@ from ontotator.domain.errors import (
 from ontotator.jobs.queue import Handler, JobContext, JobQueue, Worker
 from ontotator.ontology.modifiers import install_service_source
 from ontotator.ontology.translations import parse_translation_name
-from ontotator.storage.database import Database
+from ontotator.storage.database import (
+    Database,
+    TransactionRollbackOnly,
+    busy_cause,
+)
 from ontotator.storage.lease import RuntimeLease
 from ontotator.storage.repository import Repository
 from ontotator.storage.schema import current_revision, head_revision
@@ -122,7 +131,7 @@ async def _runtime_lease(app: FastAPI) -> AsyncIterator[None]:
     await run_in_threadpool(lease.acquire)
     keeper = asyncio.create_task(_keep_lease(lease))
     # Each server process runs queued jobs (P6, index D-l).
-    worker = Worker(app.state.jobs, f"{socket.gethostname()}:{os.getpid()}")
+    worker = Worker(app.state.worker_jobs, f"{socket.gethostname()}:{os.getpid()}")
     app.state.job_worker = worker
     worker.start()
     try:
@@ -157,9 +166,19 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
 
     if config is not None:
         # Initialize storage and ontology
+        url = settings.resolve_database_url(config.database_url, config.workspace_dir)
         db = Database(
-            settings.resolve_database_url(config.database_url, config.workspace_dir),
+            url,
             data_dir=config.workspace_dir,
+            # With the three below, a process keeps its 15 connections.
+            max_overflow=7,
+            lock_timeout_ms=config.lock_timeout_ms,
+            statement_timeout_ms=config.statement_timeout_ms,
+        )
+        # For the job worker and the runtime lease: they may wait and run as
+        # long as they need, and requests filling the pool cannot starve them.
+        unlimited_db = Database(
+            url, data_dir=config.workspace_dir, pool_size=3, max_overflow=0
         )
         # Close the engine again if anything after it fails, so a failed
         # start does not keep pooled connections open.
@@ -274,6 +293,13 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
                     data_dir=config.workspace_dir,
                 ),
             )
+            # ``app.state.jobs`` must stay on ``db``: a request enqueues inside
+            # its own transaction.
+            app.state.worker_jobs = JobQueue(
+                unlimited_db,
+                handlers,
+                context=JobContext(db=unlimited_db, data_dir=config.workspace_dir),
+            )
             threading.Thread(
                 target=preload, name="preload-ontologies", daemon=True
             ).start()
@@ -285,7 +311,7 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
             app.state.memberships = MembershipService(db)
             app.state.sessions = sessions
             app.state.preferences = UserPreferencesStore(db)
-            app.state.runtime_lease = RuntimeLease(db.engine)
+            app.state.runtime_lease = RuntimeLease(unlimited_db.engine)
             app.state.secure_cookies = bool(
                 config.public_origin and config.public_origin.startswith("https://")
             )
@@ -293,6 +319,7 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
             # Never let a failing clean-up hide why the start failed.
             with contextlib.suppress(Exception):
                 db.close()
+                unlimited_db.close()
             raise
 
         install_security(app, sessions, config.public_origin, config.trusted_hosts)
@@ -406,6 +433,14 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
             status_code=401,
             content={"code": exc.code, "details": exc.details or str(exc)},
         )
+
+    @app.exception_handler(SQLAlchemyError)
+    @app.exception_handler(TransactionRollbackOnly)
+    async def busy_handler(request: Request, exc: Exception) -> Response:
+        cause = busy_cause(exc)
+        if cause is None:
+            raise exc
+        return project_busy(request, cause)
 
     @app.exception_handler(DomainError)
     async def domain_error_handler(_req: Request, exc: DomainError) -> JSONResponse:

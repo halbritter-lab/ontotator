@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - Opening the text list right after a bundle import no longer takes minutes and blocks the project: the query for each document's newest proposal set no longer depends on fresh planner statistics.
+- One slow read or one queued writer can no longer stop a project or the instance (#217). Web requests wait at most 20 s for a lock (`ONTOTATOR_LOCK_TIMEOUT_MS`) and run a statement for at most 60 s (`ONTOTATOR_STATEMENT_TIMEOUT_MS`); a full connection pool fails after 10 s. All three answer 503 `PROJECT_BUSY` with `Retry-After`, the work is rolled back, and the user reads that the project is busy and nothing was changed. Jobs, the CLI, migrations and backups have no limit.
 
 ## [0.4.0] - 2026-10-30
 
