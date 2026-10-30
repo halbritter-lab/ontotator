@@ -468,6 +468,17 @@ class ScopedRepository(Repository):
         self._visible(project_key)
         return super().superseded_pins(project_key)
 
+    def add_snapshots(
+        self,
+        project_key: str,
+        annotations: Sequence[AnnotationSnapshot],
+        evidence: Sequence[EvidenceSnapshot],
+    ) -> None:
+        self._visible(project_key)
+        if not can(self.access, Action.IMPORT_DOCUMENTS, project_key):
+            raise AccessDenied("NOT_ALLOWED", "You may not import into this project.")
+        super().add_snapshots(project_key, annotations, evidence)
+
     def add_documents_and_proposals(
         self,
         project_key: str,

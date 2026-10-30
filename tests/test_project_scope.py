@@ -142,6 +142,7 @@ CALLS: dict[str, Callable[[Repository], object]] = {
     "add_documents_and_proposals": lambda r: r.add_documents_and_proposals(
         "B", [], [], source_sha256="0" * 64
     ),
+    "add_snapshots": lambda r: r.add_snapshots("B", [], []),
     "get_search_conditions": lambda r: r.get_search_conditions("B"),
     "capture_search_conditions": lambda r: r.capture_search_conditions("B", [], {}),
     "get_embedded_files": lambda r: r.get_embedded_files("B"),
