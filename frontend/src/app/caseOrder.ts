@@ -59,7 +59,11 @@ export function orderTasks(
   return adjacent;
 }
 
-/** Unsubmitted tasks of the same project in My tasks (server) order, without the current one (spec A.5). */
+/**
+ * Unsubmitted tasks of the same project in My tasks (server) order, without the current one (spec A.5). The next
+ * task is the first one of the current task's type (a translation review leads to the next translation review,
+ * #198), else the first open one.
+ */
 export function nextOpenTask(
   tasks: readonly TaskSummary[],
   currentAssignmentId: number,
@@ -67,5 +71,7 @@ export function nextOpenTask(
 ): { next: TaskSummary | null; remaining: number } {
   const open = tasks.filter((task) =>
     task.project_key === projectKey && task.assignment_id !== currentAssignmentId && task.status !== "submitted");
-  return { next: open[0] ?? null, remaining: open.length };
+  const kind = tasks.find(task => task.assignment_id === currentAssignmentId)?.task;
+  const next = (kind !== undefined ? open.find(task => task.task === kind) : undefined) ?? open[0] ?? null;
+  return { next, remaining: open.length };
 }

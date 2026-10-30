@@ -105,9 +105,14 @@ describe("orderTasks", () => {
 });
 
 describe("nextOpenTask", () => {
-  it("returns the first unsubmitted task of the same project in list order, any task type", () => {
+  it("prefers the next unsubmitted task of the same type over an earlier one of another type (#198)", () => {
     const tasks = [task(5, { status: "submitted", task: "translation_review" }), task(9, { status: "open" }),
       task(7, { status: "in_progress", task: "translation_review" }), task(3, { project_key: "other" })];
+    expect(nextOpenTask(tasks, 5, "project-a")).toEqual({ next: tasks[2], remaining: 2 });
+  });
+  it("falls back to the first unsubmitted task of the project, any task type", () => {
+    const tasks = [task(5, { status: "submitted", task: "translation_review" }), task(9, { status: "open" }),
+      task(7, { status: "in_progress", task: "review" }), task(4, { task: "translation_review", project_key: "other" })];
     expect(nextOpenTask(tasks, 5, "project-a")).toEqual({ next: tasks[1], remaining: 2 });
   });
   it("skips the current task even while the list still shows it unsubmitted", () => {

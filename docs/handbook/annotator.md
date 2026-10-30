@@ -256,7 +256,7 @@ Before you start: submitting says you checked the whole text for further finding
 2. Click **Finish & submit text**. While items are open, the button shows how many.
 3. A dialog named after the text, for example *Submit CASE-1 en?*, lists what is still open: **Carried findings to check**, **Findings that need attention**, **Findings after text correction**, **Proposals not decided**. Click **Go to** to fix an item.
 4. When nothing blocks, click **Submit text**. If only warnings are left, the button reads **Submit with** and the number of warnings; see [Confirm values and acknowledge warnings](#confirm-values-and-acknowledge-warnings-in-the-submit-dialog) first.
-5. The next open task opens, or **My tasks** if none is left. To see what you sent, click **View result** in the message.
+5. The next open task opens, preferably one of the same kind (another review after a review), or **My tasks** if none is left. To see what you sent, click **View result** in the message.
 
 The task is now read-only. To change it later, [start a new work round](#start-a-new-work-round).
 
@@ -363,7 +363,7 @@ Steps:
    - **Accepted with corrections**: tick **Clinically relevant change** if your correction changes the clinical meaning; then a category and a **Rationale** are required.
    - **Accepted unchanged** after a failed automatic check: say in the **Rationale** why the flagged difference is correct.
 7. Click **Submit review…** (or press `Ctrl+Enter`), read what will happen, then click **Submit review**.
-8. A message confirms the review, with **View result**. Your next open task opens on its own, or **My tasks** if none is left.
+8. A message confirms the review, with **View result**. Your next open task opens on its own, another translation review first, or **My tasks** if none is left.
 
 If the source text was updated, **Source updates to review** appears. Open it, compare **Original source** and **Updated source**, and click **Submit review and resolve source update**.
 
