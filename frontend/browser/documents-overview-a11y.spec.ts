@@ -277,10 +277,11 @@ test("axe has no violations on table, popover, text card and dialogs", async ({ 
   await page.keyboard.press("Escape");
 
   await leadOn(page, "S7b");
-  await rowAction(page, "Compare results…", "case-107", "en").click();
+  // Ana and Tom submitted the same findings: all match, so the row reads "Accept result…" (issue 198).
+  await rowAction(page, "Accept result…", "case-107", "en").click();
   const panel = textCard(page, "case-107", "en");
   await expect(panel).toBeVisible();
   await expect(panel.getByText("Loading submissions…")).toHaveCount(0);
-  expect(await axeViolations(page, ".text-card"), "text card with the decision block (compare)").toEqual([]);
+  expect(await axeViolations(page, ".text-card"), "text card with the decision block (all findings match)").toEqual([]);
   await evidence(page, "axe-panel");
 });
