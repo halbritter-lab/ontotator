@@ -90,7 +90,7 @@ What for: find the right ontology term quickly.
 
 1. Press `/` or click **Change term** to focus the search.
 2. Type a name or a code. Hits appear in the list **Terms**.
-3. Move with `↓` and `↑`; press Enter to take the active hit, or Esc to cancel.
+3. Move with `↓` and `↑`, or point at a hit. Below the hits, the full definition of the active hit is shown. Read it, then press Enter or click the hit to take it, or press Esc to cancel. Enter and a click take the hit at once.
 
 Search options:
 
@@ -98,7 +98,7 @@ Search options:
 - The language of the text is searched too. To search names in other languages, click the language button next to the field (it lists the languages searched, for example *EN, DE*) and tick them under **Search languages**. English names are always searched.
 - Hits tagged **Modifier** are modifier terms. Use one as a finding only if it names the finding itself; otherwise add it under **Modifiers**. Obsolete terms cannot be chosen.
 
-The search compares the words you type with term names and synonyms, letter by letter; it does not understand what they mean. Terms whose name or synonym equals your words come first. Similar terms follow in a shuffled order, so the best one is not always on top. Read the hits before you choose one. If nothing matches, try another word or a synonym, type a code or switch search languages.
+The search compares the words you type with term names and synonyms, letter by letter; it does not understand what they mean. Terms whose name or synonym equals your words come first. Next come terms whose name or synonym contains all your words, those with the fewest other words first. Other similar terms follow in a shuffled order, so the best one is not always on top. Read the hits before you choose one. If nothing matches, try another word or a synonym, type a code or switch search languages.
 
 ## Browse the ontology tree
 
