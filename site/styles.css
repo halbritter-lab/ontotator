@@ -466,6 +466,29 @@ video {
     max-width: 100%;
   }
 
+  /* The app is too wide to shrink to a phone: show a part of each screenshot at full size. */
+  .shot img {
+    height: 17rem;
+    object-fit: none;
+  }
+
+  .shot-editor img,
+  .shot-review img {
+    height: 7rem;
+  }
+
+  .shot-editor img {
+    object-position: -320px -125px;
+  }
+
+  .shot-review img {
+    object-position: -330px -125px;
+  }
+
+  .shot-consolidate img {
+    object-position: -724px -345px;
+  }
+
   .margin {
     border-left: 0;
     border-top: 1px solid var(--border);
