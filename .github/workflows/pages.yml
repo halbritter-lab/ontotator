@@ -1,0 +1,56 @@
+# Publishes site/ to GitHub Pages. Tutorial videos stay out of git: the release named below holds them.
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  TUTORIALS_RELEASE: tutorials-v1
+
+jobs:
+  build:
+    name: Assemble site
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - name: Fetch tutorial videos
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "$TUTORIALS_RELEASE" --dir site/tutorials
+      - name: Convert subtitles to WebVTT
+        run: |
+          for srt in site/tutorials/*.srt; do
+            { printf 'WEBVTT\n\n'; sed '/-->/s/,/./g' "$srt"; } > "${srt%.srt}.vtt"
+            rm "$srt"
+          done
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+  deploy:
+    name: Deploy
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

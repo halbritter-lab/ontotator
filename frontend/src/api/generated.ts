@@ -3623,6 +3623,8 @@ export interface components {
             added_by?: string | null;
             /** Consolidator */
             consolidator?: string | null;
+            /** Consolidation Reason */
+            consolidation_reason?: string | null;
             /** Workflow Revision */
             workflow_revision: number;
             /**
@@ -7551,6 +7553,8 @@ export interface components {
             reopened_at?: string | null;
             /** Reopen Reason */
             reopen_reason?: string | null;
+            /** Consolidation Reason */
+            consolidation_reason?: string | null;
             /**
              * Report Answered
              * @default false

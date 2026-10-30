@@ -144,6 +144,7 @@ In the card:
 - **Open text** opens the [text view](#read-a-text-and-other-peoples-work-in-the-text-view).
 - **Previous text** and **Next text** walk through the table (keys `K` and `J`).
 - **Other languages** switches to another language of the same case.
+- In **Finalization**, **Open consolidation** opens your own running consolidation as your task; a submitted one opens read-only.
 - ✕ or Esc closes the card.
 
 ### Read the history and details of a text

@@ -162,6 +162,33 @@ describe("Values block", () => {
     expect(onConfirmDefaults).toHaveBeenCalledTimes(3);
   });
 
+  it("a dropdown default has its own Confirm (#149)", () => {
+    const onConfirmDefaults = vi.fn(), onUpdateAxes = vi.fn();
+    const config = axesConfig.map(axis => axis.id === "experiencer"
+      ? { ...axis, options: ["patient", "mother", "father", "sibling", "other"] } : axis);
+    const { container } = render(<AnnotationPanel {...props({ onConfirmDefaults, onUpdateAxes, axesConfig: config })} />);
+    const field = container.querySelector<HTMLElement>('[data-axis-field="experiencer"]')!;
+    expect(field.querySelector("select")).not.toBeNull();
+    fireEvent.click(within(field).getByRole("button", { name: "Confirm Subject: Patient" }));
+    expect(onConfirmDefaults).toHaveBeenCalledTimes(1);
+    expect(onConfirmDefaults).toHaveBeenCalledWith(["experiencer"],
+      { assertion: "present", experiencer: "patient", temporality: "current" }, { moveFocus: false });
+    expect(onUpdateAxes).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(field.querySelector("select"));
+    expect(container.querySelector("[data-values-section] .form-hint")!.textContent)
+      .toBe("Click a highlighted default, Confirm next to a list, or “Confirm defaults” to confirm it.");
+  });
+
+  it("no dropdown Confirm for a chosen value or when read-only", () => {
+    const config = axesConfig.map(axis => axis.id === "experiencer"
+      ? { ...axis, options: ["patient", "mother", "father", "sibling", "other"] } : axis);
+    const { container, unmount } = render(<AnnotationPanel {...props({ onConfirmDefaults: vi.fn(), axesConfig: config }, ["assertion"])} />);
+    expect(container.querySelector('[data-axis-field="experiencer"] [data-confirm-axis]')).toBeNull();
+    unmount();
+    const readOnly = render(<AnnotationPanel {...props({ onConfirmDefaults: vi.fn(), axesConfig: config, readOnly: true })} />);
+    expect(readOnly.container.querySelector("[data-confirm-axis]")).toBeNull();
+  });
+
   it("click on a checked non-default value does nothing", () => {
     const onConfirmDefaults = vi.fn(), onUpdateAxes = vi.fn();
     render(<AnnotationPanel {...props({ onConfirmDefaults, onUpdateAxes }, ["assertion", "experiencer"])} />);

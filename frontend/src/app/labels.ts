@@ -104,6 +104,11 @@ export function formatDateTime(value: string | number | Date): string {
   return Number.isNaN(date.getTime()) ? String(value) : dateTime.format(date);
 }
 
+/** The lead's reason for a consolidation (issue 146), for the consolidator in My tasks and the consolidation header. */
+export function consolidationReasonText(reason: string): string {
+  return `Reason from the lead: ${reason}`;
+}
+
 /** Why and when a reopened task was reopened (My tasks and the editor); null for other statuses. */
 export function reopenNotice(task: { status: string; reopened_at?: string | null; reopen_reason?: string | null }): string | null {
   if (task.status !== "reopened") return null;
