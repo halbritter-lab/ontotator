@@ -11,7 +11,7 @@ General, Annotation, Workflow and Ontology have a **Save changes** button at the
 | **Workflow** | [Plan for new imports](#choose-the-plan-for-new-imports), [texts with tool proposals](#choose-how-texts-with-tool-proposals-are-annotated), [annotators per text and consolidation rules](#set-annotators-per-text-and-the-consolidation-rules) |
 | **Guidelines** | [Publish](#publish-the-first-or-a-new-guideline-version), [see who read them](#see-who-has-read-the-guidelines), [republish](#republish-an-earlier-guideline-version), [withdraw](#withdraw-a-guideline-version) |
 | **People** | [Add](#add-a-member), [change roles](#change-a-members-roles), [remove](#remove-a-member) |
-| **Ontology** | [Ontology version and annotation scheme](#choose-the-ontology-version-branches-and-annotation-scheme), [task profile](#replace-the-task-profile), [move to a newer release](#move-a-started-project-to-a-newer-release) |
+| **Ontology** | [Ontology version and annotation scheme](#choose-the-ontology-version-branches-and-annotation-scheme), [task profile](#task-profiles) and [replacing it](#replace-the-task-profile), [move to a newer release](#move-a-started-project-to-a-newer-release) |
 
 ## Open project settings
 
@@ -57,11 +57,76 @@ Before you start: you can change this until the first work is submitted. After t
    - Choose the annotation scheme: **HPO phenotype (fixed qualifiers, modifiers)** or **Generic (free qualifiers)**. "Qualifiers" are the value fields of a finding.
 4. Click **Save changes**. If the change would rewrite or flag terms in drafts, a check opens first, as in [Move a started project to a newer release](#move-a-started-project-to-a-newer-release).
 
+## Task profiles
+
+What it is: the task profile is a JSON file that defines what annotators work with: the ontology, the layers (for example *Phenotypes*), the finding types in each layer and the value fields of each finding type with their values (for example *Assertion*: present, absent, uncertain). It holds neither texts nor the ontology itself. Every project has exactly one. An administrator sets it when [creating the project](admin.md#create-a-project); a lead can [replace it](#replace-the-task-profile) until the first work is submitted.
+
+The other choices on the same form belong to the project, not to the profile: the ontology file (release), the allowed branches and the annotation scheme (*HPO phenotype* with fixed values and modifiers, or *Generic* with free values). They can change later under **Settings**, tab **Ontology**.
+
+### Template or own file
+
+The built-in template *HPO phenotype* is a ready profile: ontology `HP`, one layer `hpo-layer` (*Phenotypes*), finding type `phenotype`, and the value fields *Assertion* (present, absent, uncertain), *Experiencer* (patient, family_member, other) and *Temporality* (current, historical). New project fills in the branch `HP:0000118` (Phenotypic abnormality) and the scheme *HPO phenotype*.
+
+- Use the template if you upload only plain texts, or Ontospan bundles that fit it: layer `hpo-layer`, ontology `hp` (upper or lower case), branches exactly `HP:0000118`, and no value outside the lists above.
+- Use your own file in every other case, for example a bundle with another layer ID, another ontology, other branches or the value `unknown`. Whoever produces the bundles usually has the matching profile; ask them for it.
+
+### What a profile file looks like
+
+A shortened example. The checksum (`sha256`) and `release` are those of the ontology file uploaded on **Ontologies**; click **Copy** next to its checksum.
+
+```json
+{
+  "schema_version": "ontotator-task-profile/v1",
+  "profile_id": "lab-phenotypes/v1",
+  "version": "1.0.0",
+  "ontologies": [
+    { "ontology_id": "hp", "label": "Human Phenotype Ontology",
+      "release": "2026-09-01", "sha256": "20d4a647…d193d0" }
+  ],
+  "layers": [
+    { "layer_id": "hpo-layer", "label": "Phenotypes", "ontology_id": "hp",
+      "access": "editable", "default_type_id": "phenotype",
+      "annotation_types": [
+        { "type_id": "phenotype", "label": "Phenotype",
+          "axes": [
+            { "id": "assertion", "label": "Assertion", "options": ["present", "absent", "uncertain"] },
+            { "id": "experiencer", "label": "Experiencer", "options": ["patient", "family_member", "other", "unknown"] },
+            { "id": "temporality", "label": "Temporality", "options": ["current", "historical", "unknown"] }
+          ] }
+      ] }
+  ],
+  "default_layer_id": "hpo-layer"
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `ontology_id` | The ontology's short ID, for example `hp`. Upper and lower case count as the same. It cannot change once the project exists. |
+| `release`, `sha256` | The ontology file the project uses. They must be those of the file chosen on the form. |
+| `layer_id` | The layer's ID. Bundles name it for each proposal. |
+| `axes` | The value fields and their allowed values. With the scheme *HPO phenotype* only `assertion`, `experiencer` and `temporality` with the values above are possible; a profile may leave values out. |
+| `default_layer_id` | The layer annotators start in. |
+
+### What must match a bundle
+
+An Ontospan bundle is checked against the project when you click **Check** in **Upload texts…**. Each layer of the bundle must fit:
+
+| In the bundle | Must match | Who can change it |
+| --- | --- | --- |
+| Ontology ID | The profile's `ontology_id` (case does not matter) | Nobody: it is fixed when the project is created. An administrator creates a new project. |
+| Layer ID | A `layer_id` of the profile | A lead, by [replacing the task profile](#replace-the-task-profile) until the first work is submitted |
+| Ontology release | The project's ontology version | A lead, under **Settings**, tab **Ontology**; an administrator uploads the release first if it is missing |
+| Allowed branches | Exactly the project's branches | A lead, under **Settings**, tab **Ontology**, **Advanced**, until the first work is submitted |
+| Annotation scheme | The project's annotation scheme | As for the branches |
+| Values of each proposal | One of the profile's values | A lead, by replacing the task profile |
+
+When something differs, the check names it per text, for example *Layer hpo-layer: the bundle uses release 2026-09-01, this project uses release 2026-06-23*, and says who can change it. Nothing is imported.
+
 ## Replace the task profile
 
-What for: change the layers, finding types and value fields annotators work with. The task profile is the JSON file that defines them.
+What for: change the layers, finding types and value fields annotators work with. See [Task profiles](#task-profiles).
 
-Before you start: this is only possible before work starts.
+Before you start: this is only possible until the first work is submitted. The new file must name the same ontologies as the project (the same `ontology_id`; upper and lower case count as the same) with the `release` and `sha256` of the version chosen under **Ontology version**. Otherwise saving is refused; the ontology of a project cannot change.
 
 1. Open **Settings**, tab **Ontology**, and open **Advanced: task profile**.
 2. Check **Current profile layers**.

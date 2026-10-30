@@ -5,7 +5,7 @@ import { Button, InlineMessage, Select, Textarea, TextInput } from "../ui";
 import { ErrorNotice } from "./ErrorNotice";
 import { fieldError } from "./errors";
 import { LanguagesField } from "./LanguagesField";
-import { PinFields, preselectOnlyVersions, ProfileUpload, serializePins, type PinDraft, type UploadedProfile } from "./projectFields";
+import { emptyPin, PinFields, preselectOnlyVersions, ProfileUpload, serializePins, TaskProfileHelp, type PinDraft, type UploadedProfile } from "./projectFields";
 
 export function ProjectNewPage({ onNavigate }: { onNavigate: (route: Route) => void }): JSX.Element {
   const [metadata, setMetadata] = useState<{ templates: TemplateInfo[]; ontologies: OntologyInfo[] } | null>(null);
@@ -32,8 +32,10 @@ export function ProjectNewPage({ onNavigate }: { onNavigate: (route: Route) => v
     return () => { lifetime.current++; };
   }, [retry]);
   const ids = source === "template" ? metadata?.templates.find(item => item.id === template)?.required_ontology_ids ?? [] : uploaded?.ids ?? [];
+  // A profile file asks for no branches: they start empty (every term), not with the template's Phenotypic abnormality (#196).
+  const startPins = source === "upload" ? Object.fromEntries(ids.map(id => [id, pins[id] ?? { ...emptyPin(id), rootsText: "" }])) : pins;
   // An ontology with one loaded version starts with it chosen (#47 A-18).
-  const shownPins = metadata ? preselectOnlyVersions(ids, metadata.ontologies, pins) : pins;
+  const shownPins = metadata ? preselectOnlyVersions(ids, metadata.ontologies, startPins) : startPins;
   const keyError = fieldError(error, ["PROJECT_EXISTS", "PROJECT_KEY_INVALID"]);
   const keyInput = useRef<HTMLInputElement>(null);
   // A refusal about the key moves focus to the key field, where its message is shown.
@@ -63,6 +65,7 @@ export function ProjectNewPage({ onNavigate }: { onNavigate: (route: Route) => v
         <Select id="new-project-source" label="Profile source" value={source} onChange={event => { setSource(event.target.value); setUploaded(null); setError(undefined); }}>
           <option value="template">Built-in template</option><option value="upload">Upload profile JSON</option>
         </Select>
+        <TaskProfileHelp />
         {source === "template" ? <Select id="new-project-template" label="Built-in template" required value={template} onChange={event => setTemplate(event.target.value)}>
           <option value="">Choose a template</option>{metadata.templates.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
         </Select> : <ProfileUpload onChange={setUploaded} disabled={busy} />}
