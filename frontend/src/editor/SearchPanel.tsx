@@ -437,7 +437,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
         </ul>
       )}
       {expanded && shownActive >= 0 && (
-        // #190: the active hit's full definition, read before Enter or a click takes it. Below the list, so a
+        // Issue 190: the active hit's full definition, read before Enter or a click takes it. Below the list, so a
         // preview of another length never moves the rows under the pointer.
         <div className="candidate-preview" data-testid="candidate-preview">
           <div className="candidate-preview-title">{`Definition of ${candidates[shownActive].label} (${candidates[shownActive].term_id})`}</div>
