@@ -133,11 +133,27 @@ def test_first_matching_rule_wins(kw, first):
 
 def test_waiting_for_review_is_in_progress_and_counted_with_open_review_steps():
     steps = derive_steps(facts(review=True, annotate=True, open_translation_reviews=1))
+    # Issue 213: the lead may assign ahead while the review is open.
     assert [s.code for s in steps] == [
         "translation_review_in_progress",
+        "assign_annotation",
         "waiting_for_translation_review",
     ]
-    assert {segment_of(s) for s in steps} == {"progress"}
+    assert segment_of(steps[0]) == "progress"
+
+
+def test_no_review_in_sight_offers_no_annotation():
+    steps = derive_steps(facts(review=True, annotate=True))
+    assert "assign_annotation" not in {s.code for s in steps}
+    full = derive_steps(
+        facts(
+            review=True,
+            annotate=True,
+            open_translation_reviews=1,
+            annotation_assignments=1,
+        )
+    )
+    assert "assign_annotation" not in {s.code for s in full}
 
 
 def test_failed_check_without_reviewer_is_to_assign_with_badge():

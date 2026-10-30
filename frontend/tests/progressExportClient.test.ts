@@ -63,7 +63,7 @@ it("reads progress stages and workload", async () => {
     },
     workload: [{
       person: { pseudonym: "ann-0004", display_name: "Ana Weber", is_me: false }, username: "ana",
-      translation_reviews_open: 1, annotations_open: 1, reviews_open: 0, paused: 0, submitted: 0,
+      translation_reviews_open: 1, annotations_open: 1, annotations_waiting: 0, reviews_open: 0, paused: 0, submitted: 0,
     }],
   };
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(body))));

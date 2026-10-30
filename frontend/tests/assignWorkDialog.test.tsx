@@ -22,6 +22,7 @@ let perText = 1;
 let remainingOf: (caseId: string) => number = () => 1;
 let digest = "digest-1";
 let unreviewedOf: (caseId: string) => boolean = () => false;
+let waitingFor: ReadonlySet<string> = new Set();
 
 function preview(body: BatchAssignRequest): BatchPreview & { needs_people?: number | null } {
   const usernames = body.usernames ?? [];
@@ -29,7 +30,7 @@ function preview(body: BatchAssignRequest): BatchPreview & { needs_people?: numb
   const blocks = new Map<string, string[]>();
   if (body.mode === "one" && usernames.length === 1) for (const id of ids) blocks.set(id, [usernames[0]]);
   if (body.mode === "each") for (const id of ids) blocks.set(id, usernames.slice(0, remainingOf(id)));
-  const targets = ids.map(id => ({ case_id: id, language: body.language, document_id: `doc-${id}`, version: 1, remaining: remainingOf(id), usernames: blocks.get(id) ?? [], unreviewed_translation: unreviewedOf(id) }));
+  const targets = ids.map(id => ({ case_id: id, language: body.language, document_id: `doc-${id}`, version: 1, remaining: remainingOf(id), usernames: blocks.get(id) ?? [], unreviewed_translation: unreviewedOf(id), waiting_for_translation_review: waitingFor.has(id) }));
   return {
     task: body.task, language: body.language, versions: targets.length, targets, skipped, per_text: perText, digest, needs_people: null,
     people: people.map(item => {
@@ -41,7 +42,7 @@ function preview(body: BatchAssignRequest): BatchPreview & { needs_people?: numb
 const summary = (steps: SelectionSummary["steps"]): SelectionSummary => ({ cases: 20, steps, skipped: {}, common: steps[0] ?? null, not_shown: 0 });
 
 beforeEach(() => {
-  skipped = []; perText = 1; remainingOf = () => 1; digest = "digest-1"; unreviewedOf = () => false;
+  skipped = []; perText = 1; remainingOf = () => 1; digest = "digest-1"; unreviewedOf = () => false; waitingFor = new Set();
   vi.spyOn(api, "selectionSummary").mockResolvedValue(summary([{ task: "translation_review", language: "de", versions: 20, cases: 20 }]));
   vi.spyOn(api, "previewAssignmentBatch").mockImplementation(async (_key, body) => preview(body));
   vi.spyOn(api, "commitAssignmentBatch").mockImplementation(async (_key, body) => ({ created: preview(body).targets.flatMap(target => target.usernames.map(username => ({ ...assignment, username, document_id: target.document_id, task: body.task }))) }));
@@ -198,10 +199,17 @@ it("asks Assign anyway in the dialog for a language mismatch", async () => {
   await waitFor(() => expect(props.onAssigned).toHaveBeenCalled());
 });
 
+it("says that the tasks of texts still in review open after the acceptance (issue 213)", async () => {
+  waitingFor = new Set(["case-0101", "case-0102"]);
+  render(<AssignWorkDialog {...casesProps()} />);
+  await ready();
+  expect(screen.getByRole("status", { name: "Summary" }).textContent).toContain("2 texts still in translation review: their tasks open once the review is accepted");
+});
+
 it("closes and reports the result for one person and split", async () => {
   skipped = [{ case_id: "case-0120", language: "de", reason: "waiting_for_review" }];
   const props = casesProps(); render(<AssignWorkDialog {...props} />); await ready();
-  expect(screen.getByRole("status", { name: "Summary" }).textContent).toContain("1 still in translation review: waiting for review, they join the next batch");
+  expect(screen.getByRole("status", { name: "Summary" }).textContent).toContain("1 without a translation review under way: assign the review first");
   fireEvent.click(radio(/Ana Weber/));
   await waitForPreviewOf(["ana"]);
   fireEvent.click(screen.getByRole("button", { name: "Assign 19" }));
@@ -576,7 +584,7 @@ it("one text the preview cannot assign says why instead of a made-up limit (R-12
   perText = 2; skipped = [{ case_id: "case-0101", language: "de", reason: "waiting_for_review" }];
   render(<AssignWorkDialog mode="row" projectKey="p/key" row={row} task="annotate" onClose={vi.fn()} onAssigned={vi.fn()} />);
   await ready();
-  const why = "This text is still in translation review. Annotation can be assigned once the review is accepted.";
+  const why = "This text has no translation review under way. Annotation can be assigned once a review is assigned or the translation is accepted.";
   expect(screen.getByText(why, { selector: ".assign-limit-hint" })).toBeDefined();
   expect(screen.queryByText(/possible/)).toBeNull();
   expect(screen.getByText(why, { selector: ".dialog-footer-reason" })).toBeDefined();

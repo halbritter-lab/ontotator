@@ -160,6 +160,8 @@ class StageFacts:
     # Source version of an unreviewed source change (rule 6a, Final
     # "may be outdated").
     source_changed_from: int | None = None
+    # Issue 213: annotation tasks closed until the review is accepted.
+    annotators_waiting: tuple[int, ...] = ()
     correction_waiting: bool = False  # correction ready_for_review, rule on (edge case)
     final_causes: tuple[str, ...] = ()  # unacknowledged cause codes
     final_kind: Literal["round", "consolidation"] | None = None
@@ -396,12 +398,24 @@ def _annotation(facts: StageFacts, codes: frozenset[str]) -> StageCell:
         {"note": "text_change_waiting"} if facts.correction_waiting else {}
     )
     if not _may_annotate(step):
+        # Issue 213: the people whose tasks wait, and their count against the
+        # limit (the text card's "n of m annotators assigned").
+        waiters: dict[str, Any] = {
+            "people": facts.annotators_waiting,
+            **(
+                {"assigned": step.annotation_assignments, "target": step.per_text}
+                if step.per_text > 1
+                else {}
+            ),
+        }
         if "resolve_rejected" in codes:
-            return _cell("blocked", "waiting", note="translation_rejected")
+            return _cell("blocked", "waiting", note="translation_rejected", **waiters)
         if "resolve_queried" in codes:
-            return _cell("blocked", "waiting", note="translation_queried")
+            return _cell("blocked", "waiting", note="translation_queried", **waiters)
         if "translation_not_accepted" in codes:
-            return _cell("blocked", "waiting", note="translation_not_accepted")
+            return _cell(
+                "blocked", "waiting", note="translation_not_accepted", **waiters
+            )
         if facts.correction_waiting and (
             facts.annotators_open or step.old_open or step.finishing
         ):
@@ -413,7 +427,7 @@ def _annotation(facts: StageFacts, codes: frozenset[str]) -> StageCell:
                 or _people((*step.old_open, *step.finishing)),
                 **waiting_note,
             )
-        return _cell("after_review", "waiting", **waiting_note)
+        return _cell("after_review", "waiting", **waiting_note, **waiters)
     newest = facts.newest_version
     if not facts.correction_waiting:
         if step.old_open:

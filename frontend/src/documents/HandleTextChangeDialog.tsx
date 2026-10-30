@@ -5,8 +5,8 @@ import { errorMessage } from "../admin/errors";
 import { personName } from "../admin/assignSummary";
 import { Button, ConfirmDialog, Dialog } from "../ui";
 import {
-  CHECKING, finishDescription, finishingMessage, finishLabel, handleTitle, heldLine, moveDescription, movedMessage, moveLabel,
-  openWorkLine, RELOADED_MESSAGE, unplacedLine, WITHDRAW_LABEL, withdrawDescription, withdrawnMessage,
+  CHECKING, finishDescription, finishingMessage, finishLabel, fromProposalsLine, handleTitle, heldLine, moveDescription, movedMessage, moveLabel,
+  notNewerLine, openWorkLine, RELOADED_MESSAGE, unplacedLine, WITHDRAW_LABEL, withdrawDescription, withdrawnMessage,
 } from "./textChangeText";
 
 export type TextChangeChoice = "move" | "finish" | "withdraw";
@@ -43,7 +43,13 @@ export function HandleTextChangeDialog(props: HandleTextChangeDialogProps): JSX.
   const assignmentId = step.assignment_id ?? item?.assignment_id ?? null;
   const targetId = step.document_id ?? target?.document_id ?? "";
 
-  const [choice, setChoice] = useState<TextChangeChoice>("move");
+  // Work from proposals stays on its version, and a correction that does not count has no way back: only Withdraw works.
+  const fromProposals = item?.annotation_mode === "proposals";
+  const notNewer = !!item && !!target && target.version < (item.version ?? 0);
+  const withdrawOnly = fromProposals || notNewer;
+
+  const [chosen, setChoice] = useState<TextChangeChoice>("move");
+  const choice = withdrawOnly ? "withdraw" : chosen;
   const [preview, setPreview] = useState<TextChangePreview | null>(null);
   const [previewFailed, setPreviewFailed] = useState(false);
   const [reload, setReload] = useState(0);
@@ -55,7 +61,7 @@ export function HandleTextChangeDialog(props: HandleTextChangeDialogProps): JSX.
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
 
   useEffect(() => {
-    if (held || assignmentId === null || !targetId) return;
+    if (held || withdrawOnly || assignmentId === null || !targetId) return;
     let active = true;
     setPreview(null); setPreviewFailed(false);
     void api.previewTextChange(projectKey, { assignment_id: assignmentId, target_document_id: targetId }).then(
@@ -63,7 +69,7 @@ export function HandleTextChangeDialog(props: HandleTextChangeDialogProps): JSX.
       () => { if (active) setPreviewFailed(true); },
     );
     return () => { active = false; };
-  }, [projectKey, assignmentId, targetId, held, reload]);
+  }, [projectKey, assignmentId, targetId, held, withdrawOnly, reload]);
 
   const apply = async (confirmUnreviewed = false) => {
     if (writing.current || assignmentId === null) return;
@@ -92,9 +98,11 @@ export function HandleTextChangeDialog(props: HandleTextChangeDialogProps): JSX.
   };
 
   const options: { value: TextChangeChoice; label: string; description: string; extra?: string | null }[] = [
-    { value: "move", label: moveLabel(to), description: moveDescription(person),
-      extra: preview ? (preview.unplaced > 0 ? unplacedLine(preview.unplaced, preview.findings, person) : null) : previewFailed ? null : CHECKING },
-    { value: "finish", label: finishLabel(person, from), description: finishDescription(person, to) },
+    ...(withdrawOnly ? [] : [
+      { value: "move" as const, label: moveLabel(to), description: moveDescription(person),
+        extra: preview ? (preview.unplaced > 0 ? unplacedLine(preview.unplaced, preview.findings, person) : null) : previewFailed ? null : CHECKING },
+      { value: "finish" as const, label: finishLabel(person, from), description: finishDescription(person, to) },
+    ]),
     { value: "withdraw", label: WITHDRAW_LABEL, description: withdrawDescription(person, to) },
   ];
   const text = textLabel(row);
@@ -106,6 +114,7 @@ export function HandleTextChangeDialog(props: HandleTextChangeDialogProps): JSX.
   </>}>
     <div className="text-change-dialog">
       <p>{openWorkLine(person, from, to)}</p>
+      {withdrawOnly && !held && <p>{fromProposals ? fromProposalsLine(to) : notNewerLine(from, to)}</p>}
       {held ? <p className="text-change-held">
         {heldLine(person)}{" "}
         {props.onDecideReport && <Button size="sm" onClick={props.onDecideReport}>Decide on report…</Button>}

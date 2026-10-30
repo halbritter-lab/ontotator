@@ -235,8 +235,13 @@ class TextChangeService:
         pid: int,
         from_id: str,
         target_document_id: str,
+        *,
+        withdrawing: bool = False,
     ) -> tuple[VariantInfo, VariantInfo]:
         """The source and target versions after the spec's checks (I2, I7).
+
+        ``withdrawing``: work on a correction that does not count, later than
+        the target (``Version.not_newer``), can only be withdrawn.
 
         Raises:
             DomainError: ``TEXT_CHANGE_NOT_APPLICABLE`` (``already_on_target``,
@@ -252,7 +257,10 @@ class TextChangeService:
             raise _not_applicable("already_on_target")
         if target_document_id != target_id:
             raise DomainError("TEXT_CHANGE_CHANGED", {"reason": "target_changed"})
-        if not is_exact_ancestor(variants, target_id, from_id):
+        later = source.version > variants[target_id].version
+        if not (withdrawing and later) and not is_exact_ancestor(
+            variants, target_id, from_id
+        ):
             raise _not_applicable("not_ancestor")
         discarded = conn.execute(
             select(DiscardedVariantRow.document_id).where(
@@ -269,7 +277,7 @@ class TextChangeService:
         try:
             require_annotation_gate(conn, pid, target_id)
         except DomainError as error:
-            if error.code in {"TRANSLATION_NOT_ACCEPTED", "NOT_A_TRANSLATION"}:
+            if error.code == "TASK_WAITING_FOR_TRANSLATION_REVIEW":
                 raise _not_applicable("target_not_annotatable") from None
             raise
         return source, target
@@ -864,7 +872,12 @@ class TextChangeService:
                 raise _from_proposals("carry")
             require_task_writable(conn, assignment_id)
             source, target = self._check_target(
-                conn, key, pid, old["document_id"], target_document_id
+                conn,
+                key,
+                pid,
+                old["document_id"],
+                target_document_id,
+                withdrawing=resolution == "withdrawn",
             )
             now = datetime.now(UTC)
             if resolution == "withdrawn":

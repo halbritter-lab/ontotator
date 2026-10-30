@@ -229,7 +229,11 @@ def stage_facts(
         if item.task == "annotate" and item.document_id in target_ids
     ]
     running = [
-        item for item in annotations if item.status != "submitted" and not item.held
+        item
+        for item in annotations
+        if item.status != "submitted"
+        and not item.held
+        and item.assignment_id not in ctx.waiting
     ]
 
     per_target = eligible_by_target(ctx, targets)
@@ -306,6 +310,9 @@ def stage_facts(
         newest_version=max((v.version for v in targets), default=1),
         newest_origin=targets[0].origin if targets else None,
         annotators_open=_unique([item.user_id for item in running]),
+        annotators_waiting=_unique(
+            [item.user_id for item in annotations if item.assignment_id in ctx.waiting]
+        ),
         annotators_submitted=_unique([item.user_id for item in submitted]),
         round_ordinal=next(iter(rounds)) if len(rounds) == 1 else None,
         findings=(

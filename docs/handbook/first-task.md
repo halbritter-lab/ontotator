@@ -16,7 +16,7 @@ After login you see **My tasks**, or **Projects** the first time.
 
 1. Click **My tasks** in the sidebar.
 2. On the tab **To do**, find a row whose **Task** is *Annotation, from scratch* or *Annotation, from proposals*.
-3. Click **Start**.
+3. Click **Start**. A task marked **Waiting for translation review** cannot be started yet; it opens by itself once the translation review is accepted.
 
 The editor opens. If you have no task, you see **No texts are assigned to you yet.**; ask your lead.
 

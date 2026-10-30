@@ -9,7 +9,11 @@ from ontospan import TranslationCheck, canonical_text
 from pydantic import BaseModel, ConfigDict, ValidationError
 from sqlalchemy import Connection, RowMapping, func, insert, select, update
 
-from ontotator.assignments.service import Assignment, AssignmentService
+from ontotator.assignments.service import (
+    Assignment,
+    AssignmentService,
+    move_waiting_tasks,
+)
 from ontotator.auth.audit import Actor, record_audit
 from ontotator.auth.authority import lock_user_authority
 from ontotator.authz.policy import Access, Action, can
@@ -539,6 +543,16 @@ class TranslationReviewService:
                 )
                 .values(translation_status=after)
             )
+            if child:
+                # After the status write: it decides whether the tasks wait.
+                move_waiting_tasks(
+                    conn,
+                    Actor.user(access.user_id, user["username"]),
+                    pid,
+                    variant.document_id,
+                    child.document_id,
+                    now,
+                )
             conn.execute(
                 update(TranslationReviewDraftRow)
                 .where(TranslationReviewDraftRow.assignment_id == assignment.id)

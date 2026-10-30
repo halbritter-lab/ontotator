@@ -1047,7 +1047,7 @@ def test_carry_refused_when_the_target_is_not_annotatable(env, monkeypatch):
     work = _submitted(env)
 
     def not_accepted(*_args: Any) -> None:
-        raise DomainError("TRANSLATION_NOT_ACCEPTED")
+        raise DomainError("TASK_WAITING_FOR_TRANSLATION_REVIEW")
 
     monkeypatch.setattr(text_changes, "require_annotation_gate", not_accepted)
     with pytest.raises(DomainError) as refused:

@@ -348,10 +348,10 @@ Then decide:
 
 | Decision | Use it when | What happens next |
 | --- | --- | --- |
-| **Accepted unchanged** | The translation is right as it stands. | It becomes available for annotation. |
+| **Accepted unchanged** | The translation is right as it stands. | It becomes available for annotation. Annotation tasks already assigned open by themselves. |
 | **Accepted with corrections** | You corrected it and it is now right. Editing chooses this for you. | Your corrected text is saved as a new text version, which is accepted for annotation. |
-| **Query** | The meaning may differ clinically and you are not sure. | Not accepted. The lead reads your rationale and decides. |
-| **Rejected** | The translation changes the clinical meaning. | Not accepted. The lead decides: a new review, a correction or discarding it. |
+| **Query** | The meaning may differ clinically and you are not sure. | Not accepted. The lead reads your rationale and decides. Annotation tasks already assigned keep waiting. |
+| **Rejected** | The translation changes the clinical meaning. | Not accepted. The lead decides: a new review, a correction or discarding it. Annotation tasks already assigned keep waiting. |
 
 Steps:
 

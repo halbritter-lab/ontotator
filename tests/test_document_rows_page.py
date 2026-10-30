@@ -371,6 +371,8 @@ WORK_KEYS = {
     "assigned_by",
     "annotation_mode",
     "unreviewed_translation",
+    "waiting_for_translation_review",
+    "waiting_for_lead",
 }
 FINAL_KEYS = {
     "author",

@@ -116,7 +116,7 @@ def test_stage_cards_count_rows_per_state(env, tmp_path):
     )
     assert annotation["counts"] == {
         "waiting_for_review": 2,
-        "to_assign": 0,
+        "to_assign": 1,  # in review, and the lead may assign ahead (issue 213)
         "in_progress": 0,  # c2 en is paused, not in progress
         "paused": 1,
         "submitted": 1,

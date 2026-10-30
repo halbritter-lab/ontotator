@@ -234,12 +234,12 @@ test("ANNOTATION_BATCH: later annotation batch via To assign (5 clicks) while 6 
   await expect(documentsTab(page, "To assign", 14)).toBeVisible();
   await expect(documentsTab(page, "In progress", 6)).toBeVisible();
 
-  // With all 20 cases selected, the 6 still in review are skipped and named.
+  // With all 20 cases selected, the 6 still in review can be assigned ahead: their tasks wait for it (issue 213).
   await page.getByRole("checkbox", { name: "Select all 20 filtered texts", exact: true }).click();
   await bar(page).getByRole("button", { name: "Assign annotation…", exact: true }).click();
   let dialog = page.getByRole("dialog", { name: new RegExp(`^Assign${SEP}20 cases$`) });
-  await expect(dialog.getByText(new RegExp(`^Annotation${SEP}de${SEP}14 versions$`))).toBeVisible();
-  await expect(dialog.getByRole("status", { name: "Summary" })).toContainText("6 still in translation review: waiting for review, they join the next batch");
+  await expect(dialog.getByText(new RegExp(`^Annotation${SEP}de${SEP}20 versions$`))).toBeVisible();
+  await expect(dialog.getByRole("status", { name: "Summary" })).toContainText("6 texts still in translation review: their tasks open once the review is accepted");
   await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
   await bar(page).getByRole("button", { name: "Clear selection", exact: true }).click();
   await expect(bar(page)).toHaveCount(0);

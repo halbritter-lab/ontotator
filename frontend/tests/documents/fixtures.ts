@@ -75,6 +75,7 @@ export function version(overrides: Partial<DocumentVersionView> & Pick<DocumentV
 export function work(overrides: Partial<WorkItemView> & Pick<WorkItemView, "assignment_id" | "document_id">): WorkItemView {
   return {
     version: 1,
+    waiting_for_translation_review: false, waiting_for_lead: false,
     author_label: "ann-0001",
     is_me: false,
     task: "annotate",

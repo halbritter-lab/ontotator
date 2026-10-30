@@ -20,7 +20,7 @@ describe("assign summary", () => {
       { case_id: "a", language: "de", reason: "already_assigned" as const },
     ];
     expect(skippedLines(skipped, "de")).toEqual([
-      "6 still in translation review: waiting for review, they join the next batch",
+      "6 without a translation review under way: assign the review first",
       "4 without annotation of de in the plan (other languages are separate tasks)",
       "1 already assigned",
     ]);

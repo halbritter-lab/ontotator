@@ -265,6 +265,16 @@ What for: give translation reviews or annotations to people.
 
 **Reads** shows the languages in each person's profile. If someone's profile lists languages but not one the task needs, the dialog asks again; click **Assign anyway** or **Back**. A person with no languages listed counts as unknown and gets no warning. Ontotator sends no e-mail; the work appears in each person's **My tasks**.
 
+With **Annotate only after the translation review is accepted** on, you can assign annotators to a text while its translation review is assigned or underway, so both steps are set up at once. The summary says *Still in translation review: the task opens once the review is accepted.* The annotator sees the task in **My tasks** as **Waiting for translation review** and cannot start it; it counts under **Open tasks**. When the review is accepted, the task opens with no further step from you. This also holds for **Distribute evenly…**. A text with no translation review under way still cannot get annotators: assign the review first. With parallel translations of one text, only the translation under review can get a waiting task; the others follow once every translation is accepted, and the dialog's summary says which were left out.
+
+What happens to a waiting task:
+
+- **Rejected** or **Query**: it keeps waiting. Decide on the text as usual.
+- **Accepted with corrections**, a lead correction or an uploaded correction: the task moves to the new version and opens there once that version is accepted. A task from proposals stays on the old version, as the new version needs its own proposals: the annotator sees **Waiting for the project lead**, and once the new version is accepted the text shows **Handle text change…**, where **Withdraw** is the choice that works. A paused task stays too, until you decide its report.
+- A task on an uploaded correction that was then **Rejected** or **Query**, with the older version accepted afterwards: the text shows **Handle text change…**; **Withdraw** the task, then assign the accepted version.
+- You remove the review: the task keeps waiting, and the text shows the next step for the review.
+- You turn Review off and accept the translation: the task opens. You turn Annotate off or discard the version: the task is withdrawn, as any open task.
+
 If the selection has texts in several languages, the dialog assigns one language at a time. After the assign button, it stays open on the next language and lists what is already assigned; click **Close** when you are done. Cases that got nothing are offered in the message, for example *Select the 2 skipped cases*; the message stays until you close it.
 
 ### Assign work for one text
@@ -296,6 +306,8 @@ What for: change who works on a text, or let someone change a submitted annotati
 
 Warning: removing unsubmitted work deletes the draft for good. Submitted work stays in the history.
 
+A task that waits for the translation review shows **Waiting for review** in the person's row and can be reassigned or removed like any open task.
+
 1. Open the text card and click **Annotation** (or **Translation** for reviews).
 2. In the person's row, click one of these:
    - **Reassign…**: choose the **New assignee** and click **Reassign**.
@@ -311,7 +323,7 @@ What for: see the whole project at a glance.
 1. In the sidebar, click **Progress**.
 2. The first line counts cases, reviews and annotations. Click **need your decision** or **to assign** to jump to those texts.
 3. The cards **Translation review**, **Annotation** and **Final result** count the texts per state. Each count opens **Documents** with the same texts.
-4. The **People** table shows each person's open and submitted work. Click a name to see their texts.
+4. The **People** table shows each person's open and submitted work; tasks that wait for a translation review count under **Waiting for review**, not as open. Click a name to see their texts.
 
 ![The Progress page with the stage cards and the People table](images/lead-progress.png)
 

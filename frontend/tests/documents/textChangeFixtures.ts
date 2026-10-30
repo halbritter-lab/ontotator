@@ -19,13 +19,13 @@ export function handleStep(overrides: Partial<NextStepView> = {}): NextStepView 
 }
 
 /** Tom Reis has an open annotation on v1; the text is now v2. */
-export function openOnOldText(options: { held?: boolean } = {}): { row: DocumentRowView; step: NextStepView } {
+export function openOnOldText(options: { held?: boolean; mode?: "proposals" | "scratch"; onVersion?: number } = {}): { row: DocumentRowView; step: NextStepView } {
   const step = handleStep();
   return {
     step,
     row: row({
       case_id: "case-112", language: "de", versions: versions("case-112"), steps: [step], next_step: step,
-      work: [work({ assignment_id: 41, document_id: V1, version: 1, status: "in_progress", author_label: tom.pseudonym, person: tom, held: options.held ?? false })],
+      work: [work({ assignment_id: 41, document_id: V1, version: options.onVersion ?? 1, status: "in_progress", author_label: tom.pseudonym, person: tom, held: options.held ?? false, annotation_mode: options.mode ?? null })],
     }),
   };
 }

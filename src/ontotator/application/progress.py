@@ -115,7 +115,9 @@ def _card(context: RowContext, name: str) -> dict[str, Any]:
     }
 
 
-def _workload(conn: Connection, facts: RowFacts) -> list[dict[str, Any]]:
+def _workload(
+    conn: Connection, facts: RowFacts, context: RowContext
+) -> list[dict[str, Any]]:
     """Per person with non-revoked work.
 
     Unlike the members list and the batch people (``open_task_counts``, held
@@ -127,6 +129,12 @@ def _workload(conn: Connection, facts: RowFacts) -> list[dict[str, Any]]:
         "annotate": "annotations_open",
         "review": "reviews_open",
     }
+    waiting = {
+        item["assignment_id"]
+        for row in context.rows.values()
+        for item in row["work"]
+        if item["waiting_for_translation_review"]
+    }
     people: dict[int, dict[str, Any]] = {}
     for item in facts.assignments:
         if item.revoked:
@@ -137,6 +145,7 @@ def _workload(conn: Connection, facts: RowFacts) -> list[dict[str, Any]]:
                 "user_id": item.user_id,
                 "pseudonym": item.pseudonym,
                 **dict.fromkeys(columns.values(), 0),
+                "annotations_waiting": 0,
                 "paused": 0,
                 "submitted": 0,
             },
@@ -145,6 +154,8 @@ def _workload(conn: Connection, facts: RowFacts) -> list[dict[str, Any]]:
             person["paused"] += 1
         elif item.status == "submitted":
             person["submitted"] += 1
+        elif item.assignment_id in waiting:
+            person["annotations_waiting"] += 1
         elif item.task in columns:
             person[columns[item.task]] += 1
     usernames = {
@@ -203,5 +214,5 @@ def progress_view(
             "to_assign": segments["to_assign"],
         },
         "stages": stages,
-        "workload": _workload(conn, facts),
+        "workload": _workload(conn, facts, context),
     }

@@ -9942,9 +9942,21 @@
               "already_assigned",
               "step_differs",
               "discarded",
-              "no_proposals_on_version"
+              "no_proposals_on_version",
+              "other_root_in_review"
             ],
             "title": "Reason"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
           }
         },
         "type": "object",
@@ -9987,6 +9999,11 @@
           "unreviewed_translation": {
             "type": "boolean",
             "title": "Unreviewed Translation",
+            "default": false
+          },
+          "waiting_for_translation_review": {
+            "type": "boolean",
+            "title": "Waiting For Translation Review",
             "default": false
           }
         },
@@ -18247,6 +18264,11 @@
             "title": "Annotations Open",
             "default": 0
           },
+          "annotations_waiting": {
+            "type": "integer",
+            "title": "Annotations Waiting",
+            "default": 0
+          },
           "reviews_open": {
             "type": "integer",
             "title": "Reviews Open",
@@ -22699,6 +22721,16 @@
               }
             ],
             "title": "Answered Report Id"
+          },
+          "waiting_for_translation_review": {
+            "type": "boolean",
+            "title": "Waiting For Translation Review",
+            "default": false
+          },
+          "waiting_for_lead": {
+            "type": "boolean",
+            "title": "Waiting For Lead",
+            "default": false
           }
         },
         "type": "object",
@@ -25001,6 +25033,16 @@
           "unreviewed_translation": {
             "type": "boolean",
             "title": "Unreviewed Translation",
+            "default": false
+          },
+          "waiting_for_translation_review": {
+            "type": "boolean",
+            "title": "Waiting For Translation Review",
+            "default": false
+          },
+          "waiting_for_lead": {
+            "type": "boolean",
+            "title": "Waiting For Lead",
             "default": false
           }
         },

@@ -36,10 +36,10 @@ const progress: ProjectProgress = {
     } },
   },
   workload: [
-    { person: { pseudonym: "ann-0005", display_name: "Second annotator", is_me: false }, username: "second", translation_reviews_open: 0, annotations_open: 1, reviews_open: 0, paused: 0, submitted: 1 },
-    { person: { pseudonym: "ann-0003", display_name: "Translation reviewer", is_me: false }, username: "reviewer", translation_reviews_open: 2, annotations_open: 0, reviews_open: 0, paused: 0, submitted: 1 },
-    { person: { pseudonym: "ann-0002", display_name: "Lead", is_me: true }, username: "lead", translation_reviews_open: 0, annotations_open: 1, reviews_open: 0, paused: 1, submitted: 0 },
-    { person: { pseudonym: "ann-0006", display_name: null, is_me: false }, username: "former", translation_reviews_open: 0, annotations_open: 0, reviews_open: 0, paused: 0, submitted: 3 },
+    { person: { pseudonym: "ann-0005", display_name: "Second annotator", is_me: false }, username: "second", translation_reviews_open: 0, annotations_open: 1, annotations_waiting: 0, reviews_open: 0, paused: 0, submitted: 1 },
+    { person: { pseudonym: "ann-0003", display_name: "Translation reviewer", is_me: false }, username: "reviewer", translation_reviews_open: 2, annotations_open: 0, annotations_waiting: 0, reviews_open: 0, paused: 0, submitted: 1 },
+    { person: { pseudonym: "ann-0002", display_name: "Lead", is_me: true }, username: "lead", translation_reviews_open: 0, annotations_open: 1, annotations_waiting: 0, reviews_open: 0, paused: 1, submitted: 0 },
+    { person: { pseudonym: "ann-0006", display_name: null, is_me: false }, username: "former", translation_reviews_open: 0, annotations_open: 0, annotations_waiting: 0, reviews_open: 0, paused: 0, submitted: 3 },
   ],
 };
 
@@ -136,12 +136,12 @@ it("renders People sorted by open work in the identity format, linked by owner",
   render(<ProgressPage projectKey="p" onNavigate={navigate} />);
   const table = await screen.findByRole("table", { name: "People" });
   expect(within(table).getAllByRole("columnheader").map(cell => cell.textContent))
-    .toEqual(["Person", "Translation reviews open", "Annotations open", "Consolidations open", "Paused", "Submitted"]);
+    .toEqual(["Person", "Translation reviews open", "Annotations open", "Waiting for review", "Consolidations open", "Paused", "Submitted"]);
   const rows = within(table).getAllByRole("row").slice(1);
   expect(rows.map(row => within(row).getByRole("rowheader").textContent)).toEqual([
     "Translation reviewer (ann-0003)", "Lead (ann-0002, you)", "Second annotator (ann-0005)", "ann-0006",
   ]);
-  expect(rows[0].textContent).toBe("Translation reviewer (ann-0003)20001");
+  expect(rows[0].textContent).toBe("Translation reviewer (ann-0003)200001");
   expect(table.textContent).not.toContain("reviewer\u0000");
   expect(table.textContent).not.toMatch(/\bsecond\b|\bformer\b/);
   const link = within(rows[0]).getByRole("link", { name: "Translation reviewer (ann-0003)" });

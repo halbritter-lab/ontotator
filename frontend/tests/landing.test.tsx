@@ -25,7 +25,7 @@ const project = (key: string, roles: ProjectSummary["roles"]): ProjectSummary =>
   can_manage: roles.includes("lead"),
 });
 const openTask: TaskSummary = {
-  assignment_id: 7, workflow_revision: 0, held: false, report_answered: false, project_key: "p1", project_name: "Project p1", document_id: "doc-7",
+  assignment_id: 7, workflow_revision: 0, held: false, report_answered: false, waiting_for_translation_review: false, waiting_for_lead: false, project_key: "p1", project_name: "Project p1", document_id: "doc-7",
   case_id: "case-0101", language: "de", task: "annotate", status: "open", updated_at: "2026-10-20T10:00:00Z",
 };
 const lead = testUser("lead", { username: "lead", is_system_admin: false });

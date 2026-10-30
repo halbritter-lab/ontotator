@@ -195,6 +195,8 @@ class ProgressWorkloadView(BaseModel):
     username: str
     translation_reviews_open: int = 0
     annotations_open: int = 0
+    # Issue 213: annotation tasks closed until the translation review is accepted.
+    annotations_waiting: int = 0
     reviews_open: int = 0
     paused: int = 0
     submitted: int = 0

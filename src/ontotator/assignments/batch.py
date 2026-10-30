@@ -27,6 +27,7 @@ from ontotator.assignments.eligibility import (
     load_variants,
     reads_all,
     required_languages,
+    review_covers,
 )
 from ontotator.assignments.service import (
     Assignment,
@@ -72,6 +73,7 @@ SkipReason = Literal[
     "step_differs",
     "discarded",
     "no_proposals_on_version",
+    "other_root_in_review",
 ]
 Unavailable = Literal["does_not_read", "role_missing", "inactive"]
 
@@ -131,6 +133,8 @@ class _Target:
     no_proposals: bool = False
     # Annotate: the rule is off and the translation is not accepted.
     unreviewed_translation: bool = False
+    # Annotate: the rule is on and the task waits for the review (issue 213).
+    waiting_for_translation_review: bool = False
     usernames: list[str] = field(default_factory=list)
 
 
@@ -139,6 +143,8 @@ class _Match:
     targets: tuple[_Target, ...]
     reason: SkipReason | None
     holders: frozenset[str]  # usernames holding the task on the row
+    # Parallel roots: the roots that get no task although the text has targets.
+    skipped_roots: Mapping[str, SkipReason] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -224,6 +230,21 @@ class _Rows:
             if not any(v.document_id in dropped for v in chain.versions)
         ]
 
+    def _closed_roots(self, newest: Sequence[rules.Version]) -> dict[str, SkipReason]:
+        """Rule on, not every root accepted: only a root with its own review
+        may get a task, and it waits (``check_variant_assignable``)."""
+        if all(v.translation_status == "accepted" for v in newest):
+            return {}
+        reviewed = {item[1] for item in self.facts.open_translation_reviews}
+        known = {v.document_id: v for v in self.facts.versions}
+        roots: dict[str, SkipReason] = {}
+        for version in newest:
+            if version.translation_status == "accepted":
+                roots[version.document_id] = "other_root_in_review"
+            elif not review_covers(version, known.get, reviewed):
+                roots[version.document_id] = "waiting_for_review"
+        return roots
+
     def _work(self, document_id: str, task: Task) -> list[rules.AssignmentFact]:
         return [
             item
@@ -287,6 +308,7 @@ class _Rows:
         review, annotate = self.ctx.flags[key]
         codes = {step["code"] for step in row["steps"]}
         candidates: list[_Target] = []
+        closed: dict[str, SkipReason] = {}
         if task == "translation_review":
             # The predicate of ``enable_review_for_accepted`` (D25).
             external = (
@@ -336,13 +358,31 @@ class _Rows:
             if not annotate:
                 return _Match((), "not_in_plan", holders)
             if ASSIGN_STEPS[task] in codes:
-                candidates = [self._target(v, task) for v in newest]
-                for candidate in candidates:
+                if self.facts.rule_on and not row["is_source"]:
+                    closed = self._closed_roots(newest)
+                assignable = [v for v in newest if v.document_id not in closed]
+                candidates = [self._target(v, task) for v in assignable]
+                for candidate, version in zip(candidates, assignable, strict=True):
                     candidate.unreviewed_translation = row["unreviewed_translation"]
+                    candidate.waiting_for_translation_review = (
+                        self.facts.rule_on
+                        and not row["is_source"]
+                        and version.translation_status != "accepted"
+                    )
         targets = tuple(t for t in candidates if t.remaining > 0)
         if targets:
-            return _Match(targets, None, holders)
-        if task != "translation_review" and codes & WAITING_FOR_REVIEW_STEPS:
+            return _Match(targets, None, holders, closed)
+        # No review in sight (Rule 8 offers the others); a full text is not
+        # "waiting", it has its annotators.
+        if (
+            task != "translation_review"
+            and not candidates
+            and codes & WAITING_FOR_REVIEW_STEPS
+            and any(
+                self.held[v.document_id] < self.facts.annotations_per_text
+                for v in newest
+            )
+        ):
             return _Match((), "waiting_for_review", holders)
         if any(t.no_proposals for t in candidates):
             return _Match((), "no_proposals_on_version", holders)
@@ -550,6 +590,7 @@ class BatchAssignmentService:
         targets: dict[str, tuple[_Target, ...]] = {}
         skipped: dict[str, SkipReason] = {}
         holders: dict[str, frozenset[str]] = {}
+        skipped_roots: dict[str, Mapping[str, SkipReason]] = {}
         for case_id in order:
             match = rows.match(
                 case_id,
@@ -565,6 +606,7 @@ class BatchAssignmentService:
                 skipped[case_id] = match.reason
             else:
                 targets[case_id] = match.targets
+                skipped_roots[case_id] = match.skipped_roots
         needs_people: int | None = None
         try:
             got, layout_skipped = layout(
@@ -602,13 +644,25 @@ class BatchAssignmentService:
                 "remaining": t.remaining,
                 "usernames": list(t.usernames),
                 "unreviewed_translation": t.unreviewed_translation,
+                "waiting_for_translation_review": t.waiting_for_translation_review,
             }
             for t in flat
         ]
-        skip_views = [
+        skip_views: list[dict[str, Any]] = [
             {"case_id": case_id, "language": spec.language, "reason": skipped[case_id]}
             for case_id in order
             if case_id in skipped
+        ]
+        skip_views += [
+            {
+                "case_id": case_id,
+                "language": spec.language,
+                "reason": reason,
+                "document_id": document_id,
+            }
+            for case_id in order
+            if case_id in targets
+            for document_id, reason in skipped_roots[case_id].items()
         ]
         digest = _digest(
             {

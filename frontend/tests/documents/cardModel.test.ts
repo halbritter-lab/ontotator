@@ -37,6 +37,7 @@ describe("Annotation", () => {
   it("waits for the translation review", () => {
     expect(annotationState(cardRow({ annotation: cell("after_review", "waiting") }))).toEqual({ state: "after translation review", tone: "later" });
     expect(annotationState(cardRow({ annotation: cell("blocked", "waiting") }))).toEqual({ state: "after translation review", tone: "later" });
+    expect(annotationState(cardRow({ annotation: cell("after_review", "waiting", { people: [{ pseudonym: "ann-1", display_name: "Ana", is_me: false }] }) }))).toEqual({ state: "waiting for review (Ana)", tone: "later" });
   });
   it("annotation with one of max 2 annotators is now (R-13); no proposal count, never 0 of 0", () => {
     const target = cardRow({ annotation: cell("partly_assigned", "todo", { assigned: 1, target: 2 }) }, { proposal_count: 17 });

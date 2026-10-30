@@ -5,7 +5,7 @@ import { nextOpenTask, orderTasks } from "../src/app/caseOrder";
 
 const task = (assignment_id: number, overrides: Partial<TaskSummary> = {}): TaskSummary => ({
   assignment_id,
-  workflow_revision: 0, held: false, report_answered: false,
+  workflow_revision: 0, held: false, report_answered: false, waiting_for_translation_review: false, waiting_for_lead: false,
   project_key: "project-a",
   project_name: "Project A",
   document_id: `document-${assignment_id}`,
@@ -14,6 +14,19 @@ const task = (assignment_id: number, overrides: Partial<TaskSummary> = {}): Task
   status: "open",
   updated_at: "2026-10-15T12:00:00Z",
   ...overrides,
+});
+
+describe("tasks waiting for their translation review (issue 213)", () => {
+  const waiting = task(5, { waiting_for_translation_review: true });
+
+  it("are no stop on the way between tasks", () => {
+    expect(orderTasks([task(81), waiting, task(23)], task(81))).toEqual({ next: 23 });
+  });
+
+  it("are never the next task", () => {
+    expect(nextOpenTask([task(81), waiting], 81, "project-a")).toEqual({ next: null, remaining: 0 });
+    expect(nextOpenTask([task(81), task(6, { waiting_for_lead: true })], 81, "project-a")).toEqual({ next: null, remaining: 0 });
+  });
 });
 
 describe("orderTasks", () => {

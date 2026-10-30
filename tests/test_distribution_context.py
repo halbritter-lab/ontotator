@@ -229,7 +229,7 @@ def test_stored_proposal_is_ordered_bounded_and_writes_nothing(stored):
         event.remove(db.engine, "before_cursor_execute", capture)
     assert prepared.context.document_ids == ("second", "first")
     assert len(prepared.proposal.rows) == 2
-    assert len(statements) <= 11
+    assert len(statements) <= 12
     assert all(s.lstrip().upper().startswith("SELECT") for s in statements)
 
 

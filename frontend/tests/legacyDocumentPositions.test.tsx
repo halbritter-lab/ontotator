@@ -26,7 +26,7 @@ function server(mode: WorkspaceMode = "independent") {
   }]);
   // "All" explicitly: a bare "#/" lands on the last-used project or the Projects page (F8).
   window.history.replaceState(null, "", "#/?status=all");
-  const tasks = documents.map((document, index) => Object.freeze({ ...document, assignment_id: 100 + index, workflow_revision: 0, held: false, report_answered: false,
+  const tasks = documents.map((document, index) => Object.freeze({ ...document, assignment_id: 100 + index, workflow_revision: 0, held: false, report_answered: false, waiting_for_translation_review: false, waiting_for_lead: false,
     project_key: "pkg", project_name: "Synthetic cases", task: mode === "review" ? "review" as const : "annotate" as const,
     status: "open" as const, updated_at: "2026-10-14T12:00:00Z" }));
   Object.freeze(tasks);

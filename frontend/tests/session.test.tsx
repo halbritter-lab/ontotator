@@ -96,7 +96,7 @@ const caseWithEndedSession = (relogin: CurrentUser, view = caseView()) => {
   const alice = testUser("ann-0007", { display_name: "Alice", csrf_token: "csrf-1" });
   sessionsOf(alice);
   oneCaseServer(view);
-  vi.spyOn(api, "listMyTasks").mockResolvedValue([{ assignment_id: 1, workflow_revision: 0, held: false, report_answered: false, project_key: "pkg", project_name: "pkg", document_id: view.document.document_id, language: "en", task: view.key.mode === "review" ? "review" : "annotate", status: "open", updated_at: "2026-10-14T12:00:00Z" }]);
+  vi.spyOn(api, "listMyTasks").mockResolvedValue([{ assignment_id: 1, workflow_revision: 0, held: false, report_answered: false, waiting_for_translation_review: false, waiting_for_lead: false, project_key: "pkg", project_name: "pkg", document_id: view.document.document_id, language: "en", task: view.key.mode === "review" ? "review" : "annotate", status: "open", updated_at: "2026-10-14T12:00:00Z" }]);
   vi.spyOn(api, "openAssignment").mockResolvedValueOnce(assigned({ read_only: false, workspace_id: "ws", view })).mockRejectedValue(new AuthError("Task not found or not yours", undefined, "ASSIGNMENT_NOT_FOUND", 403));
   let sessionOpen = false;
   const fetchMock = fakeServer({

@@ -90,6 +90,8 @@ Each row is one task. The **Task** column says what to do, for example **Annotat
 - **Reopened**: the lead reopened your submission. Click the badge to read why.
 - A **Consolidation** task shows the lead's reason under the task, for example *Reason from the lead: Term and assertion differ*, if the lead gave one.
 - **Paused**: the task waits for a decision on a problem report. **Answer to your report** means the lead has replied.
+- **Waiting for translation review**: the lead assigned the annotation ahead, and the translation is still being reviewed. You cannot start yet; the **Action** column says **Opens after the review**. Once the review is accepted, the task shows **Start** by itself. If the review leads to a corrected version, the task opens on that version.
+- **Waiting for the project lead**: the text of this task was corrected and the task cannot follow by itself. You cannot start it; the lead decides how it continues, and it may leave your list.
 
 If the project has guidelines, a link such as *Project guidelines v2* appears above the table. Read them before you start: they say what to mark and how.
 
@@ -106,6 +108,8 @@ What for: start or continue your work on a text.
    - **View** for a submitted task (read-only),
    - **View paused task** for a paused task (read-only).
 3. The task opens. While it loads you see **Opening task…**.
+
+A link to a task that still waits shows **Waiting for translation review** instead of the text. Nothing is lost; the task opens by itself once the review is accepted. A link to a task the lead has to decide on shows **Waiting for the project lead**.
 
 To move to your next or previous task without going back, use **Previous text** and **Next text** in the toolbar (`Alt+←` and `Alt+→`), or pick one in **Select text**.
 

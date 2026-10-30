@@ -124,6 +124,10 @@ class WorkItemView(_View):
     # Spec 2026-10-25 §2: annotate work the lead confirmed before the
     # translation review was accepted (the History line).
     unreviewed_translation: bool = False
+    # Issue 213: closed until the translation review of its version is accepted.
+    waiting_for_translation_review: bool = False
+    # Closed on a version the text moved on from: the lead decides.
+    waiting_for_lead: bool = False
 
 
 class ReportIssueView(_View):

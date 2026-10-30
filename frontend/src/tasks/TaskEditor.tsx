@@ -153,6 +153,10 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
       <Button disabled={!rounds.includes(round)} onClick={() => { if (rounds.includes(round)) void load({ review_round_target_set_id: round }); }}>Resume round</Button>
       <Button onClick={back}>Back to my tasks</Button>
     </Dialog>;
+    if (error instanceof ApiError && error.code === "TRANSLATION_NOT_ACCEPTED" && typeof error.details === "object" && error.details?.waiting_for_lead === true) return <NotFound title="Waiting for the project lead"
+      reason="The text of this task was corrected. The project lead decides how the task continues." onNavigate={onNavigate} />;
+    if (error instanceof ApiError && error.code === "TASK_WAITING_FOR_TRANSLATION_REVIEW") return <NotFound title="Waiting for translation review"
+      reason="This task opens by itself once the translation review of the text is accepted. Until then it waits in My tasks." onNavigate={onNavigate} />;
     if (isNotAvailable(error)) return <NotFound title={TASK_UNAVAILABLE} reason={TASK_UNAVAILABLE_REASON} onNavigate={onNavigate} />;
     return <section className="not-found"><ErrorNotice error={error} />
       <div className="toolbar"><Button onClick={() => { void load(); }}>Retry</Button>{backLink}</div></section>;
@@ -182,7 +186,7 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
     assignment_id: assignment.id, project_key: assignment.project_key, project_name: assignment.project_key,
     document_id: assignment.document_id, task: assignment.task, status: assignment.status,
     language: workspace.view.document.language, updated_at: assignment.updated_at,
-    workflow_revision: assignment.workflow_revision, held: assignment.held, hold_reason: assignment.hold_reason, report_answered: false,
+    workflow_revision: assignment.workflow_revision, held: assignment.held, hold_reason: assignment.hold_reason, report_answered: false, waiting_for_translation_review: false, waiting_for_lead: false,
   };
   // Toolbar identity (spec section 7): short badge, full identity line as its title.
   const roundBadge = roundBadgeOf(roundInfo);

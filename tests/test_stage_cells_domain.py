@@ -1033,6 +1033,16 @@ def test_every_lead_step_has_exactly_one_actionable_cell() -> None:
                 assert s.code == "needs_attention", (s, f)
                 continue
             tone = getattr(c, name).tone
+            # Issue 213: assigning ahead of an open review is on offer, while
+            # the cell still reads "after review" (next step: the review).
+            if (
+                s.code == "assign_annotation"
+                and open_reviews
+                and rule_on
+                and not is_source
+                and status != "accepted"
+            ):
+                continue
             # "rejected" carries the edge of a decision row ("rejected + edge"),
             # only for the row's resolve_rejected (an assign step of the same
             # rejected translation lands there too).

@@ -242,6 +242,8 @@ def derive_steps(facts: StepFacts, *, row: object = None) -> list[Step]:
     accepted = _accepted(facts)
     open_review = facts.open_translation_reviews > 0
     stage = row_stage(facts)
+    # Issue 213: with the review underway the lead assigns ahead; the task waits.
+    may_assign_annotation = _may_annotate(facts) or open_review
     steps: list[Step] = []
     # 1-2: problem report, pause without report.
     if facts.open_report_id is not None:
@@ -346,7 +348,7 @@ def derive_steps(facts: StepFacts, *, row: object = None) -> list[Step]:
     # people whose old-version work waits for the lead count too (VD22).
     if (
         facts.annotate
-        and _may_annotate(facts)
+        and may_assign_annotation
         and not facts.has_final
         and facts.annotation_assignments + facts.pending_old_people < facts.per_text
     ):
