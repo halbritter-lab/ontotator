@@ -1520,8 +1520,16 @@
   line-height: var(--leading-sm);
 }
 .case-status__lock { display: none; color: var(--text-muted); }
+/* The full editor of a consolidation: where to submit, beside "Back to consolidation". */
+.case-consolidation-hint {
+  color: var(--text-muted);
+  font-size: var(--size-sm);
+  line-height: var(--leading-sm);
+  white-space: nowrap;
+}
 @media (max-width: 1023px) {
   .case-mode { display: none; }
+  .case-consolidation-hint { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .case-status__lock { display: inline-flex; }
   /* "Saved" keeps its dot; the word stays for assistive technology. */
   .status-badge__text,
@@ -2374,6 +2382,15 @@ details.case-version-controls > .btn { vertical-align: bottom; }
   color: var(--warning);
   font-weight: var(--weight-strong);
 }
+/* A Select axis with an unconfirmed default: the list and its own "Confirm" (issue 149). */
+.values-section .axis-select-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.values-section .axis-select-row > :first-child { flex: 1 1 auto; min-width: 0; margin: 0; }
+.values-section .axis-select-row > .axis-confirm { flex: none; }
 .values-section .axis-options {
   display: flex;
   flex-wrap: nowrap;

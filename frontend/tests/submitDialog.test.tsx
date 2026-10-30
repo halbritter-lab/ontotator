@@ -5,6 +5,7 @@ import { CaseScreen } from "../src/app/CaseScreen";
 import { SubmitCaseDialog, submitLabel, summaryText, type SubmitCaseDialogProps } from "../src/editor/SubmitCaseDialog";
 import { collectOpenItems } from "../src/editor/openItems";
 import { unconfirmedRows, type UnconfirmedRow } from "../src/editor/unconfirmedValues";
+import { UNCONFIRMED_CONSEQUENCE } from "../src/editor/UnconfirmedValuesSection";
 import { historical } from "./variantFixtures";
 import { workspaceFixture } from "./assignments";
 
@@ -404,6 +405,13 @@ describe("Unconfirmed values section", () => {
     rerender(<SubmitCaseDialog {...dialogProps({ unconfirmed: [], onConfirm })} />);
     fireEvent.click(screen.getByRole("button", { name: "Submit text" }));
     expect(onConfirm).toHaveBeenLastCalledWith(false);
+  });
+
+  it("says what happens to values left unconfirmed, only while they are warnings (#164)", () => {
+    const { rerender } = render(<SubmitCaseDialog {...dialogProps()} />);
+    expect(section().querySelector("[data-unconfirmed-consequence]")!.textContent).toBe(UNCONFIRMED_CONSEQUENCE);
+    rerender(<SubmitCaseDialog {...dialogProps({ requireChosenAxes: true })} />);
+    expect(section().querySelector("[data-unconfirmed-consequence]")).toBeNull();
   });
 
   it("with the project rule the rows block and there is no warnings button", () => {

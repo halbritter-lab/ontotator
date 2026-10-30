@@ -1,4 +1,4 @@
-import{r as i,a as p,j as a}from"./index-V0d5S-9c.js";import{M as m,r as g}from"./index-CLkBN5bW.js";const f=`# Ontotator user handbook
+import{r as i,a as m,j as a,b as d}from"./index-B8rdl3IL.js";import{M as g,r as f}from"./index-DknAkN7m.js";function w(){const[e,t]=i.useState(null);return i.useEffect(()=>{let o=!0;return m.getAbout().then(n=>{o&&t(n)},()=>{}),()=>{o=!1}},[]),e?a.jsxs("p",{className:"help-version",title:e.revision??void 0,children:["Ontotator ",e.version,e.revision&&a.jsxs(a.Fragment,{children:[" · commit ",e.revision.slice(0,7)]})]}):null}const y=`# Ontotator user handbook
 
 This handbook explains how to work with Ontotator in the browser. It is for everyone who uses the app: annotators, translation reviewers, consolidators, leads and system administrators. It describes the version of Ontotator that you open it from. If you run the server, read the [server operations guide (for server operators)](../operations.md) instead.
 
@@ -115,7 +115,7 @@ Words you meet in the app, in alphabetical order. The handbook uses one word per
 - **Bold** text is a label exactly as the app shows it, for example **My tasks**. <!-- handbook: not-a-label -->
 - *Italic* text is an example of a label or message that changes, for example *Publish as v2* or *CASE-1 en*.
 - Keys are written like \`Ctrl+Z\` (macOS: \`Cmd+Z\`). A letter key such as \`j\` means the plain key; \`Shift+K\` means with Shift.
-`,w=`# Administration
+`,k=`# Administration
 
 This chapter is for system administrators. You manage user accounts, ontology releases and projects in the app. Back to the [handbook overview](README.md).
 
@@ -254,7 +254,7 @@ What for: see which releases are on the server and which projects use them.
 
 1. On **Ontologies**, look at **Uploaded files**.
 2. The table lists file name, kind, release, language, checksum and upload time.
-3. **Pinned by** lists the projects that use (*pin*) a file. Click a project key to open its settings; they open on **General**, so switch to the **Ontology** tab. Unused files read **Not pinned**.
+3. **Pinned by** lists the projects that use (*pin*) a file. Click a project key to open its settings on the **Ontology** tab. Unused files read **Not pinned**.
 4. Click **Copy** next to a checksum to copy it.
 5. Click **Refresh inventory** to reload the list.
 
@@ -273,6 +273,8 @@ Before you start: [upload the ontology release](#upload-ontology-releases-and-tr
 5. Click **Create project**.
 6. The project's settings open on **People**. [Add the lead](lead-settings.md#add-a-member) and the other members.
 
+You are now a member of the project with all three roles. The assign dialog for reviews and annotations marks system administrators with an *Administrator* badge so that nobody assigns you work by mistake. If you do not take part in the project, [remove your roles](lead-settings.md#change-a-members-roles) once a lead is added.
+
 ![New project form with key, name, template and ontology file filled in](images/admin-new-project.png)
 
 The project key cannot be changed later. Everything else, such as name, workflow and members, is set in the [project settings](lead-settings.md).
@@ -284,7 +286,7 @@ What for: as system administrator you can manage every project, also without a p
 1. Click **Projects** in the sidebar, or **All projects** in the project switcher.
 2. In the project's row, click **Open** to go to its documents, or **Settings** to change it.
 3. Work as a lead would; see the [lead overview](lead.md).
-`,y=`# Annotator reference
+`,b=`# Annotator reference
 
 This chapter is for annotators and translation reviewers. It explains the editor, how to mark findings, check tool proposals and carried findings, submit a text and review a translation. Back to the [handbook overview](README.md).
 
@@ -402,7 +404,7 @@ What for: record the context of a finding: whether it is present, who has it and
 1. Select the finding. The section **Values** lists each value field, such as the assertion (**Present**, **Absent**, **Uncertain**) or the experiencer (**Patient**, **Family member**, …). Press \`v\` to jump there with the keyboard.
 2. Read the passage in context. "No seizures" is **Absent**; "his mother has seizures" is not the patient.
 3. To change a value, choose another one. Value fields with few values are buttons; others are a dropdown.
-4. Values the project prefills are tagged **Default**. They count as not confirmed until you confirm or change them. If all shown values are right, click **Confirm defaults** or press \`d\`. This confirms every default of this finding. On a button field you can also confirm one default by clicking its highlighted button.
+4. Values the project prefills are tagged **Default**. They count as not confirmed until you confirm or change them. If all shown values are right, click **Confirm defaults** or press \`d\`. This confirms every default of this finding. To confirm one default only, click its highlighted button on a button field, or **Confirm** next to a dropdown field.
 
 Findings with open defaults show **Defaults to confirm** in the list.
 
@@ -417,7 +419,7 @@ What for: link a finding to every place in the text that supports it.
    - **Add mention**, then mark the text: adds another place. Esc cancels.
    - **Add segment** on a mention, then mark the text: adds a second piece to the same mention, for words that are apart.
    - Drag a mention's edge handles, or focus an edge and press \`←\` or \`→\` (\`Ctrl+←\` / \`Ctrl+→\` moves by word): resizes it.
-   - **Move to a new finding**: gives one mention its own finding with the same term and values. The original finding stays selected; the new one is added to the list. Select it there to change it.
+   - **Move to a new finding**: gives one mention its own finding with the same term and values. The new finding is selected, so you can change it right away; modifiers stay with the original finding.
    - **Remove**, then **Yes, remove**: detaches the mention.
 
 You cannot remove the last mention when the project requires a text span. If the project allows findings without a span, enter a reason in the note first.
@@ -443,9 +445,9 @@ What for: correct a finding you made.
 2. Use the action you need:
    - **Change term**, then search a new one: changes the term and keeps the mentions.
    - **Note**: type a comment. It is saved with the finding and the lead can read it.
-   - **Delete finding**, then **Yes, delete**: deletes the finding and all its mentions.
+   - **Delete finding**, then **Yes, delete**: deletes the finding and all its mentions. The message that follows offers **Undo**; \`Ctrl+Z\` (macOS: \`Cmd+Z\`) does the same while you are not typing in a field. Undo puts the finding back with its mentions, values, note and modifiers, and selects it.
 
-Warning: deleting a finding cannot be undone. Check that the right finding is selected first.
+Undo is offered only right after deleting, until the message closes. A restored carried finding may need a new check.
 
 If a term has become obsolete, the panel says so. Change the term or delete the finding.
 
@@ -494,7 +496,7 @@ Tools make mistakes. Check every proposal as if you had marked it yourself: the 
    - **Confirm**: the passage, term and all values are right. Values tagged **Defaulted** were not set by the tool but prefilled; Confirm accepts them as shown, so check them too.
    - **Reject**: the proposal is wrong and nothing should replace it.
    - **Edit & Replace**: the proposal is nearly right. You get an editable copy that replaces it; correct the term, values or text span in the copy.
-   - **Unresolved**: only if you really cannot decide; the other three decisions are the normal case. Write a **Reviewer note** saying why, then click **Save decision**. The proposal is submitted with your note and a reviewer flag. It does not block submitting; the lead (and a consolidator, if there is one) decides it.
+   - **Unresolved**: only if you really cannot decide; the other three decisions are the normal case. Write a **Reviewer note** saying why, then click **Save decision**. The proposal is submitted with your note and a reviewer flag. It does not block submitting; the lead (and a consolidator, if there is one) decides it. Only **Confirm** confirms a proposal's prefilled values: on an unresolved proposal they stay recorded as defaults, and its row shows **Defaults not confirmed**. The result line under **Your own findings** counts such a proposal as unresolved, for example "1 confirmed proposal, 1 unresolved proposal, 1 own finding".
 5. After each decision, the next open proposal is selected. Press \`k\` right after a decision to go back to it.
 6. When all proposals are decided, read the whole text again and add findings the tool missed: mark text that has no proposal, choose the term in **New finding** and set the values, as in [Mark text and add a finding](#mark-text-and-add-a-finding). Your additions appear under **Your own findings**, next to the proposals.
 
@@ -510,14 +512,14 @@ What for: check findings that were carried over from an earlier round, for examp
 
 1. The toolbar names the round, for example *Round 2, continued from Round 1*, or reads **Review carried findings**. The progress line counts checked findings.
 2. Click **Next unchecked** (or press \`n\`) to select the next finding marked **Check needed**.
-3. Read **What to check**: the text span, the values or the note. Carried values are not confirmed.
+3. Read **What to check**: the text span, the values or the note. For a finding without a text span the note is listed as its **Reason for no text span**. Carried values are not confirmed.
 4. Optional: to see the finding as it was, click **Show original evidence**.
 5. If it is right (after any edits), click **Mark as checked** or press \`c\`.
 6. If it does not apply to this text, open **Does not apply…**, give a reason and click **Dismiss**.
 
 If you change a finding after checking it, it needs a new check.
 
-A row **Not on this text** means the finding could not be placed in this text. Select it and choose one: **Mark in text**, **Link to an existing finding**, or **Dismiss with reason…**.
+A row **Not on this text** means the finding could not be placed in this text. Select it and choose one: **Mark in text**, **Link to an existing finding**, or **Dismiss with reason…**. A finding re-created with **Mark in text** keeps the original's term, values and note.
 
 ![A carried finding with What to check and the Mark as checked button](images/annotator-carried-finding.png)
 
@@ -539,7 +541,7 @@ What for: hand your finished work to the lead.
 Before you start: submitting says you checked the whole text for further findings, not only the ones you marked. See [When is a task done?](#when-is-a-task-done).
 
 1. Click **Next open item** to jump to things that still need attention.
-2. Click **Finish & submit text**. While items are open, the button shows how many.
+2. Click **Finish & submit text**. While items are open, the button shows how many. The full editor of a consolidation has no submit button; see [Work in the full editor](consolidator.md#work-in-the-full-editor).
 3. A dialog named after the text, for example *Submit CASE-1 en?*, lists what is still open: **Carried findings to check**, **Findings that need attention**, **Findings after text correction**, **Proposals not decided**. Click **Go to** to fix an item.
 4. When nothing blocks, click **Submit text**. If only warnings are left, the button reads **Submit with** and the number of warnings; see [Confirm values and acknowledge warnings](#confirm-values-and-acknowledge-warnings-in-the-submit-dialog) first.
 5. The next open task opens, or **My tasks** if none is left. To see what you sent, click **View result** in the message.
@@ -555,7 +557,7 @@ Check each value before you confirm it. **Confirm as shown** says "I checked thi
 1. The group **Values not chosen yet** lists findings with prefilled values.
 2. Click **Go to** to check a finding in the text and change a value. If the shown values are right, click **Confirm as shown** on the row, or, with more than one row, **Confirm all as shown**.
 3. The group **Modifier warnings** lists, for example, a modifier used as a finding or two severities on one finding. Click **Go to** to fix one.
-4. Click the submit button. Warnings you leave are submitted as they are.
+4. Click the submit button. Warnings you leave are submitted as they are; the group **Values not chosen yet** says so in one line.
 
 If the project requires chosen values, unconfirmed values block submitting instead of warning.
 
@@ -577,15 +579,17 @@ What for: change your work after you submitted it, or start over. A submission i
 1. Open the task, then open **More** and choose **Work rounds**.
 2. The table **Rounds** lists each round with its state and submission. **You are here** marks the current one; **Open** opens another.
 3. Under **Start a new round**, choose one:
-   - To continue from your work: choose the submission under **Continue from** and click **Continue from this submission**. Your findings are carried into the new round, and each must be checked again ([Review carried findings](#review-carried-findings)).
+   - To continue from your work: choose the submission under **Continue from**, read what the dialog says will happen, and click **Continue from this submission**. Your findings are carried into the new round, and each must be checked again ([Review carried findings](#review-carried-findings)). You can do this yourself; you do not need the lead.
    - To start over: click **Start empty round**. The new round has no findings.
 4. Click **Close**, make your changes and [submit the text](#submit-the-text) again.
 
 What happens to your earlier work:
 
 - The earlier round stays in the history and is marked *Replaced by Round 2* (or the next number). Starting a round does not change the final result.
-- Your task shows **Open** in **My tasks** again, with **Continue**. It no longer counts as submitted, so you must submit the new round.
+- Your earlier submission no longer counts as submitted. Your task shows **Open** in **My tasks** again, with **Continue**, and the number after **My tasks** in the sidebar counts it again.
+- The lead sees your task as not submitted, and a new consolidation cannot start from the replaced submission. The lead can still read it.
 - If the lead had already accepted your earlier submission as the final result, the lead is asked to review that choice.
+- You must [submit](#submit-the-text) the new round to hand in your work again.
 
 ## Report a text problem
 
@@ -605,7 +609,7 @@ What for: continue work after a report, or take a report back.
 
 1. Open **More**, then **Text problems**. Your report card shows its state and your task's state.
 2. Choose one:
-   - To continue: click **Resume my task…**, fill in **Why can you continue?** and click **Resume my task**. The report stays open for the lead.
+   - To continue: click **Resume my task…**, fill in **Why can you continue?** and click **Resume my task**. The card confirms it, for example *Resumed. The report stays open.*, and the dialog shows *Your task: Active*. The report stays open for the lead.
    - To take the report back: click **Withdraw report…**, fill in **Why are you withdrawing it?** and click **Withdraw report**. Your task is no longer paused by this report.
 
 When the lead answers, the task shows a banner with **Open the answer**, and **My tasks** shows **Answer to your report**. If a project lead paused the task, only a project lead can release the pause.
@@ -657,7 +661,7 @@ If the source text was updated, **Source updates to review** appears. Open it, c
 
 ## Keyboard shortcuts
 
-What for: work without the mouse. Shortcuts are off while you type in a field or when a dialog is open. Letter keys work in lower and upper case alike. **Keyboard shortcuts (?)** in **More**, or \`?\`, lists the shortcuts of the current screen. Many buttons also show their key next to the label.
+What for: work without the mouse. Shortcuts are off while you type in a field or when a dialog is open. Letter keys work in lower and upper case alike. **Keyboard shortcuts (?)** in **More**, or \`?\`, lists the shortcuts of the current screen, grouped for example under *Finding*, *Decisions* and *Carried findings*. A key that needs something first, such as a selected finding or proposal, is listed with *(not available right now)*. Many buttons also show their key next to the label.
 
 | Key | Action |
 |---|---|
@@ -673,12 +677,12 @@ What for: work without the mouse. Shortcuts are off while you type in a field or
 | \`0\` | Reset the decision to open |
 | \`n\` / \`Shift+N\` | Next / previous unchecked carried finding |
 | \`c\` | Mark carried finding as checked |
-| \`Ctrl+Z\` (macOS: \`Cmd+Z\`) | Undo removing a modifier |
+| \`Ctrl+Z\` (macOS: \`Cmd+Z\`) | Undo deleting a finding or removing a modifier |
 | \`Alt+←\` / \`Alt+→\` | Previous / next text |
 | \`Alt+P\` | Switch project |
 
 In a translation review: \`1\` to \`4\` choose a decision (outside the text), \`Ctrl+Enter\` submits (with a confirmation), \`Alt+M\` shows the matching paragraph.
-`,k=`# Consolidator
+`,v=`# Consolidator
 
 This chapter is for consolidators. A consolidation merges two or more submissions on one text into one result: findings that everyone agrees on are taken over, and you decide the rest. Back to the [handbook overview](README.md).
 
@@ -732,6 +736,8 @@ What for: start or continue your consolidation work.
 2. Click **Start**, **Continue** or **View**.
 3. The consolidation screen opens. Its heading reads, for example, *Consolidate CASE-1 en v1*. The path above it shows how many groups are still open.
 
+If the lead gave a reason when starting the consolidation, it shows above the groups, for example *Reason from the lead: Term and assertion differ*, and under the task in **My tasks**.
+
 The header holds **Open in full editor**, **Report a text problem** and, if the project has guidelines, a button such as *Guidelines v2*. **More…** appears once you decided a group.
 
 The screen is read-only after you submitted, when the task is no longer yours, when it is paused, or when a submission used here was withdrawn. A banner tells you which.
@@ -754,7 +760,7 @@ What for: decide a group by choosing, per row, the value that is right.
 1. Open a group. The table has one column per person. A robot icon marks findings from a tool proposal.
 2. The rows are **Term**, one row per value field (for example the assertion), **Text**, **Modifiers** (only if someone used modifiers) and **Note**. Rows where people disagree come first and are highlighted; *(all agree)* marks rows that need no choice. You can mix: take the term from one person and a value from another.
 3. In each highlighted row, click the ✓ next to the value you want. Its button is named after the value, for example *Take Hypotonia … for Term*.
-4. Read the result line below the table. It starts with "Result:" and lists what is still not chosen, for example *text not chosen yet*. **Not taken:** lists other people's terms that are not in the result. Until you choose in the **Term** row, the line shows the first person's term as a preview.
+4. Read the result line below the table. It starts with "Result:" and lists what is still not chosen, for example *Term not chosen yet* or *text not chosen yet*. Once the term is chosen, **Not taken:** lists other people's terms that are not in the result.
 5. Optional: click **+ note** to write a **Note for the lead**, and tick **Guidelines unclear here** if the guidelines did not settle the case.
 6. Click **Keep**. The group reads **decided**, the message **Decision saved** appears with **Undo**, and the next open group opens.
 
@@ -765,7 +771,7 @@ What for: decide a group by choosing, per row, the value that is right.
 Special cases:
 
 - Not everyone marked it. The card names who did, for example *Ana Weber, Luc Martin marked this. Tom Reis has nothing here.* The button reads **Keep the finding**, or *Keep Luc Martin's finding* for one person. Keep it only if the text supports it.
-- Different passages. If people marked overlapping but different passages, the group is open without a highlighted row. The **Text** row shows the passage that comes with the chosen finding (*overlapping, comes with the chosen finding*). Compare the underlines in the text. If that passage is right, click **Keep**; to use another passage, [work in the full editor](#work-in-the-full-editor).
+- Different passages. If people marked overlapping but different passages, the group is open without a highlighted row. The **Text** row shows each person's passage; the ✓ of the passage that goes into the result is pressed, and the result line names it, for example *text "Absent reflexes"*. Compare the underlines in the text. To use another person's passage, click its ✓; its note comes with it. Then click **Keep**. For a passage nobody marked, [work in the full editor](#work-in-the-full-editor).
 - Modifiers. Each modifier has its own ✓, so you can combine modifiers that different people chose. Modifiers of one kind, such as two severities, exclude each other. If someone linked a modifier to a different finding, the card says so, for example *Ben Roth linked "Severe" (Severe) to Hypotonia.* Check which finding the text means.
 - Same term twice. If the same term is already in the result from another group, the card warns you. **Keep** then adds a second finding with that term.
 
@@ -804,7 +810,8 @@ What for: add a finding that no submission has.
 
 1. Select the passage in the text. Or click **Add finding**, type the passage into **Passage from the text** (choose the **Occurrence** if it appears more than once) and click **Continue**.
 2. Search and pick the term.
-3. A message confirms the new finding. It is listed under **Added by you**.
+3. A message confirms the new finding. It is listed under **Added by you** with its values, which start as the project's defaults (for example *Present, Patient, Current*). Its value fields open right away: change what the text says, for example **Assertion** to *Absent* for a negated finding, and click **Save values**. Click **Cancel** to keep the defaults.
+4. To change the values later, click **Edit values…** next to the added finding.
 
 If the passage is not found, type it exactly as written, or select it in the text.
 
@@ -828,7 +835,7 @@ Before you start: after you submit, you cannot change the consolidation.
 
 1. When no group is open, the progress card reads **Ready to submit**.
 2. Click **Submit consolidation**.
-3. The dialog **Submit consolidation?** shows how many groups and findings the result has, and how many are not in the result.
+3. The dialog **Submit consolidation?** says who accepts the result (*The lead then accepts the result.*; if you are the lead yourself: *Then accept the result in Documents.*) and shows how many groups and findings the result has, and how many are not in the result.
 4. Click **Submit**.
 5. If there are warnings (values filled in by default, a modifier used as a finding, two severities), the dialog now lists them under **Check before you submit**, and the button reads **Submit with** and the number of warnings. Click **Back** to fix them, or submit with warnings only if you checked that the values are right.
 6. The screen confirms: *Consolidation submitted. The lead then accepts the result.* (If you are the lead yourself: *Consolidation submitted. Accept the result in Documents.*) Open your next task or click **Back to my tasks**.
@@ -844,10 +851,10 @@ What happens next: the lead reads the result with your notes and flags, and acce
 What for: change text spans or add findings that the comparison table cannot express.
 
 1. Click **Open in full editor**.
-2. The editor shows the mode **Consolidate** and the list **Selected submitted findings** with each finding's author. *Replaced by* on a submitted finding shows which result finding took its place. The editor works as described in the [annotator reference](annotator.md).
-3. Click **Back to consolidation** to return.
+2. The editor shows the mode **Consolidate** and the list **Selected submitted findings** with each finding's author. *Replaced by* on a submitted finding shows which result finding took its place; point at it for a short explanation, click it to jump to that finding. The editor works as described in the [annotator reference](annotator.md), except that it has no submit button.
+3. Click **Back to consolidation** at the end of the toolbar to return. Next to it the editor says *Submit on the consolidation screen.*
 
-Groups you changed here are tagged **edited in editor** on the consolidation screen. **Finish & submit text** in the full editor submits the whole consolidation, like **Submit consolidation**; it is refused while groups are open. Submitting from the consolidation screen shows you the summary first.
+Groups you changed here are tagged **edited in editor** on the consolidation screen. You submit the consolidation only there, with **Submit consolidation** (see [Finish a consolidation](#finish-a-consolidation)).
 
 ## Keyboard shortcuts
 
@@ -860,7 +867,7 @@ Groups you changed here are tagged **edited in editor** on the consolidation scr
 ## Read others' work in the text view
 
 Consolidators can open the text view of a text they consolidate to read each person's findings side by side. See [Read a text and other people's work in the text view](lead-documents.md#read-a-text-and-other-peoples-work-in-the-text-view).
-`,b=`# Frequently asked questions
+`,x=`# Frequently asked questions
 
 Short answers to problems people often meet. Each answer links to the chapter with the full steps.
 
@@ -988,6 +995,10 @@ In projects where the consolidator of a text may not be one of its annotators, y
 
 An import runs in the background; reload **Documents** when it is done. If the project plan for new imports is **Plan nothing; I plan texts on Documents**, the new texts show as *Not decided* until you plan them. See [Upload texts](lead-documents.md#upload-texts).
 
+### The upload says "The file name is not a valid text ID."
+
+For plain text, each file name without \`.txt\` becomes the text ID. Rename the file: letters, digits, dots, hyphens and underscores, up to 128 characters, starting with a letter or digit. See [Prepare files for upload](lead-documents.md#prepare-files-for-upload).
+
 ### I cannot change the ontology release or the task profile
 
 The ontology release can be chosen freely only until the first work is submitted; after that, use **Move to another release**. The task profile can only be replaced before work starts. See [Move a started project to a newer release](lead-settings.md#move-a-started-project-to-a-newer-release).
@@ -1000,13 +1011,13 @@ The text is not in the work plan. Plan it first. See [Add a text to the plan](le
 
 Closing a report does not always release the pause. The row shows **Resume task…**; click it and release the pause. See [Decide on a problem report](lead-results.md#decide-on-a-problem-report).
 
-### I chose myself as consolidator, but "Open consolidation" shows no actions
+### I chose myself as consolidator: where do I work?
 
-**Open consolidation** in the text card is the read-only view. Open your task with **Open my task** in the row on **Documents**, or from **My tasks**. See [Start a consolidation](lead-results.md#start-a-consolidation).
+While your consolidation runs, **Open consolidation** in the text card opens your task, as does **Open my task** in the row on **Documents** or the row in **My tasks**. After you submitted, **Open consolidation** shows the read-only result. See [Start a consolidation](lead-results.md#start-a-consolidation).
 
 ### The consolidator list does not show a person
 
-Only members with the **Consolidator** role are listed. Give the role first. See [Change a member's roles](lead-settings.md#change-a-members-roles).
+Only you and the members with the **Consolidator** role are listed; the hint under the list says so and links **Settings → People**. Give the role first. See [Change a member's roles](lead-settings.md#change-a-members-roles).
 
 ### The export asks me to tick a box
 
@@ -1037,7 +1048,7 @@ The file could not be read, is too large, or is an incomplete HPO release. Read 
 ### The administrator lost the password
 
 This is fixed on the server, not in the app. See [Lost admin password](../operations.md#lost-admin-password) in the server operations guide.
-`,v=`# Your first task, start to finish
+`,T=`# Your first task, start to finish
 
 This chapter takes you through one annotation task, from your first login to a submitted text. Do it once in this order; afterwards, look things up in the [annotator reference](annotator.md). Back to the [handbook overview](README.md).
 
@@ -1108,8 +1119,8 @@ Details: [Review tool proposals](annotator.md#review-tool-proposals).
 Before you start: submitting means you checked the whole text, not only the findings you marked.
 
 1. Click **Next open item** until nothing is left. It takes you to every proposal, value or finding that still needs you.
-2. Click **Finish & submit text**.
-3. The dialog lists what is still open, with **Go to** for each item. Values you have not confirmed are under **Values not chosen yet**: confirm them only if you checked that they are right.
+2. Click **Finish & submit text**. (A consolidation is submitted on its own screen; see [Consolidator](consolidator.md).)
+3. The dialog lists what is still open, with **Go to** for each item. Values you have not confirmed are under **Values not chosen yet**: confirm them only if you checked that they are right. A value you leave is submitted as shown but recorded as defaulted, not chosen; the lead and the export see this.
 4. Click **Submit text**.
 
 ![The submit dialog with the Values not chosen yet group](images/annotator-submit-dialog.png)
@@ -1130,7 +1141,7 @@ If something is wrong with the text itself (cut off, wrong patient, unreadable):
 ## If you were given a translation review
 
 A *Translation review* task shows the source and the translation side by side. You correct the translation if needed and choose a decision. See [Review a translation](annotator.md#review-a-translation).
-`,x=`# Getting started
+`,C=`# Getting started
 
 This chapter is for everyone. It shows how to log in, find your tasks and keep your profile up to date. Back to the [handbook overview](README.md).
 
@@ -1192,9 +1203,10 @@ The header is the same on every page:
 - **Ontotator** on the left takes you to the start page.
 - The breadcrumb shows where you are, for example **My tasks** or **Documents**.
 - On the right are your display name, your pseudonym, your roles and **Log out**.
-- **Handbook** in the header opens this handbook inside the app. On the Documents, consolidation and translation review screens, **Help** opens the handbook section about that screen; in the editor it is **More** > **Help for this screen**.
+- **Handbook** in the header opens this handbook inside the app. On the Documents, consolidation and translation review screens, **Help** opens the handbook section about that screen; in the editor it is **More** > **Help for this screen**. Click a screenshot in the handbook to open it at full size in a new tab.
+- Below the chapter list, the handbook shows the app's version and commit, for example \`Ontotator 0.3.0 · commit cc65cea\`. Quote it when you report a problem.
 
-The sidebar lists **My tasks**, **Projects** and **Profile**. The number after **My tasks** counts your open tasks. Leads also see their project's pages (**Documents**, **Progress**, **Settings**, **Export**). System administrators also see **Administration** with **Users**, **Ontologies** and **New project** (see [Administration](admin.md)). In the editor, the sidebar folds into **Sections**; click it to open it.
+The sidebar lists **My tasks**, **Projects** and **Profile**. The number after **My tasks** counts your open tasks, the same tasks as the **To do** tab; it updates as soon as you submit a text. Leads also see their project's pages (**Documents**, **Progress**, **Settings**, **Export**). System administrators also see **Administration** with **Users**, **Ontologies** and **New project** (see [Administration](admin.md)). In the editor, the sidebar folds into **Sections**; click it to open it.
 
 ## Switch project
 
@@ -1219,6 +1231,7 @@ What for: find the texts you have to work on.
 Each row is one task. The **Task** column says what to do, for example **Annotation, from scratch**, **Annotation, from proposals**, **Consolidation** or **Translation review**. The **Status** column shows **Open**, **In progress**, **Submitted** or **Reopened**.
 
 - **Reopened**: the lead reopened your submission. Click the badge to read why.
+- A **Consolidation** task shows the lead's reason under the task, for example *Reason from the lead: Term and assertion differ*, if the lead gave one.
 - **Paused**: the task waits for a decision on a problem report. **Answer to your report** means the lead has replied.
 
 If the project has guidelines, a link such as *Project guidelines v2* appears above the table. Read them before you start: they say what to mark and how.
@@ -1251,7 +1264,7 @@ What for: check the annotation rules of the project.
 2. Open **More** in the toolbar and choose the guidelines, for example *Guidelines v2*. *(new)* after it means the guidelines changed since you last read them. In a translation review or consolidation, the guidelines are a button in the header instead, with a **New** badge.
 3. The guidelines open beside the text. Click **All versions** to see older versions, or **Close** to hide them.
 
-The first time you open a task in a project with guidelines, a notice asks you to read them. Click the read button in the notice, for example *Read guidelines v2*.
+The first time you open a task in a project with guidelines, a notice asks you to read them. Click the read button in the notice, for example *Read guidelines v2*. The notice also says where you find them later: under **More** › *Guidelines* in the editor, or the guidelines button in the header of a translation review or consolidation.
 
 The guidelines are your project's rules: what counts as a finding, how much text to mark, how to handle negation or family history. The handbook explains the app, not these rules. If the project has no guidelines or they do not answer your question, ask your lead.
 
@@ -1291,7 +1304,7 @@ What for: replace your password with a new one.
 6. Click **Change password**. You see **Password changed. Other sessions were logged out.**
 
 If you forgot your password, ask an administrator for a reset code and follow [Set your password with a setup or reset code](#set-your-password-with-a-setup-or-reset-code).
-`,T=`# Lead: texts, work plans and progress
+`,A=`# Lead: texts, work plans and progress
 
 This chapter is for project leads. It covers the **Documents** page: uploading texts, the text card, planning and assigning work, and following progress. Back to the [lead overview](lead.md).
 
@@ -1338,7 +1351,7 @@ Before you start: [prepare the files](#prepare-files-for-upload). Check the [lan
 2. Choose the **Format**. For plain text, also choose the **Upload language**.
 3. Click **Choose files…** and select your files.
 4. Click **Check**. Nothing is imported yet; the dialog shows *Checking 2 files …*.
-5. Read the preview: the number of cases, proposals and texts already in the project, and any **Notes**.
+5. Read the preview: the number of cases, proposals and texts already in the project, and any **Notes**. For plain text, the first note shows which text ID each file name became.
 6. Check the **Work plan**: for each language, whether it gets a **Translation review** and an annotation. Click **Adjust per case…** for exceptions.
 7. Optional: if translations are not marked as reviewed and you want them annotated without review, tick **These translations were reviewed outside Ontotator — accept them as they are** and enter a **Reason**.
 8. Click the import button, for example *Import 20 cases*.
@@ -1378,9 +1391,9 @@ The **Documents** page lists every text of the project and what it needs next. O
 What for: work through texts by what they need.
 
 1. On **Documents**, choose a tab: **Needs your decision**, **To assign**, **In progress**, **Done** or **All**.
-2. Click **Refresh** to update the counts.
+2. Click **Refresh** to reload the table and the counts.
 
-A tab keeps your filters and search.
+A tab keeps your filters and search. A text that leaves the tab while you work on it, for example one you just assigned under **To assign**, stays in the table with a *Changed: …* or *Resolved* badge, so the list does not jump. **Refresh** or another tab removes such texts.
 
 ### Do a text's next step
 
@@ -1437,6 +1450,7 @@ In the card:
 - **Open text** opens the [text view](#read-a-text-and-other-peoples-work-in-the-text-view).
 - **Previous text** and **Next text** walk through the table (keys \`K\` and \`J\`).
 - **Other languages** switches to another language of the same case.
+- In **Finalization**, **Open consolidation** opens your own running consolidation as your task; a submitted one opens read-only.
 - ✕ or Esc closes the card.
 
 ### Read the history and details of a text
@@ -1544,7 +1558,7 @@ What for: give translation reviews or annotations to people.
 
 1. Select the texts, then click the assign button in the selection bar, for example **Assign annotation…**.
 2. Check the **Task**, for example a translation review in one language.
-3. In the table of people (**Person**, **Reads**, **Open tasks**), pick the reviewer, or tick everyone who should annotate. Each ticked person gets every selected text.
+3. In the table of people (**Person**, **Reads**, **Open tasks**), pick the reviewer, or tick everyone who should annotate. Each ticked person gets every selected text. *Administrator* marks a system administrator; the administrator who created the project is a member with all roles, so leave them unticked unless they take part.
 4. Read the summary below the table, for example *Ana Weber gets 3 translation reviews (de).*
 5. Click the assign button, for example *Assign 20*.
 
@@ -1597,7 +1611,7 @@ What for: see the whole project at a glance.
 ![The Progress page with the stage cards and the People table](images/lead-progress.png)
 
 Click **Refresh progress** to update.
-`,C=`# Lead: results, decisions and export
+`,S=`# Lead: results, decisions and export
 
 This chapter is for project leads. It covers choosing the final result of each text, consolidations, the decisions on translations, text changes and problem reports, and the export. Back to the [lead overview](lead.md).
 
@@ -1621,7 +1635,7 @@ What for: choose the final result of a text.
 4. If they differ, the card shows the agreement, for example *Agreement: 5 of 9 findings match, 1 differs in context only*. **How is this counted?** explains the numbers. Open a submission with **Open in editor** to read it.
 5. Warning: the next action saves at once, without a confirmation. Click **Use as final** in the row of the submission you want. Or [start a consolidation](#start-a-consolidation) instead.
 
-After saving, the card moves on to the next text that needs a decision. To undo, [change the final result](#change-a-final-result).
+After saving, the card moves on to the next text that needs a decision. The decided row stays in the tab with a *Resolved* badge until you click **Refresh** or change the tab. To undo, [change the final result](#change-a-final-result).
 
 ![The Finalization part comparing two submissions, with the agreement line and Use as final](images/lead-compare-results.png)
 
@@ -1645,9 +1659,9 @@ Before you start: the text needs at least two submissions. The consolidator must
 
 1. In the text card, open **Finalization** and click **Consolidate…**. The form **Consolidate submitted results** opens with the compared submissions already ticked.
 2. Under **Submissions to merge**, check the ticked submissions (at least two).
-3. Under **Consolidator**, choose a person. The list starts with **Choose a consolidator**, then you (*You (Mia Lead)*), then every member with the Consolidator role. If the project rule forbids it, people who annotated this text are shown but cannot be chosen (*— Ana Weber annotated this text*).
-4. If the person's profile lacks the text's language, tick the box *Assign this consolidator despite missing en in their profile*.
-5. Optional: enter **Consolidation reason (optional)**. The reason is kept in the history; the consolidator does not see it.
+3. Under **Consolidator**, choose a person. The list starts with **Choose a consolidator**, then you (*You (Mia Lead)*), then every member with the Consolidator role; the hint under the list links **Settings → People**, where you give the role to someone who is missing. If the project rule forbids it, people who annotated this text are shown but cannot be chosen (*— Ana Weber annotated this text*).
+4. If the person's profile lacks the text's language, tick the box *Assign this consolidator despite missing en in their profile*, right under the list.
+5. Optional: enter **Consolidation reason (optional)**. The consolidator sees it in **My tasks** and above the groups; it is also kept in the history.
 6. Click **Start consolidation**.
 
 If the button stays inactive, the form says why: *Select at least two submissions.*, *Choose a consolidator.*, *Confirm the consolidator despite missing en.*, or someone already has a consolidation in progress on this text. If that is you, the button reads **Continue consolidation**.
@@ -1655,7 +1669,7 @@ If the button stays inactive, the form says why: *Select at least two submission
 After the start:
 
 - If you chose someone else: Ontotator sends no e-mail. Tell the person that a consolidation is waiting in their **My tasks**.
-- If you chose yourself: you get the Consolidator role for this project. Click **Open my consolidation task** in the message, or **Open my task** in the text's row on **Documents**. **Open consolidation** in the text card opens the read-only view, not your task.
+- If you chose yourself: you get the Consolidator role for this project. Click **Open consolidation** in the text card, **Open my consolidation task** in the message, or **Open my task** in the text's row on **Documents**. Each opens your task, where you decide and submit.
 
 While the consolidation runs, the card shows the consolidator and how many groups are still open. What the consolidator does is in the [consolidator chapter](consolidator.md).
 
@@ -1665,7 +1679,7 @@ What for: see how a consolidation result came about before you accept it.
 
 1. In the text card, click **Open consolidation**. Or, if the card shows flagged findings ("guidelines unclear"), click **Open** next to one to go straight to that group.
 2. The heading reads, for example, *Consolidation of CASE-1 en v1*. The banner says who submitted it. The view is read-only.
-3. In decided groups, the chosen value of each conflicting row is tagged **kept**. The consolidator's notes show as *Note: …*, and flagged groups show **Flagged: guidelines unclear**. Added findings say who added them.
+3. In decided groups, the chosen value of each conflicting row is tagged **kept**, including the chosen passage and modifiers. The consolidator's notes show as *Note: …*, and flagged groups show **Flagged: guidelines unclear**. Added findings say who added them and list their values.
 4. Click **Back to documents**.
 
 ### Accept a consolidation
@@ -1803,7 +1817,7 @@ What for: download raw material for analysis. People appear as pseudonyms.
 3. Click **Create**, then **Download** when it is ready.
 
 How to analyse these files is described in the [scientific workflow guide](../scientific-workflow.md).
-`,A=`# Lead: project settings
+`,O=`# Lead: project settings
 
 This chapter is for project leads. It covers every tab under **Settings**: the project name and languages, the ontology, the submission rules, the workflow, the people and the guidelines. Back to the [lead overview](lead.md).
 
@@ -1975,6 +1989,8 @@ What for: give or take away a role.
 
 A project needs at least one lead: **Add another project lead before removing the last lead.**
 
+The system administrator who created the project is a member with all three roles. If they do not annotate or consolidate, take away those roles so that they no longer appear in the assign lists.
+
 ## Remove a member
 
 What for: take someone off the project.
@@ -2029,7 +2045,7 @@ Warning: the text of the withdrawn version is deleted for good. The version numb
 2. In the version's row, click **More…**, then the withdraw item, for example *Withdraw v2…*.
 3. Optional: enter **Reason (optional)**. Do not repeat confidential content.
 4. Confirm, for example with *Withdraw v2*.
-`,S=`# Lead overview
+`,j=`# Lead overview
 
 This chapter is for project leads. A lead sets up the project, uploads texts, plans and assigns the work, accepts the results and exports them. Back to the [handbook overview](README.md).
 
@@ -2057,4 +2073,4 @@ The lead's tasks are in three chapters:
 10. Export the final results: [Export final results](lead-results.md#export-final-results).
 
 Try it with the demo project: the [demo project guide](../../examples/demo-project/README.md) walks through every step with invented clinical letters, tool proposals, translations and guidelines.
-`,O="/assets/admin-new-project-Cir0O66s.png",j="/assets/admin-setup-code-C_NzEJeU.png",I="/assets/annotator-carried-finding-yADspK5V.png",R="/assets/annotator-editor-dqHteLqT.png",W="/assets/annotator-finding-values-DF2d7KaZ.png",_="/assets/annotator-new-finding-Ck1Vt4sY.png",D="/assets/annotator-proposal-review-BfFE3fNQ.png",P="/assets/annotator-submit-dialog-DEybG3Zm.png",E="/assets/annotator-translation-review-DA3-4k_Z.png",M="/assets/consolidator-group-table-Dp7hujX8.png",N="/assets/consolidator-submit-dialog-DJEkTQ6t.png",U="/assets/getting-started-my-tasks-ezmcCup8.png",Y="/assets/getting-started-set-password-CC57Fe71.png",F="/assets/lead-assign-9KxFl6dY.png",L="/assets/lead-compare-results-DC6HkQJ3.png",B="/assets/lead-documents-CjycjdEv.png",H="/assets/lead-export-KFM5Mz1P.png",G="/assets/lead-move-release-check-BHRNaFox.png",q="/assets/lead-problem-report-C6J_XPtm.png",z="/assets/lead-progress-B0_lg4T2.png",K="/assets/lead-text-card-DRw6CK7x.png",V="/assets/lead-upload-preview-64cXvoTU.png",Z="/assets/lead-work-plan-Dau0Rzps.png",$="/assets/workflow-Dii9V6xB.png",Q="https://github.com/halbritter-lab/ontotator/blob/main",h="https://handbook.invalid/docs/handbook/",J=Object.assign({"../../../docs/handbook/README.md":f,"../../../docs/handbook/admin.md":w,"../../../docs/handbook/annotator.md":y,"../../../docs/handbook/consolidator.md":k,"../../../docs/handbook/faq.md":b,"../../../docs/handbook/first-task.md":v,"../../../docs/handbook/getting-started.md":x,"../../../docs/handbook/lead-documents.md":T,"../../../docs/handbook/lead-results.md":C,"../../../docs/handbook/lead-settings.md":A,"../../../docs/handbook/lead.md":S}),X=Object.assign({"../../../docs/handbook/images/admin-new-project.png":O,"../../../docs/handbook/images/admin-setup-code.png":j,"../../../docs/handbook/images/annotator-carried-finding.png":I,"../../../docs/handbook/images/annotator-editor.png":R,"../../../docs/handbook/images/annotator-finding-values.png":W,"../../../docs/handbook/images/annotator-new-finding.png":_,"../../../docs/handbook/images/annotator-proposal-review.png":D,"../../../docs/handbook/images/annotator-submit-dialog.png":P,"../../../docs/handbook/images/annotator-translation-review.png":E,"../../../docs/handbook/images/consolidator-group-table.png":M,"../../../docs/handbook/images/consolidator-submit-dialog.png":N,"../../../docs/handbook/images/getting-started-my-tasks.png":U,"../../../docs/handbook/images/getting-started-set-password.png":Y,"../../../docs/handbook/images/lead-assign.png":F,"../../../docs/handbook/images/lead-compare-results.png":L,"../../../docs/handbook/images/lead-documents.png":B,"../../../docs/handbook/images/lead-export.png":H,"../../../docs/handbook/images/lead-move-release-check.png":G,"../../../docs/handbook/images/lead-problem-report.png":q,"../../../docs/handbook/images/lead-progress.png":z,"../../../docs/handbook/images/lead-text-card.png":K,"../../../docs/handbook/images/lead-upload-preview.png":V,"../../../docs/handbook/images/lead-work-plan.png":Z,"../../../docs/handbook/images/workflow.png":$}),l=e=>e.slice(e.lastIndexOf("/")+1),r=Object.fromEntries(Object.entries(J).map(([e,t])=>[l(e).replace(/\.md$/,""),t])),ee=Object.fromEntries(Object.entries(X).map(([e,t])=>[`images/${l(e)}`,t]));function te(e){var t;return((t=/^# +(.+)$/m.exec(r[e]??""))==null?void 0:t[1].trim())??e}function ne(){const e=[...(r.README??"").matchAll(/\]\(([A-Za-z0-9_-]+)\.md[)#]/g)].map(t=>t[1]);return[...new Set(["README",...e,...Object.keys(r).sort()])].filter(t=>t in r)}function oe(e){return e.toLowerCase().replace(/[^\p{L}\p{M}\p{N}\p{Pc} -]/gu,"").replace(/ /g,"-")}function ae(){const e=new Map;return t=>{const o=oe(t);let n=o;for(;e.has(n);){const s=e.get(o)+1;e.set(o,s),n=`${o}-${s}`}return e.set(n,0),n}}function se(e,t){var d;if(/^[a-z][a-z0-9+.-]*:/i.test(e))return{kind:"external",href:e};const o=new URL(e,`${h}${t}.md`),n=decodeURIComponent(o.hash.slice(1)),s=(d=/^\/docs\/handbook\/([A-Za-z0-9_-]+)\.md$/.exec(o.pathname))==null?void 0:d[1];return s&&s in r?s===t&&n?{kind:"anchor",id:n}:{kind:"chapter",href:i({name:"help",chapter:s,...n?{section:n}:{}})}:{kind:"external",href:`${Q}${o.pathname}${o.hash}`}}function re(e,t){if(/^[a-z][a-z0-9+.-]*:/i.test(e))return null;const o=new URL(e,`${h}${t}.md`).pathname.replace(/^\/docs\/handbook\//,"");return ee[o]??null}const c=e=>e.type==="text"?e.value:"children"in e?e.children.map(c).join(""):"";function ie(){return e=>{const t=ae(),o=n=>n.children.forEach(s=>{s.type==="element"&&(/^h[1-6]$/.test(s.tagName)?s.properties.id=t(c(s)):o(s))});o(e)}}function u(e){var t;(t=document.getElementById(e))==null||t.scrollIntoView()}const de=e=>e.button===0&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey&&!e.altKey;function he(e){return{a:({href:t,children:o})=>{if(!t)return a.jsx(a.Fragment,{children:o});const n=se(t,e);return n.kind==="external"?a.jsx("a",{href:n.href,target:"_blank",rel:"noopener noreferrer",children:o}):n.kind==="chapter"?a.jsx("a",{href:n.href,children:o}):a.jsx("a",{href:i({name:"help",chapter:e,section:n.id}),onClick:s=>{de(s)&&(s.preventDefault(),u(n.id))},children:o})},img:({src:t,alt:o})=>{const n=t?re(t,e):null;return n?a.jsx("img",{className:"help-image",src:n,alt:o??"",loading:"lazy"}):a.jsx("span",{className:"guideline-image-text",children:o?`Image: ${o}`:"Image"})},table:({children:t})=>a.jsx("div",{className:"guideline-table-scroll",tabIndex:0,role:"region","aria-label":"Table",children:a.jsx("table",{children:t})})}}function ue({chapter:e="README",section:t}){const o=r[e];return p.useEffect(()=>{var n,s;t?u(t):(s=(n=document.getElementById("main"))==null?void 0:n.scrollTo)==null||s.call(n,0,0)},[e,t]),a.jsxs("div",{className:"help-page",children:[a.jsx("nav",{className:"help-chapters","aria-label":"Handbook chapters",children:a.jsx("ul",{children:ne().map(n=>a.jsx("li",{children:a.jsx("a",{href:i({name:"help",chapter:n}),"aria-current":n===e?"page":void 0,children:te(n)})},n))})}),a.jsx("article",{className:"guideline-document help-document",children:o===void 0?a.jsxs(a.Fragment,{children:[a.jsx("h1",{children:"Chapter not found"}),a.jsxs("p",{children:["This handbook has no chapter “",e,"”. Pick one from the list."]})]}):a.jsx("div",{className:"guideline-markdown",children:a.jsx(m,{remarkPlugins:[g],rehypePlugins:[ie],skipHtml:!0,components:he(e),children:o})})})]})}export{ue as default};
+`,I="/assets/admin-new-project-Cir0O66s.png",R="/assets/admin-setup-code-C_NzEJeU.png",W="/assets/annotator-carried-finding-yADspK5V.png",_="/assets/annotator-editor-dqHteLqT.png",D="/assets/annotator-finding-values-DF2d7KaZ.png",P="/assets/annotator-new-finding-Ck1Vt4sY.png",E="/assets/annotator-proposal-review-BfFE3fNQ.png",M="/assets/annotator-submit-dialog-DEybG3Zm.png",N="/assets/annotator-translation-review-DA3-4k_Z.png",U="/assets/consolidator-group-table-Dp7hujX8.png",Y="/assets/consolidator-submit-dialog-DJEkTQ6t.png",F="/assets/getting-started-my-tasks-ezmcCup8.png",L="/assets/getting-started-set-password-CC57Fe71.png",B="/assets/lead-assign-9KxFl6dY.png",H="/assets/lead-compare-results-DC6HkQJ3.png",G="/assets/lead-documents-CjycjdEv.png",z="/assets/lead-export-KFM5Mz1P.png",q="/assets/lead-move-release-check-BHRNaFox.png",K="/assets/lead-problem-report-C6J_XPtm.png",V="/assets/lead-progress-B0_lg4T2.png",Z="/assets/lead-text-card-DRw6CK7x.png",$="/assets/lead-upload-preview-64cXvoTU.png",Q="/assets/lead-work-plan-Dau0Rzps.png",J="/assets/workflow-Dii9V6xB.png",X="https://github.com/halbritter-lab/ontotator/blob/main",l="https://handbook.invalid/docs/handbook/",ee=Object.assign({"../../../docs/handbook/README.md":y,"../../../docs/handbook/admin.md":k,"../../../docs/handbook/annotator.md":b,"../../../docs/handbook/consolidator.md":v,"../../../docs/handbook/faq.md":x,"../../../docs/handbook/first-task.md":T,"../../../docs/handbook/getting-started.md":C,"../../../docs/handbook/lead-documents.md":A,"../../../docs/handbook/lead-results.md":S,"../../../docs/handbook/lead-settings.md":O,"../../../docs/handbook/lead.md":j}),te=Object.assign({"../../../docs/handbook/images/admin-new-project.png":I,"../../../docs/handbook/images/admin-setup-code.png":R,"../../../docs/handbook/images/annotator-carried-finding.png":W,"../../../docs/handbook/images/annotator-editor.png":_,"../../../docs/handbook/images/annotator-finding-values.png":D,"../../../docs/handbook/images/annotator-new-finding.png":P,"../../../docs/handbook/images/annotator-proposal-review.png":E,"../../../docs/handbook/images/annotator-submit-dialog.png":M,"../../../docs/handbook/images/annotator-translation-review.png":N,"../../../docs/handbook/images/consolidator-group-table.png":U,"../../../docs/handbook/images/consolidator-submit-dialog.png":Y,"../../../docs/handbook/images/getting-started-my-tasks.png":F,"../../../docs/handbook/images/getting-started-set-password.png":L,"../../../docs/handbook/images/lead-assign.png":B,"../../../docs/handbook/images/lead-compare-results.png":H,"../../../docs/handbook/images/lead-documents.png":G,"../../../docs/handbook/images/lead-export.png":z,"../../../docs/handbook/images/lead-move-release-check.png":q,"../../../docs/handbook/images/lead-problem-report.png":K,"../../../docs/handbook/images/lead-progress.png":V,"../../../docs/handbook/images/lead-text-card.png":Z,"../../../docs/handbook/images/lead-upload-preview.png":$,"../../../docs/handbook/images/lead-work-plan.png":Q,"../../../docs/handbook/images/workflow.png":J}),c=e=>e.slice(e.lastIndexOf("/")+1),r=Object.fromEntries(Object.entries(ee).map(([e,t])=>[c(e).replace(/\.md$/,""),t])),ne=Object.fromEntries(Object.entries(te).map(([e,t])=>[`images/${c(e)}`,t]));function oe(e){var t;return((t=/^# +(.+)$/m.exec(r[e]??""))==null?void 0:t[1].trim())??e}function ae(){const e=[...(r.README??"").matchAll(/\]\(([A-Za-z0-9_-]+)\.md[)#]/g)].map(t=>t[1]);return[...new Set(["README",...e,...Object.keys(r).sort()])].filter(t=>t in r)}function se(e){return e.toLowerCase().replace(/[^\p{L}\p{M}\p{N}\p{Pc} -]/gu,"").replace(/ /g,"-")}function re(){const e=new Map;return t=>{const o=se(t);let n=o;for(;e.has(n);){const s=e.get(o)+1;e.set(o,s),n=`${o}-${s}`}return e.set(n,0),n}}function ie(e,t){var h;if(/^[a-z][a-z0-9+.-]*:/i.test(e))return{kind:"external",href:e};const o=new URL(e,`${l}${t}.md`),n=decodeURIComponent(o.hash.slice(1)),s=(h=/^\/docs\/handbook\/([A-Za-z0-9_-]+)\.md$/.exec(o.pathname))==null?void 0:h[1];return s&&s in r?s===t&&n?{kind:"anchor",id:n}:{kind:"chapter",href:d({name:"help",chapter:s,...n?{section:n}:{}})}:{kind:"external",href:`${X}${o.pathname}${o.hash}`}}function de(e,t){if(/^[a-z][a-z0-9+.-]*:/i.test(e))return null;const o=new URL(e,`${l}${t}.md`).pathname.replace(/^\/docs\/handbook\//,"");return ne[o]??null}const u=e=>e.type==="text"?e.value:"children"in e?e.children.map(u).join(""):"";function he(){return e=>{const t=re(),o=n=>n.children.forEach(s=>{s.type==="element"&&(/^h[1-6]$/.test(s.tagName)?s.properties.id=t(u(s)):o(s))});o(e)}}function p(e){var t;(t=document.getElementById(e))==null||t.scrollIntoView()}const le=e=>e.button===0&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey&&!e.altKey;function ce(e){return{a:({href:t,children:o})=>{if(!t)return a.jsx(a.Fragment,{children:o});const n=ie(t,e);return n.kind==="external"?a.jsx("a",{href:n.href,target:"_blank",rel:"noopener noreferrer",children:o}):n.kind==="chapter"?a.jsx("a",{href:n.href,children:o}):a.jsx("a",{href:d({name:"help",chapter:e,section:n.id}),onClick:s=>{le(s)&&(s.preventDefault(),p(n.id))},children:o})},img:({src:t,alt:o})=>{const n=t?de(t,e):null;return n?a.jsx("a",{className:"help-image-link",href:n,target:"_blank",rel:"noopener noreferrer",title:"Open the image at full size in a new tab",children:a.jsx("img",{className:"help-image",src:n,alt:o??"",loading:"lazy"})}):a.jsx("span",{className:"guideline-image-text",children:o?`Image: ${o}`:"Image"})},table:({children:t})=>a.jsx("div",{className:"guideline-table-scroll",tabIndex:0,role:"region","aria-label":"Table",children:a.jsx("table",{children:t})})}}function me({chapter:e="README",section:t}){const o=r[e];return i.useEffect(()=>{var n,s;t?p(t):(s=(n=document.getElementById("main"))==null?void 0:n.scrollTo)==null||s.call(n,0,0)},[e,t]),a.jsxs("div",{className:"help-page",children:[a.jsxs("nav",{className:"help-chapters","aria-label":"Handbook chapters",children:[a.jsx("ul",{children:ae().map(n=>a.jsx("li",{children:a.jsx("a",{href:d({name:"help",chapter:n}),"aria-current":n===e?"page":void 0,children:oe(n)})},n))}),a.jsx(w,{})]}),a.jsx("article",{className:"guideline-document help-document",children:o===void 0?a.jsxs(a.Fragment,{children:[a.jsx("h1",{children:"Chapter not found"}),a.jsxs("p",{children:["This handbook has no chapter “",e,"”. Pick one from the list."]})]}):a.jsx("div",{className:"guideline-markdown",children:a.jsx(g,{remarkPlugins:[f],rehypePlugins:[he],skipHtml:!0,components:ce(e),children:o})})})]})}export{me as default};

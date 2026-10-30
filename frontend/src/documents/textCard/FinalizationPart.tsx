@@ -27,7 +27,7 @@ function nameOf(items: readonly WorkItem[], assignmentId: number): string {
 
 /**
  * Finalization part of the text card: what happens next, the decision block, the final result. While a consolidation
- * runs: one row per consolidator with the open groups, "Open consolidation" for the consolidator and, for the
+ * runs: one row per consolidator with the open groups, "Open consolidation" (their task) for the consolidator and, for the
  * lead, "Remove…", which frees the text for "Consolidate…" with someone else (no Reassign, D1).
  */
 export function FinalizationPart({ row, projectKey, query, decision, onNavigate, now, canManage = false, tools, onChanged }: {
@@ -55,7 +55,11 @@ export function FinalizationPart({ row, projectKey, query, decision, onNavigate,
   const openable = progress && consolidators.length > 0 && consolidators.every(person => person.is_me) ? progress : null;
   const running = consolidating ? row.work.filter(item => item.task === "review" && item.status !== "submitted" && item.moved_to_version == null) : [];
   const focusAfterRemoval = useFocusAfterRemoval();
-  const consolidationLink = (label?: string) => openable && <RouteLink route={{ name: "projectConsolidation", key: projectKey, roundId: openable.round_id, ...(Object.keys(query).length ? { documents: query } : {}) }}
+  // The round route is always read-only (issue 145): the viewer's own running consolidation opens as their task, where they
+  // decide and submit. Without an open consolidation task of theirs the link shows the read-only round.
+  const ownTask = running.find(item => item.is_me)?.assignment_id;
+  const consolidationLink = (label?: string, assignmentId = ownTask) => openable && <RouteLink route={assignmentId != null ? { name: "task", assignmentId }
+    : { name: "projectConsolidation", key: projectKey, roundId: openable.round_id, ...(Object.keys(query).length ? { documents: query } : {}) }}
     onNavigate={onNavigate} className="btn btn-secondary btn-sm" aria-label={label}>Open consolidation</RouteLink>;
   const groups = progress ? `${progress.open} of ${progress.total} groups open` : null;
   // "Annotators per text" is an upper limit (issue 123): with one annotation submitted the lead may decide now; the
@@ -81,7 +85,7 @@ export function FinalizationPart({ row, projectKey, query, decision, onNavigate,
         const assigned = assignedLine(item, now, !groups);
         return <WorkPersonRow key={item.assignment_id} item={item} caseId={row.case_id} canManage={canManage} tools={tools} onChanged={() => onChanged?.()}
           onRemoved={focusAfterRemoval} details={groups && assigned ? <>{groups} · {assigned}</> : groups ?? assigned}
-          open={item.is_me ? consolidationLink(`Open consolidation of ${workerName(item)}`) : undefined} />;
+          open={item.is_me ? consolidationLink(`Open consolidation of ${workerName(item)}`, item.assignment_id) : undefined} />;
       })}
     </PersonList> : <>
       {/* Without the work items (they name the assignments) the consolidators are a line of text. */}

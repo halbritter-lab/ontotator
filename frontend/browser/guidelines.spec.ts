@@ -204,7 +204,7 @@ test("EMPTY: publish v1, read it in a task, publish v2, review under v2, export 
     ana.page.on("dialog", dialog => { dialogs.push(dialog.message()); void dialog.dismiss(); });
     await openTask(ana.page, s, "annotate-1");
     await expect(ana.page.getByText("This project has guidelines (v1)", { exact: true })).toBeVisible();
-    await expect(ana.page.getByText("Read them before you start; they are available at any time under Guidelines in the toolbar.", { exact: true })).toBeVisible();
+    await expect(ana.page.getByText("Read them before you start; they are available at any time under More › Guidelines in the toolbar.", { exact: true })).toBeVisible();
     await moreButton(ana.page).click();
     await ana.page.getByRole("menuitem", { name: "Guidelines v1 (new)", exact: true }).click();
     const panel = drawer(ana.page, 1);

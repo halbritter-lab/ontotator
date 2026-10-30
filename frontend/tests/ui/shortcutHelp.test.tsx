@@ -20,6 +20,13 @@ it("lists_described_bindings_and_hints_by_group", () => {
   expect(screen.getByText("Show / hide this help")).not.toBeNull();
   expect(screen.getByText("Shortcuts are disabled while typing in a field or when a dialog is open.")).not.toBeNull();
 });
+it("lists_screen_keys_that_need_a_selection_as_not_available_right_now", () => {
+  function Bindings() { useShortcut("/", () => {}, { description: "Focus the term search", group: "Finding", enabled: false, listWhenDisabled: true }); useShortcut("x", () => {}, { description: "Hidden", enabled: false }); return null; }
+  render(<><Bindings /><ShortcutHelpHost /></>); act(openShortcutHelp);
+  expect(screen.getByRole("heading", { name: "Finding" })).not.toBeNull();
+  expect(screen.getByText("Focus the term search").textContent).toBe("Focus the term search (not available right now)");
+  expect(screen.queryByText("Hidden")).toBeNull();
+});
 it("two_hosts_render_one_overlay_and_transfer_ownership", () => {
   const view = render(<StrictMode><ShortcutHelpHost key="first" /><ShortcutHelpHost key="second" /></StrictMode>);
   act(openShortcutHelp); expect(screen.getAllByRole("dialog")).toHaveLength(1);

@@ -137,7 +137,7 @@ What for: see which releases are on the server and which projects use them.
 
 1. On **Ontologies**, look at **Uploaded files**.
 2. The table lists file name, kind, release, language, checksum and upload time.
-3. **Pinned by** lists the projects that use (*pin*) a file. Click a project key to open its settings; they open on **General**, so switch to the **Ontology** tab. Unused files read **Not pinned**.
+3. **Pinned by** lists the projects that use (*pin*) a file. Click a project key to open its settings on the **Ontology** tab. Unused files read **Not pinned**.
 4. Click **Copy** next to a checksum to copy it.
 5. Click **Refresh inventory** to reload the list.
 
@@ -155,6 +155,8 @@ Before you start: [upload the ontology release](#upload-ontology-releases-and-tr
 4. For each ontology, choose the release in its ontology file field. Optionally limit the allowed branches and choose the annotation scheme. For HPO, both are filled in for you.
 5. Click **Create project**.
 6. The project's settings open on **People**. [Add the lead](lead-settings.md#add-a-member) and the other members.
+
+You are now a member of the project with all three roles. The assign dialog for reviews and annotations marks system administrators with an *Administrator* badge so that nobody assigns you work by mistake. If you do not take part in the project, [remove your roles](lead-settings.md#change-a-members-roles) once a lead is added.
 
 ![New project form with key, name, template and ontology file filled in](images/admin-new-project.png)
 

@@ -16,7 +16,7 @@ export interface ModifierCommandDeps {
 /** "Link a text span" waits for the next text selection for this modifier. */
 export interface LinkSpanMode { annotationId: string; termId: string; term: string; finding: string }
 
-/** The modifier commands of the editor (C3), the Undo toast of a removal and the link-a-span mode. */
+/** The modifier commands of the editor (C3), the editor's Undo toast (a removed modifier, a deleted finding) and the link-a-span mode. */
 export function useModifierCommands({ mutate, segmentsOf, reportError }: ModifierCommandDeps) {
   const { toast, show, dismiss } = useToast();
   const [linkSpan, setLinkSpan] = useState<LinkSpanMode | null>(null);
@@ -41,5 +41,5 @@ export function useModifierCommands({ mutate, segmentsOf, reportError }: Modifie
   /** R3: the standalone modifier finding `sourceId` becomes a modifier of `targetId` (one mutation, keyed on the target). */
   const convert = (sourceId: string, targetId: string, linkSpan: boolean) =>
     run(targetId, { command: "convert_to_modifier", annotation_id: sourceId, target_annotation_id: targetId, link_span: linkSpan });
-  return { add, setSegments, remove, removeSpan, convert, toast, dismissToast: dismiss, linkSpan, setLinkSpan };
+  return { add, setSegments, remove, removeSpan, convert, toast, showToast: show, dismissToast: dismiss, linkSpan, setLinkSpan };
 }

@@ -85,6 +85,10 @@ export function uploadNotes(plan: ImportPlan, kind: UploadKind, projectLanguages
   const rows = uploadTextRows(plan, kind);
   const label = (row: UploadTextRow) => `${row.caseId} ${row.language}`;
   const notes: UploadNote[] = [];
+  // issue 174: a plain-text file's name without .txt becomes its text ID; say so where the IDs first show.
+  const named = kind === "text" ? (plan.documents ?? []).filter(document => document.label) : [];
+  if (named.length) notes.push({ id: "text-ids", text: `Text IDs are the file names without .txt, for example ${named[0].label} → ${named[0].document_id}.`,
+    details: named.map(document => `${document.label} → ${document.document_id}`) });
   if (kind === "t1" && projectLanguages.length) {
     const unknown = [...new Set(rows.map(row => row.language).filter(language => !projectLanguages.includes(language)))].sort();
     if (unknown.length) {

@@ -126,6 +126,10 @@ In projects where the consolidator of a text may not be one of its annotators, y
 
 An import runs in the background; reload **Documents** when it is done. If the project plan for new imports is **Plan nothing; I plan texts on Documents**, the new texts show as *Not decided* until you plan them. See [Upload texts](lead-documents.md#upload-texts).
 
+### The upload says "The file name is not a valid text ID."
+
+For plain text, each file name without `.txt` becomes the text ID. Rename the file: letters, digits, dots, hyphens and underscores, up to 128 characters, starting with a letter or digit. See [Prepare files for upload](lead-documents.md#prepare-files-for-upload).
+
 ### I cannot change the ontology release or the task profile
 
 The ontology release can be chosen freely only until the first work is submitted; after that, use **Move to another release**. The task profile can only be replaced before work starts. See [Move a started project to a newer release](lead-settings.md#move-a-started-project-to-a-newer-release).
@@ -138,13 +142,13 @@ The text is not in the work plan. Plan it first. See [Add a text to the plan](le
 
 Closing a report does not always release the pause. The row shows **Resume task…**; click it and release the pause. See [Decide on a problem report](lead-results.md#decide-on-a-problem-report).
 
-### I chose myself as consolidator, but "Open consolidation" shows no actions
+### I chose myself as consolidator: where do I work?
 
-**Open consolidation** in the text card is the read-only view. Open your task with **Open my task** in the row on **Documents**, or from **My tasks**. See [Start a consolidation](lead-results.md#start-a-consolidation).
+While your consolidation runs, **Open consolidation** in the text card opens your task, as does **Open my task** in the row on **Documents** or the row in **My tasks**. After you submitted, **Open consolidation** shows the read-only result. See [Start a consolidation](lead-results.md#start-a-consolidation).
 
 ### The consolidator list does not show a person
 
-Only members with the **Consolidator** role are listed. Give the role first. See [Change a member's roles](lead-settings.md#change-a-members-roles).
+Only you and the members with the **Consolidator** role are listed; the hint under the list says so and links **Settings → People**. Give the role first. See [Change a member's roles](lead-settings.md#change-a-members-roles).
 
 ### The export asks me to tick a box
 

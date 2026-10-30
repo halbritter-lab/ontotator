@@ -214,6 +214,7 @@ describe("ConsolidationScreen", () => {
     const lead = screen.getByRole("region", { name: "Added findings" });
     expect(within(lead).getByRole("heading", { name: "Added by Ana Weber" })).toBeTruthy();
     expect(lead.textContent).toContain("Seizure (HP:0001250)");
+    expect(within(lead).queryByRole("button")).toBeNull();
   });
 
   it("offers Back to documents in the lead's read-only view", async () => {
@@ -231,8 +232,40 @@ describe("ConsolidationScreen", () => {
     vi.spyOn(api, "listMyTasks").mockResolvedValue([] as never);
     await renderScreen({ assignmentId: 42, lead: true });
     fireEvent.click(screen.getByRole("button", { name: "Submit consolidation" }));
-    fireEvent.click(within(screen.getByRole("dialog", { name: "Submit consolidation?" })).getByRole("button", { name: "Submit" }));
+    const dialog = screen.getByRole("dialog", { name: "Submit consolidation?" });
+    // #143: the dialog already says who accepts the result.
+    expect(within(dialog).getByText("Then accept the result in Documents.")).toBeTruthy();
+    expect(within(dialog).queryByText("The lead then accepts the result.")).toBeNull();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Submit" }));
     expect(await screen.findByText("Consolidation submitted. Accept the result in Documents.")).toBeTruthy();
+  });
+
+  it("asks the project list whether the consolidator leads, before the submit dialog (#143)", async () => {
+    load(decidedView());
+    vi.spyOn(api, "listProjects").mockResolvedValue([{ project_key: "pkg-1", can_manage: true }] as never);
+    await renderScreen({ assignmentId: 42 });
+    fireEvent.click(screen.getByRole("button", { name: "Submit consolidation" }));
+    expect(await within(screen.getByRole("dialog", { name: "Submit consolidation?" })).findByText("Then accept the result in Documents.")).toBeTruthy();
+  });
+
+  it("tells any other consolidator that the lead accepts the result", async () => {
+    load(decidedView());
+    vi.spyOn(api, "listProjects").mockResolvedValue([{ project_key: "pkg-1", can_manage: false }] as never);
+    await renderScreen({ assignmentId: 42 });
+    fireEvent.click(screen.getByRole("button", { name: "Submit consolidation" }));
+    expect(within(screen.getByRole("dialog", { name: "Submit consolidation?" })).getByText("The lead then accepts the result.")).toBeTruthy();
+  });
+
+  it("shows the lead's consolidation reason above the groups (#146)", async () => {
+    load({ ...exampleView(), consolidation_reason: "Term and assertion differ" });
+    await renderScreen({ assignmentId: 42, lead: false });
+    expect(screen.getByText("Reason from the lead: Term and assertion differ")).toBeTruthy();
+  });
+
+  it("shows no reason line without a reason", async () => {
+    load(exampleView());
+    await renderScreen({ assignmentId: 42, lead: false });
+    expect(screen.queryByText(/^Reason from the lead/)).toBeNull();
   });
 
   it("adds a finding from a typed passage without a mouse selection", async () => {
@@ -458,6 +491,45 @@ describe("ConsolidationScreen", () => {
     expect(payload).toMatchObject({ search_event_id: "search-1", annotation_id: search.mock.calls.at(-1)![0].annotation_id });
     await waitFor(() => expect(document.querySelector(".cons-added")?.textContent).toBe("last week"));
     expect(TEXT.slice(start, end)).toBe("last week");
+  });
+
+  it("opens the values of an added finding right away and saves them with set_axes (#178)", async () => {
+    mockViewport(1280);
+    load(exampleView());
+    vi.spyOn(api, "searchOntology").mockResolvedValue({ route: "auto", query: "ataxia", shuffled: false, search_id: "search-1",
+      candidates: [{ term_id: "HP:0001251", label: "Ataxia", definition: "", matched_term: "Ataxia", rank: 1 }] } as never);
+    const [start, end] = span("Unsteady gait");
+    const save = vi.spyOn(api, "applyCommand").mockResolvedValue(draft(4));
+    // After each save the view is read again: the added finding (its id as created) with the values saved last.
+    vi.mocked(api.getConsolidation).mockImplementation(async () => {
+      const created = save.mock.calls[0]?.[1].payload;
+      if (!created) return exampleView();
+      const set = save.mock.calls[1]?.[1].payload.axes_values as Record<string, string> | undefined;
+      const id = created.annotation_id as string;
+      return { ...exampleView(), added: [{ input_id: id, person_id: "ann-0009", annotation_id: id, term_id: "HP:0001251", term_label: "Ataxia",
+        layer_id: "phenotype", type_id: "default", axes: set ?? created.axes_values as Record<string, string>, spans: [[start, end]], cues: [],
+        note: null, from_tool_proposal: false, modifiers: [] }], added_by: "Ada Judicator (ann-0009)" };
+    });
+    await renderScreen({ assignmentId: 42, workspaceView: workspaceView() });
+    fireEvent.click(screen.getByRole("button", { name: "Add finding" }));
+    const form = await screen.findByRole("dialog", { name: "Add finding" });
+    fireEvent.change(within(form).getByLabelText("Passage from the text"), { target: { value: "Unsteady gait" } });
+    fireEvent.click(within(form).getByRole("button", { name: "Continue" }));
+    fireEvent.click(await within(await screen.findByRole("dialog", { name: "Add finding" })).findByRole("option", { name: /Ataxia/ }));
+    const values = await screen.findByRole("group", { name: "Values of Ataxia (HP:0001251)" });
+    const list = screen.getByRole("region", { name: "Added findings" });
+    expect(list.textContent).toContain("Ataxia (HP:0001251), “Unsteady gait”, Present, Patient, Current");
+    expect((within(values).getByLabelText("Assertion") as HTMLSelectElement).value).toBe("present");
+    fireEvent.change(within(values).getByLabelText("Assertion"), { target: { value: "absent" } });
+    fireEvent.click(within(values).getByRole("button", { name: "Save values" }));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(2));
+    expect(save.mock.calls[1][1].payload).toEqual({ command: "set_axes", annotation_id: save.mock.calls[0][1].payload.annotation_id,
+      axes_values: { assertion: "absent", experiencer: "patient", temporality: "current" }, chosen_axis_ids: ["assertion", "experiencer", "temporality"] });
+    await waitFor(() => expect(screen.queryByRole("group", { name: "Values of Ataxia (HP:0001251)" })).toBeNull());
+    expect(list.textContent).toContain("Ataxia (HP:0001251), “Unsteady gait”, Absent, Patient, Current");
+    // Later changes go through "Edit values…" of the finding.
+    fireEvent.click(within(list).getByRole("button", { name: "Edit values, Ataxia (HP:0001251)" }));
+    expect((within(screen.getByRole("group", { name: "Values of Ataxia (HP:0001251)" })).getByLabelText("Assertion") as HTMLSelectElement).value).toBe("absent");
   });
 
   it("reloads the view after a revision conflict", async () => {

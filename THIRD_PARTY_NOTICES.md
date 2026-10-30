@@ -84,7 +84,8 @@ Font License 1.1. Variable woff2 fonts are bundled locally via Fontsource; no
 external font service is used. The full licence texts ship in the wheel and
 container alongside the UI at `web/licenses/source-serif-4-OFL.txt` and
 `web/licenses/source-sans-3-OFL.txt` (source copies in
-`frontend/public/licenses/`).
+`frontend/public/licenses/`). The project page bundles the same fonts with
+their licence texts in `site/fonts/`.
 
 ## Ontologies (not bundled)
 

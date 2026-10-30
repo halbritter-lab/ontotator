@@ -52,6 +52,8 @@ What for: start or continue your consolidation work.
 2. Click **Start**, **Continue** or **View**.
 3. The consolidation screen opens. Its heading reads, for example, *Consolidate CASE-1 en v1*. The path above it shows how many groups are still open.
 
+If the lead gave a reason when starting the consolidation, it shows above the groups, for example *Reason from the lead: Term and assertion differ*, and under the task in **My tasks**.
+
 The header holds **Open in full editor**, **Report a text problem** and, if the project has guidelines, a button such as *Guidelines v2*. **More…** appears once you decided a group.
 
 The screen is read-only after you submitted, when the task is no longer yours, when it is paused, or when a submission used here was withdrawn. A banner tells you which.
@@ -74,7 +76,7 @@ What for: decide a group by choosing, per row, the value that is right.
 1. Open a group. The table has one column per person. A robot icon marks findings from a tool proposal.
 2. The rows are **Term**, one row per value field (for example the assertion), **Text**, **Modifiers** (only if someone used modifiers) and **Note**. Rows where people disagree come first and are highlighted; *(all agree)* marks rows that need no choice. You can mix: take the term from one person and a value from another.
 3. In each highlighted row, click the ✓ next to the value you want. Its button is named after the value, for example *Take Hypotonia … for Term*.
-4. Read the result line below the table. It starts with "Result:" and lists what is still not chosen, for example *text not chosen yet*. **Not taken:** lists other people's terms that are not in the result. Until you choose in the **Term** row, the line shows the first person's term as a preview.
+4. Read the result line below the table. It starts with "Result:" and lists what is still not chosen, for example *Term not chosen yet* or *text not chosen yet*. Once the term is chosen, **Not taken:** lists other people's terms that are not in the result.
 5. Optional: click **+ note** to write a **Note for the lead**, and tick **Guidelines unclear here** if the guidelines did not settle the case.
 6. Click **Keep**. The group reads **decided**, the message **Decision saved** appears with **Undo**, and the next open group opens.
 
@@ -85,7 +87,7 @@ What for: decide a group by choosing, per row, the value that is right.
 Special cases:
 
 - Not everyone marked it. The card names who did, for example *Ana Weber, Luc Martin marked this. Tom Reis has nothing here.* The button reads **Keep the finding**, or *Keep Luc Martin's finding* for one person. Keep it only if the text supports it.
-- Different passages. If people marked overlapping but different passages, the group is open without a highlighted row. The **Text** row shows the passage that comes with the chosen finding (*overlapping, comes with the chosen finding*). Compare the underlines in the text. If that passage is right, click **Keep**; to use another passage, [work in the full editor](#work-in-the-full-editor).
+- Different passages. If people marked overlapping but different passages, the group is open without a highlighted row. The **Text** row shows each person's passage; the ✓ of the passage that goes into the result is pressed, and the result line names it, for example *text "Absent reflexes"*. Compare the underlines in the text. To use another person's passage, click its ✓; its note comes with it. Then click **Keep**. For a passage nobody marked, [work in the full editor](#work-in-the-full-editor).
 - Modifiers. Each modifier has its own ✓, so you can combine modifiers that different people chose. Modifiers of one kind, such as two severities, exclude each other. If someone linked a modifier to a different finding, the card says so, for example *Ben Roth linked "Severe" (Severe) to Hypotonia.* Check which finding the text means.
 - Same term twice. If the same term is already in the result from another group, the card warns you. **Keep** then adds a second finding with that term.
 
@@ -124,7 +126,8 @@ What for: add a finding that no submission has.
 
 1. Select the passage in the text. Or click **Add finding**, type the passage into **Passage from the text** (choose the **Occurrence** if it appears more than once) and click **Continue**.
 2. Search and pick the term. Read the definition of the active hit below the hits before you press Enter or click it.
-3. A message confirms the new finding. It is listed under **Added by you**.
+3. A message confirms the new finding. It is listed under **Added by you** with its values, which start as the project's defaults (for example *Present, Patient, Current*). Its value fields open right away: change what the text says, for example **Assertion** to *Absent* for a negated finding, and click **Save values**. Click **Cancel** to keep the defaults.
+4. To change the values later, click **Edit values…** next to the added finding.
 
 If the passage is not found, type it exactly as written, or select it in the text.
 
@@ -148,7 +151,7 @@ Before you start: after you submit, you cannot change the consolidation.
 
 1. When no group is open, the progress card reads **Ready to submit**.
 2. Click **Submit consolidation**.
-3. The dialog **Submit consolidation?** shows how many groups and findings the result has, and how many are not in the result.
+3. The dialog **Submit consolidation?** says who accepts the result (*The lead then accepts the result.*; if you are the lead yourself: *Then accept the result in Documents.*) and shows how many groups and findings the result has, and how many are not in the result.
 4. Click **Submit**.
 5. If there are warnings (values filled in by default, a modifier used as a finding, two severities), the dialog now lists them under **Check before you submit**, and the button reads **Submit with** and the number of warnings. Click **Back** to fix them, or submit with warnings only if you checked that the values are right.
 6. The screen confirms: *Consolidation submitted. The lead then accepts the result.* (If you are the lead yourself: *Consolidation submitted. Accept the result in Documents.*) Open your next task or click **Back to my tasks**.
@@ -164,10 +167,10 @@ What happens next: the lead reads the result with your notes and flags, and acce
 What for: change text spans or add findings that the comparison table cannot express.
 
 1. Click **Open in full editor**.
-2. The editor shows the mode **Consolidate** and the list **Selected submitted findings** with each finding's author. *Replaced by* on a submitted finding shows which result finding took its place. The editor works as described in the [annotator reference](annotator.md).
-3. Click **Back to consolidation** to return.
+2. The editor shows the mode **Consolidate** and the list **Selected submitted findings** with each finding's author. *Replaced by* on a submitted finding shows which result finding took its place; point at it for a short explanation, click it to jump to that finding. The editor works as described in the [annotator reference](annotator.md), except that it has no submit button.
+3. Click **Back to consolidation** at the end of the toolbar to return. Next to it the editor says *Submit on the consolidation screen.*
 
-Groups you changed here are tagged **edited in editor** on the consolidation screen. **Finish & submit text** in the full editor submits the whole consolidation, like **Submit consolidation**; it is refused while groups are open. Submitting from the consolidation screen shows you the summary first.
+Groups you changed here are tagged **edited in editor** on the consolidation screen. You submit the consolidation only there, with **Submit consolidation** (see [Finish a consolidation](#finish-a-consolidation)).
 
 ## Keyboard shortcuts
 
