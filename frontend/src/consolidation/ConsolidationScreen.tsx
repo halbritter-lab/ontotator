@@ -172,7 +172,7 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
   useShortcut("j", () => step(1), { description: "Next open group", group: "Consolidation", enabled: !!view });
   useShortcut("k", () => step(-1), { description: "Previous open group", group: "Consolidation", enabled: !!view });
 
-  const reopen = async (group: ConsolidationGroupView): Promise<boolean> => {
+  const reopen = async (group: ConsolidationGroupView, undone = false): Promise<boolean> => {
     const previous = lastDecision;
     setLastDecision(null);
     const ok = await data.reopen(group.group_id, { input_ids: group.members.map(member => member.input_id) });
@@ -181,6 +181,8 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
     if (ok) {
       setSummaries(current => { const next = new Map(current); next.delete(group.group_id); return next; });
       select(group.group_id, true);
+      // #198: the status region no longer reads the decision that was just taken back.
+      announce(`${groupName(group, viewRef.current?.text ?? "")}: ${undone ? "decision undone" : "reopened"}.`);
     }
     return ok;
   };
@@ -202,7 +204,7 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
     if (!lastDecision) return false;
     const group = lastDecision;
     setRestoring(group.group_id);
-    void reopen(group);
+    void reopen(group, true);
   };
   // Not in text fields (the shortcut scope "screen" leaves typing targets alone). Listed in "?" while the view is
   // editable (R-25); without a decision to undo the key passes through.

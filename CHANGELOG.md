@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The final export leaves out texts without a final result only after a tick box that names the count (#194).
 - The Finalization row reads "Accept result…" when all compared findings match (#198).
 - Edit & Replace names what the copy changed ("Assertion: Present → Absent") next to "Replaced by" and has a "Done, back to the proposal" button (#198).
+- A consolidation's note shows under the closed group in the list, not only after opening it; Undo updates the screen reader status (#198).
 - After a submit, the next task is one of the same type when there is one, so a translation review leads to the next translation review (#198).
 
 ## [0.3.0] - 2026-10-30
