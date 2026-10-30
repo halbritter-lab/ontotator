@@ -1,4 +1,4 @@
-import{r,a as m,j as a,b as h}from"./index-B0z0Zf44.js";import{M as f,r as g}from"./index-DZ0Hh9Dl.js";function w(){const[e,t]=r.useState(null);return r.useEffect(()=>{let o=!0;return m.getAbout().then(n=>{o&&t(n)},()=>{}),()=>{o=!1}},[]),e?a.jsxs("p",{className:"help-version",title:e.revision??void 0,children:["Ontotator ",e.version,e.revision&&a.jsxs(a.Fragment,{children:[" · commit ",e.revision.slice(0,7)]})]}):null}const y=`# Ontotator user handbook
+import{r,a as m,j as a,b as h}from"./index-CNxu2r1C.js";import{M as f,r as g}from"./index-LZGEwOgD.js";function w(){const[e,t]=r.useState(null);return r.useEffect(()=>{let o=!0;return m.getAbout().then(n=>{o&&t(n)},()=>{}),()=>{o=!1}},[]),e?a.jsxs("p",{className:"help-version",title:e.revision??void 0,children:["Ontotator ",e.version,e.revision&&a.jsxs(a.Fragment,{children:[" · commit ",e.revision.slice(0,7)]})]}):null}const y=`# Ontotator user handbook
 
 This handbook explains how to work with Ontotator in the browser. It is for everyone who uses the app: annotators, translation reviewers, consolidators, leads and system administrators. It describes the version of Ontotator that you open it from. If you run the server, read the [server operations guide (for server operators)](../operations.md) instead.
 
@@ -898,6 +898,10 @@ Your session has ended. Log in again in that window. Your unsaved edits stay in 
 Reload the page in the browser, then repeat the last action. If the message asks you to, log in again ([Log in](getting-started.md#log-in)).
 
 ## Tasks and projects
+
+### The page says "The project is busy, so nothing was changed."
+
+Another operation, often a running import, is holding the project. What you just did was not applied, so nothing needs undoing. Wait a moment and click **Retry**, or repeat the action. In the editor your unsaved edits stay on the page until the save goes through.
 
 ### After login I see Projects, not My tasks
 

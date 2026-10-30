@@ -957,7 +957,7 @@ def test_a_failing_start_closes_the_database(
     with pytest.raises(RuntimeError, match="ontology start failed"):
         create_app(config)
 
-    assert len(closed) == 1
+    assert len(closed) == 2
 
 
 def test_a_failing_close_does_not_hide_why_the_start_failed(
@@ -1017,7 +1017,7 @@ def test_an_unmigrated_database_is_refused_at_start(
 
     assert exc_info.value.code == "DATABASE_NOT_MIGRATED"
     assert exc_info.value.details == {"current": None, "head": head_revision()}
-    assert len(closed) == 1
+    assert len(closed) == 2
 
 
 @pytest.mark.parametrize("confirmation", [None, False])

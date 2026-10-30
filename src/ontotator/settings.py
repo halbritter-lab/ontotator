@@ -17,6 +17,9 @@ from urllib.parse import urlsplit
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.exc import ArgumentError
 
+LOCK_TIMEOUT_MS = 20_000
+STATEMENT_TIMEOUT_MS = 60_000
+
 
 class SettingsError(ValueError):
     """A setting is missing, contradictory or unreadable."""
@@ -33,6 +36,18 @@ class ServerSettings:
     workers: int
     admin_password_hash: str | None = field(repr=False)
     database_url: URL = field(repr=False)
+    lock_timeout_ms: int = LOCK_TIMEOUT_MS
+    statement_timeout_ms: int = STATEMENT_TIMEOUT_MS
+
+
+def _milliseconds(name: str, default: int, env: Mapping[str, str]) -> int:
+    """A database limit from ``env``; 0 means no limit."""
+    raw = env.get(name, "")
+    if not raw:
+        return default
+    if not raw.isascii() or not raw.isdigit():
+        raise SettingsError(f"{name} must be a whole number of milliseconds")
+    return int(raw)
 
 
 def server_settings(env: Mapping[str, str] | None = None) -> ServerSettings:
@@ -101,6 +116,12 @@ def server_settings(env: Mapping[str, str] | None = None) -> ServerSettings:
         workers=workers,
         admin_password_hash=read_secret("ONTOTATOR_ADMIN_PASSWORD_HASH", env),
         database_url=url,
+        lock_timeout_ms=_milliseconds(
+            "ONTOTATOR_LOCK_TIMEOUT_MS", LOCK_TIMEOUT_MS, env
+        ),
+        statement_timeout_ms=_milliseconds(
+            "ONTOTATOR_STATEMENT_TIMEOUT_MS", STATEMENT_TIMEOUT_MS, env
+        ),
     )
 
 

@@ -26,6 +26,10 @@ Reload the page in the browser, then repeat the last action. If the message asks
 
 ## Tasks and projects
 
+### The page says "The project is busy, so nothing was changed."
+
+Another operation, often a running import, is holding the project. What you just did was not applied, so nothing needs undoing. Wait a moment and click **Retry**, or repeat the action. In the editor your unsaved edits stay on the page until the save goes through.
+
 ### After login I see Projects, not My tasks
 
 Ontotator opens the project you used last, or **Projects** the first time. Click **My tasks** in the sidebar. See [Log in](getting-started.md#log-in).
