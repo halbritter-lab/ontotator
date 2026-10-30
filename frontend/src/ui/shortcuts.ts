@@ -9,9 +9,14 @@ export interface ShortcutOptions {
   allowRepeat?: boolean;
   allowInInputs?: boolean;
   root?: RefObject<HTMLElement>;
+  /**
+   * Keeps a described binding in the help while it is disabled, marked as not available right now: a screen's
+   * keys stay discoverable before their precondition holds (a selected finding, a proposal).
+   */
+  listWhenDisabled?: boolean;
 }
 
-type HelpRow = { keys: string[]; description: string; group: string };
+type HelpRow = { keys: string[]; description: string; group: string; unavailable?: true };
 type Entry = {
   keys: string[];
   handler?: (event: KeyboardEvent) => void | false;
@@ -28,14 +33,15 @@ const priority: Record<ShortcutScope, number> = { dialog: 2, screen: 1, global: 
 function publish() {
   const next: HelpRow[] = [];
   for (const { keys, options } of entries) {
-    if (options.enabled !== false && options.description) {
-      next.push({ keys: [...keys], description: options.description, group: options.group ?? "General" });
-    }
+    if (!options.description) continue;
+    const row: HelpRow = { keys: [...keys], description: options.description, group: options.group ?? "General" };
+    if (options.enabled !== false) next.push(row);
+    else if (options.listWhenDisabled) next.push({ ...row, unavailable: true });
   }
   // useSyncExternalStore needs a stable snapshot when the public rows are unchanged.
   if (next.length === snapshot.length && next.every((row, index) => {
     const previous = snapshot[index];
-    return row.description === previous.description && row.group === previous.group &&
+    return row.description === previous.description && row.group === previous.group && row.unavailable === previous.unavailable &&
       row.keys.length === previous.keys.length && row.keys.every((key, i) => key === previous.keys[i]);
   })) return;
   snapshot = next;
@@ -93,7 +99,7 @@ export function useShortcut(
 export function useShortcutHint(
   keysLabel: string[],
   description: string,
-  options: { group?: string; enabled?: boolean } = {},
+  options: { group?: string; enabled?: boolean; listWhenDisabled?: boolean } = {},
 ): void {
   useEntry({ keys: keysLabel, options: { ...options, description } });
 }

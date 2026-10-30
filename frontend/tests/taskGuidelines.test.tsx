@@ -30,8 +30,8 @@ const update: GuidelineNotice = { from_version: 1, to_version: 3, more: 2, chang
 ] };
 const first: GuidelineNotice = { from_version: null, to_version: 3, more: 0, changes: [{ version: 3, change_note: "Initial rules", created_at: T, withdrawn: false }] };
 
-function Harness({ assignment, readOnly = false }: { assignment: AssignmentView; readOnly?: boolean }) {
-  return <TaskGuidelines assignment={assignment} readOnly={readOnly}>{({ button, notice, drawer }) => <>
+function Harness({ assignment, readOnly = false, place = "more" }: { assignment: AssignmentView; readOnly?: boolean; place?: "more" | "header" }) {
+  return <TaskGuidelines assignment={assignment} readOnly={readOnly} place={place}>{({ button, notice, drawer }) => <>
     <div role="group" aria-label="Task actions">{button}<button>Report a text problem</button></div>
     <div data-testid="notice-slot">{notice}</div>
     <button>Editor</button>
@@ -150,9 +150,15 @@ describe("task guidelines notice", () => {
     render(<Harness assignment={task({ guideline_notice: first })} />);
     const notice = within(screen.getByTestId("notice-slot"));
     expect(await notice.findByText("This project has guidelines (v3)")).toBeDefined();
-    expect(notice.getByText("Read them before you start; they are available at any time under Guidelines in the toolbar.")).toBeDefined();
+    expect(notice.getByText("Read them before you start; they are available at any time under More › Guidelines in the toolbar.")).toBeDefined();
     expect(notice.getByRole("button", { name: "Read guidelines v3" })).toBeDefined();
     expect(notice.queryByRole("listitem")).toBeNull();
+  });
+
+  it("names the header button where the screen places the guidelines there (#154)", async () => {
+    render(<Harness assignment={task({ guideline_notice: first })} place="header" />);
+    const notice = within(screen.getByTestId("notice-slot"));
+    expect(await notice.findByText("Read them before you start; they are available at any time under Guidelines in the header.")).toBeDefined();
   });
 
   it("records notified once; Close only hides", async () => {

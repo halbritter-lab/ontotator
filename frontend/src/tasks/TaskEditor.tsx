@@ -11,6 +11,7 @@ import { TranslationReviewScreen } from "../translation/TranslationReviewScreen"
 import { WorkRoundsDialog } from "./WorkRoundsDialog";
 import { TaskProblemActions } from "./TaskProblemActions";
 import { TaskGuidelines } from "./TaskGuidelines";
+import { notifyTasksChanged } from "./tasksEvents";
 import { ReportAnswerNotice } from "../problems/ReportAnswerNotice";
 import { roundBadge as roundBadgeOf, roundIdentity } from "../editor/rounds/roundLabels";
 import { ConsolidationScreen } from "../consolidation/ConsolidationScreen";
@@ -38,6 +39,8 @@ interface TaskEditorProps {
 function afterSubmit({ onNavigate, showToast }: Pick<TaskEditorProps, "onNavigate" | "showToast">) {
   return ({ label, assignmentId, next }: { label: string; assignmentId: number; next?: number }) => {
     showToast?.({ message: `${label} submitted.`, actionLabel: "View result", onAction: () => onNavigate({ name: "task", assignmentId }) });
+    // The submitted task no longer counts in "My tasks (n)".
+    notifyTasksChanged();
     onNavigate(next !== undefined ? { name: "task", assignmentId: next } : MY_TASKS);
   };
 }
@@ -61,7 +64,7 @@ export function TaskEditor(props: TaskEditorProps): JSX.Element {
   if (state.assignment?.task === "translation_review") {
     const assignment = state.assignment;
     // Lead correction shows no problem reporter, whose focus reload otherwise refreshes the task metadata.
-    return <TaskGuidelines assignment={assignment} readOnly={assignment.status === "submitted" || assignment.held}
+    return <TaskGuidelines assignment={assignment} place="header" readOnly={assignment.status === "submitted" || assignment.held}
       onRefresh={assignment.lead_correction ? value => setState({ identity, assignment: value }) : undefined}>{guidelines => <>
       <TranslationReviewScreen key={identity} assignmentId={props.assignmentId} username={props.user.username}
         held={assignment.held} holdReason={assignment.hold_reason} saveBeforeReportRef={saveBeforeReportRef}
@@ -159,7 +162,7 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
   // An active consolidation round opens the consolidation view (acceptance fixes WP-E); "Edit in editor…" adds view=editor.
   if (roundInfo?.kind === "consolidation" && roundInfo.active && view !== "editor") {
     // The task's guidelines and "Report a text problem" stay at hand: the consolidator decides guideline questions.
-    return <TaskGuidelines assignment={assignment} readOnly={workspace.read_only || assignment.held}>{guidelines => <>
+    return <TaskGuidelines assignment={assignment} place="header" readOnly={workspace.read_only || assignment.held}>{guidelines => <>
       <ConsolidationScreen projectKey={assignment.project_key} roundId={roundInfo.round_id} assignmentId={assignmentId}
         onNavigate={onNavigate} workspaceView={workspace.read_only ? null : workspace.view} notice={guidelines.notice}
         headerActions={<>{guidelines.button}<HelpLink screen="consolidation" />
@@ -188,7 +191,7 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
     : workspace.view.key.mode === "review" ? "consolidationEditor"
     : workspace.view.key.mode === "proposal_check" ? "editorProposals" : "editorScratch";
   const roundTitle = roundInfo ? roundIdentity(roundInfo) : undefined;
-  return <TaskGuidelines assignment={assignment} readOnly={workspace.read_only || assignment.held}>{guidelines => <>{submittedElsewhere && <InlineMessage tone="info">Another session submitted this task. Your editor has been reloaded read-only.</InlineMessage>}
+  return <TaskGuidelines assignment={assignment} place="more" readOnly={workspace.read_only || assignment.held}>{guidelines => <>{submittedElsewhere && <InlineMessage tone="info">Another session submitted this task. Your editor has been reloaded read-only.</InlineMessage>}
     {!!taskError && <><ErrorNotice error={taskError} /><Button onClick={() => { void loadTasks(); }}>Retry task list</Button></>}
     {/* "Report a text problem" sits in the header's "More" menu; its dialogs stay mounted here. */}
     <TaskProblemActions assignment={assignment} readOnly={workspace.read_only} onSaveBeforeReport={async () => { await saveBeforeReportRef.current?.(); }} onRefresh={value => {
@@ -215,7 +218,7 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
       onClose={back} onReload={() => load()} onReadonlyRequired={() => { if (active.current) { setSubmittedElsewhere(true); void load(); } }} onSubmitted={() => {
         setWorkspace(value => value ? { ...value, read_only: true } : value);
         // CaseScreen owns the successful-submission dialog; retain its mounted state.
-        void loadTasks();
+        void loadTasks(); notifyTasksChanged();
       }} />
   </CaseErrorBoundary>
     </>} />

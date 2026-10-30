@@ -23,6 +23,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - After "Move to a new finding" the new finding is selected, not the original (#151).
 - A new finding without a text span shows the term's name in "Selected term:"; a carried one lists its note as "Reason for no text span", and re-creating a carried finding keeps its note (#157).
 - The submit dialog says what happens to values left unconfirmed: submitted as shown, recorded as defaulted (#164).
+- The Work rounds dialog says before "Continue from this submission" that the earlier submission no longer counts as submitted, what the lead sees, and that the new round must be submitted again (#152).
+- The text problem dialog no longer keeps "Your task is paused" after "Resume my task" (#155).
+- The sidebar's "My tasks (n)" updates right after a submit or a new work round (#156).
+- The first-time guidelines notice names where the guidelines are: "More › Guidelines" in the editor, the header button in translation review and consolidation (#154).
+- The keyboard shortcut help (`?`) in the editor also lists the finding keys, and in review modes the decision keys, while they need a selection first, marked "not available right now" (#158).
 
 ## [0.3.0] - 2026-10-30
 
