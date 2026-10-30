@@ -91,7 +91,7 @@ it("sorts members by reads, then open tasks, then name; nobody preselected", asy
   expect(lastPreview().usernames).toEqual([]);
 });
 
-it("marks system administrators (a project's creator holds every role, #177)", async () => {
+it("marks system administrators (#177)", async () => {
   people.push(person("root", "Root Admin", "ann-0099", ["en", "de"], 0, { system_admin: true }));
   try {
     render(<AssignWorkDialog {...casesProps()} />); await ready();

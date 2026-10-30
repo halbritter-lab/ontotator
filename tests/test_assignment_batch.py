@@ -298,8 +298,8 @@ def test_preview_people_sorted_reads_then_open_tasks_then_name_with_reasons(env)
 
 
 def test_preview_marks_system_administrators(env):
-    """#177: a project's creator (a system admin) holds every role; the
-    dialog marks such people instead of listing them like any member."""
+    """#177: the dialog marks system admins instead of listing them like any
+    member."""
     with env.db.transaction() as conn:
         conn.execute(
             update(UserRow)
