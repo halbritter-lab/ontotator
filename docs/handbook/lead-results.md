@@ -66,7 +66,7 @@ What for: see how a consolidation result came about before you accept it.
 
 1. In the text card, click **Open consolidation**. Or, if the card shows flagged findings ("guidelines unclear"), click **Open** next to one to go straight to that group.
 2. The heading reads, for example, *Consolidation of CASE-1 en v1*. The banner says who submitted it. The view is read-only.
-3. In decided groups, the chosen value of each conflicting row is tagged **kept**. The consolidator's notes show as *Note: …*, and flagged groups show **Flagged: guidelines unclear**. Added findings say who added them.
+3. In decided groups, the chosen value of each conflicting row is tagged **kept**, including the chosen passage and modifiers. The consolidator's notes show as *Note: …*, and flagged groups show **Flagged: guidelines unclear**. Added findings say who added them and list their values.
 4. Click **Back to documents**.
 
 ### Accept a consolidation

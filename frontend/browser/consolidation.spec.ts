@@ -99,8 +99,12 @@ test("a lead without the Consolidator role consolidates the 8-group example in 6
   await expanded(page).getByRole("button", { name: "Keep", exact: true }).click();
   await expect(expandedGroup(page)).toHaveText("Absent reflexes");
   await expect(page.getByRole("button", { name: /^muscular hypotonia decided: Hypotonia \(HP:0001252\), Absent/ })).toBeVisible();
-  // The reflex spans overlap: no text decision, the text comes with the kept finding; "Keep" takes it.
-  await expect(expanded(page).getByText("(overlapping, comes with the chosen finding)", { exact: false })).toBeVisible();
+  // The reflex spans overlap but differ: no text decision; each person's passage has its ✓, the default one pressed
+  // (#159), and the result line names it; "Keep" takes it.
+  const textRow = expanded(page).getByRole("row").filter({ has: page.getByRole("rowheader", { name: "Text", exact: true }) });
+  await expect(textRow.getByRole("button", { name: /for Text$/ })).toHaveCount(2);
+  await expect(textRow.getByRole("button", { pressed: true })).toHaveCount(1);
+  await expect(expanded(page).locator(".cons-result")).toContainText("text “Absent reflexes");
   await expanded(page).getByRole("button", { name: "Keep", exact: true }).click();
   await expect(expandedGroup(page)).toHaveText("Reduced hearing");
   await page.getByRole("button", { name: /^Keep .+'s finding$/ }).click();
@@ -197,4 +201,13 @@ test("Add finding: a typed passage and a searched term are saved with the search
   expect(response.ok(), await response.text()).toBeTruthy();
   await expect(page.getByText(/^Finding added: Seizure/)).toBeVisible();
   await expect(page.locator(".cons-added")).toHaveText("Brief absence episodes");
+  // #178: the values open right away; a changed assertion is saved on the added finding.
+  const values = page.getByRole("group", { name: /^Values of / });
+  await values.getByLabel("Assertion").selectOption("absent");
+  const valuesSaved = page.waitForResponse(r => r.request().method() === "POST" && /\/commands$/.test(new URL(r.url()).pathname));
+  await values.getByRole("button", { name: "Save values", exact: true }).click();
+  const valuesResponse = await valuesSaved;
+  expect(valuesResponse.ok(), await valuesResponse.text()).toBeTruthy();
+  await expect(values).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Added findings" })).toContainText("Absent");
 });
