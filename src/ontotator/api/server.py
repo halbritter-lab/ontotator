@@ -12,10 +12,11 @@ from sqlalchemy.exc import OperationalError
 
 from ontotator.api.app import _runtime_lease, create_app
 from ontotator.api.health import ReadinessProbe, router
+from ontotator.api.proxy_guard import TrustedPeerGuard
 from ontotator.api.security import install_security
 from ontotator.config import AppConfig
 from ontotator.domain.errors import DomainError
-from ontotator.settings import demo_logins, server_settings
+from ontotator.settings import ServerSettings, demo_logins, server_settings
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +53,7 @@ def app_from_env() -> FastAPI:
         demo_logins=demo_logins(public_origin=runtime.public_origin),
     )
     try:
-        return create_app(config, expose_docs=not production)
+        return _guarded(create_app(config, expose_docs=not production), runtime)
     except DomainError as exc:
         if not production or exc.code != "DATABASE_NOT_MIGRATED":
             raise
@@ -77,4 +78,15 @@ def app_from_env() -> FastAPI:
     app.state.health_database_url = runtime.database_url
     install_security(app, None, runtime.public_origin, tuple(hosts))
     app.include_router(router)
+    return _guarded(app, runtime)
+
+
+def _guarded(app: FastAPI, runtime: ServerSettings) -> FastAPI:
+    """Production: accept only the trusted proxy and loopback (see proxy_guard).
+
+    ``serve --production`` runs uvicorn without its own proxy-header handling;
+    this outermost middleware applies X-Forwarded-* from the trusted proxies.
+    """
+    if runtime.environment == "production":
+        app.add_middleware(TrustedPeerGuard, trusted_proxies=runtime.trusted_proxies)
     return app

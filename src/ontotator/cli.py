@@ -218,8 +218,9 @@ def serve(
             host="0.0.0.0",
             port=8000,
             workers=runtime.workers,
-            proxy_headers=True,
-            forwarded_allow_ips=",".join(runtime.trusted_proxies),
+            # The app applies X-Forwarded-* itself, from ONTOTATOR_TRUSTED_PROXIES
+            # only, and refuses other remote peers (api/proxy_guard.py).
+            proxy_headers=False,
             access_log=True,
             timeout_graceful_shutdown=30,
         )

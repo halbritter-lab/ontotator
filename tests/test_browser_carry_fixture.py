@@ -92,6 +92,8 @@ def test_t5_carries_one_spanless_seizure_and_adds_one_finding(client):
     assert not draft.get("round_input_resolutions")
     added = ids[built["added_annotation_id"]]["annotation"]
     assert added["term_id"] == "HP:0001252" and len(added["evidence_refs"]) == 1
+    # #157: the carried spanless finding keeps its reason in its own note.
+    assert ids[built["carried_annotation_id"]]["annotation"]["note"] == built["note"]
 
 
 def test_corrected_input_needs_review_with_a_stored_reason(client):
