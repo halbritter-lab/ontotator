@@ -16,7 +16,7 @@ How to choose:
 
 What for: choose the final result of a text.
 
-1. On **Documents**, tab **Needs your decision**, click **Accept result…** or **Compare results…** in the row. The card opens at **Finalization**.
+1. On **Documents**, tab **Needs your decision**, click **Accept result…** or **Compare results…** in the row. The row reads **Accept result…** when there is one result to accept or all findings match, and **Compare results…** when submissions differ. The card opens at **Finalization**.
 2. With one submission or a submitted consolidation, check it and click **Accept result**.
 3. If all annotations agree, the card says so. Click **Accept result**.
 4. If they differ, the card shows the agreement, for example *Agreement: 5 of 9 findings match, 1 differs in context only*. **How is this counted?** explains the numbers. Open a submission with **Open submission** to read it in the read-only text view.
@@ -66,7 +66,7 @@ What for: see how a consolidation result came about before you accept it.
 
 1. In the text card, click **Open consolidation**. Or, if the card shows flagged findings ("guidelines unclear"), click **Open** next to one to go straight to that group.
 2. The heading reads, for example, *Consolidation of CASE-1 en v1*. The banner says who submitted it. The view is read-only.
-3. In decided groups, the chosen value of each conflicting row is tagged **kept**, including the chosen passage and modifiers. The consolidator's notes show as *Note: …*, and flagged groups show **Flagged: guidelines unclear**. Added findings say who added them and list their values.
+3. In decided groups, the chosen value of each conflicting row is tagged **kept**, including the chosen passage and modifiers. The consolidator's notes show as *Note: …*, in the list under each closed group as well, and flagged groups show **Flagged: guidelines unclear**. Added findings say who added them and list their values.
 4. Click **Back to documents**.
 
 ### Accept a consolidation
@@ -187,7 +187,7 @@ What for: download the accepted final results.
 
 1. In the sidebar, click **Export**. Or click **Export final results…** on **Documents** or **Progress**.
 2. The card **Final results** checks every text. It lists texts that need your decision and texts left out because they have no final result.
-3. Optional: to export now anyway, tick the box to leave out the other texts.
+3. If texts need your decision or are left out, a tick box names how many results are exported and how many texts are left out, for example *Export the 3 results as they are; leave out the other 243 texts*. Tick it to export now anyway. Without the tick, **Create final export** does not start. The export's README.txt lists the left-out texts and the warnings you acknowledged with this tick.
 4. Click **Create final export**.
 5. When it is ready, click **Download (ZIP)**.
 

@@ -11,7 +11,7 @@ import { Time } from "../app/Time";
 type Row = { case_id: string; language: string };
 type Line = Row & { why: string };
 const rowKey = (row: Row) => JSON.stringify([row.case_id, row.language]);
-/** Every omission also arrives as this warning; leaving a text out is information, not a decision to confirm. */
+/** Every omission also arrives as this warning; it is listed under "Left out", not under "Needs your decision". */
 const LEFT_OUT = "MISSING_FINAL_SELECTION";
 /** Rows beyond this collapse behind "Show all {n}", so a large project does not push the actions off screen. */
 const SHOWN_ROWS = 5;
@@ -43,8 +43,8 @@ export function FinalExportPanel({ projectKey, username }: { projectKey: string;
 }
 /**
  * The final export (D8): the preflight runs when the panel opens, "Check again" and final-selection
- * changes (while the page is visible) rerun it. "Create final export" is primary; only warnings other than
- * left-out texts ask for the acknowledgement; the download stays an explicit click.
+ * changes (while the page is visible) rerun it. "Create final export" is primary; open decisions and
+ * left-out texts ask for the acknowledgement, which names the counts; the download stays an explicit click.
  */
 function FinalExportContent({ projectKey }: { projectKey: string }): JSX.Element {
   const [state, setState] = useState<FinalPreflight>();
@@ -212,7 +212,7 @@ function FinalExportContent({ projectKey }: { projectKey: string }): JSX.Element
   </section>;
 }
 
-/** Only warnings other than "left out" need the lead's explicit confirmation. */
+/** Open decisions and left-out texts both need the lead's explicit, counted confirmation (issue 194). */
 function needsAck(state: FinalPreflight): boolean {
-  return state.warnings.some(warning => warning.code !== LEFT_OUT);
+  return state.omissions.length > 0 || state.warnings.some(warning => warning.code !== LEFT_OUT);
 }

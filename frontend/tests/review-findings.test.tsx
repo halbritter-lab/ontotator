@@ -410,7 +410,7 @@ describe("Submit", () => {
     const dialog = await screen.findByRole("dialog", { name: /Submit text/i });
     expect(dialog.textContent).toContain("1 finding, nothing open.");
     const confirm = within(dialog).getByRole("button", { name: /^Submit text$/i }) as HTMLButtonElement;
-    expect(dialog.textContent).toContain("Submitting also says you checked the whole text for further findings. Afterwards only the project lead can reopen it.");
+    expect(dialog.textContent).toContain("Submitting also says you checked the whole text for further findings. Afterwards the submission is read-only; to change it, start a new work round under More › Work rounds.");
     expect(confirm.getAttribute("aria-disabled")).toBeNull();
     fireEvent.click(confirm);
     await waitFor(() => expect(submit).toHaveBeenCalled());

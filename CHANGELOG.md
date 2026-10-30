@@ -38,6 +38,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The keyboard shortcut help (`?`) in the editor also lists the finding keys, and in review modes the decision keys, while they need a selection first, marked "not available right now" (#158).
 - **Refresh** on Documents starts a new visit of the tab, so rows that left it (for example texts just assigned under To assign) drop out instead of staying until a tab switch (#176).
 - **Pinned by** on Administration › Ontologies opens the project's Ontology settings tab; small settings cleanups (#168).
+- The final export leaves out texts without a final result only after a tick box that names the count (#194).
+- The Finalization row reads "Accept result…" when all compared findings match (#198).
+- Edit & Replace names what the copy changed ("Assertion: Present → Absent") next to "Replaced by" and has a "Done, back to the proposal" button (#198).
+- A consolidation's note shows under the closed group in the list, not only after opening it; Undo updates the screen reader status (#198).
+- The submit dialog no longer says only the lead can reopen a submitted task: it points to More › Work rounds, which annotators can use themselves (#197).
+- After a submit, the next task is one of the same type when there is one, so a translation review leads to the next translation review (#198).
 - Opening **My tasks** or **Projects** reloads the project list and the *My tasks (n)* count, so a project you were added to while logged in shows up without a page reload (#192).
 - Documents, tab **All**: while texts not in plan are hidden, the toolbar says how many of the tab's texts the table holds, for example *246 of 307* (#198).
 - The final-result links in the text card read **Open submission** instead of "Open in editor", since they open the read-only text view; the row's **Open** is named "Open text, …" for screen readers (#198).

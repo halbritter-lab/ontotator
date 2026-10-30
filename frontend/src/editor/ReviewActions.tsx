@@ -66,6 +66,8 @@ export interface ReviewActionsProps {
   onMoveMention?: (index: number) => void;
   /** B2-4: every finding that replaced the proposal (its copy first) when a mention was moved off the copy. */
   replacedBy?: { annotationId: string; quote: string }[];
+  /** issue 198: what the replacement changed against the proposal, in words; empty while the copy is unchanged. */
+  replacementChanges?: string[] | null;
   /** Controlled reviewer note (kept by the parent so it survives re-selection and decision resets). */
   note?: string;
   onNoteChange?: (note: string) => void;
@@ -122,6 +124,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
   onShowMention,
   onMoveMention,
   replacedBy = [],
+  replacementChanges = null,
   evidence = [],
   documentText = "",
   note: controlledNote,
@@ -375,6 +378,9 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
                   {index > 0 && " "}
                   <Button type="button" size="sm" title="Open this finding" onClick={() => onEditReplacement(item.annotationId)}>“{item.quote}”</Button>
                 </React.Fragment>)}</>}
+                {replacementChanges && (replacementChanges.length
+                  ? <ul className="review-actions__changes" aria-label="Changes against the proposal">{replacementChanges.map(change => <li key={change}>{change}</li>)}</ul>
+                  : <p className="field-hint">No changes against the proposal yet.</p>)}
               </div>
             );
           })()}

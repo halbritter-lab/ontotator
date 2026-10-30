@@ -192,6 +192,20 @@ describe("GroupCard", () => {
       "Hypotonia (HP:0001252), Absent, Patient, Current");
   });
 
+  it("shows the note of a closed group in the list, not only after opening it (#198)", () => {
+    const long = `Negated in the text, ${"x".repeat(80)}`;
+    renderCard({ ...byId("g-hypo"), state: "choose", note: `${long}\nSecond line.`, guidelines_unclear: true }, { expanded: false });
+    const preview = document.querySelector(".cons-note-preview")!;
+    expect(preview.textContent).toBe(`Note: ${long.slice(0, 79)}…`);
+    expect(preview.getAttribute("title")).toBe(`${long}\nSecond line.`);
+    cleanup();
+    renderCard({ ...byId("g-hypo"), state: "choose", note: "Short.\nMore." }, { expanded: false });
+    expect(document.querySelector(".cons-note-preview")!.textContent).toBe("Note: Short. …");
+    cleanup();
+    renderCard({ ...byId("g-hypo"), state: "choose", note: "Short." });
+    expect(document.querySelector(".cons-note-preview")).toBeNull();
+  });
+
   it("shows each person's overlapping passage, the default one marked: Keep takes the default member (#159)", () => {
     const value = { ...byId("g-dd"), kinds: ["span_differs", "notes_differ"],
       members: byId("g-dd").members.map((item, index) => ({ ...item, note: index ? "Late." : "Early." })) };

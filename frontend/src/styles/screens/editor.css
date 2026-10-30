@@ -2014,6 +2014,11 @@
   font-size: var(--size-sm);
 }
 
+.review-actions__changes {
+  margin: var(--space-1) 0 0;
+  padding-left: var(--space-4);
+}
+
 .review-actions__block .form-select {
   margin-bottom: var(--space-2);
 }

@@ -787,7 +787,8 @@ def build_s7a(app: FastAPI) -> dict[str, Any]:
 
 
 def build_s7b(app: FastAPI) -> dict[str, Any]:
-    """case-107 en source, per text 2: Ana and Tom submitted, no final."""
+    """case-107 en source, per text 2: Ana and Tom submitted the same three
+    findings (all match, the row reads "Accept result…"), no final."""
     scenario = overview_project(app, "S7b", per_text=2)
     docs = import_bundle(scenario, units("case-107", ()))
     plan(scenario, ["case-107"], {"source": {"annotate": ON}})

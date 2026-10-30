@@ -89,6 +89,19 @@ describe("next step labels", () => {
     expect(rowActionLabel(choose, single)).toBe("Compare results…");
   });
 
+  it("reads Accept result… when every compared finding matches (issue 198)", () => {
+    const choose = stepOf("choose_final");
+    const at = (matching: number, compared: number) => row({ case_id: "c", language: "de", stages: stages({ final: stageCell("choose", "decision", { submitted: 2, label_rule: "compare", matching, compared }) }) });
+    expect(rowActionLabel(choose, at(4, 4))).toBe("Accept result…");
+    expect(rowActionLabel(choose, at(0, 0))).toBe("Accept result…");
+    expect(rowActionLabel(choose, at(3, 4))).toBe("Compare results…");
+    // Like the card: a final already chosen, or annotations still open (partial agreement), compare.
+    expect(rowActionLabel(choose, { ...at(4, 4), final: { submission_id: "s1" } as never })).toBe("Compare results…");
+    const work = (status: string) => ({ task: "annotate", status, moved_to_version: null }) as never;
+    expect(rowActionLabel(choose, { ...at(4, 4), work: [work("submitted"), work("submitted"), work("in_progress")] })).toBe("Compare results…");
+    expect(rowActionLabel(choose, { ...at(4, 4), work: [work("submitted"), work("submitted")] })).toBe("Accept result…");
+  });
+
   it("names the text-change actions by target version and person when one row has several (VD18)", () => {
     const versions = [version({ document_id: "d1", version: 1, is_newest_in_chain: false }), version({ document_id: "d3", version: 3 })];
     const tom = { pseudonym: "ann-0004", display_name: "Tom Reis", is_me: false };

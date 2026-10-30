@@ -78,7 +78,7 @@ What for: decide a group by choosing, per row, the value that is right.
 3. In each highlighted row, click the ✓ next to the value you want. Its button is named after the value, for example *Take Hypotonia … for Term*.
 4. Read the result line below the table. It starts with "Result:" and lists what is still not chosen, for example *Term not chosen yet* or *text not chosen yet*. Once the term is chosen, **Not taken:** lists other people's terms that are not in the result.
 5. Optional: click **+ note** to write a **Note for the lead**, and tick **Guidelines unclear here** if the guidelines did not settle the case.
-6. Click **Keep**. The group reads **decided**, the message **Decision saved** appears with **Undo**, and the next open group opens.
+6. Click **Keep**. The group reads **decided**, the message **Decision saved** appears with **Undo**, and the next open group opens. A note shows under the closed group in the list, so you and the lead see it without opening the group.
 
 ![An open group with the comparison table, the ✓ choices for Hypotonia and Absent, and the Keep button](images/consolidator-group-table.png)
 

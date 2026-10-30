@@ -207,7 +207,7 @@ Tools make mistakes. Check every proposal as if you had marked it yourself: the 
 4. Decide:
    - **Confirm**: the passage, term and all values are right. Values tagged **Defaulted** were not set by the tool but prefilled; Confirm accepts them as shown, so check them too.
    - **Reject**: the proposal is wrong and nothing should replace it.
-   - **Edit & Replace**: the proposal is nearly right. You get an editable copy that replaces it; correct the term, values or text span in the copy.
+   - **Edit & Replace**: the proposal is nearly right. You get an editable copy that replaces it; correct the term, values or text span in the copy. The copy is listed under **Your own findings**. Above it, the editor names the proposal it replaces and what you changed, for example *Assertion: Present → Absent*. Click **Done, back to the proposal** when you are finished. The proposal then reads *Replaced by* with the term and your changes.
    - **Unresolved**: only if you really cannot decide; the other three decisions are the normal case. Write a **Reviewer note** saying why, then click **Save decision**. The proposal is submitted with your note and a reviewer flag. It does not block submitting; the lead (and a consolidator, if there is one) decides it. Only **Confirm** confirms a proposal's prefilled values: on an unresolved proposal they stay recorded as defaults, and its row shows **Defaults not confirmed**. The result line under **Your own findings** counts such a proposal as unresolved, for example "1 confirmed proposal, 1 unresolved proposal, 1 own finding".
 5. After each decision, the next open proposal is selected. Press `k` right after a decision to go back to it.
 6. When all proposals are decided, read the whole text again and add findings the tool missed: mark text that has no proposal, choose the term in **New finding** and set the values, as in [Mark text and add a finding](#mark-text-and-add-a-finding). Your additions appear under **Your own findings**, next to the proposals.
@@ -256,9 +256,9 @@ Before you start: submitting says you checked the whole text for further finding
 2. Click **Finish & submit text**. While items are open, the button shows how many. The full editor of a consolidation has no submit button; see [Work in the full editor](consolidator.md#work-in-the-full-editor).
 3. A dialog named after the text, for example *Submit CASE-1 en?*, lists what is still open: **Carried findings to check**, **Findings that need attention**, **Findings after text correction**, **Proposals not decided**. Click **Go to** to fix an item.
 4. When nothing blocks, click **Submit text**. If only warnings are left, the button reads **Submit with** and the number of warnings; see [Confirm values and acknowledge warnings](#confirm-values-and-acknowledge-warnings-in-the-submit-dialog) first.
-5. The next open task opens, or **My tasks** if none is left. To see what you sent, click **View result** in the message.
+5. The next open task opens, preferably one of the same kind (another review after a review), or **My tasks** if none is left. To see what you sent, click **View result** in the message.
 
-The task is now read-only. To change it later, [start a new work round](#start-a-new-work-round).
+The task is now read-only. To change it later, [start a new work round](#start-a-new-work-round) yourself under **More** › **Work rounds**; you do not need the lead for that. The submit dialog says the same.
 
 ## Confirm values and acknowledge warnings in the submit dialog
 
@@ -365,7 +365,7 @@ Steps:
    - **Accepted with corrections**: tick **Clinically relevant change** if your correction changes the clinical meaning; then a category and a **Rationale** are required.
    - **Accepted unchanged** after a failed automatic check: say in the **Rationale** why the flagged difference is correct.
 7. Click **Submit review…** (or press `Ctrl+Enter`), read what will happen, then click **Submit review**.
-8. A message confirms the review, with **View result**. Your next open task opens on its own, or **My tasks** if none is left.
+8. A message confirms the review, with **View result**. Your next open task opens on its own, another translation review first, or **My tasks** if none is left.
 
 If the source text was updated, **Source updates to review** appears. Open it, compare **Original source** and **Updated source**, and click **Submit review and resolve source update**.
 

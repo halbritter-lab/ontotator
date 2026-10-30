@@ -94,6 +94,9 @@ describe("ConsolidationScreen", () => {
     expect(reopen.mock.calls[0][1].expected_revision).toBe(4);
     await waitFor(() => expect(expandedTitle()).toBe("muscular hypotonia"));
     expect(screen.getByRole("button", { name: "Take Absent from Tom Reis for Assertion" }).getAttribute("aria-pressed")).toBe("true");
+    // #198: the status region no longer reads the undone decision.
+    await waitFor(() => expect(screen.getByText("muscular hypotonia: decision undone.")).toBeTruthy());
+    expect(screen.queryByText("muscular hypotonia: Hypotonia (HP:0001252), Absent, Patient, Current.")).toBeNull();
   });
 
   it("More… > Reopen all decisions… asks with the count, reopens in one command and offers one Undo (R-10)", async () => {

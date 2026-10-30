@@ -239,10 +239,10 @@ test('Q4: export preflight has one primary, Cancel, and tight warning items', as
   await expect(section.locator('.btn-primary')).toHaveCount(1);
   await expect(section.locator('.btn-primary')).toHaveText('Create final export');
   await expect(section.getByRole('button', { name: 'Check again', exact: true })).toBeVisible();
-  // Required: the scenario guarantees a text without a final result; it is listed as information, with no checkbox.
+  // Required: the scenario guarantees a text without a final result; leaving it out needs the counted tick (#194).
   const leftOut = section.getByRole('rowgroup', { name: 'Left out: no final result' });
   await expect(leftOut.getByRole('link', { name: /^Open in Documents, / }).first()).toBeVisible();
-  await expect(section.getByRole('checkbox')).toHaveCount(0);
+  await expect(section.getByRole('checkbox', { name: /leave out the other / })).toBeVisible();
   await section.getByRole('button', { name: 'Check again', exact: true }).click();
   await expect(section.getByRole('region', { name: 'Export check' })).toBeVisible();
   await expect(section.locator('.btn-primary')).toHaveCount(1);

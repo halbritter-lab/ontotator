@@ -483,6 +483,13 @@
   font-size: var(--size-sm);
 }
 
+/* issue 198: a closed group's note, so the list says more than "flagged". */
+.cons-note-preview {
+  margin: var(--space-1) 0 0;
+  color: var(--text-muted);
+  font-size: var(--size-sm);
+}
+
 .cons-snippet-mark {
   background: var(--surface-sunken);
   color: var(--text);

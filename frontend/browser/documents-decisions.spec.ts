@@ -421,9 +421,10 @@ test("S15 the lead's own result is not selectable when adjudication is separate"
   // VD5: groups never collapse; every row of the page is shown.
   await expect(textName(page, "case-0002", "en")).toBeVisible();
 
-  await rowAction(page, "Compare results…", caseId, "en").click();
+  // Both submissions have no findings: full agreement (W1, U7), so the row reads "Accept result…" (issue 198) and the
+  // per-submission table is under "Show submissions".
+  await rowAction(page, "Accept result…", caseId, "en").click();
   const panel = await openDecisionBlock(page, caseId, "en");
-  // Both submissions have no findings (W1, U7): the per-submission table is under "Show submissions".
   await expect(panel.getByText("Both submissions have no findings", { exact: true })).toBeVisible();
   await panel.getByRole("button", { name: "Show submissions", exact: true }).click();
   const lead = labels.lead.replace(/ \(.*\)$/, "");
