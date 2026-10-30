@@ -212,7 +212,7 @@ function FinalExportContent({ projectKey }: { projectKey: string }): JSX.Element
   </section>;
 }
 
-/** Open decisions and left-out texts both need the lead's explicit, counted confirmation (#194). */
+/** Open decisions and left-out texts both need the lead's explicit, counted confirmation (issue 194). */
 function needsAck(state: FinalPreflight): boolean {
   return state.omissions.length > 0 || state.warnings.some(warning => warning.code !== LEFT_OUT);
 }

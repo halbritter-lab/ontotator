@@ -181,7 +181,7 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
     if (ok) {
       setSummaries(current => { const next = new Map(current); next.delete(group.group_id); return next; });
       select(group.group_id, true);
-      // #198: the status region no longer reads the decision that was just taken back.
+      // issue 198: the status region no longer reads the decision that was just taken back.
       announce(`${groupName(group, viewRef.current?.text ?? "")}: ${undone ? "decision undone" : "reopened"}.`);
     }
     return ok;

@@ -147,7 +147,7 @@ export function secondaryLine(step: NextStepView, row: DocumentRowView): string 
  * The action name of a step on its row: "Choose final" follows the server's `stages.final.detail.label_rule` (the
  * final-result panel's rule, VD16): "accept" reads "Accept result…", "compare" "Compare results…"; without the field
  * one submission reads "Accept result…". A "compare" row whose findings all match ("All findings match (4 of 4)" in
- * the card) also reads "Accept result…": there is nothing to compare (#198).
+ * the card) also reads "Accept result…": there is nothing to compare (issue 198).
  */
 export function rowActionLabel(step: NextStepView, row: Pick<DocumentRowView, "stages"> & Partial<Pick<DocumentRowView, "versions" | "work" | "steps" | "next_step">>): string {
   if (step.action === "choose_final") {

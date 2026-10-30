@@ -61,7 +61,7 @@ export interface GroupCardProps {
 const SNIPPET_CONTEXT = 40;
 
 /** "…context passage context…" around the group's passage. */
-/** A note in the closed group's row: its first line, at most 80 characters (#198). */
+/** A note in the closed group's row: its first line, at most 80 characters (issue 198). */
 function notePreview(note: string): string {
   const trimmed = note.trim();
   const line = trimmed.split("\n")[0];
@@ -319,7 +319,7 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
           aria-keyshortcuts="Control+Z Meta+Z" onClick={props.onUndo}>Undo</Button></span>}
     </div>
     {narrow && <Snippet group={group} text={text} />}
-    {/* #198: a closed group's note shows in the list, not only after opening it. */}
+    {/* issue 198: a closed group's note shows in the list, not only after opening it. */}
     {!expanded && group.note && <p className="cons-note-text cons-note-preview" title={group.note}>Note: {notePreview(group.note)}</p>}
     {expanded && <div className="cons-group-body">
       {open ? openBody : resolvedBody}

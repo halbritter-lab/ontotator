@@ -62,7 +62,7 @@ export function orderTasks(
 /**
  * Unsubmitted tasks of the same project in My tasks (server) order, without the current one (spec A.5). The next
  * task is the first one of the current task's type (a translation review leads to the next translation review,
- * #198), else the first open one.
+ * issue 198), else the first open one.
  */
 export function nextOpenTask(
   tasks: readonly TaskSummary[],

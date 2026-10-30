@@ -15,7 +15,7 @@ export interface ReplacementSide {
 const quoted = (quotes: readonly string[]) => quotes.length ? quotes.map(quote => `“${quote}”`).join(", ") : "no text span";
 
 /**
- * What the replacement changed against its proposal (#198), in display words: "Term: Weight loss → Cachexia",
+ * What the replacement changed against its proposal (issue 198), in display words: "Term: Weight loss → Cachexia",
  * "Assertion: Present → Absent", "Text: “weight loss” → “loss”", "Note changed", "Modifiers changed". Empty when the
  * copy is still identical, so a "Replaced by" with the same name says what makes it different.
  */

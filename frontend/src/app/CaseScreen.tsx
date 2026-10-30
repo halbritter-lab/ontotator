@@ -1160,7 +1160,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     return segmentsKey(copyEvidence) !== segmentsKey(source.evidence ?? []);
   };
 
-  /** #198: what a replacement changed against its proposal, in words ("Assertion: Present → Absent"); null without both. */
+  /** issue 198: what a replacement changed against its proposal, in words ("Assertion: Present → Absent"); null without both. */
   const replacementChangesOf = (target: TargetProposal, copyId: string | undefined): string[] | null => {
     const source = targetSnapshotOf(target);
     const copy = (draft.annotations ?? []).find(a => a.annotation.annotation_id === copyId);
@@ -3533,7 +3533,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                           </React.Fragment>)}
                         </>
                       );
-                      // #198: the same name says nothing; the other changes follow it ("Assertion: Present → Absent").
+                      // issue 198: the same name says nothing; the other changes follow it ("Assertion: Present → Absent").
                       const changes = (replacementChangesOf(t, dec.replacement?.annotation_id) ?? []).filter(change => !change.startsWith("Term: "));
                       return (
                         <Button
@@ -3965,7 +3965,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           ) : (<>
             {carriedSection}
             {isReviewLike(view.key.mode) && selectedAnnotation && (() => {
-              // #198: the copy made by Edit & Replace says what it replaces and has a clear way back to its proposal.
+              // issue 198: the copy made by Edit & Replace says what it replaces and has a clear way back to its proposal.
               const replaced = sourceTargetOf(selectedAnnotation);
               if (!replaced) return null;
               const changes = replacementChangesOf(replaced, selectedAnnotation.annotation.annotation_id) ?? [];

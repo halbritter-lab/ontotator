@@ -66,7 +66,7 @@ export interface ReviewActionsProps {
   onMoveMention?: (index: number) => void;
   /** B2-4: every finding that replaced the proposal (its copy first) when a mention was moved off the copy. */
   replacedBy?: { annotationId: string; quote: string }[];
-  /** #198: what the replacement changed against the proposal, in words; empty while the copy is unchanged. */
+  /** issue 198: what the replacement changed against the proposal, in words; empty while the copy is unchanged. */
   replacementChanges?: string[] | null;
   /** Controlled reviewer note (kept by the parent so it survives re-selection and decision resets). */
   note?: string;
