@@ -49,6 +49,9 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     ONTOTATOR_ENV=production \
     ONTOTATOR_DATA_DIR=/data
+# The Git commit, shown in the app's Help (/api/v1/about); late, so it does not bust the layer cache.
+ARG ONTOTATOR_REVISION=""
+ENV ONTOTATOR_REVISION=$ONTOTATOR_REVISION
 USER 1001:1001
 EXPOSE 8000
 VOLUME ["/data"]

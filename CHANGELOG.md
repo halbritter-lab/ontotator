@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- The handbook in the app shows the running version and Git commit below its chapter list, for every logged-in user; `GET /api/v1/about` returns them. Published images carry the commit as `ONTOTATOR_REVISION`.
+
+### Changed
+
+- The OpenAPI version comes from the package version instead of a second hard-coded number.
+
 ## [0.3.0] - 2026-10-30
 
 ### Added

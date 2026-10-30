@@ -20,7 +20,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 from starlette.concurrency import run_in_threadpool
 
-from ontotator import settings
+from ontotator import __version__, settings
+from ontotator.api.about_routes import router as about_router
 from ontotator.api.admin_routes import router as admin_router
 from ontotator.api.auth_routes import demo_router as demo_login_router
 from ontotator.api.auth_routes import router as auth_router
@@ -145,7 +146,7 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
     """Instantiate configured FastAPI application for local editor."""
     app = FastAPI(
         title="Ontotator Local API",
-        version="0.3.0",
+        version=__version__,
         docs_url="/docs" if expose_docs else None,
         redoc_url="/redoc" if expose_docs else None,
         openapi_url="/openapi.json" if expose_docs else None,
@@ -527,6 +528,7 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
     app.include_router(job_router)
     app.include_router(upload_router)
     app.include_router(me_router)
+    app.include_router(about_router)
     app.include_router(auth_router)
     if config is not None and config.demo_logins:
         logger.warning(

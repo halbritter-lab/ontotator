@@ -10,6 +10,7 @@
 .help-document .guideline-markdown h3 { font-size: var(--size-reading); }
 /* Anchored headings stay clear of the top edge after a jump. */
 .help-document :is(h1, h2, h3, h4) { scroll-margin-top: var(--space-4); }
+.help-version { margin: var(--space-4) 0 0; padding: 0 var(--space-2); color: var(--text-muted); font-size: var(--size-sm); }
 .help-image { display: block; max-width: 100%; height: auto; margin: var(--space-3) 0; border: 1px solid var(--border); border-radius: var(--radius-sm); }
 
 @media (max-width: 899px) {
