@@ -227,10 +227,11 @@ def pin_differences(
 ) -> list[dict[str, Any]]:
     """How the layers of a bundle differ from the project's pins (T3 A1).
 
-    Compared per layer: the ontology id (that of the profile layer), the
-    version (the pinned release), the sha256 if the layer names one, the
-    allowed roots and the T1 profile. A layer the project does not know is left
-    to the mapping (``T1_UNKNOWN_LAYER``).
+    Compared per layer: the ontology id (that of the profile layer, ignoring
+    case: ``hp`` and ``HP`` are the same ontology, #189), the version (the
+    pinned release), the sha256 if the layer names one, the allowed roots and
+    the T1 profile. A layer the project does not know is left to the mapping
+    (``T1_UNKNOWN_LAYER``).
     """
     profile_layers = _layer_map(profile)
     differences: list[dict[str, Any]] = []
@@ -252,7 +253,7 @@ def pin_differences(
             continue
         seen.add(layer.layer_id)
         ontology_id = definition.ontology_id
-        if layer.ontology.id != ontology_id:
+        if not same_ontology(layer.ontology.id, ontology_id):
             differ(layer.layer_id, "ontology", ontology_id, layer.ontology.id)
             continue
         pin = pins.get(ontology_id)
@@ -274,6 +275,121 @@ def pin_differences(
         if layer.profile != pin.t1_profile:
             differ(layer.layer_id, "profile", pin.t1_profile, layer.profile)
     return differences
+
+
+def same_ontology(a: str, b: str) -> bool:
+    """Ontology ids name the same ontology regardless of case (``hp``/``HP``, #189)."""
+    return a.casefold() == b.casefold()
+
+
+_SCHEME_LABELS = {"hpo-phenotype": "HPO phenotype", "generic": "Generic"}
+
+
+def _roots(value: Any) -> str:
+    return ", ".join(value) if value else "every term"
+
+
+def explain_pin_differences(differences: Sequence[Mapping[str, Any]]) -> str:
+    """``pin_differences`` in plain words: bundle value, project value, who fixes it (#196)."""
+    lines: list[str] = []
+    for item in differences:
+        layer, found, expected = item["layer_id"], item["found"], item["expected"]
+        match item["field"]:
+            case "ontology":
+                lines.append(
+                    f"Layer {layer}: the bundle uses the ontology {found}, this "
+                    f"project uses {expected}. The ontology of a project is fixed "
+                    "when it is created; ask an administrator for a project with "
+                    f"the ontology {found}."
+                )
+            case "pin":
+                lines.append(
+                    f"Layer {layer}: this project has no ontology file for "
+                    f"{expected}. Ask an administrator."
+                )
+            case "version":
+                lines.append(
+                    f"Layer {layer}: the bundle uses release {found}, this project "
+                    f"uses release {expected}. A lead can choose the release under "
+                    "Settings, tab Ontology; an administrator uploads it first if "
+                    "it is missing."
+                )
+            case "sha256":
+                lines.append(
+                    f"Layer {layer}: the bundle was made with another file of the "
+                    "ontology than the one this project uses. Ask an administrator "
+                    "to upload the file the bundle names."
+                )
+            case "allowed_roots":
+                lines.append(
+                    f"Layer {layer}: the bundle allows {_roots(found)}, this "
+                    f"project allows {_roots(expected)}. A lead can change the "
+                    "branches under Settings, tab Ontology, until work is submitted."
+                )
+            case "profile":
+                lines.append(
+                    f"Layer {layer}: the bundle uses the annotation scheme "
+                    f"{_SCHEME_LABELS.get(found, found)}, this project uses "
+                    f"{_SCHEME_LABELS.get(expected, expected)}. A lead can change "
+                    "the scheme under Settings, tab Ontology, until work is submitted."
+                )
+            case _:
+                lines.append(f"Layer {layer}: {item['field']} differs.")
+    return " ".join(lines)
+
+
+def _listed(value: Any) -> str:
+    if isinstance(value, Mapping):
+        return "; ".join(f"{key}: {_listed(item)}" for key, item in value.items())
+    if isinstance(value, list | tuple | set | frozenset):
+        return ", ".join(_listed(item) for item in value)
+    return str(value)
+
+
+_PROFILE_FIX = (
+    "The project's task profile defines them; a lead can replace it under "
+    "Settings, tab Ontology, until work is submitted."
+)
+
+
+def import_issue_message(exc: DomainError) -> str:
+    """A refused unit in plain words, never a raw Python structure (#196)."""
+    details = exc.details
+    if not isinstance(details, Mapping):
+        return str(details) if details else exc.code
+    match exc.code:
+        case "T1_SET_KIND":
+            return (
+                f"Proposal sets of the kind {_listed(details['set_kinds'])} cannot "
+                f"be imported; accepted are {_listed(details['accepted'])}."
+            )
+        case "T1_TOOL_PROVENANCE":
+            return "A tool in the proposal set has no name or version."
+        case "T1_UNSUPPORTED":
+            return (
+                f"Proposals {_listed(details['annotations'])} have modifiers on a "
+                "layer without the HPO phenotype scheme."
+            )
+        case "T1_UNKNOWN_LAYER":
+            return (
+                f"Proposals {_listed(details['annotations'])} use the layer "
+                f"{_listed(details['layers'])}, which this project does not have. "
+                + _PROFILE_FIX
+            )
+        case "T1_UNKNOWN_AXIS":
+            return (
+                f"Proposals {_listed(details['annotations'])} use the value fields "
+                f"{_listed(details['axes'])}, which this project does not have. "
+                + _PROFILE_FIX
+            )
+        case "T1_UNKNOWN_AXIS_VALUE":
+            values = "; ".join(
+                f"{annotation}: "
+                + ", ".join(f"{axis} {value}" for axis, value in axes.items())
+                for annotation, axes in details["values"].items()
+            )
+            return f"Values this project does not offer: {values}. " + _PROFILE_FIX
+    return _listed(details)
 
 
 def _layer_map(profile: TaskProfile) -> dict[str, LayerDefinition]:

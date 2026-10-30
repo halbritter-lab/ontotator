@@ -47,10 +47,24 @@ class JobView(BaseModel):
     finished_at: datetime | None
 
 
-def authorized_project(conn: Connection, key: str, actor: Actor, action: Action) -> int:
-    """Keep membership, structure and fresh actor rights stable through commit."""
+def authorized_project(
+    conn: Connection,
+    key: str,
+    actor: Actor,
+    action: Action,
+    *,
+    structure: bool = True,
+) -> int:
+    """Keep membership, structure and fresh actor rights stable through commit.
+
+    ``structure=False`` skips the shared project lock: a pure read of job state
+    must not wait for an import, which holds that lock exclusively (#198).
+    """
     conn.execute(select(func.pg_advisory_xact_lock_shared(_lock_id("members", key))))
-    conn.execute(select(func.pg_advisory_xact_lock_shared(_lock_id("project", key))))
+    if structure:
+        conn.execute(
+            select(func.pg_advisory_xact_lock_shared(_lock_id("project", key)))
+        )
     project_id = Repository._project_id(conn, key)
     if project_id is None:
         raise project_not_found(key)
@@ -86,7 +100,8 @@ def get_job(job_id: int, request: Request, principal: PrincipalDep) -> JobView:
             else Action.VIEW_PROGRESS
         )
         try:
-            authorized_project(conn, key, actor, action)
+            # Polled while an import runs; reads only the job row.
+            authorized_project(conn, key, actor, action, structure=False)
         except DomainError as exc:
             if exc.code in {"PROJECT_NOT_FOUND", "NOT_ALLOWED"}:
                 raise _not_found() from None

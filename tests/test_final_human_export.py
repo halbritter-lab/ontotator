@@ -241,7 +241,7 @@ _VOLATILE = [
 # inputs): a change here changes every export of that kind. v2 (#133) added
 # the (here empty) "consolidations" record and the format string.
 CARRY_FORWARD_DIGEST = (
-    "02119bcc51b60b6f222da711765d69d2f933e879f8946dbf17b6ee88048eed14"
+    "458ac726c812a016de6e19093b22497e1b4cfa429804995266cca2624e5b1875"
 )
 
 

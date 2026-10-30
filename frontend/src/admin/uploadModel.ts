@@ -77,8 +77,21 @@ export function uploadSummary(plan: ImportPlan, kind: UploadKind): SummaryItem[]
 /** One line of "Notes"; `details` are shown behind its "Show" button. */
 export interface UploadNote { id: string; text: string; details: string[]; tone?: "warning" }
 
-const issueText = (issue: Issue) => `${issue.unit ? `${issue.unit}: ` : ""}${issue.message}`;
+/** One issue as a detail line: the text and proposal it concerns, without the file-internal path ("annotation_set.annotations[35].term_id"). */
+const issueText = (issue: Issue) => {
+  const message = issue.message.replace(/^(annotation_set|document|schema_version)[\w.[\]]*: /, "");
+  const where = [issue.unit, issue.annotation_id && `proposal ${issue.annotation_id}`].filter(Boolean).join(", ");
+  return where ? `${where}: ${message}` : message;
+};
 export const issueTitle = (code: string) => ERROR_MESSAGES[code] ?? humanize(code);
+
+/** Checker warnings in plain words; each says whether anything needs doing (#196). Others fall back to their title. */
+const WARNING_NOTES: Readonly<Record<string, (count: number) => string>> = {
+  modifier_as_annotation: count => `${plural(count, "proposal")} name${count === 1 ? "s" : ""} a modifier term, such as Severe, as the finding. No action needed now: annotators are asked to check each one before they submit.`,
+  empty_after_normalization: count => `${plural(count, "evidence span")} cover${count === 1 ? "s" : ""} only spaces or punctuation. No action needed now: annotators check the evidence of each proposal.`,
+  newer_minor: count => `${plural(count, "text")} use${count === 1 ? "s" : ""} a newer version of the Ontospan format. Parts this version does not know are kept but not shown. No action needed.`,
+  ontology_release_mismatch: count => `${plural(count, "text")} name${count === 1 ? "s" : ""} another ontology release than this project. Check the imported terms in the first tasks.`,
+};
 
 /** Notes on a committable preview, one line each (OQ1: unknown languages warn, they do not refuse). */
 export function uploadNotes(plan: ImportPlan, kind: UploadKind, projectLanguages: readonly string[]): UploadNote[] {
@@ -107,7 +120,7 @@ export function uploadNotes(plan: ImportPlan, kind: UploadKind, projectLanguages
   if (duplicates.length) notes.push({ id: "duplicates", text: `${plural(duplicates.length, "text")} with the same text as another text.`, details: duplicates.map(item => `${item.document_id}: ${item.same_text_as.length ? `same text as ${item.same_text_as.join(", ")}` : "duplicate input"}`) });
   const warnings = new Map<string, Issue[]>();
   for (const issue of plan.warnings ?? []) warnings.set(issue.code, [...(warnings.get(issue.code) ?? []), issue]);
-  for (const [code, issues] of warnings) notes.push({ id: `warning-${code}`, text: `${issueTitle(code)} (${issues.length})`, details: issues.map(issueText) });
+  for (const [code, issues] of warnings) notes.push({ id: `warning-${code}`, text: WARNING_NOTES[code]?.(issues.length) ?? `${issueTitle(code)} (${issues.length})`, details: issues.map(issueText) });
   const refused = (plan.proposal_sets ?? []).flatMap(set => set.refused.map(item => ({ set, item })));
   if (refused.length) {
     const proposals = new Set(refused.map(({ set, item }) => `${set.document_id}\u0000${item.annotation_id}`)).size;

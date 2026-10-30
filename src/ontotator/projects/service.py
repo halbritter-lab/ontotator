@@ -240,6 +240,22 @@ def check_allowed_roots(store: OntologyStore, pins: Mapping[str, Pin]) -> None:
             )
 
 
+def _spelled_as(pins: Mapping[str, Pin], profile: TaskProfile) -> dict[str, Pin]:
+    """``pins`` keyed by the profile's spelling of each ontology id (#189).
+
+    ``hp`` and ``HP`` are one ontology, so a profile that spells the pinned id
+    in another case replaces the profile of the project; the pin follows it.
+    """
+    spelling = {o.ontology_id.casefold(): o.ontology_id for o in profile.ontologies}
+    result: dict[str, Pin] = {}
+    for oid, pin in pins.items():
+        name = spelling.get(oid.casefold(), oid)
+        if name in result:
+            return dict(pins)
+        result[name] = pin
+    return result
+
+
 def _superseded(earlier: list[str], old: Pin | None, sha256: str) -> list[str]:
     """The digests a pin replaced, oldest first, after it moves to ``sha256``."""
     history = list(earlier)
@@ -627,6 +643,10 @@ class ProjectService:
             selected_pins = (
                 pins if pins is not None else self.repo._pins(conn, row["id"])
             )
+            if profile is not None:
+                selected_pins = _spelled_as(selected_pins, profile)
+            # Pins re-spelled to the profile's ontology ids keep their history.
+            earlier_id = {oid.casefold(): oid for oid in old_pins}
             if pins is not None:
                 definitions = []
                 for definition in selected_profile.ontologies:
@@ -713,8 +733,11 @@ class ProjectService:
                             "allowed_roots": list(pin.allowed_roots),
                             "t1_profile": pin.t1_profile,
                             "superseded_sha256": _superseded(
-                                list(superseded.get(oid) or []),
-                                old_pins.get(oid),
+                                list(
+                                    superseded.get(earlier_id.get(oid.casefold(), oid))
+                                    or []
+                                ),
+                                old_pins.get(earlier_id.get(oid.casefold(), oid)),
                                 pin.sha256,
                             ),
                         }
