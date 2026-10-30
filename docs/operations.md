@@ -109,7 +109,7 @@ docker compose ps --all
 
 PostgreSQL initialization creates separate non-superuser owner and app roles and the application schema. `migrate` upgrades that schema as owner, and only successful completion allows app to start.
 
-If initialization fails, the data volume is left half-initialized: PostgreSQL restarts, reports healthy and skips initialization, but the roles `ontotator_owner` and `ontotator_app` and the `ontotator` schema are missing, so `migrate` fails (for example `password authentication failed` or `role "ontotator_owner" does not exist`) and app never starts. Look for the cause in the first lines of `docker compose logs ontotator_postgres`:
+If initialization fails, the data volume is left half-initialized: PostgreSQL restarts and skips initialization, so the roles `ontotator_owner` and `ontotator_app` and the `ontotator` schema stay missing. The `ontotator_postgres` health check looks for both roles and the schema, so the container stays `unhealthy`, `up --wait` fails, and `migrate` and app are not started (`dependency failed to start: container ... is unhealthy`). `docker inspect --format '{{json .State.Health}}' CONTAINER` shows `ontotator roles/schema missing: postgres-init.sh failed`. Look for the cause in the first lines of `docker compose logs ontotator_postgres`:
 
 - `Invalid generated credential (hex expected)`: a password file is not 64 lowercase hex characters; see [Configuration and secrets](#configuration-and-secrets).
 - `Permission denied` for `/docker-entrypoint-initdb.d/10-ontotator.sh`: the init script is not readable by UID 70; apply the `chmod` lines above.

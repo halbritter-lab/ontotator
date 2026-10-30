@@ -31,8 +31,21 @@ services:
     cpus: 1.0
     pids_limit: 256
     healthcheck:
-      # TCP, not the socket: the init-time server listens only on the socket.
-      test: [CMD, pg_isready, -h, 127.0.0.1, -U, ontotator_bootstrap, -d, ontotator]
+      # pg_isready over TCP, not the socket: the init-time server listens only
+      # on the socket. The query then uses the socket (local trust, as for the
+      # documented pg_dump). Healthy also needs both roles and the schema from
+      # postgres-init.sh: if the script failed (e.g. unreadable under a host
+      # umask of 027), initdb has already run and a restart skips
+      # initialization, so a bare pg_isready would call a half-initialized
+      # database healthy and migrate would fail with a misleading error.
+      test:
+        - CMD-SHELL
+        - >-
+          pg_isready -q -h 127.0.0.1 -U ontotator_bootstrap -d ontotator &&
+          psql -X -q -U ontotator_bootstrap -d ontotator -tAc
+          "SELECT (SELECT count(*) FROM pg_roles WHERE rolname IN ('ontotator_owner', 'ontotator_app'))
+          + (SELECT count(*) FROM pg_namespace WHERE nspname = 'ontotator')" | grep -qx 3 ||
+          { echo 'PostgreSQL not ready, or ontotator roles/schema missing: postgres-init.sh failed (see docs/operations.md, First start)' >&2; exit 1; }
       interval: 10s
       timeout: 5s
       retries: 5
