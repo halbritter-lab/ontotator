@@ -54,3 +54,4 @@ worktrees/
 /.env*
 !/.env.docker.template
 /loadtest/results/
+site/tutorials/

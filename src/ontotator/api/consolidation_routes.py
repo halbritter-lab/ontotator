@@ -125,6 +125,9 @@ class ConsolidationView(_View):
     added_by: str | None = None
     # The consolidator's label, always (the read-only banner names them).
     consolidator: str | None = None
+    # The lead's "Consolidation reason" from the start command (#146); None
+    # when the lead gave none.
+    consolidation_reason: str | None = None
     workflow_revision: int
     # The live draft's revision, the ``expected_revision`` of the next group
     # command; 0 in read-only mode.

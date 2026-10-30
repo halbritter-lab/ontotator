@@ -1,4 +1,4 @@
-import{r as i,a as p,j as a}from"./index-T1y6HZAb.js";import{M as m,r as g}from"./index-BlXb8o6y.js";const f=`# Ontotator user handbook
+import{r as i,a as p,j as a}from"./index-Cu6DhsxF.js";import{M as m,r as g}from"./index-BfAjzznC.js";const f=`# Ontotator user handbook
 
 This handbook explains how to work with Ontotator in the browser. It is for everyone who uses the app: annotators, translation reviewers, consolidators, leads and system administrators. It describes the version of Ontotator that you open it from. If you run the server, read the [server operations guide (for server operators)](../operations.md) instead.
 
@@ -402,7 +402,7 @@ What for: record the context of a finding: whether it is present, who has it and
 1. Select the finding. The section **Values** lists each value field, such as the assertion (**Present**, **Absent**, **Uncertain**) or the experiencer (**Patient**, **Family member**, …). Press \`v\` to jump there with the keyboard.
 2. Read the passage in context. "No seizures" is **Absent**; "his mother has seizures" is not the patient.
 3. To change a value, choose another one. Value fields with few values are buttons; others are a dropdown.
-4. Values the project prefills are tagged **Default**. They count as not confirmed until you confirm or change them. If all shown values are right, click **Confirm defaults** or press \`d\`. This confirms every default of this finding. On a button field you can also confirm one default by clicking its highlighted button.
+4. Values the project prefills are tagged **Default**. They count as not confirmed until you confirm or change them. If all shown values are right, click **Confirm defaults** or press \`d\`. This confirms every default of this finding. To confirm one default only, click its highlighted button on a button field, or **Confirm** next to a dropdown field.
 
 Findings with open defaults show **Defaults to confirm** in the list.
 
@@ -417,7 +417,7 @@ What for: link a finding to every place in the text that supports it.
    - **Add mention**, then mark the text: adds another place. Esc cancels.
    - **Add segment** on a mention, then mark the text: adds a second piece to the same mention, for words that are apart.
    - Drag a mention's edge handles, or focus an edge and press \`←\` or \`→\` (\`Ctrl+←\` / \`Ctrl+→\` moves by word): resizes it.
-   - **Move to a new finding**: gives one mention its own finding with the same term and values. The original finding stays selected; the new one is added to the list. Select it there to change it.
+   - **Move to a new finding**: gives one mention its own finding with the same term and values. The new finding is selected, so you can change it right away; modifiers stay with the original finding.
    - **Remove**, then **Yes, remove**: detaches the mention.
 
 You cannot remove the last mention when the project requires a text span. If the project allows findings without a span, enter a reason in the note first.
@@ -443,9 +443,9 @@ What for: correct a finding you made.
 2. Use the action you need:
    - **Change term**, then search a new one: changes the term and keeps the mentions.
    - **Note**: type a comment. It is saved with the finding and the lead can read it.
-   - **Delete finding**, then **Yes, delete**: deletes the finding and all its mentions.
+   - **Delete finding**, then **Yes, delete**: deletes the finding and all its mentions. The message that follows offers **Undo**; \`Ctrl+Z\` (macOS: \`Cmd+Z\`) does the same while you are not typing in a field. Undo puts the finding back with its mentions, values, note and modifiers, and selects it.
 
-Warning: deleting a finding cannot be undone. Check that the right finding is selected first.
+Undo is offered only right after deleting, until the message closes. A restored carried finding may need a new check.
 
 If a term has become obsolete, the panel says so. Change the term or delete the finding.
 
@@ -494,7 +494,7 @@ Tools make mistakes. Check every proposal as if you had marked it yourself: the 
    - **Confirm**: the passage, term and all values are right. Values tagged **Defaulted** were not set by the tool but prefilled; Confirm accepts them as shown, so check them too.
    - **Reject**: the proposal is wrong and nothing should replace it.
    - **Edit & Replace**: the proposal is nearly right. You get an editable copy that replaces it; correct the term, values or text span in the copy.
-   - **Unresolved**: only if you really cannot decide; the other three decisions are the normal case. Write a **Reviewer note** saying why, then click **Save decision**. The proposal is submitted with your note and a reviewer flag. It does not block submitting; the lead (and a consolidator, if there is one) decides it.
+   - **Unresolved**: only if you really cannot decide; the other three decisions are the normal case. Write a **Reviewer note** saying why, then click **Save decision**. The proposal is submitted with your note and a reviewer flag. It does not block submitting; the lead (and a consolidator, if there is one) decides it. Only **Confirm** confirms a proposal's prefilled values: on an unresolved proposal they stay recorded as defaults, and its row shows **Defaults not confirmed**. The result line under **Your own findings** counts such a proposal as unresolved, for example "1 confirmed proposal, 1 unresolved proposal, 1 own finding".
 5. After each decision, the next open proposal is selected. Press \`k\` right after a decision to go back to it.
 6. When all proposals are decided, read the whole text again and add findings the tool missed: mark text that has no proposal, choose the term in **New finding** and set the values, as in [Mark text and add a finding](#mark-text-and-add-a-finding). Your additions appear under **Your own findings**, next to the proposals.
 
@@ -510,14 +510,14 @@ What for: check findings that were carried over from an earlier round, for examp
 
 1. The toolbar names the round, for example *Round 2, continued from Round 1*, or reads **Review carried findings**. The progress line counts checked findings.
 2. Click **Next unchecked** (or press \`n\`) to select the next finding marked **Check needed**.
-3. Read **What to check**: the text span, the values or the note. Carried values are not confirmed.
+3. Read **What to check**: the text span, the values or the note. For a finding without a text span the note is listed as its **Reason for no text span**. Carried values are not confirmed.
 4. Optional: to see the finding as it was, click **Show original evidence**.
 5. If it is right (after any edits), click **Mark as checked** or press \`c\`.
 6. If it does not apply to this text, open **Does not apply…**, give a reason and click **Dismiss**.
 
 If you change a finding after checking it, it needs a new check.
 
-A row **Not on this text** means the finding could not be placed in this text. Select it and choose one: **Mark in text**, **Link to an existing finding**, or **Dismiss with reason…**.
+A row **Not on this text** means the finding could not be placed in this text. Select it and choose one: **Mark in text**, **Link to an existing finding**, or **Dismiss with reason…**. A finding re-created with **Mark in text** keeps the original's term, values and note.
 
 ![A carried finding with What to check and the Mark as checked button](images/annotator-carried-finding.png)
 
@@ -539,7 +539,7 @@ What for: hand your finished work to the lead.
 Before you start: submitting says you checked the whole text for further findings, not only the ones you marked. See [When is a task done?](#when-is-a-task-done).
 
 1. Click **Next open item** to jump to things that still need attention.
-2. Click **Finish & submit text**. While items are open, the button shows how many.
+2. Click **Finish & submit text**. While items are open, the button shows how many. The full editor of a consolidation has no submit button; see [Work in the full editor](consolidator.md#work-in-the-full-editor).
 3. A dialog named after the text, for example *Submit CASE-1 en?*, lists what is still open: **Carried findings to check**, **Findings that need attention**, **Findings after text correction**, **Proposals not decided**. Click **Go to** to fix an item.
 4. When nothing blocks, click **Submit text**. If only warnings are left, the button reads **Submit with** and the number of warnings; see [Confirm values and acknowledge warnings](#confirm-values-and-acknowledge-warnings-in-the-submit-dialog) first.
 5. The next open task opens, or **My tasks** if none is left. To see what you sent, click **View result** in the message.
@@ -555,7 +555,7 @@ Check each value before you confirm it. **Confirm as shown** says "I checked thi
 1. The group **Values not chosen yet** lists findings with prefilled values.
 2. Click **Go to** to check a finding in the text and change a value. If the shown values are right, click **Confirm as shown** on the row, or, with more than one row, **Confirm all as shown**.
 3. The group **Modifier warnings** lists, for example, a modifier used as a finding or two severities on one finding. Click **Go to** to fix one.
-4. Click the submit button. Warnings you leave are submitted as they are.
+4. Click the submit button. Warnings you leave are submitted as they are; the group **Values not chosen yet** says so in one line.
 
 If the project requires chosen values, unconfirmed values block submitting instead of warning.
 
@@ -675,7 +675,7 @@ What for: work without the mouse. Shortcuts are off while you type in a field or
 | \`0\` | Reset the decision to open |
 | \`n\` / \`Shift+N\` | Next / previous unchecked carried finding |
 | \`c\` | Mark carried finding as checked |
-| \`Ctrl+Z\` (macOS: \`Cmd+Z\`) | Undo removing a modifier |
+| \`Ctrl+Z\` (macOS: \`Cmd+Z\`) | Undo deleting a finding or removing a modifier |
 | \`Alt+←\` / \`Alt+→\` | Previous / next text |
 | \`Alt+P\` | Switch project |
 
@@ -734,6 +734,8 @@ What for: start or continue your consolidation work.
 2. Click **Start**, **Continue** or **View**.
 3. The consolidation screen opens. Its heading reads, for example, *Consolidate CASE-1 en v1*. The path above it shows how many groups are still open.
 
+If the lead gave a reason when starting the consolidation, it shows above the groups, for example *Reason from the lead: Term and assertion differ*, and under the task in **My tasks**.
+
 The header holds **Open in full editor**, **Report a text problem** and, if the project has guidelines, a button such as *Guidelines v2*. **More…** appears once you decided a group.
 
 The screen is read-only after you submitted, when the task is no longer yours, when it is paused, or when a submission used here was withdrawn. A banner tells you which.
@@ -756,7 +758,7 @@ What for: decide a group by choosing, per row, the value that is right.
 1. Open a group. The table has one column per person. A robot icon marks findings from a tool proposal.
 2. The rows are **Term**, one row per value field (for example the assertion), **Text**, **Modifiers** (only if someone used modifiers) and **Note**. Rows where people disagree come first and are highlighted; *(all agree)* marks rows that need no choice. You can mix: take the term from one person and a value from another.
 3. In each highlighted row, click the ✓ next to the value you want. Its button is named after the value, for example *Take Hypotonia … for Term*.
-4. Read the result line below the table. It starts with "Result:" and lists what is still not chosen, for example *text not chosen yet*. **Not taken:** lists other people's terms that are not in the result. Until you choose in the **Term** row, the line shows the first person's term as a preview.
+4. Read the result line below the table. It starts with "Result:" and lists what is still not chosen, for example *Term not chosen yet* or *text not chosen yet*. Once the term is chosen, **Not taken:** lists other people's terms that are not in the result.
 5. Optional: click **+ note** to write a **Note for the lead**, and tick **Guidelines unclear here** if the guidelines did not settle the case.
 6. Click **Keep**. The group reads **decided**, the message **Decision saved** appears with **Undo**, and the next open group opens.
 
@@ -767,7 +769,7 @@ What for: decide a group by choosing, per row, the value that is right.
 Special cases:
 
 - Not everyone marked it. The card names who did, for example *Ana Weber, Luc Martin marked this. Tom Reis has nothing here.* The button reads **Keep the finding**, or *Keep Luc Martin's finding* for one person. Keep it only if the text supports it.
-- Different passages. If people marked overlapping but different passages, the group is open without a highlighted row. The **Text** row shows the passage that comes with the chosen finding (*overlapping, comes with the chosen finding*). Compare the underlines in the text. If that passage is right, click **Keep**; to use another passage, [work in the full editor](#work-in-the-full-editor).
+- Different passages. If people marked overlapping but different passages, the group is open without a highlighted row. The **Text** row shows each person's passage; the ✓ of the passage that goes into the result is pressed, and the result line names it, for example *text "Absent reflexes"*. Compare the underlines in the text. To use another person's passage, click its ✓; its note comes with it. Then click **Keep**. For a passage nobody marked, [work in the full editor](#work-in-the-full-editor).
 - Modifiers. Each modifier has its own ✓, so you can combine modifiers that different people chose. Modifiers of one kind, such as two severities, exclude each other. If someone linked a modifier to a different finding, the card says so, for example *Ben Roth linked "Severe" (Severe) to Hypotonia.* Check which finding the text means.
 - Same term twice. If the same term is already in the result from another group, the card warns you. **Keep** then adds a second finding with that term.
 
@@ -806,7 +808,8 @@ What for: add a finding that no submission has.
 
 1. Select the passage in the text. Or click **Add finding**, type the passage into **Passage from the text** (choose the **Occurrence** if it appears more than once) and click **Continue**.
 2. Search and pick the term.
-3. A message confirms the new finding. It is listed under **Added by you**.
+3. A message confirms the new finding. It is listed under **Added by you** with its values, which start as the project's defaults (for example *Present, Patient, Current*). Its value fields open right away: change what the text says, for example **Assertion** to *Absent* for a negated finding, and click **Save values**. Click **Cancel** to keep the defaults.
+4. To change the values later, click **Edit values…** next to the added finding.
 
 If the passage is not found, type it exactly as written, or select it in the text.
 
@@ -830,7 +833,7 @@ Before you start: after you submit, you cannot change the consolidation.
 
 1. When no group is open, the progress card reads **Ready to submit**.
 2. Click **Submit consolidation**.
-3. The dialog **Submit consolidation?** shows how many groups and findings the result has, and how many are not in the result.
+3. The dialog **Submit consolidation?** says who accepts the result (*The lead then accepts the result.*; if you are the lead yourself: *Then accept the result in Documents.*) and shows how many groups and findings the result has, and how many are not in the result.
 4. Click **Submit**.
 5. If there are warnings (values filled in by default, a modifier used as a finding, two severities), the dialog now lists them under **Check before you submit**, and the button reads **Submit with** and the number of warnings. Click **Back** to fix them, or submit with warnings only if you checked that the values are right.
 6. The screen confirms: *Consolidation submitted. The lead then accepts the result.* (If you are the lead yourself: *Consolidation submitted. Accept the result in Documents.*) Open your next task or click **Back to my tasks**.
@@ -846,10 +849,10 @@ What happens next: the lead reads the result with your notes and flags, and acce
 What for: change text spans or add findings that the comparison table cannot express.
 
 1. Click **Open in full editor**.
-2. The editor shows the mode **Consolidate** and the list **Selected submitted findings** with each finding's author. *Replaced by* on a submitted finding shows which result finding took its place. The editor works as described in the [annotator reference](annotator.md).
-3. Click **Back to consolidation** to return.
+2. The editor shows the mode **Consolidate** and the list **Selected submitted findings** with each finding's author. *Replaced by* on a submitted finding shows which result finding took its place; point at it for a short explanation, click it to jump to that finding. The editor works as described in the [annotator reference](annotator.md), except that it has no submit button.
+3. Click **Back to consolidation** at the end of the toolbar to return. Next to it the editor says *Submit on the consolidation screen.*
 
-Groups you changed here are tagged **edited in editor** on the consolidation screen. **Finish & submit text** in the full editor submits the whole consolidation, like **Submit consolidation**; it is refused while groups are open. Submitting from the consolidation screen shows you the summary first.
+Groups you changed here are tagged **edited in editor** on the consolidation screen. You submit the consolidation only there, with **Submit consolidation** (see [Finish a consolidation](#finish-a-consolidation)).
 
 ## Keyboard shortcuts
 
@@ -1002,13 +1005,13 @@ The text is not in the work plan. Plan it first. See [Add a text to the plan](le
 
 Closing a report does not always release the pause. The row shows **Resume task…**; click it and release the pause. See [Decide on a problem report](lead-results.md#decide-on-a-problem-report).
 
-### I chose myself as consolidator, but "Open consolidation" shows no actions
+### I chose myself as consolidator: where do I work?
 
-**Open consolidation** in the text card is the read-only view. Open your task with **Open my task** in the row on **Documents**, or from **My tasks**. See [Start a consolidation](lead-results.md#start-a-consolidation).
+While your consolidation runs, **Open consolidation** in the text card opens your task, as does **Open my task** in the row on **Documents** or the row in **My tasks**. After you submitted, **Open consolidation** shows the read-only result. See [Start a consolidation](lead-results.md#start-a-consolidation).
 
 ### The consolidator list does not show a person
 
-Only members with the **Consolidator** role are listed. Give the role first. See [Change a member's roles](lead-settings.md#change-a-members-roles).
+Only you and the members with the **Consolidator** role are listed; the hint under the list says so and links **Settings → People**. Give the role first. See [Change a member's roles](lead-settings.md#change-a-members-roles).
 
 ### The export asks me to tick a box
 
@@ -1110,8 +1113,8 @@ Details: [Review tool proposals](annotator.md#review-tool-proposals).
 Before you start: submitting means you checked the whole text, not only the findings you marked.
 
 1. Click **Next open item** until nothing is left. It takes you to every proposal, value or finding that still needs you.
-2. Click **Finish & submit text**.
-3. The dialog lists what is still open, with **Go to** for each item. Values you have not confirmed are under **Values not chosen yet**: confirm them only if you checked that they are right.
+2. Click **Finish & submit text**. (A consolidation is submitted on its own screen; see [Consolidator](consolidator.md).)
+3. The dialog lists what is still open, with **Go to** for each item. Values you have not confirmed are under **Values not chosen yet**: confirm them only if you checked that they are right. A value you leave is submitted as shown but recorded as defaulted, not chosen; the lead and the export see this.
 4. Click **Submit text**.
 
 ![The submit dialog with the Values not chosen yet group](images/annotator-submit-dialog.png)
@@ -1221,6 +1224,7 @@ What for: find the texts you have to work on.
 Each row is one task. The **Task** column says what to do, for example **Annotation, from scratch**, **Annotation, from proposals**, **Consolidation** or **Translation review**. The **Status** column shows **Open**, **In progress**, **Submitted** or **Reopened**.
 
 - **Reopened**: the lead reopened your submission. Click the badge to read why.
+- A **Consolidation** task shows the lead's reason under the task, for example *Reason from the lead: Term and assertion differ*, if the lead gave one.
 - **Paused**: the task waits for a decision on a problem report. **Answer to your report** means the lead has replied.
 
 If the project has guidelines, a link such as *Project guidelines v2* appears above the table. Read them before you start: they say what to mark and how.
@@ -1439,6 +1443,7 @@ In the card:
 - **Open text** opens the [text view](#read-a-text-and-other-peoples-work-in-the-text-view).
 - **Previous text** and **Next text** walk through the table (keys \`K\` and \`J\`).
 - **Other languages** switches to another language of the same case.
+- In **Finalization**, **Open consolidation** opens your own running consolidation as your task; a submitted one opens read-only.
 - ✕ or Esc closes the card.
 
 ### Read the history and details of a text
@@ -1647,9 +1652,9 @@ Before you start: the text needs at least two submissions. The consolidator must
 
 1. In the text card, open **Finalization** and click **Consolidate…**. The form **Consolidate submitted results** opens with the compared submissions already ticked.
 2. Under **Submissions to merge**, check the ticked submissions (at least two).
-3. Under **Consolidator**, choose a person. The list starts with **Choose a consolidator**, then you (*You (Mia Lead)*), then every member with the Consolidator role. If the project rule forbids it, people who annotated this text are shown but cannot be chosen (*— Ana Weber annotated this text*).
-4. If the person's profile lacks the text's language, tick the box *Assign this consolidator despite missing en in their profile*.
-5. Optional: enter **Consolidation reason (optional)**. The reason is kept in the history; the consolidator does not see it.
+3. Under **Consolidator**, choose a person. The list starts with **Choose a consolidator**, then you (*You (Mia Lead)*), then every member with the Consolidator role; the hint under the list links **Settings → People**, where you give the role to someone who is missing. If the project rule forbids it, people who annotated this text are shown but cannot be chosen (*— Ana Weber annotated this text*).
+4. If the person's profile lacks the text's language, tick the box *Assign this consolidator despite missing en in their profile*, right under the list.
+5. Optional: enter **Consolidation reason (optional)**. The consolidator sees it in **My tasks** and above the groups; it is also kept in the history.
 6. Click **Start consolidation**.
 
 If the button stays inactive, the form says why: *Select at least two submissions.*, *Choose a consolidator.*, *Confirm the consolidator despite missing en.*, or someone already has a consolidation in progress on this text. If that is you, the button reads **Continue consolidation**.
@@ -1657,7 +1662,7 @@ If the button stays inactive, the form says why: *Select at least two submission
 After the start:
 
 - If you chose someone else: Ontotator sends no e-mail. Tell the person that a consolidation is waiting in their **My tasks**.
-- If you chose yourself: you get the Consolidator role for this project. Click **Open my consolidation task** in the message, or **Open my task** in the text's row on **Documents**. **Open consolidation** in the text card opens the read-only view, not your task.
+- If you chose yourself: you get the Consolidator role for this project. Click **Open consolidation** in the text card, **Open my consolidation task** in the message, or **Open my task** in the text's row on **Documents**. Each opens your task, where you decide and submit.
 
 While the consolidation runs, the card shows the consolidator and how many groups are still open. What the consolidator does is in the [consolidator chapter](consolidator.md).
 
@@ -1667,7 +1672,7 @@ What for: see how a consolidation result came about before you accept it.
 
 1. In the text card, click **Open consolidation**. Or, if the card shows flagged findings ("guidelines unclear"), click **Open** next to one to go straight to that group.
 2. The heading reads, for example, *Consolidation of CASE-1 en v1*. The banner says who submitted it. The view is read-only.
-3. In decided groups, the chosen value of each conflicting row is tagged **kept**. The consolidator's notes show as *Note: …*, and flagged groups show **Flagged: guidelines unclear**. Added findings say who added them.
+3. In decided groups, the chosen value of each conflicting row is tagged **kept**, including the chosen passage and modifiers. The consolidator's notes show as *Note: …*, and flagged groups show **Flagged: guidelines unclear**. Added findings say who added them and list their values.
 4. Click **Back to documents**.
 
 ### Accept a consolidation

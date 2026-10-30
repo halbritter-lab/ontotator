@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Ontotator Local API",
-    "version": "0.2.0"
+    "version": "0.3.0"
   },
   "paths": {
     "/api/v1/me/tasks": {
@@ -11211,6 +11211,17 @@
               }
             ],
             "title": "Consolidator"
+          },
+          "consolidation_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consolidation Reason"
           },
           "workflow_revision": {
             "type": "integer",
@@ -22468,6 +22479,17 @@
               }
             ],
             "title": "Reopen Reason"
+          },
+          "consolidation_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consolidation Reason"
           },
           "report_answered": {
             "type": "boolean",
