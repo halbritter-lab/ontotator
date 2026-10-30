@@ -24,7 +24,7 @@ Before you start: you need a setup or reset code from your administrator. A code
 
 ![The Set your password form with the fields Username, Setup or reset code, New password and Repeat the new password](images/getting-started-set-password.png)
 
-If you see **Your password is set. Log in with it now.**, the password worked; [log in](#log-in). If you see **The two passwords differ.**, type both passwords again. To go back without a code, click **Back to login**.
+Ontotator sets the password and logs you in at once. The first time, you land on **Projects** (see [Log in](#log-in) for where you land later). Only if that login fails afterwards, for example because the account is locked for a while, the login screen opens with **Your password is set. Log in with it now.**; the password is set, so [log in](#log-in) with it later. If you see **The two passwords differ.**, type both passwords again. To go back without a code, click **Back to login**.
 
 ## Log in
 
