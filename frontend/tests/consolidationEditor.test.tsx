@@ -1,5 +1,4 @@
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { CaseScreen, type WorkspaceView } from "../src/app/CaseScreen";
 import { api, type ConsolidationView } from "../src/api/client";
 
@@ -116,22 +115,28 @@ it("reads no consolidation and shows no link outside a consolidation round", () 
   expect(screen.queryByRole("link", { name: "Back to consolidation" })).toBeNull();
 });
 
-it("names the toolbar submit after the consolidation it submits (#162)", async () => {
+it("offers no submit in a consolidation's full editor, only the way back with a hint (#162)", async () => {
   vi.spyOn(api, "getConsolidation").mockResolvedValue(consolidation);
+  const submit = vi.spyOn(api, "submitWorkspace");
   renderEditor();
   await screen.findByText("Luc Martin (ann-0004)");
-  const submit = document.querySelector<HTMLButtonElement>("[data-finish-submit]")!;
-  expect(submit.textContent).toMatch(/^Submit consolidation/);
-  expect(submit.getAttribute("title")).toBe("Submits the whole consolidation, like Submit consolidation on the consolidation screen");
-  expect(screen.queryByText(/Finish & submit/)).toBeNull();
+  expect(document.querySelector("[data-finish-submit]")).toBeNull();
+  expect(screen.queryByRole("button", { name: /Finish & submit|Submit consolidation/ })).toBeNull();
+  expect(screen.getByText("Submit on the consolidation screen.")).toBeTruthy();
+  const back = screen.getByRole("link", { name: "Back to consolidation" });
+  expect(back.className).toContain("btn-primary");
+  // No key submits from here either.
+  for (const key of ["Enter", "s"]) fireEvent.keyDown(document.body, { key, ctrlKey: true });
+  expect(screen.queryByRole("dialog", { name: "Submit text" })).toBeNull();
+  expect(submit).not.toHaveBeenCalled();
 });
 
 it("keeps Finish & submit text outside a consolidation round", () => {
   vi.spyOn(api, "getConsolidation").mockResolvedValue(consolidation);
   renderEditor("ordinary");
   expect(document.querySelector("[data-finish-submit]")!.textContent).toMatch(/Finish & submit/);
+  expect(screen.queryByText("Submit on the consolidation screen.")).toBeNull();
 });
-
 it("shows no Back to consolidation once the round is no longer active", async () => {
   vi.spyOn(api, "getConsolidation").mockResolvedValue(consolidation);
   render(<CaseScreen view={consolidationView()} workspaceId="ws-c" onClose={vi.fn()} roundKind="consolidation" roundActive={false}

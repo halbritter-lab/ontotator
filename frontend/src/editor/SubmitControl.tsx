@@ -9,14 +9,10 @@ export interface SubmitControlProps {
   openCount?: number | null;
   /** Goes to the next open item; shown next to the button while items are open. */
   onNextOpen?: () => void;
-  /** What the button submits ("Submit consolidation" in a consolidation's full editor, issue 162); default "Finish & submit text". */
-  label?: string;
-  /** The button's title while no save is pending; default "Finish and submit text". */
-  title?: string;
 }
 
 /** Toolbar control that starts the case submission, with the remaining open items. */
-export function SubmitControl({ onSubmit, disabled, pending, openCount = null, onNextOpen, label, title }: SubmitControlProps) {
+export function SubmitControl({ onSubmit, disabled, pending, openCount = null, onNextOpen }: SubmitControlProps) {
   const open = openCount !== null && openCount > 0;
   return (
     <>
@@ -32,10 +28,10 @@ export function SubmitControl({ onSubmit, disabled, pending, openCount = null, o
         onClick={onSubmit}
         disabled={disabled}
         aria-busy={pending}
-        title={pending ? "Saving changes before submitting" : title ?? "Finish and submit text"}
+        title={pending ? "Saving changes before submitting" : "Finish and submit text"}
       >
         <IconCheck />
-        {label ? (open ? `${label} (${openCount} open)` : label) : open ? `Finish & submit (${openCount} open)` : "Finish & submit text"}
+        {open ? `Finish & submit (${openCount} open)` : "Finish & submit text"}
       </Button>
     </>
   );

@@ -109,6 +109,10 @@ export function duplicatesText(terms: readonly string[]): string | null {
 
 export const SUBMIT_LABEL = "Submit consolidation";
 
+/** Issue 162: the full editor of a consolidation has no submit; it leads back to the consolidation screen. */
+export const BACK_TO_CONSOLIDATION = "Back to consolidation";
+export const CONSOLIDATION_EDITOR_HINT = "Submit on the consolidation screen.";
+
 /** Issue 162: "Replaced by" on a submitted finding in the consolidation's full editor. */
 export const REPLACED_BY_CONSOLIDATION_TITLE = "The result finding that takes the place of this submitted finding. Click to jump to it.";
 

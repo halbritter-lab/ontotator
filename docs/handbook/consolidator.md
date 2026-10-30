@@ -166,10 +166,10 @@ What happens next: the lead reads the result with your notes and flags, and acce
 What for: change text spans or add findings that the comparison table cannot express.
 
 1. Click **Open in full editor**.
-2. The editor shows the mode **Consolidate** and the list **Selected submitted findings** with each finding's author. *Replaced by* on a submitted finding shows which result finding took its place; point at it for a short explanation, click it to jump to that finding. The editor works as described in the [annotator reference](annotator.md).
-3. Click **Back to consolidation** to return.
+2. The editor shows the mode **Consolidate** and the list **Selected submitted findings** with each finding's author. *Replaced by* on a submitted finding shows which result finding took its place; point at it for a short explanation, click it to jump to that finding. The editor works as described in the [annotator reference](annotator.md), except that it has no submit button.
+3. Click **Back to consolidation** at the end of the toolbar to return. Next to it the editor says *Submit on the consolidation screen.*
 
-Groups you changed here are tagged **edited in editor** on the consolidation screen. The editor's toolbar button reads **Submit consolidation** here, not *Finish & submit text*: it submits the whole consolidation, like the button on the consolidation screen, and is refused while groups are open. Submitting from the consolidation screen shows you the summary first, so prefer going **Back to consolidation** to submit.
+Groups you changed here are tagged **edited in editor** on the consolidation screen. You submit the consolidation only there, with **Submit consolidation** (see [Finish a consolidation](#finish-a-consolidation)).
 
 ## Keyboard shortcuts
 
