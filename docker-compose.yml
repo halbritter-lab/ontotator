@@ -27,7 +27,9 @@ services:
     tmpfs:
       - /tmp:size=64m
       - /var/run/postgresql:size=16m,uid=70,gid=70
-    mem_limit: 1g
+    # Memory caps: see "Workers and resource limits" in docs/operations.md
+    # before changing them on a shared host.
+    mem_limit: ${ONTOTATOR_POSTGRES_MEM_LIMIT:-1g}
     cpus: 1.0
     pids_limit: 256
     healthcheck:
@@ -102,7 +104,7 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
-    mem_limit: 2g
+    mem_limit: ${ONTOTATOR_APP_MEM_LIMIT:-2g}
     cpus: 2.0
     pids_limit: 256
     # uvicorn's 30 s graceful shutdown plus the job worker's 30 s join.

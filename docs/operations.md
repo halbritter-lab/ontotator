@@ -450,7 +450,22 @@ Take a backup before `make deploy` switches the image, as in [Upgrades](#upgrade
 
 The production default is two Uvicorn workers (`ONTOTATOR_WORKERS=2`, supported range 1–6, so the connection pools stay under PostgreSQL's `max_connections=100`). Sessions are shared in PostgreSQL, so routing needs no sticky session. Each worker has its own interpreter, ontology registry and search indexes: memory rises with worker count and loaded ontology size. Measure representative workloads before increasing workers.
 
-The app contract limits it to 2 CPUs / 2 GiB, PostgreSQL to 1 CPU / 1 GiB and migrations to 1 CPU / 512 MiB. Each has a 256-PID limit; app has a 35-second stop grace period. Temporary files also consume container memory. More workers under unchanged limits can cause memory pressure or worse latency; worker count is not a throughput guarantee.
+The app contract limits it to 2 CPUs / 2 GiB, PostgreSQL to 1 CPU / 1 GiB and migrations to 1 CPU / 512 MiB. Each has a 256-PID limit; app has a 70-second stop grace period (uvicorn's 30 s graceful shutdown plus the job worker's 30 s join). Temporary files on tmpfs also count toward a container's memory. More workers under unchanged limits can cause memory pressure or worse latency; worker count is not a throughput guarantee.
+
+The memory caps can be set in `.env`: `ONTOTATOR_APP_MEM_LIMIT` (default `2g`) and `ONTOTATOR_POSTGRES_MEM_LIMIT` (default `1g`). Do not lower the app's cap below what you have measured: a load test under these limits saw app peak at about 2.1 GB (deployment review, issue #72), and an app that hits its cap is killed and restarted by Docker, which ends running jobs and in-flight requests. `migrate` runs only before app starts and does not add to the steady-state sum.
+
+A cap is a ceiling per container, not a reservation: on a shared host the caps of all stacks can add up to more than the host has, and when the host itself runs out, the kernel's OOM killer picks a process anywhere on the host, possibly PostgreSQL. On a shared host:
+
+- Add up the caps of every stack, plus uncapped containers (for example the reverse proxy) and the OS (allow at least 1 GB), and compare with `free -h`. Measure real peaks with `docker stats --no-stream` under load before choosing caps.
+- Keep the sum below physical memory, or provide swap so a short peak slows the host instead of killing a process. Lower another stack's cap rather than this one's if that stack is measured well below its cap.
+- Optionally make the host OOM killer prefer other processes to the database with an override file next to `docker-compose.yml` (a rootless Docker daemon may refuse negative values):
+
+  ```yaml
+  # docker-compose.override.yml, or a file listed in COMPOSE_FILE
+  services:
+    ontotator_postgres:
+      oom_score_adj: -500
+  ```
 
 ## Local verification
 
