@@ -5,7 +5,7 @@ import { ErrorNotice } from "./ErrorNotice";
 import { SettingsHint } from "./SettingsCard";
 import { labelFor, roleLabels, taskLabels } from "../app/labels";
 import { personLabel } from "../app/identity";
-export interface MembersSectionProps { projectKey: string; isSystemAdmin: boolean }
+export interface MembersSectionProps { projectKey: string }
 
 const roles = ["lead", "annotator", "adjudicator"] as const;
 /** Accounts that cannot work right now are marked, as in the Assign dialog; active ones read plainly. */
@@ -36,7 +36,7 @@ function affectedAssignments(error: unknown): Affected[] | null {
 }
 
 export function MembersSection(props: MembersSectionProps): JSX.Element {
-  return <MemberEditor key={JSON.stringify([props.projectKey, props.isSystemAdmin])} {...props} />;
+  return <MemberEditor key={props.projectKey} {...props} />;
 }
 
 /** "Maria Klein · reads de, en": display name and languages of a candidate. */
@@ -46,7 +46,7 @@ const candidateLabel = (user: MemberCandidate): string =>
 /** One suggestion: username, display name and languages. */
 const candidateOption = (user: MemberCandidate): { value: string; label: string } => ({ value: user.username, label: candidateLabel(user) });
 
-function MemberEditor({ projectKey, isSystemAdmin }: MembersSectionProps): JSX.Element {
+function MemberEditor({ projectKey }: MembersSectionProps): JSX.Element {
   const id = useId();
   const [members, setMembers] = useState<Member[] | null>(null);
   const [suggestions, setSuggestions] = useState<MemberCandidate[]>([]);
@@ -68,7 +68,7 @@ function MemberEditor({ projectKey, isSystemAdmin }: MembersSectionProps): JSX.E
     setMembers(null); setLoadError(undefined);
     void api.listMembers(projectKey).then(rows => { if (epoch === lifetime.current) setMembers(rows); }).catch((failure: unknown) => { if (epoch === lifetime.current) setLoadError(failure); });
     return () => { lifetime.current++; };
-  }, [projectKey, isSystemAdmin, retry]);
+  }, [projectKey, retry]);
   const search = useRef(0);
   const typeUsername = (value: string) => {
     setUsername(value);

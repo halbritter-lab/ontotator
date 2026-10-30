@@ -11,6 +11,7 @@
 /* Anchored headings stay clear of the top edge after a jump. */
 .help-document :is(h1, h2, h3, h4) { scroll-margin-top: var(--space-4); }
 .help-image { display: block; max-width: 100%; height: auto; margin: var(--space-3) 0; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.help-image-link { display: block; width: fit-content; max-width: 100%; cursor: zoom-in; }
 
 @media (max-width: 899px) {
   .help-page { grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
