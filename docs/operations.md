@@ -179,7 +179,7 @@ A project can move to a newer release in Settings › Ontology, also after work 
 
 To check a single file against the checksum its release publishes, add `--sha256 <hex>`: a different file is refused with `ONTOLOGY_DIGEST_MISMATCH` and nothing is stored.
 
-Replace `ONTOLOGY_SHA256` with the full hash printed for the ontology JSON; the task profile must define ontology id `hp` and the intended layers. [smoke-profile.json](../tests/fixtures/smoke-profile.json) illustrates the JSON structure with synthetic fixtures; supply your own release identity, hash and protocol. See the [scientific workflow](scientific-workflow.md) for protocol guidance. Workers discover uploaded ontologies on use; no restart is needed for a new upload.
+Replace `ONTOLOGY_SHA256` with the full hash printed for the ontology JSON; the task profile must define ontology id `hp` and the intended layers. [smoke-profile.json](../tests/fixtures/smoke-profile.json) illustrates the JSON structure with synthetic fixtures; supply your own release identity, hash and protocol. See the [scientific workflow](scientific-workflow.md) for protocol guidance. `--allowed-roots` and `--t1-profile` are optional when the profile sets `allowed_roots` and `t1_profile`; given, they win, and `--allowed-roots hp=` allows every term. Workers discover uploaded ontologies on use; no restart is needed for a new upload.
 
 ```bash
 docker compose exec ontotator_app ontotator admin projects create ward-7 --name 'Ward 7' --profile /tmp/profile.json --pin hp=ONTOLOGY_SHA256 --allowed-roots hp=HP:0000118 --t1-profile hp=hpo-phenotype
