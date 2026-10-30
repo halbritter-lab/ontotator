@@ -291,6 +291,8 @@ def test_lead_who_annotated_an_input_is_refused_and_not_granted(env):
 
 
 def test_missing_language_needs_the_confirmation(env):
+    # Listed languages without en; none listed would be unknown (#193).
+    env.app.state.accounts.set_languages(Actor.cli(), "leader", ["fr"])
     refused = env.lead.post(URL, json=body(env, confirm_language=False))
     assert refused.status_code == 409, refused.text
     assert refused.json()["code"] == "LANGUAGE_CONFIRMATION_REQUIRED"

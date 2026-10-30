@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { useState } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { api, ApiError, type BulkPreview, type BulkResult, type ConsequencesView, type DocumentRowFilters, type SelectionSummary } from "../../src/api/client";
-import { assignButtonText, SelectionBar, type SelectionBarProps } from "../../src/documents/SelectionBar";
+import { assignButtonText, nextStepsText, SelectionBar, type SelectionBarProps } from "../../src/documents/SelectionBar";
 import { Toast, useToast } from "../../src/ui";
 
 type LanguagePreview = BulkPreview["languages"][number];
@@ -198,4 +198,11 @@ it("reserves its height at the page bottom while shown and releases it on clear"
   fireEvent.click(within(bar()).getByRole("button", { name: "Clear selection" }));
   await waitFor(() => expect(screen.queryByRole("region", { name: "Selection" })).toBeNull());
   expect(document.documentElement.style.getPropertyValue("--selection-bar-space")).toBe("");
+});
+
+it("names every step of a mixed selection, one language list per task (#195)", () => {
+  expect(nextStepsText([{ task: "annotate", language: "en" }])).toBe("next step: Assign annotation (en)");
+  expect(nextStepsText([{ task: "annotate", language: "en" }, { task: "annotate", language: "es" }])).toBe("next steps: Assign annotation (en, es)");
+  expect(nextStepsText([{ task: "translation_review", language: "de" }, { task: "annotate", language: "en" }]))
+    .toBe("next steps: Assign translation review (de); Assign annotation (en)");
 });

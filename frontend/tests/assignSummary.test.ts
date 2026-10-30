@@ -21,7 +21,7 @@ describe("assign summary", () => {
     ];
     expect(skippedLines(skipped, "de")).toEqual([
       "6 still in translation review: waiting for review, they join the next batch",
-      "4 not in plan for de",
+      "4 without annotation of de in the plan (other languages are separate tasks)",
       "1 already assigned",
     ]);
   });

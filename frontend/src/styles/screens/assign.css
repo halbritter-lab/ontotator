@@ -33,7 +33,8 @@
 .assign-summary:not(:empty) { border-color: var(--accent); background: var(--accent-light); }
 .assign-summary > p { margin: 0; }
 .assign-random { align-self: flex-start; }
-.assign-notice, .assign-error { font-size: var(--size-sm); }
+.assign-notice, .assign-error, .assign-done { font-size: var(--size-sm); }
+.assign-done { margin: 0; color: var(--success); }
 .assign-error { color: var(--danger); }
 .assign-refused { margin: 0; padding-left: var(--space-4); font-size: var(--size-sm); }
 .assign-confirm { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface-sunken); }

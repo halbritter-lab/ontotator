@@ -63,6 +63,48 @@ def test_only_readers_of_the_language_are_proposed() -> None:
     assert proposal.rows == (("english", 1), ("german", 2))
 
 
+def test_members_without_listed_languages_count_as_unknown_readers() -> None:
+    """No languages listed is unknown, not "reads nothing" (issue 193)."""
+    proposal = propose_distribution(
+        [document("french", "fr"), document("both", "de")],
+        [candidate(1, languages=""), candidate(2, languages="")],
+        per_document=2,
+        seed=0,
+        required_languages=lambda doc: frozenset({doc.language, "en"}),
+    )
+    assert proposal.unassignable == ()
+    assert sorted(proposal.rows) == [
+        ("both", 1),
+        ("both", 2),
+        ("french", 1),
+        ("french", 2),
+    ]
+
+
+def test_listed_readers_are_preferred_over_unknown_languages() -> None:
+    """Unknown-language members (issue 193) fill only the slots that members
+    listing the language leave open, whatever their load or the seed."""
+    candidates = [
+        candidate(1, languages=""),
+        candidate(2, load=5),
+        candidate(3, languages="", load=0),
+    ]
+    for seed in range(20):
+        proposal = propose_distribution(
+            [document("a"), document("b")], candidates, per_document=1, seed=seed
+        )
+        assert proposal.rows == (("a", 2), ("b", 2))
+        filled = propose_distribution(
+            [document("a")], candidates, per_document=2, seed=seed
+        )
+        assert filled.rows[0] == ("a", 2)
+        assert filled.rows[1][1] in {1, 3}
+        german = propose_distribution(
+            [document("de", "de")], candidates, per_document=1, seed=seed
+        )
+        assert german.rows[0][1] in {1, 3}
+
+
 def test_documents_without_readers_are_listed_without_partial_rows() -> None:
     proposal = propose_distribution(
         [document("none", "fr"), document("few", "de"), document("enough")],

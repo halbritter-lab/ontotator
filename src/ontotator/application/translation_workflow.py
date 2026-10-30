@@ -14,6 +14,7 @@ from ontotator.application.translation_reviews import (
 from ontotator.assignments.eligibility import (
     check_variant_assignable,
     load_variants,
+    reads_all,
 )
 from ontotator.assignments.service import Assignment, AssignmentService
 from ontotator.auth.audit import Actor, record_audit
@@ -261,7 +262,7 @@ class TranslationWorkflowService:
                     .order_by(UserLanguageRow.language)
                 ).scalars()
             )
-            mismatch = not set(languages) >= required
+            mismatch = not reads_all(languages, required)
             if mismatch and not confirm_language:
                 raise DomainError(
                     "LANGUAGE_CONFIRMATION_REQUIRED",

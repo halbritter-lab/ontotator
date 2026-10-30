@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { personLabel } from '../app/identity';
 import { api, type AssignmentView, type Member, type VariantSummary } from '../api/client';
-import { eligibleMembers } from '../admin/assignmentUI';
+import { eligibleMembers, unreadLanguages } from '../admin/assignmentUI';
 import { ErrorNotice } from '../admin/ErrorNotice';
 import { Button, Checkbox, InlineMessage, Select, Textarea } from '../ui';
 import { onSpaceActivate } from '../ui/spaceActivates';
@@ -28,7 +28,7 @@ function CorrectionContent({ projectKey, variant, username, requiredLanguages, d
   const [assigned, setAssigned] = useState<AssignmentView>();
   const reviewers = eligibleMembers(members ?? [], 'translation_review');
   const member = reviewers.find(row => row.username === reviewer);
-  const missingLanguages = member ? (requiredLanguages ?? []).filter(language => !member.languages.includes(language)) : [];
+  const missingLanguages = member ? unreadLanguages(member.languages, requiredLanguages ?? []) : [];
   useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
   useEffect(() => {
     if (!open) return;

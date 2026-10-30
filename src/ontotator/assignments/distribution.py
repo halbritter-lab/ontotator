@@ -4,6 +4,8 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from random import Random
 
+from ontotator.assignments.eligibility import reads_all
+
 
 @dataclass(frozen=True)
 class Candidate:
@@ -70,7 +72,8 @@ def propose_distribution(
         eligible = [
             c
             for c in ordered_candidates
-            if c.languages >= languages and c.user_id not in document.excluded_user_ids
+            if reads_all(c.languages, languages)
+            and c.user_id not in document.excluded_user_ids
         ]
         if len(eligible) < per_document:
             unassignable.append(
@@ -81,9 +84,16 @@ def propose_distribution(
                 )
             )
             continue
+        # Members who list the languages come first; members without listed
+        # languages (unknown, issue 193) only fill the remaining slots.
         picked = sorted(
             eligible,
-            key=lambda c: (loads[c.user_id], tie_breaks[c.user_id], c.user_id),
+            key=lambda c: (
+                not c.languages,
+                loads[c.user_id],
+                tie_breaks[c.user_id],
+                c.user_id,
+            ),
         )[:per_document]
         for selected in picked:
             rows.append((document.document_id, selected.user_id))

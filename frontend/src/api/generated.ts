@@ -3753,6 +3753,8 @@ export interface components {
             system_admin: boolean;
             /** Languages */
             languages?: string[];
+            /** Qualification */
+            qualification?: string | null;
             /** Projects */
             projects?: components["schemas"]["NewMembership"][];
         };

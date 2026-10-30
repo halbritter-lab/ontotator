@@ -23,7 +23,11 @@ from ontotator.application import document_row_page as page
 from ontotator.application.annotation_modes import locked_modes
 from ontotator.application.document_rows import RowFacts, RowQuery, load_facts
 from ontotator.application.people import person_refs
-from ontotator.assignments.eligibility import load_variants, required_languages
+from ontotator.assignments.eligibility import (
+    load_variants,
+    reads_all,
+    required_languages,
+)
 from ontotator.assignments.service import (
     Assignment,
     AssignmentService,
@@ -663,7 +667,7 @@ class BatchAssignmentService:
             username = member["username"]
             # One entry per target (version) the person gets.
             cases = [t.case_id for t in targets if username in t.usernames]
-            mismatch = not required <= set(member["reads"])
+            mismatch = not reads_all(member["reads"], required)
             unavailable: Unavailable | None = (
                 "inactive"
                 if not member["active"]
