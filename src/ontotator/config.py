@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, NonNegativeInt, field_validator
 
 from ontotator import settings
 from ontotator.domain.axes import AxesConfig
@@ -47,6 +47,9 @@ class AppConfig(BaseModel):
     max_ontology_bytes: int = 300 * 1024 * 1024
     # Any other request body (JSON etc.), login and code redemption included.
     max_request_bytes: int = 1024 * 1024
+    # Limits of web requests on the database (0: none). Jobs have none.
+    lock_timeout_ms: NonNegativeInt = settings.LOCK_TIMEOUT_MS
+    statement_timeout_ms: NonNegativeInt = settings.STATEMENT_TIMEOUT_MS
 
     @field_validator("max_ontology_bytes", "max_upload_bytes", "max_request_bytes")
     @classmethod

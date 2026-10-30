@@ -55,6 +55,7 @@ import { clearVisits, forgetVisit, recordDecision, rememberShown, retainedKeys, 
 import { notifyFinalSelectionChanged } from "../variants/finalSelectionState";
 import { AssignWorkDialog, type AssignWorkDialogProps } from "./AssignWorkDialog";
 import { ErrorNotice } from "./ErrorNotice";
+import { errorMessage } from "./errors";
 import { useSessionRestored } from "../app/useSessionRestored";
 import { UploadPanel } from "./UploadPanel";
 import { onSpaceActivate } from "../ui/spaceActivates";
@@ -212,6 +213,15 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
         failure => { if (active) setInventoryError(failure); });
     return () => { active = false; };
   }, [projectKey, revision]);
+
+  // A read that failed while the project was busy loads again with the next rows.
+  useEffect(() => {
+    if (rows.updatedAt && (settingsError !== undefined || inventoryError !== undefined)) setRevision(value => value + 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only a new page of rows retries
+  }, [rows.updatedAt]);
+  // One cause gives one message, not one per failed request.
+  const loadNotices = [...new Set([settingsError, inventoryError].filter(failure => failure !== undefined).map(errorMessage))]
+    .filter(message => rows.error == null || message !== errorMessage(rows.error));
 
   // Announce the number of texts once the data for a changed filter arrives.
   const shownFilters = useRef<string | null>(null);
@@ -815,7 +825,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       onRevisions={revisions => { for (const [caseId, value] of Object.entries(revisions)) planSaves.noteRevision(caseId, value); }} />;
     // While another filter or page loads, the previous page stays (busy) so the bar and paging links keep focus.
     content = <>
-      {rows.error != null && <InlineMessage tone="error">Could not refresh. <Button size="sm" onClick={rows.retry}>Retry</Button></InlineMessage>}
+      {rows.error != null && <InlineMessage tone="error">Could not refresh. {errorMessage(rows.error)} <Button size="sm" onClick={rows.retry}>Retry</Button></InlineMessage>}
       {!emptyProject && <div className="documents-selection-tools">
         {page.groups.length > 0 && <Checkbox id="documents-select-all" className="checkbox-target" label={selectAllLabel} checked={allSelected}
           // Some texts selected, not all filtered ones: mixed (announced "mixed", #47 A-20).
@@ -854,8 +864,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
         checked={showNotInPlan} onChange={event => changeShowNotInPlan(event.currentTarget.checked)} />}
       {page && (filtersActive(query) || hiddenNotInPlanCount > 0) && <p className="documents-filter-count">{`${page.bar.shown - hiddenNotInPlanCount} of ${tabCount(page.bar, tab)}`}</p>}
     </Toolbar>}
-    {settingsError !== undefined && <ErrorNotice error={settingsError} />}
-    {inventoryError !== undefined && <ErrorNotice error={inventoryError} />}
+    {loadNotices.map(message => <InlineMessage key={message} tone="error">{message}</InlineMessage>)}
     <div id={PANEL_ID} {...(page && !emptyProject ? { role: "tabpanel", "aria-labelledby": tabId(PANEL_ID, tab) } : {})}>{content}</div>
     <LiveRegion ref={liveRegion} />
     {/* The panel is the dialog: its footer holds the actions. Closing it during an import shows no toast (OQ2). */}

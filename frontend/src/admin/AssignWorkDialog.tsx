@@ -263,6 +263,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
   };
 
   const reason = !task || steps === null ? "Loading…"
+    : previewError && !fresh ? "The preview could not load. Use Retry."
     : calculating || !fresh ? "Calculating…"
     : !fresh.targets.length ? blocked ?? "No cases in the selection need this task."
     : unacknowledged ? "Confirm annotating before the translation review is accepted."
