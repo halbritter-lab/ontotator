@@ -84,9 +84,16 @@ def propose_distribution(
                 )
             )
             continue
+        # Members who list the languages come first; members without listed
+        # languages (unknown, issue 193) only fill the remaining slots.
         picked = sorted(
             eligible,
-            key=lambda c: (loads[c.user_id], tie_breaks[c.user_id], c.user_id),
+            key=lambda c: (
+                not c.languages,
+                loads[c.user_id],
+                tie_breaks[c.user_id],
+                c.user_id,
+            ),
         )[:per_document]
         for selected in picked:
             rows.append((document.document_id, selected.user_id))

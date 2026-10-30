@@ -276,7 +276,7 @@ To change the limit of annotators per text from here, click the info button (i) 
 
 What for: spread a batch of texts evenly across people.
 
-The proposal uses the languages in each person's profile: a person is proposed for a text only if they read its languages, or list no languages at all. Fewest open tasks come first.
+The proposal uses the languages in each person's profile: a person is proposed for a text only if they read its languages, or list no languages at all. People who list the text's languages come first; people with no languages listed only fill the places left over. Among them, fewest open tasks come first.
 
 1. In the assign dialog, click **Distribute evenly…**.
 2. Set **People per document** and click **Propose**.
