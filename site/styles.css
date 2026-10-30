@@ -378,6 +378,7 @@ h1 {
 }
 
 #tutorial,
+#guideline,
 #workflow,
 #self-hosting {
   border-top: 1px solid var(--border);
@@ -385,6 +386,7 @@ h1 {
 }
 
 #tutorial,
+#guideline,
 #self-hosting {
   padding-top: 4.5rem;
   padding-bottom: 3.5rem;

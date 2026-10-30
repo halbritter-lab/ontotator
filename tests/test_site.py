@@ -8,6 +8,8 @@ SITE = Path(__file__).parent.parent / "site"
 RELEASE_FILES = {
     "tutorials/ontotator-onboarding.mp4",
     "tutorials/ontotator-onboarding.vtt",
+    "tutorials/ontotator-annotation-guidelines.mp4",
+    "tutorials/ontotator-annotation-guidelines.vtt",
 }
 
 
