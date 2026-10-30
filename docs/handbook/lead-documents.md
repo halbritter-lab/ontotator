@@ -85,9 +85,9 @@ The **Documents** page lists every text of the project and what it needs next. O
 What for: work through texts by what they need.
 
 1. On **Documents**, choose a tab: **Needs your decision**, **To assign**, **In progress**, **Done** or **All**.
-2. Click **Refresh** to update the counts.
+2. Click **Refresh** to reload the table and the counts.
 
-A tab keeps your filters and search.
+A tab keeps your filters and search. A text that leaves the tab while you work on it, for example one you just assigned under **To assign**, stays in the table with a *Changed: …* or *Resolved* badge, so the list does not jump. **Refresh** or another tab removes such texts.
 
 ### Do a text's next step
 
