@@ -14,6 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - **Refresh** on Documents starts a new visit of the tab, so rows that left it (for example texts just assigned under To assign) drop out instead of staying until a tab switch (#176).
 - Opening **My tasks** or **Projects** reloads the project list and the *My tasks (n)* count, so a project you were added to while logged in shows up without a page reload (#192).
+- Documents, tab **All**: while texts not in plan are hidden, the toolbar says how many of the tab's texts the table holds, for example *246 of 307* (#198).
+- The final-result links in the text card read **Open submission** instead of "Open in editor", since they open the read-only text view; the row's **Open** is named "Open text, …" for screen readers (#198).
 
 ## [0.3.0] - 2026-10-30
 

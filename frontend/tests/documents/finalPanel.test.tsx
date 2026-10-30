@@ -77,7 +77,7 @@ describe("choose", () => {
     expect(await screen.findByText("Accept Ana Weber’s annotation as the result?")).toBeTruthy();
     expect(screen.getByText(`Round 1, 3 findings, submitted ${time("2026-10-20T12:01:00Z")}, on de v1`)).toBeTruthy();
     // The links sit with the actions, not inside the sentence.
-    fireEvent.click(within(block()).getByRole("link", { name: "Open in editor" }));
+    fireEvent.click(within(block()).getByRole("link", { name: "Open submission" }));
     expect(onNavigate).toHaveBeenCalledWith({
       name: "projectCase", key: "p", caseId: "case-107", variant: "case-107-de",
       annotations: refKey({ kind: "submission", id: "case-107-s1" }), documents: { panel: "case-107:de" },
@@ -210,7 +210,7 @@ describe("choose", () => {
     expect(document.getElementById(use.getAttribute("aria-describedby")!)!.textContent).toContain("Tom Old");
     fireEvent.click(use);
     expect(api.selectFinalResult).toHaveBeenCalledWith("p", expect.objectContaining({ submission_id: "t1", document_id: "case-110-de" }));
-    expect(within(old).getByRole("link", { name: "Open in editor, Tom Old" })).toBeTruthy();
+    expect(within(old).getByRole("link", { name: "Open submission, Tom Old" })).toBeTruthy();
   });
 
   it("own result: Use as final aria-disabled with OWN_RESULT_REASON", async () => {

@@ -440,7 +440,7 @@ test("320 CSS px: no horizontal scroll; case title, card heading, stages, row ac
         card.getByRole("heading", { name: textNamePattern("", S0_CASE, language), level: 4 }),
         card.locator(".document-card-stage").first(),
         card.locator(".documents-action").first(),
-        card.getByRole("link", { name: textNamePattern("Open in editor, ", S0_CASE, language) }),
+        card.getByRole("link", { name: textNamePattern("Open text, ", S0_CASE, language) }),
         card.getByRole("button", { name: textNamePattern("Details, ", S0_CASE, language) }),
       ];
       for (const fact of facts) await inView(fact, `${state} ${language}`);
