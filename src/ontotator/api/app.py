@@ -145,7 +145,7 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
     """Instantiate configured FastAPI application for local editor."""
     app = FastAPI(
         title="Ontotator Local API",
-        version="0.2.0",
+        version="0.3.0",
         docs_url="/docs" if expose_docs else None,
         redoc_url="/redoc" if expose_docs else None,
         openapi_url="/openapi.json" if expose_docs else None,

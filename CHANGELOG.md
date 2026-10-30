@@ -6,20 +6,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- A finding added in the consolidation no longer keeps its default values unchangeable: its values open right after "Add finding" and "Edit values…" changes them later, so a negated finding is exported as absent (#178).
+- The consolidation group card shows each person's passage when overlapping passages differ, and a ✓ chooses which one goes into the result (#159).
+- The consolidation result line names no term and nothing as "Not taken" until the Term row is chosen (#160).
+- The read-only consolidation view tags the kept passage and modifiers with "kept", not only the term and values (#163).
+
+## [0.3.0] - 2026-10-30
+
 ### Added
 
 - Leads can change a text's annotation mode after submissions: "Change mode…" names whose submitted work is discarded, the work is kept as discarded (not deleted) and "Restore…" brings it back while no new annotation has started (#109).
 - A started project can move to a newer ontology release after a dry-run check; draft terms with one successor or merged ids are rewritten (#81).
 - The text card says how a consolidation came about ("6 matching, 2 decided by Carla"), and the final export records per finding whether it was matched automatically, decided or added by the consolidator (`consolidations` in `receipt.json`, export format `ontotator-final-export/v2`) (#133).
+- User handbook, shown in the app and kept in sync with the code (#141, #179).
+- Synthetic demo project with a guide and upload files (#175).
 
 ### Fixed
 
 - HPO releases without a modifier classifier root (Clinical modifier, Frequency, Severity, Onset) are refused (#97).
 - The consolidation's duplicate-term warning fires only for findings of the same term on overlapping spans (#132).
-- A finding added in the consolidation no longer keeps its default values unchangeable: its values open right after "Add finding" and "Edit values…" changes them later, so a negated finding is exported as absent (#178).
-- The consolidation group card shows each person's passage when overlapping passages differ, and a ✓ chooses which one goes into the result (#159).
-- The consolidation result line names no term and nothing as "Not taken" until the Term row is chosen (#160).
-- The read-only consolidation view tags the kept passage and modifiers with "kept", not only the term and values (#163).
+- A lead can accept a result before every planned annotator has submitted; a translation review leads on to the next task (#136).
+- The consolidation saves Add finding with the search made for it (#172).
+- The task profile wins over the project's spanless setting (#130).
+
+### Changed
+
+- The Upload texts dialog is redesigned (#135).
+- The text card shows one row per person (#139).
+- The Users table folds each person's projects behind a count (#180).
+- Clearer lead assign and member UI (#134).
+- Deployment runbook for a pinned proxy network and managed hosting (#131).
 
 ## [0.2.0] - 2026-10-28
 
@@ -52,6 +70,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 First public release.
 
-[Unreleased]: https://github.com/halbritter-lab/ontotator/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/halbritter-lab/ontotator/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/halbritter-lab/ontotator/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/halbritter-lab/ontotator/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/halbritter-lab/ontotator/releases/tag/v0.1.0
