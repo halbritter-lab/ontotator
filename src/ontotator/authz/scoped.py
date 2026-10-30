@@ -478,6 +478,7 @@ class ScopedRepository(Repository):
         imported_by: int | None = None,
         job_id: int | None = None,
         on_done: Callable[[Connection, int, ImportCounts], None] | None = None,
+        snapshots_added: bool = False,
     ) -> ImportCounts:
         self._visible(project_key)
         if not can(self.access, Action.IMPORT_DOCUMENTS, project_key):
@@ -490,6 +491,7 @@ class ScopedRepository(Repository):
             imported_by=imported_by,
             job_id=job_id,
             on_done=on_done,
+            snapshots_added=snapshots_added,
         )
 
     def get_search_conditions(self, project_key: str) -> list[SearchCondition] | None:

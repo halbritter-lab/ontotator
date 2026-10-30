@@ -8,9 +8,11 @@ are append-only (T2 D6): the application role can only insert and read them.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from functools import partial
 from typing import Any, Literal, cast
 from urllib.parse import quote, unquote
 
@@ -18,16 +20,20 @@ from sqlalchemy import (
     Connection,
     Row,
     Select,
+    Text,
     and_,
     delete,
     exists,
     func,
     insert,
+    literal_column,
     or_,
     select,
     tuple_,
     update,
 )
+from sqlalchemy import cast as cast_sql
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import aliased
 
@@ -105,6 +111,39 @@ from ontotator.storage.tables import (
 _ESCAPED_KEY_PREFIX = "wk2|"
 # Identities per snapshot verification query (bind parameters stay far below limits).
 _SNAPSHOT_CHUNK = 1000
+_INSERT_CHUNK = 5000
+
+
+def _insert_rows(
+    conn: Connection, table: Any, rows: list[dict[str, Any]], *returning: Any
+) -> list[Row[Any]]:
+    """Insert ``rows`` unless they exist, with one array parameter per column.
+
+    An import of thousands of documents does this under the exclusive project
+    lock: arrays take far less time than executemany or multi-row VALUES (#209).
+    """
+
+    def column(name: str, values: list[Any]) -> Any:
+        kind = table.__table__.c[name].type
+        if isinstance(kind, JSONB):
+            texts = cast_sql([json.dumps(value) for value in values], ARRAY(Text))
+            return cast_sql(func.unnest(texts), JSONB)
+        return func.unnest(cast_sql(values, ARRAY(kind)))
+
+    names = list(rows[0])
+    inserted: list[Row[Any]] = []
+    for i in range(0, len(rows), _INSERT_CHUNK):
+        chunk = rows[i : i + _INSERT_CHUNK]
+        statement = (
+            pg_insert(table)
+            .from_select(
+                names, select(*[column(n, [r[n] for r in chunk]) for n in names])
+            )
+            .on_conflict_do_nothing()
+        )
+        result = conn.execute(statement.returning(*returning or (literal_column("1"),)))
+        inserted.extend(result.all())
+    return inserted
 
 
 def _key_str(key: WorkspaceKey) -> str:
@@ -915,28 +954,33 @@ class Repository:
         One indexed query per chunk of identities, not one table scan each:
         imports run this under the global import lock.
         """
+        checks: tuple[tuple[Any, Any, list[tuple[str, str, Callable[[], Any]]]], ...]
         checks = (
             (
                 AnnotationSnapshotRow,
                 AnnotationSnapshotRow.annotation_id,
                 [
-                    (s.annotation.annotation_id, s.version, encode_snapshot(s))
+                    (
+                        s.annotation.annotation_id,
+                        s.version,
+                        partial(encode_snapshot, s),
+                    )
                     for s in annotations
                 ],
             ),
             (
                 EvidenceSnapshotRow,
                 EvidenceSnapshotRow.evidence_id,
-                [(e.mention.evidence_id, e.version, e.model_dump()) for e in evidence],
+                [(e.mention.evidence_id, e.version, e.model_dump) for e in evidence],
             ),
         )
         for row, id_column, items in checks:
-            expected: dict[tuple[str, str], set[str]] = {}
-            for item_id, version, payload in items:
-                expected.setdefault((item_id, version), set()).add(
-                    canonical_hash(payload)
-                )
-            keys = list(expected)
+            # Hashed only for identities already stored: a new import has none,
+            # and it waits here under the exclusive project lock (#209).
+            encoders: dict[tuple[str, str], list[Callable[[], Any]]] = {}
+            for item_id, version, encode in items:
+                encoders.setdefault((item_id, version), []).append(encode)
+            keys = list(encoders)
             for i in range(0, len(keys), _SNAPSHOT_CHUNK):
                 for item_id, version, stored in conn.execute(
                     select(id_column, row.version, row.payload).where(
@@ -945,7 +989,11 @@ class Repository:
                         )
                     )
                 ):
-                    if expected[(item_id, version)] != {canonical_hash(stored)}:
+                    expected = {
+                        canonical_hash(encode())
+                        for encode in encoders[(item_id, version)]
+                    }
+                    if expected != {canonical_hash(stored)}:
                         raise InvalidPackage("Conflicting immutable snapshot content")
 
     @staticmethod
@@ -1293,6 +1341,25 @@ class Repository:
             for row in rows
         }
 
+    def add_snapshots(
+        self,
+        project_key: str,
+        annotations: Sequence[AnnotationSnapshot],
+        evidence: Sequence[EvidenceSnapshot],
+    ) -> None:
+        """Store the snapshots of a coming import before its exclusive project lock.
+
+        They are most of an import's rows, and until the commit nobody sees them,
+        so the project stays readable meanwhile (#209). Runs in the caller's
+        transaction, which must fail if the plan they belong to turns out outdated:
+        committed without their sets, they would refer to nothing.
+        """
+        with self.db.transaction() as conn:
+            conn.execute(select(func.pg_advisory_xact_lock(_lock_id("import"))))
+            project_id = self._require_project(conn, project_key)
+            self._verify_snapshot_contents(conn, annotations, evidence)
+            self._insert_snapshots(conn, project_id, annotations, evidence)
+
     def add_documents_and_proposals(
         self,
         project_key: str,
@@ -1303,6 +1370,7 @@ class Repository:
         imported_by: int | None = None,
         job_id: int | None = None,
         on_done: Callable[[Connection, int, ImportCounts], None] | None = None,
+        snapshots_added: bool = False,
     ) -> ImportCounts:
         """Add imported documents and sets in one transaction (T3 A1, T7 O1, O2).
 
@@ -1310,6 +1378,7 @@ class Repository:
         is written; an identical one is skipped. A set already imported under
         the same (bundle, set, document) is skipped, so a re-import adds
         nothing. ``on_done`` runs with the counts in the same transaction.
+        With ``snapshots_added``, ``add_snapshots`` already stored the snapshots.
         """
         texts: dict[str, ImportedDocument] = {}
         conflicts: set[str] = set()
@@ -1341,11 +1410,12 @@ class Repository:
             )
             if conflicts:
                 raise DomainError("DOCUMENT_CONFLICT", {"documents": sorted(conflicts)})
-            self._verify_snapshot_contents(
-                conn,
-                [s for item in proposal_sets for s in item.proposals.annotations],
-                [e for item in proposal_sets for e in item.proposals.evidence],
-            )
+            if not snapshots_added:
+                self._verify_snapshot_contents(
+                    conn,
+                    [s for item in proposal_sets for s in item.proposals.annotations],
+                    [e for item in proposal_sets for e in item.proposals.evidence],
+                )
             position = conn.execute(
                 select(func.coalesce(func.max(DocumentRow.position), -1)).where(
                     DocumentRow.project_id == project_id
@@ -1398,66 +1468,87 @@ class Repository:
                 "sets_skipped": 0,
                 "proposals": 0,
             }
-            for item in proposal_sets:
-                set_id = conn.execute(
-                    pg_insert(ProposalSetRow)
-                    .values(
-                        project_id=project_id,
-                        document_id=item.document_id,
-                        bundle_id=item.bundle_id,
-                        manifest_sha256=item.manifest_sha256,
-                        annotation_set_id=item.annotation_set_id,
-                        set_kind=item.set_kind,
-                        actors=item.actors,
-                        payload=item.payload,
-                        origin=item.origin,
-                        pending_items=item.pending_items,
-                        source_sha256=source_sha256,
-                        imported_by=imported_by,
-                        job_id=job_id,
-                    )
-                    .on_conflict_do_nothing()
-                    .returning(ProposalSetRow.id)
-                ).scalar_one_or_none()
-                if set_id is None:
-                    counts["sets_skipped"] += 1
-                    continue
-                counts["sets_added"] += 1
-                proposals = item.proposals
-                self._insert_snapshots(
-                    conn, project_id, proposals.annotations, proposals.evidence
-                )
-                if proposals.annotations:
-                    inserted = conn.execute(
-                        pg_insert(ProposalAnnotationRow)
-                        .on_conflict_do_nothing()
-                        .returning(ProposalAnnotationRow.annotation_id),
+            if proposal_sets:
+                # One statement per table, not per set: this runs under the
+                # exclusive project lock (#209).
+                created = {
+                    (bundle_id, annotation_set_id, document_id): set_id
+                    for set_id, bundle_id, annotation_set_id, document_id in _insert_rows(
+                        conn,
+                        ProposalSetRow,
                         [
                             {
                                 "project_id": project_id,
-                                "annotation_id": snap.annotation.annotation_id,
-                                "version": snap.version,
-                                "proposal_set_id": set_id,
-                                "notes": proposals.notes.get(
-                                    snap.annotation.annotation_id, []
-                                ),
+                                "document_id": item.document_id,
+                                "bundle_id": item.bundle_id,
+                                "manifest_sha256": item.manifest_sha256,
+                                "annotation_set_id": item.annotation_set_id,
+                                "set_kind": item.set_kind,
+                                "actors": item.actors,
+                                "payload": item.payload,
+                                "origin": item.origin,
+                                "pending_items": item.pending_items,
+                                "source_sha256": source_sha256,
+                                "imported_by": imported_by,
+                                "job_id": job_id,
                             }
-                            for snap in proposals.annotations
+                            for item in proposal_sets
                         ],
-                    ).all()
-                    counts["proposals"] += len(inserted)
-                if proposals.evidence:
-                    conn.execute(
-                        pg_insert(ProposalEvidenceRow).on_conflict_do_nothing(),
-                        [
-                            {
-                                "project_id": project_id,
-                                "evidence_id": ev.mention.evidence_id,
-                                "version": ev.version,
-                            }
-                            for ev in proposals.evidence
-                        ],
+                        ProposalSetRow.id,
+                        ProposalSetRow.bundle_id,
+                        ProposalSetRow.annotation_set_id,
+                        ProposalSetRow.document_id,
                     )
+                }
+                added: list[tuple[int, ImportedSet]] = []
+                for item in proposal_sets:
+                    key = (item.bundle_id, item.annotation_set_id, item.document_id)
+                    set_id = created.pop(key, None)
+                    if set_id is None:
+                        counts["sets_skipped"] += 1
+                    else:
+                        counts["sets_added"] += 1
+                        added.append((set_id, item))
+                if not snapshots_added:
+                    self._insert_snapshots(
+                        conn,
+                        project_id,
+                        [s for _, item in added for s in item.proposals.annotations],
+                        [e for _, item in added for e in item.proposals.evidence],
+                    )
+                annotation_rows = [
+                    {
+                        "project_id": project_id,
+                        "annotation_id": snap.annotation.annotation_id,
+                        "version": snap.version,
+                        "proposal_set_id": set_id,
+                        "notes": item.proposals.notes.get(
+                            snap.annotation.annotation_id, []
+                        ),
+                    }
+                    for set_id, item in added
+                    for snap in item.proposals.annotations
+                ]
+                if annotation_rows:
+                    counts["proposals"] = len(
+                        _insert_rows(
+                            conn,
+                            ProposalAnnotationRow,
+                            annotation_rows,
+                            ProposalAnnotationRow.annotation_id,
+                        )
+                    )
+                evidence_rows = [
+                    {
+                        "project_id": project_id,
+                        "evidence_id": ev.mention.evidence_id,
+                        "version": ev.version,
+                    }
+                    for _, item in added
+                    for ev in item.proposals.evidence
+                ]
+                if evidence_rows:
+                    _insert_rows(conn, ProposalEvidenceRow, evidence_rows)
             if on_done is not None:
                 on_done(conn, project_id, counts)
         return counts
@@ -1905,10 +1996,7 @@ class Repository:
             for snap in annotations
         ]
         if annotation_rows:
-            conn.execute(
-                pg_insert(AnnotationSnapshotRow).on_conflict_do_nothing(),
-                annotation_rows,
-            )
+            _insert_rows(conn, AnnotationSnapshotRow, annotation_rows)
         evidence_rows = [
             {
                 "project_id": project_id,
@@ -1920,9 +2008,7 @@ class Repository:
             for ev in evidence
         ]
         if evidence_rows:
-            conn.execute(
-                pg_insert(EvidenceSnapshotRow).on_conflict_do_nothing(), evidence_rows
-            )
+            _insert_rows(conn, EvidenceSnapshotRow, evidence_rows)
 
     def get_annotation_snapshot(
         self, annotation_id: str, version: str, project_key: str | None = None
