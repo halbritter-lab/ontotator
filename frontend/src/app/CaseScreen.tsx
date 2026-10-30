@@ -295,7 +295,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     reanchorItem?: ReanchorItem;
     /** "Mark in text" of a carried input without a carried finding: re-create it with the original term. */
     carriedInput?: import("../api/client").RoundInputView;
-    /** `label`: the hit's name, shown until the term labels have resolved this term (#157). */
+    /** `label`: the hit's name, shown until the term labels have resolved this term (issue 157). */
     selectedTerm?: { termId: string; searchId?: string; label?: string };
   } | null>(null);
   // Segments of the pending mark moved by its handles, readable before the state update lands.
@@ -1539,7 +1539,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         values: valuesLines(carriedAxes(selectedAnnotation).filter(axis => defaulted.has(axis.id)).map(axis => axis.label)),
         noteFirstLine: sourceNote ? sourceNote.split("\n")[0] : undefined,
         noteFull: sourceNote || undefined,
-        // #157: the note of a finding without a text span is its reason, as in the editor's field.
+        // Issue 157: the note of a finding without a text span is its reason, as in the editor's field.
         noteLabel: !input.source_snapshot.annotation.evidence_refs?.length ? "Reason for no text span" : undefined,
       }}
       readOnly={carriedReadOnly}
@@ -1555,7 +1555,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     ? "Delete this finding and all its mentions? This is a carried finding. After deleting it, you must link another finding or dismiss it with a reason."
     : undefined;
   /** Delete; a deleted carried finding becomes its placeholder row, selected with "Dismiss with reason…" focused. */
-  /** #150: puts a deleted finding back (Undo in the toast or Ctrl+Z) and selects it. */
+  /** Issue 150: puts a deleted finding back (Undo in the toast or Ctrl+Z) and selects it. */
   const restoreDeletedFinding = async (deleted: DeletedFinding) => {
     if (readOnlyRef.current) return;
     const ann = deleted.snapshot.annotation;
@@ -1588,7 +1588,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const neighbour = index < 0 ? undefined : rowKeys[index + 1] ?? rowKeys[index - 1];
     const deleted = captureDeletedFinding(latestDraft.current, annotationId);
     await handleDeleteAnnotation(annotationId);
-    // #150: like a removed modifier, a deleted finding can be undone (toast or Ctrl+Z).
+    // Issue 150: like a removed modifier, a deleted finding can be undone (toast or Ctrl+Z).
     if (deleted && !readOnlyRef.current) {
       const name = findingNameOf(deleted.snapshot);
       modifierCommands.showToast(canRestore(deleted)
@@ -1800,7 +1800,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         term_id: termId,
         ...(!pending.reanchorItem ? {search_event_id:searchId} : {}),
         ...(pending.isSpanless && spanlessReason.trim() ? { note: spanlessReason.trim() } : {}),
-        // #157: a re-created carried finding keeps the original's note (for a spanless one, its reason).
+        // Issue 157: a re-created carried finding keeps the original's note (for a spanless one, its reason).
         ...(pending.carriedInput?.source_snapshot.annotation.note?.trim() ? { note: pending.carriedInput.source_snapshot.annotation.note.trim() } : {}),
         segments: pending.segments,
         axes_values: pending.reanchorItem?.axes_values ?? (pending.carriedInput ? { ...pending.carriedInput.source_snapshot.annotation.axes_values }
@@ -2374,7 +2374,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const finding = findingNameOf(source);
     const modifiers = (ann.modifiers ?? []).map(modifier => termLabel(ann.layer_id, modifier.term_id) ?? modifier.term_id);
     const stays = modifiers.length ? ` ${modifiers.join(", ")} ${modifiers.length === 1 ? "stays" : "stay"} with the original finding.` : "";
-    // #151: the new finding is selected (and scrolled to), so the next action does not hit the original by mistake.
+    // Issue 151: the new finding is selected (and scrolled to), so the next action does not hit the original by mistake.
     setSelectedTargetId(null); setSelectedSourceId(null); setSelectedInputId(null);
     setSelectedAnnotationId(newId);
     setSelectedEvidenceId(movedEvidenceId);
@@ -3589,7 +3589,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                       >
                         <div className="doc-id doc-row">
                           <TermName termId={t.term_id ?? t.annotation_id} label={termLabel(t.layer_id, t.term_id ?? t.annotation_id)} />
-                          {/* #148: only Confirm decides a proposal's defaults; an unresolved one keeps them as defaults. */}
+                          {/* Issue 148: only Confirm decides a proposal's defaults; an unresolved one keeps them as defaults. */}
                           {defaultedKeys.has(refKey(t)) && (dec?.outcome === "uncertain"
                             ? <StatusBadge tone="warning" title="Submitted as Unresolved with your note; its prefilled values stay recorded as defaults.">Defaults not confirmed</StatusBadge>
                             : <StatusBadge tone="warning">Defaults to confirm</StatusBadge>)}
@@ -3662,7 +3662,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               </div>
               {isReviewLike(view.key.mode) && (() => {
                 const proposals = completionResults.filter(s => reviewTargets.some(t => t.annotation_id === s.annotation.annotation_id && t.version === s.version));
-                // #148: a proposal in the result is confirmed or unresolved; count it by its decision.
+                // Issue 148: a proposal in the result is confirmed or unresolved; count it by its decision.
                 const unresolved = proposals.filter(s => decisionsMap[refKey({ annotation_id: s.annotation.annotation_id, version: s.version })]?.outcome === "uncertain").length;
                 const confirmed = proposals.length - unresolved;
                 const own = completionResults.length - proposals.length;

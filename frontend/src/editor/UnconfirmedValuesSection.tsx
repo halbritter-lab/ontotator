@@ -18,7 +18,7 @@ export interface UnconfirmedValuesSectionProps {
 }
 
 /**
- * #164: what happens to a value left open. Mirrors the server: the value is submitted as shown and keeps
+ * Issue 164: what happens to a value left open. Mirrors the server: the value is submitted as shown and keeps
  * `axes_defaulted` (T1 `basis: defaulted`); the lead's view marks it "(defaulted)", the export as defaulted.
  */
 export const UNCONFIRMED_CONSEQUENCE =

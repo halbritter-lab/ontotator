@@ -2340,7 +2340,7 @@ details.case-version-controls > .btn { vertical-align: bottom; }
   color: var(--warning);
   font-weight: var(--weight-strong);
 }
-/* A Select axis with an unconfirmed default: the list and its own "Confirm" (#149). */
+/* A Select axis with an unconfirmed default: the list and its own "Confirm" (issue 149). */
 .values-section .axis-select-row {
   display: flex;
   align-items: center;

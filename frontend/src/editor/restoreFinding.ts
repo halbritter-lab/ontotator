@@ -2,7 +2,7 @@ import type { AnnotationSnapshot, Draft, Modifier } from "../api/client";
 import { carriedChosenAxisIds } from "./carried/checkState";
 
 /**
- * Undo of "Delete finding" (#150): everything needed to put a deleted finding back with the existing draft
+ * Undo of "Delete finding" (issue 150): everything needed to put a deleted finding back with the existing draft
  * commands, captured before the delete. The finding keeps its ID, mentions (IDs and segments), term, values
  * (chosen stay chosen, defaults stay defaults), note and modifiers; review decisions that named it as their
  * replacement are recorded again.

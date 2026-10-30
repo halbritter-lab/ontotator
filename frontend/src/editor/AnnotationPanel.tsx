@@ -392,7 +392,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
                       {unavailable && <option value={val} disabled>{unavailableLabel}</option>}
                       {axis.options.map((option) => <option key={option} value={option}>{axisOptionLabel(option)}</option>)}
                     </Select>
-                    {/* #149: choosing the selected option again fires no change, so a dropdown default gets its own Confirm. */}
+                    {/* Issue 149: choosing the selected option again fires no change, so a dropdown default gets its own Confirm. */}
                     {unconfirmed && !readOnly && onConfirmDefaults && (
                       <Button type="button" variant="secondary" size="sm" className="axis-confirm" data-confirm-axis={axis.id}
                         aria-label={`Confirm ${axis.label}: ${axisOptionLabel(val)}`} onClick={() => {
