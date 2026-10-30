@@ -70,7 +70,7 @@ Before you start: submitting means you checked the whole text, not only the find
 
 1. Click **Next open item** until nothing is left. It takes you to every proposal, value or finding that still needs you.
 2. Click **Finish & submit text**. (A consolidation is submitted on its own screen; see [Consolidator](consolidator.md).)
-3. The dialog lists what is still open, with **Go to** for each item. Values you have not confirmed are under **Values not chosen yet**: confirm them only if you checked that they are right.
+3. The dialog lists what is still open, with **Go to** for each item. Values you have not confirmed are under **Values not chosen yet**: confirm them only if you checked that they are right. A value you leave is submitted as shown but recorded as defaulted, not chosen; the lead and the export see this.
 4. Click **Submit text**.
 
 ![The submit dialog with the Values not chosen yet group](images/annotator-submit-dialog.png)

@@ -17,6 +17,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The consolidation launcher says under "Consolidator" who is listed and links Settings → People (#147).
 - The "Submit consolidation?" dialog tells a lead consolidator to accept the result in Documents (#143).
 - The full editor of a consolidation has no submit any more; it points back to the consolidation screen, where you submit, and "Replaced by" explains itself (#162).
+- "Delete finding" in the editor can be undone with "Undo" in the message or Ctrl+Z, like removing a modifier (#150).
+- An unresolved proposal is counted as "unresolved proposal", not as confirmed, and its prefilled values read "Defaults not confirmed" (#148).
+- A default on a dropdown value field (such as Experiencer) can be confirmed on its own with "Confirm" (#149).
+- After "Move to a new finding" the new finding is selected, not the original (#151).
+- A new finding without a text span shows the term's name in "Selected term:"; a carried one lists its note as "Reason for no text span", and re-creating a carried finding keeps its note (#157).
+- The submit dialog says what happens to values left unconfirmed: submitted as shown, recorded as defaulted (#164).
 
 ## [0.3.0] - 2026-10-30
 

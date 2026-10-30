@@ -349,7 +349,7 @@ describe("A6: conflicts and offline state", () => {
     fireEvent.click(screen.getByRole("radio", { name: /Present/i }));
     const banner = await screen.findByRole("alert", { name: /Revision conflict/i });
     expect(banner.textContent).toMatch(/Case was changed elsewhere/);
-    expect(screen.getByRole("status").textContent).not.toMatch(/Saved/);
+    expect(document.querySelector(".app-actions [role=\"status\"]")!.textContent).not.toMatch(/Saved/);
 
     fireEvent.click(screen.getByRole("button", { name: /Reload case/i }));
     const dialog = await screen.findByRole("dialog", { name: /Reload case/i });
@@ -382,7 +382,7 @@ describe("A6: conflicts and offline state", () => {
     render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()} />);
     fireEvent.click(screen.getByText("HP:0003"));
     fireEvent.click(screen.getByRole("radio", { name: /Present/i }));
-    await waitFor(() => expect(screen.getByRole("status").textContent).toMatch(/Offline – changes not saved/));
+    await waitFor(() => expect(document.querySelector(".app-actions [role=\"status\"]")!.textContent).toMatch(/Offline – changes not saved/));
     expect(screen.getByRole("button", { name: /Retry/i })).toBeDefined();
   });
 

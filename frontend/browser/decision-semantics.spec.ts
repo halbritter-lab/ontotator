@@ -32,7 +32,7 @@ test("defaulted warning reveals a hidden result and an explicit axis confirmatio
   await page.locator(".review-actions__title").click(); await page.keyboard.press("4");
   await page.getByRole("button", { name: "Save decision", exact: true }).click();
   await expect(proposal).toContainText("Unresolved");
-  await expect(proposal).toContainText("Defaults to confirm");
+  await expect(proposal).toContainText("Defaults not confirmed");
   await page.getByRole("button", { name: /^Finish & submit/ }).click();
   await expect(submitDialog.getByRole("heading", { name: "Values not chosen yet", exact: true })).toBeVisible();
   await expect(submitDialog.locator("[data-unconfirmed-row]")).toHaveCount(1);

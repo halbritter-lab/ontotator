@@ -159,6 +159,8 @@ export interface WhatToCheck {
   values: string[];
   noteFirstLine?: string;
   noteFull?: string;
+  /** Term of the note row; "Note" by default. */
+  noteLabel?: string;
 }
 
 export interface CarriedSectionProps {
@@ -272,7 +274,7 @@ export function CarriedSection({
             <dt>Values</dt>
             <dd>{whatToCheck.values.map(line => <span key={line} className="carried-check-list__line">{line}</span>)}</dd>
             {whatToCheck.noteFirstLine && <>
-              <dt>Note</dt>
+              <dt>{whatToCheck.noteLabel ?? "Note"}</dt>
               <dd>{whatToCheck.noteFirstLine}</dd>
             </>}
           </dl>
