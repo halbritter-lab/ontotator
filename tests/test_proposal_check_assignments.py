@@ -312,7 +312,12 @@ def test_batch_skips_a_locked_text_without_proposals_and_assigns_the_rest(env):
     preview = shown.json()
     assert [t["case_id"] for t in preview["targets"]] == ["c1"]
     assert preview["skipped"] == [
-        {"case_id": "c2", "language": "en", "reason": "no_proposals_on_version"}
+        {
+            "case_id": "c2",
+            "language": "en",
+            "reason": "no_proposals_on_version",
+            "document_id": None,
+        }
     ]
     saved = env.lead.post(
         f"{BASE}/assignments/batch",
