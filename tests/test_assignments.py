@@ -503,10 +503,12 @@ def test_queued_assign_uses_current_target_and_settings(core, change, code) -> N
                         .values(active=False)
                     )
                 elif change == "language":
+                    # Listed languages without the document's: no languages
+                    # at all would be unknown, which needs no confirmation.
                     conn.execute(
-                        delete(UserLanguageRow).where(
-                            UserLanguageRow.user_id == users["alice"]
-                        )
+                        update(UserLanguageRow)
+                        .where(UserLanguageRow.user_id == users["alice"])
+                        .values(language="fr")
                     )
                 else:
                     conn.execute(

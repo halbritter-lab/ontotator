@@ -17,6 +17,9 @@ export function memberOptionLabel(member: Member): string {
 export type TaskDocument = Pick<DocumentSummary, "document_id" | "language" | "translation_status">;
 /** Annotators; the task argument is kept for callers (D1: consolidators are chosen in "Consolidate…" only). */
 export const eligibleMembers = (members: Member[], _task: string) => members.filter(member => member.roles.includes("annotator"));
+/** The required languages a member does not read; none listed means unknown, never "reads nothing" (#193). */
+export const unreadLanguages = (known: readonly string[], required: readonly string[]) =>
+  known.length ? required.filter(language => !known.includes(language)) : [];
 export function useCaseVariants(key: string, supplied?: readonly CaseSummary[] | null) {
   const [loaded, setLoaded] = useState<CaseSummary[] | null>(null);
   const [error, setError] = useState<unknown>();

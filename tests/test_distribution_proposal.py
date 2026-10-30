@@ -63,6 +63,24 @@ def test_only_readers_of_the_language_are_proposed() -> None:
     assert proposal.rows == (("english", 1), ("german", 2))
 
 
+def test_members_without_listed_languages_count_as_unknown_readers() -> None:
+    """No languages listed is unknown, not "reads nothing" (#193)."""
+    proposal = propose_distribution(
+        [document("french", "fr"), document("both", "de")],
+        [candidate(1, languages=""), candidate(2, languages="")],
+        per_document=2,
+        seed=0,
+        required_languages=lambda doc: frozenset({doc.language, "en"}),
+    )
+    assert proposal.unassignable == ()
+    assert sorted(proposal.rows) == [
+        ("both", 1),
+        ("both", 2),
+        ("french", 1),
+        ("french", 2),
+    ]
+
+
 def test_documents_without_readers_are_listed_without_partial_rows() -> None:
     proposal = propose_distribution(
         [document("none", "fr"), document("few", "de"), document("enough")],

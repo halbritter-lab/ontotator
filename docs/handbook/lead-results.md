@@ -47,7 +47,7 @@ Before you start: the text needs at least two submissions. The consolidator must
 1. In the text card, open **Finalization** and click **Consolidate…**. The form **Consolidate submitted results** opens with the compared submissions already ticked.
 2. Under **Submissions to merge**, check the ticked submissions (at least two).
 3. Under **Consolidator**, choose a person. The list starts with **Choose a consolidator**, then you (*You (Mia Lead)*), then every member with the Consolidator role. If the project rule forbids it, people who annotated this text are shown but cannot be chosen (*— Ana Weber annotated this text*).
-4. If the person's profile lacks the text's language, tick the box *Assign this consolidator despite missing en in their profile*.
+4. If the person's profile lists languages but not the text's language, tick the box *Assign this consolidator despite missing en in their profile*.
 5. Optional: enter **Consolidation reason (optional)**. The reason is kept in the history; the consolidator does not see it.
 6. Click **Start consolidation**.
 
@@ -116,7 +116,7 @@ What for: decide what happens after a reviewer rejected or queried a translation
 What for: fix a queried or rejected translation without assigning another review.
 
 1. In the row, click **Resolve…**, then **Correct the translation…** (or **Continue your correction**).
-2. Read the panel: you review the version yourself, and your corrected text becomes the next text version and counts as accepted. If your profile lacks the language, tick *Correct despite missing de in your profile*.
+2. Read the panel: you review the version yourself, and your corrected text becomes the next text version and counts as accepted. If your profile lists languages but not this one, tick *Correct despite missing de in your profile*.
 3. Click **Open translation review**. The screen says **You are correcting this translation as project lead.**
 4. Correct the translation as described in [Review a translation](annotator.md#review-a-translation). Only **Accepted with corrections** is offered.
 5. Submit with **Submit review…** (or `Ctrl+Enter`), then click **Back to Documents**.

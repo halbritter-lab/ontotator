@@ -91,6 +91,14 @@ def required_languages(
     return frozenset({variant.language, source.language})
 
 
+def reads_all(known: Collection[str], required: Collection[str]) -> bool:
+    """Whether a person with ``known`` languages reads every ``required`` one.
+
+    No languages listed means unknown, not "reads nothing": such a person is
+    eligible without a language warning (issue #193)."""
+    return not known or set(known) >= set(required)
+
+
 def check_variant_assignable(
     project: Mapping[Any, Any],
     variant: VariantInfo,

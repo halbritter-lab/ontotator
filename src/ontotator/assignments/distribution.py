@@ -4,6 +4,8 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from random import Random
 
+from ontotator.assignments.eligibility import reads_all
+
 
 @dataclass(frozen=True)
 class Candidate:
@@ -70,7 +72,8 @@ def propose_distribution(
         eligible = [
             c
             for c in ordered_candidates
-            if c.languages >= languages and c.user_id not in document.excluded_user_ids
+            if reads_all(c.languages, languages)
+            and c.user_id not in document.excluded_user_ids
         ]
         if len(eligible) < per_document:
             unassignable.append(

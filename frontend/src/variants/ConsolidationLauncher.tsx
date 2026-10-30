@@ -4,6 +4,7 @@ import { api, ApiError, type AssignmentView, type Member, type SubmissionHistory
 import { routeHref } from '../app/router';
 import { Button, Checkbox, InlineMessage, Select, Textarea } from '../ui';
 import { ErrorNotice } from '../admin/ErrorNotice';
+import { unreadLanguages } from '../admin/assignmentUI';
 import { formatDateTime } from '../app/labels';
 import { onSpaceActivate } from '../ui/spaceActivates';
 import { notifyFinalSelectionChanged } from './finalSelectionState';
@@ -76,7 +77,7 @@ function ConsolidationContent(props: Props): JSX.Element {
   const selectedIds = eligibleRows.filter(row => selected.has(row.submission_id)).map(row => row.submission_id);
   const candidates = current ? candidatesOf(current.members, current.assignments, props) : [];
   const chosen = candidates.find(row => row.username === reviewer && row.reason === null);
-  const missingLanguage = !!chosen?.member && !chosen.member.languages.includes(language);
+  const missingLanguage = !!chosen?.member && unreadLanguages(chosen.member.languages, [language]).length > 0;
   const noConsolidator = current != null && !current.members.some(member => member.roles.includes('adjudicator'));
   // An existing review assignment of the reviewer on this text is reused at its revision; none means "new".
   const existing = chosen && current?.assignments.find(row => row.project_key === projectKey && row.document_id === documentId

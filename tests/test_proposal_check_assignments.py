@@ -343,6 +343,10 @@ def test_a_system_admin_who_is_not_lead_confirms_the_language_on_self_assign(env
         projects={"proj": ["annotator"]},
         assignments=[],
     )
+    # Listed languages without en; none listed would be unknown (#193).
+    from ontotator.auth.audit import Actor
+
+    env.app.state.accounts.set_languages(Actor.cli(), "root", ["fr"])
     response = admin.post(
         f"{BASE}/assignments",
         json={
