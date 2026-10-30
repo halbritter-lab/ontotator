@@ -398,7 +398,7 @@ When the server is managed from a separate infrastructure ("hosting") repository
 - Proxy: the NPM proxy host is a declared `npm-hosts` entry forwarding to `ontotator_app:8000` with `hsts_enabled: false` (the app sends its own HSTS header), on the edge network from [Reverse proxy settings](#reverse-proxy-settings).
 - Settings and secrets are still required as in [Configuration and secrets](#configuration-and-secrets): the base file needs `ONTOTATOR_IMAGE`, `ONTOTATOR_PUBLIC_ORIGIN`, `ONTOTATOR_TRUSTED_PROXIES` and `NPM_SHARED_NETWORK_NAME` set even when the override pins the images.
 
-A release is deployed from the hosting repository, not on the server:
+A release is deployed from the hosting repository, not on the server. The targets below are a sketch of that flow; the hosting repository's own documentation is authoritative for their names and arguments:
 
 ```bash
 make pin APP=ontotator VERSION=X.Y.Z # vendors the release's files and pins its image digests
@@ -406,7 +406,7 @@ git add server/apps/ontotator && git commit # review the vendored diff first
 make deploy APP=ontotator
 ```
 
-Take a backup before `make deploy` switches the image, as in [Upgrades](#upgrades). Read the release notes for changes to the Compose file or init script; the PostgreSQL init script only runs on an empty volume, so changing it does not affect an existing database.
+Take a backup before `make deploy` switches the image, as in [Upgrades](#upgrades) (the hosting playbook takes one automatically before an image switch; check that it did). The host needs no GitHub credential: the repository and, once its visibility is set to public, the GHCR package are readable anonymously, and the vendored files make even an anonymous clone unnecessary. Read the release notes for changes to the Compose file or init script; the PostgreSQL init script only runs on an empty volume, so changing it does not affect an existing database.
 
 ## Workers and resource limits
 
