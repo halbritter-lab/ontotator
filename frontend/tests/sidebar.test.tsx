@@ -183,6 +183,30 @@ describe("continuous sidebar", () => {
     expect(renderCase(reviewView([])).container.querySelector("[data-result-count]")).toBeNull();
   });
 
+  it("counts an unresolved proposal as unresolved, not as confirmed (#148)", () => {
+    const own = snapshot("own", "HP:0004", { actor: { actor_id: "dr-a", kind: "human" }, method: "manual", source_refs: [] });
+    const view = reviewView([own]);
+    view.draft.decisions = [
+      { decision_id: "d1", target: { annotation_id: "tool-prop", version: "tool-prop-v1" }, outcome: "confirmed", reviewer_id: "dr-a" },
+      { decision_id: "d2", target: { annotation_id: "human-prop", version: "human-prop-v1" }, outcome: "uncertain", note: "Unclear", reviewer_id: "dr-a" },
+    ] as never;
+    const { container } = renderCase(view);
+    expect(container.querySelector("[data-result-count]")!.textContent).toBe("1 confirmed proposal, 1 unresolved proposal, 1 own finding");
+  });
+
+  it("an unresolved proposal with defaults reads Defaults not confirmed (#148)", () => {
+    const view = reviewView([]);
+    const target = view.available_inputs!.find(s => s.annotation.annotation_id === "human-prop")!;
+    target.annotation.axes_defaulted = ["assertion"];
+    view.draft.decisions = [
+      { decision_id: "d2", target: { annotation_id: "human-prop", version: "human-prop-v1" }, outcome: "uncertain", note: "Unclear", reviewer_id: "dr-a" },
+    ] as never;
+    const { container } = renderCase(view);
+    const row = itemFor(container, "HP:0002");
+    expect(row.textContent).toContain("Defaults not confirmed");
+    expect(row.textContent).not.toContain("Defaults to confirm");
+  });
+
   it("scrolls the selected entry into view", () => {
     const scrolled: string[] = [];
     const original = (Element.prototype as any).scrollIntoView;

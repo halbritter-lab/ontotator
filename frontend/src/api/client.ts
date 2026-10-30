@@ -256,6 +256,8 @@ export type CaseFilters = NonNullable<operations["list_cases_api_v1_projects__ke
 export type CurrentUser = components["schemas"]["CurrentUser"];
 export type SessionState = components["schemas"]["SessionState"];
 export type Profile = components["schemas"]["Profile"];
+/** Version and Git commit of the running app, for the Help page. */
+export type About = components["schemas"]["About"];
 /** PATCH distinguishes omitted defaults from explicit null/false values. */
 export type OwnProfilePatch = Partial<components["schemas"]["ProfilePatch"]>;
 export type PasswordChange = components["schemas"]["PasswordChange"];
@@ -846,6 +848,10 @@ export class ApiClient {
   /** Raw transport; metadata lifetime and deduplication belong to the workspace. */
   async getProposalSet(projectKey: string, setId: number, signal?: AbortSignal): Promise<ProposalSetView> {
     return this.request<ProposalSetView>(`/api/v1/projects/${encodeURIComponent(projectKey)}/proposal-sets/${setId}`, { method: "GET", signal });
+  }
+
+  async getAbout(): Promise<About> {
+    return this.request<About>("/api/v1/about", { method: "GET" });
   }
 
   async getProfile(): Promise<Profile> {

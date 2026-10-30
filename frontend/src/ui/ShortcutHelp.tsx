@@ -36,7 +36,7 @@ export function ShortcutHelpHost(): JSX.Element | null {
       <h3>{group}</h3>
       <dl>{bindings.map((row, index) => <div className="shortcut-help-row" key={index}>
         <dt>{row.keys.map((key, keyIndex) => <Fragment key={keyIndex}>{keyIndex > 0 && " / "}<Kbd>{formatKey(key)}</Kbd></Fragment>)}</dt>
-        <dd>{row.description}</dd>
+        <dd>{row.description}{row.unavailable && <span className="shortcut-help-unavailable"> (not available right now)</span>}</dd>
       </div>)}</dl>
     </section>)}
     <p className="shortcut-help-note">Shortcuts are disabled while typing in a field or when a dialog is open.</p>

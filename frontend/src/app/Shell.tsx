@@ -6,6 +6,7 @@ import { MY_TASKS, routeHref, type Route } from "./router";
 import { projectDestination, ProjectSwitcher } from "./ProjectPicker";
 import { rememberedProject } from "./lastProject";
 import { useDocumentsSummary } from "../documents/useDocumentsSummary";
+import { TASKS_CHANGED } from "../tasks/tasksEvents";
 
 export interface ShellProps {
   user: CurrentUser;
@@ -51,8 +52,10 @@ export function shellRole(user: CurrentUser, projects: readonly ProjectSummary[]
 }
 
 /**
- * Unsubmitted own tasks, loaded once per session and again on window focus, a restored session
- * or a change of `navigation` (opening My tasks or Projects).
+/**
+ * Unsubmitted own tasks, loaded once per session and again on window focus, a restored session, a tasks-changed
+ * event (an own submit or new work round, so the count never lags behind it) or a change of `navigation` (opening
+ * My tasks or Projects).
  */
 function useOpenTaskCount(username: string, navigation: unknown): number | null {
   const [count, setCount] = useState<{ username: string; value: number } | null>(null);
@@ -69,11 +72,13 @@ function useOpenTaskCount(username: string, navigation: unknown): number | null 
     load();
     reload.current = load;
     window.addEventListener("focus", load);
+    window.addEventListener(TASKS_CHANGED, load);
     const stopRestored = onSessionRestored(load);
     return () => {
       active = false;
       reload.current = null;
       window.removeEventListener("focus", load);
+      window.removeEventListener(TASKS_CHANGED, load);
       stopRestored();
     };
   }, [username]);

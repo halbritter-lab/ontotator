@@ -46,7 +46,7 @@ Log in as a system administrator. Background: [Set up a new project for a lead](
 5. **Give the reviewer a qualification.** On **Users**, click **Edit** in the row of `mia.kuehn`, fill **Qualification** and click **Save changes**. See [Edit a user's profile and administrator role](../../docs/handbook/admin.md#edit-a-users-profile-and-administrator-role).
 6. **Each person sets a password.** On the login page: **I have a setup or reset code**, then **Username**, **Setup or reset code**, **New password**, **Repeat the new password**, **Set password and log in**. See [Set your password with a setup or reset code](../../docs/handbook/getting-started.md#set-your-password-with-a-setup-or-reset-code).
 
-The administrator who created the project is a member with all three roles. In the assign dialogs below, just leave the administrator unticked.
+The administrator who created the project is a member with all three roles. In the assign dialogs below, just leave the administrator unticked (the review and annotation dialog marks them *Administrator*).
 
 ## Part 2: lead (about 15 minutes)
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { duplicatesText, fieldsToDecide, finalizationState, groupStatus, headerTitle, partialText, readOnlyText, submittedText, summaryText } from "../../src/consolidation/consolidationText";
 import type { ConsolidationGroupView } from "../../src/api/client";
-import { attachCandidates, choicesComplete, choose, comparisonRows, duplicateTerms, groupName, resolvePayload, resultLine, sameTermGroups, standaloneText, takeFinding, type Choices } from "../../src/consolidation/groupModel";
+import { attachCandidates, choicesComplete, choose, comparisonRows, duplicateTerms, groupName, resolvePayload, resultLine, sameTermGroups, standaloneText, storedResult, takeFinding, type Choices } from "../../src/consolidation/groupModel";
 import { NO_MODIFIERS } from "../../src/consolidation/modifierSets";
 import { textOrder } from "../../src/consolidation/GroupList";
 import { ANA, BEN, CEM, decidedView, exampleGroups, exampleView, group, hypotoniaThree, LUC, member, mild, MOD_PEOPLE, MOD_TEXT, modSpan, recurrent, seizure, severe, span, TEXT, THREE, TOM } from "./fixtures";
@@ -93,11 +93,20 @@ describe("comparison model", () => {
 
   it("result line names the open choices", () => {
     const group = hypotoniaThree();
+    // #160: an open term conflict names no term and nothing as not taken.
     expect(resultLine(group, THREE, TEXT, {})).toMatchObject({
+      saved: "Result: 1 finding, Term not chosen yet, Assertion not chosen yet, Patient, Current",
+      notTaken: null,
+      termId: undefined,
+    });
+    expect(resultLine(group, THREE, TEXT, { term: "HP:0001252" })).toMatchObject({
       saved: "Result: 1 finding, Hypotonia (HP:0001252), Assertion not chosen yet, Patient, Current",
       notTaken: "Not taken: Axial hypotonia (Ali)",
     });
-    expect(resultLine(group, THREE, TEXT, { assertion: "absent" }).saved).toBe("Result: 1 finding, Hypotonia (HP:0001252), Absent, Patient, Current");
+    expect(resultLine(group, THREE, TEXT, { term: "HP:0001252", assertion: "absent" }).saved).toBe("Result: 1 finding, Hypotonia (HP:0001252), Absent, Patient, Current");
+    // Without a term conflict the term stands from the start.
+    const values = exampleGroups().find(value => value.group_id === "g-hypo")!;
+    expect(resultLine(values, THREE, TEXT, {}).saved).toBe("Result: 1 finding, Hypotonia (HP:0001252), Assertion not chosen yet, Patient, Current");
   });
 
   it("taking a whole finding fills every row", () => {
@@ -291,6 +300,17 @@ describe("modifiers row", () => {
     expect(resultLine(value, P, MOD_TEXT, choices).finding).toBe("Seizure (HP:0001250), Present, Patient, Current, modifiers: Recurrent “wiederholt”, Severe “schwere”");
     const none = seizure("g", ["modifiers_differ"], [[ANA, []], [BEN, [severe("schwere")]]]);
     expect(resultLine(none, P, MOD_TEXT, choose(none, {}, "modifiers", NO_MODIFIERS)).finding).toBe("Seizure (HP:0001250), Present, Patient, Current, no modifiers");
+  });
+
+  it("a decided group's stored modifiers press the kept toggles; none kept presses No modifiers (#163)", () => {
+    const value = s4();
+    const severeOnly = value.members[0].modifiers!;
+    const decided = { ...value, state: "choose" as const, result: { term_id: "HP:0001250", term_label: "Seizure", layer_id: "phenotype",
+      axes: value.members[0].axes, modifiers: severeOnly, spans: value.members[0].spans } };
+    expect(pressed(mods(decided, storedResult(decided, MOD_TEXT)!.choices))).toEqual([[true], [false]]);
+    const none = seizure("g", ["modifiers_differ"], [[ANA, []], [BEN, [severe("schwere")]]]);
+    const keptNone = { ...none, state: "choose" as const, result: { ...decided.result, modifiers: [] } };
+    expect(pressed(mods(keptNone, storedResult(keptNone, MOD_TEXT)!.choices))).toEqual([[true], [false]]);
   });
 
   it("choose sends the pressed modifiers with their segments (S4)", () => {

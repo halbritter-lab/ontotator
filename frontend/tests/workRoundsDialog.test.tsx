@@ -84,6 +84,30 @@ describe("Work rounds dialog", () => {
     expect(dialog().querySelector("[data-dialog-close]")).not.toBeNull();
   });
 
+  it("says before the click what happens to the earlier submission and what the lead sees (#152)", async () => {
+    renderDialog({ assignment: { ...assignment, status: "submitted" } as AssignmentView });
+    await screen.findByRole("radiogroup", { name: "Continue from" });
+    expect(screen.getByText("Your earlier submission is then marked as replaced and no longer counts as submitted: the project lead sees your task as not submitted, and a new consolidation cannot start from it. If the lead already chose it as the final result, the lead is asked to review that choice. Submit the new round to hand in your work again.")).toBeDefined();
+    cleanup();
+    // Nothing counts as submitted any more (for example after a lead reopened the task): only the reminder to submit.
+    renderDialog({ assignment: { ...assignment, last_submission_id: null } as unknown as AssignmentView });
+    await screen.findByRole("radiogroup", { name: "Continue from" });
+    expect(screen.getByText("Submit the new round to hand in your work.")).toBeDefined();
+    expect(screen.queryByText(/no longer counts as submitted/)).toBeNull();
+  });
+
+  it("reloads the My tasks counter after starting a round", async () => {
+    const changed = vi.fn();
+    window.addEventListener("tasks-changed", changed);
+    try {
+      renderDialog();
+      const group = await screen.findByRole("radiogroup", { name: "Continue from" });
+      fireEvent.click(within(group).getByRole("radio", { name: /Round 2 submission/ }));
+      fireEvent.click(footer().getByRole("button", { name: "Continue from this submission" }));
+      await waitFor(() => expect(changed).toHaveBeenCalledOnce());
+    } finally { window.removeEventListener("tasks-changed", changed); }
+  });
+
   it("reuses the request identity after a failed start", async () => {
     const { onCreate } = renderDialog();
     onCreate.mockRejectedValueOnce(new Error("The round could not be opened"));

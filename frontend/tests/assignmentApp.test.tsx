@@ -181,6 +181,8 @@ it.each(["open", "submitted"] as const)("after a submit with a %s neighbor opens
   }
   expect(screen.queryByRole("dialog", { name: "Text submitted" })).toBeNull();
   expect(first.read_only).toBe(false);
+  // The sidebar count reloads after the submit and no longer counts the submitted task (#156).
+  expect(await screen.findByRole("link", { name: `My tasks (${status === "open" ? 1 : 0})` })).toBeTruthy();
   const toast = (await screen.findByText(/^\S+ \S+ submitted\.$/)).closest(".ui-toast") as HTMLElement;
   fireEvent.click(within(toast).getByRole("button", { name: "View result" }));
   await waitFor(() => expect(window.location.hash).toBe("#/tasks/17"));

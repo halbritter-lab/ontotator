@@ -166,6 +166,18 @@ it("disabled_bindings_neither_fire_nor_list", () => {
   expect(rows()).toEqual([{ keys: ["j"], description: "Review", group: "General" }]);
 });
 
+it("disabled_bindings_with_list_when_disabled_stay_listed_as_unavailable_but_never_fire", () => {
+  const handler = vi.fn();
+  const view = render(<><Binding handler={handler} options={{ enabled: false, listWhenDisabled: true, description: "Review" }} /><Help /></>);
+  press();
+  expect(handler).not.toHaveBeenCalled();
+  expect(rows()).toEqual([{ keys: ["j"], description: "Review", group: "General", unavailable: true }]);
+  view.rerender(<><Binding handler={handler} options={{ listWhenDisabled: true, description: "Review" }} /><Help /></>);
+  press();
+  expect(handler).toHaveBeenCalledOnce();
+  expect(rows()).toEqual([{ keys: ["j"], description: "Review", group: "General" }]);
+});
+
 it("hints_are_listed_but_never_fire", () => {
   const view = render(<><Hint /><Help /></>);
   expect(rows()).toEqual([{ keys: ["Shift+arrows", "←/→"], description: "Select text", group: "Editor" }]);
