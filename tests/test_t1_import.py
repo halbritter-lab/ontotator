@@ -139,7 +139,7 @@ def test_a_bundle_for_another_ontology_release_is_refused(
 
     assert job.status == "failed"
     assert job.error is not None and "PIN_MISMATCH" in job.error
-    assert "'version'" in job.error and "2025-01-01" in job.error
+    assert "release 2025-01-01" in job.error
     assert _rows(db, DocumentRow.document_id) == []
 
 
@@ -150,7 +150,7 @@ def test_allowed_roots_must_match_the_project(db: Database, tmp_path: Path) -> N
 
     assert job.status == "failed"
     assert job.error is not None and "PIN_MISMATCH" in job.error
-    assert "allowed_roots" in job.error
+    assert "the bundle allows HP:0000001" in job.error
     assert _rows(db, DocumentRow.document_id) == []
 
 

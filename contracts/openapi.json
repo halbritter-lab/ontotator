@@ -7236,6 +7236,28 @@
         }
       }
     },
+    "/api/v1/auth/session": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Session",
+        "description": "The logged-in user or ``None``; 200 without a session too.\n\nThe login page asks this instead of ``/me``, so an anonymous visit logs\nno failed request, and learns whether to ask for demo logins.",
+        "operationId": "session_api_v1_auth_session_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionState"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects": {
       "get": {
         "summary": "List Projects",
@@ -21320,6 +21342,31 @@
         "additionalProperties": false,
         "type": "object",
         "title": "SelectionSummaryRequest"
+      },
+      "SessionState": {
+        "properties": {
+          "user": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CurrentUser"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "demo_logins": {
+            "type": "boolean",
+            "title": "Demo Logins"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user",
+          "demo_logins"
+        ],
+        "title": "SessionState",
+        "description": "Who this browser is logged in as, if anyone, for the login page."
       },
       "SourceObligationView": {
         "properties": {

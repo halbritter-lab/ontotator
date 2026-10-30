@@ -194,6 +194,16 @@ describe("carried finding inspector", () => {
     expect(resolve).not.toHaveBeenCalled();
   });
 
+  it("a carried finding without a text span names its note the reason in What to check (#157)", () => {
+    const carried = finding("carried"); carried.annotation.note = "Reported by the parents";
+    const spanless = input("input-1", carried); spanless.source_snapshot.annotation.note = "Reported by the parents";
+    const { container } = setup({ annotations: [carried], inputs: [spanless] });
+    fireEvent.click(row(container, "annotation:carried"));
+    const term = within(section()).getByText("Reason for no text span");
+    expect(term.tagName).toBe("DT");
+    expect(term.nextElementSibling!.textContent).toBe("Reported by the parents");
+  });
+
   it("Mark in text keeps the original's chosen axis values chosen and its defaulted ones defaulted", async () => {
     const apply = vi.spyOn(api, "applyCommand").mockImplementation(async (_workspace, envelope) => {
       const payload = envelope.payload as Record<string, unknown>;

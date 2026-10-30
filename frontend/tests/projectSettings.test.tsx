@@ -78,6 +78,20 @@ describe("project creation", () => {
     expect(vi.mocked(api.createProject).mock.calls[0][0]).not.toHaveProperty("template");
   });
 
+  it("starts an uploaded profile's branches empty; the template keeps Phenotypic abnormality (#196)", async () => {
+    render(<ProjectNewPage onNavigate={vi.fn()} />);
+    fireEvent.change(await screen.findByLabelText(/^Built-in template/), { target: { value: "template" } });
+    expect((screen.getByLabelText("Allowed roots for HP") as HTMLInputElement).value).toBe("HP:0000118");
+    fireEvent.change(screen.getByLabelText("Profile source"), { target: { value: "upload" } });
+    const file = new File([JSON.stringify(profile)], "profile.json", { type: "application/json" });
+    fireEvent.change(screen.getByLabelText("Profile JSON"), { target: { files: [file] } });
+    await screen.findByText("Findings (findings)");
+    const id = profile.ontologies[0]!.ontology_id;
+    expect((screen.getByLabelText(`Allowed roots for ${id}`) as HTMLInputElement).value).toBe("");
+    // The handbook section opens from the form (#199).
+    expect(screen.getByRole("link", { name: "What is a task profile, and which do I need?" }).getAttribute("href")).toContain("task-profiles");
+  });
+
   it("shows a refused key at the key field and focuses it", async () => {
     vi.mocked(api.createProject).mockRejectedValue(new ApiError(409, "exists", "PROJECT_EXISTS"));
     render(<ProjectNewPage onNavigate={vi.fn()} />);

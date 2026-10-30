@@ -36,7 +36,7 @@ A project lead has not assigned you a text yet. Assigned texts appear under **My
 
 ### I see "You are not a member of any project yet."
 
-Ask your project lead or an administrator to add you to a project, then reload the page. Leads: see [Add a member](lead-settings.md#add-a-member).
+Ask your project lead or an administrator to add you to a project, then click **My tasks** or reload the page. Leads: see [Add a member](lead-settings.md#add-a-member).
 
 ### A task opens with "Task not found or not yours"
 
@@ -86,7 +86,7 @@ The connection to the server is lost. Keep the window open; your input stays in 
 
 ### The term search does not find the right term
 
-The search compares your words with term names and synonyms; it does not understand meaning. Terms whose name or synonym equals your words come first, similar terms follow in a shuffled order. Read all hits, then try another word, a synonym, the English name or a code. See [Search a term](annotator.md#search-a-term).
+The search compares your words with term names and synonyms; it does not understand meaning. Terms whose name or synonym equals your words come first, then terms whose name or synonym contains all your words; other similar terms follow in a shuffled order. Read all hits, then try another word, a synonym, the English name or a code. See [Search a term](annotator.md#search-a-term).
 
 ## Translation review
 
@@ -132,7 +132,11 @@ For plain text, each file name without `.txt` becomes the text ID. Rename the fi
 
 ### I cannot change the ontology release or the task profile
 
-The ontology release can be chosen freely only until the first work is submitted; after that, use **Move to another release**. The task profile can only be replaced before work starts. See [Move a started project to a newer release](lead-settings.md#move-a-started-project-to-a-newer-release).
+The ontology release can be chosen freely only until the first work is submitted; after that, use **Move to another release**. The task profile can only be replaced before work starts, and only by a file with the same ontology ID as the project (upper and lower case count as the same) and the checksum of the chosen release. See [Move a started project to a newer release](lead-settings.md#move-a-started-project-to-a-newer-release) and [Replace the task profile](lead-settings.md#replace-the-task-profile).
+
+### My bundle is refused: the ontology settings do not match
+
+The check names, per text, what the bundle uses, what the project uses and who can change it: a lead changes the release, branches or annotation scheme under **Settings**, tab **Ontology**; the ontology ID of a project cannot change. See [What must match a bundle](lead-settings.md#what-must-match-a-bundle).
 
 ### A text has no assign button
 

@@ -58,6 +58,15 @@ class CurrentUser(BaseModel):
         )
 
 
+class SessionState(BaseModel):
+    """Who this browser is logged in as, if anyone, for the login page."""
+
+    # None without a valid session.
+    user: CurrentUser | None
+    # Whether ``/api/v1/auth/demo-logins`` offers one-click accounts (demo only).
+    demo_logins: bool
+
+
 def _sessions(request: Request) -> SessionService:
     return request.app.state.sessions  # type: ignore[no-any-return]
 
@@ -74,8 +83,9 @@ def _start_session(
     token, principal = sessions.login(
         username,
         password,
-        # Behind a proxy named in --forwarded-allow-ips, uvicorn sets this from
-        # X-Forwarded-For (deployment contract: T2e).
+        # Behind a trusted proxy this comes from X-Forwarded-For: uvicorn's
+        # --forwarded-allow-ips in development, api/proxy_guard.py in
+        # production (deployment contract: T2e).
         client_ip=client_address(request.client.host if request.client else None),
         user_agent=request.headers.get("user-agent"),
     )
@@ -137,6 +147,21 @@ def logout(principal: PrincipalDep, request: Request) -> Response:
 def me(principal: PrincipalDep) -> CurrentUser:
     """The logged-in user."""
     return CurrentUser.of(principal)
+
+
+@router.get("/session")
+def session(request: Request) -> SessionState:
+    """The logged-in user or ``None``; 200 without a session too.
+
+    The login page asks this instead of ``/me``, so an anonymous visit logs
+    no failed request, and learns whether to ask for demo logins.
+    """
+    token = request.cookies.get(SESSION_COOKIE)
+    principal = _sessions(request).resolve(token) if token else None
+    return SessionState(
+        user=CurrentUser.of(principal) if principal is not None else None,
+        demo_logins=bool(getattr(request.app.state, "demo_logins", ())),
+    )
 
 
 @demo_router.get("/demo-logins")

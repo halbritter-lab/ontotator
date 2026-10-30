@@ -37,7 +37,10 @@ from ontotator.exchange.t1 import (
     Pin,
     check_importable,
     document_from_unit,
+    explain_pin_differences,
+    import_issue_message,
     pin_differences,
+    same_ontology,
     unit_to_proposals,
 )
 from ontotator.exchange.variant_plan import (
@@ -338,6 +341,23 @@ def _report_issues(
     return result
 
 
+def _by_layer_ids(
+    ontologies: Mapping[str, ontospan.OntologyView],
+    layers: Sequence[ontospan.Layer],
+) -> dict[str, ontospan.OntologyView]:
+    """``ontologies`` also under the bundle's spelling of each id (``hp``/``HP``, #189).
+
+    ontospan looks an ontology up by the layer's exact id; the pins may spell
+    it in another case.
+    """
+    result = dict(ontologies)
+    for layer in layers:
+        for name, view in ontologies.items():
+            if same_ontology(name, layer.ontology.id):
+                result.setdefault(layer.ontology.id, view)
+    return result
+
+
 def read_t1_upload(
     path: Path,
     pins: Mapping[str, Pin],
@@ -384,18 +404,26 @@ def read_t1_upload(
         differences = pin_differences(raw.annotation_set.layers, profile, pins)
         if differences:
             issues.append(
-                Issue(code="PIN_MISMATCH", unit=unit_label, message=str(differences))
+                Issue(
+                    code="PIN_MISMATCH",
+                    unit=unit_label,
+                    message=explain_pin_differences(differences),
+                )
             )
         # Both kind and provenance checks are authoritative in T2d, including
         # empty sets; retain all affected units instead of stopping at the first.
         try:
             check_importable([raw])
         except DomainError as exc:
-            issues.append(Issue(code=exc.code, unit=unit_label, message=str(exc)))
+            issues.append(
+                Issue(code=exc.code, unit=unit_label, message=import_issue_message(exc))
+            )
         if ontologies is not None:
             issues.extend(
                 _report_issues(
-                    ontospan.validate(raw, ontologies),
+                    ontospan.validate(
+                        raw, _by_layer_ids(ontologies, raw.annotation_set.layers)
+                    ),
                     unit_label,
                     raw.annotation_set.annotations,
                 )
@@ -406,7 +434,13 @@ def read_t1_upload(
             try:
                 proposals = unit_to_proposals(raw, profile, doc, bundle_id=bundle_id)
             except DomainError as exc:
-                issues.append(Issue(code=exc.code, unit=unit_label, message=str(exc)))
+                issues.append(
+                    Issue(
+                        code=exc.code,
+                        unit=unit_label,
+                        message=import_issue_message(exc),
+                    )
+                )
             else:
                 incoming_set = IncomingSet(
                     aset.annotation_set_id,
@@ -614,7 +648,11 @@ def plan_import(
                 i.code == exc.code and i.unit == doc.document_id for i in plan.errors
             ):
                 plan.errors.append(
-                    Issue(code=exc.code, unit=doc.document_id, message=str(exc))
+                    Issue(
+                        code=exc.code,
+                        unit=doc.document_id,
+                        message=import_issue_message(exc),
+                    )
                 )
         proposals = aset.proposals
         refused = rule_violations(

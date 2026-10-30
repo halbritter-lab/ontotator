@@ -35,6 +35,8 @@ bundle.zip
 
 Ontospan bundles are written by the Ontospan tools that produce the translations and proposals. Ask whoever runs those tools for a bundle.
 
+A bundle fits a project only if its ontology ID, layer IDs, ontology release, branches, annotation scheme and values match the project's [task profile](lead-settings.md#task-profiles) and ontology settings. The built-in template *HPO phenotype* fits only bundles with ontology `hp`, layer `hpo-layer` and exactly the branch `HP:0000118`. See [What must match a bundle](lead-settings.md#what-must-match-a-bundle).
+
 ### Upload texts
 
 What for: bring texts into the project, with or without tool proposals.
@@ -45,7 +47,7 @@ Before you start: [prepare the files](#prepare-files-for-upload). Check the [lan
 2. Choose the **Format**. For plain text, also choose the **Upload language**.
 3. Click **Choose files…** and select your files.
 4. Click **Check**. Nothing is imported yet; the dialog shows *Checking 2 files …*.
-5. Read the preview: the number of cases, proposals and texts already in the project, and any **Notes**. For plain text, the first note shows which text ID each file name became.
+5. Read the preview: the number of cases, proposals and texts already in the project, and any **Notes**. For plain text, the first note shows which text ID each file name became. A note says what, if anything, you need to do; **Show** lists the texts and proposals it concerns.
 6. Check the **Work plan**: for each language, whether it gets a **Translation review** and an annotation. Click **Adjust per case…** for exceptions.
 7. Optional: if translations are not marked as reviewed and you want them annotated without review, tick **These translations were reviewed outside Ontotator — accept them as they are** and enter a **Reason**.
 8. Click the import button, for example *Import 20 cases*.
@@ -56,7 +58,7 @@ What you may see:
 
 | Message | Meaning |
 | --- | --- |
-| *…: problems found. Nothing can be imported.* | The dialog names the problems per file. Click **Discard**, fix the files and try again. |
+| *…: problems found. Nothing can be imported.* | The dialog names the problems per file and, for a bundle that does not fit the project, what the bundle uses, what the project uses and who can change it. Click **Discard** (or **Cancel**): the upload is dropped and the dialog closes. Fix the files or the settings and upload again. |
 | **You can close this dialog; the import continues, and the texts appear after the next page load.** | The import runs. Reload **Documents** later. |
 | *Imported 20 documents and 35 proposals.* | The import is done. |
 | **This upload failed. Nothing was imported.** | **Discard it and upload the files again.** |
@@ -190,7 +192,7 @@ The corrected text becomes a new text version.
 
 ## Work plans and assignments
 
-The work plan says, for each text, whether it gets a translation review and whether and how it is annotated. Planned texts show up in the main list; the others are hidden.
+The work plan says, for each text, whether it gets a translation review and whether and how it is annotated. Planned texts show up in the main list; the others are hidden. Then the tab **All** says how many of its texts the table holds, for example *246 of 307*.
 
 ### Add a text to the plan
 

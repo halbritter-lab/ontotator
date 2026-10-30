@@ -43,3 +43,23 @@ def test_resuming_an_upload_recovers_the_real_preview_job(tmp_path):
     assert finished["status"] == "committed"
     assert finished["preview_job_id"] == ids["job_id"]
     assert finished["commit_job_id"] == commit_id
+
+
+def test_job_status_does_not_wait_for_an_import_holding_the_project(tmp_path):
+    """Polling a job must not queue behind the import's exclusive project lock (#198)."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from sqlalchemy import func, select
+
+    from ontotator.storage.repository import _lock_id
+
+    app = _app(tmp_path)
+    db = app.state.repo.db
+    create_project(db)
+    admin = logged_in(app, "root", system_admin=True)
+    ids = _create(admin).json()
+    job_url = f"/api/v1/jobs/{ids['job_id']}"
+    with ThreadPoolExecutor(1) as pool, db.transaction() as conn:
+        conn.execute(select(func.pg_advisory_xact_lock(_lock_id("project", "proj"))))
+        polled = pool.submit(admin.get, job_url)
+        assert polled.result(timeout=10).json()["id"] == ids["job_id"]

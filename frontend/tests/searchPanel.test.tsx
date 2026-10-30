@@ -331,11 +331,33 @@ describe("SearchPanel", () => {
     expect(document.querySelector(".is-clamped")).toBeNull();
   });
 
-  it("shows no detail area that repeats the active hit (#21)", async () => {
-    const input = renderPanel(vi.fn().mockResolvedValue(threeHits));
+  it("shows the full definition of the active hit below the hits (#190)", async () => {
+    const long = "A seizure is an intermittent abnormality of nervous system physiology. ".repeat(4).trim();
+    const input = renderPanel(vi.fn().mockResolvedValue({ ...threeHits, candidates: [
+      ...threeHits.candidates.slice(0, 2).map((c) => c.term_id === "HP:0001250" ? { ...c, definition: long } : c),
+      hit("HP:0002373", "Febrile seizure", { definition: "" }),
+    ] }));
+    fireEvent.change(input, { target: { value: "seizure" } });
+    await waitFor(() => expect(activeId(input)).toBe(options()[1].id));
+    const preview = () => screen.getByTestId("candidate-preview");
+    // Not inside an option: the list keeps its rows, the preview follows the active one.
+    expect(preview().closest("[role=option]")).toBeNull();
+    expect(preview().textContent).toBe(`Definition of Seizure (HP:0001250)${long}`);
+    // A long definition scrolls inside the pane: a named region a keyboard user can Tab to (axe
+    // scrollable-region-focusable).
+    expect(screen.getByRole("region", { name: "Definition of Seizure (HP:0001250)" })).toBe(preview());
+    expect(preview().tabIndex).toBe(0);
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    expect(preview().textContent).toBe("Definition of Febrile seizure (HP:0002373)This term has no definition in the ontology.");
+    fireEvent.pointerEnter(options()[1]);
+    expect(preview().textContent).toContain("Definition of Seizure (HP:0001250)");
+  });
+
+  it("shows no definition preview without an active hit", async () => {
+    const input = renderPanel(vi.fn().mockResolvedValue(threeHits), { canAssign: false });
     fireEvent.change(input, { target: { value: "seizure" } });
     await waitFor(() => expect(options()).toHaveLength(3));
-    expect(document.querySelector("[data-search-detail]")).toBeNull();
+    expect(screen.queryByTestId("candidate-preview")).toBeNull();
   });
 
   it("marks the current term with an icon and text, not a glyph", async () => {

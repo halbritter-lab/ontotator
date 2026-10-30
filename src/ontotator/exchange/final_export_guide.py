@@ -273,6 +273,15 @@ def build_readme(
             "  ",
         ),
         *_wrap(
+            "An original text (first version, not a translation) that is the only "
+            "text of its case in a bundle has no case_id and no variant in its "
+            "document, as in ontospan 1.0: its case ID is then its document_id. "
+            "Translations and corrected versions always carry both. index.csv "
+            'gives the case of every row in "case_id".',
+            "- ",
+            "  ",
+        ),
+        *_wrap(
             "Text positions are Unicode code points into the text of the matching line "
             'of source-texts.jsonl (column "source_text_line").',
             "- ",

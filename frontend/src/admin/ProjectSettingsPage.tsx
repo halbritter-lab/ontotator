@@ -8,7 +8,7 @@ import { hiddenCount, HiddenAxisValuesField } from "./HiddenAxisValuesField";
 import { LanguagesField } from "./LanguagesField";
 import { MembersSection } from "./MembersSection";
 import { SettingsCard, SettingsHint } from "./SettingsCard";
-import { draftPins, PinFields, ProfileUpload, ReleaseFields, serializePins, ANNOTATION_SCHEME_LABELS, WorkflowFields, workflowOf, type UploadedProfile } from "./projectFields";
+import { draftPins, PinFields, ProfileUpload, ReleaseFields, serializePins, ANNOTATION_SCHEME_LABELS, TaskProfileHelp, WorkflowFields, workflowOf, type UploadedProfile } from "./projectFields";
 import { RepinReportPanel } from "./RepinReport";
 import { axisOptionLabel } from "../editor/axisLabels";
 export interface ProjectSettingsPageProps {
@@ -333,7 +333,8 @@ function SettingsEditor({ initial, ontologies, projectKey, onSaved, section = DE
             <ul aria-label="Current profile layers">{model.profile.layers.map(layer => <li key={layer.layer_id}>{layer.label} ({layer.layer_id})</li>)}</ul>
             <form aria-label="Task profile" onSubmit={event => { event.preventDefault(); if (uploaded && event.currentTarget.reportValidity()) void save("Profile", work.Profile); }}>
               <fieldset disabled={busy !== null}><legend className="visually-hidden">Task profile</legend>
-                <SettingsHint why="The layers, finding types and values annotators work with.">Replace it with a profile file (JSON) only before work starts.</SettingsHint>
+                <SettingsHint why="The layers, finding types and values annotators work with. The new file keeps the project's ontology.">Replace it with a profile file (JSON) only before work starts.</SettingsHint>
+                <TaskProfileHelp />
                 <ProfileUpload key={profileGeneration} label="Profile file (JSON)" onChange={setUploaded} disabled={busy !== null} />
                 {saveBar("Profile")}
               </fieldset>
