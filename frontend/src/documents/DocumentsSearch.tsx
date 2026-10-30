@@ -22,7 +22,7 @@ export interface DocumentsSearchProps {
   onApply: (q: string | undefined) => void;
 }
 
-/** "Case ID or text…": typed locally, applied after a pause, on Enter or on blur (one push, not one per keystroke). */
+/** "Case ID…": typed locally, applied after a pause, on Enter or on blur (one push, not one per keystroke). */
 export const DocumentsSearch = forwardRef<DocumentsSearchHandle, DocumentsSearchProps>(function DocumentsSearch({ q, onApply }, ref) {
   const [text, setText] = useState(q ?? "");
   const sent = useRef(q);
@@ -59,7 +59,7 @@ export const DocumentsSearch = forwardRef<DocumentsSearchHandle, DocumentsSearch
   }), []);
 
   return <div className="documents-search">
-    <input ref={input} id="documents-search" type="search" className="form-control" aria-label="Case ID or text" placeholder="Case ID or text…"
+    <input ref={input} id="documents-search" type="search" className="form-control" aria-label="Search by case ID" placeholder="Case ID…"
       value={text} onChange={event => type(event.target.value)} onBlur={() => apply(text)}
       onKeyDown={event => { if (event.key === "Enter") apply(text); }} />
     {text !== "" && <IconButton size="sm" variant="quiet" label="Clear search" icon={<IconClose />} onClick={() => {

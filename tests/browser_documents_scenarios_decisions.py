@@ -13,6 +13,7 @@ from browser_documents_scenarios import (
     SYNTHETIC_DE,
     Builder,
     Scenario,
+    accept_translation,
     add_user,
     assign,
     finish_round,
@@ -49,6 +50,8 @@ def separate_adjudication(scenario: Scenario) -> None:
             .values(adjudicator_not_annotator=True)
         )
 
+
+S17_CASES = ("FR100994", "FR200100", "FR300200")
 
 # --- S11, S13, S14, S15 --------------------------------------------------------- #
 
@@ -257,10 +260,41 @@ def build_s16(app: FastAPI) -> dict[str, Any]:
     )
 
 
+def build_s17(app: FastAPI) -> dict[str, Any]:
+    """Documents search and "Assigned to": ann-0001 submitted FR100994 en and
+    the translation review of its fr text, has FR200100 en in progress and lost
+    FR300200 en (revoked); ann-0002 has FR300200 en in progress."""
+    from t1_builders import native_unit, translation_unit
+
+    from ontotator.assignments.service import AssignmentService
+
+    scenario = new_project(app, "S17")
+    source = native_unit("FR100994", "en", SYNTHETIC, case_id="FR100994")
+    target = translation_unit(
+        "FR100994", "fr", f"{SYNTHETIC} (fr)", source=source, provider="Provider A"
+    )
+    others = [native_unit(c, "en", SYNTHETIC, case_id=c) for c in S17_CASES[1:]]
+    docs = import_texts(scenario, [source, target, *others])
+    add_user(scenario, "lead", ["lead"])
+    add_user(scenario, "ann-0001", ["annotator"], qualification="Physician")
+    add_user(scenario, "ann-0002", ["annotator"])
+    submit(scenario, docs[("FR100994", "en", 1)], "ann-0001")
+    accept_translation(scenario, docs[("FR100994", "fr", 1)], "ann-0001")
+    in_progress(scenario, docs[("FR200100", "en", 1)], "ann-0001")
+    gone = assign(scenario, docs[("FR300200", "en", 1)], "ann-0001", "annotate")
+    AssignmentService(scenario.db).revoke(Actor.cli(), gone)
+    in_progress(scenario, docs[("FR300200", "en", 1)], "ann-0002")
+    return result(
+        scenario,
+        [("FR100994", "en"), ("FR100994", "fr"), *((c, "en") for c in S17_CASES[1:])],
+    )
+
+
 BUILDERS: dict[str, Builder] = {
     "S11": build_s11,
     "S13": build_s13,
     "S14": build_s14,
     "S15": build_s15,
     "S16": build_s16,
+    "S17": build_s17,
 }

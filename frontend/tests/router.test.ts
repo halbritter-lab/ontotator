@@ -212,7 +212,7 @@ describe("Documents deep-link parameters", () => {
   it("round_trips_lead_workflow_filters_segment_step_stage_owner_plan_sort_and_final_none", () => {
     const route: Route = { name: "projectDocuments", key: "p", segment: "assign", step: "assign_translation_review", stage: "translation_review", owner: "me", plan: "review_and_annotate", sort: "activity", final: "none", language: "de" };
     expect(parseRoute(routeHref(route))).toEqual(route);
-    for (const [field, value] of [["segment", "decision"], ["step", "choose_final"], ["stage", "final"], ["owner", "ann-0004"], ["plan", "not_in_plan"], ["sort", "import"], ["final", "none"]] as const) {
+    for (const [field, value] of [["segment", "decision"], ["step", "choose_final"], ["stage", "final"], ["owner", "ann-0004"], ["assignee", "ann-0004"], ["plan", "not_in_plan"], ["sort", "import"], ["final", "none"]] as const) {
       const single: Route = { name: "projectDocuments", key: "p", [field]: value };
       expect(routeHref(single)).toBe(`#/projects/p/documents?${field}=${value}`);
       expect(parseRoute(routeHref(single))).toEqual(single);

@@ -67,6 +67,7 @@ class DocumentRowFilters(BaseModel):
     step: StepCode | list[StepCode] | None = None
     stage: Stage | list[Stage] | None = None
     owner: str | None = None
+    assignee: str | None = None
     plan: PlanFilter | list[PlanFilter] | None = None
     paused: Paused | None = None
     review_state: ReviewState | list[ReviewState] | None = None

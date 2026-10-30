@@ -3805,6 +3805,11 @@ export interface components {
             /** Shown */
             shown: number;
             /**
+             * All Tab Shown
+             * @default 0
+             */
+            all_tab_shown: number;
+            /**
              * Finals
              * @default 0
              */
@@ -4015,6 +4020,8 @@ export interface components {
             stage?: ("translation_review" | "annotation" | "final" | "done") | ("translation_review" | "annotation" | "final" | "done")[] | null;
             /** Owner */
             owner?: string | null;
+            /** Assignee */
+            assignee?: string | null;
             /** Plan */
             plan?: ("review" | "annotate" | "review_and_annotate" | "not_in_plan" | "not_decided") | ("review" | "annotate" | "review_and_annotate" | "not_in_plan" | "not_decided")[] | null;
             /** Paused */
@@ -10828,7 +10835,7 @@ export interface operations {
             query?: {
                 language?: string[] | null;
                 status?: ("unassigned" | "open" | "in_progress" | "submitted" | "reopened" | "held") | null;
-                /** @description Case/external/document ID prefix or "case-104 de" */
+                /** @description Part of a case/external/document ID or "case-104 de" */
                 q?: string | null;
                 origin?: ("native" | "machine_translation" | "human_translation" | "correction")[] | null;
                 translation_status?: ("translated" | "automatic_check_failed" | "ready_for_review" | "reviewed" | "accepted") | "accepted_without_review" | null;
@@ -10840,6 +10847,8 @@ export interface operations {
                 stage?: ("translation_review" | "annotation" | "final" | "done")[] | null;
                 /** @description "me" or a pseudonym */
                 owner?: string | null;
+                /** @description Pseudonym with non-revoked work on the row */
+                assignee?: string | null;
                 plan?: ("review" | "annotate" | "review_and_annotate" | "not_in_plan" | "not_decided")[] | null;
                 paused?: ("yes" | "no") | null;
                 sort?: "case" | "-case" | "import" | "activity" | "-activity";
@@ -10886,7 +10895,7 @@ export interface operations {
                 retain?: string[] | null;
                 language?: string[] | null;
                 status?: ("unassigned" | "open" | "in_progress" | "submitted" | "reopened" | "held") | null;
-                /** @description Case/external/document ID prefix or "case-104 de" */
+                /** @description Part of a case/external/document ID or "case-104 de" */
                 q?: string | null;
                 origin?: ("native" | "machine_translation" | "human_translation" | "correction")[] | null;
                 translation_status?: ("translated" | "automatic_check_failed" | "ready_for_review" | "reviewed" | "accepted") | "accepted_without_review" | null;
@@ -10898,6 +10907,8 @@ export interface operations {
                 stage?: ("translation_review" | "annotation" | "final" | "done")[] | null;
                 /** @description "me" or a pseudonym */
                 owner?: string | null;
+                /** @description Pseudonym with non-revoked work on the row */
+                assignee?: string | null;
                 plan?: ("review" | "annotate" | "review_and_annotate" | "not_in_plan" | "not_decided")[] | null;
                 paused?: ("yes" | "no") | null;
                 sort?: "case" | "-case" | "import" | "activity" | "-activity";

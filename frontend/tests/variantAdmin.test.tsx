@@ -61,7 +61,7 @@ it("shows the server-owned override label and sends controlled filters without r
   expect((await within(screen.getByRole("dialog", { name: `${target.case_id} ${target.language}` })).findAllByText(/Accepted without review/)).length).toBeGreaterThan(0);
   expect(api.listDocumentRows).toHaveBeenCalledWith("p", { origin: "machine_translation", translation_status: "accepted" });
   // The modal card keeps focus; close it before typing in the ID input.
-  const prefix = screen.getByLabelText("Case ID or text");
+  const prefix = screen.getByLabelText("Search by case ID");
   view.rerender(<DocumentsPage projectKey="p" canManage query={{ origin: "machine_translation", translation_status: "accepted" }} onNavigate={navigate} />);
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   prefix.focus();
@@ -70,7 +70,7 @@ it("shows the server-owned override label and sends controlled filters without r
   expect(navigate).toHaveBeenLastCalledWith(expect.objectContaining({ origin: "machine_translation", translation_status: "accepted", q: "abc" }));
   view.rerender(<DocumentsPage projectKey="p" canManage query={{ q: "abc", origin: "machine_translation", translation_status: "accepted" }} onNavigate={navigate} />);
   await screen.findByRole("button", { name: `Text ${target.case_id} ${target.language}` });
-  expect(screen.getByLabelText("Case ID or text")).toBe(prefix);
+  expect(screen.getByLabelText("Search by case ID")).toBe(prefix);
   expect(document.activeElement).toBe(prefix);
   expect(api.getProjectSettings).toHaveBeenCalledTimes(1);
   expect(api.listCases).toHaveBeenCalledTimes(1);

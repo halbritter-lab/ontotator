@@ -7,9 +7,9 @@ from ontotator.domain.document_rows import (
     bar_counts,
     build_chains,
     bulk_target,
+    id_matches,
     missing_final_counts,
     open_target,
-    prefix_matches,
     round_ordinals,
     submission_kind,
     translation_issue,
@@ -157,9 +157,12 @@ def test_bar_categories_counts_and_prefix():
         "translation": 1,
         "missing-final": 1,
     }
-    # Fullwidth "case-0" normalises (NFKC) to ASCII before prefix matching.
-    assert prefix_matches(
+    # Fullwidth "case-0" normalises (NFKC) to ASCII before matching.
+    assert id_matches(
         "\N{FULLWIDTH LATIN SMALL LETTER C}\N{FULLWIDTH LATIN SMALL LETTER A}se-0",
         ["case-0042"],
     )
-    assert not prefix_matches("0042", ["case-0042"])
+    assert id_matches("0042", ["case-0042"])
+    assert id_matches("fr100994", ["FR100994"])
+    assert id_matches("FR100994", ["fr100994"])
+    assert not id_matches("0043", ["case-0042"])

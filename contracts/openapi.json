@@ -3538,10 +3538,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Case/external/document ID prefix or \"case-104 de\"",
+              "description": "Part of a case/external/document ID or \"case-104 de\"",
               "title": "Q"
             },
-            "description": "Case/external/document ID prefix or \"case-104 de\""
+            "description": "Part of a case/external/document ID or \"case-104 de\""
           },
           {
             "name": "origin",
@@ -3760,6 +3760,24 @@
               "title": "Owner"
             },
             "description": "\"me\" or a pseudonym"
+          },
+          {
+            "name": "assignee",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Pseudonym with non-revoked work on the row",
+              "title": "Assignee"
+            },
+            "description": "Pseudonym with non-revoked work on the row"
           },
           {
             "name": "plan",
@@ -4115,10 +4133,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Case/external/document ID prefix or \"case-104 de\"",
+              "description": "Part of a case/external/document ID or \"case-104 de\"",
               "title": "Q"
             },
-            "description": "Case/external/document ID prefix or \"case-104 de\""
+            "description": "Part of a case/external/document ID or \"case-104 de\""
           },
           {
             "name": "origin",
@@ -4337,6 +4355,24 @@
               "title": "Owner"
             },
             "description": "\"me\" or a pseudonym"
+          },
+          {
+            "name": "assignee",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Pseudonym with non-revoked work on the row",
+              "title": "Assignee"
+            },
+            "description": "Pseudonym with non-revoked work on the row"
           },
           {
             "name": "plan",
@@ -11629,6 +11665,11 @@
             "type": "integer",
             "title": "Shown"
           },
+          "all_tab_shown": {
+            "type": "integer",
+            "title": "All Tab Shown",
+            "default": 0
+          },
           "finals": {
             "type": "integer",
             "title": "Finals",
@@ -12345,6 +12386,17 @@
               }
             ],
             "title": "Owner"
+          },
+          "assignee": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee"
           },
           "plan": {
             "anyOf": [
