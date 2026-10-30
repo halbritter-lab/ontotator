@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `GET /api/v1/auth/session` answers 200 with the logged-in user or `null` and whether demo logins are offered. The login page uses it, so an anonymous visit no longer logs a failed `401 /auth/me` and `404 /auth/demo-logins` in the browser console (#198). `/auth/me` is unchanged.
+
 ### Fixed
 
 - **Refresh** on Documents starts a new visit of the tab, so rows that left it (for example texts just assigned under To assign) drop out instead of staying until a tab switch (#176).

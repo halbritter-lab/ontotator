@@ -254,6 +254,7 @@ export type TranslationReviewSubmitRequest = components["schemas"]["SubmitReques
 export type CaseFilters = NonNullable<operations["list_cases_api_v1_projects__key__cases_get"]["parameters"]["query"]>;
 /** The logged-in user; `csrf_token` goes back in `X-CSRF-Token` with every write. */
 export type CurrentUser = components["schemas"]["CurrentUser"];
+export type SessionState = components["schemas"]["SessionState"];
 export type Profile = components["schemas"]["Profile"];
 /** PATCH distinguishes omitted defaults from explicit null/false values. */
 export type OwnProfilePatch = Partial<components["schemas"]["ProfilePatch"]>;
@@ -426,6 +427,8 @@ export class ApiClient {
   private readonly baseUrl: string;
   /** The session's CSRF token, sent with every write (index D-h). */
   private csrfToken: string | null = null;
+  /** From the last `me()`: whether the server offers demo logins; null before it answered. */
+  private demoLoginsOffered: boolean | null = null;
 
   constructor(options: ApiClientOptions = {}) {
     this.baseUrl = options.baseUrl ?? "";
@@ -827,11 +830,17 @@ export class ApiClient {
     return response;
   }
 
-  /** The logged-in user of this browser's session; 401 without one. Stores the CSRF token. */
+  /**
+   * The logged-in user of this browser's session; an `AuthError` 401 without one. Stores the CSRF token.
+   * Asks `/auth/session`, which answers 200 without a session too, so an anonymous visit logs no
+   * failed request (#198); the answer also says whether demo logins are offered.
+   */
   async me(): Promise<CurrentUser> {
-    const user = await this.request<CurrentUser>("/api/v1/auth/me", { method: "GET" });
-    this.setCsrfToken(user.csrf_token);
-    return user;
+    const state = await this.request<SessionState>("/api/v1/auth/session", { method: "GET" });
+    this.demoLoginsOffered = state.demo_logins;
+    if (!state.user) throw new AuthError("Log in to continue.", undefined, "NOT_AUTHENTICATED", 401);
+    this.setCsrfToken(state.user.csrf_token);
+    return state.user;
   }
 
   /** Raw transport; metadata lifetime and deduplication belong to the workspace. */
@@ -869,8 +878,10 @@ export class ApiClient {
   /**
    * DEMO ONLY: one-click accounts of a loopback demo stack (ONTOTATOR_DEMO_LOGINS_FILE).
    * The server answers 404 unless they are configured; that and any other failure give none.
+   * After `me()` learnt that none are offered, no request is sent.
    */
   async demoLogins(): Promise<DemoLogin[]> {
+    if (this.demoLoginsOffered === false) return [];
     try {
       const body = await this.request<{ accounts?: DemoLogin[] }>("/api/v1/auth/demo-logins", { method: "GET" });
       return Array.isArray(body?.accounts) ? body.accounts : [];
