@@ -40,8 +40,7 @@ function ModifierList({ owner, toggles, interactive, kept, busy, onPress }: { ow
 
 /** Every row is shown (M2 M-7e): rows to decide first and highlighted, then the rest; agreed rows muted. */
 export function orderRows(rows: readonly ComparisonRow[]): ComparisonRow[] {
-  const shown = rows.filter(row => row.kind !== "whole");
-  return [...shown.filter(row => row.conflict), ...shown.filter(row => !row.conflict)];
+  return [...rows.filter(row => row.conflict), ...rows.filter(row => !row.conflict)];
 }
 
 export function ComparisonTable({ name, group, people, rows, readOnly = false, busy = false, onChoose }: ComparisonTableProps): JSX.Element {

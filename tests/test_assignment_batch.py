@@ -435,6 +435,7 @@ def test_selection_summary_lists_assignable_steps_and_common_step(env):
         "skipped": {},
         "common": step,
         "not_shown": 0,
+        "not_shown_sources": 0,
         "skipped_rows": [],
     }
 

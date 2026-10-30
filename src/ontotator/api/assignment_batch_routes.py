@@ -267,7 +267,8 @@ class SelectionSummary(BaseModel):
     With ``rows`` only the selected texts count: ``steps`` count those texts,
     ``skipped`` counts the selected texts in the language of ``common`` that
     it does not reach, ``skipped_rows`` names them and ``not_shown`` counts
-    selected texts the filters hide. ``cases`` counts the cases with at
+    selected texts the filters hide, ``not_shown_sources`` the source texts
+    among them. ``cases`` counts the cases with at
     least one selected text the project knows. Selected texts outside the
     language of ``common`` are not counted in ``skipped``.
     """
@@ -277,6 +278,8 @@ class SelectionSummary(BaseModel):
     skipped: dict[str, int]
     common: AssignableStepView | None
     not_shown: int = 0
+    # A factory default keeps it optional in the generated types.
+    not_shown_sources: int = Field(default_factory=int)
     skipped_rows: list[RowRefView] = Field(default_factory=list)
 
 

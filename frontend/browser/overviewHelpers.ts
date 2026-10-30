@@ -4,7 +4,7 @@ import { openTasksHome, TEST_PASSWORD } from "./helpers";
 /** Scenarios of ``POST /__test_overview__`` (tests/browser_overview_scenarios.py). */
 export type OverviewScenarioName =
   | "S1" | "S2" | "S3" | "S4" | "S5" | "S6" | "S7a" | "S7b" | "S8"
-  | "S9" | "S10" | "S11" | "S12" | "S13" | "S14" | "S15" | "S16"
+  | "S9" | "S10" | "S11" | "S12" | "S13" | "S14" | "S15" | "S16" | "S17"
   | "WALKTHROUGH";
 
 /** The people of every overview scenario: Mia Kühn (lead), Ana Weber, Tom Reis, Luc Martin. */

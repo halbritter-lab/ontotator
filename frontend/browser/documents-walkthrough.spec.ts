@@ -289,8 +289,6 @@ test("step 10: Compare results… → agreement 5 of 7 → Consolidate… → An
   await evidence(page, "walkthrough-10-panel");
 
   await clicks.count(panel.getByRole("button", { name: "Consolidate…", exact: true }));
-  const open = panel.getByRole("button", { name: "Consolidate results", exact: true });
-  if (await open.count()) await clicks.count(open);
   const launcher = panel.getByRole("region", { name: "Consolidate submitted results", exact: true });
   await expect(launcher).toBeVisible();
   const reviewer = launcher.getByLabel("Consolidator", { exact: true });

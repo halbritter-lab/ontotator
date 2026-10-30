@@ -397,6 +397,20 @@ SCENARIO_TABLE: dict[str, dict[tuple[str, str], Expect]] = {
             },
         ),
     },
+    "S17": {
+        (case, "en"): Expect(
+            SOURCE,
+            ("submitted", "done"),
+            ("choose", "decision"),
+            "You",
+            "choose_final",
+            {
+                "annotation": {"people": [ANA, TOM], "submitted": 2, "total": 2},
+                "final": {"submitted": 2},
+            },
+        )
+        for case in ("case-173", "case-174")
+    },
 }
 # The Text cell's marker "v2 corrected" (scenarios 12 to 15).
 MARKERS = {
@@ -417,7 +431,7 @@ def cell_detail(cell: dict[str, Any], expected: dict[str, Any]) -> dict[str, Any
 
 def test_registry_and_unknown_names(client):
     assert set(BUILDERS) == {
-        *(f"S{n}" for n in range(1, 17) if n != 7),
+        *(f"S{n}" for n in range(1, 18) if n != 7),
         "S7a",
         "S7b",
         "WALKTHROUGH",
@@ -467,6 +481,11 @@ def test_each_scenario_builds_and_shows_its_cells(client, name):
     if name == "S9":
         excerpt = rows[("case-109", "de")]["stages"]["annotation"]["detail"]["excerpt"]
         assert excerpt.startswith("Satz 3 unvollständig") and excerpt.endswith("…")
+    if name == "S17":
+        final = {key: row["stages"]["final"]["detail"] for key, row in rows.items()}
+        assert final[("case-173", "en")]["all_match"] is True
+        assert final[("case-174", "en")]["all_match"] is False
+        assert final[("case-174", "en")]["matching"] == 3
     if name == "S15":
         step = rows[("case-115", "de")]["next_step"]
         assert (step["kind"], step["badges"]) == ("assign", ["source_changed"])

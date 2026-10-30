@@ -478,7 +478,11 @@ def _workspace(scenario: Scenario, assignment_id: int, name: str) -> Any:
 
 
 def add_findings(
-    scenario: Scenario, name: str, workspace_key: Any, terms: Iterable[str]
+    scenario: Scenario,
+    name: str,
+    workspace_key: Any,
+    terms: Iterable[str],
+    note: str = FINDING_NOTE,
 ) -> None:
     """Spanless findings for each of ``terms`` the draft does not hold yet."""
     from ontotator.application.editing import EditingService
@@ -501,7 +505,7 @@ def add_findings(
             "axes_values": dict(AXES),
             "chosen_axis_ids": list(AXES),
             # Spanless findings need a note (rule spanless_note_required).
-            "note": FINDING_NOTE,
+            "note": note,
         }
         editing.apply(workspace_key, _envelope(scoped, workspace_key, payload))
         present.add(term)
@@ -557,12 +561,13 @@ def annotate(
     terms: Iterable[str] = (),
     *,
     submit: bool = True,
+    note: str = FINDING_NOTE,
 ) -> dict[str, Any]:
     """Work on an annotate assignment: resolve carried inputs, add ``terms``
     and (``submit``) submit the round."""
     workspace_key = _workspace(scenario, assignment_id, name)
     resolved = resolve_inputs(scenario, name, workspace_key)
-    add_findings(scenario, name, workspace_key, terms)
+    add_findings(scenario, name, workspace_key, terms, note)
     result: dict[str, Any] = {
         "assignment_id": assignment_id,
         "round_id": workspace_key.round_id,
@@ -580,6 +585,7 @@ def assign_and_annotate(
     terms: Iterable[str] = (),
     *,
     submit: bool = True,
+    note: str = FINDING_NOTE,
 ) -> dict[str, Any]:
     return annotate(
         scenario,
@@ -587,6 +593,7 @@ def assign_and_annotate(
         name,
         terms,
         submit=submit,
+        note=note,
     )
 
 
@@ -803,6 +810,33 @@ def build_s7b(app: FastAPI) -> dict[str, Any]:
     )
 
 
+def build_s17(app: FastAPI) -> dict[str, Any]:
+    """Issues 210 and 211, per text 2. case-171 and case-172: en source and de
+    translation, planned, nothing assigned. case-173 en: Ana and Tom agree in
+    full ("Accept result…"). case-174 en: they differ only in a note ("Compare
+    results…")."""
+    scenario = overview_project(app, "S17", per_text=2)
+    docs = import_bundle(
+        scenario,
+        [
+            *units("case-171", ("de",)),
+            *units("case-172", ("de",)),
+            *units("case-173", ()),
+            *units("case-174", ()),
+        ],
+    )
+    plan(scenario, ["case-171", "case-172"], {"de": BOTH})
+    plan(scenario, ["case-173", "case-174"], {"source": {"annotate": ON}})
+    terms = PRESETS["three"]
+    for name in ("ana", "tom"):
+        assign_and_annotate(scenario, docs[("case-173", "en", 1)], name, terms)
+    assign_and_annotate(scenario, docs[("case-174", "en", 1)], "ana", terms)
+    assign_and_annotate(
+        scenario, docs[("case-174", "en", 1)], "tom", terms, note="A different note."
+    )
+    return result(scenario, [("case-173", "en"), ("case-174", "en")])
+
+
 def build_s8(app: FastAPI) -> dict[str, Any]:
     """case-108 de, per text 2: accepted, two submissions, a consolidation
     open by Luc (D1: was an annotation review)."""
@@ -1011,6 +1045,7 @@ BUILDERS: dict[str, Builder] = {
     "S14": build_s14,
     "S15": build_s15,
     "S16": build_s16,
+    "S17": build_s17,
     "WALKTHROUGH": build_walkthrough,
 }
 

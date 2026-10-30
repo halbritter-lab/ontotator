@@ -1278,6 +1278,8 @@ def is_paused(row: Mapping[str, Any]) -> bool:
 
 def _row_level_matches(ctx: _Context, row: Mapping[str, Any], query: RowQuery) -> bool:
     key = (row["case_id"], row["language"])
+    if query.selected and PlanKey(*key) not in query.selected:
+        return False
     if query.language and row["language"] not in query.language:
         return False
     if query.case is not None and row["case_id"] != query.case:
@@ -1741,6 +1743,10 @@ def build_page_with_context(
         "page": query.page,
         "page_count": page_count,
         "group_count": group_count,
+        # Texts the filters match: what the header checkbox selects.
+        "text_count": sum(
+            filtered and decision for filtered, decision in matches.values()
+        ),
         "bar": bar,
         "case_found": query.case is None or query.case in by_case,
         "adjudicator_not_annotator": facts.adjudicator_not_annotator,

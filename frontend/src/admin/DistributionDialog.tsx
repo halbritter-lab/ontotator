@@ -1,16 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError, type AssignmentRow, type AssignmentView, type ProposalResponse } from "../api/client";
 import { Button, Dialog, InlineMessage, TextInput } from "../ui";
-import { BatchFeedback, eligibleMembers, memberOptionLabel, TaskSelect, useAlive, useAssignmentBatch, useMembers, type Task, type TaskDocument, useCaseVariants, canReviewSelection, taskLanguages } from "./assignmentUI";
+import { labelFor, taskLabels } from "../app/labels";
+import { BatchFeedback, eligibleMembers, memberOptionLabel, useAlive, useAssignmentBatch, useMembers, type Task, type TaskDocument, useCaseVariants, canReviewSelection, taskLanguages } from "./assignmentUI";
 import { personLabel } from "../app/identity";
 import type { CaseSummary } from "../api/client";
 import { ErrorNotice } from "./ErrorNotice";
 type Slot = { document_id: string; language: string; username: string; place: number };
-/** `task` presets the task (the assign dialog's "Distribute evenly…" link). */
-export interface DistributionDialogProps { projectKey: string; documents: readonly TaskDocument[]; cases?: readonly CaseSummary[] | null; task?: Task; confirmUnreviewedTranslation?: boolean; onClose: () => void; onChanged: () => void }
+/** `task` is fixed by the assign dialog ("Distribute evenly…"). */
+export interface DistributionDialogProps { projectKey: string; documents: readonly TaskDocument[]; cases?: readonly CaseSummary[] | null; task: Task; confirmUnreviewedTranslation?: boolean; onClose: () => void; onChanged: () => void }
 export function DistributionDialog(props: DistributionDialogProps): JSX.Element { return <DistributionEditor key={JSON.stringify([props.projectKey, props.documents.map(doc => [doc.document_id, doc.language]), props.task])} {...props} />; }
-function DistributionEditor({ projectKey, documents, cases, task: initialTask, confirmUnreviewedTranslation, onClose, onChanged }: DistributionDialogProps): JSX.Element {
-  const [task, setTask] = useState<Task>(initialTask ?? "annotate");
+function DistributionEditor({ projectKey, documents, cases, task, confirmUnreviewedTranslation, onClose, onChanged }: DistributionDialogProps): JSX.Element {
   const [count, setCount] = useState("1");
   const [proposal, setProposal] = useState<ProposalResponse | null>(null);
   const [slots, setSlots] = useState<Slot[]>([]);
@@ -62,7 +62,7 @@ function DistributionEditor({ projectKey, documents, cases, task: initialTask, c
   for (const row of proposal?.rows ?? []) loadBefore.set(row.username, row.load_before);
   return <Dialog open title="Propose distribution" size="lg" onClose={busy || batch.busy ? undefined : onClose} footer={<Button disabled={busy || batch.busy} onClick={onClose}>Close</Button>}>
     <form onSubmit={event => { event.preventDefault(); if (event.currentTarget.reportValidity()) void propose(); }}>
-      <TaskSelect value={task} disabled={busy || batch.busy} translationReviewAllowed={reviewAllowed} onChange={value => { setTask(value); clear(); }} />
+      <p>Task: {labelFor(taskLabels, task)}</p>
       {context.notice}
       <TextInput id="distribution-count" label="People per document" type="number" min={1} step={1} required value={count} disabled={busy || batch.busy} onChange={event => { setCount(event.target.value); clear(); }} />
       {notice}<Button type="submit" disabled={!members || !documents.length || batch.busy || (task === "translation_review" && !reviewAllowed)} loading={busy}>{proposal || stale ? "Propose again" : "Propose"}</Button>

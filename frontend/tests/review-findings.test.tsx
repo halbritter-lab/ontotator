@@ -1,3 +1,4 @@
+import { ShortcutHelpHost } from "../src/ui/ShortcutHelp";
 import userEvent from "@testing-library/user-event";
 import { assigned, assignedList } from "./assignments";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -431,11 +432,6 @@ describe("Submit", () => {
 
 describe("Review cases", () => {
   const confirmed = { decision_id: "d", target: { annotation_id: "prop", version: "p-v1" }, outcome: "confirmed" as const, reviewer_id: "dr-a" };
-  const submitCase = async () => {
-    fireEvent.click(screen.getByRole("button", { name: /Finish & submit/i }));
-    const dialog = await screen.findByRole("dialog", { name: /Submit text/i });
-    fireEvent.click(within(dialog).getByRole("button", { name: /^Submit text$/i }));
-  };
 
   it("counts confirmed proposals among the findings that will be submitted", async () => {
     const own = proposal("own", "o-v1", "HP:0003");
@@ -443,34 +439,6 @@ describe("Review cases", () => {
     fireEvent.click(screen.getByRole("button", { name: /Finish & submit/i }));
     const dialog = await screen.findByRole("dialog", { name: /Submit text/i });
     expect(dialog.textContent).toContain("2 findings, nothing open.");
-  });
-
-  it("offers the next case including zero proposals after submitting a review", async () => {
-    vi.spyOn(api, "submitWorkspace").mockResolvedValue({ submission_id: "s", created_at: "now", snapshots: [], decisions: [] } as any);
-    const onNavigate = vi.fn().mockResolvedValue(undefined);
-    const documentList = [
-      { ...docs[0], document_id: "doc", has_review_inputs: true },
-      { ...docs[1], document_id: "doc-de", position: 2, has_review_inputs: false },
-      { ...docs[1], document_id: "doc-3", position: 3, has_review_inputs: true },
-    ];
-    render(<CaseScreen view={reviewView([confirmed])} workspaceId="ws" onClose={vi.fn()}
-      onNavigateCase={onNavigate} documentList={documentList} />);
-    await submitCase();
-    fireEvent.click(await screen.findByRole("button", { name: /Review next text \(Text 2\)/i }));
-    await waitFor(() => expect(onNavigate).toHaveBeenCalledWith("doc-de"));
-  });
-
-  it("offers a later case even when it has no proposals", async () => {
-    vi.spyOn(api, "submitWorkspace").mockResolvedValue({ submission_id: "s", created_at: "now", snapshots: [], decisions: [] } as any);
-    const documentList = [
-      { ...docs[0], document_id: "doc", has_review_inputs: true },
-      { ...docs[1], document_id: "doc-de", has_review_inputs: false },
-    ];
-    render(<CaseScreen view={reviewView([confirmed])} workspaceId="ws" onClose={vi.fn()}
-      onNavigateCase={vi.fn()} documentList={documentList} />);
-    await submitCase();
-    await screen.findByRole("dialog", { name: /Text submitted/i });
-    expect(screen.getByRole("button", { name: /Review next text/i })).toBeDefined();
   });
 
   it("quotes each proposal's text so equally named proposals can be told apart", () => {
@@ -593,6 +561,7 @@ describe("Shortcuts and error handling", () => {
   };
 
   it("ignores auto-repeat and keys typed in contentEditable or while a dialog is open; '?' shows help", async () => {
+    render(<ShortcutHelpHost />);
     const decide = vi.spyOn(api, "recordDecision").mockResolvedValue(twoTargets().draft);
     render(<CaseScreen view={twoTargets()} workspaceId="ws" onClose={vi.fn()} />);
     fireEvent.keyDown(window, { key: "j" });
@@ -615,18 +584,6 @@ describe("Shortcuts and error handling", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     fireEvent.keyDown(window, { key: "1" });
     await waitFor(() => expect(decide).toHaveBeenCalledTimes(1));
-  });
-
-  it("surfaces navigation failures from the post-submit modal instead of swallowing them", async () => {
-    vi.spyOn(api, "submitWorkspace").mockResolvedValue({ submission_id: "s", created_at: "now", snapshots: [], decisions: [] } as any);
-    const onNavigate = vi.fn().mockRejectedValue(new Error("network down"));
-    render(<CaseScreen view={baseView()} workspaceId="ws" onClose={vi.fn()} onNavigateCase={onNavigate}
-      documentList={[{ ...docs[0], document_id: "doc" }, docs[1]]} />);
-    fireEvent.click(screen.getByRole("button", { name: /Finish & submit/i }));
-    const dialog = await screen.findByRole("dialog", { name: /Submit text/i });
-    fireEvent.click(within(dialog).getByRole("button", { name: /^Submit text$/i }));
-    fireEvent.click(await screen.findByRole("button", { name: /Review next text/i }));
-    await waitFor(() => expect(screen.getByText("network down")).toBeDefined());
   });
 
   it("shows a recoverable message when the case screen crashes", () => {

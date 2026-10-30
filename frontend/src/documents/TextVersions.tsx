@@ -5,7 +5,7 @@ import { assignmentStatusLabels, labelFor, taskLabels } from "../app/labels";
 import { routeHref, type ProjectDocumentsQuery, type Route } from "../app/router";
 import { personLabel as identityLabel, type PersonRef } from "../app/identity";
 import { formatTime, personLabel } from "../app/submissionLabels";
-import { Button, Checkbox, StatusBadge, type StatusTone } from "../ui";
+import { Button, StatusBadge, type StatusTone } from "../ui";
 import { TranslationCorrectionAction } from "../variants/TranslationCorrectionAction";
 import { originLabels } from "../admin/variantMetadata";
 import { statusBadgeText, versionName } from "./labels";
@@ -25,9 +25,6 @@ export interface TextVersionsTools {
   onShowTranslationReviews?: (documentId: string) => void;
   /** Opens the page's "Request translation correction" dialog for an accepted version (else the inline form). */
   onRequestCorrection?: (row: DocumentRowView, variant: VariantSummary) => void;
-  /** Per-version bulk selection (rows that show "Choose in Text versions"). */
-  bulkSelected?: ReadonlySet<string>;
-  onToggleBulk?: (documentId: string) => void;
 }
 
 /** Acceptance record of a translation version (spec "Annotate without review: acceptance record"). */
@@ -123,7 +120,6 @@ export interface TextVersionsProps {
 /** Child rows per text version of a row: origin, status with review decision, chain name, work and version actions. */
 export const TextVersions = forwardRef<HTMLUListElement, TextVersionsProps>(function TextVersions({ row, projectKey, query, onNavigate, tools, now, hideOpenWork = false, collapseOlder = false }, ref) {
   const documents = Object.keys(query).length ? { documents: query } : {};
-  const chooseInVersions = row.bulk.mode === "choose_in_versions";
   const newest = collapseOlder ? row.versions.filter(version => version.is_newest_in_chain) : [];
   const current = newest.length ? newest : row.versions;
   const older = newest.length ? row.versions.filter(version => !version.is_newest_in_chain) : [];
@@ -136,7 +132,6 @@ export const TextVersions = forwardRef<HTMLUListElement, TextVersionsProps>(func
         .filter(item => item.document_id === version.document_id);
       const variant = tools?.variants.get(version.document_id);
       const fullName = `${name} of ${rowName(row)}`;
-      const checkboxId = `text-version-select-${encodeURIComponent(version.document_id)}`;
       const discarded = isDiscarded(row, version);
       const acceptance = acceptanceOf(version);
       let actions: ReactNode = null;
@@ -150,8 +145,6 @@ export const TextVersions = forwardRef<HTMLUListElement, TextVersionsProps>(func
       }
       return <li key={version.document_id} className="text-version">
         <div className="text-version-head">
-          {chooseInVersions && tools?.onToggleBulk && <Checkbox id={checkboxId} label={<span className="visually-hidden">Select {fullName} for assignment</span>}
-            checked={tools.bulkSelected?.has(version.document_id) ?? false} onChange={() => tools.onToggleBulk?.(version.document_id)} />}
           <span className="text-version-name">{name}</span>
           <span className="text-version-origin">{originText(version, row)}</span>
           {badge && <StatusBadge tone={badgeTone(version)}>{badge}</StatusBadge>}

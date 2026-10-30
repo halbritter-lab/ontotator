@@ -1,4 +1,4 @@
-import{r,a as m,j as a,b as h}from"./index-C-eISaqP.js";import{M as f,r as g}from"./index-EYZP0ZwN.js";function w(){const[e,t]=r.useState(null);return r.useEffect(()=>{let o=!0;return m.getAbout().then(n=>{o&&t(n)},()=>{}),()=>{o=!1}},[]),e?a.jsxs("p",{className:"help-version",title:e.revision??void 0,children:["Ontotator ",e.version,e.revision&&a.jsxs(a.Fragment,{children:[" · commit ",e.revision.slice(0,7)]})]}):null}const y=`# Ontotator user handbook
+import{r,a as m,j as a,b as h}from"./index-DkELRI80.js";import{M as f,r as g}from"./index-B0ZV5fyR.js";function w(){const[e,t]=r.useState(null);return r.useEffect(()=>{let o=!0;return m.getAbout().then(n=>{o&&t(n)},()=>{}),()=>{o=!1}},[]),e?a.jsxs("p",{className:"help-version",title:e.revision??void 0,children:["Ontotator ",e.version,e.revision&&a.jsxs(a.Fragment,{children:[" · commit ",e.revision.slice(0,7)]})]}):null}const y=`# Ontotator user handbook
 
 This handbook explains how to work with Ontotator in the browser. It is for everyone who uses the app: annotators, translation reviewers, consolidators, leads and system administrators. It describes the version of Ontotator that you open it from. If you run the server, read the [server operations guide (for server operators)](../operations.md) instead.
 
@@ -499,7 +499,7 @@ Tools make mistakes. Check every proposal as if you had marked it yourself: the 
 4. Decide:
    - **Confirm**: the passage, term and all values are right. Values tagged **Defaulted** were not set by the tool but prefilled; Confirm accepts them as shown, so check them too.
    - **Reject**: the proposal is wrong and nothing should replace it.
-   - **Edit & Replace**: the proposal is nearly right. You get an editable copy that replaces it; correct the term, values or text span in the copy. The copy is listed under **Your own findings**. Above it, the editor names the proposal it replaces and what you changed, for example *Assertion: Present → Absent*. Click **Done, back to the proposal** when you are finished. The proposal then reads *Replaced by* with the term and your changes.
+   - **Edit & Replace**: the proposal is nearly right. You get an editable copy that replaces it; correct the term, values or text span in the copy. The copy is listed under its proposal in **Review Proposals**, as *Your copy*, not under **Your own findings**. In the details, the editor names the proposal it replaces and what you changed, for example *Assertion: Present → Absent*. Click **Done, back to the proposal** when you are finished. The proposal then reads *Replaced by* with the term and your changes.
    - **Unresolved**: only if you really cannot decide; the other three decisions are the normal case. Write a **Reviewer note** saying why, then click **Save decision**. The proposal is submitted with your note and a reviewer flag. It does not block submitting; the lead (and a consolidator, if there is one) decides it. Only **Confirm** confirms a proposal's prefilled values: on an unresolved proposal they stay recorded as defaults, and its row shows **Defaults not confirmed**. The result line under **Your own findings** counts such a proposal as unresolved, for example "1 confirmed proposal, 1 unresolved proposal, 1 own finding".
 5. After each decision, the next open proposal is selected. Press \`k\` right after a decision to go back to it.
 6. When all proposals are decided, read the whole text again and add findings the tool missed: mark text that has no proposal, choose the term in **New finding** and set the values, as in [Mark text and add a finding](#mark-text-and-add-a-finding). Your additions appear under **Your own findings**, next to the proposals.
@@ -905,7 +905,7 @@ Another operation, often a running import, is holding the project. What you just
 
 ### After login I see Projects, not My tasks
 
-Ontotator opens the project you used last. The first time, leads see **Projects** and everyone else **My tasks**. Click **My tasks** in the sidebar. See [Log in](getting-started.md#log-in).
+Ontotator opens the project you used last. The first time, leads and administrators see **Projects** and everyone else **My tasks**. Click **My tasks** in the sidebar. See [Log in](getting-started.md#log-in).
 
 ### My tasks is empty
 
@@ -1118,7 +1118,7 @@ In a task *Annotation, from proposals*, the column **Review Proposals** lists fi
 
 1. Select the first proposal. The text shows where it was found.
 2. Check three things: the marked text, the term and every value.
-3. Click **Confirm** if all three are right, **Reject** if the proposal is wrong, or **Edit & Replace** to correct it in a copy, then click **Done, back to the proposal**. Only if you really cannot decide, click **Unresolved** and write a **Reviewer note** saying why.
+3. Click **Confirm** if all three are right, **Reject** if the proposal is wrong, or **Edit & Replace** to correct it in a copy, listed under the proposal, then click **Done, back to the proposal**. Only if you really cannot decide, click **Unresolved** and write a **Reviewer note** saying why.
 4. The next open proposal is selected. Go on until every proposal is decided.
 5. Then read the whole text for findings the tool missed. Mark text that has no proposal and add the finding as in step 5. It appears under **Your own findings**, next to the proposals.
 
@@ -1179,7 +1179,7 @@ Before you start: you need a setup or reset code from your administrator. A code
 
 ![The Set your password form with the fields Username, Setup or reset code, New password and Repeat the new password](images/getting-started-set-password.png)
 
-Ontotator sets the password and logs you in at once. The first time, you land on **My tasks**, or on **Projects** if you lead a project (see [Log in](#log-in) for where you land later). Only if that login fails afterwards, for example because the account is locked for a while, the login screen opens with **Your password is set. Log in with it now.**; the password is set, so [log in](#log-in) with it later. If you see **The two passwords differ.**, type both passwords again. To go back without a code, click **Back to login**.
+Ontotator sets the password and logs you in at once. The first time, you land on **My tasks**, or on **Projects** if you lead a project or are an administrator (see [Log in](#log-in) for where you land later). Only if that login fails afterwards, for example because the account is locked for a while, the login screen opens with **Your password is set. Log in with it now.**; the password is set, so [log in](#log-in) with it later. If you see **The two passwords differ.**, type both passwords again. To go back without a code, click **Back to login**.
 
 ## Log in
 
@@ -1194,7 +1194,7 @@ After logging in, Ontotator opens the project you used last on this browser:
 - annotators and consolidators see **My tasks** for that project;
 - leads see the project's **Documents** page.
 
-The first time, or if that project is no longer yours, you see **My tasks**; if you lead a project, you see **Projects** instead. Click **My tasks** in the sidebar to see your work. On **Projects**, **Needs your decision** counts texts that wait for a lead's decision, and **Your open tasks** counts your tasks.
+The first time, or if that project is no longer yours, you see **My tasks**; if you lead a project or are an administrator, you see **Projects** instead. Click **My tasks** in the sidebar to see your work. On **Projects**, **Needs your decision** counts texts that wait for a lead's decision, and **Your open tasks** counts your tasks.
 
 If your session ends while you work, a login box opens with **Your session has ended. Please log in again.** Log in there. Your unsaved input is kept.
 
@@ -1535,7 +1535,9 @@ What for: plan or assign many texts at once.
 
 1. Click a row to select it. Shift+click selects a range; Ctrl+click (macOS: Cmd+click) adds single rows.
 2. To select every filtered text, tick the checkbox in the table header.
-3. The selection bar at the bottom shows how many texts are selected and their next steps, for example *next steps: Assign annotation (en, es)*.
+3. The selection bar at the bottom shows how many texts are selected and their next steps, for example *next steps: Assign annotation (en, es)*. Selected texts the filters hide are counted too, and the bar says so, for example *4 texts in 2 cases selected (2 source texts not shown)*.
+
+To list only the selected texts, across all pages, click **Show selected**. The list then ignores the tab and the filters and shows the chip **Selected texts**. Click **Show selected** again or remove the chip to return to your filters and page; changing a filter or tab also ends it.
 
 To start over, click **Clear selection**.
 
@@ -1617,10 +1619,10 @@ What for: spread a batch of texts evenly across people.
 
 The proposal uses the languages in each person's profile: a person is proposed for a text only if they read its languages, or list no languages at all. People who list the text's languages come first; people with no languages listed only fill the places left over. Among them, fewest open tasks come first.
 
-1. In the assign dialog, click **Distribute evenly…**.
+1. In the assign dialog, click **Distribute evenly…**. The proposal takes the place of the assign dialog; **Close** without confirming returns to it.
 2. Set **People per document** and click **Propose**.
 3. Check the proposal. Change a person in any cell, or click **Propose again**. Texts nobody can take are listed under **Unassignable documents**.
-4. Click **Confirm**. This covers only the task shown in the assign dialog. If the selection needs more, the assign dialog stays open on the next step; otherwise it closes and the message says the assignments are saved.
+4. Click **Confirm**. This covers only the task shown in the assign dialog. If the selection needs more, the assign dialog comes back on the next step; otherwise it closes and the message says the assignments are saved.
 
 If you chose someone whose profile lists other languages than the text needs, the dialog stays open after **Confirm** and asks; click **Assign anyway**, then **Close**.
 
@@ -1670,7 +1672,7 @@ How to choose:
 
 What for: choose the final result of a text.
 
-1. On **Documents**, tab **Needs your decision**, click **Accept result…** or **Compare results…** in the row. The row reads **Accept result…** when there is one result to accept or all findings match, and **Compare results…** when submissions differ. The card opens at **Finalization**.
+1. On **Documents**, tab **Needs your decision**, click **Accept result…** or **Compare results…** in the row. The row reads **Accept result…** when there is one result to accept or the submissions agree in full, also on notes and modifier text spans, and **Compare results…** when they differ in anything. The card opens at **Finalization**.
 2. With one submission or a submitted consolidation, check it and click **Accept result**.
 3. If all annotations agree, the card says so. Click **Accept result**.
 4. If they differ, the card shows the agreement, for example *Agreement: 5 of 9 findings match, 1 differs in context only*. **How is this counted?** explains the numbers. Open a submission with **Open submission** to read it in the read-only text view.
@@ -1710,7 +1712,7 @@ If the button stays inactive, the form says why: *Select at least two submission
 After the start:
 
 - If you chose someone else: Ontotator sends no e-mail. Tell the person that a consolidation is waiting in their **My tasks**.
-- If you chose yourself: you get the Consolidator role for this project. Click **Open consolidation** in the text card, **Open my consolidation task** in the message, or **Open my task** in the text's row on **Documents**. Each opens your task, where you decide and submit.
+- If you chose yourself: you get the Consolidator role for this project. Click **Open consolidation** in the text card or **Open my task** in the text's row on **Documents**. Each opens your task, where you decide and submit.
 
 While the consolidation runs, the card shows the consolidator and how many groups are still open. What the consolidator does is in the [consolidator chapter](consolidator.md).
 

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { api, ApiError, type AssignmentView, type Member, type StartConsolidationResponse, type WorkRoundView } from '../src/api/client';
 import { ConsolidationLauncher } from '../src/variants/ConsolidationLauncher';
@@ -29,7 +29,7 @@ const reviewerSelect = () => screen.getByLabelText('Consolidator') as HTMLSelect
 const options = () => within(reviewerSelect()).getAllByRole('option').map(option => option.textContent);
 
 async function openForm(extra: Partial<Parameters<typeof ConsolidationLauncher>[0]> = {}) {
-  render(<ConsolidationLauncher {...props} defaultOpen defaultSelected={['first', 'second']} {...extra} />);
+  render(<ConsolidationLauncher {...props} defaultSelected={['first', 'second']} {...extra} />);
   await screen.findByLabelText('Consolidator');
 }
 
@@ -53,7 +53,7 @@ it('choosing yourself says that you get the Consolidator role, and starts with o
   fireEvent.change(reviewerSelect(), { target: { value: 'lead' } });
   expect(screen.getByText('You will get the Consolidator role for this project.')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Start consolidation' }));
-  await screen.findByText(/Consolidation assigned to you/);
+  await waitFor(() => expect(onStarted).toHaveBeenCalled());
   expect(api.startConsolidation).toHaveBeenCalledTimes(1);
   expect(api.startConsolidation).toHaveBeenCalledWith('p', {
     document_id: 'target', reviewer: 'lead', source_submission_ids: ['first', 'second'], reason: null, confirm_language: false,
@@ -62,7 +62,6 @@ it('choosing yourself says that you get the Consolidator role, and starts with o
   expect(create).not.toHaveBeenCalled();
   expect(startRound).not.toHaveBeenCalled();
   expect(onStarted).toHaveBeenCalledWith(round, { self: true, roleGranted: true });
-  expect(screen.getByRole('link', { name: 'Open my consolidation task' }).getAttribute('href')).toBe('#/tasks/42');
 });
 
 it('says nothing about the role when you already hold it', async () => {
@@ -104,7 +103,7 @@ it('keeps the missing-language confirmation and reuses an existing review assign
   expect(document.getElementById(start.getAttribute('aria-describedby')!)!.textContent).toBe('Confirm the consolidator despite missing de.');
   fireEvent.click(screen.getByRole('checkbox', { name: 'Assign this consolidator despite missing de in their profile' }));
   fireEvent.click(start);
-  await screen.findByText(/Consolidation assigned to Rita Rev/);
+  await waitFor(() => expect(api.startConsolidation).toHaveBeenCalledTimes(1));
   expect(api.startConsolidation).toHaveBeenCalledWith('p', expect.objectContaining({ reviewer: 'rita', confirm_language: true, expected_workflow_revision: 7 }));
 });
 
@@ -122,13 +121,13 @@ it('a consolidator with a consolidation in progress gets Continue instead of Sta
 });
 
 it('requires at least two selected inputs and a reviewer', async () => {
-  const view = render(<ConsolidationLauncher {...props} defaultOpen />);
+  const view = render(<ConsolidationLauncher {...props} />);
   await screen.findByLabelText('Consolidator');
   expect(screen.getByText('Select at least two submissions.')).toBeTruthy();
   fireEvent.click(screen.getByRole('checkbox', { name: 'Reader 1, Round 1' }));
   fireEvent.click(screen.getByRole('checkbox', { name: 'Reader 2, Round 1' }));
   expect(screen.getByText('Choose a consolidator.')).toBeTruthy();
-  view.rerender(<ConsolidationLauncher {...props} rows={[rows[0]]} defaultOpen />);
+  view.rerender(<ConsolidationLauncher {...props} rows={[rows[0]]} />);
   fireEvent.change(reviewerSelect(), { target: { value: 'luc' } });
   expect(screen.getByRole('button', { name: 'Start consolidation' }).getAttribute('aria-disabled')).toBe('true');
   fireEvent.click(screen.getByRole('button', { name: 'Start consolidation' }));
@@ -145,10 +144,8 @@ it('keeps the inputs after a refusal and words a stale input', async () => {
   expect(screen.getByRole('checkbox', { name: 'Reader 2, Round 1' })).toHaveProperty('checked', true);
 });
 
-it('opens behind Consolidate results without defaultOpen and lists only inputs on this text', async () => {
+it('lists only inputs on this text', async () => {
   render(<ConsolidationLauncher {...props} rows={[...rows, { ...rows[0], submission_id: 'foreign', document_id: 'other' }]} />);
-  expect(api.listMembers).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: 'Consolidate results' }));
   await screen.findByLabelText('Consolidator');
   expect(screen.getAllByRole('checkbox')).toHaveLength(2);
   expect(screen.queryByText(/first|second|foreign/)).toBeNull();

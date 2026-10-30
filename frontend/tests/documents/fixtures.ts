@@ -203,7 +203,7 @@ export function barFor(groups: readonly DocumentGroupView[]): DecisionBarView {
 }
 
 export function page(groups: DocumentGroupView[], overrides: Partial<DocumentRowsPage> = {}): DocumentRowsPage {
-  return { groups, page: 1, page_count: 1, group_count: groups.length, bar: barFor(groups), case_found: true, adjudicator_not_annotator: false, ...overrides };
+  return { groups, page: 1, page_count: 1, group_count: groups.length, text_count: groups.flatMap(group => group.rows).length, bar: barFor(groups), case_found: true, adjudicator_not_annotator: false, ...overrides };
 }
 
 export function submission(overrides: Partial<RowSubmissionView> & Pick<RowSubmissionView, "submission_id" | "document_id">): RowSubmissionView {

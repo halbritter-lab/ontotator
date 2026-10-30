@@ -167,7 +167,7 @@ export function TextCard(props: TextCardProps): JSX.Element {
   if (view === "history") {
     body = <div className="text-card-view">
       {back}
-      <RowActivity row={row} projectKey={projectKey} submissions={list} onStage={() => {}} reportRoute={props.reportRoute} onNavigate={onNavigate} me={props.me?.pseudonym ?? null} now={now} />
+      <RowActivity row={row} projectKey={projectKey} submissions={list} reportRoute={props.reportRoute} onNavigate={onNavigate} me={props.me?.pseudonym ?? null} now={now} />
     </div>;
   } else if (view === "details") {
     body = <div className="text-card-view">

@@ -18,6 +18,14 @@ from test_consolidation_modifiers_read import (
     submit_all,
 )
 
+from ontotator.application.document_rows import RowQuery
+
+
+def row_all_match(env: Any, case: str) -> bool:
+    """The row's fact, with the rows the page shows the card's answer on."""
+    page = rows_service(env).page("proj", RowQuery(case=case, language=("de",)))
+    return page["groups"][0]["rows"][0]["stages"]["final"]["detail"]["all_match"]
+
 
 def test_all_match_needs_identical_modifiers(tmp_path):
     env = mod_env(tmp_path)
@@ -75,9 +83,20 @@ def test_all_match_needs_identical_modifiers(tmp_path):
         submit_all(env, f"c{n}", {"ana": ana, "ben": ben})
         panels[name] = rows_service(env).final_panel("proj", f"c{n}", "de")
         assert panels[name]["all_match"] is expected, name
+        assert row_all_match(env, f"c{n}") is expected, name
     # S6: the term sets are equal, so ``compare`` counts a match (R4).
     assert panels["S6"]["agreement"]["matching"] == 1
     # S11: compare buckets by term, so each finding is only here.
     s11 = panels["S11"]
     assert s11["agreement"]["matching"] == 0
     assert sorted(s["only_here"] for s in s11["submissions"]) == [1, 1]
+
+
+def test_the_row_compares_when_only_a_note_differs(tmp_path):
+    env = mod_env(tmp_path)
+    same = found("s", SEIZURE, "Krampfanfälle")
+    submit_all(env, "c1", {"ana": [same], "ben": [{**same, "note": "Bitte prüfen"}]})
+    panel = rows_service(env).final_panel("proj", "c1", "de")
+    assert panel["agreement"]["matching"] == panel["agreement"]["total"] == 1
+    assert panel["all_match"] is False
+    assert row_all_match(env, "c1") is False

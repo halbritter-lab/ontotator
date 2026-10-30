@@ -36,7 +36,7 @@ SELECTION_BYTES = MAX_SELECTED_ROWS * (MAX_CASE_ID_LENGTH + MAX_LANGUAGE_LENGTH 
 # The JSON routes that carry a Documents selection or other bulk row lists.
 SELECTION_PATH = re.compile(
     r"^/api/v1/projects/[^/]+/(work-plans/(bulk(/preview)?|rows)"
-    r"|assignments(/batch(/preview)?)?|document-rows/(selection-summary|keys)"
+    r"|assignments(/batch(/preview)?)?|document-rows/(selection-summary|keys|selected)"
     r"|case-ids/lookup)/?$"
 )
 
