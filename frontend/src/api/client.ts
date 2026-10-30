@@ -833,7 +833,7 @@ export class ApiClient {
   /**
    * The logged-in user of this browser's session; an `AuthError` 401 without one. Stores the CSRF token.
    * Asks `/auth/session`, which answers 200 without a session too, so an anonymous visit logs no
-   * failed request (#198); the answer also says whether demo logins are offered.
+   * failed request (issue 198); the answer also says whether demo logins are offered.
    */
   async me(): Promise<CurrentUser> {
     const state = await this.request<SessionState>("/api/v1/auth/session", { method: "GET" });

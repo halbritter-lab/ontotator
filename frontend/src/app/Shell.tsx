@@ -18,7 +18,7 @@ export interface ShellProps {
   taskProject?: string;
   /** The open task's kind: an annotator on a translation review reads as "Translation reviewer". */
   taskKind?: string;
-  /** Changes on each navigation to My tasks or Projects; the My tasks count reloads then (#192). */
+  /** Changes on each navigation to My tasks or Projects; the My tasks count reloads then (issue 192). */
   navigation?: unknown;
 }
 

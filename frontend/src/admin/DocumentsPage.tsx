@@ -681,7 +681,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   // Texts outside the plan in the current filters: the plan facet's "not in plan" minus the undecided rows it also counts.
   const planFacet = page?.bar.facets?.plan;
   const notInPlanCount = Math.max(0, (planFacet?.not_in_plan ?? 0) - (planFacet?.not_decided ?? 0));
-  // The wide table of All leaves them out while the switch is off: the count says "246 of 307" (#198).
+  // The wide table of All leaves them out while the switch is off: the count says "246 of 307" (issue 198).
   const hiddenNotInPlanCount = !narrow && activeTab(query) === "all" && !showNotInPlan ? Math.min(notInPlanCount, page?.bar.shown ?? 0) : 0;
   // A status-column sort of the loaded page (the server sorts by Text and Last activity only).
   const [columnSort, setColumnSort] = useState<ColumnSort | null>(null);

@@ -181,7 +181,7 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
   requestRef.current = requestRoute;
 
   const projectsReady = !!baseUser && projectContext?.identity === projectIdentity;
-  // Opening My tasks or Projects reloads the project list in place (#192): a project the user was added to
+  // Opening My tasks or Projects reloads the project list in place (issue 192): a project the user was added to
   // while logged in shows up without a page reload. The shown list stays until the new one arrives.
   const navigationRoute = route.name === "tasks" || route.name === "projects" ? route : null;
   useEffect(() => {
