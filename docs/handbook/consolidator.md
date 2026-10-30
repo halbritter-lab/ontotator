@@ -114,7 +114,7 @@ What for: keep a finding with a value or term that nobody chose.
 1. Open the group and click **More…**. It is offered when no row is in conflict or when the terms differ.
 2. Choose one:
    - **Edit values…**: set each value and the modifiers, then click **Keep with these values**. This is offered only when no row is in conflict.
-   - **Other term…**: search and pick a term. If there was no term conflict, it is saved at once; otherwise choose the remaining highlighted rows with ✓ and click **Keep**.
+   - **Other term…**: search and pick a term; the search works as in the editor ([Search a term](annotator.md#search-a-term)) and shows the full definition of the active hit below the hits. If there was no term conflict, it is saved at once; otherwise choose the remaining highlighted rows with ✓ and click **Keep**.
 
 Click **Cancel** to stop without changes.
 
@@ -123,7 +123,7 @@ Click **Cancel** to stop without changes.
 What for: add a finding that no submission has.
 
 1. Select the passage in the text. Or click **Add finding**, type the passage into **Passage from the text** (choose the **Occurrence** if it appears more than once) and click **Continue**.
-2. Search and pick the term.
+2. Search and pick the term. Read the definition of the active hit below the hits before you press Enter or click it.
 3. A message confirms the new finding. It is listed under **Added by you**.
 
 If the passage is not found, type it exactly as written, or select it in the text.

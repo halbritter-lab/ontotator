@@ -90,7 +90,7 @@ What for: find the right ontology term quickly.
 
 1. Press `/` or click **Change term** to focus the search.
 2. Type a name or a code. Hits appear in the list **Terms**.
-3. Move with `↓` and `↑`; press Enter to take the active hit, or Esc to cancel.
+3. Move with `↓` and `↑`, or point at a hit. Below the hits, the full definition of the active hit is shown. Read it, then press Enter or click the hit to take it, or press Esc to cancel. Enter and a click take the hit at once.
 
 Search options:
 
