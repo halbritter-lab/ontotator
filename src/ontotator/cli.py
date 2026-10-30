@@ -768,12 +768,14 @@ def projects_remove_member(
     _print_roles(username.strip().lower(), project, roles)
 
 
-def _pairs(values: list[str] | None, option: str) -> dict[str, str]:
-    """``id=value`` options by ontology id."""
+def _pairs(
+    values: list[str] | None, option: str, *, allow_empty: bool = False
+) -> dict[str, str]:
+    """``id=value`` options by ontology id; ``allow_empty`` also takes ``id=``."""
     pairs: dict[str, str] = {}
     for item in values or []:
         ontology_id, sep, value = item.partition("=")
-        if not sep or not ontology_id.strip() or not value.strip():
+        if not sep or not ontology_id.strip() or not (allow_empty or value.strip()):
             raise typer.BadParameter(
                 f"expected <ontology id>=<value>, got {item!r}", param_hint=option
             )
@@ -816,8 +818,8 @@ def projects_create(
             "--allowed-roots",
             help=(
                 "<ontology id>=<term>,<term>,... the allowed roots (repeatable; "
-                "an hpo-phenotype ontology defaults to HP:0000118, '<id>=' "
-                "allows every term)."
+                "default: the profile's allowed_roots, else HP:0000118 for an "
+                "hpo-phenotype ontology; '<id>=' allows every term)."
             ),
             show_default=False,
         ),
@@ -826,7 +828,10 @@ def projects_create(
         list[str] | None,
         typer.Option(
             "--t1-profile",
-            help="<ontology id>=generic|hpo-phenotype (repeatable; default generic).",
+            help=(
+                "<ontology id>=generic|hpo-phenotype (repeatable; default: the "
+                "profile's t1_profile, else generic)."
+            ),
             show_default=False,
         ),
     ] = None,
@@ -851,7 +856,7 @@ def projects_create(
             f"not a task profile: {exc}", param_hint="--profile"
         ) from exc
     shas = _pairs(pin, "--pin")
-    roots = _pairs(allowed_roots, "--allowed-roots")
+    roots = _pairs(allowed_roots, "--allowed-roots", allow_empty=True)
     profiles = _pairs(t1_profile, "--t1-profile")
     defined = {o.ontology_id for o in task_profile.ontologies}
     for option, given in (("--allowed-roots", roots), ("--t1-profile", profiles)):
@@ -875,24 +880,26 @@ def projects_create(
         }
     )
     shas = {**{o.ontology_id: o.sha256 for o in task_profile.ontologies}, **shas}
-    pins = {
-        ontology_id: Pin(
-            sha256=sha,
-            allowed_roots=tuple(
-                root.strip()
-                for root in roots.get(
-                    ontology_id,
-                    # Phenotypic abnormality: findings, not inheritance or history.
-                    "HP:0000118"
-                    if profiles.get(ontology_id) == "hpo-phenotype"
-                    else "",
-                ).split(",")
-                if root.strip()
-            ),
-            t1_profile=cast(T1Profile, profiles.get(ontology_id, "generic")),
+    definitions = {o.ontology_id: o for o in task_profile.ontologies}
+    pins = {}
+    for ontology_id, sha in shas.items():
+        definition = definitions.get(ontology_id)
+        scheme = cast(
+            T1Profile,
+            profiles.get(ontology_id)
+            or (definition.t1_profile if definition else None)
+            or "generic",
         )
-        for ontology_id, sha in shas.items()
-    }
+        if ontology_id in roots:
+            chosen = roots[ontology_id].split(",")
+        elif definition and definition.allowed_roots is not None:
+            chosen = definition.allowed_roots
+        else:
+            # Phenotypic abnormality: findings, not inheritance or history.
+            chosen = ["HP:0000118"] if scheme == "hpo-phenotype" else []
+        pins[ontology_id] = Pin(
+            sha, tuple(root.strip() for root in chosen if root.strip()), scheme
+        )
     actor = Actor.cli()
     with _open_database(ctx) as db:
         check_allowed_roots(_ontology_store(db), pins)
