@@ -247,7 +247,45 @@ docker compose up -d --wait ontotator_app
 
 Run the block in the source deployment directory (or set `COMPOSE_PROJECT_NAME` and the same `--file`/`--env-file` options) so every `docker compose` command addresses the source project. Keep the spaces in `{{ .Config.Image }}`: the Docker CLI on Windows turns a space-free `{{.Config.Image}}` passed from Git Bash into the literal `.Config.Image`. In Git Bash also set `MSYS_NO_PATHCONV=1`, otherwise container paths such as `/source` are rewritten into Windows paths. `image-reference.txt` holds the reference app was started with; it identifies the image only if `.env` pins a digest. The final `up` also reruns the one-shot `migrate`, which finds the schema current. The volume is resolved from app's actual `/data` mount, never guessed from a project name. The archive helper uses the same verified image, has no network, reads the source volume read-only and records numeric owners. If any command fails, app stays stopped; investigate before releasing the maintenance restriction. Keep deployed Compose settings, ontology release identities and protected role credentials with this recovery record. `pg_dump` does not back up role passwords. Protect backups as clinical data. Bash streams binary data safely; older PowerShell versions may corrupt native binary redirection.
 
-Schedule this backup rather than relying on manual runs: run it nightly (it stops app for the duration of the dump and archive, so pick a quiet hour), copy each recovery point off the host, encrypted, together with its `SHA256SUMS`, and keep several recovery points. A backup that exists only on the deployment host is lost with the host. Run it additionally right before every image switch (see [Upgrades](#upgrades)). Check regularly that the newest off-host copy verifies with `sha256sum --check`, and rehearse a restore as below after any change to this procedure or to the Compose files.
+### Scheduled and off-host backups
+
+Schedule this backup rather than relying on manual runs. [`scripts/backup.sh`](../scripts/backup.sh) is the block above made safe to run unattended; copy it from the release you deploy next to its `docker-compose.yml`:
+
+```bash
+bash backup.sh /private/backup --wait-jobs 600 --keep-days 14
+```
+
+It runs in the deployment directory (or with `COMPOSE_PROJECT_NAME`/`COMPOSE_FILE` set), waits up to `--wait-jobs` seconds for running import/export jobs and gives up with exit code 75 without touching app if they do not finish, stops app for the dump and archive (about 15 s for small data) and **always starts it again**, also when the backup fails. It writes into `BACKUP_ROOT/<UTC timestamp>.partial` and renames the directory to `BACKUP_ROOT/<UTC timestamp>` only once both files exist and `SHA256SUMS` is written; it prints that path as the last line. `--keep-days` deletes older recovery points it created (names `YYYYMMDDTHHMMSSZ`, and stale `.partial` directories); without it nothing is deleted. CLI writers are not blocked: do not schedule it while operators run `admin import`/`export`.
+
+A recovery point that exists only on the deployment host is lost with the host's disk. Copy every complete recovery point off the host, **encrypted**, with its `SHA256SUMS`, for example by a systemd service that runs the script and then an off-host step of your choice (an encrypting backup tool such as restic or borg with a remote repository, or `age`/`gpg` plus `rsync`/`rclone` to storage you control). Never copy `.partial` directories. For example, with systemd (a sketch; adapt paths, user and the off-host step):
+
+```bash
+#!/bin/bash
+# /usr/local/bin/ontotator-nightly-backup
+set -euo pipefail
+cd /opt/ontotator # the deployment directory
+point="$(bash backup.sh /private/backup --keep-days 14 | tail -n 1)"
+ontotator-offsite "$point" # your encrypt-and-upload command
+```
+
+```ini
+# /etc/systemd/system/ontotator-backup.service
+[Service]
+Type=oneshot
+User=deploy
+ExecStart=/usr/local/bin/ontotator-nightly-backup
+
+# /etc/systemd/system/ontotator-backup.timer
+[Timer]
+OnCalendar=*-*-* 03:30:00 UTC
+Persistent=true
+[Install]
+WantedBy=timers.target
+```
+
+Keep the off-host encryption key off the deployment host, or at least out of the backup. Alert on a failed unit (`OnFailure=` or your monitoring), not only on a missing file. Run the backup additionally right before every image switch (see [Upgrades](#upgrades)). Check regularly that the newest **off-host** copy decrypts and verifies with `sha256sum --check`, and rehearse a restore as below, from an off-host copy, after any change to this procedure or to the Compose files and at least once on the real host.
+
+### Restore
 
 Restore only into a **fresh isolated target**, using the same image digest and role names. Prepare a separate deployment directory containing the matching Compose file, `docker/postgres-init.sh` at the same relative path (the Compose file mounts it from `./docker/`), private `.env` and service-specific secrets in `./secrets/`. Generate fresh bootstrap/owner/app passwords for the target as in [Configuration and secrets](#configuration-and-secrets): the dump carries no role passwords, so initialization sets the target's roles from its own files, and the consuming files must match them. Remove app's bootstrap admin `_FILE` setting as described earlier: the restored database already contains admin. Configure a separate test origin/proxy; do not attach the target to the live proxy network or allow users/CLI writers during restoration.
 
