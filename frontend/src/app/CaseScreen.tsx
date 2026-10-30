@@ -66,6 +66,7 @@ import { fromSubmission } from "../editor/historicalSubmission";
 import { MySubmissions } from "../editor/MySubmissions";
 import { formatTime, fullTimestamp } from "./submissionLabels";
 import { axisOptionLabel, findingAxes } from "../editor/axisLabels";
+import { replacementChanges } from "../editor/replacementChanges";
 import { StatusBadge } from "../ui/StatusBadge";
 import { defaultedResults, resultSnapshots } from "../editor/decisionSemantics";
 import { LayerControls } from "../editor/LayerControls";
@@ -1157,6 +1158,26 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       .map((ref) => (latestDraft.current.evidence ?? []).find((ev) => ev.mention.evidence_id === ref.evidence_id))
       .filter((ev): ev is NonNullable<typeof ev> => !!ev);
     return segmentsKey(copyEvidence) !== segmentsKey(source.evidence ?? []);
+  };
+
+  /** #198: what a replacement changed against its proposal, in words ("Assertion: Present → Absent"); null without both. */
+  const replacementChangesOf = (target: TargetProposal, copyId: string | undefined): string[] | null => {
+    const source = targetSnapshotOf(target);
+    const copy = (draft.annotations ?? []).find(a => a.annotation.annotation_id === copyId);
+    if (!source || !copy) return null;
+    const quotes = (evidence: readonly EvidenceSnapshot[]) => [...evidence].map(ev => ev.mention.segments)
+      .sort((a, b) => (a[0]?.start ?? 0) - (b[0]?.start ?? 0)).map(segments => quoteSegments(view.document.text, segments, 40));
+    const copyEvidence = (copy.annotation.evidence_refs ?? [])
+      .map(ref => (draft.evidence ?? []).find(ev => ev.mention.evidence_id === ref.evidence_id))
+      .filter((ev): ev is EvidenceSnapshot => !!ev);
+    const layer = copy.annotation.layer_id;
+    const axesConfig = view.layers?.find(l => l.layer_id === layer)?.annotation_types.find(type => type.type_id === copy.annotation.type_id)?.axes ?? view.axes_config;
+    return replacementChanges(
+      { term: termLabel(source.annotation.layer_id, source.annotation.term_id) ?? source.annotation.term_id, axes: source.annotation.axes_values ?? {},
+        quotes: quotes(source.evidence ?? []), note: source.annotation.note, modifiers: copiedModifiers.current.get(copy.annotation.annotation_id) ?? modifiersKey(source.annotation.modifiers) },
+      { term: termLabel(layer, copy.annotation.term_id) ?? copy.annotation.term_id, axes: copy.annotation.axes_values ?? {},
+        quotes: quotes(copyEvidence), note: copy.annotation.note, modifiers: modifiersKey(copy.annotation.modifiers) },
+      axesConfig);
   };
 
   const enqueueDecision = (
@@ -3512,6 +3533,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                           </React.Fragment>)}
                         </>
                       );
+                      // #198: the same name says nothing; the other changes follow it ("Assertion: Present → Absent").
+                      const changes = (replacementChangesOf(t, dec.replacement?.annotation_id) ?? []).filter(change => !change.startsWith("Term: "));
                       return (
                         <Button
                           type="button"
@@ -3522,6 +3545,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                           title="Jump to replacement annotation in draft"
                         >
                           <span className="replaced-by-label">Replaced by:</span> <strong>{displayText}</strong>
+                          {changes.length > 0 && <span className="replaced-by-changes">, {changes.join("; ")}</span>}
                         </Button>
                       );
                     })() : null;
@@ -3903,6 +3927,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 const copy = (draft.annotations ?? []).find(a => a.annotation.annotation_id === replacementId);
                 return splitOffs.length && copy ? [copy, ...splitOffs].map(snap => ({ annotationId: snap.annotation.annotation_id, quote: firstQuoteOf(snap) })) : [];
               })()}
+              replacementChanges={replacementChangesOf(selectedTarget, decisionsMap[refKey(selectedTarget)]?.replacement?.annotation_id)}
               documentText={view.document.text}
               currentDecision={decisionsMap[refKey(selectedTarget)] ?? null}
               draftAnnotations={draft.annotations ?? []}
@@ -3939,6 +3964,18 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             />
           ) : (<>
             {carriedSection}
+            {isReviewLike(view.key.mode) && selectedAnnotation && (() => {
+              // #198: the copy made by Edit & Replace says what it replaces and has a clear way back to its proposal.
+              const replaced = sourceTargetOf(selectedAnnotation);
+              if (!replaced) return null;
+              const changes = replacementChangesOf(replaced, selectedAnnotation.annotation.annotation_id) ?? [];
+              const proposalName = termLabel(replaced.layer_id ?? selectedAnnotation.annotation.layer_id, replaced.term_id ?? replaced.annotation_id) ?? replaced.term_id ?? replaced.annotation_id;
+              return <div className="review-actions__block replacement-strip" data-replacement-strip>
+                <p className="review-actions__block-title">Your replacement for the proposal {proposalName}</p>
+                <p className="field-hint">{changes.length ? `Changes: ${changes.join("; ")}.` : "No changes yet. Edit the term, values or text below; the proposal counts as replaced once the copy differs."}</p>
+                <Button type="button" variant="primary" size="sm" onClick={() => selectProposal(replaced)}>Done, back to the proposal</Button>
+              </div>;
+            })()}
             {panesLayout && !readOnly && selectedAnnotation && selectedAnnotationId === loopAnnotationId && (
               <Button type="button" variant="secondary" size="sm" className="back-to-text" data-back-to-text onClick={backToText}>
                 Back to text

@@ -207,7 +207,7 @@ Tools make mistakes. Check every proposal as if you had marked it yourself: the 
 4. Decide:
    - **Confirm**: the passage, term and all values are right. Values tagged **Defaulted** were not set by the tool but prefilled; Confirm accepts them as shown, so check them too.
    - **Reject**: the proposal is wrong and nothing should replace it.
-   - **Edit & Replace**: the proposal is nearly right. You get an editable copy that replaces it; correct the term, values or text span in the copy.
+   - **Edit & Replace**: the proposal is nearly right. You get an editable copy that replaces it; correct the term, values or text span in the copy. The copy is listed under **Your own findings**. Above it, the editor names the proposal it replaces and what you changed, for example *Assertion: Present → Absent*. Click **Done, back to the proposal** when you are finished. The proposal then reads *Replaced by* with the term and your changes.
    - **Unresolved**: only if you really cannot decide; the other three decisions are the normal case. Write a **Reviewer note** saying why, then click **Save decision**. The proposal is submitted with your note and a reviewer flag. It does not block submitting; the lead (and a consolidator, if there is one) decides it.
 5. After each decision, the next open proposal is selected. Press `k` right after a decision to go back to it.
 6. When all proposals are decided, read the whole text again and add findings the tool missed: mark text that has no proposal, choose the term in **New finding** and set the values, as in [Mark text and add a finding](#mark-text-and-add-a-finding). Your additions appear under **Your own findings**, next to the proposals.

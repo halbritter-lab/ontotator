@@ -9,6 +9,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - The final export leaves out texts without a final result only after a tick box that names the count (#194).
+- The Finalization row reads "Accept result…" when all compared findings match (#198).
+- Edit & Replace names what the copy changed ("Assertion: Present → Absent") next to "Replaced by" and has a "Done, back to the proposal" button (#198).
 
 ## [0.3.0] - 2026-10-30
 

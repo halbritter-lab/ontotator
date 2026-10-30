@@ -697,6 +697,34 @@ it("hides markings of replaced or rejected review targets in text and grays them
   expect(rendered.container.querySelectorAll(".run--target").length).toBe(0);
 });
 
+it("names what a same-term replacement changed and leads back to the proposal (#198)", async () => {
+  const target1 = proposal("t1-v1", "HP:0001");
+  const copy = proposal("rep-v1", "HP:0001");
+  copy.annotation.annotation_id = "rep-ann";
+  copy.annotation.axes_values = { assertion: "present" };
+  copy.annotation.provenance.source_refs = ["same:t1-v1"];
+  const view = baseView();
+  view.key = { ...key, mode: "review" };
+  view.scope = { ...scope, mode: "review" };
+  view.available_inputs = [target1];
+  view.targets = { target_set_id: "targets", targets: [{ annotation_id: "same", version: "t1-v1" }] };
+  view.draft = {
+    ...view.draft, key: view.key, targets: view.targets, annotations: [copy], evidence: copy.evidence,
+    decisions: [{ decision_id: "d1", target: { annotation_id: "same", version: "t1-v1" }, outcome: "changed",
+      replacement: { annotation_id: "rep-ann", version: "rep-v1" }, reviewer_id: "annotator" }],
+  };
+  render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
+  const link = screen.getByRole("button", { name: /^Replaced by:.*HP:0001/ });
+  expect(link.textContent).toContain("Absent → Present");
+  fireEvent.click(link);
+  const strip = await waitFor(() => { const found = document.querySelector("[data-replacement-strip]"); expect(found).not.toBeNull(); return found as HTMLElement; });
+  expect(strip.textContent).toContain("Your replacement for the proposal HP:0001");
+  expect(strip.textContent).toContain("Absent → Present");
+  fireEvent.click(screen.getByRole("button", { name: "Done, back to the proposal" }));
+  await waitFor(() => expect(screen.getByText("Review decision for this proposal")).toBeDefined());
+  expect(screen.getByRole("list", { name: "Changes against the proposal" }).textContent).toContain("Absent → Present");
+});
+
 it("displays replacement term link in sidebar and allows deselecting so no term is selected", async () => {
   const target1 = proposal("t1-v1", "HP:0001");
   const ownSnap = proposal("rep-v1", "HP:0003");
