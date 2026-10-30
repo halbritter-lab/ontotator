@@ -1,7 +1,6 @@
 /**
- * One presentation model for the historical-submission dialog. Its entry points deliver two shapes:
- * "View" in My submissions loads a `SubmissionHistoryDetail`; the non-assignment "Submission history"
- * list and "View submitted result" hold raw `Submission` objects.
+ * One presentation model for the historical-submission dialog: "View" in My submissions loads a
+ * `SubmissionHistoryDetail`.
  */
 import type { ReactNode } from "react";
 import type { AnnotationSnapshot, Submission, SubmissionHistoryDetail } from "../api/client";
@@ -26,23 +25,6 @@ export interface HistoricalSubmissionView {
   reanchorResolutions: NonNullable<Submission["reanchor_resolutions"]>;
   /** Read-only check states of a carry-forward submission; null when the submission has no round inputs. */
   carried: { items: CarriedCheckItem[] } | null;
-}
-
-export function fromSubmission(submission: Submission, heading: string): HistoricalSubmissionView {
-  return {
-    submissionId: submission.submission_id,
-    heading,
-    documentId: submission.snapshots[0]?.document_id ?? submission.origin_key.document_id,
-    recordedAt: submission.created_at,
-    annotations: submission.snapshots,
-    evidence: submission.snapshots.flatMap(snapshot => snapshot.evidence),
-    decisions: submission.decisions,
-    checkedLayerIds: submission.checked_layer_ids ?? [],
-    documentChecked: submission.document_checked,
-    reanchorInputs: submission.reanchor_inputs ?? [],
-    reanchorResolutions: submission.reanchor_resolutions ?? [],
-    carried: null,
-  };
 }
 
 /**

@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
-import { decisionCategoryLabels, formatTime, issueAriaLabel, middleEllipsis, NOT_PLANNED, statusBadgeText, versionText, workText, type WorkItemLike } from "../../src/documents/labels";
+import { decisionCategoryLabels, formatTime, middleEllipsis, NOT_PLANNED, statusBadgeText, versionText, workText, type WorkItemLike } from "../../src/documents/labels";
 
 describe("documents labels", () => {
   it("names rows outside the plan with one wording, Not planned", () => {
@@ -25,12 +25,6 @@ describe("documents labels", () => {
     expect(statusBadgeText("translated", null, true)).toBe("Accepted without review");
     expect(statusBadgeText("automatic_check_failed", null, false)).toBe("Check failed");
     expect(statusBadgeText(null, null, false)).toBeNull();
-  });
-  it("issue_aria_label_groups_by_category", () => {
-    expect(issueAriaLabel({ "report-or-pause": 1, "confirm-final": 1 }, { "Source text changed": 1 })).toBe("2 issues: problem report or paused task 1; final result to confirm 1. 1 note: source text changed");
-    expect(issueAriaLabel({ "missing-final": 1 }, {})).toBe("1 issue: final result missing 1");
-    expect(issueAriaLabel({}, { "Task paused": 2 })).toBe("2 notes: task paused 2");
-    expect(issueAriaLabel({}, {})).toBe("No issues");
   });
   it("bar_categories_use_the_lead_workflow_copy", () => {
     expect(Object.values(decisionCategoryLabels)).toEqual(["Problem report or paused task", "Final result to confirm", "Translation rejected or queried", "Final result missing"]);

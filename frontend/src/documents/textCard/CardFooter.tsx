@@ -12,17 +12,15 @@ import { acceptanceLabel, acceptanceOf, discardLabel, isDiscarded, type TextVers
 const REPORT_STATE_TEXT = { open: "Open", resolved: "Closed", withdrawn: "Withdrawn" } as const;
 
 /** Footer of the text card: History (n), Details, Change plan…. No tabs. */
-export function CardFooter({ historyCount, onHistory, onDetails, onChangePlan }: {
+export function CardFooter({ historyCount, onHistory, onDetails }: {
   /** Null while the history loads. */
   historyCount: number | null;
   onHistory: () => void;
   onDetails: () => void;
-  onChangePlan?: () => void;
 }): JSX.Element {
   return <div className="text-card-footer">
     <Button size="sm" variant="quiet" onClick={onHistory}>{historyCount == null ? "History" : `History (${historyCount})`}</Button>
     <Button size="sm" variant="quiet" onClick={onDetails}>Details</Button>
-    {onChangePlan && <Button size="sm" variant="quiet" className="text-card-footer-end" onClick={onChangePlan}>Change plan…</Button>}
   </div>;
 }
 

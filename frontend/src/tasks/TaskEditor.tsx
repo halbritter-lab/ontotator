@@ -221,7 +221,6 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
         onSubmitted: afterSubmit({ onNavigate, showToast }) }}
       onClose={back} onReload={() => load()} onReadonlyRequired={() => { if (active.current) { setSubmittedElsewhere(true); void load(); } }} onSubmitted={() => {
         setWorkspace(value => value ? { ...value, read_only: true } : value);
-        // CaseScreen owns the successful-submission dialog; retain its mounted state.
         void loadTasks(); notifyTasksChanged();
       }} />
   </CaseErrorBoundary>
