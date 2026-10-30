@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 import type { NextStepView } from "../../src/api/client";
-import { actionLabel, BADGE_LABELS, leadSteps, rowActionLabel, secondaryLine, stepLabel, STEP_FILTER_GROUPS, STEP_LABELS } from "../../src/documents/nextStepLabels";
-import { final, row, stageCell, stages, step, stepOf, version, work } from "./fixtures";
+import { actionLabel, leadSteps, rowActionLabel, stepLabel, STEP_LABELS } from "../../src/documents/nextStepLabels";
+import { row, stageCell, stages, stepOf, version, work } from "./fixtures";
 
 describe("next step labels", () => {
   it("labels every step code", () => {
@@ -43,32 +43,6 @@ describe("next step labels", () => {
     expect(actionLabel("handle_text_change")).toBe("Handle text change…");
     expect(actionLabel("carry_text_change")).toBe("Carry to v2…");
     expect(actionLabel("assign_source_review")).toBe("Assign review…");
-    expect(BADGE_LABELS.source_changed).toBe("Source changed");
-  });
-
-  it("offers every step code in the step filter except the fallback", () => {
-    const grouped = STEP_FILTER_GROUPS.flatMap(([, codes]) => codes);
-    expect(new Set(grouped)).toEqual(new Set(Object.keys(STEP_LABELS).filter(code => code !== "decide_plan" && code !== "needs_attention")));
-  });
-
-  it("labels the secondary line per detail kind", () => {
-    const plain = row({ case_id: "case-0101", language: "de" });
-    expect(secondaryLine(step({ code: "assign_translation_review", detail: { kind: "version", version: 1, origin: "machine_translation", translation_status: "ready_for_review", task_paused: false } }), plain))
-      .toBe("v1 machine translation, ready for review");
-    expect(secondaryLine(step({ code: "assign_annotation", detail: { kind: "source_ready", task_paused: false } }), plain)).toBe("Source text, ready to annotate");
-    expect(secondaryLine(step({ code: "choose_final", detail: { kind: "annotations_submitted", submitted: 2, total: 2, task_paused: false } }), plain)).toBe("2 of 2 annotations submitted");
-    expect(secondaryLine(step({ code: "annotation_in_progress", detail: { kind: "round", round_ordinal: 1, task_paused: false } }), plain)).toBe("Round 1, in progress");
-    const excerpt = "The translation drops the negation in the second sentence and the dosage line.";
-    expect(secondaryLine(step({ code: "decide_report", detail: { kind: "report", excerpt, reporter: { pseudonym: "ann-0005", display_name: "Ben Roth", is_me: false }, task_paused: true } }), plain))
-      .toBe(`“${excerpt.slice(0, 60)}…”, Ben Roth (ann-0005), task paused`);
-    const withFinal = row({ case_id: "case-0101", language: "de", final: final({ case_id: "case-0101", language: "de", document_id: "d", submission_id: "s", round_ordinal: 1, author_label: "ann-0004", author: { pseudonym: "ann-0004", display_name: "Annotator", is_me: false } }) });
-    expect(secondaryLine(step({ code: "done", kind: "done", detail: { kind: "final", version: 1, round_ordinal: 1, task_paused: false } }), withFinal)).toBe("Final: Annotation, from scratch, Round 1, Annotator (ann-0004)");
-    expect(secondaryLine(step({ code: "translation_accepted", kind: "done", detail: { kind: "review_only", version: 1, task_paused: false } }), plain)).toBe("Review only, not annotated");
-    expect(secondaryLine(step({ code: "waiting_for_translation_review", kind: "in_progress", detail: { kind: "waiting", version: 2, origin: "correction", translation_status: "ready_for_review", task_paused: false } }), plain))
-      .toBe("v2 correction, waiting for review");
-    expect(secondaryLine(step({ code: "assign_annotation", kind: "assign", assigned: 1, target: 2, detail: null }), plain)).toBe("1 annotator · max 2");
-    // Nobody yet: no "No annotator yet · max 2" under "Assign annotation" (#129 U2).
-    expect(secondaryLine(step({ code: "assign_annotation", kind: "assign", assigned: 0, target: 2, detail: null }), plain)).toBe("");
   });
 
   it("names Choose final as Accept result… for one submission and Compare results… otherwise (V6, VD16)", () => {

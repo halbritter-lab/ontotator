@@ -10,21 +10,15 @@ import { plural } from "../app/labels";
 import { kindLabels, type SubmissionKind } from "../app/submissionLabels";
 import { Time } from "../app/Time";
 import { routeHref, type PanelStage, type ProjectDocumentsQuery, type Route } from "../app/router";
-import { IconBot, IconBotOff, IconCheck } from "../ui/icons";
+import { IconBot, IconBotOff } from "../ui/icons";
 import { onSpaceActivate } from "../ui/spaceActivates";
 import { StatusBadge } from "../ui/StatusBadge";
-import { EmptyValue } from "../ui/EmptyValue";
 import {
-  decisionCategoryLabels,
-  issueAriaLabel,
   middleEllipsis,
   personLabel,
-  statusBadgeText,
   submissionLabel,
   versionName,
   versionText,
-  workText,
-  type DecisionCategory,
 } from "./labels";
 import { isActiveRow, shortName, stageText, versionMarkerText, waitingOnText, type StageName } from "./stageLabels";
 import { annotationState, finalizationState, translationState } from "./textCard/cardModel";
@@ -34,42 +28,11 @@ import { StageSymbol, type StageTone } from "../ui/StageCell";
 /** Longest ID shown in full in a cell; longer IDs get a middle ellipsis with the full value in `title`. */
 export const ID_DISPLAY_MAX = 24;
 
-/** Waiting items appear as the waiting line in the selection notice, never as a note count. */
-const WAITING_CODES = new Set(["ROUND_REVIEW_PENDING"]);
-
-/** Row wording of notes (causes outside the bar categories). */
-const NOTE_LABELS: Readonly<Record<string, string>> = {
-  SOURCE_UPDATE_UNREVIEWED: "Source text changed",
-  TASK_ON_HOLD: "Task paused",
-  REVIEWER_NEEDED: "Reviewer needed",
-};
-
 /** `"{case}:{language}"`: the row key used in `query.panel`. */
 export const rowKeyOf = (row: Pick<DocumentRowView, "case_id" | "language">): string => `${row.case_id}:${row.language}`;
 
 /** "{text ID} {language}" as used in accessible names. */
 export const rowName = (row: Pick<DocumentRowView, "case_id" | "language">): string => `${row.case_id} ${row.language}`;
-
-export function noteLabel(code: string): string {
-  return NOTE_LABELS[code] ?? "Other note";
-}
-
-/** Notes counted in the Issues column (waiting items excluded). */
-export function countedNotes(row: DocumentRowView): DocumentRowView["notes"] {
-  return row.notes.filter(note => !WAITING_CODES.has(note.code));
-}
-
-/** Issue counts per bar category and note counts per row wording. */
-export function issueCounts(row: DocumentRowView): { issues: Partial<Record<DecisionCategory, number>>; notes: Record<string, number> } {
-  const issues: Partial<Record<DecisionCategory, number>> = {};
-  for (const issue of row.issues) {
-    const category = issue.category as DecisionCategory | null;
-    if (category && category in decisionCategoryLabels) issues[category] = (issues[category] ?? 0) + 1;
-  }
-  const notes: Record<string, number> = {};
-  for (const note of countedNotes(row)) notes[noteLabel(note.code)] = (notes[noteLabel(note.code)] ?? 0) + 1;
-  return { issues, notes };
-}
 
 /** A long ID with a middle ellipsis; the full value is in `title`. */
 export function ShortId({ value, max = ID_DISPLAY_MAX }: { value: string; max?: number }): JSX.Element {
@@ -93,11 +56,6 @@ export function documentsRowId(caseId: string, language: string, part: Documents
 /** Stable id of a case's group row label (a focus fallback; the group row is no disclosure, VD5). */
 export function documentsGroupId(caseId: string): string {
   return `documents-group-${encodeURIComponent(caseId)}-toggle`;
-}
-
-/** Stable id of the former not-in-plan toggle of a case; no element has it since VD1 (plan chips keep it as a focus fallback). */
-export function documentsNotInPlanId(caseId: string): string {
-  return `documents-group-${encodeURIComponent(caseId)}-not-in-plan`;
 }
 
 /** A link with a real `href`; plain left clicks go through `onNavigate` when given; styled as a button (`btn`) it also answers Space (V4). */
@@ -145,12 +103,6 @@ export function versionLabel(row: DocumentRowView, entry: DocumentVersionView): 
   });
 }
 
-/** Short form for the "Matched:" line: "v1, Check failed". */
-function matchedLabel(row: DocumentRowView, entry: DocumentVersionView): string {
-  const badge = statusBadgeText(entry.translation_status, entry.latest_review_decision, entry.accepted_without_review);
-  return [versionName(entry.version, entry.chain_name, row.parallel_roots), badge].filter(Boolean).join(", ");
-}
-
 /** Chain names of the row's roots, in version order. */
 export function chainNames(row: DocumentRowView): string[] {
   const names = new Map<string, string>();
@@ -162,39 +114,6 @@ export function chainNames(row: DocumentRowView): string[] {
 export function displayedVersion(row: DocumentRowView): DocumentVersionView | undefined {
   if (row.parallel_roots) return undefined;
   return row.versions.find(entry => entry.is_newest_in_chain) ?? row.versions[row.versions.length - 1];
-}
-
-/** Versions to name in "Matched: …" for a collapsed row; empty when the displayed content already matches. */
-export function matchedVersions(row: DocumentRowView): DocumentVersionView[] {
-  const matching = row.versions.filter(entry => entry.matches_filter);
-  if (matching.length === 0 || matching.length === row.versions.length) return [];
-  const shown = displayedVersion(row);
-  if (shown && shown.matches_filter) return [];
-  return matching;
-}
-
-export function VersionCell({ row, expanded }: { row: DocumentRowView; expanded: boolean }): JSX.Element {
-  const shown = displayedVersion(row);
-  const matched = expanded ? [] : matchedVersions(row);
-  const summary = shown
-    ? versionLabel(row, shown)
-    : `${chainNames(row).length} independent translations: ${chainNames(row).join(", ")}`;
-  return (
-    <>
-      <span className="documents-version">{summary}</span>
-      {matched.length > 0 && <span className="documents-matched">{`Matched: ${matched.map(entry => matchedLabel(row, entry)).join(", ")}`}</span>}
-    </>
-  );
-}
-
-export function WorkCell({ row }: { row: DocumentRowView }): JSX.Element {
-  const paused = row.work.some(entry => entry.held);
-  return (
-    <span className="documents-work">
-      <span>{workText(row.work)}</span>
-      {paused && <StatusBadge tone="warning">Paused</StatusBadge>}
-    </span>
-  );
 }
 
 export interface FinalLabelOptions {
@@ -223,30 +142,6 @@ export function finalLabel(row: DocumentRowView, final: FinalSelectionSummary, o
     : [kindLabels[kind] ?? kind, kind === "consolidation" ? null : final.round_ordinal == null ? "Initial submission" : `Round ${final.round_ordinal}`,
       personLabel(author, final.is_mine), withLanguage ? [language, labelVersion].filter(Boolean).join(" ") : null].filter(Boolean).join(", ");
   return marker ? `${base}, ${marker}` : base;
-}
-
-export function FinalCell({ row }: { row: DocumentRowView }): JSX.Element {
-  if (!row.final) return <span className="documents-final documents-final--none"><EmptyValue /></span>;
-  return (
-    <span className="documents-final">
-      <IconCheck className="documents-final-icon" />
-      <span>{finalLabel(row, row.final)}</span>
-    </span>
-  );
-}
-
-/** Warning badge with the bar-category count plus neutral "n notes"; one grouped accessible label. */
-export function IssuesCell({ row }: { row: DocumentRowView }): JSX.Element | null {
-  const { issues, notes } = issueCounts(row);
-  const issueTotal = Object.values(issues).reduce((sum, count) => sum + (count ?? 0), 0);
-  const noteTotal = Object.values(notes).reduce((sum, count) => sum + count, 0);
-  if (issueTotal === 0 && noteTotal === 0) return null;
-  return (
-    <span className="documents-issues" role="img" aria-label={issueAriaLabel(issues, notes)}>
-      {issueTotal > 0 && <StatusBadge tone="warning">{issueTotal}</StatusBadge>}
-      {noteTotal > 0 && <span className="documents-notes">{noteTotal === 1 ? "1 note" : `${noteTotal} notes`}</span>}
-    </span>
-  );
 }
 
 export function LastActivityCell({ iso }: { iso: string | null }): JSX.Element {

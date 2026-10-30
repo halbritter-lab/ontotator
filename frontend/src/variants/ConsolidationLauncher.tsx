@@ -17,13 +17,11 @@ interface Props {
   /** The signed-in lead: offered first as "You (Mia Kühn)" (U4). */
   username: string;
   rows: ConsolidationInput[];
-  /** Starts with the form open (the caller's own "Consolidate…" already asked), skipping the "Consolidate results" button. */
-  defaultOpen?: boolean;
   /** Submissions checked when the form opens (e.g. the compared submissions on the current text). */
   defaultSelected?: readonly string[];
   /** The consolidator may not be an annotator: people who annotated this text are unavailable. */
   adjudicatorNotAnnotator?: boolean;
-  /** The round was started; a caller that closes (the final-result panel) replaces the success line with its own message. */
+  /** The round was started; the caller says so (a toast) and replaces the form. */
   onStarted?: (round: WorkRoundView, started: ConsolidationStarted) => void;
 }
 
@@ -56,9 +54,8 @@ function candidatesOf(members: readonly Member[], assignments: readonly Assignme
 }
 
 function ConsolidationContent(props: Props): JSX.Element {
-  const { projectKey, documentId, language, rows, defaultOpen = false, defaultSelected = [], onStarted } = props;
+  const { projectKey, documentId, language, rows, defaultSelected = [], onStarted } = props;
   const fieldId = useId();
-  const [open, setOpen] = useState(defaultOpen);
   const [attempt, setAttempt] = useState(0);
   const [inventory, setInventory] = useState<{ attempt: number; members: Member[]; assignments: AssignmentView[] } | null>(null);
   const [loadError, setLoadError] = useState<unknown>();
@@ -68,7 +65,6 @@ function ConsolidationContent(props: Props): JSX.Element {
   const [confirmLanguage, setConfirmLanguage] = useState(false);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
-  const [created, setCreated] = useState<{ round: WorkRoundView; roleGranted: boolean; self: boolean; name: string }>();
   const active = useRef(false);
   const writing = useRef(false);
   const request = useRef<{ intent: string; id: string }>();
@@ -93,14 +89,13 @@ function ConsolidationContent(props: Props): JSX.Element {
       : missingLanguage && !confirmLanguage ? `Confirm the consolidator despite missing ${language}.` : null;
   useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
   useEffect(() => {
-    if (!open) return;
     let live = true;
     setLoadError(undefined);
     Promise.all([api.listMembers(projectKey), api.listAssignments(projectKey)]).then(([members, assignments]) => {
       if (live) setInventory({ attempt, members, assignments });
     }, failure => { if (live) setLoadError(failure); });
     return () => { live = false; };
-  }, [projectKey, open, attempt]);
+  }, [projectKey, attempt]);
   const start = async () => {
     if (!current || !chosen || missing || writing.current) return;
     writing.current = true; setBusy(true); setError(undefined);
@@ -114,7 +109,6 @@ function ConsolidationContent(props: Props): JSX.Element {
         request_id: request.current.id, expected_workflow_revision: existing?.workflow_revision ?? null,
       });
       notifyFinalSelectionChanged(projectKey);
-      if (active.current) setCreated({ round: response.round, roleGranted: response.role_granted, self: chosen.self, name: chosen.label });
       onStarted?.(response.round, { self: chosen.self, roleGranted: response.role_granted });
     } catch (failure) {
       if (active.current) setError(failure instanceof ApiError && failure.code === 'ROUND_INPUT_STALE'
@@ -124,13 +118,12 @@ function ConsolidationContent(props: Props): JSX.Element {
           : failure);
     } finally { writing.current = false; if (active.current) setBusy(false); }
   };
-  if (!open) return <Button size="sm" onClick={() => setOpen(true)}>Consolidate results</Button>;
   const membersHref = routeHref({ name: 'projectSettings', key: projectKey, section: 'people' });
   return <section className="detail-section consolidation-launcher" aria-label="Consolidate submitted results"><h3>Consolidate submitted results</h3>
     <p>Select at least two submissions on this text and a consolidator. The consolidator creates a separate result; the original submissions remain in history.</p>
     {loadError != null && <><ErrorNotice error={loadError} /><Button onClick={() => setAttempt(value => value + 1)}>Reload reviewer tasks</Button></>}
     {!current && loadError == null && <InlineMessage tone="info">Loading consolidators and tasks…</InlineMessage>}
-    {current && !created && <>
+    {current && <>
       <fieldset disabled={busy}><legend>Submissions to merge</legend>{eligibleRows.map(row => <Checkbox key={row.submission_id}
         id={`${fieldId}-${encodeURIComponent(row.submission_id)}`} label={row.label ?? `${row.author_label}, ${formatDateTime(row.created_at)}`}
         data-submission-id={row.submission_id} checked={selected.has(row.submission_id)} onChange={event => setSelected(previous => {
@@ -153,10 +146,5 @@ function ConsolidationContent(props: Props): JSX.Element {
       {ongoing ? chosen?.self && <a className="btn btn-secondary" href={`#/tasks/${ongoing.id}`} onKeyDown={onSpaceActivate}>Continue consolidation</a> : <Button aria-disabled={missing || busy ? true : undefined} aria-describedby={missing ? `${fieldId}-missing` : undefined} loading={busy}
         onClick={() => { if (!missing && !busy) void start(); }}>Start consolidation</Button>}
     </>}
-    {created && <InlineMessage tone="success">
-      {created.self ? 'Consolidation assigned to you.' : `Consolidation assigned to ${created.name}.`}
-      {created.roleGranted && ' You now have the Consolidator role for this project.'}
-      {created.self && <> <a className="btn btn-secondary btn-sm" href={`#/tasks/${created.round.assignment_id}`} onKeyDown={onSpaceActivate}>Open my consolidation task</a></>}
-    </InlineMessage>}
   </section>;
 }

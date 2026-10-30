@@ -492,7 +492,7 @@ function Consolidate(props: ContentProps & { listed: FinalPanelSubmissionView[];
       <Button size="sm" variant={primary ? "primary" : "secondary"} aria-describedby={hint ? hintId : undefined} onClick={() => setOpen(true)}>Consolidate…</Button>
       {hint && <>{" "}<span id={hintId} className="cell-secondary">{hint}</span></>}
     </p>}
-    {open && <ConsolidationLauncher projectKey={projectKey} documentId={documentId} language={row.language} username={username} rows={rows} defaultOpen
+    {open && <ConsolidationLauncher projectKey={projectKey} documentId={documentId} language={row.language} username={username} rows={rows}
       defaultSelected={preselected} adjudicatorNotAnnotator={page.adjudicator_not_annotator} onStarted={(round, started) => onConsolidationStarted?.(row, round, started)} />}
   </div>;
 }

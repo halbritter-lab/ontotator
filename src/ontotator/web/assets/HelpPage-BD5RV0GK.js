@@ -1,4 +1,4 @@
-import{r,a as m,j as a,b as h}from"./index-Czu8XL9g.js";import{M as f,r as g}from"./index-BtSFaB_L.js";function w(){const[e,t]=r.useState(null);return r.useEffect(()=>{let o=!0;return m.getAbout().then(n=>{o&&t(n)},()=>{}),()=>{o=!1}},[]),e?a.jsxs("p",{className:"help-version",title:e.revision??void 0,children:["Ontotator ",e.version,e.revision&&a.jsxs(a.Fragment,{children:[" · commit ",e.revision.slice(0,7)]})]}):null}const y=`# Ontotator user handbook
+import{r,a as m,j as a,b as h}from"./index-DixP0RzP.js";import{M as f,r as g}from"./index-KfJPJhlI.js";function w(){const[e,t]=r.useState(null);return r.useEffect(()=>{let o=!0;return m.getAbout().then(n=>{o&&t(n)},()=>{}),()=>{o=!1}},[]),e?a.jsxs("p",{className:"help-version",title:e.revision??void 0,children:["Ontotator ",e.version,e.revision&&a.jsxs(a.Fragment,{children:[" · commit ",e.revision.slice(0,7)]})]}):null}const y=`# Ontotator user handbook
 
 This handbook explains how to work with Ontotator in the browser. It is for everyone who uses the app: annotators, translation reviewers, consolidators, leads and system administrators. It describes the version of Ontotator that you open it from. If you run the server, read the [server operations guide (for server operators)](../operations.md) instead.
 
@@ -1712,7 +1712,7 @@ If the button stays inactive, the form says why: *Select at least two submission
 After the start:
 
 - If you chose someone else: Ontotator sends no e-mail. Tell the person that a consolidation is waiting in their **My tasks**.
-- If you chose yourself: you get the Consolidator role for this project. Click **Open consolidation** in the text card, **Open my consolidation task** in the message, or **Open my task** in the text's row on **Documents**. Each opens your task, where you decide and submit.
+- If you chose yourself: you get the Consolidator role for this project. Click **Open consolidation** in the text card or **Open my task** in the text's row on **Documents**. Each opens your task, where you decide and submit.
 
 While the consolidation runs, the card shows the consolidator and how many groups are still open. What the consolidator does is in the [consolidator chapter](consolidator.md).
 

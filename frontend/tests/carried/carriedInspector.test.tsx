@@ -1,3 +1,4 @@
+import { ShortcutHelpHost } from "../../src/ui/ShortcutHelp";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, ApiError, type AnnotationSnapshot, type Draft, type MutationEnvelope, type RoundInputView } from "../../src/api/client";
@@ -290,6 +291,7 @@ describe("carried finding inspector", () => {
   });
 
   it("marks the selected carried finding as checked with C, never while typing or read-only", async () => {
+    render(<ShortcutHelpHost />);
     const carried = finding("carried");
     const resolve = vi.spyOn(api, "resolveRoundInput").mockResolvedValue(draftWith(1, [carried], []));
     const { container } = setup({ annotations: [carried], inputs: [input("input-1", carried)] });

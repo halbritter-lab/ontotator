@@ -1,5 +1,5 @@
 /** Documents-only label rules. Shared submission and time helpers are re-exported for convenience. */
-import { labelFor, plural } from "../app/labels";
+import { labelFor } from "../app/labels";
 import { personLabel } from "../app/submissionLabels";
 import { originLabels, translationStatusLabels } from "../admin/variantMetadata";
 
@@ -64,30 +64,6 @@ export const decisionCategoryLabels: Readonly<Record<DecisionCategory, string>> 
   translation: "Translation rejected or queried",
   "missing-final": "Final result missing",
 };
-
-const lowerFirst = (text: string): string => (text ? text[0].toLowerCase() + text.slice(1) : text);
-
-/**
- * Accessible label of the Issues cell, grouped by category:
- * "2 issues: problem report or paused task 1; final result to confirm 1. 1 note: source text changed".
- * Notes are keyed by their row wording; a note with count 1 omits the count.
- */
-export function issueAriaLabel(issues: Partial<Record<DecisionCategory, number>>, notes: Readonly<Record<string, number>>): string {
-  const issueEntries = (Object.keys(decisionCategoryLabels) as DecisionCategory[])
-    .map(category => [category, issues[category] ?? 0] as const)
-    .filter(([, count]) => count > 0);
-  const noteEntries = Object.entries(notes).filter(([, count]) => count > 0);
-  const sentences: string[] = [];
-  const issueTotal = issueEntries.reduce((sum, [, count]) => sum + count, 0);
-  if (issueTotal > 0) {
-    sentences.push(`${plural(issueTotal, "issue")}: ${issueEntries.map(([category, count]) => `${lowerFirst(decisionCategoryLabels[category])} ${count}`).join("; ")}`);
-  }
-  const noteTotal = noteEntries.reduce((sum, [, count]) => sum + count, 0);
-  if (noteTotal > 0) {
-    sentences.push(`${plural(noteTotal, "note")}: ${noteEntries.map(([label, count]) => (count === 1 ? lowerFirst(label) : `${lowerFirst(label)} ${count}`)).join("; ")}`);
-  }
-  return sentences.length ? sentences.join(". ") : "No issues";
-}
 
 /** Structural shape of a row's work item (non-revoked assignment), matching the Documents rows API. */
 export interface WorkItemLike {

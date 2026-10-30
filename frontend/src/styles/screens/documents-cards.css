@@ -19,7 +19,6 @@
 .document-card-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); min-width: 0; }
 .document-card-head { flex-wrap: nowrap; align-items: flex-start; }
 .document-card-title { flex: 1 1 auto; min-width: 0; margin: 0; font-size: var(--size-md); font-weight: var(--weight-strong); overflow-wrap: anywhere; }
-.document-card-head .documents-issues,
 .document-card-head .documents-row-badge { flex: none; }
 .document-card-activity { color: var(--text-muted); }
 /* Stage lines "Review: ✓ Accepted, unchanged": label muted, status in the tone colour (stage-cell--{tone}), detail muted. */

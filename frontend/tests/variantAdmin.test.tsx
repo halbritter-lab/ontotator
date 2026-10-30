@@ -97,9 +97,7 @@ it("keeps translation distribution context exact through partial language retry"
   const context = { document_ids: [readyTarget.document_id], task: "translation_review" as const, per_document: 2, seed: 42, state_sha256: "exact-state" };
   vi.spyOn(api, "proposeDistribution").mockResolvedValue({ rows: [{ document_id: readyTarget.document_id, language: "de", username: "alice", display_name: "Alice", load_before: 4 }, { document_id: readyTarget.document_id, language: "de", username: "bob", display_name: "Bob", load_before: 2 }], unassignable: [], seed: 42, per_document: 2, context });
   vi.spyOn(api, "createAssignments").mockResolvedValueOnce({ created: [{ ...assignment, username: "bob" }], refused: [{ document_id: readyTarget.document_id, username: "alice", code: "LANGUAGE_CONFIRMATION_REQUIRED" }] }).mockResolvedValueOnce({ created: [{ ...assignment, username: "alice" }], refused: [] });
-  render(<DistributionDialog projectKey="p" documents={[readyTarget]} cases={inventory} onClose={vi.fn()} onChanged={vi.fn()} />);
-  await screen.findByRole("option", { name: "Translation review" });
-  fireEvent.change(screen.getByLabelText("Task"), { target: { value: "translation_review" } });
+  render(<DistributionDialog projectKey="p" documents={[readyTarget]} cases={inventory} task="translation_review" onClose={vi.fn()} onChanged={vi.fn()} />);
   fireEvent.change(screen.getByLabelText(/^People per document/), { target: { value: "2" } });
   await waitFor(() => expect((screen.getByRole("button", { name: "Propose" }) as HTMLButtonElement).disabled).toBe(false));
   fireEvent.click(screen.getByRole("button", { name: "Propose" }));

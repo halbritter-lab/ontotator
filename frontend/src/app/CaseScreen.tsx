@@ -55,7 +55,6 @@ import {
   type QueueState,
 } from "../editor/autosave";
 import { newEvidenceId } from "../editor/ids";
-import { submissionHistoryLabel } from "../editor/submissionHistoryLabel";
 import { plural, reopenNotice } from "./labels";
 import { FindingRow, ModifierLine } from "../editor/FindingRow";
 import { SubmitCaseDialog, submitOpenCount } from "../editor/SubmitCaseDialog";
@@ -63,8 +62,6 @@ import { SubmitControl } from "../editor/SubmitControl";
 import { BACK_TO_CONSOLIDATION, CONSOLIDATION_EDITOR_HINT, REPLACED_BY_CONSOLIDATION_TITLE } from "../consolidation/consolidationText";
 import { collectOpenItems, nextOpenItem, type OpenItem } from "../editor/openItems";
 import { isModifierWarningKey, modifierWarningPairs, modifierWarnings, pairKey, rowPairs, sameSet, unconfirmedRows, type UnconfirmedRow } from "../editor/unconfirmedValues";
-import { HistoricalSubmissionDialog } from "../editor/HistoricalSubmissionDialog";
-import { fromSubmission } from "../editor/historicalSubmission";
 import { MySubmissions } from "../editor/MySubmissions";
 import { formatTime, fullTimestamp } from "./submissionLabels";
 import { axisOptionLabel, findingAxes } from "../editor/axisLabels";
@@ -110,7 +107,7 @@ import { MenuButton, type MenuItem } from "../ui/MenuButton";
 import { isNegated } from "../editor/negation";
 import { Dialog } from "../ui/Dialog";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
-import { openShortcutHelp, ShortcutHelpHost } from "../ui/ShortcutHelp";
+import { openShortcutHelp } from "../ui/ShortcutHelp";
 import { isTextEntryTarget, isTypingTarget, useShortcut, useShortcutHint } from "../ui/shortcuts";
 import { CaseNavigation } from "./CaseNavigation";
 import { taskText } from "./identity";
@@ -199,7 +196,7 @@ export interface CaseScreenProps {
   routeLeaveRef?: React.MutableRefObject<RouteLeaveGuard | null>;
   assignmentNavigation?: {
     tasks: TaskSummary[]; current: TaskSummary; onNavigate: (assignmentId: number) => void;
-    /** M2 M-6: after a submit the caller opens the next task (or My tasks) and names the submission; no "Text submitted" dialog. */
+    /** M2 M-6: after a submit the caller opens the next task (or My tasks) and names the submission. */
     onSubmitted?: (result: { label: string; assignmentId: number; next?: number }) => void;
   };
   onReadonlyRequired?: () => void;
@@ -416,9 +413,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   noteDraftsRef.current = noteDrafts;
 
   // Modals
-  const [completedSubmission, setCompletedSubmission] = useState<Submission | null>(null);
-  const completedNextAssignment = useRef<number | undefined>(undefined);
-  const [historySubmission, setHistorySubmission] = useState<Submission | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [reloadSubmissionRules, setReloadSubmissionRules] = useState(false);
   const [mobilePane, setMobilePane] = useState<"list" | "text" | "details">("text");
@@ -3023,10 +3017,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       const next = assignmentNavigation
         ? nextOpenTask(assignmentNavigation.tasks, assignmentNavigation.current.assignment_id, assignmentNavigation.current.project_key).next?.assignment_id
         : undefined;
-      if (!afterSubmit) {
-        completedNextAssignment.current = next;
-        setCompletedSubmission(submission);
-      }
       try {
         await onSubmitted?.();
       } catch {
@@ -3425,12 +3415,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       {/* Header */}
       <Toolbar className="case-toolbar" label="Case">
         <div className={(assignmentNavigation ? assignmentTasks?.length ?? 0 : documentList?.length ?? 0) <= 1 ? "app-title app-title--single-case" : "app-title"}>
-          {/* Assignment routes go back through the shell breadcrumb; only the legacy path keeps its own way back. */}
-          {!assignmentNavigation && (
-            <Button type="button" size="sm" onClick={() => { void leaveCase(onClose); }} title="Back to dashboard">
-              ← Dashboard
-            </Button>
-          )}
           {assignmentNavigation && assignmentTasks?.length ? (
             <CaseNavigation documents={assignmentTasks.map((task, index) => ({ document_id: task.document_id, case_id: task.case_id ?? task.external_id ?? undefined,
               version: task.version ?? undefined, origin: task.origin as DocumentSummary["origin"], position: index + 1, language: task.language, text_length: 0,
@@ -3547,9 +3531,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               {isReloading ? "Reloading..." : "Reload case"}
             </Button>
           ) : (
-            <Button type="button" variant="secondary" size="sm" onClick={() => { if (assignmentNavigation) onClose(); else void leaveCase(onClose); }}>
-              {assignmentNavigation ? "Back to my tasks" : "Back to dashboard"}
-            </Button>
+            <Button type="button" variant="secondary" size="sm" onClick={onClose}>Back to my tasks</Button>
           )}
         </InlineMessage>
       )}
@@ -3793,18 +3775,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             </div>
           </div>
 
-          {versionContext?.assignmentId !== undefined ? <MySubmissions assignmentId={versionContext.assignmentId} projectKey={view.key.project_key}
+          {versionContext?.assignmentId !== undefined && <MySubmissions assignmentId={versionContext.assignmentId} projectKey={view.key.project_key}
             currentRound={view.key.round_id && roundOrdinal ? { roundId: view.key.round_id, ordinal: roundOrdinal } : undefined}
             documentId={view.document.document_id} documentText={view.document.text} termLabel={termLabel}
-            reloadKey={submissions.at(-1)?.submission_id} />
-          : <section className="detail-section submission-history" aria-label="Submission history">
-            <h3>Submission history</h3>
-            {submissions.length === 0 && <p>No previous submissions yet.</p>}
-            {submissions.map((submission, index) => <Button type="button" variant="secondary" size="sm"
-              key={submission.submission_id} onClick={() => setHistorySubmission(submission)}>
-              {submissionHistoryLabel(submission.created_at, index + 1)}
-            </Button>)}
-          </section>}
+            reloadKey={submissions.at(-1)?.submission_id} />}
 
         </aside>
         <SidebarResizer width={sidebarWidth.width} limits={sidebarWidth.limits} controls="findings-column"
@@ -4179,38 +4153,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       </div>
       {originalRoundInput && <RoundInputEvidenceDialog projectKey={view.key.project_key} input={originalRoundInput} onClose={() => setOriginalRoundInput(null)} labelFor={termLabel}
         sourceName={originalRoundInput.source_round_ordinal ? roundName(originalRoundInput.source_round_ordinal) : undefined} />}
-      {historySubmission && <HistoricalSubmissionDialog view={fromSubmission(historySubmission,
-        // Assignment editors name the submission by its round, as My submissions does.
-        versionContext?.assignmentId !== undefined && roundOrdinal ? `Round ${roundOrdinal}, ${formatTime(historySubmission.created_at)}`
-          : submissionHistoryLabel(historySubmission.created_at, submissions.findIndex(s => s.submission_id === historySubmission.submission_id) + 1))}
-        documentText={view.document.text} currentDocumentId={view.document.document_id} projectKey={view.key.project_key}
-        termLabel={termLabel} onClose={() => setHistorySubmission(null)} />}
-
-      {completedSubmission && (() => {
-        // One primary action, last as in every footer: the next piece of work, else the way back.
-        const nextTask = assignmentNavigation && completedNextAssignment.current !== undefined;
-        const nextCase = !!(nextDoc && onNavigateCase);
-        return <Dialog open title="Text submitted" heading="Text submitted" footer={<>
-          <Button type="button" variant="secondary" onClick={() => { setHistorySubmission(completedSubmission); setCompletedSubmission(null); }}>View submitted result</Button>
-          <Button type="button" variant="secondary" onClick={() => setCompletedSubmission(null)}>Stay in text</Button>
-          <Button type="button" variant={nextTask || nextCase ? "secondary" : "primary"}
-            onClick={() => { if (assignmentNavigation) onClose(); else { setCompletedSubmission(null); void leaveCase(onClose); } }}>
-            {assignmentNavigation ? "Back to my tasks" : "Back to dashboard"}
-          </Button>
-          {nextCase && <Button type="button" variant={nextTask ? "secondary" : "primary"}
-            onClick={() => { setCompletedSubmission(null); void leaveCase(() => onNavigateCase!(nextDoc!.document_id)); }}>
-            Review next text (Text {nextDoc!.position}) →
-          </Button>}
-          {nextTask && <Button type="button" variant="primary"
-            onClick={() => navigateAssignment(completedNextAssignment.current!)}>Next task</Button>}
-        </>}>
-          <p>Submitted <time dateTime={completedSubmission.created_at} title={fullTimestamp(completedSubmission.created_at)}>{formatTime(completedSubmission.created_at)}</time>.</p>
-          <details className="technical-details">
-            <summary>Technical details</summary>
-            <p>Submission ID: <code>{completedSubmission.submission_id}</code></p>
-          </details>
-        </Dialog>;
-      })()}
 
       <SubmitCaseDialog
         open={submitDialogOpen}
@@ -4247,7 +4189,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         busy={logoutSaving} onConfirm={() => { void saveAndLogout(); }} onCancel={() => setLogoutProceed(null)} />
       {confirmRequest && <ConfirmDialog open title={confirmRequest.title} message={<p>{confirmRequest.message}</p>}
         confirmLabel={confirmRequest.confirmLabel} onConfirm={() => closeConfirm(true)} onCancel={() => closeConfirm(false)} />}
-      {!assignmentNavigation && <ShortcutHelpHost />}
     </div>
     </ProposalMetadataProvider>
   );

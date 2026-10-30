@@ -29,11 +29,6 @@ export function consolidationStartedToast(name: string, assignmentId: number, st
 /** Panel actions of a row: "Accept result…" / "Compare results…" and "Review changes…". */
 export const PANEL_ACTIONS: ReadonlySet<string> = new Set(["choose_final", "review_changes"]);
 
-/** "Final result: case-107 de" (the panel's `h2`). */
-export function panelTitle(caseId: string, language: string): string {
-  return `Final result: ${caseId} ${language}`;
-}
-
 /** The step that opens the panel for a row (choose before review, in the server's order). */
 export function panelStep(row: Pick<DocumentRowView, "next_step" | "steps">): NextStepView | null {
   return leadSteps(row).find(step => step.action != null && PANEL_ACTIONS.has(step.action)) ?? null;

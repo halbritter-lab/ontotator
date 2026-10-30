@@ -62,8 +62,6 @@ describe("My submissions", () => {
     expect(items[2]).toBe("Round 3, not submitted yet");
     expect(within(mine()).getByRole("button", { name: `View Round 1, ${formatTime(round1At)}` })).toBeDefined();
     expect(within(mine()).getByRole("button", { name: `View Round 2, ${formatTime(round2At)}` })).toBeDefined();
-    expect(screen.queryByText("No previous submissions yet.")).toBeNull();
-    expect(screen.queryByRole("region", { name: "Submission history" })).toBeNull();
     expect(list).toHaveBeenCalledWith(7);
   });
 
@@ -104,23 +102,7 @@ describe("My submissions", () => {
     expect(within(carried).getByText("Carried from Round 1")).toBeDefined();
   });
 
-  it("entry point 2: an editor without an assignment keeps the Submission history list on raw submissions", () => {
-    const view = workspaceFixture().view;
-    const base = { format_version: "ontotator-submission/v2", origin_key: view.key, targets: view.targets!, draft_revision: 1,
-      decisions: [], document_checked: true, created_at: new Date(2026, 9, 17, 9, 5).toISOString() };
-    view.submissions = [{ ...base, submission_id: "raw-1", snapshots: [snapshot("raw-finding", "HP:0001250")] }];
-    const list = vi.spyOn(api, "listAssignmentSubmissions");
-    render(<CaseScreen view={view} workspaceId="ws-raw" onClose={vi.fn()} />);
-    expect(screen.queryByRole("region", { name: "My submissions" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Submission 1, 17 Oct 2026, 09:05" }));
-    const dialog = screen.getByRole("dialog", { name: "Historical submission" });
-    expect(within(dialog).getByRole("heading", { name: "Submission 1, 17 Oct 2026, 09:05" })).toBeDefined();
-    fireEvent.click(within(dialog).getByText("Technical details"));
-    expect(within(dialog).getByText("raw-1")).toBeDefined();
-    expect(list).not.toHaveBeenCalled();
-  });
-
-  it("entry point 3: View submitted result opens the just-submitted submission and the list reloads", async () => {
+  it("the list reloads after a submit", async () => {
     const list = vi.spyOn(api, "listAssignmentSubmissions").mockResolvedValue(rows);
     const view = workspaceFixture().view;
     view.key.round_id = "round-3"; view.draft.key = view.key;
@@ -133,12 +115,6 @@ describe("My submissions", () => {
     fireEvent.click(screen.getByRole("button", { name: /Finish & submit/ }));
     const confirm = await screen.findByRole("dialog", { name: "Submit text" });
     await act(async () => { fireEvent.click(within(confirm).getByRole("button", { name: "Submit text" })); });
-    const receipt = await screen.findByRole("dialog", { name: "Text submitted" });
-    fireEvent.click(within(receipt).getByRole("button", { name: "View submitted result" }));
-    const dialog = screen.getByRole("dialog", { name: "Historical submission" });
-    expect(within(dialog).getByRole("heading", { name: `Round 3, ${formatTime(at(19, 2, 5))}` })).toBeDefined();
-    fireEvent.click(within(dialog).getByText("Technical details"));
-    expect(within(dialog).getByText("fresh-submission")).toBeDefined();
     await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
   });
 });
