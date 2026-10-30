@@ -86,6 +86,8 @@ services:
       ONTOTATOR_PUBLIC_ORIGIN: ${ONTOTATOR_PUBLIC_ORIGIN:?Set the public HTTPS origin}
       ONTOTATOR_TRUSTED_PROXIES: ${ONTOTATOR_TRUSTED_PROXIES:?Set the exact proxy peer addresses}
       ONTOTATOR_WORKERS: ${ONTOTATOR_WORKERS:-2}
+      ONTOTATOR_LOCK_TIMEOUT_MS: ${ONTOTATOR_LOCK_TIMEOUT_MS:-20000}
+      ONTOTATOR_STATEMENT_TIMEOUT_MS: ${ONTOTATOR_STATEMENT_TIMEOUT_MS:-60000}
       ONTOTATOR_DATABASE_URL: postgresql://ontotator_app@ontotator_postgres:5432/ontotator
       ONTOTATOR_DATABASE_PASSWORD_FILE: /run/secrets/app-password
       ONTOTATOR_ADMIN_PASSWORD_HASH_FILE: /run/secrets/admin-password-hash

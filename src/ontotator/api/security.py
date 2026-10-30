@@ -10,12 +10,14 @@ write only when the browser says it comes from this site (``Origin`` or
 
 from __future__ import annotations
 
+import logging
 import secrets
 from collections.abc import Collection
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import SQLAlchemyError
 from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import MutableHeaders
 from starlette.middleware.base import RequestResponseEndpoint
@@ -23,6 +25,9 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from ontotator.auth.context import current_principal as current_principal
 from ontotator.auth.sessions import SessionService
+from ontotator.storage.database import busy_cause
+
+logger = logging.getLogger(__name__)
 
 SESSION_COOKIE = "ontotator_session"
 CSRF_HEADER = "x-csrf-token"
@@ -124,6 +129,18 @@ def _error(status: int, code: str, details: str) -> JSONResponse:
     return JSONResponse(status_code=status, content={"code": code, "details": details})
 
 
+def project_busy(request: Request, cause: str) -> JSONResponse:
+    """503 for work a database limit stopped: its transaction rolled back."""
+    logger.warning("PROJECT_BUSY %s %s (%s)", request.method, request.url.path, cause)
+    response = _error(
+        503,
+        "PROJECT_BUSY",
+        "The project is busy, so nothing was changed. Try again in a moment.",
+    )
+    response.headers["Retry-After"] = "5"
+    return response
+
+
 def install_security(
     app: FastAPI,
     sessions: SessionService | None,
@@ -161,7 +178,15 @@ def install_security(
                 return _error(403, "CROSS_SITE_REQUEST", CROSS_SITE_MESSAGE)
             return await call_next(request)
         token = request.cookies.get(SESSION_COOKIE)
-        principal = await run_in_threadpool(sessions.resolve, token) if token else None
+        try:
+            principal = (
+                await run_in_threadpool(sessions.resolve, token) if token else None
+            )
+        except SQLAlchemyError as exc:  # outside the app's exception handlers
+            cause = busy_cause(exc)
+            if cause is None:
+                raise
+            return project_busy(request, cause)
         if principal is None:
             return _error(401, "NOT_AUTHENTICATED", "Log in to continue.")
         if unsafe:

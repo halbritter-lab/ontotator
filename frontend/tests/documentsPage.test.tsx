@@ -357,6 +357,36 @@ it("keeps the rows and shows Could not refresh when a background refetch fails",
   await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
 });
 
+it("names a busy project on a failed refetch and recovers with Retry (#217)", async () => {
+  mockRows(scenarioS1().page);
+  renderPage();
+  await screen.findByRole("table", { name: "Documents" });
+  vi.mocked(api.listDocumentRows).mockRejectedValueOnce(new ApiError(503, "raw", "PROJECT_BUSY"));
+  act(() => { window.dispatchEvent(new Event("focus")); });
+  const alert = await screen.findByRole("alert");
+  expect(alert.textContent).toContain("The project is busy, so nothing was changed.");
+  fireEvent.click(within(alert).getByRole("button", { name: "Retry" }));
+  await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+});
+
+it("shows a busy project once on the first load and reloads the page data with Retry (#217)", async () => {
+  const busy = new ApiError(503, "raw", "PROJECT_BUSY");
+  mockRows(scenarioS1().page);
+  vi.mocked(api.listDocumentRows).mockRejectedValueOnce(busy);
+  const members = vi.mocked(api.listMembers);
+  members.mockRejectedValueOnce(busy);
+  renderPage();
+  const message = await screen.findByText("The project is busy, so nothing was changed. Try again in a moment.");
+  await waitFor(() => expect(members).toHaveBeenCalled());
+  await new Promise(done => { setTimeout(done, 0); });
+  expect(screen.getAllByText(message.textContent ?? "")).toHaveLength(1);
+  const calls = members.mock.calls.length;
+  fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+  await screen.findByRole("table", { name: "Documents" });
+  await waitFor(() => expect(members.mock.calls.length).toBeGreaterThan(calls));
+  expect(screen.queryByText(message.textContent ?? "")).toBeNull();
+});
+
 it("reloads after the same user logs in again, so the session banners go (#13)", async () => {
   mockRows(scenarioS1().page);
   renderPage();

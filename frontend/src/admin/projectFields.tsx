@@ -13,7 +13,13 @@ export const emptyPin = (id: string): PinDraft => {
   const hpo = id.toUpperCase() === "HP";
   return { ontology_id: id, sha256: "", t1_profile: hpo ? "hpo-phenotype" : "generic", rootsText: hpo ? "HP:0000118" : "" };
 };
-export const serializePins = (ids: string[], pins: Record<string, PinDraft>): ProjectPin[] => ids.map(id => {
+/** The start for an ontology of an uploaded profile: what it sets; unset branches stay empty (issue 196), `[]` too (the whole ontology). */
+export const profilePin = (ontology: TaskProfile["ontologies"][number]): PinDraft => {
+  const start = emptyPin(ontology.ontology_id);
+  // The file is unchecked until the server reads it: a wrong shape must not break the form.
+  return { ...start, t1_profile: ontology.t1_profile ?? start.t1_profile, rootsText: Array.isArray(ontology.allowed_roots) ? ontology.allowed_roots.join(", ") : "" };
+};
+export const serializePins =(ids: string[], pins: Record<string, PinDraft>): ProjectPin[] => ids.map(id => {
   const pin = pins[id] ?? emptyPin(id);
   return { ontology_id: id, sha256: pin.sha256, allowed_roots: pin.rootsText.split(",").map(root => root.trim()).filter(Boolean), t1_profile: pin.t1_profile };
 });
@@ -67,7 +73,7 @@ export function PinFields({ ids, ontologies, value, onChange, disabled, plain = 
     const choices = versionChoices(id, ontologies);
     const change = (patch: Partial<PinDraft>) => onChange({ ...value, [id]: { ...pin, ...patch } });
     const roots = <TextInput id={`${prefix}-${index}-roots`} label={plain ? `Limit ${id} terms to these branches` : `Allowed roots for ${id}`}
-      hint={plain ? "Term codes separated by commas, for example HP:0000118. Empty: every term." : "Comma-separated CURIEs; leave empty to allow all roots."}
+      hint={plain ? "Term codes separated by commas, for example HP:0000118. Empty: every term." : pin.rootsText.trim() ? "Comma-separated CURIEs; leave empty for the whole ontology." : "Whole ontology: every term is allowed. Add comma-separated CURIEs to limit it."}
       value={pin.rootsText} onChange={event => change({ rootsText: event.target.value })} />;
     const checks = <Select id={`${prefix}-${index}-t1`} label={`Annotation scheme for ${id}`} hint={SCHEME_HINT} value={pin.t1_profile} onChange={event => change({ t1_profile: event.target.value as ProjectPin["t1_profile"] })}>
       {(Object.keys(ANNOTATION_SCHEME_LABELS) as ProjectPin["t1_profile"][]).map(option => <option key={option} value={option}>{ANNOTATION_SCHEME_LABELS[option]}</option>)}

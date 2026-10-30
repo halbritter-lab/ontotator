@@ -92,6 +92,49 @@ describe("project creation", () => {
     expect(screen.getByRole("link", { name: "What is a task profile, and which do I need?" }).getAttribute("href")).toContain("task-profiles");
   });
 
+  const upload = async (ontology: Record<string, unknown>) => {
+    const file = new File([JSON.stringify({ ...profile, ontologies: [{ ...profile.ontologies[0]!, ...ontology }] })], "profile.json", { type: "application/json" });
+    fireEvent.change(screen.getByLabelText("Profile JSON"), { target: { files: [file] } });
+    await screen.findByText("Findings (findings)");
+  };
+  const fieldValue = (label: string) => (screen.getByLabelText(label) as HTMLInputElement).value;
+  const hintOf = (label: string) => document.getElementById(screen.getByLabelText(label).getAttribute("aria-describedby")!.split(" ")[0]!)?.textContent;
+
+  it("prefills branches and scheme from the uploaded profile, also over an earlier choice (#208)", async () => {
+    render(<ProjectNewPage onNavigate={vi.fn()} />);
+    fireEvent.change(await screen.findByLabelText(/^Built-in template/), { target: { value: "template" } });
+    fireEvent.change(screen.getByLabelText(/^Ontology file for HP/), { target: { value: "b".repeat(64) } });
+    fireEvent.change(screen.getByLabelText("Profile source"), { target: { value: "upload" } });
+    await upload({ allowed_roots: ["HP:1", "HP:2"], t1_profile: "generic" });
+    expect(fieldValue("Allowed roots for HP")).toBe("HP:1, HP:2");
+    expect(fieldValue("Annotation scheme for HP")).toBe("generic");
+
+    // Drafts of the first file do not outlive it; an explicit [] reads as the whole ontology.
+    fireEvent.change(screen.getByLabelText(/^Ontology file for HP/), { target: { value: "a".repeat(64) } });
+    await upload({ allowed_roots: [], t1_profile: "hpo-phenotype" });
+    await waitFor(() => expect(fieldValue("Allowed roots for HP")).toBe(""));
+    expect(fieldValue("Annotation scheme for HP")).toBe("hpo-phenotype");
+    expect(hintOf("Allowed roots for HP")).toContain("Whole ontology: every term");
+
+    fireEvent.change(screen.getByLabelText("Allowed roots for HP"), { target: { value: "HP:3" } });
+    expect(hintOf("Allowed roots for HP")).not.toContain("Whole ontology: every term");
+  });
+
+  it("keeps today's defaults for a profile that sets nothing (#208)", async () => {
+    render(<ProjectNewPage onNavigate={vi.fn()} />);
+    fireEvent.change(await screen.findByLabelText("Profile source"), { target: { value: "upload" } });
+    await upload({});
+    expect(fieldValue("Allowed roots for HP")).toBe("");
+    expect(fieldValue("Annotation scheme for HP")).toBe("hpo-phenotype");
+  });
+
+  it("does not break on a wrong branches value; the server refuses the file (#208)", async () => {
+    render(<ProjectNewPage onNavigate={vi.fn()} />);
+    fireEvent.change(await screen.findByLabelText("Profile source"), { target: { value: "upload" } });
+    await upload({ allowed_roots: "HP:1" });
+    expect(fieldValue("Allowed roots for HP")).toBe("");
+  });
+
   it("shows a refused key at the key field and focuses it", async () => {
     vi.mocked(api.createProject).mockRejectedValue(new ApiError(409, "exists", "PROJECT_EXISTS"));
     render(<ProjectNewPage onNavigate={vi.fn()} />);

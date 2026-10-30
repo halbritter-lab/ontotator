@@ -51,6 +51,8 @@ def app_from_env() -> FastAPI:
         trusted_hosts=tuple(hosts),
         # The container binds 0.0.0.0; only the public origin can be checked.
         demo_logins=demo_logins(public_origin=runtime.public_origin),
+        lock_timeout_ms=runtime.lock_timeout_ms,
+        statement_timeout_ms=runtime.statement_timeout_ms,
     )
     try:
         return _guarded(create_app(config, expose_docs=not production), runtime)

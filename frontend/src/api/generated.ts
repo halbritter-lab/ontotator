@@ -5326,6 +5326,10 @@ export interface components {
             format: "obo-graph-json";
             /** Resource Path */
             resource_path?: string | null;
+            /** Allowed Roots */
+            allowed_roots?: string[] | null;
+            /** T1 Profile */
+            t1_profile?: ("generic" | "hpo-phenotype") | null;
         };
         /** OntologyInfo */
         OntologyInfo: {

@@ -990,6 +990,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     : queueState === "error" ? (
       isSessionProblem(queueError) ? "Session ended – changes kept"
       : isNetworkError(queueError) || isOffline ? "Offline – changes not saved"
+      : queueError instanceof ApiError && queueError.code === "PROJECT_BUSY" ? errorMessage(queueError)
       : "Save error – changes not saved"
     )
     : unsavedAnnotationNotes().length > 0 ? "Annotation note changes not saved"

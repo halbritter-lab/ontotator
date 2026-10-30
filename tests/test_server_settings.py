@@ -137,6 +137,23 @@ def test_worker_count_is_bounded(tmp_path: Path, workers: str) -> None:
         settings.server_settings(env)
 
 
+def test_database_limits_have_defaults_and_can_be_set(tmp_path: Path) -> None:
+    env = production_env(tmp_path)
+    result = settings.server_settings(env)
+    assert (result.lock_timeout_ms, result.statement_timeout_ms) == (20_000, 60_000)
+    env["ONTOTATOR_LOCK_TIMEOUT_MS"] = "500"
+    env["ONTOTATOR_STATEMENT_TIMEOUT_MS"] = "0"
+    result = settings.server_settings(env)
+    assert (result.lock_timeout_ms, result.statement_timeout_ms) == (500, 0)
+
+
+def test_a_database_limit_must_be_a_whole_number(tmp_path: Path) -> None:
+    env = production_env(tmp_path)
+    env["ONTOTATOR_LOCK_TIMEOUT_MS"] = "20s"
+    with pytest.raises(settings.SettingsError, match="ONTOTATOR_LOCK_TIMEOUT_MS"):
+        settings.server_settings(env)
+
+
 def install_env(monkeypatch: pytest.MonkeyPatch, env: dict[str, str]) -> None:
     for name in list(os.environ):
         if name.startswith("ONTOTATOR_") and name != "ONTOTATOR_TEST_PG_URL":

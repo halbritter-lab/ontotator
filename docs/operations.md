@@ -179,7 +179,7 @@ A project can move to a newer release in Settings › Ontology, also after work 
 
 To check a single file against the checksum its release publishes, add `--sha256 <hex>`: a different file is refused with `ONTOLOGY_DIGEST_MISMATCH` and nothing is stored.
 
-Replace `ONTOLOGY_SHA256` with the full hash printed for the ontology JSON; the task profile must define ontology id `hp` and the intended layers. [smoke-profile.json](../tests/fixtures/smoke-profile.json) illustrates the JSON structure with synthetic fixtures; supply your own release identity, hash and protocol. See the [scientific workflow](scientific-workflow.md) for protocol guidance. Workers discover uploaded ontologies on use; no restart is needed for a new upload.
+Replace `ONTOLOGY_SHA256` with the full hash printed for the ontology JSON; the task profile must define ontology id `hp` and the intended layers. [smoke-profile.json](../tests/fixtures/smoke-profile.json) illustrates the JSON structure with synthetic fixtures; supply your own release identity, hash and protocol. See the [scientific workflow](scientific-workflow.md) for protocol guidance. `--allowed-roots` and `--t1-profile` are optional when the profile sets `allowed_roots` and `t1_profile`; given, they win, and `--allowed-roots hp=` allows every term. Workers discover uploaded ontologies on use; no restart is needed for a new upload.
 
 ```bash
 docker compose exec ontotator_app ontotator admin projects create ward-7 --name 'Ward 7' --profile /tmp/profile.json --pin hp=ONTOLOGY_SHA256 --allowed-roots hp=HP:0000118 --t1-profile hp=hpo-phenotype
@@ -468,6 +468,64 @@ A cap is a ceiling per container, not a reservation: on a shared host the caps o
     ontotator_postgres:
       oom_score_adj: -500
   ```
+
+## When a project stops responding
+
+Every project has one advisory lock: reads hold it shared, changes and imports exclusive. PostgreSQL queues the requests for it in order, so a writer waits for the running readers and every later reader waits behind that writer. Without a limit, one slow read plus one writer would stop the project, and the waiting requests would fill the connection pool and stop the instance (#217).
+
+Two limits bound this for web requests. They are set per connection when the app connects, not on the database role:
+
+| Setting | Default | Limits |
+| --- | --- | --- |
+| `ONTOTATOR_LOCK_TIMEOUT_MS` | `20000` | Waiting for one lock (advisory or row). A request that takes two locks can wait for each. |
+| `ONTOTATOR_STATEMENT_TIMEOUT_MS` | `60000` | One SQL statement, so a transaction of many short statements can last longer. |
+
+`0` switches a limit off. A request also waits at most 10 s for a free pooled connection. When any of the three is hit, the transaction rolls back and the client gets HTTP 503 with code `PROJECT_BUSY` and `Retry-After: 5`, and the user reads that the project is busy and nothing was changed. The Documents page tries again on its next refresh, the editor keeps unsaved changes for its Retry button.
+
+Writers need no extra rule to get their turn: the queue is first come, first served, so readers that arrive later cannot overtake a waiting writer, and a writer that hits the limit gives up its place, so the readers behind it go on.
+
+The job worker (imports, checks, exports, carrying annotations over), the runtime lease, every `ontotator` CLI command, migrations, `scripts/backup.sh` and `scripts/purge_annotation_work.py` have no limit. The worker and the lease use three connections of their own, so a full request pool cannot stop a job. A running import still holds the project lock exclusively while it plans and writes: during that time Documents shows the busy message after the wait limit instead of a long spinner.
+
+### Recognise it
+
+The app log has one line per stopped request. The last field says why: `55P03` lock wait, `57014` statement limit, `pool` no free connection.
+
+```text
+PROJECT_BUSY GET /api/v1/projects/demo/document-rows (55P03)
+```
+
+Many of these lines in a short time mean something is holding the lock. Look at what runs and who waits:
+
+```bash
+docker compose exec -T ontotator_postgres psql --username=ontotator_bootstrap --dbname=ontotator <<'SQL'
+SELECT pid, state, wait_event_type, now() - xact_start AS in_transaction, left(query, 80) AS query
+  FROM pg_stat_activity
+ WHERE datname = current_database() AND pid <> pg_backend_pid() AND xact_start IS NOT NULL
+ ORDER BY xact_start;
+
+SELECT locked.pid AS waiting, array_agg(holder.pid) AS blocked_by
+  FROM pg_locks locked
+  JOIN pg_locks holder
+    ON holder.locktype = locked.locktype
+   AND holder.classid IS NOT DISTINCT FROM locked.classid
+   AND holder.objid IS NOT DISTINCT FROM locked.objid
+   AND holder.granted AND NOT locked.granted
+ WHERE locked.locktype = 'advisory'
+ GROUP BY locked.pid;
+SQL
+```
+
+The oldest transaction that is not waiting (`wait_event_type` is not `Lock`) and holds the lock the others wait for is the cause. A job shows up there too: compare with `SELECT id, kind, status, started_at FROM ontotator.jobs WHERE status = 'running';` before you end anything.
+
+### Recover
+
+Normally nothing is needed: the limits end the stuck requests. If a job or an old transaction keeps the project stopped and you decide to end it, use the `pid` from above:
+
+```sql
+SELECT pg_terminate_backend(12345);
+```
+
+This rolls back that transaction. A request ended this way gets a plain 500, and a job ended this way is marked failed. Waiting work continues within seconds. Do not raise the limits to get through an incident: find the slow statement instead.
 
 ## Local verification
 
