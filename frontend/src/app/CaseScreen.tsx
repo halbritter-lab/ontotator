@@ -1554,7 +1554,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const carriedDeleteMessage = selectedAnnotationId && carried.byHome.has(selectedAnnotationId)
     ? "Delete this finding and all its mentions? This is a carried finding. After deleting it, you must link another finding or dismiss it with a reason."
     : undefined;
-  /** Delete; a deleted carried finding becomes its placeholder row, selected with "Dismiss with reason…" focused. */
   /** Issue 150: puts a deleted finding back (Undo in the toast or Ctrl+Z) and selects it. */
   const restoreDeletedFinding = async (deleted: DeletedFinding) => {
     if (readOnlyRef.current) return;
@@ -1580,6 +1579,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     announceCarried(`Restored ${findingNameOf(deleted.snapshot)}.`);
   };
 
+  /** Delete; a deleted carried finding becomes its placeholder row, selected with "Dismiss with reason…" focused. */
   const deleteAnnotation = async (annotationId: string) => {
     const homes = carried.byHome.get(annotationId) ?? [];
     // Focus moves to the next finding row, else the previous one, not to <body> (#18).
