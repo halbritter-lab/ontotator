@@ -153,7 +153,7 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
       <Button disabled={!rounds.includes(round)} onClick={() => { if (rounds.includes(round)) void load({ review_round_target_set_id: round }); }}>Resume round</Button>
       <Button onClick={back}>Back to my tasks</Button>
     </Dialog>;
-    if (error instanceof ApiError && error.code === "TASK_WAITING_FOR_TRANSLATION_REVIEW" && typeof error.details === "object" && error.details?.waiting_for_lead === true) return <NotFound title="Waiting for the project lead"
+    if (error instanceof ApiError && error.code === "TRANSLATION_NOT_ACCEPTED" && typeof error.details === "object" && error.details?.waiting_for_lead === true) return <NotFound title="Waiting for the project lead"
       reason="The text of this task was corrected. The project lead decides how the task continues." onNavigate={onNavigate} />;
     if (error instanceof ApiError && error.code === "TASK_WAITING_FOR_TRANSLATION_REVIEW") return <NotFound title="Waiting for translation review"
       reason="This task opens by itself once the translation review of the text is accepted. Until then it waits in My tasks." onNavigate={onNavigate} />;
