@@ -1,4 +1,4 @@
-import{r as i,a as p,j as a}from"./index-V0d5S-9c.js";import{M as m,r as g}from"./index-CLkBN5bW.js";const f=`# Ontotator user handbook
+import{r as i,a as p,j as a}from"./index-T1y6HZAb.js";import{M as m,r as g}from"./index-BlXb8o6y.js";const f=`# Ontotator user handbook
 
 This handbook explains how to work with Ontotator in the browser. It is for everyone who uses the app: annotators, translation reviewers, consolidators, leads and system administrators. It describes the version of Ontotator that you open it from. If you run the server, read the [server operations guide (for server operators)](../operations.md) instead.
 
@@ -577,15 +577,17 @@ What for: change your work after you submitted it, or start over. A submission i
 1. Open the task, then open **More** and choose **Work rounds**.
 2. The table **Rounds** lists each round with its state and submission. **You are here** marks the current one; **Open** opens another.
 3. Under **Start a new round**, choose one:
-   - To continue from your work: choose the submission under **Continue from** and click **Continue from this submission**. Your findings are carried into the new round, and each must be checked again ([Review carried findings](#review-carried-findings)).
+   - To continue from your work: choose the submission under **Continue from**, read what the dialog says will happen, and click **Continue from this submission**. Your findings are carried into the new round, and each must be checked again ([Review carried findings](#review-carried-findings)). You can do this yourself; you do not need the lead.
    - To start over: click **Start empty round**. The new round has no findings.
 4. Click **Close**, make your changes and [submit the text](#submit-the-text) again.
 
 What happens to your earlier work:
 
 - The earlier round stays in the history and is marked *Replaced by Round 2* (or the next number). Starting a round does not change the final result.
-- Your task shows **Open** in **My tasks** again, with **Continue**. It no longer counts as submitted, so you must submit the new round.
+- Your earlier submission no longer counts as submitted. Your task shows **Open** in **My tasks** again, with **Continue**, and the number after **My tasks** in the sidebar counts it again.
+- The lead sees your task as not submitted, and a new consolidation cannot start from the replaced submission. The lead can still read it.
 - If the lead had already accepted your earlier submission as the final result, the lead is asked to review that choice.
+- You must [submit](#submit-the-text) the new round to hand in your work again.
 
 ## Report a text problem
 
@@ -605,7 +607,7 @@ What for: continue work after a report, or take a report back.
 
 1. Open **More**, then **Text problems**. Your report card shows its state and your task's state.
 2. Choose one:
-   - To continue: click **Resume my task…**, fill in **Why can you continue?** and click **Resume my task**. The report stays open for the lead.
+   - To continue: click **Resume my task…**, fill in **Why can you continue?** and click **Resume my task**. The card confirms it, for example *Resumed. The report stays open.*, and the dialog shows *Your task: Active*. The report stays open for the lead.
    - To take the report back: click **Withdraw report…**, fill in **Why are you withdrawing it?** and click **Withdraw report**. Your task is no longer paused by this report.
 
 When the lead answers, the task shows a banner with **Open the answer**, and **My tasks** shows **Answer to your report**. If a project lead paused the task, only a project lead can release the pause.
@@ -657,7 +659,7 @@ If the source text was updated, **Source updates to review** appears. Open it, c
 
 ## Keyboard shortcuts
 
-What for: work without the mouse. Shortcuts are off while you type in a field or when a dialog is open. Letter keys work in lower and upper case alike. **Keyboard shortcuts (?)** in **More**, or \`?\`, lists the shortcuts of the current screen. Many buttons also show their key next to the label.
+What for: work without the mouse. Shortcuts are off while you type in a field or when a dialog is open. Letter keys work in lower and upper case alike. **Keyboard shortcuts (?)** in **More**, or \`?\`, lists the shortcuts of the current screen, grouped for example under *Finding*, *Decisions* and *Carried findings*. A key that needs something first, such as a selected finding or proposal, is listed with *(not available right now)*. Many buttons also show their key next to the label.
 
 | Key | Action |
 |---|---|
@@ -1194,7 +1196,7 @@ The header is the same on every page:
 - On the right are your display name, your pseudonym, your roles and **Log out**.
 - **Handbook** in the header opens this handbook inside the app. On the Documents, consolidation and translation review screens, **Help** opens the handbook section about that screen; in the editor it is **More** > **Help for this screen**.
 
-The sidebar lists **My tasks**, **Projects** and **Profile**. The number after **My tasks** counts your open tasks. Leads also see their project's pages (**Documents**, **Progress**, **Settings**, **Export**). System administrators also see **Administration** with **Users**, **Ontologies** and **New project** (see [Administration](admin.md)). In the editor, the sidebar folds into **Sections**; click it to open it.
+The sidebar lists **My tasks**, **Projects** and **Profile**. The number after **My tasks** counts your open tasks, the same tasks as the **To do** tab; it updates as soon as you submit a text. Leads also see their project's pages (**Documents**, **Progress**, **Settings**, **Export**). System administrators also see **Administration** with **Users**, **Ontologies** and **New project** (see [Administration](admin.md)). In the editor, the sidebar folds into **Sections**; click it to open it.
 
 ## Switch project
 
@@ -1251,7 +1253,7 @@ What for: check the annotation rules of the project.
 2. Open **More** in the toolbar and choose the guidelines, for example *Guidelines v2*. *(new)* after it means the guidelines changed since you last read them. In a translation review or consolidation, the guidelines are a button in the header instead, with a **New** badge.
 3. The guidelines open beside the text. Click **All versions** to see older versions, or **Close** to hide them.
 
-The first time you open a task in a project with guidelines, a notice asks you to read them. Click the read button in the notice, for example *Read guidelines v2*.
+The first time you open a task in a project with guidelines, a notice asks you to read them. Click the read button in the notice, for example *Read guidelines v2*. The notice also says where you find them later: under **More** › *Guidelines* in the editor, or the guidelines button in the header of a translation review or consolidation.
 
 The guidelines are your project's rules: what counts as a finding, how much text to mark, how to handle negation or family history. The handbook explains the app, not these rules. If the project has no guidelines or they do not answer your question, ask your lead.
 
