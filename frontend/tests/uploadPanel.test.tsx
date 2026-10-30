@@ -212,6 +212,38 @@ it("shows failed jobs separately from request errors and never imports after fai
   expect(footer().getAllByRole("button").map(item => item.textContent)).toEqual(["Cancel", "Discard"]);
 });
 
+it("after a check with problems, Discard discards and closes; Cancel discards too (#196)", async () => {
+  const problems: UploadView = { ...view, kind: "t1", status: "invalid", plan_sha256: null, preview: { ...plan, committable: false, errors: [{ code: "PIN_MISMATCH", unit: "case", message: "Layer hpo: the bundle uses release 2025, this project uses release 2026.", severity: "error" }] } };
+  vi.mocked(api.getUpload).mockResolvedValue(problems);
+  for (const button of ["Discard", "Cancel"] as const) {
+    const close = vi.fn();
+    render(<UploadPanel projectKey="p" languages={["en"]} onImported={vi.fn()} onClose={close} />);
+    await choose("bad.json", "{}");
+    fireEvent.click(footer().getByRole("button", { name: "Check" }));
+    await screen.findByText("Checked 1 file: problems found. Nothing can be imported.");
+    fireEvent.click(footer().getByRole("button", { name: button }));
+    await waitFor(() => expect(close).toHaveBeenCalledOnce());
+    expect(api.discardUpload).toHaveBeenCalledWith("p", 7);
+    cleanup(); vi.mocked(api.discardUpload).mockClear();
+  }
+});
+
+it("Cancel keeps a ready upload under Unfinished uploads", async () => {
+  const close = vi.fn();
+  render(<UploadPanel projectKey="p" languages={["en"]} onImported={vi.fn()} onClose={close} />);
+  await check();
+  fireEvent.click(footer().getByRole("button", { name: "Cancel" }));
+  expect(close).toHaveBeenCalledOnce();
+  expect(api.discardUpload).not.toHaveBeenCalled();
+});
+
+it("words checker notes for people and says whether action is needed (#196)", () => {
+  render(<UploadPreview kind="t1" plan={{ ...plan, warnings: [{ code: "modifier_as_annotation", unit: "EN1", annotation_id: "p35", message: "annotation_set.annotations[35].term_id: HP:0003826 is a modifier", severity: "warning" }] }} />);
+  const note = screen.getByText(/^1 proposal names a modifier term, such as Severe, as the finding\. No action needed now/).closest("li")!;
+  fireEvent.click(within(note).getByRole("button", { name: /^Show/ }));
+  expect(within(note).getByText("EN1, proposal p35: HP:0003826 is a modifier")).toBeTruthy();
+});
+
 it("blocks duplicate mutations while checking and ignores responses after unmount", async () => {
   let resolve!: (value: { upload_id: number; job_id: number }) => void;
   vi.mocked(api.createUpload).mockImplementation(() => new Promise(r => { resolve = r; }));

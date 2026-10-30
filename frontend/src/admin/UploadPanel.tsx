@@ -273,12 +273,19 @@ export function UploadPanel({ projectKey, languages, onImported, onClose, canOve
   })();
 
   const closing = onClose ?? (() => undefined);
+  // A checked upload with problems is never imported: leaving the dialog discards it (#196). A ready one stays under "Unfinished uploads".
+  const refusedUpload = phase === "problems" && view && ["invalid", "failed"].includes(view.status) ? view : null;
+  const cancel = () => {
+    if (refusedUpload && !busy) void api.discardUpload(projectKey, refusedUpload.id).catch(() => undefined);
+    closing();
+  };
   const reason = phase === "choose" ? chooseReason : importReason;
   const footer = <>
     {reason && <span id={reasonId} className="dialog-footer-reason">{reason}</span>}
     {phase === "importing" || phase === "imported" || phase === "committed" ? <Button variant={phase === "importing" ? "secondary" : "primary"} onClick={closing}>Close</Button> : <>
-      <Button onClick={closing}>Cancel</Button>
-      {(phase === "preview" || phase === "problems") && view && ["ready", "invalid", "failed"].includes(view.status) && <Button disabled={busy} variant={phase === "problems" ? "primary" : "secondary"} onClick={() => { void discard(); }}>Discard</Button>}
+      <Button onClick={cancel}>Cancel</Button>
+      {/* After a failed check Discard also closes the dialog; after a good one it returns to step 1 with the files kept. */}
+      {(phase === "preview" || phase === "problems") && view && ["ready", "invalid", "failed"].includes(view.status) && <Button disabled={busy} variant={phase === "problems" ? "primary" : "secondary"} onClick={() => { void discard(phase === "problems" ? closing : undefined); }}>Discard</Button>}
       {(phase === "choose" || phase === "checking") && <Button type="submit" form={formId} variant="primary" loading={phase === "checking"} aria-disabled={reason ? "true" : undefined} aria-describedby={reason ? reasonId : undefined}
         onClick={event => { if (reason) event.preventDefault(); }}>Check</Button>}
       {phase === "preview" && (stale && files.length
@@ -286,7 +293,7 @@ export function UploadPanel({ projectKey, languages, onImported, onClose, canOve
         : <Button variant="primary" aria-disabled={reason || busy ? "true" : undefined} aria-describedby={reason ? reasonId : undefined} onClick={() => { void commit(); }}>{importButtonLabel(view?.preview, unit)}</Button>)}
     </>}
   </>;
-  return <Dialog open title="Upload texts" size="lg" className="upload-dialog" onClose={closing} footer={footer}>
+  return <Dialog open title="Upload texts" size="lg" className="upload-dialog" onClose={cancel} footer={footer}>
     <div className="upload-body" aria-busy={busy || undefined}>{body}</div>
   </Dialog>;
 }
