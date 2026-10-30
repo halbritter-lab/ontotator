@@ -6,7 +6,7 @@ import { assignment } from "./assignmentFixtures";
 
 type Person = Omit<BatchPersonView, "open_after" | "gets" | "first_case" | "last_case">;
 const person = (username: string, display_name: string, pseudonym: string, reads: string[], open_before: number, extra: Partial<Person> = {}): Person => ({
-  username, person: { pseudonym, display_name, is_me: false }, reads, open_before, language_mismatch: !reads.includes("de"), unavailable: reads.includes("de") ? null : "does_not_read", already_assigned: 0, ...extra,
+  username, person: { pseudonym, display_name, is_me: false }, reads, open_before, language_mismatch: !reads.includes("de"), unavailable: reads.includes("de") ? null : "does_not_read", already_assigned: 0, ...extra, system_admin: extra.system_admin ?? false,
 });
 // Deliberately unsorted: the dialog sorts by reads, then open tasks, then name.
 const people: Person[] = [
@@ -76,6 +76,16 @@ it("sorts members by reads, then open tasks, then name; nobody preselected", asy
   expect(memberNames().map(name => name?.split(" (")[0])).toEqual(["Ana Weber", "Ben Roth", "Clara Diaz", "Dan Mertens", "Eva Klein"]);
   expect(screen.getAllByRole("radio").filter(item => (item as HTMLInputElement).name.startsWith("assign-member")).some(item => (item as HTMLInputElement).checked)).toBe(false);
   expect(lastPreview().usernames).toEqual([]);
+});
+
+it("marks system administrators (a project's creator holds every role, #177)", async () => {
+  people.push(person("root", "Root Admin", "ann-0099", ["en", "de"], 0, { system_admin: true }));
+  try {
+    render(<AssignWorkDialog {...casesProps()} />); await ready();
+    const row = screen.getByRole("radio", { name: /Root Admin/ }).closest("tr")!;
+    expect(within(row).getByText("Administrator")).toBeTruthy();
+    expect(within(screen.getByRole("radio", { name: /Ana Weber/ }).closest("tr")!).queryByText("Administrator")).toBeNull();
+  } finally { people.pop(); }
 });
 
 it("shows ineligible members muted with the reason and aria-disabled", async () => {

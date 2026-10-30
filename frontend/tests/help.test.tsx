@@ -84,6 +84,18 @@ describe("HelpPage", () => {
     expect(screen.getByRole("navigation", { name: "Handbook chapters" })).toBeTruthy();
   });
 
+  it("links each screenshot to its full-size image in a new tab (#173)", () => {
+    render(<HelpPage chapter="lead-documents" />);
+    const images = [...document.querySelectorAll("article img")];
+    expect(images.length).toBeGreaterThan(0);
+    for (const image of images) {
+      const link = image.closest("a")!;
+      expect(link.getAttribute("href")).toBe(image.getAttribute("src"));
+      expect(link.getAttribute("target")).toBe("_blank");
+      expect(link.getAttribute("rel")).toBe("noopener noreferrer");
+    }
+  });
+
   it("scrolls in-page anchors without touching the route", () => {
     const scroll = vi.fn();
     Element.prototype.scrollIntoView = scroll;

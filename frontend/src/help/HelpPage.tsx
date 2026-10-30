@@ -46,7 +46,10 @@ function components(chapter: string): Components {
     },
     img: ({ src, alt }) => {
       const url = src ? imageUrl(src, chapter) : null;
-      return url ? <img className="help-image" src={url} alt={alt ?? ""} loading="lazy" /> : <span className="guideline-image-text">{alt ? `Image: ${alt}` : "Image"}</span>;
+      // issue 173: the screenshots are scaled to the chapter column; the link opens one at full size in a new tab.
+      return url ? <a className="help-image-link" href={url} target="_blank" rel="noopener noreferrer" title="Open the image at full size in a new tab">
+        <img className="help-image" src={url} alt={alt ?? ""} loading="lazy" />
+      </a> : <span className="guideline-image-text">{alt ? `Image: ${alt}` : "Image"}</span>;
     },
     table: ({ children }) => <div className="guideline-table-scroll" tabIndex={0} role="region" aria-label="Table"><table>{children}</table></div>,
   };

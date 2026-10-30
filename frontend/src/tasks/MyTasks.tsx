@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { api, onSessionRestored, type ProjectSummary, type TaskSummary } from "../api/client";
 import { routeHref, type NavigateOptions, type Route, type TaskStatusTab } from "../app/router";
 import { ErrorNotice } from "../admin/ErrorNotice";
-import { assignmentStatusLabels, formatDateTime, reopenNotice, roleLabels, taskLabels } from "../app/labels";
+import { assignmentStatusLabels, consolidationReasonText, formatDateTime, reopenNotice, roleLabels, taskLabels } from "../app/labels";
 import { taskText } from "../app/identity";
 import { failedChecksTitle } from "../translation/labels";
 import { IconInfo, IconWarning } from "../ui/icons";
@@ -183,6 +183,7 @@ export function MyTasks({ project, status, projects, onNavigate, username }: MyT
     { id: "task", header: "Task", cell: task => <>
       {taskDescription(task)}
       {failedChecks(task) > 0 && <span className="task-check-flag"><IconWarning /> {failedChecksTitle(failedChecks(task))}</span>}
+      {task.consolidation_reason && <p className="cell-secondary task-consolidation-reason">{consolidationReasonText(task.consolidation_reason)}</p>}
     </> },
     { id: "status", header: "Status", cell: task => <>
       {reopenNotice(task) ? <ReopenedInfo notice={reopenNotice(task)!} /> : <StatusBadge status={task.status}>{assignmentStatusLabels[task.status]}</StatusBadge>}

@@ -9775,6 +9775,11 @@
           "already_assigned": {
             "type": "integer",
             "title": "Already Assigned"
+          },
+          "system_admin": {
+            "type": "boolean",
+            "title": "System Admin",
+            "default": false
           }
         },
         "type": "object",
@@ -11259,6 +11264,17 @@
               }
             ],
             "title": "Consolidator"
+          },
+          "consolidation_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consolidation Reason"
           },
           "workflow_revision": {
             "type": "integer",
@@ -22516,6 +22532,17 @@
               }
             ],
             "title": "Reopen Reason"
+          },
+          "consolidation_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consolidation Reason"
           },
           "report_answered": {
             "type": "boolean",

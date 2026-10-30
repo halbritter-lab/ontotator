@@ -17,7 +17,17 @@ export interface TaskGuidelinesProps {
    * and hands it here when its guideline state changed.
    */
   onRefresh?: (assignment: AssignmentView) => void;
+  /**
+   * Where the caller places the entry, named by the first-time notice: "more" (the editor's "More" menu item)
+   * or "header" (the button in the translation review and consolidation header).
+   */
+  place: "more" | "header";
 }
+
+const entryPlaces: Record<TaskGuidelinesProps["place"], string> = {
+  more: "More › Guidelines in the toolbar",
+  header: "Guidelines in the header",
+};
 
 const guidelineState = (value: AssignmentView) => JSON.stringify([value.guideline ?? null, value.guideline_notice ?? null]);
 
@@ -26,7 +36,7 @@ const guidelineState = (value: AssignmentView) => JSON.stringify([value.guidelin
  * opened one is in force), the one-time update notice on editable tasks and the reading drawer. The
  * caller places the three parts. Showing the notice records `notified`; the drawer's reader records `opened`.
  */
-export function TaskGuidelines({ assignment, readOnly, children, onRefresh }: TaskGuidelinesProps): JSX.Element {
+export function TaskGuidelines({ assignment, readOnly, children, onRefresh, place }: TaskGuidelinesProps): JSX.Element {
   const projectKey = assignment.project_key;
   const current = assignment.guideline?.version ?? null;
   const [latestSeen, setLatestSeen] = useState<{ key: string; version: number | null } | null>(null);
@@ -108,7 +118,7 @@ export function TaskGuidelines({ assignment, readOnly, children, onRefresh }: Ta
     : { id: "guidelines", label: `Guidelines v${current}${isNew ? " (new)" : ""}`, onSelect: () => openDrawer(current) };
 
   const shown = !readOnly && current !== null && notice?.key === projectKey ? notice.value : null;
-  const noticePart = shown && <GuidelineNoticeMessage notice={shown} onRead={() => { setNotice(null); openDrawer(shown.to_version); }} onClose={() => setNotice(null)} />;
+  const noticePart = shown && <GuidelineNoticeMessage notice={shown} place={place} onRead={() => { setNotice(null); openDrawer(shown.to_version); }} onClose={() => setNotice(null)} />;
 
   const version = drawer.version;
   const drawerPart = version !== null && <Drawer open={drawer.open} title={`Guidelines v${version}`} onClose={closeDrawer} returnFocusRef={returnFocus}
@@ -125,11 +135,11 @@ export function TaskGuidelines({ assignment, readOnly, children, onRefresh }: Ta
   return <>{children({ button: buttonPart, item: itemPart, notice: noticePart || null, drawer: drawerPart || null })}</>;
 }
 
-function GuidelineNoticeMessage({ notice, onRead, onClose }: { notice: GuidelineNotice; onRead: () => void; onClose: () => void }): JSX.Element {
+function GuidelineNoticeMessage({ notice, place, onRead, onClose }: { notice: GuidelineNotice; place: TaskGuidelinesProps["place"]; onRead: () => void; onClose: () => void }): JSX.Element {
   const read = <Button variant="quiet" size="sm" onClick={onRead}>Read guidelines v{notice.to_version}</Button>;
   if (notice.from_version === null) {
     return <InlineMessage tone="info" title={`This project has guidelines (v${notice.to_version})`} onDismiss={onClose}>
-      <p className="task-guidelines-notice-text">Read them before you start; they are available at any time under Guidelines in the toolbar.</p>
+      <p className="task-guidelines-notice-text">{`Read them before you start; they are available at any time under ${entryPlaces[place]}.`}</p>
       {read}
     </InlineMessage>;
   }

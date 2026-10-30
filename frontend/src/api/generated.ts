@@ -3099,6 +3099,11 @@ export interface components {
             unavailable: ("does_not_read" | "role_missing" | "inactive") | null;
             /** Already Assigned */
             already_assigned: number;
+            /**
+             * System Admin
+             * @default false
+             */
+            system_admin: boolean;
         };
         /** BatchPreview */
         BatchPreview: {
@@ -3648,6 +3653,8 @@ export interface components {
             added_by?: string | null;
             /** Consolidator */
             consolidator?: string | null;
+            /** Consolidation Reason */
+            consolidation_reason?: string | null;
             /** Workflow Revision */
             workflow_revision: number;
             /**
@@ -7576,6 +7583,8 @@ export interface components {
             reopened_at?: string | null;
             /** Reopen Reason */
             reopen_reason?: string | null;
+            /** Consolidation Reason */
+            consolidation_reason?: string | null;
             /**
              * Report Answered
              * @default false

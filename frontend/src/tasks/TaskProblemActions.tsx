@@ -118,7 +118,8 @@ export function TaskProblemActions({ assignment, onSaveBeforeReport, onRefresh, 
         {reports.map((report: ProblemReportView) => <ReporterReportCard key={report.report_id} report={report} assignment={assignment}
           confirm={confirm?.reportId === report.report_id ? confirm : null} onConfirmChange={setConfirm}
           busy={busy} onBusyChange={setBusy}
-          onUpdated={value => { put(value); void reload(true); }}
+          // A resume or withdrawal replaces the "Reported. Your task is paused" notice: the card states the outcome.
+          onUpdated={value => { setNotice(null); put(value); void reload(true); }}
           onConflict={() => { void reload(true); }}
           headingRef={element => { if (element) headings.current.set(report.report_id, element); else headings.current.delete(report.report_id); }} />)}
       </section>}
