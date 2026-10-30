@@ -2341,6 +2341,8 @@ details.case-version-controls > .btn { vertical-align: bottom; }
     flex: none;
     overflow: visible;
   }
+  /* The shell stacks only from 699 px: at exactly 700 px a row here collapses the main column to no width (#144). */
+  .shell-reading:has(.case-screen:not(.case-comparing) .case-workspace) > .shell-body { flex-direction: column; }
   .shell-main.density-reading > .case-screen:not(.case-comparing) { flex: none; height: auto; }
   .case-screen:not(.case-comparing) .case-workspace {
     display: flex;

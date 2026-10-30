@@ -13,6 +13,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- Whoever creates a project gets only the Lead role, no longer every role; existing projects keep their members. **Add me as annotator** and a lead's self-consolidation add the other roles when needed (#177).
+- Login without a remembered project: people without a lead role in any project land on **My tasks**, leads stay on **Projects** (#153).
 - The assign dialog works through the whole selection: reviews first, then annotation, one language at a time. It stays open after each step and after *Distribute evenly…*, says what comes next, shows up front what the selection needs and where you are, and a step can be skipped with *Skip this task*. The closing message names what is left unassigned and offers to select those cases (#218).
 - The Documents search finds any part of a case, external or document ID in any case (`fr100994` and `100994` find `FR100994`). The field now reads "Case ID…", since it never searched the words of a text (#216).
 - A search without hits in the open tab says so and offers its hits under All, with the search kept (`all_tab_shown` on the decision bar) (#216).
@@ -20,6 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- At a width of exactly 700 px the annotation editor collapsed to no width, so the Document tab showed no text (#144).
 - Opening the text list right after a bundle import no longer takes minutes and blocks the project: the query for each document's newest proposal set no longer depends on fresh planner statistics.
 - One slow read or one queued writer can no longer stop a project or the instance (#217). Web requests wait at most 20 s for a lock (`ONTOTATOR_LOCK_TIMEOUT_MS`) and run a statement for at most 60 s (`ONTOTATOR_STATEMENT_TIMEOUT_MS`); a full connection pool fails after 10 s. All three answer 503 `PROJECT_BUSY` with `Retry-After`, the work is rolled back, and the user reads that the project is busy and nothing was changed. Jobs, the CLI, migrations and backups have no limit.
 - `admin projects create --allowed-roots <id>=` allows every term, as its help says, instead of failing with exit 2 (#208).
