@@ -244,6 +244,35 @@ test("390 px: the shell header is one compact row (Sections, breadcrumb, Log out
   await evidence(page, "shell-header-390");
 });
 
+test("the Document tab shows the text at exactly 700 px, also after crossing the breakpoint (#144)", async ({ page }) => {
+  await page.setViewportSize({ width: 700, height: 800 });
+  await openT5(page);
+  const textFills = async () => {
+    await expect(paneTab(page, /^Document/)).toHaveAttribute("aria-pressed", "true");
+    const text = page.locator(".text-container");
+    await expect(text).toContainText(/\S/);
+    await text.scrollIntoViewIfNeeded();
+    // The shell stacks from 699 px, the panes from 700 px: in between the column once had no width.
+    expect((await text.boundingBox())!.width).toBe(700);
+    const line = await text.evaluate(element => {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      const box = range.getBoundingClientRect();
+      return { width: box.width, height: box.height, left: box.left, right: box.right };
+    });
+    expect(line.width).toBeGreaterThan(100);
+    expect(line.height).toBeGreaterThan(0);
+    expect(line.left).toBeGreaterThanOrEqual(0);
+    expect(line.right).toBeLessThanOrEqual(700);
+  };
+  await textFills();
+  await page.setViewportSize({ width: 701, height: 800 });
+  await page.setViewportSize({ width: 700, height: 800 });
+  await paneTab(page, /^Findings/).click();
+  await paneTab(page, /^Document/).click();
+  await textFills();
+});
+
 test("320 px reflow without horizontal scrolling in every pane", async ({ page }) => {
   // 320 × 640: the wrapping toolbar scrolls away; the findings rows stay reachable and clickable.
   await page.setViewportSize({ width: 320, height: 640 });

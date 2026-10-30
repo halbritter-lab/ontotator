@@ -90,7 +90,7 @@ test("Assigned to shows a person's open and submitted work, survives a reload an
   await expect(chip).toBeVisible();
   await expect(rows(page)).toHaveCount(3);
 
-  await page.getByRole("checkbox", { name: "Select all 2 filtered texts" }).click();
+  await page.getByRole("checkbox", { name: "Select all 3 filtered texts" }).click();
   await expect(rowBox(page, "FR100994", "en")).toBeChecked();
   await expect(rowBox(page, "FR100994", "fr")).toBeChecked();
   await expect(rowBox(page, "FR200100", "en")).toBeChecked();

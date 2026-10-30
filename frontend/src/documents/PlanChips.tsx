@@ -11,7 +11,7 @@ import { plural } from "../app/labels";
 import { errorMessage } from "../admin/errors";
 import { Button, Checkbox, InlineConfirm, InlineMessage, PlanChip, Textarea, type ToastMessage } from "../ui";
 import { runPlanUndo } from "./planUndo";
-import { documentsGroupId, documentsNotInPlanId } from "./RowCells";
+import { documentsGroupId } from "./RowCells";
 
 export type PlanFlag = "review" | "annotate";
 export interface PlanFlagState { review: boolean; annotate: boolean }
@@ -313,7 +313,7 @@ export function usePlanSaves({ projectKey, onAnnounce, onChanged, showToast }: P
       const active = document.activeElement;
       if (active != null && active !== document.body) return;
       if (focusChip({ case_id: pending.caseId, language: pending.language }, pending.flag)) return;
-      (document.getElementById(documentsNotInPlanId(pending.caseId)) ?? document.getElementById(documentsGroupId(pending.caseId)))?.focus();
+      document.getElementById(documentsGroupId(pending.caseId))?.focus();
     }, 0);
   };
 

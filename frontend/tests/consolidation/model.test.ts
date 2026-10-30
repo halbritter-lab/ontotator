@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { duplicatesText, fieldsToDecide, finalizationState, groupStatus, headerTitle, partialText, readOnlyText, submittedText, summaryText } from "../../src/consolidation/consolidationText";
 import type { ConsolidationGroupView } from "../../src/api/client";
-import { attachCandidates, choicesComplete, choose, comparisonRows, duplicateTerms, groupName, resolvePayload, resultLine, sameTermGroups, standaloneText, storedResult, takeFinding, type Choices } from "../../src/consolidation/groupModel";
+import { attachCandidates, choicesComplete, choose, comparisonRows, duplicateTerms, groupName, resolvePayload, resultLine, sameTermGroups, standaloneText, storedResult, type Choices } from "../../src/consolidation/groupModel";
 import { NO_MODIFIERS } from "../../src/consolidation/modifierSets";
 import { textOrder } from "../../src/consolidation/GroupList";
 import { ANA, BEN, CEM, decidedView, exampleGroups, exampleView, group, hypotoniaThree, LUC, member, mild, MOD_PEOPLE, MOD_TEXT, modSpan, recurrent, seizure, severe, span, TEXT, THREE, TOM } from "./fixtures";
@@ -62,7 +62,7 @@ const rowOf = (rows: ReturnType<typeof comparisonRows>, id: string) => rows.find
 describe("comparison model", () => {
   it("comparison rows mark term and assertion as conflicts and the rest as agreed", () => {
     const rows = comparisonRows(hypotoniaThree(), THREE, TEXT, {});
-    expect(rows.map(row => row.id)).toEqual(["term", "assertion", "experiencer", "temporality", "text", "whole"]);
+    expect(rows.map(row => row.id)).toEqual(["term", "assertion", "experiencer", "temporality", "text"]);
     expect(rowOf(rows, "term").conflict).toBe(true);
     expect(rowOf(rows, "assertion").conflict).toBe(true);
     expect(rowOf(rows, "experiencer")).toMatchObject({ conflict: false, agreed: "Patient (all agree)", label: "Experiencer" });
@@ -109,12 +109,10 @@ describe("comparison model", () => {
     expect(resultLine(values, THREE, TEXT, {}).saved).toBe("Result: 1 finding, Hypotonia (HP:0001252), Assertion not chosen yet, Patient, Current");
   });
 
-  it("taking a whole finding fills every row", () => {
+  it("choosing one person's values marks them and fills the result", () => {
     const group = hypotoniaThree();
-    const choices = takeFinding(group, group.members[2]);
+    const choices = { term: group.members[2].term_id, assertion: "present" };
     const rows = comparisonRows(group, THREE, TEXT, choices);
-    expect(rowOf(rows, "whole").cells.map(cell => cell.display)).toEqual(["Take Tom's finding", "Take Mia's finding", "Take Ali's finding"]);
-    expect(rowOf(rows, "whole").cells[2].chosen).toBe(true);
     expect(rowOf(rows, "term").cells.map(cell => cell.chosen)).toEqual([false, false, true]);
     expect(resultLine(group, THREE, TEXT, choices)).toMatchObject({
       finding: "Axial hypotonia (HP:0008936), Present, Patient, Current",
@@ -130,7 +128,7 @@ describe("comparison model", () => {
     expect(resolvePayload(group, { term: "HP:0001252", assertion: "absent" })).toEqual({
       action: "choose", choice: { term_id: "HP:0001252", axes: { assertion: "absent" }, span_from_input_id: "in-tom" },
     });
-    expect(resolvePayload(group, takeFinding(group, group.members[2])).choice?.span_from_input_id).toBe("in-ali");
+    expect(resolvePayload(group, { term: group.members[2].term_id, assertion: "present" }).choice?.span_from_input_id).toBe("in-ali");
     expect(choicesComplete(comparisonRows(group, THREE, TEXT, { term: "HP:0001252" }), { term: "HP:0001252" })).toBe(false);
     expect(choicesComplete(comparisonRows(group, THREE, TEXT, {}), { term: "HP:0008936", assertion: "present" })).toBe(true);
   });
@@ -147,16 +145,9 @@ describe("comparison model", () => {
 
   it("an axis a person left empty is sent as null", () => {
     const group = hypotoniaThree({ differing_axes: ["assertion", "temporality"] }, { ali: { axes: { assertion: "present", experiencer: "patient" } } });
-    const choices = takeFinding(group, group.members[2]);
+    const choices = { term: group.members[2].term_id, assertion: "present", temporality: "" };
     expect(rowOf(comparisonRows(group, THREE, TEXT, choices), "temporality").cells[2].display).toBe("Not specified");
     expect(resolvePayload(group, choices).choice?.axes).toEqual({ assertion: "present", temporality: null });
-  });
-
-  it("taking a finding in a group without conflicts chooses that person's finding", () => {
-    const agreed = exampleGroups().find(value => value.group_id === "g-dd")!;
-    expect(resolvePayload(agreed, takeFinding(agreed, agreed.members[1]))).toEqual({
-      action: "choose", choice: { term_id: "HP:0001263", span_from_input_id: "in-dt", axes: {} },
-    });
   });
 
   it("the text row is keyed by person: identical spans with different notes are separate choices", () => {
@@ -273,12 +264,11 @@ describe("modifiers row", () => {
     expect(resultLine(value, P, MOD_TEXT, ben).finding).toBe("Seizure (HP:0001250), Present, Patient, Current, modifiers: Recurrent, Severe “schwere ”");
   });
 
-  it("one check completes the row; a modifiers-only group has one field and no Whole finding row (S4)", () => {
+  it("one check completes the row; a modifiers-only group has one field (S4)", () => {
     const value = s4();
     const rows = comparisonRows(value, P, MOD_TEXT, {});
     expect(rows.filter(row => row.conflict).map(row => row.id)).toEqual(["modifiers"]);
     expect(fieldsToDecide(rows.filter(row => row.conflict).length)).toBe("1 field to decide");
-    expect(rows.some(row => row.kind === "whole")).toBe(false);
     expect(choicesComplete(rows, {})).toBe(false);
     const choices = choose(value, {}, "modifiers", idOf(mods(value), "Severe “schwere”"));
     expect(choicesComplete(comparisonRows(value, P, MOD_TEXT, choices), choices)).toBe(true);
@@ -330,18 +320,12 @@ describe("modifiers row", () => {
     expect(resolvePayload(values, { assertion: "absent" }).choice?.modifiers).toEqual([{ term_id: "HP:0012828", segments: [] }]);
   });
 
-  it("Whole finding stays with other conflicts and takes values and modifiers (S10)", () => {
+  it("modifiers conflict alongside other conflicts (S10)", () => {
     const value = seizure("g", ["values_differ", "span_differs", "modifiers_differ"], [[ANA, [severe("schwere")]],
       [BEN, [], { spans: [modSpan("schwere Krampfanfälle")], axes: { assertion: "uncertain", experiencer: "patient", temporality: "current" } }]],
     { differing_axes: ["assertion"], span_conflict: true });
     const rows = comparisonRows(value, P, MOD_TEXT, {});
     expect(rows.filter(row => row.conflict).map(row => row.id)).toEqual(["assertion", "text", "modifiers"]);
-    expect(rowOf(rows, "whole").cells.map(cell => cell.display)).toEqual(["Take Ana's finding", "Take Ben's finding"]);
-    const ana = takeFinding(value, value.members[0]);
-    expect(pressed(mods(value, ana))).toEqual([[true], [false]]);
-    expect(resolvePayload(value, ana).choice).toMatchObject({ span_from_input_id: "g-0", axes: { assertion: "present" },
-      modifiers: [{ term_id: "HP:0012828", segments: [{ start: modSpan("schwere")[0], end: modSpan("schwere")[1] }] }] });
-    expect(resolvePayload(value, takeFinding(value, value.members[1])).choice?.modifiers).toEqual([]);
   });
 
   it("term differs: the Modifiers row compares all members, decided on its own (S11)", () => {

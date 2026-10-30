@@ -179,7 +179,6 @@ it.each(["open", "submitted"] as const)("after a submit with a %s neighbor opens
     await waitFor(() => expect(window.location.hash).toBe("#/?status=all"));
     expect(open).not.toHaveBeenCalledWith(4);
   }
-  expect(screen.queryByRole("dialog", { name: "Text submitted" })).toBeNull();
   expect(first.read_only).toBe(false);
   // The sidebar count reloads after the submit and no longer counts the submitted task (#156).
   expect(await screen.findByRole("link", { name: `My tasks (${status === "open" ? 1 : 0})` })).toBeTruthy();

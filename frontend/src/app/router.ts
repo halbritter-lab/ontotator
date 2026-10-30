@@ -60,8 +60,8 @@ export interface ProjectDocumentsQuery {
 export type PanelStage = "review" | "annotation" | "final";
 export const PANEL_STAGES: readonly PanelStage[] = ["review", "annotation", "final"];
 /** Tabs of the row panel (route `panel_tab`). */
-export type PanelTab = "activity" | "versions" | "details" | "history";
-export const PANEL_TABS: readonly PanelTab[] = ["activity", "versions", "details", "history"];
+export type PanelTab = "activity" | "details" | "history";
+export const PANEL_TABS: readonly PanelTab[] = ["activity", "details", "history"];
 
 /** Layer keys of the text view (`show`, `compare_show`): `text` | `proposals` | `submission:<id>` | `own:<id>` | `final:<id>`. */
 export const isLayerKey = (value: string): boolean => /^(?:text|proposals|(?:submission|own|final):.+)$/.test(value);
@@ -124,7 +124,7 @@ export type Route =
   | { name: "adminUsers" }
   | { name: "adminOntologies" }
   | { name: "projectNew" }
-  /** Every project of the user (F8); the landing when no last-used project is accessible. */
+  /** Every project of the user (F8); the landing of a lead when no last-used project is accessible. */
   | { name: "projects" }
   | { name: "projectSettings"; key: string; section?: SettingsSection }
   | ({ name: "projectDocuments"; key: string } & ProjectDocumentsQuery)

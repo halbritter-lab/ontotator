@@ -48,7 +48,7 @@ import { documentsGroupId, documentsRowId, isPlainClick, type DocumentsRowPart, 
 import type { TextVersionsTools } from "../documents/TextVersions";
 import { workText } from "../documents/labels";
 import { isActiveRow } from "../documents/stageLabels";
-import { caseOfTextKey, languageOfTextKey, MAX_SELECTION_CASES as MAX_SELECTION, textKeyOf, useTextSelection } from "../documents/useTextSelection";
+import { caseOfTextKey, languageOfTextKey, MAX_SELECTION_CASES as MAX_SELECTION, rowRefOf, textKeyOf, useTextSelection } from "../documents/useTextSelection";
 import { useDocumentRows } from "../documents/useDocumentRows";
 import { notifyDocumentsChanged } from "../documents/documentsEvents";
 import { clearVisits, forgetVisit, recordDecision, rememberShown, retainedKeys, rowBadges, type RowBadge } from "../documents/visitState";
@@ -126,10 +126,10 @@ interface ResolveOptions { rowKey: string; mode: "resolve" | "not_accepted" }
 interface PanelOpenOptions { opener?: HTMLElement | null; focus?: boolean; changeFinal?: boolean }
 /** Where the text card goes next: another row, segment (`panel_stage`) or view (`panel_tab`). */
 interface CardTarget { key: string; stage?: PanelStage; tab?: PanelTab }
-/** Route `panel_stage` ↔ card segment, `panel_tab` ↔ card view (`activity` and `versions` show the path). */
+/** Route `panel_stage` ↔ card segment, `panel_tab` ↔ card view (`activity` shows the path, as does an old `versions` link). */
 const SEGMENT_OF: Readonly<Record<PanelStage, SegmentId>> = { review: "translation", annotation: "annotation", final: "finalization" };
 const STAGE_OF: Readonly<Record<SegmentId, PanelStage>> = { translation: "review", annotation: "annotation", finalization: "final" };
-const VIEW_OF: Readonly<Record<PanelTab, CardView>> = { activity: "path", versions: "path", history: "history", details: "details" };
+const VIEW_OF: Readonly<Record<PanelTab, CardView>> = { activity: "path", history: "history", details: "details" };
 
 /** The focused element (the control that ran a row action), as the row panel's opener. */
 const focusedElement = (): HTMLElement | null => (document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null);
@@ -169,9 +169,15 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   const request = rowsRequest(query);
   const requestIdentity = JSON.stringify(request);
   const filterIdentity = JSON.stringify({ ...request, page: undefined, case: undefined });
+  // Text selection (VD4, spec D17): a set of texts "{case}:{language}" that survives paging and filter changes.
+  const selection = useTextSelection();
+  // Show selected (issue 210): the route keeps the filters, so leaving restores them; `page` is the page to return to.
+  const [selectedView, setSelectedView] = useState<{ page: string | undefined } | null>(null);
+  const showSelected = selectedView !== null;
+  const selectedRows = useMemo(() => [...selection.keys].map(rowRefOf), [selection.keys]);
   // Visit state (Resolved / Changed badges) exists only under a decision or segment filter; it is keyed
   // by the filters without page and case, so paging keeps the badges and a filter change starts a new visit.
-  const decisionActive = request.decision !== undefined || request.final === "missing" || request.segment !== undefined;
+  const decisionActive = !showSelected && (request.decision !== undefined || request.final === "missing" || request.segment !== undefined);
   const [retainState, setRetainState] = useState<{ identity: string; keys: readonly string[] } | null>(null);
   const retain = !decisionActive ? []
     : retainState?.identity === filterIdentity ? retainState.keys : retainedKeys(projectKey, filterIdentity);
@@ -186,7 +192,8 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       .finally(() => setVisitRecorded(true));
   }, [projectKey]);
   // `useDocumentRows` is typed with one value per filter; the client sends lists as repeated parameters.
-  const rows = useDocumentRows(projectKey, (retain.length ? { ...request, retain: [...retain] } : request) as DocumentRowsQuery, { enabled: visitRecorded });
+  const rowsQuery = showSelected ? { selected: selectedRows, page: request.page, sort: request.sort } : retain.length ? { ...request, retain: [...retain] } : request;
+  const rows = useDocumentRows(projectKey, rowsQuery as DocumentRowsQuery, { enabled: visitRecorded });
   const page: DocumentRowsPage | null = rows.page;
 
   // The page's one polite live region (its own component: an announcement re-renders only the region).
@@ -227,7 +234,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   const shownFilters = useRef<string | null>(null);
   useEffect(() => {
     if (!page) return;
-    if (shownFilters.current !== null && shownFilters.current !== filterIdentity) announce(`${plural(page.group_count, "text")} shown`);
+    if (shownFilters.current !== null && shownFilters.current !== filterIdentity) announce(`${plural(page.text_count, "text")} shown`);
     shownFilters.current = filterIdentity;
     // Only a new page (never a query change alone) can carry the new count.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -261,6 +268,22 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   };
   const changeFilter = (patch: ProjectDocumentsQuery) => navigateDocuments({ ...patch, page: undefined, select: undefined });
 
+  const leaveSelected = () => {
+    if (!selectedView) return;
+    setSelectedView(null);
+    navigateDocuments({ page: selectedView.page });
+  };
+  const toggleShowSelected = () => {
+    if (showSelected) { leaveSelected(); return; }
+    setSelectedView({ page: query.page });
+    navigateDocuments({ page: undefined });
+    announce(`${plural(selection.keys.size, "selected text")} shown`);
+  };
+  // A new filter or tab starts a new view; nothing left to show ends this one. The order is not a new view.
+  const viewIdentity = JSON.stringify({ ...request, page: undefined, case: undefined, sort: undefined });
+  useEffect(() => { setSelectedView(null); }, [viewIdentity]);
+  useEffect(() => { if (selection.keys.size === 0) leaveSelected(); }, [selection.keys.size]); // eslint-disable-line react-hooks/exhaustive-deps -- only an emptied selection ends the view
+
   // Search: its own component, so a keystroke re-renders only the field.
   const search = useRef<DocumentsSearchHandle>(null);
 
@@ -270,7 +293,8 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   const people = useMemo(() => new Map((inventory?.members ?? []).filter(member => member.display_name?.trim())
     .map(member => [member.pseudonym, member.display_name.trim()] as const)), [inventory]);
   const members = useMemo(() => (inventory?.members ?? []).map(member => member.pseudonym), [inventory]);
-  const chips = chipsOf(query, people);
+  // The list ignores the filters while it shows the selection, so their chips make way for this one.
+  const chips = showSelected ? [{ id: "selected", label: "Selected texts", patch: {} }] : chipsOf(query, people);
   const chipIdentity = chips.map(chip => chip.id).join("\n");
   useEffect(() => {
     if (chipFocus === null) return;
@@ -283,7 +307,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   }, [chipIdentity]);
   const removeChip = (index: number) => {
     setChipFocus(index);
-    changeFilter(chips[index].patch);
+    if (showSelected) leaveSelected(); else changeFilter(chips[index].patch);
   };
   const clearAll = () => {
     search.current?.reset();
@@ -408,8 +432,6 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
-  // Text selection (VD4, spec D17): a set of texts "{case}:{language}" that survives paging and filter changes.
-  const selection = useTextSelection();
   const [limitNote, setLimitNote] = useState<string | null>(null);
   const [idsDialogOpen, setIdsDialogOpen] = useState(false);
   const [allFiltered, setAllFiltered] = useState<{ identity: string; keys: readonly string[] } | null>(null);
@@ -449,11 +471,12 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     }, (failure: unknown) => setSelectionError(failure));
   };
   // Header checkbox: every text matching the current filters, across pages (server list, at most 2000 cases).
-  const filteredTotal = page?.group_count ?? 0;
+  const filteredCases = page?.group_count ?? 0;
+  const filteredTexts = page?.text_count ?? 0;
   const allSelected = allFiltered !== null && allFiltered.identity === filterIdentity && allFiltered.keys.length > 0 && allFiltered.keys.every(key => selection.keys.has(key));
-  const selectAllLabel = filteredTotal > MAX_SELECTION
-    ? `Select the first ${MAX_SELECTION} of ${filteredTotal} filtered texts`
-    : filteredTotal === 1 ? "Select the only filtered text" : `Select all ${filteredTotal} filtered texts`;
+  const selectAllLabel = filteredCases > MAX_SELECTION
+    ? `Select the texts of the first ${MAX_SELECTION} of ${filteredCases} filtered cases`
+    : filteredTexts === 1 ? "Select the only filtered text" : `Select all ${filteredTexts} filtered texts`;
   const filters = useMemo(() => selectionFilters(request), [requestIdentity]); // eslint-disable-line react-hooks/exhaustive-deps -- requestIdentity stands for request
   const toggleAll = async () => {
     if (selectingAll) return;
@@ -652,7 +675,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       setPanelDirty(false);
       decisionKey.current = null;
       setReleasedKey(rowKeyOf(row));
-      // The lead consolidating themselves gets "Open consolidation" (and the role sentence) instead of the launcher's link.
+      // The lead consolidating themselves gets "Open consolidation" (and the role sentence).
       const toast = consolidationStartedToast(rowName(row), round.assignment_id, started);
       showToast({ message: toast.message, ...(toast.route ? { actionLabel: toast.actionLabel, onAction: () => onNavigate(toast.route!) } : {}) });
       refreshAll();
@@ -690,12 +713,12 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     setShowNotInPlan(value);
     try { window.localStorage.setItem(notInPlanKey, value ? "1" : "0"); } catch { /* Blocked storage: not remembered. */ }
   };
-  const notInPlanShown = showNotInPlan && activeTab(query) === "all";
+  const notInPlanShown = showSelected || (showNotInPlan && activeTab(query) === "all");
   // Texts outside the plan in the current filters: the plan facet's "not in plan" minus the undecided rows it also counts.
   const planFacet = page?.bar.facets?.plan;
   const notInPlanCount = Math.max(0, (planFacet?.not_in_plan ?? 0) - (planFacet?.not_decided ?? 0));
   // The wide table of All leaves them out while the switch is off: the count says "246 of 307" (issue 198).
-  const hiddenNotInPlanCount = !narrow && activeTab(query) === "all" && !showNotInPlan ? Math.min(notInPlanCount, page?.bar.shown ?? 0) : 0;
+  const hiddenNotInPlanCount = !narrow && activeTab(query) === "all" && !notInPlanShown ? Math.min(notInPlanCount, page?.bar.shown ?? 0) : 0;
   // A status-column sort of the loaded page (the server sorts by Text and Last activity only).
   const [columnSort, setColumnSort] = useState<ColumnSort | null>(null);
   const shownRows = useMemo(() => page ? tableRows(page, notInPlanShown, columnSort) : [], [page, notInPlanShown, columnSort]);
@@ -790,6 +813,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
 
   /** No rows: the search hit nothing here (All may still have hits), the tab is empty (tab counts ignore facets and search), or the filters exclude every row of the tab. */
   const emptyState = (bar: DocumentRowsPage["bar"]): JSX.Element => {
+    if (showSelected) return <EmptyState title="The selected texts are no longer in this project." />;
     if (query.q && !emptyProject) {
       if (tab === "all" || !bar.all_tab_shown) return <EmptyState title="No texts match this search." />;
       return <EmptyState title="No texts in this tab match this search." action={<RouteLink route={tabRoute(projectKey, query, "all")} className="btn btn-secondary" onNavigate={navigateLink}>{`Show ${plural(bar.all_tab_shown, "text")} under All`}</RouteLink>} />;
@@ -825,14 +849,15 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
         empty={<EmptyState title="No texts in plan on this page." action={notInPlanCount > 0 ? <Button size="sm" onClick={() => changeShowNotInPlan(true)}>Show texts not in plan</Button> : undefined} />} />;
     }
     // Floats at the bottom of the viewport; placed above the table (below 700 px after the cards) to keep the focus order.
-    const selectionBar = <SelectionBar projectKey={projectKey} keys={selection.keys} filters={filters} refresh={page} narrow={narrow} limitNote={limitNote}
+    const selectionBar = <SelectionBar projectKey={projectKey} keys={selection.keys} filters={showSelected ? {} : filters} showSelected={showSelected} onToggleShowSelected={toggleShowSelected}
+      refresh={page} narrow={narrow} limitNote={limitNote}
       onClear={clearSelection} onAssign={openAssignCases} showToast={showToast} onAnnounce={announce} onChanged={() => reloadAfterAction()}
       onRevisions={revisions => { for (const [caseId, value] of Object.entries(revisions)) planSaves.noteRevision(caseId, value); }} />;
     // While another filter or page loads, the previous page stays (busy) so the bar and paging links keep focus.
     content = <>
       {rows.error != null && <InlineMessage tone="error">Could not refresh. {errorMessage(rows.error)} <Button size="sm" onClick={rows.retry}>Retry</Button></InlineMessage>}
       {!emptyProject && <div className="documents-selection-tools">
-        {page.groups.length > 0 && <Checkbox id="documents-select-all" className="checkbox-target" label={selectAllLabel} checked={allSelected}
+        {page.groups.length > 0 && !showSelected && <Checkbox id="documents-select-all" className="checkbox-target" label={selectAllLabel} checked={allSelected}
           // Some texts selected, not all filtered ones: mixed (announced "mixed", #47 A-20).
           ref={element => { if (element) element.indeterminate = !allSelected && selection.keys.size > 0; }}
           aria-busy={selectingAll || undefined} onChange={() => { void toggleAll(); }} />}
@@ -864,10 +889,10 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       {chips.length > 0 && <div ref={chipList} className="documents-filter-chips">
         {chips.map((chip, index) => <FilterChip key={chip.id} label={chip.label} language={chip.language} onRemove={() => removeChip(index)} />)}
       </div>}
-      {filtersActive(query) && <Button size="sm" onClick={clearAll}>Clear all</Button>}
-      {page && !narrow && tab === "all" && <Checkbox id="documents-show-not-in-plan" className="checkbox-target" label={`Show texts not in plan (${notInPlanCount})`}
+      {!showSelected && filtersActive(query) && <Button size="sm" onClick={clearAll}>Clear all</Button>}
+      {page && !narrow && !showSelected && tab === "all" && <Checkbox id="documents-show-not-in-plan" className="checkbox-target" label={`Show texts not in plan (${notInPlanCount})`}
         checked={showNotInPlan} onChange={event => changeShowNotInPlan(event.currentTarget.checked)} />}
-      {page && (filtersActive(query) || hiddenNotInPlanCount > 0) && <p className="documents-filter-count">{`${page.bar.shown - hiddenNotInPlanCount} of ${tabCount(page.bar, tab)}`}</p>}
+      {page && !showSelected && (filtersActive(query) || hiddenNotInPlanCount > 0) && <p className="documents-filter-count">{`${page.bar.shown - hiddenNotInPlanCount} of ${tabCount(page.bar, tab)}`}</p>}
     </Toolbar>}
     {loadNotices.map(message => <InlineMessage key={message} tone="error">{message}</InlineMessage>)}
     <div id={PANEL_ID} {...(page && !emptyProject ? { role: "tabpanel", "aria-labelledby": tabId(PANEL_ID, tab) } : {})}>{content}</div>

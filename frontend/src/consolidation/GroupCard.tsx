@@ -1,7 +1,7 @@
 /**
  * One finding group of the consolidation view (spec §3, mockup variant B). Collapsed: one line with the conflict mark,
  * the group name (the text excerpt) and its state ("2 fields to decide", "agreed", "decided"). Expanded: the
- * comparison table (columns = people, rows = term, axes, text, note, whole finding; a check button takes a value in a
+ * comparison table (columns = people, rows = term, axes, text, note; a check button takes a value in a
  * conflicting row), the result line that always spells out the one finding, "+ note", "Guidelines unclear here" and
  * the actions. A choice only stages (the result line updates, "Not saved yet."); one "Keep" saves once every
  * conflicting row has a choice (M2 M-7d, as DN-11 for modifiers). Actions: Keep, "Not in result" and "More…" (Edit
@@ -20,7 +20,7 @@ import { Button, Checkbox, InlineConfirm, MenuButton, Select, Textarea } from ".
 import { IconUndo, IconWarning } from "../ui/icons";
 import { ComparisonTable } from "./ComparisonTable";
 import { axisLabel, duplicateTermHint, groupStatus, labelWithQuote, keepLabel, namesOf, NOT_IN_RESULT, partialText, REOPEN_EDITED_WARNING, standaloneWarning } from "./consolidationText";
-import { absentPeople, attachCandidates, choicesComplete, choose, comparisonRows, groupName, hasKind, isStandalone, memberSets, needsTerm, presentPeople, resolvePayload, resultLine, sameTermGroups, standaloneText, storedResult, type Choices, type ComparisonRow, type OtherTerm } from "./groupModel";
+import { absentPeople, attachCandidates, choicesComplete, choose, comparisonRows, groupName, hasKind, isStandalone, memberSets, needsTerm, presentPeople, resolvePayload, resultLine, sameTermGroups, standaloneText, storedResult, type Choices, type OtherTerm } from "./groupModel";
 import { crossLinks, setText, type ModifierView } from "./modifierSets";
 import { ResultLine } from "./ResultLine";
 import { TermPicker, useTermSearch } from "./TermPicker";
@@ -248,9 +248,7 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
       }} />
   </div>;
 
-  // M-7d: no "Whole finding" shortcut row; a choice per row stages the same result.
-  const shownRows = (all: readonly ComparisonRow[]) => all.filter(row => row.kind !== "whole");
-  const table = (tableReadOnly: boolean, tableRows = shownRows(rows)) => <ComparisonTable name={name} group={group} people={people} rows={tableRows} readOnly={tableReadOnly}
+  const table = (tableReadOnly: boolean, tableRows = rows) => <ComparisonTable name={name} group={group} people={people} rows={tableRows} readOnly={tableReadOnly}
     busy={busy} onChoose={onChoose} />;
 
   const crossLinkHints = links.map(link => <p key={`${link.personId}-${link.groupId}-${link.termLabel}`} className="cons-muted cons-crosslink">
@@ -311,7 +309,7 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
     {attached.map(value => <p key={value.group_id} className="cons-note-text">
       {`Attached modifier: ${standaloneText(value, text)} from ${namesOf(presentPeople(value, people))}`}</p>)}
     {stored && <ResultLine line={stored.line} />}
-    {table(true, shownRows(comparisonRows(group, people, text, stored?.choices ?? {})))}
+    {table(true, comparisonRows(group, people, text, stored?.choices ?? {}))}
     {!readOnly && <>
       {confirmReopen ? <InlineConfirm title="Reopen this group?" message={REOPEN_EDITED_WARNING} confirmLabel="Reopen" busy={busy}
         onCancel={() => setConfirmReopen(false)} onConfirm={() => { void props.onReopen().then(() => setConfirmReopen(false)); }} />

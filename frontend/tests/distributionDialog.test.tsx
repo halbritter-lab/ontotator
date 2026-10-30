@@ -5,7 +5,7 @@ import { DistributionDialog } from "../src/admin/DistributionDialog";
 import { assignment, deferred, documents, members, proposal } from "./assignmentFixtures";
 beforeEach(() => { vi.spyOn(api, "listCases").mockResolvedValue([]); vi.spyOn(api, "listMembers").mockResolvedValue(members); vi.spyOn(api, "listAssignments").mockResolvedValue([]); vi.spyOn(api, "proposeDistribution").mockResolvedValue(proposal); vi.spyOn(api, "createAssignments").mockResolvedValue({ created: [assignment], refused: [] }); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
-const props = () => ({ projectKey: "p/key", documents, onClose: vi.fn(), onChanged: vi.fn() });
+const props = () => ({ projectKey: "p/key", documents, task: "annotate" as const, onClose: vi.fn(), onChanged: vi.fn() });
 async function propose() { fireEvent.change(await screen.findByLabelText(/^People per document/), { target: { value: "2" } }); await waitFor(() => expect(screen.getByRole("button", { name: "Propose" })).toHaveProperty("disabled", false)); fireEvent.click(screen.getByRole("button", { name: "Propose" })); await screen.findByText("Proposal"); }
 it("shows distinct slots, every unassignable and actual original load before confirmation", async () => {
   render(<DistributionDialog {...props()} />); await propose();
@@ -83,10 +83,10 @@ it("prevents duplicate proposals and ignores replies after unmount", async () =>
   const pending = deferred<typeof proposal>(); vi.mocked(api.proposeDistribution).mockReturnValue(pending.promise);
   const options = props(); const view = render(<DistributionDialog {...options} />); const button = await screen.findByRole("button", { name: "Propose" }); fireEvent.click(button); fireEvent.click(button); expect(api.proposeDistribution).toHaveBeenCalledOnce(); view.unmount(); await act(async () => { pending.resolve(proposal); }); expect(options.onChanged).not.toHaveBeenCalled();
 });
-it("labels people in the identity format with open tasks and accepts a preset task", async () => {
+it("labels people in the identity format with open tasks and shows the fixed task as text", async () => {
   vi.mocked(api.listMembers).mockResolvedValue(members.map(member => member.username === "bob" ? { ...member, open_tasks: { translation_review: 1, annotate: 2, review: 0 } } : member));
   render(<DistributionDialog projectKey="p/key" documents={[{ document_id: "z/doc", language: "en" }]} task="annotate" onClose={vi.fn()} onChanged={vi.fn()} />);
-  expect((await screen.findByLabelText("Task") as HTMLSelectElement).value).toBe("annotate");
+  expect(await screen.findByText("Task: Annotation")).toBeDefined();
   await waitFor(() => expect(screen.getByRole("button", { name: "Propose" })).toHaveProperty("disabled", false));
   fireEvent.click(screen.getByRole("button", { name: "Propose" })); await screen.findByText("Proposal");
   expect(screen.getAllByRole("option", { name: "Bob (B) — en, de, 3 open tasks" }).length).toBeGreaterThan(0);

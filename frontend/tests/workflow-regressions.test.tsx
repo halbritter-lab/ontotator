@@ -152,7 +152,7 @@ it("submits the API payload and preserves its envelope through a lost-response r
    document_checked: true,
  });
  fireEvent.click(screen.getByText(/Retry|Erneut versuchen/i));
- await waitFor(() => expect(screen.getByRole("dialog", { name: "Text submitted" })).toBeDefined());
+ await screen.findByText(/^Submitted/);
  expect(submit.mock.calls[1][1]).toEqual(submit.mock.calls[0][1]);
 });
 
@@ -394,30 +394,6 @@ it("uses the search event when assigning a candidate and trusts obsolete metadat
  fireEvent.click(screen.getByText("Candidate"));
  await waitFor(() => expect(edit).toHaveBeenCalled());
  expect(edit.mock.calls[0][1].payload).toEqual({ command: "set_term", annotation_id: "same", term_id: "HP:4", search_event_id: "search-event" });
-});
-
-it("exposes an immutable historical submission", () => {
- const view = baseView();
- view.submissions = [{
-   format_version: "ontotator-work-package/v2",
-   submission_id: "historical",
-   created_at: "yesterday",
-   draft_revision: 1,
-   snapshots: [proposal("old", "HP:old")],
-   decisions: [],
-   checked_layer_ids: ["phenotype"],
-   document_checked: true,
-   origin_key: key,
-   scope,
-   targets: view.targets,
- }];
- render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
- fireEvent.click(screen.getByRole("button", { name: "Submission 1, Date unavailable" }));
- const historical = screen.getByRole("dialog", { name: /Historical submission/ });
- fireEvent.click(within(historical).getByText("Technical details"));
- expect(within(historical).getByText("historical")).toBeDefined();
- expect(screen.getByRole("dialog", { name: /Historical submission|Historische Abgabe/i })).toBeDefined();
- expect(screen.getByText("HP:old")).toBeDefined();
 });
 
 it("starts a write enqueued by the previous caller continuation", async () => {

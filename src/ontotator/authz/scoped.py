@@ -24,7 +24,7 @@ from ontotator.assignments.service import TASK_FOR_MODE, Assignment, AssignmentS
 from ontotator.auth.audit import Actor, record_audit
 from ontotator.auth.authority import lock_user_authority
 from ontotator.authz.memberships import grant_roles
-from ontotator.authz.policy import ROLES, Access, Action, can, may_take
+from ontotator.authz.policy import Access, Action, can, may_take
 from ontotator.authz.versions import (
     require_proposals,
     text_layers,
@@ -121,7 +121,7 @@ class ScopedRepository(Repository):
     """A ``Repository`` limited to the projects ``access`` may see.
 
     With an ``actor`` (the API passes the logged-in user), a project this
-    repository creates gets its creator as a member with every role.
+    repository creates gets its creator as its lead.
     """
 
     def __init__(
@@ -374,7 +374,7 @@ class ScopedRepository(Repository):
 
         The same refusal for a missing and a foreign project, so neither is
         revealed. A new project is audited as ``project.create`` and its
-        creator becomes a member with every role, in the creating transaction.
+        creator becomes its lead, in the creating transaction.
         """
         key = package.manifest.package_id
         if not (
@@ -402,7 +402,7 @@ class ScopedRepository(Repository):
                     select(UserRow.username).where(UserRow.id == actor.user_id)
                 ).scalar_one()
                 grant_roles(
-                    conn, actor, project_id, actor.user_id, username, ROLES, now
+                    conn, actor, project_id, actor.user_id, username, ["lead"], now
                 )
             if on_create is not None:
                 on_create(conn, project_id)
@@ -421,7 +421,7 @@ class ScopedRepository(Repository):
     ) -> None:
         """Create a project (system admins only), audited as ``project.create``.
 
-        A creating user becomes a member with every role, as for
+        A creating user becomes its lead, as for
         :meth:`import_package`.
         """
         if not can(self.access, Action.CREATE_PROJECT):
@@ -453,7 +453,7 @@ class ScopedRepository(Repository):
                     select(UserRow.username).where(UserRow.id == actor.user_id)
                 ).scalar_one()
                 grant_roles(
-                    conn, actor, project_id, actor.user_id, username, ROLES, now
+                    conn, actor, project_id, actor.user_id, username, ["lead"], now
                 )
             if on_create is not None:
                 on_create(conn, project_id)

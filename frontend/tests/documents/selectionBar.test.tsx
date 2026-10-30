@@ -54,10 +54,21 @@ it("shows count, common next step, hidden count and Clear selection", async () =
   render(<Harness />);
   expect(within(bar()).getByText("20 texts in 20 cases selected")).toBeTruthy();
   expect(await within(bar()).findByText(", next step: Assign translation review (de)")).toBeTruthy();
-  expect(within(bar()).getByText(", 3 not shown with these filters")).toBeTruthy();
+  expect(within(bar()).getByText("(3 texts not shown)")).toBeTruthy();
   expect(api.selectionSummary).toHaveBeenCalledWith("p", { rows }, filters);
   fireEvent.click(within(bar()).getByRole("button", { name: "Clear selection" }));
   expect(screen.queryByRole("region", { name: "Selection" })).toBeNull();
+});
+
+it("names hidden source texts in one wording, and toggles Show selected", async () => {
+  vi.spyOn(api, "selectionSummary").mockResolvedValue(summary({ not_shown: 2, not_shown_sources: 2 }));
+  const onToggleShowSelected = vi.fn();
+  render(<Harness initial={["case-0101:en", "case-0101:de"]} onToggleShowSelected={onToggleShowSelected} />);
+  expect(await within(bar()).findByText("(2 source texts not shown)")).toBeTruthy();
+  const toggle = within(bar()).getByRole("button", { name: "Show selected" });
+  expect(toggle.getAttribute("aria-pressed")).toBe("false");
+  fireEvent.click(toggle);
+  expect(onToggleShowSelected).toHaveBeenCalledOnce();
 });
 
 it("counts texts in cases", () => {
@@ -76,9 +87,9 @@ it("shown with one selected text (R-3)", () => {
   expect(within(bar()).getByRole("button", { name: "Assign…" })).toBeTruthy();
 });
 
-it("keeps three stable actions; the plan presets live in Plan… (M-1)", () => {
+it("keeps four stable actions; the plan presets live in Plan… (M-1)", () => {
   render(<Harness initial={["case-0101:de", "case-0102:de"]} />);
-  expect(within(bar()).getAllByRole("button").map(button => button.textContent)).toEqual(["Assign…", "Plan…", "Clear selection"]);
+  expect(within(bar()).getAllByRole("button").map(button => button.textContent)).toEqual(["Assign…", "Plan…", "Show selected", "Clear selection"]);
   expect(bar().textContent).not.toMatch(/\bReview\b|Annotation review|Independent annotation|Translation review and annotation/);
 });
 
@@ -141,7 +152,7 @@ it("has Assign… as the page's only primary button", async () => {
   render(<Harness onAssign={onAssign} />);
   const primary = [...bar().querySelectorAll(".btn-primary")].map(button => button.textContent);
   expect(primary).toEqual(["Assign…"]);
-  expect(within(bar()).getAllByRole("button").map(button => button.textContent)).toEqual(["Assign…", "Plan…", "Clear selection"]);
+  expect(within(bar()).getAllByRole("button").map(button => button.textContent)).toEqual(["Assign…", "Plan…", "Show selected", "Clear selection"]);
   fireEvent.click(within(bar()).getByRole("button", { name: "Assign…" }));
   expect(onAssign).toHaveBeenCalledOnce();
 });

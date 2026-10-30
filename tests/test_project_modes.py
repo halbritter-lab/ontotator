@@ -82,9 +82,9 @@ def test_the_project_list_shows_only_visible_projects(app: Any) -> None:
 
     assert outsider.get("/api/v1/projects").json() == []
     [project] = root.get("/api/v1/projects").json()
-    # The uploader holds every role of the project it created.
-    assert project["roles"] == ["adjudicator", "annotator", "lead"]
-    assert project["allowed_modes"] == ["independent"]
+    # The uploader leads the project it created.
+    assert project["roles"] == ["lead"]
+    assert project["allowed_modes"] == []
 
 
 def test_an_annotator_cannot_open_review_mode(app: Any) -> None:

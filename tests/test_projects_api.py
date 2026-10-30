@@ -4,7 +4,7 @@ import hashlib
 from pathlib import Path
 
 import pytest
-from auth_harness import ensure_assignment, logged_in
+from auth_harness import ensure_assignment, grant, logged_in
 from sqlalchemy import insert, select
 from test_auth_api import _app
 
@@ -45,6 +45,16 @@ def create_project(app, admin, key="phenotypes"):
     )
     assert response.status_code == 200, response.text
     return response.json()
+
+
+def test_the_creator_of_a_project_gets_only_the_lead_role(app):
+    """#177: annotator and consolidator come when needed, by a role change."""
+    admin = logged_in(app, "root", system_admin=True)
+    create_project(app, admin)
+    [project] = admin.get("/api/v1/projects").json()
+    assert project["roles"] == ["lead"]
+    members = admin.get("/api/v1/projects/phenotypes/members").json()
+    assert [(m["username"], m["roles"]) for m in members] == [("root", ["lead"])]
 
 
 def test_an_admin_creates_a_project_from_the_template(app):
@@ -112,7 +122,7 @@ def test_a_lead_manages_members_but_not_the_last_lead(app):
     admin = logged_in(app, "root", system_admin=True)
     create_project(app, admin)
     lead = logged_in(app, "lead", projects={"phenotypes": ["lead"]})
-    # Remove the creator's lead role as an administrator, retaining their other roles.
+    # Swap the creator's lead role for another one as an administrator.
     assert (
         admin.put(
             "/api/v1/projects/phenotypes/members/root", json={"roles": ["annotator"]}
@@ -488,6 +498,7 @@ def test_authenticated_edit_rejects_stale_prepared_profile(
                 language="en",
             )
         )
+    grant(app, "root", "phenotypes", ["annotator"])
     ensure_assignment(app, "root", "phenotypes", "d1", "annotate")
     opened = admin.post(
         "/api/v1/workspaces/open",

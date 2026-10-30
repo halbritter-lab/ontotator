@@ -127,11 +127,11 @@ type SingleFilters<Query> = { [Name in keyof Query]: NonNullable<Query[Name]> ex
 /** Repeatable filters with one value or several (OR); sent as repeated parameters. */
 type RepeatableFilters<Query> = { [Name in keyof Query]: NonNullable<Query[Name]> extends readonly (infer Item)[] ? Item | Item[] | null : Query[Name] };
 /** Filters of the Documents read API, one value per filter; `retain` keys are "{case_id}:{language}". */
-export type DocumentRowsQuery = SingleFilters<RowsParameters> & { retain?: readonly string[] };
+export type DocumentRowsQuery = SingleFilters<RowsParameters> & { retain?: readonly string[]; selected?: readonly RowRefView[] };
 /** Filters of the filtered case IDs (the Documents filters without page and retain), one value per filter. */
 export type DocumentCaseIdsQuery = SingleFilters<CaseIdsParameters>;
 /** Documents rows request: every repeatable filter may hold several values (FD10, documents overview facets). */
-export type DocumentRowsRequest = RepeatableFilters<RowsParameters> & { retain?: readonly string[] };
+export type DocumentRowsRequest = RepeatableFilters<RowsParameters> & { retain?: readonly string[]; selected?: readonly RowRefView[] };
 /** Filtered case IDs request: every repeatable filter may hold several values (FD10, documents overview facets). */
 export type DocumentCaseIdsRequest = RepeatableFilters<CaseIdsParameters>;
 /** One Progress count's Documents query (FD11). */
@@ -500,8 +500,15 @@ export class ApiClient {
     return this.request<ProjectDocumentSummary[]>(`/api/v1/projects/${encodeURIComponent(key)}/documents${query.size ? `?${query}` : ""}`, { method: "GET" });
   }
 
-  /** Lead-only Documents rows; empty filters are omitted, list filters and `retain` repeat. */
+  /**
+   * Lead-only Documents rows; empty filters are omitted, list filters and `retain` repeat. `selected` (Show selected,
+   * too long for a URL) lists exactly these texts, so only `page` and `sort` still apply.
+   */
   async listDocumentRows(key: string, filters: DocumentRowsRequest = {}): Promise<DocumentRowsPage> {
+    if (filters.selected) {
+      const body = { rows: filters.selected, page: filters.page ?? 1, sort: filters.sort ?? "case" };
+      return this.request<DocumentRowsPage>(`/api/v1/projects/${encodeURIComponent(key)}/document-rows/selected`, { method: "POST", body: JSON.stringify(body) });
+    }
     const query = filterParams(filters, ["retain"]);
     for (const item of filters.retain ?? []) query.append("retain", item);
     return this.request<DocumentRowsPage>(`/api/v1/projects/${encodeURIComponent(key)}/document-rows${query.size ? `?${query}` : ""}`, { method: "GET" });

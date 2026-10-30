@@ -315,21 +315,22 @@ def _agreement(
     return compare(findings, order)
 
 
-def _all_match(
+def _full_agreement(
     comparable: Sequence[Candidate],
     recorded_at: Mapping[str, datetime],
     payloads: Mapping[str, Submission],
     profile: TaskProfile,
     defaults: AxisDefaults,
-    submissions: Sequence[Mapping[str, Any]],
     roles: ModifierRoles = NO_TERM_ROLES,
-) -> str | None:
-    """Full agreement (W1, U7): the earliest eligible compared submission when
-    at least two are compared and every consolidation group is ``match``
-    (zero findings everywhere included); else None.
+) -> list[str] | None:
+    """The compared submissions in order when at least two are compared and
+    every consolidation group is ``match`` (zero findings everywhere
+    included); else None.
 
     The caller only asks under the label rule "compare"; a consolidation that
-    covers only part of the compared submissions still hides W1 (X4).
+    covers only part of the compared submissions still hides W1 (X4). Without
+    ``roles`` the answer stays the same: a standalone modifier only changes
+    how groups that are no ``match`` anyway differ.
     """
     if (
         len(comparable) < 2
@@ -346,8 +347,22 @@ def _all_match(
     }
     if any(group.kinds != {"match"} for group in groups(findings, order)):
         return None
+    return order
+
+
+def _all_match(
+    comparable: Sequence[Candidate],
+    recorded_at: Mapping[str, datetime],
+    payloads: Mapping[str, Submission],
+    profile: TaskProfile,
+    defaults: AxisDefaults,
+    submissions: Sequence[Mapping[str, Any]],
+    roles: ModifierRoles = NO_TERM_ROLES,
+) -> str | None:
+    """Full agreement (W1, U7): the earliest eligible compared submission."""
+    order = _full_agreement(comparable, recorded_at, payloads, profile, defaults, roles)
     eligible = {item["submission_id"] for item in submissions if item["eligible"]}
-    return next((sid for sid in order if sid in eligible), None)
+    return next((sid for sid in order or () if sid in eligible), None)
 
 
 def fill_agreement(
@@ -355,7 +370,7 @@ def fill_agreement(
 ) -> None:
     """Fill ``label_rule`` of the Final cells of the page's rows in state
     ``choose`` and, where the rule is "compare", ``matching``/``compared``
-    (one ``compare`` per row).
+    (one ``compare`` per row) and ``all_match`` (the card's full agreement).
 
     ``ctx`` is the context the page was built from. Runs after paging, so
     only the shown rows are compared.
@@ -412,6 +427,10 @@ def fill_agreement(
         detail = row["stages"]["final"]["detail"]
         detail["matching"] = agreement.matching
         detail["compared"] = agreement.total
+        detail["all_match"] = (
+            _full_agreement(item.comparable, recorded_at, payloads, profile, defaults)
+            is not None
+        )
 
 
 def _changed_passages(

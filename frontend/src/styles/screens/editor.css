@@ -1729,6 +1729,19 @@
   cursor: default;
 }
 
+/* One line of text that wraps: as flex items the label, term and changes stood side by side in the narrow list. */
+.doc-item--replaced-by > .btn {
+  display: block;
+  height: auto;
+  text-align: left;
+  white-space: normal;
+}
+
+/* An Edit & Replace copy continues the proposal it replaces. */
+.doc-list-row--copy > .doc-item {
+  margin-left: var(--space-3);
+}
+
 .doc-meta__note {
   font-style: italic;
 }
@@ -2341,6 +2354,8 @@ details.case-version-controls > .btn { vertical-align: bottom; }
     flex: none;
     overflow: visible;
   }
+  /* The shell stacks only from 699 px: at exactly 700 px a row here collapses the main column to no width (#144). */
+  .shell-reading:has(.case-screen:not(.case-comparing) .case-workspace) > .shell-body { flex-direction: column; }
   .shell-main.density-reading > .case-screen:not(.case-comparing) { flex: none; height: auto; }
   .case-screen:not(.case-comparing) .case-workspace {
     display: flex;
