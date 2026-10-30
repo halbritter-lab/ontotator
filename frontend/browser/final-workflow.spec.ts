@@ -37,7 +37,7 @@ async function continueFrom(rounds: Locator, submissionId: string) {
 }
 /** Sidebar progress of a carry-forward round ("0 of 1 checked", "All carried findings checked"). */
 const carriedProgress = (page: Page) => page.locator('.carried-progress__status');
-/** The "Open in editor" link of one exact submission in the final-result panel (its href carries the submission ref). */
+/** The "Open submission" link of one exact submission in the final-result panel (its href carries the submission ref). */
 const editorLink = (panel: Locator, submissionId: string) => {
   // Route hrefs keep commas literal (router querySuffix).
   const ref = new URLSearchParams({ annotations: JSON.stringify(['submission', submissionId]) }).toString().replace(/%2C/gi, ',');

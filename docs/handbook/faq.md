@@ -36,7 +36,7 @@ A project lead has not assigned you a text yet. Assigned texts appear under **My
 
 ### I see "You are not a member of any project yet."
 
-Ask your project lead or an administrator to add you to a project, then reload the page. Leads: see [Add a member](lead-settings.md#add-a-member).
+Ask your project lead or an administrator to add you to a project, then click **My tasks** or reload the page. Leads: see [Add a member](lead-settings.md#add-a-member).
 
 ### A task opens with "Task not found or not yours"
 

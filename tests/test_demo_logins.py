@@ -113,6 +113,8 @@ def test_off_by_default_exposes_nothing(tmp_path: Path) -> None:
 
     assert client.get("/api/v1/auth/demo-logins").status_code == 404
     assert "/api/v1/auth/demo-logins" not in client.get("/openapi.json").text
+    # The login page learns this from the session and skips the 404.
+    assert client.get("/api/v1/auth/session").json()["demo_logins"] is False
 
 
 def test_on_lists_the_accounts_and_the_normal_login_accepts_them(
@@ -140,6 +142,10 @@ def test_on_lists_the_accounts_and_the_normal_login_accepts_them(
     }
     assert "/api/v1/auth/demo-logins" not in client.get("/openapi.json").text
     assert "DEMO LOGINS ARE ON" in caplog.text
+    assert client.get("/api/v1/auth/session").json() == {
+        "user": None,
+        "demo_logins": True,
+    }
     account = listed.json()["accounts"][0]
     login = client.post(
         "/api/v1/auth/login",

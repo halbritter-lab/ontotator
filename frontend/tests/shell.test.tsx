@@ -266,6 +266,20 @@ describe("shell identity and task count", () => {
     expect(await screen.findByRole("link", { name: "My tasks (1)" })).toBe(link);
   });
 
+  it("reloads My tasks (n) on each navigation to My tasks or Projects (#192)", async () => {
+    vi.mocked(api.listMyTasks).mockResolvedValue([]);
+    const first = { name: "tasks" } as const;
+    const { rerender } = render(<Shell {...props({ navigation: first })} />);
+    expect(await screen.findByRole("link", { name: "My tasks (0)" })).toBeDefined();
+    expect(api.listMyTasks).toHaveBeenCalledTimes(1);
+    rerender(<Shell {...props({ navigation: first, route: { name: "me" } })} />);
+    expect(api.listMyTasks).toHaveBeenCalledTimes(1);
+    vi.mocked(api.listMyTasks).mockResolvedValue([task(1, "open"), task(2, "open"), task(3, "open")]);
+    rerender(<Shell {...props({ navigation: { name: "projects" }, route: { name: "projects" } })} />);
+    expect(await screen.findByRole("link", { name: "My tasks (3)" })).toBeDefined();
+    expect(api.listMyTasks).toHaveBeenCalledTimes(2);
+  });
+
   it("reloads My tasks (n) on tasks-changed, so a submitted task stops counting (#156)", async () => {
     vi.mocked(api.listMyTasks).mockResolvedValue([task(1, "in_progress")]);
     render(<Shell {...props()} />);
