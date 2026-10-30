@@ -3,6 +3,7 @@ import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Element, Root, RootContent } from "hast";
 import { routeHref } from "../app/router";
+import { AppVersion } from "./AppVersion";
 import { CHAPTERS, chapterOrder, chapterTitle, imageUrl, resolveLink, slugger } from "./handbook";
 import "../ui/guidelineDocument.css";
 import "./help.css";
@@ -68,6 +69,7 @@ export default function HelpPage({ chapter = "README", section }: { chapter?: st
           <a href={routeHref({ name: "help", chapter: name })} aria-current={name === chapter ? "page" : undefined}>{chapterTitle(name)}</a>
         </li>)}
       </ul>
+      <AppVersion />
     </nav>
     <article className="guideline-document help-document">
       {body === undefined ? <><h1>Chapter not found</h1><p>This handbook has no chapter “{chapter}”. Pick one from the list.</p></>

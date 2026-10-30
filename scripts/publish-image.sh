@@ -36,6 +36,7 @@ else
 fi
 # --load: a docker-container buildx builder would otherwise leave a stale local tag.
 docker build --load --secret "$secret" \
+    --build-arg "ONTOTATOR_REVISION=$revision" \
     --label "org.opencontainers.image.revision=$revision" \
     --label "org.opencontainers.image.version=$version" \
     -t "$repository:$version" .

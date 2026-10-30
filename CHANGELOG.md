@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- The assign dialog marks system administrators with an *Administrator* badge (`system_admin` in the assignment batch preview), since the creator of a project is a member with every role (#177).
+- The plain-text upload says that each file name without `.txt` becomes the text ID and which names are valid, and the preview lists file name → text ID (#174).
+- Handbook screenshots in the in-app Help open at full size in a new tab (#173).
+- The handbook in the app shows the running version and Git commit below its chapter list, for every logged-in user; `GET /api/v1/about` returns them. Published images carry the commit as `ONTOTATOR_REVISION`.
+
 ### Fixed
 
 - A finding added in the consolidation no longer keeps its default values unchangeable: its values open right after "Add finding" and "Edit values…" changes them later, so a negated finding is exported as absent (#178).
@@ -30,11 +37,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The keyboard shortcut help (`?`) in the editor also lists the finding keys, and in review modes the decision keys, while they need a selection first, marked "not available right now" (#158).
 - **Refresh** on Documents starts a new visit of the tab, so rows that left it (for example texts just assigned under To assign) drop out instead of staying until a tab switch (#176).
 - **Pinned by** on Administration › Ontologies opens the project's Ontology settings tab; small settings cleanups (#168).
-### Added
 
-- The assign dialog marks system administrators with an *Administrator* badge (`system_admin` in the assignment batch preview), since the creator of a project is a member with every role (#177).
-- The plain-text upload says that each file name without `.txt` becomes the text ID and which names are valid, and the preview lists file name → text ID (#174).
-- Handbook screenshots in the in-app Help open at full size in a new tab (#173).
+### Changed
+
+- The OpenAPI version comes from the package version instead of a second hard-coded number.
 
 ## [0.3.0] - 2026-10-30
 
