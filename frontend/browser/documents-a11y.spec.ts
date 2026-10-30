@@ -106,7 +106,7 @@ test("Tab-only order: tabs, search, Filter, selection tools, then each row's con
     "button:Upload texts…",
     // Only the selected tab is a Tab stop (arrows move between tabs).
     "a:All, 2",
-    "input:Case ID or text",
+    "input:Search by case ID",
     "button:Filter",
     "input:Select the only filtered text",
     "button:Select by case IDs…",

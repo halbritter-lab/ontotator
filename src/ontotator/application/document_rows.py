@@ -132,8 +132,8 @@ class RowQuery:
 
     language: tuple[str, ...] = ()
     status: str | None = None  # unassigned|open|in_progress|submitted|reopened|held
-    # Prefix of case ID, external ID or document ID, or the text label form
-    # "case-104 de" / "case-104 · de" (spec VD11).
+    # Part of the case ID, external ID or document ID in any case, or the text
+    # label form "case-104 de" / "case-104 · de" (spec VD11).
     q: str | None = None
     origin: tuple[str, ...] = ()  # VariantOrigin values of the row's versions
     translation_status: str | None = None  # adds accepted_without_review
@@ -147,6 +147,8 @@ class RowQuery:
     step: tuple[StepCode, ...] = ()  # any of the row's steps
     stage: tuple[Stage, ...] = ()  # stage of the row's next step
     owner: str | None = None  # "me" or a pseudonym (owner of the next step)
+    # Pseudonym with work on the row: any task, open or submitted, not revoked.
+    assignee: str | None = None
     # Exclusive per row: review / annotate = only that flag on,
     # review_and_annotate = both, not_in_plan = neither (effective flags).
     plan: tuple[PlanFilter, ...] = ()

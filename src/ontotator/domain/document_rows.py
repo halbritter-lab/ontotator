@@ -36,9 +36,9 @@ __all__ = [
     "build_chains",
     "bulk_target",
     "category_of",
+    "id_matches",
     "missing_final_counts",
     "open_target",
-    "prefix_matches",
     "round_ordinals",
     "segment_counts",
     "split_text_label",
@@ -293,17 +293,20 @@ def bar_counts(rows: Iterable[set[BarCategory]]) -> dict[str, int]:
     return counts
 
 
-def prefix_matches(q: str, identifiers: Iterable[str]) -> bool:
-    prefix = unicodedata.normalize("NFKC", q)
-    return any(
-        unicodedata.normalize("NFKC", item).startswith(prefix) for item in identifiers
-    )
+def _folded(value: str) -> str:
+    return unicodedata.normalize("NFKC", value).casefold()
+
+
+def id_matches(q: str, identifiers: Iterable[str]) -> bool:
+    """``q`` occurs anywhere in one of the identifiers, in any case."""
+    wanted = _folded(q)
+    return any(wanted in _folded(item) for item in identifiers)
 
 
 def split_text_label(q: str) -> tuple[str, str] | None:
     """The text label form of a search: "case-104 de" / "case-104 · de".
 
-    Returns (case ID prefix, exact language) or None when ``q`` is not two
+    Returns (part of the case ID, language) or None when ``q`` is not two
     parts separated by spaces and/or a middle dot (spec VD11).
     """
     parts = unicodedata.normalize("NFKC", q).replace("\u00b7", " ").split()

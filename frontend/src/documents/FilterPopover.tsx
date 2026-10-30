@@ -2,8 +2,8 @@ import { useId, useRef, useState } from "react";
 import type { DecisionBarView } from "../api/client";
 import { plural } from "../app/labels";
 import type { ProjectDocumentsQuery } from "../app/router";
-import { Button, IconSortDown, Popover, useMediaQuery } from "../ui";
-import { chipsOf, facetGroups, ORDER_OPTIONS, optionChecked, optionCount, toggleOption, type FacetOption, type PeopleNames } from "./filterModel";
+import { Button, IconSortDown, Popover, Select, useMediaQuery } from "../ui";
+import { assigneeOptions, chipsOf, facetGroups, ORDER_OPTIONS, optionChecked, optionCount, toggleOption, type FacetOption, type PeopleNames } from "./filterModel";
 import { LanguageFlag } from "../ui/LanguageTag";
 
 export interface FilterPopoverProps {
@@ -17,6 +17,8 @@ export interface FilterPopoverProps {
   onClearAll: () => void;
   /** Display names by pseudonym for the Waiting on group. */
   people?: PeopleNames;
+  /** Pseudonyms of the project's members for "Assigned to". */
+  members?: readonly string[];
   /** False while the project has no translation (U-4): no Translation review group. */
   translations?: boolean;
 }
@@ -24,14 +26,14 @@ export interface FilterPopoverProps {
 const matchText = (count: number) => `${plural(count, "text")} ${count === 1 ? "matches" : "match"}`;
 
 /**
- * "Filter" button and its non-modal popover (spec "Filter popover", V4): fieldsets Language,
+ * "Filter" button and its non-modal popover (spec "Filter popover", V4): the "Assigned to" picker, fieldsets Language,
  * Review, Annotation, Final, Origin, Plan and Waiting on, each checkbox with its count under the
  * current tab, search and the other groups. Checking applies at once and the popover stays open;
  * zero facets are collapsed behind "Show n empty filters" (a checked one stays); shown, they are muted and
  * checkable only while checked. Footer: Order (VD10) and "Clear all";
  * below 700 px a full-height sheet with "Show {n} texts".
  */
-export function FilterPopover({ query, bar, sourceLanguages, onChange, onClearAll, people, translations = true }: FilterPopoverProps): JSX.Element {
+export function FilterPopover({ query, bar, sourceLanguages, onChange, onClearAll, people, members = [], translations = true }: FilterPopoverProps): JSX.Element {
   const [open, setOpen] = useState(false);
   const [showEmpty, setShowEmpty] = useState(false);
   const anchor = useRef<HTMLButtonElement>(null);
@@ -86,6 +88,12 @@ export function FilterPopover({ query, bar, sourceLanguages, onChange, onClearAl
     </Button>
     <Popover open={open} anchorRef={anchor} label="Filter" onClose={() => setOpen(false)} footer={footer}>
       <div id={contentId} className="documents-filter-groups">
+        <div className="documents-filter-assignee">
+          <Select id={`${contentId}-assignee`} label="Assigned to" value={query.assignee ?? ""} onChange={event => onChange({ assignee: event.currentTarget.value || undefined })}>
+            <option value="">Anyone</option>
+            {assigneeOptions(members, query, people).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </Select>
+        </div>
         {groups.map(group => <fieldset key={group.id} className="documents-filter-group">
           <legend>{group.legend}</legend>
           {group.options.map(facet)}

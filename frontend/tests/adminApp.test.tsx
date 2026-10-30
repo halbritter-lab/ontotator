@@ -68,7 +68,7 @@ it("uses controlled document query routes and actual managed-project documents",
   expect(screen.getByRole("link", { name: "Documents" }).getAttribute("aria-current")).toBe("page");
   // Status is a facet of the filter popover now; the search box drives the same controlled route
   // (an unknown status stays in the address but never reaches the request).
-  fireEvent.change(screen.getByLabelText("Case ID or text"), { target: { value: "ID2" } });
+  fireEvent.change(screen.getByLabelText("Search by case ID"), { target: { value: "ID2" } });
   await waitFor(() => expect(window.location.hash).toBe("#/projects/p%2Fkey/documents?language=de&status=invalid&q=ID2"));
   await waitFor(() => expect(api.listDocumentRows).toHaveBeenLastCalledWith("p/key", { language: "de", q: "ID2" }));
 });

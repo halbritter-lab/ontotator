@@ -44,10 +44,10 @@ it("keeps the SAME focused ID input while actual App navigation controls every t
   const user = userEvent.setup();
   render(<App user={testUser("lead", { is_system_admin: false })} />);
   await screen.findByRole("button", { name: "Text z/doc en" });
-  const input = screen.getByLabelText("Case ID or text");
+  const input = screen.getByLabelText("Search by case ID");
   await user.type(input, "abc");
   await waitFor(() => expect(window.location.hash).toBe("#/projects/p%2Fkey/documents?q=abc"));
-  expect(screen.getByLabelText("Case ID or text")).toBe(input);
+  expect(screen.getByLabelText("Search by case ID")).toBe(input);
   expect(document.activeElement).toBe(input);
   expect(input).toHaveProperty("value", "abc");
   await waitFor(() => expect(api.listDocumentRows).toHaveBeenLastCalledWith("p/key", { q: "abc" }));

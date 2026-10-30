@@ -1224,18 +1224,17 @@ def _version_matches(
 
 
 def _search_matches(q: str, row: Mapping[str, Any], version: Mapping[str, Any]) -> bool:
-    """Prefix of case ID, external ID or document ID, or the text label form
-    "case-104 de" / "case-104 · de" (case prefix, exact language; VD11)."""
+    """Part of the case ID, external ID or document ID in any case, or the
+    text label form "case-104 de" / "case-104 · de" (part of the case ID, whole
+    language; VD11)."""
     case_id = row["case_id"]
-    if rules.prefix_matches(
-        q, [case_id, version["external_id"], version["document_id"]]
-    ):
+    if rules.id_matches(q, [case_id, version["external_id"], version["document_id"]]):
         return True
     label = rules.split_text_label(q)
     return (
         label is not None
-        and row["language"] == label[1]
-        and rules.prefix_matches(label[0], [case_id])
+        and row["language"].casefold() == label[1].casefold()
+        and rules.id_matches(label[0], [case_id])
     )
 
 
@@ -1309,8 +1308,13 @@ def _row_level_matches(ctx: _Context, row: Mapping[str, Any], query: RowQuery) -
         owner = ctx.facts.viewer_pseudonym if query.owner == "me" else query.owner
         if owner not in ctx.owners[key]:
             return False
+    # ``status`` looks at this person's work when both are set.
+    work = [
+        item for item in row["work"] if query.assignee in (None, item["author_label"])
+    ]
+    if query.assignee is not None and not work:
+        return False
     if query.status is not None:
-        work = row["work"]
         if query.status == "unassigned":
             return not work
         if query.status == "held":
@@ -1681,6 +1685,14 @@ def build_page_with_context(
             row["retained"] = True
             shown_rows[key] = row
     bar["shown"] = sum(shown.values())
+    # Hits of the search under All, for the hint of an empty tab (All drops
+    # ``segment`` and ``decision``, ``tabRoute`` in the frontend).
+    everywhere = replace(query, segment=None, decision=None)
+    bar["all_tab_shown"] = (
+        sum(_shown(ctx, key, row, everywhere) for key, row in rows.items())
+        if query.q
+        else 0
+    )
     # Filter popover: counts under the tab, search and every other group.
     bar["facets"] = _facets(ctx, rows, query, shown)
 

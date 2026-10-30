@@ -147,11 +147,11 @@ it("retains controlled variant filters through real App navigation", async () =>
   render(<App user={lead} />);
   await screen.findByRole("button", { name: "Text z/doc en" });
   expect(api.listDocumentRows).toHaveBeenLastCalledWith("p/key", { origin: "correction", translation_status: "accepted", status: "submitted" });
-  const prefix = screen.getByLabelText("Case ID or text"); prefix.focus();
+  const prefix = screen.getByLabelText("Search by case ID"); prefix.focus();
   fireEvent.change(prefix, { target: { value: "ID +/ß" } });
   await waitFor(() => expect(api.listDocumentRows).toHaveBeenLastCalledWith("p/key", { origin: "correction", translation_status: "accepted", status: "submitted", q: "ID +/ß" }));
   expect(window.location.hash).toBe("#/projects/p%2Fkey/documents?status=submitted&q=ID+%2B%2F%C3%9F&origin=correction&translation_status=accepted");
-  expect(screen.getByLabelText("Case ID or text")).toBe(prefix);
+  expect(screen.getByLabelText("Search by case ID")).toBe(prefix);
   expect(document.activeElement).toBe(prefix);
   expect(api.listProjects).toHaveBeenCalledTimes(1);
 });

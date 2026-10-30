@@ -141,6 +141,7 @@ export function rowsRequest(query: ProjectDocumentsQuery): DocumentRowsRequest {
   else if (query.decision && DECISIONS.has(query.decision)) result.decision = query.decision;
   if (result.decision === undefined && (query.final === "none" || query.final === "any" || query.final === "missing")) result.final = query.final;
   if (query.owner) result.owner = query.owner;
+  if (query.assignee) result.assignee = query.assignee;
   if (query.paused === "yes" || query.paused === "no") result.paused = query.paused;
   if (query.sort && query.sort !== "case" && SORT_VALUES.has(query.sort)) result.sort = query.sort;
   if (query.case) result.case = query.case;
@@ -163,7 +164,7 @@ export function tabCount(bar: DecisionBarView, tab: TabId): number {
 /** Route parameters "Clear all" removes: every filter and the search, not the tab (`segment`) or the order (`sort`). */
 const FILTER_PARAMS = [
   "language", "review_state", "annotation_state", "final_state", "origin", "plan", "waiting_on", "flags", "proposals",
-  "decision", "step", "stage", "owner", "paused", "status", "translation_status", "final", "case", "q",
+  "decision", "step", "stage", "owner", "assignee", "paused", "status", "translation_status", "final", "case", "q",
 ] as const satisfies readonly (keyof ProjectDocumentsQuery)[];
 
 /** Some filter or the search is active (the "{k} of {n}" line and "Clear all" show). */
@@ -206,6 +207,13 @@ export function facetGroups(facets: Facets, query: ProjectDocumentsQuery, source
   ];
   if (waiting.length) groups.push({ id: "waiting_on", legend: "Waiting on", options: waiting.map(value => option("waiting_on", value === "me" ? "You" : people.get(value) ?? value, value)) });
   return groups;
+}
+
+/** "Assigned to" choices as [pseudonym, label], by label; the route's value stays listed. */
+export function assigneeOptions(members: readonly string[], query: ProjectDocumentsQuery, people: PeopleNames = new Map()): [string, string][] {
+  return [...new Set([...members, ...(query.assignee ? [query.assignee] : [])])]
+    .map((value): [string, string] => [value, people.get(value) ?? value])
+    .sort((a, b) => a[1].localeCompare(b[1]));
 }
 
 /** The option is checked when one of its values is in the route. */
@@ -255,7 +263,7 @@ function listChips(query: ProjectDocumentsQuery, param: "step" | "stage", label:
 
 /**
  * One chip per active value (spec "Chips"): the facets, then the FD11 link parameters without a
- * facet (step, stage, owner, paused, status, translation status, final, exact case) with their labels.
+ * facet (step, stage, owner, assignee, paused, status, translation status, final, exact case) with their labels.
  * The search (`q`), the tab and the order have no chip.
  */
 export function chipsOf(query: ProjectDocumentsQuery, people: PeopleNames = new Map()): Chip[] {
@@ -267,6 +275,7 @@ export function chipsOf(query: ProjectDocumentsQuery, people: PeopleNames = new 
   chips.push(...listChips(query, "step", value => `Step: ${stepLabel(value as StepCode)}`));
   chips.push(...listChips(query, "stage", value => `Stage: ${STAGE_LABELS[value]}`));
   if (query.owner) chips.push({ id: "owner", label: `Owner: ${query.owner === "me" ? "You" : query.owner}`, patch: { owner: undefined } });
+  if (query.assignee) chips.push({ id: "assignee", label: `Assigned to: ${people.get(query.assignee) ?? query.assignee}`, patch: { assignee: undefined } });
   if (query.paused === "yes" || query.paused === "no") chips.push({ id: "paused", label: query.paused === "yes" ? "Paused tasks" : "Not paused", patch: { paused: undefined } });
   const status = STATUS_OPTIONS.find(([value]) => value === query.status);
   if (status) chips.push({ id: "status", label: `Assignment status: ${status[1]}`, patch: { status: undefined } });

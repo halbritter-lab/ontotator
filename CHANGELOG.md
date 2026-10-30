@@ -9,6 +9,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - With *Annotate only after the translation review is accepted* on, a lead can assign annotators (one by one, in bulk and with *Distribute evenly…*) while the text's translation review is assigned or underway. The task shows in *My tasks* as *Waiting for translation review*, the server refuses to open, save or submit it (`TASK_WAITING_FOR_TRANSLATION_REVIEW`), and it opens by itself once the review is accepted, also on a corrected version. The review must run on that version or an ancestor: with parallel translations, the others are skipped with a reason. A task that cannot follow a correction (from proposals, paused, or on a correction that was rejected) shows *Waiting for the project lead*, and the lead withdraws it in *Handle text change…* (#213).
+- Documents: **Assigned to** in the Filter popover shows the texts given to one person, in every task, open and submitted, without revoked assignments. It shows as a chip, stays in the URL and works with the selection (`assignee` on the rows, case IDs and selection filters) (#215).
+
+### Changed
+
+- The Documents search finds any part of a case, external or document ID in any case (`fr100994` and `100994` find `FR100994`). The field now reads "Case ID…", since it never searched the words of a text (#216).
+- A search without hits in the open tab says so and offers its hits under All, with the search kept (`all_tab_shown` on the decision bar) (#216).
 - A task profile can set `allowed_roots` and `t1_profile` per ontology. New projects take them from the profile, in `admin projects create` and on the New project form; options and form values still win, and today's defaults apply only where the profile sets nothing. `[]` means the whole ontology, and the form says so. Hashes of profiles without the fields do not change (#208).
 
 ### Fixed

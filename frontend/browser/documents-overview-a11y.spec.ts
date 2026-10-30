@@ -59,6 +59,8 @@ test("keyboard-only: tabs, filter popover, row checkbox range, text card accept,
   const popover = filterPopover(page);
   await expect(popover).toBeVisible();
   await expect(filterButton(page)).toHaveAttribute("aria-expanded", "true");
+  await expect(popover.getByRole("combobox", { name: "Assigned to" })).toBeFocused();
+  await page.keyboard.press("Tab");
   const first = popover.getByRole("checkbox").first();
   await expect(first).toBeFocused();
   await page.keyboard.press("Space");

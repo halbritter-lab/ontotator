@@ -127,7 +127,7 @@ describe("tabs, popover, card, dialogs", () => {
     expect(filter.getAttribute("aria-expanded")).toBe("true");
     expect(document.getElementById(filter.getAttribute("aria-controls")!)).not.toBeNull();
     expect(within(popover).getByRole("group", { name: "Language" })).toBeTruthy();
-    expect(within(popover).getByRole("checkbox", { name: "de, 8 texts" })).toBe(document.activeElement);
+    expect(within(popover).getByRole("combobox", { name: "Assigned to" })).toBe(document.activeElement);
     expect(within(popover).getByRole("status").textContent).toBe("14 texts match");
     fireEvent.keyDown(popover, { key: "Escape" });
     expect(document.activeElement).toBe(filter);
