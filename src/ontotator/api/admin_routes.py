@@ -67,6 +67,8 @@ class CreateUserRequest(BaseModel):
     email: str | None = None
     system_admin: bool = False
     languages: list[str] = Field(default_factory=list)
+    # Reviewers need one; setting it here saves an Edit after the hand-over.
+    qualification: str | None = Field(default=None, max_length=200)
     # Optional first memberships, granted in the same transaction.
     projects: list[NewMembership] = Field(default_factory=list)
 
@@ -253,11 +255,16 @@ def create_user(
             system_admin=body.system_admin,
         )
         accounts.set_languages(actor, issued.user.username, languages)
+        created = issued.user
+        if body.qualification is not None and body.qualification.strip():
+            created = accounts.update_profile(
+                actor, created.username, qualification=body.qualification
+            )
         for membership in body.projects:
             memberships.add(
                 actor, membership.project_key, issued.user.username, membership.roles
             )
-        user = admin_users(accounts, [issued.user])[0]
+        user = admin_users(accounts, [created])[0]
         return CreatedUser(user=user, code=issued.code, expires_at=issued.expires_at)
 
 

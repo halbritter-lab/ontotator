@@ -11428,6 +11428,18 @@
             "type": "array",
             "title": "Languages"
           },
+          "qualification": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qualification"
+          },
           "projects": {
             "items": {
               "$ref": "#/components/schemas/NewMembership"

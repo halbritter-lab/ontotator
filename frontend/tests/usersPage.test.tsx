@@ -54,7 +54,7 @@ describe("users administration", () => {
     fireEvent.click(newForm().getByRole("button", { name: "Create user" }));
     const dialog = await screen.findByRole("dialog", { name: "Setup code for bea" });
     expect(within(dialog).getByText(created.code)).toBeTruthy();
-    expect(api.adminCreateUser).toHaveBeenCalledWith({ username: "bea", display_name: "Bea", email: null, languages: [], system_admin: false, projects: [] });
+    expect(api.adminCreateUser).toHaveBeenCalledWith({ username: "bea", display_name: "Bea", email: null, qualification: null, languages: [], system_admin: false, projects: [] });
     expect(await leave.current?.()).toBe(false);
     expect((within(dialog.querySelector(".modal-actions") as HTMLElement).getByRole("button", { name: "Close" }) as HTMLButtonElement).disabled).toBe(true);
     await userEvent.setup().click(within(dialog).getByLabelText("I have handed over or stored the code"));

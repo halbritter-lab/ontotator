@@ -268,7 +268,7 @@ it("loads explicit false annotation gate and saves its changed Workflow value", 
   await waitFor(() => expect(api.updateProjectSettings).toHaveBeenCalledWith("p", expect.objectContaining({ annotate_accepted_translations_only: true })));
 });
 
-it("admin edits nullable qualification without adding it to new-user creation", async () => {
+it("admin edits nullable qualification and sets it on new-user creation (#198)", async () => {
   const user: AdminUser = { id: 3, username: "reader", display_name: "Reader", email: null, pseudonym: "R", qualification: "Original", languages: ["de"], active: true, is_system_admin: false, projects: [], setup_pending: false, anonymised: false };
   vi.spyOn(api, "adminListUsers").mockResolvedValue([user]);
   vi.spyOn(api, "adminUpdateUser").mockResolvedValue({ ...user, qualification: null });
@@ -280,8 +280,14 @@ it("admin edits nullable qualification without adding it to new-user creation", 
   fireEvent.change(field, { target: { value: "" } }); fireEvent.click(form.getByRole("button", { name: "Save changes" }));
   await waitFor(() => expect(api.adminUpdateUser).toHaveBeenCalledWith("reader", { qualification: null }));
   await waitFor(() => expect(screen.queryByRole("form", { name: "Edit user" })).toBeNull());
+  vi.spyOn(api, "adminCreateUser").mockResolvedValue({ user: { ...user, username: "carol", qualification: "MD" }, code: "code", expires_at: "2026-11-01T00:00:00Z" });
   fireEvent.click(screen.getByRole("button", { name: /^New user/ }));
-  expect(within(screen.getByRole("form", { name: "New user" })).queryByLabelText("Qualification")).toBeNull();
+  const create = within(screen.getByRole("form", { name: "New user" }));
+  fireEvent.change(create.getByLabelText(/^Username/), { target: { value: "carol" } });
+  fireEvent.change(create.getByLabelText(/^Display name/), { target: { value: "Carol" } });
+  fireEvent.change(create.getByLabelText("Qualification"), { target: { value: " MD " } });
+  fireEvent.click(create.getByRole("button", { name: "Create user" }));
+  await waitFor(() => expect(api.adminCreateUser).toHaveBeenCalledWith(expect.objectContaining({ username: "carol", qualification: "MD" })));
 });
 
 it("uses the dedicated third export endpoint and true job kind", async () => {
