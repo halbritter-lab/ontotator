@@ -16185,6 +16185,35 @@
               }
             ],
             "title": "Resource Path"
+          },
+          "allowed_roots": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allowed Roots"
+          },
+          "t1_profile": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "generic",
+                  "hpo-phenotype"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "T1 Profile"
           }
         },
         "additionalProperties": false,

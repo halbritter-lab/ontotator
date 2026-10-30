@@ -6,6 +6,8 @@ from ontotator.domain.axes import AxisDefinition
 from ontotator.domain.canonical import canonical_hash
 from ontotator.domain.errors import InvalidAnnotation
 
+T1Profile = Literal["generic", "hpo-phenotype"]
+
 
 class OntologyDefinition(BaseModel):
     """Definition of an ontology artifact bound to a task profile."""
@@ -18,6 +20,14 @@ class OntologyDefinition(BaseModel):
     sha256: str
     format: Literal["obo-graph-json"] = "obo-graph-json"
     resource_path: str | None = None
+    # A new project's starting values. Unset (None) stays out of dumps, so hashes
+    # of profiles without them do not change; [] is the whole ontology.
+    allowed_roots: list[str] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    t1_profile: T1Profile | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
     @model_validator(mode="after")
     def validate_non_empty_id(self) -> "OntologyDefinition":

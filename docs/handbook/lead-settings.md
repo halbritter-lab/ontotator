@@ -61,7 +61,7 @@ Before you start: you can change this until the first work is submitted. After t
 
 What it is: the task profile is a JSON file that defines what annotators work with: the ontology, the layers (for example *Phenotypes*), the finding types in each layer and the value fields of each finding type with their values (for example *Assertion*: present, absent, uncertain). It holds neither texts nor the ontology itself. Every project has exactly one. An administrator sets it when [creating the project](admin.md#create-a-project); a lead can [replace it](#replace-the-task-profile) until the first work is submitted.
 
-The other choices on the same form belong to the project, not to the profile: the ontology file (release), the allowed branches and the annotation scheme (*HPO phenotype* with fixed values and modifiers, or *Generic* with free values). They can change later under **Settings**, tab **Ontology**.
+The other choices on the same form belong to the project, not to the profile: the ontology file (release), the allowed branches and the annotation scheme (*HPO phenotype* with fixed values and modifiers, or *Generic* with free values). A profile file can give a starting value for the branches and the scheme; after that they are the project's, and they can change later under **Settings**, tab **Ontology**. Replacing the profile does not change them.
 
 ### Template or own file
 
@@ -103,6 +103,8 @@ A shortened example. The checksum (`sha256`) and `release` are those of the onto
 | --- | --- |
 | `ontology_id` | The ontology's short ID, for example `hp`. Upper and lower case count as the same. It cannot change once the project exists. |
 | `release`, `sha256` | The ontology file the project uses. They must be those of the file chosen on the form. |
+| `allowed_roots` (optional) | The branches a new project starts with, for example `["HP:0000118"]`. `[]` means the whole ontology. Left out: the form starts empty, and `ontotator admin projects create` starts with `HP:0000118` for the scheme *HPO phenotype*. Use `[]` for bundles built for the whole ontology, as a new project must have the same branches as the bundle. |
+| `t1_profile` (optional) | The annotation scheme a new project starts with: `hpo-phenotype` or `generic`. Left out: *HPO phenotype* for HPO on the form, *Generic* otherwise; `ontotator admin projects create` starts with *Generic*. |
 | `layer_id` | The layer's ID. Bundles name it for each proposal. |
 | `axes` | The value fields and their allowed values. With the scheme *HPO phenotype* only `assertion`, `experiencer` and `temporality` with the values above are possible; a profile may leave values out. |
 | `default_layer_id` | The layer annotators start in. |
