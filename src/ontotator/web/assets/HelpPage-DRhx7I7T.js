@@ -1,4 +1,4 @@
-import{r as i,a as m,j as a,b as h}from"./index-C1Uogpd0.js";import{M as f,r as g}from"./index-BUFoakZK.js";function w(){const[e,t]=i.useState(null);return i.useEffect(()=>{let o=!0;return m.getAbout().then(n=>{o&&t(n)},()=>{}),()=>{o=!1}},[]),e?a.jsxs("p",{className:"help-version",title:e.revision??void 0,children:["Ontotator ",e.version,e.revision&&a.jsxs(a.Fragment,{children:[" · commit ",e.revision.slice(0,7)]})]}):null}const y=`# Ontotator user handbook
+import{r,a as m,j as a,b as h}from"./index-GRoFSQ-G.js";import{M as f,r as g}from"./index-BOsirgIV.js";function w(){const[e,t]=r.useState(null);return r.useEffect(()=>{let o=!0;return m.getAbout().then(n=>{o&&t(n)},()=>{}),()=>{o=!1}},[]),e?a.jsxs("p",{className:"help-version",title:e.revision??void 0,children:["Ontotator ",e.version,e.revision&&a.jsxs(a.Fragment,{children:[" · commit ",e.revision.slice(0,7)]})]}):null}const y=`# Ontotator user handbook
 
 This handbook explains how to work with Ontotator in the browser. It is for everyone who uses the app: annotators, translation reviewers, consolidators, leads and system administrators. It describes the version of Ontotator that you open it from. If you run the server, read the [server operations guide (for server operators)](../operations.md) instead.
 
@@ -1652,212 +1652,212 @@ What for: see the whole project at a glance.
 ![The Progress page with the stage cards and the People table](images/lead-progress.png)
 
 Click **Refresh progress** to update.
-`,S=`# Lead: results, decisions and export\r
-\r
-This chapter is for project leads. It covers choosing the final result of each text, consolidations, the decisions on translations, text changes and problem reports, and the export. Back to the [lead overview](lead.md).\r
-\r
-## Accepting results and consolidation\r
-\r
-Each text version gets one final result: one submission or one consolidation that you accept. Only final results go into the final export. You do this in the **Finalization** part of the [text card](lead-documents.md#the-text-card).\r
-\r
-How to choose:\r
-\r
-- If all submissions agree, accept one.\r
-- If they differ in a few findings and one is clearly right, read them and use that one.\r
-- If they differ and you want each difference decided on its own, start a consolidation.\r
-\r
-### Accept a result or compare results\r
-\r
-What for: choose the final result of a text.\r
-\r
-1. On **Documents**, tab **Needs your decision**, click **Accept result…** or **Compare results…** in the row. The row reads **Accept result…** when there is one result to accept or all findings match, and **Compare results…** when submissions differ. The card opens at **Finalization**.\r
-2. With one submission or a submitted consolidation, check it and click **Accept result**.\r
-3. If all annotations agree, the card says so. Click **Accept result**.\r
-4. If they differ, the card shows the agreement, for example *Agreement: 5 of 9 findings match, 1 differs in context only*. **How is this counted?** explains the numbers. Open a submission with **Open submission** to read it in the read-only text view.\r
-5. Warning: the next action saves at once, without a confirmation. Click **Use as final** in the row of the submission you want. Or [start a consolidation](#start-a-consolidation) instead.\r
-\r
-After saving, the card moves on to the next text that needs a decision. The decided row stays in the tab with a *Resolved* badge until you click **Refresh** or change the tab. To undo, [change the final result](#change-a-final-result).\r
-\r
-![The Finalization part comparing two submissions, with the agreement line and Use as final](images/lead-compare-results.png)\r
-\r
-If the project rule says the consolidator may not be an annotator, you cannot accept your own result; another lead must do it.\r
-\r
-### Accept early while other annotations are open\r
-\r
-What for: accept a result before everyone has submitted.\r
-\r
-1. Open the text card at **Finalization**. It lists the annotations still open.\r
-2. Optional: remove open work with **Remove assignment…**.\r
-3. Choose the result as in [Accept a result or compare results](#accept-a-result-or-compare-results).\r
-\r
-Open work stays assigned unless you remove it.\r
-\r
-### Start a consolidation\r
-\r
-What for: let one person decide the differences between submissions and build one result.\r
-\r
-Before you start: the text needs at least two submissions. The consolidator must have the **Consolidator** role in the project ([Change a member's roles](lead-settings.md#change-a-members-roles)), or be you.\r
-\r
-1. In the text card, open **Finalization** and click **Consolidate…**. The form **Consolidate submitted results** opens with the compared submissions already ticked.\r
-2. Under **Submissions to merge**, check the ticked submissions (at least two).\r
-3. Under **Consolidator**, choose a person. The list starts with **Choose a consolidator**, then you (*You (Mia Lead)*), then every member with the Consolidator role; the hint under the list links **Settings → People**, where you give the role to someone who is missing. If the project rule forbids it, people who annotated this text are shown but cannot be chosen (*— Ana Weber annotated this text*).\r
-4. If the person's profile lists languages but not the text's language, tick the box *Assign this consolidator despite missing en in their profile*, right under the list.\r
-5. Optional: enter **Consolidation reason (optional)**. The consolidator sees it in **My tasks** and above the groups; it is also kept in the history.\r
-6. Click **Start consolidation**.\r
-\r
-If the button stays inactive, the form says why: *Select at least two submissions.*, *Choose a consolidator.*, *Confirm the consolidator despite missing en.*, or someone already has a consolidation in progress on this text. If that is you, the button reads **Continue consolidation**.\r
-\r
-After the start:\r
-\r
-- If you chose someone else: Ontotator sends no e-mail. Tell the person that a consolidation is waiting in their **My tasks**.\r
-- If you chose yourself: you get the Consolidator role for this project. Click **Open consolidation** in the text card or **Open my task** in the text's row on **Documents**. Each opens your task, where you decide and submit.\r
-\r
-While the consolidation runs, the card shows the consolidator and how many groups are still open. What the consolidator does is in the [consolidator chapter](consolidator.md).\r
-\r
-### Read a submitted consolidation\r
-\r
-What for: see how a consolidation result came about before you accept it.\r
-\r
-1. In the text card, click **Open consolidation**. Or, if the card shows flagged findings ("guidelines unclear"), click **Open** next to one to go straight to that group.\r
-2. The heading reads, for example, *Consolidation of CASE-1 en v1*. The banner says who submitted it. The view is read-only.\r
-3. In decided groups, the chosen value of each conflicting row is tagged **kept**, including the chosen passage and modifiers. The consolidator's notes show as *Note: …*, in the list under each closed group as well, and flagged groups show **Flagged: guidelines unclear**. Added findings say who added them and list their values.\r
-4. Click **Back to documents**.\r
-\r
-### Accept a consolidation\r
-\r
-What for: make a submitted consolidation the final result.\r
-\r
-1. Click **Accept result…** in the row.\r
-2. Read the consolidation first ([Read a submitted consolidation](#read-a-submitted-consolidation)). Pay attention to groups flagged **Flagged: guidelines unclear** and to the notes: they show where your guidelines need a clearer rule ([Publish the first or a new guideline version](lead-settings.md#publish-the-first-or-a-new-guideline-version)).\r
-3. Click **Accept result**.\r
-\r
-A submitted consolidation cannot be reopened or reassigned. If it contains a mistake, choose **Choose another result…** in **Finalization**, then **Consolidate…** to start a new consolidation; the earlier consolidation can be one of its submissions.\r
-\r
-### Review changes to a final result\r
-\r
-What for: confirm a final result after something changed, for example a newer submission or a corrected text. The row's next step is **Confirm final result**.\r
-\r
-1. In the row, click **Review changes…**. The card lists what changed.\r
-2. Optional: if the text changed, click **Show changes** to see the changed passages.\r
-3. Choose one:\r
-   - Keep the final result on the old version, for example *Keep final on v1*.\r
-   - **Use the newer result**.\r
-   - Carry it to the new version, for example *Carry to v2…* (see [Carry submitted work to a new text version](#carry-submitted-work-to-a-new-text-version)).\r
-\r
-### Change a final result\r
-\r
-What for: pick another result after you already chose one.\r
-\r
-1. Open the text card at **Finalization**.\r
-2. Click **Change final…**.\r
-3. Click **Use as final** in the row of the result you want.\r
-\r
-## Translation and text-change decisions\r
-\r
-### Resolve a rejected or queried translation\r
-\r
-What for: decide what happens after a reviewer rejected or queried a translation. The row's next step is **Resolve rejected translation** or **Resolve queried translation**.\r
-\r
-1. In the row, click **Resolve…**. The options open below the row with the reviewer's rationale.\r
-2. Choose one:\r
-   - **Assign a new review…**: someone reviews it again.\r
-   - **Correct the translation…**: you correct it yourself ([Correct a translation yourself](#correct-a-translation-yourself)).\r
-   - The discard item, for example *Discard the de translation…*: enter a **Reason** and click **Discard**. Nothing is deleted; the versions are marked as discarded.\r
-3. Or click **Cancel**.\r
-\r
-### Correct a translation yourself\r
-\r
-What for: fix a queried or rejected translation without assigning another review.\r
-\r
-1. In the row, click **Resolve…**, then **Correct the translation…** (or **Continue your correction**).\r
-2. Read the panel: you review the version yourself, and your corrected text becomes the next text version and counts as accepted. If your profile lists languages but not this one, tick *Correct despite missing de in your profile*.\r
-3. Click **Open translation review**. The screen says **You are correcting this translation as project lead.**\r
-4. Correct the translation as described in [Review a translation](annotator.md#review-a-translation). Only **Accepted with corrections** is offered.\r
-5. Submit with **Submit review…** (or \`Ctrl+Enter\`), then click **Back to Documents**.\r
-\r
-### Accept a translation that was not reviewed\r
-\r
-What for: annotate a translation that was reviewed outside Ontotator. The row's next step is **Translation not accepted**.\r
-\r
-1. In the row, click **Assign review or accept…**.\r
-2. Choose one:\r
-   - Click **Turn translation review on**, then assign a review.\r
-   - Tick **This translation was reviewed outside Ontotator — accept it as it is**, enter a **Reason** and click **Accept and annotate**.\r
-\r
-Ontotator records the acceptance with your name, the reason and the time. To have an accepted translation reviewed after all, click **Assign a new review…** in the **Translation** part of the text card.\r
-\r
-### Handle a text change for open annotation work\r
-\r
-What for: decide what happens when a text gets a new version while someone is still annotating the old one. The row's next step is **Handle text change**.\r
-\r
-Before you start: if the task is paused by a problem report, [decide the report](#decide-on-a-problem-report) first.\r
-\r
-1. In the row, click **Handle text change…**. A task from proposals, or a task on a correction that was not accepted, only offers **Withdraw**.\r
-2. Choose one:\r
-   - Move to the new version: the annotator continues on the corrected text; their draft findings are carried and marked for checking.\r
-   - Let the annotator finish on the old version: the result is carried to the new version for them to check.\r
-   - **Withdraw**: the draft stays with them, and the new version needs a new annotation.\r
-3. Click **Apply**.\r
-\r
-### Carry submitted work to a new text version\r
-\r
-What for: reuse submitted findings after the text was corrected. The row's next step reads, for example, *Carry to v2…*.\r
-\r
-1. In the row, click the carry button, for example *Carry to v2…*.\r
-2. Choose who continues: the author, **Someone else…** (then pick the **Annotator**), or annotate the new version from scratch.\r
-3. Click **Assign**.\r
-\r
-The annotator must check the carried findings before submitting ([Review carried findings](annotator.md#review-carried-findings)).\r
-\r
-## Problem reports\r
-\r
-Annotators and reviewers can report a problem with a text. This pauses their task until you decide.\r
-\r
-### Decide on a problem report\r
-\r
-What for: answer a report and let the work go on.\r
-\r
-1. On **Documents**, click **Decide on report…** in the row. Or click **Open report** in the text card.\r
-2. Read the report: who reported it, the reason and the history.\r
-3. In the common case, write an optional answer and click the close-and-resume button, for example *Close and resume Task 12*.\r
-4. For other cases, open **Other decisions** and choose one:\r
-   - **Close report…** or **Close, keep paused…**: close it with an outcome for the reporter.\r
-   - **Release pause…**: let paused tasks continue.\r
-   - **Pause other tasks…**: pause other tasks on the same text or project.\r
-   - **Agree empty restart…**: restart the task with an empty round, after agreeing with the reporter.\r
-   - **Reopen report…**: open a closed report again.\r
-5. Confirm in the form that opens.\r
-6. Click **Back to Documents**, or go to the next decision.\r
-\r
-![The decision card of a problem report. Close and resume is the common decision; the others are under Other decisions.](images/lead-problem-report.png)\r
-\r
-A final result is never changed here. If a task is still paused after the report was closed, the row shows **Resume task…**; click it and release the pause.\r
-\r
-## Export\r
-\r
-### Export final results\r
-\r
-What for: download the accepted final results.\r
-\r
-1. In the sidebar, click **Export**. Or click **Export final results…** on **Documents** or **Progress**.\r
-2. The card **Final results** checks every text. It lists texts that need your decision and texts left out because they have no final result.\r
-3. If texts need your decision or are left out, a tick box names how many results are exported and how many texts are left out, for example *Export the 3 results as they are; leave out the other 243 texts*. Tick it to export now anyway. Without the tick, **Create final export** does not start. The export's README.txt lists the left-out texts and the warnings you acknowledged with this tick.\r
-4. Click **Create final export**.\r
-5. When it is ready, click **Download (ZIP)**.\r
-\r
-![The final results check on the Export page](images/lead-export.png)\r
-\r
-Click **Check again** after you accepted more results. **What is in the file?** explains the contents. Values that annotators never confirmed are marked as *defaulted* in the file; unresolved proposals keep their reviewer flag and note. The file formats are described in the [scientific workflow guide](../scientific-workflow.md) and the [translation review export guide](../translation-review-export.md).\r
-\r
-### Export research data\r
-\r
-What for: download raw material for analysis. People appear as pseudonyms.\r
-\r
-1. On **Export**, go to **Research data**.\r
-2. Choose a row: **Annotation results**, **Edit log** or **Translation reviews**.\r
-3. Click **Create**, then **Download** when it is ready.\r
-\r
-How to analyse these files is described in the [scientific workflow guide](../scientific-workflow.md).\r
+`,S=`# Lead: results, decisions and export
+
+This chapter is for project leads. It covers choosing the final result of each text, consolidations, the decisions on translations, text changes and problem reports, and the export. Back to the [lead overview](lead.md).
+
+## Accepting results and consolidation
+
+Each text version gets one final result: one submission or one consolidation that you accept. Only final results go into the final export. You do this in the **Finalization** part of the [text card](lead-documents.md#the-text-card).
+
+How to choose:
+
+- If all submissions agree, accept one.
+- If they differ in a few findings and one is clearly right, read them and use that one.
+- If they differ and you want each difference decided on its own, start a consolidation.
+
+### Accept a result or compare results
+
+What for: choose the final result of a text.
+
+1. On **Documents**, tab **Needs your decision**, click **Accept result…** or **Compare results…** in the row. The row reads **Accept result…** when there is one result to accept or all findings match, and **Compare results…** when submissions differ. The card opens at **Finalization**.
+2. With one submission or a submitted consolidation, check it and click **Accept result**.
+3. If all annotations agree, the card says so. Click **Accept result**.
+4. If they differ, the card shows the agreement, for example *Agreement: 5 of 9 findings match, 1 differs in context only*. **How is this counted?** explains the numbers. Open a submission with **Open submission** to read it in the read-only text view.
+5. Warning: the next action saves at once, without a confirmation. Click **Use as final** in the row of the submission you want. Or [start a consolidation](#start-a-consolidation) instead.
+
+After saving, the card moves on to the next text that needs a decision. The decided row stays in the tab with a *Resolved* badge until you click **Refresh** or change the tab. To undo, [change the final result](#change-a-final-result).
+
+![The Finalization part comparing two submissions, with the agreement line and Use as final](images/lead-compare-results.png)
+
+If the project rule says the consolidator may not be an annotator, you cannot accept your own result; another lead must do it.
+
+### Accept early while other annotations are open
+
+What for: accept a result before everyone has submitted.
+
+1. Open the text card at **Finalization**. It lists the annotations still open.
+2. Optional: remove open work with **Remove assignment…**.
+3. Choose the result as in [Accept a result or compare results](#accept-a-result-or-compare-results).
+
+Open work stays assigned unless you remove it.
+
+### Start a consolidation
+
+What for: let one person decide the differences between submissions and build one result.
+
+Before you start: the text needs at least two submissions. The consolidator must have the **Consolidator** role in the project ([Change a member's roles](lead-settings.md#change-a-members-roles)), or be you.
+
+1. In the text card, open **Finalization** and click **Consolidate…**. The form **Consolidate submitted results** opens with the compared submissions already ticked.
+2. Under **Submissions to merge**, check the ticked submissions (at least two).
+3. Under **Consolidator**, choose a person. The list starts with **Choose a consolidator**, then you (*You (Mia Lead)*), then every member with the Consolidator role; the hint under the list links **Settings → People**, where you give the role to someone who is missing. If the project rule forbids it, people who annotated this text are shown but cannot be chosen (*— Ana Weber annotated this text*).
+4. If the person's profile lists languages but not the text's language, tick the box *Assign this consolidator despite missing en in their profile*, right under the list.
+5. Optional: enter **Consolidation reason (optional)**. The consolidator sees it in **My tasks** and above the groups; it is also kept in the history.
+6. Click **Start consolidation**.
+
+If the button stays inactive, the form says why: *Select at least two submissions.*, *Choose a consolidator.*, *Confirm the consolidator despite missing en.*, or someone already has a consolidation in progress on this text. If that is you, the button reads **Continue consolidation**.
+
+After the start:
+
+- If you chose someone else: Ontotator sends no e-mail. Tell the person that a consolidation is waiting in their **My tasks**.
+- If you chose yourself: you get the Consolidator role for this project. Click **Open consolidation** in the text card or **Open my task** in the text's row on **Documents**. Each opens your task, where you decide and submit.
+
+While the consolidation runs, the card shows the consolidator and how many groups are still open. What the consolidator does is in the [consolidator chapter](consolidator.md).
+
+### Read a submitted consolidation
+
+What for: see how a consolidation result came about before you accept it.
+
+1. In the text card, click **Open consolidation**. Or, if the card shows flagged findings ("guidelines unclear"), click **Open** next to one to go straight to that group.
+2. The heading reads, for example, *Consolidation of CASE-1 en v1*. The banner says who submitted it. The view is read-only.
+3. In decided groups, the chosen value of each conflicting row is tagged **kept**, including the chosen passage and modifiers. The consolidator's notes show as *Note: …*, in the list under each closed group as well, and flagged groups show **Flagged: guidelines unclear**. Added findings say who added them and list their values.
+4. Click **Back to documents**.
+
+### Accept a consolidation
+
+What for: make a submitted consolidation the final result.
+
+1. Click **Accept result…** in the row.
+2. Read the consolidation first ([Read a submitted consolidation](#read-a-submitted-consolidation)). Pay attention to groups flagged **Flagged: guidelines unclear** and to the notes: they show where your guidelines need a clearer rule ([Publish the first or a new guideline version](lead-settings.md#publish-the-first-or-a-new-guideline-version)).
+3. Click **Accept result**.
+
+A submitted consolidation cannot be reopened or reassigned. If it contains a mistake, choose **Choose another result…** in **Finalization**, then **Consolidate…** to start a new consolidation; the earlier consolidation can be one of its submissions.
+
+### Review changes to a final result
+
+What for: confirm a final result after something changed, for example a newer submission or a corrected text. The row's next step is **Confirm final result**.
+
+1. In the row, click **Review changes…**. The card lists what changed.
+2. Optional: if the text changed, click **Show changes** to see the changed passages.
+3. Choose one:
+   - Keep the final result on the old version, for example *Keep final on v1*.
+   - **Use the newer result**.
+   - Carry it to the new version, for example *Carry to v2…* (see [Carry submitted work to a new text version](#carry-submitted-work-to-a-new-text-version)).
+
+### Change a final result
+
+What for: pick another result after you already chose one.
+
+1. Open the text card at **Finalization**.
+2. Click **Change final…**.
+3. Click **Use as final** in the row of the result you want.
+
+## Translation and text-change decisions
+
+### Resolve a rejected or queried translation
+
+What for: decide what happens after a reviewer rejected or queried a translation. The row's next step is **Resolve rejected translation** or **Resolve queried translation**.
+
+1. In the row, click **Resolve…**. The options open below the row with the reviewer's rationale.
+2. Choose one:
+   - **Assign a new review…**: someone reviews it again.
+   - **Correct the translation…**: you correct it yourself ([Correct a translation yourself](#correct-a-translation-yourself)).
+   - The discard item, for example *Discard the de translation…*: enter a **Reason** and click **Discard**. Nothing is deleted; the versions are marked as discarded.
+3. Or click **Cancel**.
+
+### Correct a translation yourself
+
+What for: fix a queried or rejected translation without assigning another review.
+
+1. In the row, click **Resolve…**, then **Correct the translation…** (or **Continue your correction**).
+2. Read the panel: you review the version yourself, and your corrected text becomes the next text version and counts as accepted. If your profile lists languages but not this one, tick *Correct despite missing de in your profile*.
+3. Click **Open translation review**. The screen says **You are correcting this translation as project lead.**
+4. Correct the translation as described in [Review a translation](annotator.md#review-a-translation). Only **Accepted with corrections** is offered.
+5. Submit with **Submit review…** (or \`Ctrl+Enter\`), then click **Back to Documents**.
+
+### Accept a translation that was not reviewed
+
+What for: annotate a translation that was reviewed outside Ontotator. The row's next step is **Translation not accepted**.
+
+1. In the row, click **Assign review or accept…**.
+2. Choose one:
+   - Click **Turn translation review on**, then assign a review.
+   - Tick **This translation was reviewed outside Ontotator — accept it as it is**, enter a **Reason** and click **Accept and annotate**.
+
+Ontotator records the acceptance with your name, the reason and the time. To have an accepted translation reviewed after all, click **Assign a new review…** in the **Translation** part of the text card.
+
+### Handle a text change for open annotation work
+
+What for: decide what happens when a text gets a new version while someone is still annotating the old one. The row's next step is **Handle text change**.
+
+Before you start: if the task is paused by a problem report, [decide the report](#decide-on-a-problem-report) first.
+
+1. In the row, click **Handle text change…**. A task from proposals, or a task on a correction that was not accepted, only offers **Withdraw**.
+2. Choose one:
+   - Move to the new version: the annotator continues on the corrected text; their draft findings are carried and marked for checking.
+   - Let the annotator finish on the old version: the result is carried to the new version for them to check.
+   - **Withdraw**: the draft stays with them, and the new version needs a new annotation.
+3. Click **Apply**.
+
+### Carry submitted work to a new text version
+
+What for: reuse submitted findings after the text was corrected. The row's next step reads, for example, *Carry to v2…*.
+
+1. In the row, click the carry button, for example *Carry to v2…*.
+2. Choose who continues: the author, **Someone else…** (then pick the **Annotator**), or annotate the new version from scratch.
+3. Click **Assign**.
+
+The annotator must check the carried findings before submitting ([Review carried findings](annotator.md#review-carried-findings)).
+
+## Problem reports
+
+Annotators and reviewers can report a problem with a text. This pauses their task until you decide.
+
+### Decide on a problem report
+
+What for: answer a report and let the work go on.
+
+1. On **Documents**, click **Decide on report…** in the row. Or click **Open report** in the text card.
+2. Read the report: who reported it, the reason and the history.
+3. In the common case, write an optional answer and click the close-and-resume button, for example *Close and resume Task 12*.
+4. For other cases, open **Other decisions** and choose one:
+   - **Close report…** or **Close, keep paused…**: close it with an outcome for the reporter.
+   - **Release pause…**: let paused tasks continue.
+   - **Pause other tasks…**: pause other tasks on the same text or project.
+   - **Agree empty restart…**: restart the task with an empty round, after agreeing with the reporter.
+   - **Reopen report…**: open a closed report again.
+5. Confirm in the form that opens.
+6. Click **Back to Documents**, or go to the next decision.
+
+![The decision card of a problem report. Close and resume is the common decision; the others are under Other decisions.](images/lead-problem-report.png)
+
+A final result is never changed here. If a task is still paused after the report was closed, the row shows **Resume task…**; click it and release the pause.
+
+## Export
+
+### Export final results
+
+What for: download the accepted final results.
+
+1. In the sidebar, click **Export**. Or click **Export final results…** on **Documents** or **Progress**.
+2. The card **Final results** checks every text. It lists texts that need your decision and texts left out because they have no final result.
+3. If texts need your decision or are left out, a tick box names how many results are exported and how many texts are left out, for example *Export the 3 results as they are; leave out the other 243 texts*. Tick it to export now anyway. Without the tick, **Create final export** does not start. The export's README.txt lists the left-out texts and the warnings you acknowledged with this tick.
+4. Click **Create final export**.
+5. When it is ready, click **Download (ZIP)**.
+
+![The final results check on the Export page](images/lead-export.png)
+
+Click **Check again** after you accepted more results. **What is in the file?** explains the contents. Values that annotators never confirmed are marked as *defaulted* in the file; unresolved proposals keep their reviewer flag and note. The file formats are described in the [scientific workflow guide](../scientific-workflow.md) and the [translation review export guide](../translation-review-export.md).
+
+### Export research data
+
+What for: download raw material for analysis. People appear as pseudonyms.
+
+1. On **Export**, go to **Research data**.
+2. Choose a row: **Annotation results**, **Edit log** or **Translation reviews**.
+3. Click **Create**, then **Download** when it is ready.
+
+How to analyse these files is described in the [scientific workflow guide](../scientific-workflow.md).
 `,j=`# Lead: project settings
 
 This chapter is for project leads. It covers every tab under **Settings**: the project name and languages, the ontology, the submission rules, the workflow, the people and the guidelines. Back to the [lead overview](lead.md).
@@ -2181,4 +2181,4 @@ The lead's tasks are in three chapters:
 10. Export the final results: [Export final results](lead-results.md#export-final-results).
 
 Try it with the demo project: the [demo project guide](../../examples/demo-project/README.md) walks through every step with invented clinical letters, tool proposals, translations and guidelines.
-`,I="/assets/admin-new-project-Cir0O66s.png",R="/assets/admin-setup-code-C_NzEJeU.png",W="/assets/annotator-carried-finding-yADspK5V.png",_="/assets/annotator-editor-dqHteLqT.png",P="/assets/annotator-finding-values-DF2d7KaZ.png",D="/assets/annotator-new-finding-Ck1Vt4sY.png",E="/assets/annotator-proposal-review-BfFE3fNQ.png",M="/assets/annotator-submit-dialog-DEybG3Zm.png",N="/assets/annotator-translation-review-DA3-4k_Z.png",U="/assets/consolidator-group-table-Dp7hujX8.png",Y="/assets/consolidator-submit-dialog-DJEkTQ6t.png",F="/assets/getting-started-my-tasks-ezmcCup8.png",L="/assets/getting-started-set-password-CC57Fe71.png",H="/assets/lead-assign-CaSzdREJ.png",B="/assets/lead-compare-results-DC6HkQJ3.png",G="/assets/lead-documents-CjycjdEv.png",z="/assets/lead-export-KFM5Mz1P.png",q="/assets/lead-move-release-check-BHRNaFox.png",K="/assets/lead-problem-report-C6J_XPtm.png",V="/assets/lead-progress-B0_lg4T2.png",Z="/assets/lead-text-card-DRw6CK7x.png",Q="/assets/lead-upload-preview-64cXvoTU.png",$="/assets/lead-work-plan-Dau0Rzps.png",J="/assets/workflow-Dii9V6xB.png",X="https://github.com/halbritter-lab/ontotator/blob/main",l="https://handbook.invalid/docs/handbook/",ee=Object.assign({"../../../docs/handbook/README.md":y,"../../../docs/handbook/admin.md":k,"../../../docs/handbook/annotator.md":b,"../../../docs/handbook/consolidator.md":v,"../../../docs/handbook/faq.md":x,"../../../docs/handbook/first-task.md":T,"../../../docs/handbook/getting-started.md":C,"../../../docs/handbook/lead-documents.md":A,"../../../docs/handbook/lead-results.md":S,"../../../docs/handbook/lead-settings.md":j,"../../../docs/handbook/lead.md":O}),te=Object.assign({"../../../docs/handbook/images/admin-new-project.png":I,"../../../docs/handbook/images/admin-setup-code.png":R,"../../../docs/handbook/images/annotator-carried-finding.png":W,"../../../docs/handbook/images/annotator-editor.png":_,"../../../docs/handbook/images/annotator-finding-values.png":P,"../../../docs/handbook/images/annotator-new-finding.png":D,"../../../docs/handbook/images/annotator-proposal-review.png":E,"../../../docs/handbook/images/annotator-submit-dialog.png":M,"../../../docs/handbook/images/annotator-translation-review.png":N,"../../../docs/handbook/images/consolidator-group-table.png":U,"../../../docs/handbook/images/consolidator-submit-dialog.png":Y,"../../../docs/handbook/images/getting-started-my-tasks.png":F,"../../../docs/handbook/images/getting-started-set-password.png":L,"../../../docs/handbook/images/lead-assign.png":H,"../../../docs/handbook/images/lead-compare-results.png":B,"../../../docs/handbook/images/lead-documents.png":G,"../../../docs/handbook/images/lead-export.png":z,"../../../docs/handbook/images/lead-move-release-check.png":q,"../../../docs/handbook/images/lead-problem-report.png":K,"../../../docs/handbook/images/lead-progress.png":V,"../../../docs/handbook/images/lead-text-card.png":Z,"../../../docs/handbook/images/lead-upload-preview.png":Q,"../../../docs/handbook/images/lead-work-plan.png":$,"../../../docs/handbook/images/workflow.png":J}),c=e=>e.slice(e.lastIndexOf("/")+1),r=Object.fromEntries(Object.entries(ee).map(([e,t])=>[c(e).replace(/\.md$/,""),t])),ne=Object.fromEntries(Object.entries(te).map(([e,t])=>[`images/${c(e)}`,t]));function oe(e){var t;return((t=/^# +(.+)$/m.exec(r[e]??""))==null?void 0:t[1].trim())??e}function ae(){const e=[...(r.README??"").matchAll(/\]\(([A-Za-z0-9_-]+)\.md[)#]/g)].map(t=>t[1]);return[...new Set(["README",...e,...Object.keys(r).sort()])].filter(t=>t in r)}function se(e){return e.toLowerCase().replace(/[^\p{L}\p{M}\p{N}\p{Pc} -]/gu,"").replace(/ /g,"-")}function re(){const e=new Map;return t=>{const o=se(t);let n=o;for(;e.has(n);){const s=e.get(o)+1;e.set(o,s),n=`${o}-${s}`}return e.set(n,0),n}}function ie(e,t){var d;if(/^[a-z][a-z0-9+.-]*:/i.test(e))return{kind:"external",href:e};const o=new URL(e,`${l}${t}.md`),n=decodeURIComponent(o.hash.slice(1)),s=(d=/^\/docs\/handbook\/([A-Za-z0-9_-]+)\.md$/.exec(o.pathname))==null?void 0:d[1];return s&&s in r?s===t&&n?{kind:"anchor",id:n}:{kind:"chapter",href:h({name:"help",chapter:s,...n?{section:n}:{}})}:{kind:"external",href:`${X}${o.pathname}${o.hash}`}}function he(e,t){if(/^[a-z][a-z0-9+.-]*:/i.test(e))return null;const o=new URL(e,`${l}${t}.md`).pathname.replace(/^\/docs\/handbook\//,"");return ne[o]??null}const u=e=>e.type==="text"?e.value:"children"in e?e.children.map(u).join(""):"";function de(){return e=>{const t=re(),o=n=>n.children.forEach(s=>{s.type==="element"&&(/^h[1-6]$/.test(s.tagName)?s.properties.id=t(u(s)):o(s))});o(e)}}function p(e){var t;(t=document.getElementById(e))==null||t.scrollIntoView()}const le=e=>e.button===0&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey&&!e.altKey;function ce(e){return{a:({href:t,children:o})=>{if(!t)return a.jsx(a.Fragment,{children:o});const n=ie(t,e);return n.kind==="external"?a.jsx("a",{href:n.href,target:"_blank",rel:"noopener noreferrer",children:o}):n.kind==="chapter"?a.jsx("a",{href:n.href,children:o}):a.jsx("a",{href:h({name:"help",chapter:e,section:n.id}),onClick:s=>{le(s)&&(s.preventDefault(),p(n.id))},children:o})},img:({src:t,alt:o})=>{const n=t?he(t,e):null;return n?a.jsx("a",{className:"help-image-link",href:n,target:"_blank",rel:"noopener noreferrer",title:"Open the image at full size in a new tab",children:a.jsx("img",{className:"help-image",src:n,alt:o??"",loading:"lazy"})}):a.jsx("span",{className:"guideline-image-text",children:o?`Image: ${o}`:"Image"})},table:({children:t})=>a.jsx("div",{className:"guideline-table-scroll",tabIndex:0,role:"region","aria-label":"Table",children:a.jsx("table",{children:t})})}}function me({chapter:e="README",section:t}){const o=r[e];return i.useEffect(()=>{var n,s;t?p(t):(s=(n=document.getElementById("main"))==null?void 0:n.scrollTo)==null||s.call(n,0,0)},[e,t]),a.jsxs("div",{className:"help-page",children:[a.jsxs("nav",{className:"help-chapters","aria-label":"Handbook chapters",children:[a.jsx("ul",{children:ae().map(n=>a.jsx("li",{children:a.jsx("a",{href:h({name:"help",chapter:n}),"aria-current":n===e?"page":void 0,children:oe(n)})},n))}),a.jsx(w,{})]}),a.jsx("article",{className:"guideline-document help-document",children:o===void 0?a.jsxs(a.Fragment,{children:[a.jsx("h1",{children:"Chapter not found"}),a.jsxs("p",{children:["This handbook has no chapter “",e,"”. Pick one from the list."]})]}):a.jsx("div",{className:"guideline-markdown",children:a.jsx(f,{remarkPlugins:[g],rehypePlugins:[de],skipHtml:!0,components:ce(e),children:o})})})]})}export{me as default};
+`,I="/assets/admin-new-project-Cir0O66s.png",R="/assets/admin-setup-code-C_NzEJeU.png",W="/assets/annotator-carried-finding-yADspK5V.png",_="/assets/annotator-editor-dqHteLqT.png",P="/assets/annotator-finding-values-DF2d7KaZ.png",D="/assets/annotator-new-finding-Ck1Vt4sY.png",E="/assets/annotator-proposal-review-BfFE3fNQ.png",M="/assets/annotator-submit-dialog-DEybG3Zm.png",N="/assets/annotator-translation-review-DA3-4k_Z.png",U="/assets/consolidator-group-table-Dp7hujX8.png",Y="/assets/consolidator-submit-dialog-DJEkTQ6t.png",F="/assets/getting-started-my-tasks-ezmcCup8.png",L="/assets/getting-started-set-password-CC57Fe71.png",H="/assets/lead-assign-CaSzdREJ.png",B="/assets/lead-compare-results-DC6HkQJ3.png",G="/assets/lead-documents-CjycjdEv.png",z="/assets/lead-export-KFM5Mz1P.png",q="/assets/lead-move-release-check-BHRNaFox.png",K="/assets/lead-problem-report-C6J_XPtm.png",V="/assets/lead-progress-B0_lg4T2.png",Z="/assets/lead-text-card-DRw6CK7x.png",Q="/assets/lead-upload-preview-64cXvoTU.png",$="/assets/lead-work-plan-Dau0Rzps.png",J="/assets/workflow-Dii9V6xB.png",X="https://github.com/halbritter-lab/ontotator/blob/main",l="https://handbook.invalid/docs/handbook/",ee=Object.assign({"../../../docs/handbook/README.md":y,"../../../docs/handbook/admin.md":k,"../../../docs/handbook/annotator.md":b,"../../../docs/handbook/consolidator.md":v,"../../../docs/handbook/faq.md":x,"../../../docs/handbook/first-task.md":T,"../../../docs/handbook/getting-started.md":C,"../../../docs/handbook/lead-documents.md":A,"../../../docs/handbook/lead-results.md":S,"../../../docs/handbook/lead-settings.md":j,"../../../docs/handbook/lead.md":O}),te=Object.assign({"../../../docs/handbook/images/admin-new-project.png":I,"../../../docs/handbook/images/admin-setup-code.png":R,"../../../docs/handbook/images/annotator-carried-finding.png":W,"../../../docs/handbook/images/annotator-editor.png":_,"../../../docs/handbook/images/annotator-finding-values.png":P,"../../../docs/handbook/images/annotator-new-finding.png":D,"../../../docs/handbook/images/annotator-proposal-review.png":E,"../../../docs/handbook/images/annotator-submit-dialog.png":M,"../../../docs/handbook/images/annotator-translation-review.png":N,"../../../docs/handbook/images/consolidator-group-table.png":U,"../../../docs/handbook/images/consolidator-submit-dialog.png":Y,"../../../docs/handbook/images/getting-started-my-tasks.png":F,"../../../docs/handbook/images/getting-started-set-password.png":L,"../../../docs/handbook/images/lead-assign.png":H,"../../../docs/handbook/images/lead-compare-results.png":B,"../../../docs/handbook/images/lead-documents.png":G,"../../../docs/handbook/images/lead-export.png":z,"../../../docs/handbook/images/lead-move-release-check.png":q,"../../../docs/handbook/images/lead-problem-report.png":K,"../../../docs/handbook/images/lead-progress.png":V,"../../../docs/handbook/images/lead-text-card.png":Z,"../../../docs/handbook/images/lead-upload-preview.png":Q,"../../../docs/handbook/images/lead-work-plan.png":$,"../../../docs/handbook/images/workflow.png":J}),c=e=>e.slice(e.lastIndexOf("/")+1),i=Object.fromEntries(Object.entries(ee).map(([e,t])=>[c(e).replace(/\.md$/,""),t])),ne=Object.fromEntries(Object.entries(te).map(([e,t])=>[`images/${c(e)}`,t]));function oe(e){var t;return((t=/^# +(.+)$/m.exec(i[e]??""))==null?void 0:t[1].trim())??e}function ae(){const e=[...(i.README??"").matchAll(/\]\(([A-Za-z0-9_-]+)\.md[)#]/g)].map(t=>t[1]);return[...new Set(["README",...e,...Object.keys(i).sort()])].filter(t=>t in i)}function se(e){return e.toLowerCase().replace(/[^\p{L}\p{M}\p{N}\p{Pc} -]/gu,"").replace(/ /g,"-")}function ie(){const e=new Map;return t=>{const o=se(t);let n=o;for(;e.has(n);){const s=e.get(o)+1;e.set(o,s),n=`${o}-${s}`}return e.set(n,0),n}}function re(e,t){var d;if(/^[a-z][a-z0-9+.-]*:/i.test(e))return{kind:"external",href:e};const o=new URL(e,`${l}${t}.md`),n=decodeURIComponent(o.hash.slice(1)),s=(d=/^\/docs\/handbook\/([A-Za-z0-9_-]+)\.md$/.exec(o.pathname))==null?void 0:d[1];return s&&s in i?s===t&&n?{kind:"anchor",id:n}:{kind:"chapter",href:h({name:"help",chapter:s,...n?{section:n}:{}})}:{kind:"external",href:`${X}${o.pathname}${o.hash}`}}function he(e,t){if(/^[a-z][a-z0-9+.-]*:/i.test(e))return null;const o=new URL(e,`${l}${t}.md`).pathname.replace(/^\/docs\/handbook\//,"");return ne[o]??null}const u=e=>e.type==="text"?e.value:"children"in e?e.children.map(u).join(""):"";function de(){return e=>{const t=ie(),o=n=>n.children.forEach(s=>{s.type==="element"&&(/^h[1-6]$/.test(s.tagName)?s.properties.id=t(u(s)):o(s))});o(e)}}function p(e){var t;(t=document.getElementById(e))==null||t.scrollIntoView()}const le=e=>e.button===0&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey&&!e.altKey;function ce(e){return{a:({href:t,children:o})=>{if(!t)return a.jsx(a.Fragment,{children:o});const n=re(t,e);return n.kind==="external"?a.jsx("a",{href:n.href,target:"_blank",rel:"noopener noreferrer",children:o}):n.kind==="chapter"?a.jsx("a",{href:n.href,children:o}):a.jsx("a",{href:h({name:"help",chapter:e,section:n.id}),onClick:s=>{le(s)&&(s.preventDefault(),p(n.id))},children:o})},img:({src:t,alt:o})=>{const n=t?he(t,e):null;return n?a.jsx("a",{className:"help-image-link",href:n,target:"_blank",rel:"noopener noreferrer",title:"Open the image at full size in a new tab",children:a.jsx("img",{className:"help-image",src:n,alt:o??"",loading:"lazy"})}):a.jsx("span",{className:"guideline-image-text",children:o?`Image: ${o}`:"Image"})},table:({children:t})=>a.jsx("div",{className:"guideline-table-scroll",tabIndex:0,role:"region","aria-label":"Table",children:a.jsx("table",{children:t})})}}function me({chapter:e="README",section:t}){const o=i[e];return r.useEffect(()=>{var n,s;t?p(t):(s=(n=document.getElementById("main"))==null?void 0:n.scrollTo)==null||s.call(n,0,0)},[e,t]),a.jsxs("div",{className:"help-page",children:[a.jsxs("nav",{className:"help-chapters","aria-label":"Handbook chapters",children:[a.jsx("ul",{children:ae().map(n=>a.jsx("li",{children:a.jsx("a",{href:h({name:"help",chapter:n}),"aria-current":n===e?"page":void 0,children:oe(n)})},n))}),a.jsx(w,{})]}),a.jsx("article",{className:"guideline-document help-document",children:o===void 0?a.jsxs(a.Fragment,{children:[a.jsx("h1",{children:"Chapter not found"}),a.jsxs("p",{children:["This handbook has no chapter “",e,"”. Pick one from the list."]})]}):a.jsx("div",{className:"guideline-markdown",children:a.jsx(f,{remarkPlugins:[g],rehypePlugins:[de],skipHtml:!0,components:ce(e),children:o})})})]})}export{me as default};
