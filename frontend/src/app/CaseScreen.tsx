@@ -3548,7 +3548,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                       >
                         <div className="doc-id doc-row">
                           <TermName termId={t.term_id ?? t.annotation_id} label={termLabel(t.layer_id, t.term_id ?? t.annotation_id)} />
-                          {defaultedKeys.has(refKey(t)) && <StatusBadge tone="warning">Defaults to confirm</StatusBadge>}
+                          {/* #148: only Confirm decides a proposal's defaults; an unresolved one keeps them as defaults. */}
+                          {defaultedKeys.has(refKey(t)) && (dec?.outcome === "uncertain"
+                            ? <StatusBadge tone="warning" title="Submitted as Unresolved with your note; its prefilled values stay recorded as defaults.">Defaults not confirmed</StatusBadge>
+                            : <StatusBadge tone="warning">Defaults to confirm</StatusBadge>)}
                           {dec ? (
                             <span className={`decision-tag decision-tag--${dec.outcome}`}>
                               {dec.outcome === "confirmed" ? <><IconCheck />Confirmed</>
@@ -3617,10 +3620,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 </Button>}
               </div>
               {isReviewLike(view.key.mode) && (() => {
-                const proposals = completionResults.filter(s => reviewTargets.some(t => t.annotation_id === s.annotation.annotation_id && t.version === s.version)).length;
-                const own = completionResults.length - proposals;
+                const proposals = completionResults.filter(s => reviewTargets.some(t => t.annotation_id === s.annotation.annotation_id && t.version === s.version));
+                // #148: a proposal in the result is confirmed or unresolved; count it by its decision.
+                const unresolved = proposals.filter(s => decisionsMap[refKey({ annotation_id: s.annotation.annotation_id, version: s.version })]?.outcome === "uncertain").length;
+                const confirmed = proposals.length - unresolved;
+                const own = completionResults.length - proposals.length;
                 // #35/#26: only the non-zero parts; nothing in the result shows no line.
-                const parts = [...(proposals ? [plural(proposals, "confirmed proposal")] : []), ...(own ? [plural(own, "own finding")] : [])];
+                const parts = [...(confirmed ? [plural(confirmed, "confirmed proposal")] : []),
+                  ...(unresolved ? [plural(unresolved, "unresolved proposal")] : []), ...(own ? [plural(own, "own finding")] : [])];
                 return parts.length > 0 && <p className="field-hint" data-result-count>{parts.join(", ")}</p>;
               })()}
               {spanlessBlockedReason && <p className="field-hint">{spanlessBlockedReason}</p>}
