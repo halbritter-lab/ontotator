@@ -146,14 +146,16 @@ export function secondaryLine(step: NextStepView, row: DocumentRowView): string 
 /**
  * The action name of a step on its row: "Choose final" follows the server's `stages.final.detail.label_rule` (the
  * final-result panel's rule, VD16): "accept" reads "Accept result…", "compare" "Compare results…"; without the field
- * one submission reads "Accept result…". A "compare" row whose findings all match ("All findings match (4 of 4)" in
- * the card) also reads "Accept result…": there is nothing to compare (issue 198).
+ * one submission reads "Accept result…". A "compare" row whose findings all match also reads "Accept result…" (issue
+ * 198): the card then offers one "Accept result" under "All findings match (4 of 4)", or "Both submissions have no
+ * findings" when neither has any. Like the card (`PanelContent`), not once a final exists or while other annotations
+ * are still open (issue 123): the card compares there.
  */
-export function rowActionLabel(step: NextStepView, row: Pick<DocumentRowView, "stages"> & Partial<Pick<DocumentRowView, "versions" | "work" | "steps" | "next_step">>): string {
+export function rowActionLabel(step: NextStepView, row: Pick<DocumentRowView, "stages"> & Partial<Pick<DocumentRowView, "versions" | "work" | "steps" | "next_step" | "final">>): string {
   if (step.action === "choose_final") {
     const final = row.stages?.final;
     const rule = final?.detail.label_rule ?? (final?.state === "choose" && final.detail.submitted === 1 ? "accept" : "compare");
-    const allMatch = final?.detail.compared != null && final.detail.matching === final.detail.compared;
+    const allMatch = final?.detail.compared != null && final.detail.matching === final.detail.compared && !row.final && !annotationsOpen(row);
     return rule === "accept" || allMatch ? "Accept result…" : "Compare results…";
   }
   if (step.action === "handle_text_change" || step.action === "carry_text_change") {
@@ -165,6 +167,13 @@ export function rowActionLabel(step: NextStepView, row: Pick<DocumentRowView, "s
     return same.length > 1 && item ? `${base}, ${item.person?.display_name?.trim() || item.person?.pseudonym || item.author_label}` : base;
   }
   return step.action ? actionLabel(step.action) : "";
+}
+
+/** Annotate work of the current versions partly submitted, partly open: the card's partial agreement (`earlyFinal`). */
+function annotationsOpen(row: Partial<Pick<DocumentRowView, "work" | "stages">>): boolean {
+  if (row.stages?.annotation.state === "consolidating") return false;
+  const work = (row.work ?? []).filter(item => item.task === "annotate" && item.moved_to_version == null);
+  return work.some(item => item.status === "submitted") && work.some(item => item.status !== "submitted");
 }
 
 /** The row's lead-owned steps with an action, in the server's order (VD18); falls back to the next step. */
