@@ -152,6 +152,15 @@ export function useConsolidation(roundId: string, options: { workspaceView?: Wor
     chosen_axis_ids: [],
   }), [command]);
 
+  /** The values of an added finding (#178): the editor's `set_axes`; every set value counts as chosen, not a default. */
+  const setAddedValues = useCallback((annotationId: string, axes: Readonly<Record<string, string | null>>): Promise<boolean> =>
+    command("add-finding", (id, envelope) => api.applyCommand(id, envelope), {
+      command: "set_axes",
+      annotation_id: annotationId,
+      axes_values: axes,
+      chosen_axis_ids: Object.keys(axes).filter(axis => !!axes[axis]),
+    }), [command]);
+
   const submit = useCallback(async (acknowledgement?: AxisWarning["acknowledgement"]): Promise<SubmitResult> => {
     const workspaceId = view?.workspace_id;
     if (!workspaceId) throw new Error("This consolidation is read-only.");
@@ -178,7 +187,7 @@ export function useConsolidation(roundId: string, options: { workspaceView?: Wor
 
   const dismissOutcome = useCallback((groupId: string) => setOutcomes(current => { const next = { ...current }; delete next[groupId]; return next; }), []);
 
-  return { view, error, refreshError, workspace, draft, busy, outcomes, reload, refresh, resolve, annotate, reopen, reopenAll, undoReopenAll, addFinding, submit, dismissOutcome };
+  return { view, error, refreshError, workspace, draft, busy, outcomes, reload, refresh, resolve, annotate, reopen, reopenAll, undoReopenAll, addFinding, setAddedValues, submit, dismissOutcome };
 }
 
 export type ConsolidationData = ReturnType<typeof useConsolidation>;

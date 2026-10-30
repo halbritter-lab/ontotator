@@ -157,10 +157,10 @@ export function DismissControl({ label, blocked, onDismiss, onBusyChange, dataDi
 export interface WhatToCheck {
   textSpan: string;
   values: string[];
-  /** Term of the note row; "Note" when absent. */
-  noteLabel?: string;
   noteFirstLine?: string;
   noteFull?: string;
+  /** Term of the note row; "Note" by default. */
+  noteLabel?: string;
 }
 
 export interface CarriedSectionProps {

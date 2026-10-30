@@ -496,6 +496,7 @@ class BatchAssignmentService:
                 UserRow.id,
                 UserRow.username,
                 UserRow.active,
+                UserRow.is_system_admin,
                 ProjectMembershipRow.role,
             )
             .join(ProjectMembershipRow, ProjectMembershipRow.user_id == UserRow.id)
@@ -507,6 +508,7 @@ class BatchAssignmentService:
                     "user_id": row.id,
                     "username": row.username,
                     "active": row.active,
+                    "system_admin": row.is_system_admin,
                     "roles": set(),
                     "reads": [],
                 },
@@ -685,6 +687,7 @@ class BatchAssignmentService:
                     "last_case": cases[-1] if cases else None,
                     "language_mismatch": mismatch,
                     "unavailable": unavailable,
+                    "system_admin": member["system_admin"],
                     "already_assigned": sum(
                         1 for names in holders.values() if username in names
                     ),

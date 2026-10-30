@@ -156,6 +156,8 @@ Before you start: [upload the ontology release](#upload-ontology-releases-and-tr
 5. Click **Create project**.
 6. The project's settings open on **People**. [Add the lead](lead-settings.md#add-a-member) and the other members.
 
+You are now a member of the project with all three roles. The assign dialog for reviews and annotations marks system administrators with an *Administrator* badge so that nobody assigns you work by mistake. If you do not take part in the project, [remove your roles](lead-settings.md#change-a-members-roles) once a lead is added.
+
 ![New project form with key, name, template and ontology file filled in](images/admin-new-project.png)
 
 The project key cannot be changed later. Everything else, such as name, workflow and members, is set in the [project settings](lead-settings.md).

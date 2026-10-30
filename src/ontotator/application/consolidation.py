@@ -58,6 +58,7 @@ from ontotator.ontology.modifiers import NO_TERM_ROLES, TermRoles, modifier_laye
 from ontotator.storage.final_tables import FinalSelectionRow
 from ontotator.storage.repository import Repository, _key_str
 from ontotator.storage.tables import (
+    AuditEventRow,
     DocumentRow,
     ProposalAnnotationRow,
     SubmissionRow,
@@ -370,6 +371,9 @@ class ConsolidationReader:
             consolidator = _people(conn, access, ["self"], {"self": item.annotator_id})[
                 0
             ]["label"]
+            lead_reason = consolidation_reasons(conn, [item.round_id]).get(
+                item.round_id
+            )
         return {
             "round_id": item.round_id,
             "workspace_id": None,  # filled by the route for the editable assignee
@@ -389,6 +393,7 @@ class ConsolidationReader:
             "added": added,
             "added_by": consolidator if added else None,
             "consolidator": consolidator,
+            "consolidation_reason": lead_reason,
             "workflow_revision": item.workflow_revision,
             "draft_revision": 0 if submitted else content.revision,
             "modifier_layer_ids": modifier_layer_ids,
@@ -733,6 +738,33 @@ def _draft(
         decisions=draft.decisions,
         revision=draft.revision,
     )
+
+
+def consolidation_reasons(conn: Connection, round_ids: Iterable[str]) -> dict[str, str]:
+    """The lead's reason per consolidation round, from its ``round.create``
+    audit event (the start command stores the reason only there, #146);
+    rounds started without a reason are left out."""
+    ids = sorted(set(round_ids))
+    if not ids:
+        return {}
+    events = conn.execute(
+        select(AuditEventRow.target_id, AuditEventRow.details).where(
+            AuditEventRow.target_type == "work_round",
+            AuditEventRow.target_id.in_(ids),
+            AuditEventRow.action == "round.create",
+        )
+    )
+    reasons: dict[str, str] = {}
+    for event in events:
+        details = event.details or {}
+        reason = details.get("reason")
+        if (
+            details.get("kind") == "consolidation"
+            and isinstance(reason, str)
+            and reason.strip()
+        ):
+            reasons[event.target_id] = reason.strip()
+    return reasons
 
 
 def _withdrawn(

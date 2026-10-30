@@ -291,9 +291,10 @@ describe("CaseScreen integration", () => {
     const candidate = await candidateCard("Hypotonia");
     fireEvent.click(candidate);
     expect(apply).not.toHaveBeenCalled();
+    // #157: the hit's name, not only its code, while the term labels have not resolved it.
+    const selected = document.querySelector<HTMLElement>(".pending-term-continuation p")!;
+    expect(selected.textContent).toContain("Hypotonia");
     const reason = screen.getByLabelText(/Reason for no text span/);
-    // #157: the hit's name shows while the term labels do not know the term yet.
-    expect(screen.getByText(/^Selected term:/).textContent).toBe("Selected term: HypotoniaHP:0001252");
     expect(screen.getByRole("button", { name: "Add annotation" })).toHaveProperty("disabled", true);
     fireEvent.change(reason, { target: { value: "  Summary outside this excerpt  " } });
     fireEvent.click(screen.getByRole("button", { name: "Add annotation" }));
@@ -954,6 +955,43 @@ describe("CaseScreen integration", () => {
     const yes = screen.getByRole("button", { name: /Yes, delete/i });
     yes.focus(); fireEvent.click(yes);
     await waitFor(() => expect(document.activeElement).toBe(container.querySelector('[data-list-key="annotation:ann-second"]')));
+  });
+  it("Delete finding offers Undo (toast and Ctrl+Z) that puts the finding back as it was (#150)", async () => {
+    const deleted = {
+      schema_version: "ontotator-annotation/v3" as const,
+      annotation: { annotation_id: "ann-undo", document_id: "doc-test-1", layer_id: "phenotype", type_id: "default", term_id: "HP:0001252",
+        axes_values: { assertion: "absent", experiencer: "patient" }, axes_defaulted: ["experiencer"], note: "Checked twice",
+        evidence_refs: [{ evidence_id: "ev-undo", version: "ev-v" }],
+        provenance: { actor: { actor_id: "user-test", kind: "human" as const }, method: "manual", source_refs: [] } },
+      evidence: [], document_id: "doc-test-1", text_sha256: "sha-test-text", ontology_sha256: "sha-ont", layer_config_sha256: "test-layer-sha", version: "v-1",
+    };
+    const evidence = { version: "ev-v", document_id: "doc-test-1", text_sha256: "sha-test-text", mention: { evidence_id: "ev-undo", segments: [{ start: 0, end: 3 }], cue_segments: [] } };
+    const view = { ...sampleView, draft: { ...sampleView.draft, revision: 1, annotations: [deleted], evidence: [evidence] } } as WorkspaceView;
+    const apply = vi.spyOn(api, "applyCommand").mockImplementation(async (_ws, envelope) => {
+      const payload = envelope.payload as Record<string, unknown>;
+      return (payload.command === "delete_draft_annotation"
+        ? { ...view.draft, revision: 2, annotations: [], evidence: [] }
+        : { ...view.draft, revision: 3 }) as any;
+    });
+    const { container } = render(<CaseScreen view={view} workspaceId="ws-undo" onClose={vi.fn()} />);
+    fireEvent.click(container.querySelector('[data-list-key="annotation:ann-undo"]')!);
+    fireEvent.click(screen.getByText("Delete finding"));
+    fireEvent.click(screen.getByRole("button", { name: /Yes, delete/i }));
+    const toast = await waitFor(() => {
+      const element = container.querySelector<HTMLElement>(".ui-toast");
+      expect(element?.textContent).toContain("Deleted");
+      return element!;
+    });
+    // Ctrl+Z outside a text field runs the toast's Undo.
+    (document.activeElement as HTMLElement | null)?.blur?.();
+    fireEvent.keyDown(document.body, { key: "z", ctrlKey: true });
+    await waitFor(() => expect(apply).toHaveBeenCalledTimes(2));
+    expect(apply.mock.calls[1][1].payload).toEqual({
+      command: "create_annotation", annotation_id: "ann-undo", layer_id: "phenotype", type_id: "default", term_id: "HP:0001252",
+      axes_values: { assertion: "absent", experiencer: "patient" }, chosen_axis_ids: ["assertion"],
+      segments: [{ start: 0, end: 3 }], evidence_id: "ev-undo", note: "Checked twice", method: "manual",
+    });
+    expect(toast.isConnected).toBe(false);
   });
   it("keeps a pending span local and creates only the term chosen in a configured ontology", async () => {
     const view = structuredClone(sampleView);
@@ -2446,7 +2484,7 @@ describe("CaseScreen integration", () => {
       save.reject(new TypeError("Failed to fetch"));
 
       expect((await screen.findByRole("alert")).textContent).toMatch(/Pending changes could not be saved/);
-      expect(screen.getByRole("status").textContent).toMatch(/Offline – changes not saved/);
+      expect(document.querySelector(".app-actions [role=\"status\"]")!.textContent).toMatch(/Offline – changes not saved/);
       await waitFor(() => expect(finishButton().getAttribute("aria-busy")).not.toBe("true"));
       expect(screen.queryByRole("dialog", { name: /Submit text/i })).toBeNull();
     });
@@ -3342,7 +3380,10 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
         axes_values: { assertion: "present" }, chosen_axis_ids: [], segments: [pos("Muskelhypotonie")] }));
       expect(create).not.toHaveProperty("source_annotation_id");
       expect(detach).toEqual({ command: "detach_mention", annotation_id: "seizure", evidence_id: "ev-seizure-2" });
-      await waitFor(() => expect(strip(container)).toBe("Moved mention 2 “Muskelhypotonie” to a new finding Seizure. Severe stays with this finding."));
+      await waitFor(() => expect(strip(container)).toBe("Moved mention 2 “Muskelhypotonie” to a new finding Seizure. The new finding is selected. Severe stays with the original finding."));
+      // #151: the new finding is selected, not the original.
+      expect(container.querySelector(`[data-list-key="annotation:${create.annotation_id}"]`)!.classList.contains("selected")).toBe(true);
+      expect(container.querySelector('[data-list-key="annotation:seizure"]')!.classList.contains("selected")).toBe(false);
       // One mention left: nothing to move.
       await waitFor(() => expect(screen.queryByRole("button", { name: "Move to a new finding" })).toBeNull());
     });

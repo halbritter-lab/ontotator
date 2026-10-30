@@ -194,31 +194,14 @@ describe("carried finding inspector", () => {
     expect(resolve).not.toHaveBeenCalled();
   });
 
-  it("a carried finding without a text span names its note the reason; Mark in text keeps it (#157)", async () => {
+  it("a carried finding without a text span names its note the reason in What to check (#157)", () => {
     const carried = finding("carried"); carried.annotation.note = "Reported by the parents";
     const spanless = input("input-1", carried); spanless.source_snapshot.annotation.note = "Reported by the parents";
-    const { container, unmount } = setup({ annotations: [carried], inputs: [spanless] });
+    const { container } = setup({ annotations: [carried], inputs: [spanless] });
     fireEvent.click(row(container, "annotation:carried"));
     const term = within(section()).getByText("Reason for no text span");
     expect(term.tagName).toBe("DT");
     expect(term.nextElementSibling!.textContent).toBe("Reported by the parents");
-    unmount();
-
-    const apply = vi.spyOn(api, "applyCommand").mockImplementation(async (_workspace, envelope) =>
-      draftWith(1, [finding(String((envelope.payload as Record<string, unknown>).annotation_id), "new-v1")], []));
-    const failed = input("input-failed", null); failed.source_snapshot.annotation.note = "  Reported by the parents ";
-    const view = setup({ annotations: [], inputs: [failed] });
-    await screen.findByRole("button", { name: "Seizure, carried, not on this text, check needed" });
-    fireEvent.click(row(view.container, "input:input-failed"));
-    fireEvent.click(within(section()).getByRole("button", { name: "Mark in text" }));
-    const text = view.container.querySelector(".text-container")!;
-    const node = text.querySelector(".run")!.firstChild!;
-    const range = document.createRange(); range.setStart(node, 0); range.setEnd(node, 7);
-    window.getSelection()!.removeAllRanges(); window.getSelection()!.addRange(range);
-    fireEvent.mouseUp(text);
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Save re-created finding" })); });
-    await waitFor(() => expect(apply).toHaveBeenCalledTimes(1));
-    expect(payloadOf(apply)).toEqual(expect.objectContaining({ command: "create_annotation", note: "Reported by the parents" }));
   });
 
   it("Mark in text keeps the original's chosen axis values chosen and its defaulted ones defaulted", async () => {
@@ -229,6 +212,7 @@ describe("carried finding inspector", () => {
     const missing = input("input-failed", null);
     missing.source_snapshot.annotation.axes_values = { assertion: "present", temporality: "current" };
     missing.source_snapshot.annotation.axes_defaulted = ["temporality"];
+    missing.source_snapshot.annotation.note = "  Seen at the last visit  ";
     const { container } = setup({ annotations: [], inputs: [missing], adjustView: view => {
       view.layers![0].annotation_types[0].axes = [
         { id: "assertion", label: "Assertion", options: ["present", "absent"], allow_empty: true },
@@ -247,6 +231,8 @@ describe("carried finding inspector", () => {
     await waitFor(() => expect(apply).toHaveBeenCalledTimes(1));
     expect(payloadOf(apply)).toEqual(expect.objectContaining({
       command: "create_annotation", axes_values: { assertion: "present", temporality: "current" }, chosen_axis_ids: ["assertion"],
+      // #157: the original's note goes with the re-created finding.
+      note: "Seen at the last visit",
     }));
   });
 

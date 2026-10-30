@@ -20,7 +20,7 @@ function batchPreview(body: BatchAssignRequest): BatchPreview {
     people: [{
       username: "alice", person: { pseudonym: "ann-0001", display_name: "Alice", is_me: false }, reads: ["en"], open_before: 0,
       open_after: usernames.includes("alice") ? targets.length : 0, gets: usernames.includes("alice") ? targets.length : 0,
-      first_case: targets[0]?.case_id ?? null, last_case: targets.at(-1)?.case_id ?? null, language_mismatch: false, unavailable: null, already_assigned: 0,
+      first_case: targets[0]?.case_id ?? null, last_case: targets.at(-1)?.case_id ?? null, language_mismatch: false, unavailable: null, already_assigned: 0, system_admin: false,
     }],
   };
 }

@@ -156,6 +156,14 @@ describe("My tasks component", () => {
     expect((await screen.findByRole("dialog", { name: "Why reopened" })).textContent).toBe("The project lead reopened this task. No reason given.");
   });
 
+  it("shows the lead's consolidation reason with the consolidation task (#146)", async () => {
+    vi.mocked(api.listMyTasks).mockResolvedValue([{ ...task(2, "open"), consolidation_reason: "Term and assertion differ" }, task(3, "open")]);
+    render(<MyTasks projects={[]} onNavigate={vi.fn()} />);
+    const rows = await screen.findAllByTestId("task-row");
+    expect(within(rows[0]).getByText("Reason from the lead: Term and assertion differ")).toBeDefined();
+    expect(within(rows[1]).queryByText(/^Reason from the lead/)).toBeNull();
+  });
+
   it("shows pauses alongside underlying status and keeps saved work accessible", async () => {
     vi.mocked(api.listMyTasks).mockResolvedValue([
       { ...task(11, "open"), held: true, hold_reason: "Source evidence needs clarification" },

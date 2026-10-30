@@ -82,6 +82,11 @@ describe("CarriedSection", () => {
     expect(screen.getByText(/Second line/)).toBeTruthy();
   });
 
+  it("names the note of a spanless finding its reason (#157)", () => {
+    render(section({ whatToCheck: { ...whatToCheck, noteFirstLine: "Stated in the referral", noteLabel: "Reason for no text span" } }));
+    expect(Array.from(document.querySelectorAll("dt")).map(node => node.textContent)).toEqual(["Text span", "Values", "Reason for no text span"]);
+  });
+
   it("omits_the_note_term_without_a_note", () => {
     render(section({ whatToCheck: { textSpan: "x", values: ["y"] } }));
     expect(Array.from(document.querySelectorAll("dt")).map(node => node.textContent)).toEqual(["Text span", "Values"]);
