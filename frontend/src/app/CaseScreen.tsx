@@ -59,6 +59,7 @@ import { plural, reopenNotice } from "./labels";
 import { FindingRow, ModifierLine } from "../editor/FindingRow";
 import { SubmitCaseDialog, submitOpenCount } from "../editor/SubmitCaseDialog";
 import { SubmitControl } from "../editor/SubmitControl";
+import { BACK_TO_CONSOLIDATION, CONSOLIDATION_EDITOR_HINT, REPLACED_BY_CONSOLIDATION_TITLE } from "../consolidation/consolidationText";
 import { collectOpenItems, nextOpenItem, type OpenItem } from "../editor/openItems";
 import { isModifierWarningKey, modifierWarningPairs, modifierWarnings, pairKey, rowPairs, sameSet, unconfirmedRows, type UnconfirmedRow } from "../editor/unconfirmedValues";
 import { HistoricalSubmissionDialog } from "../editor/HistoricalSubmissionDialog";
@@ -605,6 +606,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const entryAuthorOf = (annotationId: string): string | undefined =>
     entryAuthors && entryAuthors.roundId === consolidationRoundId ? entryAuthors.labels.get(annotationId) : undefined;
   // Only an active round opens the consolidation view; otherwise the task route opens this editor again.
+  // The full editor of a consolidation: no submit here, the consolidation screen submits (issue 162).
+  const consolidationEditor = roundKind === "consolidation";
   const consolidationAssignmentId = roundKind === "consolidation" && roundActive ? assignmentNavigation?.current.assignment_id ?? versionContext?.assignmentId : undefined;
 
   // Review mode targets
@@ -2148,7 +2151,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     if (next === undefined) {
       handleDeselectAll();
       setAdvanceStatus({ listKey: null, text: `${done} Every proposal is decided.`, decidedKey: refKey(target), decidedTerm });
-      document.querySelector<HTMLButtonElement>("[data-finish-submit]")?.focus();
+      document.querySelector<HTMLElement>(consolidationEditor ? "[data-consolidation-back]" : "[data-finish-submit]")?.focus();
       return;
     }
     selectProposal(reviewTargets[next]);
@@ -2859,7 +2862,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
   // Step 1: save pending edits, validate the saved draft and open the confirmation dialog.
   const handleSubmitWorkspace = async () => {
-    if (readOnlyRef.current) return;
+    if (readOnlyRef.current || consolidationEditor) return;
     flushPendingAxes();
     setSubmitError(null);
     if (invalidAnnotationNotes().length > 0) { setActionError(null); setSubmitError("A reason is required for findings without a text span."); return; }
@@ -3335,7 +3338,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           >
             {roundKind === "consolidation" ? modeBadge("review").label : roundKind === "text_change" ? TEXT_CHANGE_ORIGIN : isCarryKind(roundKind) ? roundBadge ?? "Review carried findings" : badge.label}
           </span>
-          {consolidationAssignmentId ? <a className="btn btn-secondary btn-sm" href={routeHref({ name: "task", assignmentId: consolidationAssignmentId })} onKeyDown={onSpaceActivate}>Back to consolidation</a> : null}
+          {readOnly && consolidationAssignmentId ? <a className="btn btn-secondary btn-sm" href={routeHref({ name: "task", assignmentId: consolidationAssignmentId })} onKeyDown={onSpaceActivate}>{BACK_TO_CONSOLIDATION}</a> : null}
           {/* The display name has a bounded width (full text in the title), so the header
               does not need another line; the pseudonym is never shortened. */}
           {/* "as …" only when the work is saved under another pseudonym than the user's own (the shell names the user). */}
@@ -3389,14 +3392,22 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             ...(narrowHeader && !readOnly && openItems.length > 0 ? [{ id: "next-open", label: "Next open item", onSelect: goToNextOpenItem }] : []),
             { id: "shortcuts", label: "Keyboard shortcuts (?)", onSelect: openShortcutHelp },
           ]} />
-          {/* Read-only (submitted, paused, an older version): no edit controls. */}
-          {!readOnly && <SubmitControl
+          {/* Read-only (submitted, paused, an older version): no edit controls. A consolidation is submitted only on
+              its own screen (issue 162): its full editor offers the way back instead of a submit. */}
+          {!readOnly && !consolidationEditor && <SubmitControl
             onSubmit={() => { void handleSubmitWorkspace(); }}
             disabled={submitPending}
             pending={submitPending}
             openCount={submitOpenCount(openItems, unconfirmed)}
             onNextOpen={narrowHeader ? undefined : goToNextOpenItem}
           />}
+          {!readOnly && consolidationEditor && !narrowHeader && openItems.length > 0
+            && <Button type="button" size="sm" onClick={goToNextOpenItem}>Next open item</Button>}
+          {!readOnly && consolidationAssignmentId ? <>
+            <span className="case-consolidation-hint">{CONSOLIDATION_EDITOR_HINT}</span>
+            <a className="btn btn-primary btn-sm" data-consolidation-back href={routeHref({ name: "task", assignmentId: consolidationAssignmentId })}
+              onKeyDown={onSpaceActivate}>{BACK_TO_CONSOLIDATION}</a>
+          </> : null}
         </div>
       </Toolbar>
 
@@ -3519,7 +3530,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                           onClick={() => {
                             if (dec.replacement?.annotation_id) selectListKey(`annotation:${dec.replacement.annotation_id}`, true);
                           }}
-                          title="Jump to replacement annotation in draft"
+                          title={roundKind === "consolidation" ? REPLACED_BY_CONSOLIDATION_TITLE : "Jump to replacement annotation in draft"}
                         >
                           <span className="replaced-by-label">Replaced by:</span> <strong>{displayText}</strong>
                         </Button>

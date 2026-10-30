@@ -134,6 +134,9 @@ class TaskSummary:
     # ``assignment.reopen`` audit event); None for other statuses.
     reopened_at: datetime | None = None
     reopen_reason: str | None = None
+    # An open consolidation: the lead's reason from the start command (#146);
+    # None without one and for other tasks.
+    consolidation_reason: str | None = None
     # R-26: a lead answered one of the owner's reports on this task since the
     # owner last opened it.
     report_answered: bool = False
@@ -1144,6 +1147,20 @@ class AssignmentService:
                 if reopened
                 else {}
             )
+            # #146: the lead's reason of an open consolidation, shown to the
+            # consolidator in My tasks.
+            from ontotator.application.consolidation import consolidation_reasons
+
+            consolidation_reason = consolidation_reasons(
+                conn,
+                [
+                    r["active_round_id"]
+                    for r in rows
+                    if r["task"] == "review"
+                    and r["active_round_id"]
+                    and r["status"] != "submitted"
+                ],
+            )
             reports = {
                 r.report_id: r
                 for r in conn.execute(
@@ -1215,6 +1232,9 @@ class AssignmentService:
                         failed_check_count=failed,
                         report_answered=row["assignment_id"] in answered_tasks,
                         answered_report_id=answered_tasks.get(row["assignment_id"]),
+                        consolidation_reason=consolidation_reason.get(
+                            row["active_round_id"] or ""
+                        ),
                         **(
                             {
                                 "reopened_at": reopen.at,

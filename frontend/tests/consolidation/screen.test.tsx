@@ -232,8 +232,40 @@ describe("ConsolidationScreen", () => {
     vi.spyOn(api, "listMyTasks").mockResolvedValue([] as never);
     await renderScreen({ assignmentId: 42, lead: true });
     fireEvent.click(screen.getByRole("button", { name: "Submit consolidation" }));
-    fireEvent.click(within(screen.getByRole("dialog", { name: "Submit consolidation?" })).getByRole("button", { name: "Submit" }));
+    const dialog = screen.getByRole("dialog", { name: "Submit consolidation?" });
+    // #143: the dialog already says who accepts the result.
+    expect(within(dialog).getByText("Then accept the result in Documents.")).toBeTruthy();
+    expect(within(dialog).queryByText("The lead then accepts the result.")).toBeNull();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Submit" }));
     expect(await screen.findByText("Consolidation submitted. Accept the result in Documents.")).toBeTruthy();
+  });
+
+  it("asks the project list whether the consolidator leads, before the submit dialog (#143)", async () => {
+    load(decidedView());
+    vi.spyOn(api, "listProjects").mockResolvedValue([{ project_key: "pkg-1", can_manage: true }] as never);
+    await renderScreen({ assignmentId: 42 });
+    fireEvent.click(screen.getByRole("button", { name: "Submit consolidation" }));
+    expect(await within(screen.getByRole("dialog", { name: "Submit consolidation?" })).findByText("Then accept the result in Documents.")).toBeTruthy();
+  });
+
+  it("tells any other consolidator that the lead accepts the result", async () => {
+    load(decidedView());
+    vi.spyOn(api, "listProjects").mockResolvedValue([{ project_key: "pkg-1", can_manage: false }] as never);
+    await renderScreen({ assignmentId: 42 });
+    fireEvent.click(screen.getByRole("button", { name: "Submit consolidation" }));
+    expect(within(screen.getByRole("dialog", { name: "Submit consolidation?" })).getByText("The lead then accepts the result.")).toBeTruthy();
+  });
+
+  it("shows the lead's consolidation reason above the groups (#146)", async () => {
+    load({ ...exampleView(), consolidation_reason: "Term and assertion differ" });
+    await renderScreen({ assignmentId: 42, lead: false });
+    expect(screen.getByText("Reason from the lead: Term and assertion differ")).toBeTruthy();
+  });
+
+  it("shows no reason line without a reason", async () => {
+    load(exampleView());
+    await renderScreen({ assignmentId: 42, lead: false });
+    expect(screen.queryByText(/^Reason from the lead/)).toBeNull();
   });
 
   it("adds a finding from a typed passage without a mouse selection", async () => {

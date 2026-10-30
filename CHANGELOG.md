@@ -12,6 +12,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The consolidation group card shows each person's passage when overlapping passages differ, and a ✓ chooses which one goes into the result (#159).
 - The consolidation result line names no term and nothing as "Not taken" until the Term row is chosen (#160).
 - The read-only consolidation view tags the kept passage and modifiers with "kept", not only the term and values (#163).
+- "Open consolidation" in the text card opens the lead's own running consolidation as their task instead of the read-only view (#145).
+- The consolidator sees the lead's consolidation reason above the groups and in My tasks (`consolidation_reason` on the consolidation view and the task list) (#146).
+- The consolidation launcher says under "Consolidator" who is listed and links Settings → People (#147).
+- The "Submit consolidation?" dialog tells a lead consolidator to accept the result in Documents (#143).
+- The full editor of a consolidation has no submit any more; it points back to the consolidation screen, where you submit, and "Replaced by" explains itself (#162).
 
 ## [0.3.0] - 2026-10-30
 

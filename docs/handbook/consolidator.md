@@ -52,6 +52,8 @@ What for: start or continue your consolidation work.
 2. Click **Start**, **Continue** or **View**.
 3. The consolidation screen opens. Its heading reads, for example, *Consolidate CASE-1 en v1*. The path above it shows how many groups are still open.
 
+If the lead gave a reason when starting the consolidation, it shows above the groups, for example *Reason from the lead: Term and assertion differ*, and under the task in **My tasks**.
+
 The header holds **Open in full editor**, **Report a text problem** and, if the project has guidelines, a button such as *Guidelines v2*. **More…** appears once you decided a group.
 
 The screen is read-only after you submitted, when the task is no longer yours, when it is paused, or when a submission used here was withdrawn. A banner tells you which.
@@ -149,7 +151,7 @@ Before you start: after you submit, you cannot change the consolidation.
 
 1. When no group is open, the progress card reads **Ready to submit**.
 2. Click **Submit consolidation**.
-3. The dialog **Submit consolidation?** shows how many groups and findings the result has, and how many are not in the result.
+3. The dialog **Submit consolidation?** says who accepts the result (*The lead then accepts the result.*; if you are the lead yourself: *Then accept the result in Documents.*) and shows how many groups and findings the result has, and how many are not in the result.
 4. Click **Submit**.
 5. If there are warnings (values filled in by default, a modifier used as a finding, two severities), the dialog now lists them under **Check before you submit**, and the button reads **Submit with** and the number of warnings. Click **Back** to fix them, or submit with warnings only if you checked that the values are right.
 6. The screen confirms: *Consolidation submitted. The lead then accepts the result.* (If you are the lead yourself: *Consolidation submitted. Accept the result in Documents.*) Open your next task or click **Back to my tasks**.
@@ -165,10 +167,10 @@ What happens next: the lead reads the result with your notes and flags, and acce
 What for: change text spans or add findings that the comparison table cannot express.
 
 1. Click **Open in full editor**.
-2. The editor shows the mode **Consolidate** and the list **Selected submitted findings** with each finding's author. *Replaced by* on a submitted finding shows which result finding took its place. The editor works as described in the [annotator reference](annotator.md).
-3. Click **Back to consolidation** to return.
+2. The editor shows the mode **Consolidate** and the list **Selected submitted findings** with each finding's author. *Replaced by* on a submitted finding shows which result finding took its place; point at it for a short explanation, click it to jump to that finding. The editor works as described in the [annotator reference](annotator.md), except that it has no submit button.
+3. Click **Back to consolidation** at the end of the toolbar to return. Next to it the editor says *Submit on the consolidation screen.*
 
-Groups you changed here are tagged **edited in editor** on the consolidation screen. **Finish & submit text** in the full editor submits the whole consolidation, like **Submit consolidation**; it is refused while groups are open. Submitting from the consolidation screen shows you the summary first.
+Groups you changed here are tagged **edited in editor** on the consolidation screen. You submit the consolidation only there, with **Submit consolidation** (see [Finish a consolidation](#finish-a-consolidation)).
 
 ## Keyboard shortcuts
 

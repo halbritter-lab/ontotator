@@ -9,6 +9,7 @@ import { api, ApiError, type ConsolidationAnnotatePayload, type ConsolidationGro
 import { ErrorNotice } from "../admin/ErrorNotice";
 import type { WorkspaceView } from "../app/CaseScreen";
 import { nextOpenTask } from "../app/caseOrder";
+import { consolidationReasonText } from "../app/labels";
 import { MY_TASKS, routeHref, type Route } from "../app/router";
 import { prefillQuery } from "../editor/termSearch";
 import { randomId } from "../editor/ids";
@@ -143,6 +144,16 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
     const first = routed ?? textOrder(view.groups, view.text).find(group => group.state === "open");
     setSelected(first?.group_id ?? null);
   }, [view, props.group]);
+
+  // Issue 143: the submit dialog already tells a lead consolidator that they accept the result themselves.
+  useEffect(() => {
+    if (props.assignmentId === undefined || props.lead !== undefined) return;
+    let live = true;
+    api.listProjects().then(projects => {
+      if (live) setIsLead(current => current ?? !!projects.find(project => project.project_key === props.projectKey)?.can_manage);
+    }, () => undefined);
+    return () => { live = false; };
+  }, [props.assignmentId, props.lead, props.projectKey]);
 
   useEffect(() => {
     if (!focusRequest) return;
@@ -323,6 +334,7 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
         onNextOpen={() => { const next = nextOpenAfter(groups, selected); if (next) select(next, true); }} /></div>}
     </header>
     {props.notice}
+    {view.consolidation_reason && <InlineMessage tone="info" live={false}><p className="cons-lead-reason">{consolidationReasonText(view.consolidation_reason)}</p></InlineMessage>}
     {reason && !submitted && <InlineMessage tone="info">{reason}</InlineMessage>}
     {submitted && <div className="cons-submitted" role="status">
       <p>{submittedText(!!isLead)}</p>
@@ -360,7 +372,7 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
     {typing && <PassageForm text={view.text} anchorRef={addRef} onPick={pickPassage} onClose={() => setTyping(false)} />}
     {data.workspace && addTarget && <TermPicker open={adding} anchorRef={addRef} label="Add finding" workspace={data.workspace} layerId={addTarget.layerId} annotationId={newAnnotationId}
       initialQuery={range ? prefillQuery(view.text, [range]) : undefined} onClose={() => setAdding(false)} onPick={(candidate, searchId) => { void addFinding(candidate, searchId); }} />}
-    <SummaryDialog open={dialog.open} summary={summaryText(groups, added.length)} duplicates={duplicatesText(duplicateTerms(groups))} busy={dialog.busy} warning={dialog.warning} error={dialog.error}
+    <SummaryDialog open={dialog.open} lead={!!isLead} summary={summaryText(groups, added.length)} duplicates={duplicatesText(duplicateTerms(groups))} busy={dialog.busy} warning={dialog.warning} error={dialog.error}
       onSubmit={acknowledged => { void submit(acknowledged); }} onClose={() => setDialog({ open: false, busy: false, warning: null, error: null })} />
     <p className="visually-hidden" role="status" aria-live="polite">{announcement}</p>
     <ConfirmDialog open={reopeningAll.open} busy={reopeningAll.busy} title={`Reopen ${decidedCount} decided ${decidedCount === 1 ? "group" : "groups"}?`}
