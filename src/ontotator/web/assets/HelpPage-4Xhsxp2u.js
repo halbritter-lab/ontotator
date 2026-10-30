@@ -1,4 +1,4 @@
-import{r,a as m,j as a,b as h}from"./index-m993e5Oz.js";import{M as f,r as g}from"./index-B1dMqpof.js";function w(){const[e,t]=r.useState(null);return r.useEffect(()=>{let o=!0;return m.getAbout().then(n=>{o&&t(n)},()=>{}),()=>{o=!1}},[]),e?a.jsxs("p",{className:"help-version",title:e.revision??void 0,children:["Ontotator ",e.version,e.revision&&a.jsxs(a.Fragment,{children:[" · commit ",e.revision.slice(0,7)]})]}):null}const y=`# Ontotator user handbook
+import{r,a as m,j as a,b as h}from"./index-B0z0Zf44.js";import{M as f,r as g}from"./index-DZ0Hh9Dl.js";function w(){const[e,t]=r.useState(null);return r.useEffect(()=>{let o=!0;return m.getAbout().then(n=>{o&&t(n)},()=>{}),()=>{o=!1}},[]),e?a.jsxs("p",{className:"help-version",title:e.revision??void 0,children:["Ontotator ",e.version,e.revision&&a.jsxs(a.Fragment,{children:[" · commit ",e.revision.slice(0,7)]})]}):null}const y=`# Ontotator user handbook
 
 This handbook explains how to work with Ontotator in the browser. It is for everyone who uses the app: annotators, translation reviewers, consolidators, leads and system administrators. It describes the version of Ontotator that you open it from. If you run the server, read the [server operations guide (for server operators)](../operations.md) instead.
 
@@ -271,7 +271,7 @@ Before you start: [upload the ontology release](#upload-ontology-releases-and-tr
 1. In the sidebar, open **Administration** › **New project**.
 2. Fill **Project key** (2–63 lower-case letters, digits or hyphens) and **Name**. **Description** and **Languages of the texts** are optional.
 3. Under **Profile source**, keep **Built-in template** and choose a template. Or choose **Upload profile JSON** and pick a task profile file. Which one you need: see [Task profiles](lead-settings.md#task-profiles).
-4. For each ontology, choose the release in its ontology file field. With an uploaded profile, choose the file whose checksum the profile names. Optionally limit the allowed branches and choose the annotation scheme. With the template, HPO starts with the branch \`HP:0000118\` and the scheme **HPO phenotype (fixed qualifiers, modifiers)**; with an uploaded profile, the branches start empty (every term).
+4. For each ontology, choose the release in its ontology file field. With an uploaded profile, choose the file whose checksum the profile names. Optionally limit the allowed branches and choose the annotation scheme. With the template, HPO starts with the branch \`HP:0000118\` and the scheme **HPO phenotype (fixed qualifiers, modifiers)**; with an uploaded profile, the branches and the scheme start with what the file sets ([\`allowed_roots\`, \`t1_profile\`](lead-settings.md#what-a-profile-file-looks-like)), and the branches start empty (every term) if it sets none. The hint under an empty field says *Whole ontology*. What you enter here wins over the file.
 5. Click **Create project**.
 6. The project's settings open on **People**. [Add the lead](lead-settings.md#add-a-member) and the other members.
 
@@ -1896,7 +1896,7 @@ Before you start: you can change this until the first work is submitted. After t
 
 What it is: the task profile is a JSON file that defines what annotators work with: the ontology, the layers (for example *Phenotypes*), the finding types in each layer and the value fields of each finding type with their values (for example *Assertion*: present, absent, uncertain). It holds neither texts nor the ontology itself. Every project has exactly one. An administrator sets it when [creating the project](admin.md#create-a-project); a lead can [replace it](#replace-the-task-profile) until the first work is submitted.
 
-The other choices on the same form belong to the project, not to the profile: the ontology file (release), the allowed branches and the annotation scheme (*HPO phenotype* with fixed values and modifiers, or *Generic* with free values). They can change later under **Settings**, tab **Ontology**.
+The other choices on the same form belong to the project, not to the profile: the ontology file (release), the allowed branches and the annotation scheme (*HPO phenotype* with fixed values and modifiers, or *Generic* with free values). A profile file can give a starting value for the branches and the scheme; after that they are the project's, and they can change later under **Settings**, tab **Ontology**. Replacing the profile does not change them.
 
 ### Template or own file
 
@@ -1938,6 +1938,8 @@ A shortened example. The checksum (\`sha256\`) and \`release\` are those of the 
 | --- | --- |
 | \`ontology_id\` | The ontology's short ID, for example \`hp\`. Upper and lower case count as the same. It cannot change once the project exists. |
 | \`release\`, \`sha256\` | The ontology file the project uses. They must be those of the file chosen on the form. |
+| \`allowed_roots\` (optional) | The branches a new project starts with, for example \`["HP:0000118"]\`. \`[]\` means the whole ontology. Left out: the form starts empty, and \`ontotator admin projects create\` starts with \`HP:0000118\` for the scheme *HPO phenotype*. Use \`[]\` for bundles built for the whole ontology, as a new project must have the same branches as the bundle. |
+| \`t1_profile\` (optional) | The annotation scheme a new project starts with: \`hpo-phenotype\` or \`generic\`. Left out: *HPO phenotype* for HPO on the form, *Generic* otherwise; \`ontotator admin projects create\` starts with *Generic*. |
 | \`layer_id\` | The layer's ID. Bundles name it for each proposal. |
 | \`axes\` | The value fields and their allowed values. With the scheme *HPO phenotype* only \`assertion\`, \`experiencer\` and \`temporality\` with the values above are possible; a profile may leave values out. |
 | \`default_layer_id\` | The layer annotators start in. |

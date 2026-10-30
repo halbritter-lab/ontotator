@@ -6,9 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- A task profile can set `allowed_roots` and `t1_profile` per ontology. New projects take them from the profile, in `admin projects create` and on the New project form; options and form values still win, and today's defaults apply only where the profile sets nothing. `[]` means the whole ontology, and the form says so. Hashes of profiles without the fields do not change (#208).
+
 ### Fixed
 
 - Opening the text list right after a bundle import no longer takes minutes and blocks the project: the query for each document's newest proposal set no longer depends on fresh planner statistics.
+- `admin projects create --allowed-roots <id>=` allows every term, as its help says, instead of failing with exit 2 (#208).
+- Changing the profile source or the file on the New project form no longer keeps branches, scheme and version chosen for the previous profile (#208).
 
 ## [0.4.0] - 2026-10-30
 

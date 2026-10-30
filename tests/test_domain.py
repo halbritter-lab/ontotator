@@ -1,4 +1,5 @@
 import hashlib
+from pathlib import Path
 
 import pytest
 
@@ -26,6 +27,8 @@ from ontotator.domain.profiles import (
     LayerDefinition,
     OntologyDefinition,
     TaskProfile,
+    layer_config_hash,
+    profile_hash,
 )
 from ontotator.domain.review import ReviewDecision, ReviewTargetSet
 from ontotator.domain.serialization import (
@@ -418,3 +421,35 @@ def test_unknown_snapshot_schema_rejected() -> None:
         InvalidAnnotation, match="only 'ontotator-annotation/v3' is supported"
     ):
         decode_snapshot(bad_raw)
+
+
+def _shipped_profile() -> TaskProfile:
+    src = Path(__file__).parents[1] / "src"
+    path = src / "ontotator/profiles/hpo-context-example-v1.json"
+    return TaskProfile.model_validate_json(path.read_text(encoding="utf-8"))
+
+
+def test_hashes_of_an_existing_profile_do_not_change() -> None:
+    """Computed before `allowed_roots` and `t1_profile` existed (#208)."""
+    profile = _shipped_profile()
+
+    assert profile_hash(profile) == (
+        "3c12153d3b83e9b1b9ff12183b2164907cb07714bf0ce3ab795c1bfed27939fe"
+    )
+    assert layer_config_hash(profile, profile.default_layer_id) == (
+        "03c6dfc5b95cb41de43854b92907efc53a950ef932fe6679d78ca7fc9d8bd33e"
+    )
+
+
+def test_unset_project_settings_differ_from_an_explicit_empty_list() -> None:
+    unset = _shipped_profile()
+    data = unset.model_dump(mode="json")
+    assert not {"allowed_roots", "t1_profile"} & set(data["ontologies"][0])
+
+    data["ontologies"][0] |= {"allowed_roots": [], "t1_profile": "generic"}
+    empty = TaskProfile.model_validate(data)
+
+    dumped = empty.model_dump(mode="json")["ontologies"][0]
+    assert (dumped["allowed_roots"], dumped["t1_profile"]) == ([], "generic")
+    assert unset.ontologies[0].allowed_roots is None
+    assert profile_hash(empty) != profile_hash(unset)

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import ontospan
 import pytest
@@ -260,6 +262,114 @@ def test_the_cli_creates_a_project_and_imports(
     assert broken.exit_code == 1
     assert "JOB_FAILED" in broken.output  # type: ignore[attr-defined]
     assert "PIN_MISMATCH" in broken.output  # type: ignore[attr-defined]
+
+
+def _create_with(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    profile_fields: dict[str, object],
+    *options: str,
+) -> tuple[Callable[..., Any], Any]:
+    """``projects create`` for a profile with ``profile_fields`` on its ontology."""
+    monkeypatch.setenv("ONTOTATOR_DATA_DIR", str(tmp_path / "data"))
+    url = database_url_for(tmp_path / "cli.db")
+    data = hpo_profile().model_dump(mode="json")
+    data["ontologies"][0] |= profile_fields
+    profile = tmp_path / "profile.json"
+    profile.write_text(json.dumps(data), encoding="utf-8")
+
+    def admin(*args: str) -> Any:
+        return runner.invoke(app, ["admin", "--database-url", url, *args])
+
+    assert admin("ontologies", "add", str(HP_PATH)).exit_code == 0
+    return admin, admin(
+        "projects",
+        "create",
+        "cli-proj",
+        "--name",
+        "CLI project",
+        "--profile",
+        str(profile),
+        *options,
+    )
+
+
+@pytest.mark.parametrize(
+    ("profile_fields", "options", "pin"),
+    [
+        # Unset: today's defaults.
+        ({}, (), ([], "generic")),
+        ({}, ("--t1-profile", "hp=hpo-phenotype"), (["HP:0000118"], "hpo-phenotype")),
+        ({"t1_profile": "hpo-phenotype"}, (), (["HP:0000118"], "hpo-phenotype")),
+        # #208: `hp=` as the help text says.
+        (
+            {},
+            ("--t1-profile", "hp=hpo-phenotype", "--allowed-roots", "hp="),
+            ([], "hpo-phenotype"),
+        ),
+        # The profile sets them; an explicit [] stays the whole ontology.
+        (
+            {"allowed_roots": [], "t1_profile": "hpo-phenotype"},
+            (),
+            ([], "hpo-phenotype"),
+        ),
+        ({"allowed_roots": ["HP:0000118"]}, (), (["HP:0000118"], "generic")),
+        # Options win over the profile.
+        (
+            {"allowed_roots": ["HP:0000118"], "t1_profile": "hpo-phenotype"},
+            ("--allowed-roots", "hp=", "--t1-profile", "hp=generic"),
+            ([], "generic"),
+        ),
+        (
+            {"allowed_roots": []},
+            ("--allowed-roots", "hp=HP:0000118"),
+            (["HP:0000118"], "generic"),
+        ),
+    ],
+)
+def test_a_new_pin_comes_from_options_then_profile_then_defaults(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    profile_fields: dict[str, object],
+    options: tuple[str, ...],
+    pin: tuple[list[str], str],
+) -> None:
+    _, created = _create_with(tmp_path, monkeypatch, profile_fields, *options)
+
+    assert created.exit_code == 0, created.output
+    assert _rows(
+        database_for(tmp_path / "cli.db"),
+        ProjectOntologyRow.allowed_roots,
+        ProjectOntologyRow.t1_profile,
+    ) == [pin]
+
+
+def test_a_whole_hpo_bundle_imports_when_the_profile_says_so(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#208: `"allowed_roots": []`, profile `hpo-phenotype`, no PIN_MISMATCH."""
+    admin, created = _create_with(
+        tmp_path,
+        monkeypatch,
+        {"allowed_roots": [], "t1_profile": "hpo-phenotype"},
+    )
+    assert created.exit_code == 0, created.output
+
+    whole = unit(layer_data=layers(roots=()))
+    imported = admin("import", "cli-proj", str(bundle(tmp_path / "b.zip", [whole])))
+
+    assert imported.exit_code == 0, imported.output
+    assert "documents_added: 1" in imported.output.splitlines()
+
+
+@pytest.mark.parametrize("option", ["--pin", "--t1-profile"])
+def test_only_allowed_roots_takes_an_empty_value(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, option: str
+) -> None:
+    _, created = _create_with(tmp_path, monkeypatch, {}, option, "hp=")
+
+    assert created.exit_code == 2
+    assert "expected <ontology id>=<value>" in created.output
 
 
 def test_a_project_needs_stored_pinned_ontologies(tmp_path: Path) -> None:

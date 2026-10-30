@@ -40,12 +40,14 @@ from ontotator.domain.profiles import (
     resolve_ontology,
     resolve_type,
 )
+from ontotator.domain.profiles import (
+    T1Profile as T1Profile,
+)
 from ontotator.domain.review import ReviewDecision
 from ontotator.domain.scopes import is_review_like
 from ontotator.domain.variants import VariantInfo
 from ontotator.domain.workspace import Submission
 
-T1Profile = Literal["generic", "hpo-phenotype"]
 HPO_PROFILE: T1Profile = "hpo-phenotype"
 # Methods of the closed T1 list that keep their name on export.
 KEPT_METHODS = frozenset({"manual", "adopted", "edited", "merged"})
