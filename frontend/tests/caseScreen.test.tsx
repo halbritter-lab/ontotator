@@ -3340,7 +3340,10 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
         axes_values: { assertion: "present" }, chosen_axis_ids: [], segments: [pos("Muskelhypotonie")] }));
       expect(create).not.toHaveProperty("source_annotation_id");
       expect(detach).toEqual({ command: "detach_mention", annotation_id: "seizure", evidence_id: "ev-seizure-2" });
-      await waitFor(() => expect(strip(container)).toBe("Moved mention 2 “Muskelhypotonie” to a new finding Seizure. Severe stays with this finding."));
+      await waitFor(() => expect(strip(container)).toBe("Moved mention 2 “Muskelhypotonie” to a new finding Seizure. The new finding is selected. Severe stays with the original finding."));
+      // #151: the new finding is selected, not the original.
+      expect(container.querySelector(`[data-list-key="annotation:${create.annotation_id}"]`)!.classList.contains("selected")).toBe(true);
+      expect(container.querySelector('[data-list-key="annotation:seizure"]')!.classList.contains("selected")).toBe(false);
       // One mention left: nothing to move.
       await waitFor(() => expect(screen.queryByRole("button", { name: "Move to a new finding" })).toBeNull());
     });

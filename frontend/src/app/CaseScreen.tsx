@@ -2313,12 +2313,13 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const type = view.layers?.find(layer => layer.layer_id === ann.layer_id)?.annotation_types.find(item => item.type_id === ann.type_id);
     const axisIds = (type?.axes ?? view.axes_config ?? []).map(axis => axis.id);
     const newId = `ann-${crypto.randomUUID()}`;
+    const movedEvidenceId = newEvidenceId();
     setActionError(null);
     try {
       await enqueueMutation({
         command: "create_annotation",
         annotation_id: newId,
-        evidence_id: newEvidenceId(),
+        evidence_id: movedEvidenceId,
         layer_id: ann.layer_id,
         type_id: ann.type_id,
         term_id: ann.term_id,
@@ -2333,12 +2334,13 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     }
     const finding = findingNameOf(source);
     const modifiers = (ann.modifiers ?? []).map(modifier => termLabel(ann.layer_id, modifier.term_id) ?? modifier.term_id);
-    const stays = modifiers.length ? ` ${modifiers.join(", ")} ${modifiers.length === 1 ? "stays" : "stay"} with this finding.` : "";
+    const stays = modifiers.length ? ` ${modifiers.join(", ")} ${modifiers.length === 1 ? "stays" : "stay"} with the original finding.` : "";
+    // #151: the new finding is selected (and scrolled to), so the next action does not hit the original by mistake.
     setSelectedTargetId(null); setSelectedSourceId(null); setSelectedInputId(null);
-    setSelectedAnnotationId(annotationId);
-    setSelectedEvidenceId(refs.find(ref => ref.evidence_id !== evidenceId)?.evidence_id ?? null);
-    setAdvanceStatus({ listKey: `annotation:${annotationId}`, decidedKey: "",
-      text: `Moved mention ${index + 1} “${quoteSegments(view.document.text, segments, 40)}” to a new finding ${finding}.${stays}` });
+    setSelectedAnnotationId(newId);
+    setSelectedEvidenceId(movedEvidenceId);
+    setAdvanceStatus({ listKey: `annotation:${newId}`, decidedKey: "",
+      text: `Moved mention ${index + 1} “${quoteSegments(view.document.text, segments, 40)}” to a new finding ${finding}. The new finding is selected.${stays}` });
   };
   /** R-7: a proposal replaced by a copy with a single mention has nothing left to move (the move acts on the copy). */
   const proposalCopyCanMove = (target: TargetProposal) => {

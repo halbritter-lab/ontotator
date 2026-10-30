@@ -131,7 +131,7 @@ What for: link a finding to every place in the text that supports it.
    - **Add mention**, then mark the text: adds another place. Esc cancels.
    - **Add segment** on a mention, then mark the text: adds a second piece to the same mention, for words that are apart.
    - Drag a mention's edge handles, or focus an edge and press `←` or `→` (`Ctrl+←` / `Ctrl+→` moves by word): resizes it.
-   - **Move to a new finding**: gives one mention its own finding with the same term and values. The original finding stays selected; the new one is added to the list. Select it there to change it.
+   - **Move to a new finding**: gives one mention its own finding with the same term and values. The new finding is selected, so you can change it right away; modifiers stay with the original finding.
    - **Remove**, then **Yes, remove**: detaches the mention.
 
 You cannot remove the last mention when the project requires a text span. If the project allows findings without a span, enter a reason in the note first.
