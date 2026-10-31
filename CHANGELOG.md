@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-31
+
 ### Changed
 
 - Exports name the ontology release recorded with the work instead of the project's current one, and check each text against that release. When the texts of one export were made under different releases, the newest keeps the layer ID and each older one gets its own layer `<layer id>@<digest prefix>`; an export of one release keeps its shape (#81).
@@ -169,7 +171,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 First public release.
 
-[Unreleased]: https://github.com/halbritter-lab/ontotator/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/halbritter-lab/ontotator/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/halbritter-lab/ontotator/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/halbritter-lab/ontotator/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/halbritter-lab/ontotator/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/halbritter-lab/ontotator/compare/v0.2.0...v0.3.0
