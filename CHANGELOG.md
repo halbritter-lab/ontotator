@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- Term search: a hit that does not match the query closely is tagged **Weak match** and listed last (`weak_match` on the search candidates), and Enter adds it only after it was chosen with the arrow keys. If all hits are weak, the hint line says "no close match" (#247).
+
 ## [0.6.0] - 2026-10-31
 
 ### Changed

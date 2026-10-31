@@ -79,7 +79,7 @@ What for: record a term that the text mentions.
 1. Select the words in the text with the mouse. With the keyboard: click before the first word (or press Tab until the text has focus), hold Shift and move with the arrow keys.
 2. The panel **New finding** shows the marked text. To adjust it, drag the edge handles at its start and end, or focus a handle and press `←` or `→`.
 3. **Search term** is already filled with the marked words, and the hits are listed under **Terms**. Change the words, or type a code such as `HP:0001250`, if the right term is not among them.
-4. Press Enter to add the top hit, or click a hit.
+4. Press Enter to add the top hit, or click a hit. Enter adds nothing when the top hit is a **Weak match**: click a hit, or choose it with `↓` and press Enter.
 5. The finding is created with the project's prefilled values. [Confirm or change them](#set-values-and-confirm-defaults).
 
 To drop a mark without adding a finding, click **Discard** or press Esc.
@@ -90,15 +90,16 @@ What for: find the right ontology term quickly.
 
 1. Press `/` or click **Change term** to focus the search.
 2. Type a name or a code. Hits appear in the list **Terms**.
-3. Move with `↓` and `↑`, or point at a hit. Below the hits, the full definition of the active hit is shown; in a narrow window, scroll down to it. Read it, then press Enter or click the hit to take it, or press Esc to cancel. Enter and a click take the hit at once.
+3. Move with `↓` and `↑`, or point at a hit (pointing skips a **Weak match**). Below the hits, the full definition of the active hit is shown; in a narrow window, scroll down to it. Read it, then press Enter or click the hit to take it, or press Esc to cancel. Enter and a click take the hit at once.
 
 Search options:
 
 - To search only modifier terms (severity, onset, …), switch on **Modifiers only**, or type `mod:` before the word.
 - The language of the text is searched too. To search names in other languages, click the language button next to the field (it lists the languages searched, for example *EN, DE*) and tick them under **Search languages**. English names are always searched.
 - Hits tagged **Modifier** are modifier terms. Use one as a finding only if it names the finding itself; otherwise add it under **Modifiers**. Obsolete terms cannot be chosen.
+- Hits tagged **Weak match** do not match your words closely: at least one word is not at the start of a word of the name, even allowing for a typo or a plural. They are listed last, and Enter takes one only after you choose it with `↓` or `↑`. If all hits are weak, the line under the field says "no close match".
 
-The search compares the words you type with term names and synonyms, letter by letter; it does not understand what they mean. Terms whose name or synonym equals your words come first. Next come terms whose name or synonym contains all your words, those with the fewest other words first. Other similar terms follow in a shuffled order, so the best one is not always on top. Read the hits before you choose one. If nothing matches, try another word or a synonym, type a code or switch search languages.
+The search compares the words you type with term names and synonyms, letter by letter; it does not understand what they mean. Terms whose name or synonym equals your words come first. Next come terms whose name or synonym contains all your words, those with the fewest other words first. Other similar terms follow in a shuffled order, weak matches last, so the best one is not always on top. Read the hits before you choose one. If nothing matches, try another word or a synonym, type a code or switch search languages.
 
 ## Browse the ontology tree
 

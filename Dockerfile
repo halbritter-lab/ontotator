@@ -4,7 +4,10 @@ WORKDIR /web
 COPY frontend/package.json frontend/package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci
 COPY frontend/ ./
-RUN npm run build
+# frontend/src/help/handbook.ts globs ../../../docs/handbook, which is /docs/handbook here.
+COPY docs/handbook/ /docs/handbook/
+RUN npm run build \
+    && grep -rqF "$(head -n 1 /docs/handbook/README.md | tr -d '\r')" dist/assets
 
 FROM ghcr.io/astral-sh/uv:0.11@sha256:77280f2f771df71f90786c314fe1bbc1e023feac652969bbf139c280babf2eb7 AS uv
 FROM python:3.12-slim-bookworm@sha256:34386ef0cb081344d7ec1c103ba398e6e9f64e9ab3a1509accc92a4e24a07258 AS build
