@@ -51,8 +51,8 @@ export function matchLine(
   return `Matched “${matched}”`;
 }
 
-/** Index of the first hit that can be added (not obsolete, canAssign), or -1. */
+/** Index of the first hit Enter may add by default (not obsolete, not a weak match, canAssign), or -1. */
 export function firstUsableIndex(candidates: readonly SearchCandidate[], canAssign: boolean): number {
   if (!canAssign) return -1;
-  return candidates.findIndex((candidate) => candidate.obsolete !== true);
+  return candidates.findIndex((candidate) => candidate.obsolete !== true && candidate.weak_match !== true);
 }

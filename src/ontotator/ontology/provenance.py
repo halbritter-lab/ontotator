@@ -117,6 +117,9 @@ class SearchCandidate(BaseModel):
     route: str = ""
     # Language of the name that matched, when the route knows it.
     match_language: str | None = None
+    # A scored hit whose matched name does not hold every query word at (a typo
+    # from) the start of a word. Listed, but never the default pick (#247).
+    weak_match: bool = False
     # Filled by the search route for layers pinned with ``hpo-phenotype``.
     role: Literal["finding", "modifier", "cohort"] = "finding"
 

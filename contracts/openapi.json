@@ -21266,6 +21266,11 @@
             ],
             "title": "Match Language"
           },
+          "weak_match": {
+            "type": "boolean",
+            "title": "Weak Match",
+            "default": false
+          },
           "role": {
             "type": "string",
             "enum": [

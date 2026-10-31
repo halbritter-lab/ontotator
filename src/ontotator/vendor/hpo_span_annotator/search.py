@@ -46,6 +46,9 @@ all the words is a fact about the name, and without this head a single query
 word put any name holding it on top: "hemorrhage" showed "Hemorrhage of the
 eye", "esophageal hemorrhage" showed "Epistaxis" through its synonym "Nasal
 hemorrhage" (#190). ``rank`` stays the retriever's order.
+
+Inside the shuffled hits, the weak ones come last: a hit with a word merely near
+a query word is not offered first while a close hit exists (#247).
 """
 
 from __future__ import annotations
@@ -120,7 +123,7 @@ def ordered_then_shuffled(
     hits: list[dict[str, Any]], seed: str
 ) -> list[dict[str, Any]]:
     """Scored hits for display: the hits whose name holds every query word in
-    fixed order, then the others shuffled.
+    fixed order, then the others shuffled, weak matches last.
 
     ``rank`` and ``display_pos`` as in :func:`shuffled`.
     """
@@ -137,6 +140,7 @@ def ordered_then_shuffled(
     )
     rest = [hit for hit in ordered if not hit.get("all_words")]
     random.Random(seed).shuffle(rest)
+    rest.sort(key=lambda hit: not hit.get("close_match", True))
     out = head + rest
     for position, hit in enumerate(out, start=1):
         hit["display_pos"] = position

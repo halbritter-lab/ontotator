@@ -621,6 +621,7 @@ class OntologyService:
             route=hit.get("route", ""),
             # "?" is the lexical index's marker for a name it could not place.
             match_language=language if language and language != "?" else None,
+            weak_match=not hit.get("close_match", True),
         )
 
     def all_ancestors_of(self, hpo_id: str) -> set[str]:
