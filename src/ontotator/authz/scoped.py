@@ -468,6 +468,17 @@ class ScopedRepository(Repository):
         self._visible(project_key)
         return super().superseded_pins(project_key)
 
+    def add_snapshots(
+        self,
+        project_key: str,
+        annotations: Sequence[AnnotationSnapshot],
+        evidence: Sequence[EvidenceSnapshot],
+    ) -> None:
+        self._visible(project_key)
+        if not can(self.access, Action.IMPORT_DOCUMENTS, project_key):
+            raise AccessDenied("NOT_ALLOWED", "You may not import into this project.")
+        super().add_snapshots(project_key, annotations, evidence)
+
     def add_documents_and_proposals(
         self,
         project_key: str,
@@ -478,6 +489,7 @@ class ScopedRepository(Repository):
         imported_by: int | None = None,
         job_id: int | None = None,
         on_done: Callable[[Connection, int, ImportCounts], None] | None = None,
+        snapshots_added: bool = False,
     ) -> ImportCounts:
         self._visible(project_key)
         if not can(self.access, Action.IMPORT_DOCUMENTS, project_key):
@@ -490,6 +502,7 @@ class ScopedRepository(Repository):
             imported_by=imported_by,
             job_id=job_id,
             on_done=on_done,
+            snapshots_added=snapshots_added,
         )
 
     def get_search_conditions(self, project_key: str) -> list[SearchCondition] | None:

@@ -45,6 +45,8 @@ from ontotator.exchange.plan import (
     planned_rows,
     read_t1_upload,
     row_defaults,
+    state_hash,
+    upload_work_plan,
     with_work_plan,
 )
 from ontotator.exchange.t1 import ImportCounts, ImportedDocument, ImportedSet
@@ -143,6 +145,10 @@ def lock_import(conn: Connection, key: str, actor: Actor) -> int:
     conn.execute(select(func.pg_advisory_xact_lock(_lock_id("import"))))
     conn.execute(select(func.pg_advisory_xact_lock_shared(_lock_id("members", key))))
     conn.execute(select(func.pg_advisory_xact_lock(_lock_id("project", key))))
+    return _may_import(conn, key, actor)
+
+
+def _may_import(conn: Connection, key: str, actor: Actor) -> int:
     project_id = Repository._project_id(conn, key)
     if project_id is None:
         raise DomainError("PROJECT_NOT_FOUND", "Project not found.")
@@ -225,6 +231,9 @@ def read_sources(
     return sources, issues
 
 
+Prepared = tuple[ImportPlan, list[tuple[str, list[IncomingUnit]]], WorkPlanContext]
+
+
 def prepare_plan(
     db: Database,
     conn: Connection,
@@ -255,33 +264,11 @@ def _plan_context(
     )
 
 
-def _prepare(
-    db: Database,
-    conn: Connection,
-    key: str,
-    project_id: int,
-    kind: str,
-    language: str | None,
-    files: Sequence[dict[str, Any]],
-    *,
-    prepared: tuple[list[tuple[str, list[IncomingUnit]]], list[Issue]] | None = None,
-) -> tuple[ImportPlan, list[tuple[str, list[IncomingUnit]]], WorkPlanContext]:
+def _inventory(
+    db: Database, conn: Connection, key: str, project_id: int
+) -> tuple[Any, TaskProfile, ProjectRules, ProjectImportState]:
+    """Everything of the project a plan depends on, apart from its work plan rows."""
     row = conn.execute(select(ProjectRow).where(ProjectRow.id == project_id)).one()
-    profile = TaskProfile.model_validate(row.task_profile)
-    sources, reader_issues = (
-        prepared
-        if prepared is not None
-        else read_sources(db, conn, key, project_id, kind, language, files)
-    )
-    issues = list(reader_issues)
-    if kind == "text" and row.languages and language not in row.languages:
-        issues.append(
-            Issue(
-                code="LANGUAGE_NOT_IN_PROJECT",
-                unit="",
-                message="Language is not enabled for this project.",
-            )
-        )
     documents = dict(
         conn.execute(
             select(DocumentRow.document_id, DocumentRow.text_sha256).where(
@@ -319,15 +306,75 @@ def _prepare(
         context,
         {v.document_id: v for v in Repository(db).list_variants(key)},
     )
+    profile = TaskProfile.model_validate(row.task_profile)
+    return row, profile, ProjectRules.of(row), state
+
+
+def _prepare(
+    db: Database,
+    conn: Connection,
+    key: str,
+    project_id: int,
+    kind: str,
+    language: str | None,
+    files: Sequence[dict[str, Any]],
+    *,
+    prepared: tuple[list[tuple[str, list[IncomingUnit]]], list[Issue]] | None = None,
+) -> Prepared:
+    row, profile, rules, state = _inventory(db, conn, key, project_id)
+    sources, reader_issues = (
+        prepared
+        if prepared is not None
+        else read_sources(db, conn, key, project_id, kind, language, files)
+    )
+    issues = list(reader_issues)
+    if kind == "text" and row.languages and language not in row.languages:
+        issues.append(
+            Issue(
+                code="LANGUAGE_NOT_IN_PROJECT",
+                unit="",
+                message="Language is not enabled for this project.",
+            )
+        )
     plan = plan_import(
         [u for _, us in sources for u in us],
         state,
         profile,
-        ProjectRules.of(row),
+        rules,
         issues,
     )
     ctx = _plan_context(conn, project_id, row, case_ids(plan))
     return with_work_plan(plan, ctx), sources, ctx
+
+
+def _add_snapshots(db: Database, key: str, plan: ImportPlan) -> bool:
+    """Store the plan's snapshots ahead of the project lock; whether it did."""
+    if not plan.committable:
+        return False
+    sets = [s.proposals for s in plan.proposal_sets if s.action == "add"]
+    Repository(db).add_snapshots(
+        key,
+        [annotation for proposals in sets for annotation in proposals.annotations],
+        [evidence for proposals in sets for evidence in proposals.evidence],
+    )
+    return True
+
+
+def _still_current(
+    db: Database, conn: Connection, key: str, project_id: int, planned: Prepared
+) -> bool:
+    """Whether a plan made before the locks equals what planning now would give.
+
+    Compares every project input of ``_prepare``, so a plan made from reads of
+    several states, or before a change, never passes. Only the caller's locks
+    make the answer last.
+    """
+    plan, _, ctx = planned
+    row, profile, rules, state = _inventory(db, conn, key, project_id)
+    return (
+        state_hash(state, profile, rules) == plan.state_sha256
+        and _plan_context(conn, project_id, row, case_ids(plan)) == ctx
+    )
 
 
 def apply_plan(
@@ -338,6 +385,7 @@ def apply_plan(
     actor: Actor,
     *,
     job_id: int,
+    snapshots_added: bool = False,
 ) -> ImportCounts:
     """Apply filtered proposals, retaining the complete delivered payload per source.
 
@@ -451,6 +499,7 @@ def apply_plan(
             source_sha256=sha,
             imported_by=actor.user_id,
             job_id=job_id,
+            snapshots_added=snapshots_added,
         )
         for name in ("sets_added", "sets_skipped", "proposals"):
             counts[name] += result[name]
@@ -858,8 +907,8 @@ def run_import(job: Job, ctx: JobContext) -> dict[str, Any]:
         {"filename": job.payload["filename"], "sha256": job.payload["blob_sha256"]}
     ]
     kind, language = job.payload.get("kind", "t1"), job.payload.get("language")
-    # Parse once before waiting, then verify the captured structural snapshot
-    # under the write locks. The actual inventory/rules/plan are loaded fresh.
+    # Parse and plan before waiting; under the write locks verify the captured
+    # structural snapshot and keep the plan only if the project did not change.
     with db.transaction() as conn:
         expected = project_state(conn, key)
         project_id = Repository(db)._require_project(conn, key)
@@ -874,12 +923,52 @@ def run_import(job: Job, ctx: JobContext) -> dict[str, Any]:
             files,
             text_limit=MAX_TOTAL_BYTES,
         )
-    with db.transaction() as conn:
-        project_id = lock_import(conn, key, actor)
-        require_state(conn, key, expected)
-        plan, sources, plan_ctx = _prepare(
+        planned = _prepare(
             db, conn, key, project_id, kind, language, files, prepared=prepared
         )
+
+    def apply(*, early_snapshots: bool) -> dict[str, Any]:
+        return _apply_import(
+            job, db, actor, expected, prepared, planned, early_snapshots=early_snapshots
+        )
+
+    try:
+        return apply(early_snapshots=True)
+    except _PlanOutdated:
+        return apply(early_snapshots=False)
+
+
+class _PlanOutdated(Exception):
+    """The project changed behind a plan whose snapshots are already written."""
+
+
+def _apply_import(
+    job: Job,
+    db: Database,
+    actor: Actor,
+    expected: tuple[str, str],
+    prepared: tuple[list[tuple[str, list[IncomingUnit]]], list[Issue]],
+    planned: Prepared,
+    *,
+    early_snapshots: bool,
+) -> dict[str, Any]:
+    key = job.payload["project"]
+    kind, language = job.payload.get("kind", "t1"), job.payload.get("language")
+    files = [
+        {"filename": job.payload["filename"], "sha256": job.payload["blob_sha256"]}
+    ]
+    with db.transaction() as conn:
+        written = early_snapshots and _add_snapshots(db, key, planned[0])
+        project_id = lock_import(conn, key, actor)
+        require_state(conn, key, expected)
+        if _still_current(db, conn, key, project_id, planned):
+            plan, sources, plan_ctx = planned
+        elif written:
+            raise _PlanOutdated
+        else:
+            plan, sources, plan_ctx = _prepare(
+                db, conn, key, project_id, kind, language, files, prepared=prepared
+            )
         accepted = _overrides(
             conn, actor, key, project_id, plan, job.payload.get("status_overrides", [])
         )
@@ -888,7 +977,9 @@ def run_import(job: Job, ctx: JobContext) -> dict[str, Any]:
         resolved = _resolve_work_plan(
             conn, actor, key, project_id, plan, plan_ctx, choices, accepted
         )
-        counts = apply_plan(db, key, plan, sources, actor, job_id=job.id)
+        counts = apply_plan(
+            db, key, plan, sources, actor, job_id=job.id, snapshots_added=written
+        )
         _apply_overrides(conn, actor, project_id, plan, accepted)
         _apply_work_plan(
             conn,
@@ -932,8 +1023,8 @@ def _upload_job(job: Job, ctx: JobContext, *, commit: bool) -> dict[str, Any]:
     db, key, upload_id = ctx.db, job.payload["project"], job.payload["upload_id"]
     try:
         actor, _ = requester(db, job)
-        # Parse before waiting for the global import lock, as run_import does;
-        # under the lock the result is reused only if nothing it read changed.
+        # Parse and plan before waiting for the global import lock, as run_import
+        # does; under the lock the result is reused only if nothing it read changed.
         with db.transaction() as conn:
             state = project_state(conn, key)
             parsed_id = Repository(db)._require_project(conn, key)
@@ -947,10 +1038,34 @@ def _upload_job(job: Job, ctx: JobContext, *, commit: bool) -> dict[str, Any]:
                 if source is not None
                 else None
             )
+            planned = (
+                _prepare(db, conn, key, parsed_id, *source, prepared=prepared)
+                if source is not None
+                else None
+            )
+        preview = planned[0].model_dump(mode="json") if planned and not commit else None
         with db.transaction() as conn:
-            project_id = lock_import(conn, key, actor)
+            written = (
+                commit and planned is not None and _add_snapshots(db, key, planned[0])
+            )
+            # A preview writes only its own row, which can take long, and takes no
+            # project lock: the commit replans under the locks and compares (#209).
+            project_id = (
+                lock_import(conn, key, actor)
+                if commit
+                else _may_import(conn, key, actor)
+            )
+            # Not the stored preview: it is large and this job does not read it.
             row = conn.execute(
-                select(UploadRow)
+                select(
+                    UploadRow.status,
+                    UploadRow.commit_job_id,
+                    UploadRow.preview_job_id,
+                    UploadRow.plan_sha256,
+                    UploadRow.kind,
+                    UploadRow.language,
+                    UploadRow.files,
+                )
                 .where(UploadRow.id == upload_id, UploadRow.project_id == project_id)
                 .with_for_update()
             ).one_or_none()
@@ -972,17 +1087,27 @@ def _upload_job(job: Job, ctx: JobContext, *, commit: bool) -> dict[str, Any]:
                 and project_state(conn, key) == state
             )
             if not reuse:
-                prepared = None  # free the stale parse before parsing again (mem_limit)
-            plan, sources, plan_ctx = _prepare(
-                db,
-                conn,
-                key,
-                project_id,
-                row.kind,
-                row.language,
-                row.files,
-                prepared=prepared,
-            )
+                # Free the stale parse before parsing again (mem_limit).
+                prepared = planned = preview = None
+            if planned is None or not _still_current(
+                db, conn, key, project_id, planned
+            ):
+                if written:
+                    raise DomainError(
+                        "UPLOAD_STALE", "Project changed since preview; upload again."
+                    )
+                planned = _prepare(
+                    db,
+                    conn,
+                    key,
+                    project_id,
+                    row.kind,
+                    row.language,
+                    row.files,
+                    prepared=prepared,
+                )
+                preview = None
+            plan, sources, plan_ctx = planned
             if commit:
                 if plan.plan_sha256 != row.plan_sha256:
                     raise DomainError(
@@ -1007,7 +1132,15 @@ def _upload_job(job: Job, ctx: JobContext, *, commit: bool) -> dict[str, Any]:
                 resolved = _resolve_work_plan(
                     conn, actor, key, project_id, plan, plan_ctx, choices, accepted
                 )
-                counts = apply_plan(db, key, plan, sources, actor, job_id=job.id)
+                counts = apply_plan(
+                    db,
+                    key,
+                    plan,
+                    sources,
+                    actor,
+                    job_id=job.id,
+                    snapshots_added=written,
+                )
                 _apply_overrides(
                     conn, actor, project_id, plan, accepted, upload_id=upload_id
                 )
@@ -1034,7 +1167,7 @@ def _upload_job(job: Job, ctx: JobContext, *, commit: bool) -> dict[str, Any]:
                 result = {"counts": plan.counts}
                 values = {
                     "status": "ready" if plan.committable else "invalid",
-                    "preview": plan.model_dump(mode="json"),
+                    "preview": preview or plan.model_dump(mode="json"),
                     "plan_sha256": plan.plan_sha256,
                 }
             conn.execute(
@@ -1211,16 +1344,34 @@ class UploadService:
             # A request thread must not wait for an import in another project.
             conn.execute(text(f"SET LOCAL lock_timeout = '{IMPORT_LOCK_TIMEOUT}'"))
             project_id = lock_import(conn, key, self.actor)
-            row = self._row(conn, project_id, upload_id)
+            row = conn.execute(
+                select(UploadRow.status, UploadRow.plan_sha256)
+                .where(UploadRow.id == upload_id, UploadRow.project_id == project_id)
+                .with_for_update()
+            ).one_or_none()
+            if row is None:
+                raise DomainError("UPLOAD_NOT_FOUND", "Upload not found.")
             if row.status != "ready" or row.plan_sha256 != digest:
                 raise DomainError(
                     "UPLOAD_STALE", "Upload is not ready or the plan hash changed."
                 )
             if normalized or choices.any:
-                plan, _, ctx = _prepare(
-                    self.db, conn, key, project_id, row.kind, row.language, row.files
+                # The stored plan, not a new parse under the locks (#209); the job
+                # replans before it writes, and refuses a plan that no longer holds.
+                plan = ImportPlan.model_validate(
+                    conn.scalar(
+                        select(UploadRow.preview).where(UploadRow.id == upload_id)
+                    )
                 )
-                if plan.plan_sha256 != digest:
+                project, profile, rules, state = _inventory(
+                    self.db, conn, key, project_id
+                )
+                ctx = _plan_context(conn, project_id, project, case_ids(plan))
+                rows = planned_rows(plan.variants, added_documents(plan), ctx)
+                if (
+                    state_hash(state, profile, rules) != plan.state_sha256
+                    or upload_work_plan(rows, ctx) != plan.work_plan
+                ):
                     raise DomainError(
                         "UPLOAD_STALE", "Project changed since preview; upload again."
                     )

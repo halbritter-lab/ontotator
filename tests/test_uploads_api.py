@@ -17,6 +17,7 @@ from ontotator.domain.errors import DomainError
 from ontotator.exchange.uploads import UploadService
 from ontotator.storage.repository import Repository
 from ontotator.storage.tables import (
+    AnnotationSnapshotRow,
     AuditEventRow,
     DocumentRow,
     JobRow,
@@ -585,19 +586,22 @@ def test_commit_rechecks_after_a_real_import_lock_wait(staged, change):
     assert admin.get(f"{BASE}/{upload['id']}").json()["status"] == "failed"
 
 
-def test_preview_parses_before_waiting_for_the_import_lock(staged, monkeypatch):
+def test_commit_parses_before_waiting_for_the_import_lock(staged, monkeypatch):
     from test_admin_write_authority import _wait_for_database_lock
 
     from ontotator.exchange import uploads
     from ontotator.storage.repository import _lock_id
 
     app, admin = staged
+    upload = _ready(app, admin)
     parses = []
     real = uploads.read_sources
     monkeypatch.setattr(
         uploads, "read_sources", lambda *a: parses.append(a) or real(*a)
     )
-    queued = _create(admin).json()
+    queued = admin.post(
+        f"{BASE}/{upload['id']}/commit", json={"plan_sha256": upload["plan_sha256"]}
+    ).json()
     with app.state.repo.db.engine.begin() as holder:
         holder.execute(select(func.pg_advisory_xact_lock(_lock_id("import"))))
         with ThreadPoolExecutor(max_workers=1) as pool:
@@ -875,3 +879,253 @@ def test_service_list_keeps_only_the_given_statuses(staged):
     ] == [discarded, committed]
     assert len(service.list("proj")) == 4
     assert len(service.list("proj", statuses=[])) == 4
+
+
+def _count_plans(monkeypatch):
+    from ontotator.exchange import uploads
+
+    plans = []
+    real = uploads.plan_import
+    monkeypatch.setattr(uploads, "plan_import", lambda *a: plans.append(a) or real(*a))
+    return plans
+
+
+def _run_behind_import_lock(app, job_id, while_waiting):
+    """Run a job until it waits for the import lock, then ``while_waiting(holder)``."""
+    from test_admin_write_authority import _wait_for_database_lock
+
+    from ontotator.storage.repository import _lock_id
+
+    with app.state.repo.db.engine.begin() as holder:
+        holder.execute(select(func.pg_advisory_xact_lock(_lock_id("import"))))
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            pending = pool.submit(_run, app, job_id)
+            try:
+                _wait_for_database_lock(app, pending)
+                while_waiting(holder)
+            finally:
+                holder.commit()
+            return pending.result(timeout=15)
+
+
+def test_commit_plans_before_the_lock_and_keeps_an_unchanged_plan(staged, monkeypatch):
+    app, admin = staged
+    upload = _ready(app, admin)
+    plans = _count_plans(monkeypatch)
+    planned_before_the_wait = []
+    queued = admin.post(
+        f"{BASE}/{upload['id']}/commit", json={"plan_sha256": upload["plan_sha256"]}
+    ).json()
+    job = _run_behind_import_lock(
+        app, queued["job_id"], lambda _: planned_before_the_wait.append(len(plans))
+    )
+    assert job.status == "succeeded", job.error
+    assert planned_before_the_wait == [1]
+    assert len(plans) == 1
+    assert _count(app, DocumentRow) == 1
+
+
+@pytest.mark.parametrize(
+    ("document_id", "status", "documents"),
+    [("unrelated", "succeeded", 2), ("EN100017", "failed", 1)],
+)
+def test_import_job_replans_after_a_change_behind_the_plan(
+    staged, tmp_path, monkeypatch, document_id, status, documents
+):
+    from sqlalchemy import text
+
+    from ontotator.exchange.jobs import store_file
+
+    app, _ = staged
+    db = app.state.repo.db
+    plans = _count_plans(monkeypatch)
+    path = bundle(tmp_path / "b.zip", [unit()])
+    job_id = app.state.jobs.enqueue(
+        "t1_import",
+        {
+            "project": "proj",
+            "blob_sha256": store_file(db, path.read_bytes()),
+            "filename": path.name,
+        },
+        actor=Actor.cli(),
+    )
+    job = _run_behind_import_lock(
+        app,
+        job_id,
+        lambda holder: holder.execute(
+            text(
+                "INSERT INTO ontotator.documents (project_id, document_id, case_id, external_id, position, language, text, text_sha256) SELECT id, :id, :id, :id, 0, 'de', 'Else', :sha FROM ontotator.projects WHERE project_key = 'proj'"
+            ),
+            {"id": document_id, "sha": hashlib.sha256(b"Else").hexdigest()},
+        ),
+    )
+    assert job.status == status, job.error
+    assert len(plans) == 2
+    assert _count(app, DocumentRow) == documents
+    if status == "failed":
+        assert "DOCUMENT_CONFLICT" in job.error
+        assert _count(app, ProposalSetRow) == 0
+        assert _count(app, AnnotationSnapshotRow) == 0
+
+
+def test_commit_behind_a_change_leaves_no_early_snapshots(staged, tmp_path):
+    from sqlalchemy import text
+
+    app, admin = staged
+    path = bundle(tmp_path / "b.zip", [unit("doc")])
+    upload = _ready(
+        app, admin, kind="t1", files=[("files[]", (path.name, path.read_bytes()))]
+    )
+    queued = admin.post(
+        f"{BASE}/{upload['id']}/commit", json={"plan_sha256": upload["plan_sha256"]}
+    ).json()
+    job = _run_behind_import_lock(
+        app,
+        queued["job_id"],
+        lambda holder: holder.execute(
+            text(
+                "INSERT INTO ontotator.documents (project_id, document_id, case_id, external_id, position, language, text, text_sha256) SELECT id, 'later', 'later', 'later', 0, 'de', 'Else', :sha FROM ontotator.projects WHERE project_key = 'proj'"
+            ),
+            {"sha": hashlib.sha256(b"Else").hexdigest()},
+        ),
+    )
+    assert job.status == "failed"
+    assert "UPLOAD_STALE" in job.error
+    assert _count(app, AnnotationSnapshotRow) == 0
+    assert _count(app, ProposalSetRow) == 0
+
+
+def test_a_plan_is_not_current_after_a_change_to_its_work_plan_rows(staged, tmp_path):
+    from ontotator.domain.work_plans import PlanFlags, RowKey
+    from ontotator.exchange import uploads
+    from ontotator.storage import work_plan_store
+
+    app, admin = staged
+    db = app.state.repo.db
+    path = bundle(tmp_path / "b.zip", [unit("doc")])
+    upload = _ready(
+        app, admin, kind="t1", files=[("files[]", (path.name, path.read_bytes()))]
+    )
+    assert _commit(app, admin, upload).status == "succeeded"
+    with db.transaction() as conn:
+        source = conn.execute(
+            select(UploadRow.kind, UploadRow.language, UploadRow.files).where(
+                UploadRow.id == upload["id"]
+            )
+        ).one()
+        project_id = conn.execute(
+            select(ProjectRow.id).where(ProjectRow.project_key == "proj")
+        ).scalar_one()
+        planned = uploads._prepare(db, conn, "proj", project_id, *source)
+        assert uploads._still_current(db, conn, "proj", project_id, planned)
+        key = RowKey("doc", "de")
+        current = planned[2].flags[key]
+        work_plan_store.write_rows(
+            conn,
+            project_id,
+            {key: PlanFlags(not current.review, current.annotate)},
+            actor_id=None,
+        )
+        assert not uploads._still_current(db, conn, "proj", project_id, planned)
+
+
+def test_preview_needs_neither_import_nor_project_lock(staged):
+    from ontotator.storage.repository import _lock_id
+
+    app, admin = staged
+    queued = _create(admin).json()
+    with app.state.repo.db.engine.begin() as holder:
+        holder.execute(select(func.pg_advisory_xact_lock(_lock_id("import"))))
+        holder.execute(select(func.pg_advisory_xact_lock(_lock_id("project", "proj"))))
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            job = pool.submit(_run, app, queued["job_id"]).result(timeout=15)
+    assert job.status == "succeeded", job.error
+
+
+def test_a_change_during_the_preview_stops_its_commit(staged):
+    """A preview takes no lock, so its plan can be outdated: the commit refuses it."""
+    from sqlalchemy import text
+
+    app, admin = staged
+    upload = _ready(app, admin)
+    with app.state.repo.db.transaction() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO ontotator.documents (project_id, document_id, case_id, external_id, position, language, text, text_sha256) SELECT id, 'later', 'later', 'later', 0, 'de', 'Else', :sha FROM ontotator.projects WHERE project_key = 'proj'"
+            ),
+            {"sha": hashlib.sha256(b"Else").hexdigest()},
+        )
+    job = _commit(app, admin, upload)
+    assert job.status == "failed"
+    assert "UPLOAD_STALE" in job.error
+    assert _count(app, DocumentRow) == 1
+
+
+def test_a_failure_after_the_writes_leaves_nothing(staged, tmp_path, monkeypatch):
+    from ontotator.exchange import uploads
+
+    app, admin = staged
+    path = bundle(tmp_path / "b.zip", [unit(f"doc-{i}") for i in range(3)])
+    upload = _ready(
+        app, admin, kind="t1", files=[("files[]", (path.name, path.read_bytes()))]
+    )
+
+    def fail(*_args, **_kwargs):
+        raise RuntimeError("write fails")
+
+    monkeypatch.setattr(uploads, "_apply_work_plan", fail)
+    job = _commit(app, admin, upload)
+    assert job.status == "failed"
+    assert (
+        _count(app, DocumentRow)
+        == _count(app, ProposalSetRow)
+        == _count(app, ProposalAnnotationRow)
+        == _count(app, AnnotationSnapshotRow)
+        == 0
+    )
+    assert admin.get(f"{BASE}/{upload['id']}").json()["status"] == "failed"
+
+
+def test_sets_of_one_call_take_one_statement_and_keep_their_counts(staged, tmp_path):
+    from sqlalchemy import event
+
+    from ontotator.exchange.t1 import ImportedProposals, ImportedSet
+
+    app, admin = staged
+    repo = app.state.repo
+    path = bundle(tmp_path / "b.zip", [unit(f"doc-{i}") for i in range(3)])
+    upload = _ready(
+        app, admin, kind="t1", files=[("files[]", (path.name, path.read_bytes()))]
+    )
+    statements = []
+
+    def record(_conn, _cursor, statement, *_rest):
+        statements.append(statement)
+
+    engine = repo.db.engine
+    event.listen(engine, "before_cursor_execute", record)
+    try:
+        job = _commit(app, admin, upload)
+    finally:
+        event.remove(engine, "before_cursor_execute", record)
+    assert job.status == "succeeded", job.error
+    assert _count(app, ProposalAnnotationRow) == 6
+    assert sum("INTO ontotator.proposal_sets" in s for s in statements) == 1
+
+    def imported(document_id):
+        return ImportedSet(
+            document_id,
+            None,
+            None,
+            "extra",
+            "tool_output",
+            [],
+            {},
+            ImportedProposals([], [], {}, 0),
+        )
+
+    twice = [imported("doc-0"), imported("doc-0"), imported("doc-1")]
+    first = repo.add_documents_and_proposals("proj", [], twice, source_sha256=None)
+    assert (first["sets_added"], first["sets_skipped"]) == (2, 1)
+    again = repo.add_documents_and_proposals("proj", [], twice, source_sha256=None)
+    assert (again["sets_added"], again["sets_skipped"]) == (0, 3)

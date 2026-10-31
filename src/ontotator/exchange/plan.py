@@ -469,7 +469,7 @@ def read_t1_upload(
     return result, issues
 
 
-def _state_hash(
+def state_hash(
     state: ProjectImportState, profile: TaskProfile, rules: ProjectRules
 ) -> str:
     return canonical_hash(
@@ -505,7 +505,7 @@ def plan_import(
     reader_issues: Sequence[Issue],
 ) -> ImportPlan:
     """Plan all actions against one inventory without changing delivered units."""
-    plan = ImportPlan(state_sha256=_state_hash(state, profile, rules))
+    plan = ImportPlan(state_sha256=state_hash(state, profile, rules))
     for issue in reader_issues:
         (plan.errors if issue.severity == "error" else plan.warnings).append(issue)
     variants, internal_ids, variant_issues = resolve_variants(
