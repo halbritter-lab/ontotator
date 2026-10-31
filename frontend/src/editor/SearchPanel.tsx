@@ -203,7 +203,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   const expanded = candidates.length > 0;
   const noHits = resultsCurrent && candidates.length === 0;
 
-  // The active hit resets to the first usable close match whenever a new result list arrives; weak matches wait for ↓ ↑ (#247).
+  // The active hit resets to the first usable close match whenever a new result list arrives; weak matches wait for ↓ ↑.
   const [active, setActive] = useState<{ list: SearchCandidate[]; index: number } | null>(null);
   const activeIndex = active && active.list === state.candidates
     ? active.index
