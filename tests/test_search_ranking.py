@@ -33,6 +33,11 @@ TERMS: list[tuple[str, tuple[str, ...]]] = [
     ("Soft tissue swelling", ()),
     ("Subcutaneous soft tissue mass", ()),
     ("Abdominal mass", ()),
+    ("Fractured metatarsal bone of digit 1", ()),
+    ("Thumb hypoplasia grade 2", ()),
+    ("Sclerotic foci in forearm bones", ()),
+    ("Increased bone mineral density", ("Osteosclerosis",)),
+    ("Seizure", ()),
 ]
 ANNOTATORS = ("dr-a", "dr-b", "dr-c", "dr-d")
 
@@ -97,15 +102,20 @@ def _shown(service: OntologyService, query: str, annotator: str) -> list[str]:
 
 
 def test_word_cover_counts_query_words_and_other_words() -> None:
-    assert word_cover("hemorrhage", "Retinal hemorrhage") == (0, 1, 1)
+    assert word_cover("hemorrhage", "Retinal hemorrhage") == (0, 1, 1, True)
     # "of" is too short to count.
-    assert word_cover("hemorrhage", "Hemorrhage of the eye") == (0, 1, 2)
-    assert word_cover("esophageal hemorrhage", "Nasal hemorrhage") == (0, 1, None)
-    assert word_cover("soft tissue mass", "Soft tissue sarcoma") == (0, 2, None)
+    assert word_cover("hemorrhage", "Hemorrhage of the eye") == (0, 1, 2, True)
+    assert word_cover("esophageal hemorrhage", "Nasal hemorrhage") == (
+        0,
+        1,
+        None,
+        False,
+    )
+    assert word_cover("soft tissue mass", "Soft tissue sarcoma") == (0, 2, None, False)
     # A word typed so far still counts.
-    assert word_cover("hemorr", "Internal hemorrhage") == (0, 1, 1)
+    assert word_cover("hemorr", "Internal hemorrhage") == (0, 1, 1, True)
     # Query words too short to check put no name in the fixed head.
-    assert word_cover("of", "Hemorrhage of the eye") == (0, 0, None)
+    assert word_cover("of", "Hemorrhage of the eye") == (0, 0, None, False)
 
 
 @pytest.mark.parametrize("annotator", ANNOTATORS)
@@ -154,3 +164,40 @@ def test_ranks_prefer_names_covering_more_query_words(
     # Labels holding one query word rank before a synonym holding one.
     assert ranked.index("Epistaxis") > ranked.index("Internal hemorrhage")
     assert ranked.index("Epistaxis") > ranked.index("Esophageal varix")
+
+
+@pytest.mark.parametrize(
+    ("query", "label", "weak"),
+    [
+        # #247: one shared word, or a name word inside the query word.
+        ("bone metastases", "Fractured metatarsal bone of digit 1", True),
+        ("sangrado", "Thumb hypoplasia grade 2", True),
+        # Every query word starts a word of the name.
+        ("sclerotic foci", "Sclerotic foci in forearm bones", False),
+        ("sclero", "Sclerotic foci in forearm bones", False),
+        # An exact synonym, a typo, a plural.
+        ("osteosclerosis", "Increased bone mineral density", False),
+        ("osteosclerrosis", "Increased bone mineral density", False),
+        ("seizures", "Seizure", False),
+    ],
+)
+def test_a_hit_is_weak_unless_every_query_word_is_close(
+    service: OntologyService, query: str, label: str, weak: bool
+) -> None:
+    hits = {c.label: c for c in _search(service, query, "dr-a").candidates}
+    assert hits[label].weak_match is weak
+
+
+@pytest.mark.parametrize("annotator", ANNOTATORS)
+def test_weak_hits_are_listed_after_close_ones(
+    service: OntologyService, annotator: str
+) -> None:
+    # "Hemorrhage" hits are a typo away, "Thumb hypoplasia grade 2" only near.
+    weak = [
+        c.weak_match for c in _search(service, "hemorhage grade", annotator).candidates
+    ]
+    assert True in weak
+    assert weak == sorted(weak)
+
+    # With a typo alone, a close hit stays on top although it is shuffled.
+    assert _search(service, "seizures", annotator).candidates[0].label == "Seizure"
