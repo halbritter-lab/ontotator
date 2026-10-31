@@ -1,4 +1,4 @@
-import{r,a as m,j as a,b as h}from"./index-BmEOAHfG.js";import{M as f,r as g}from"./index-BWYYJ50k.js";function w(){const[e,t]=r.useState(null);return r.useEffect(()=>{let o=!0;return m.getAbout().then(n=>{o&&t(n)},()=>{}),()=>{o=!1}},[]),e?a.jsxs("p",{className:"help-version",title:e.revision??void 0,children:["Ontotator ",e.version,e.revision&&a.jsxs(a.Fragment,{children:[" · commit ",e.revision.slice(0,7)]})]}):null}const y=`# Ontotator user handbook
+import{r,a as m,j as a,b as h}from"./index-BM5_gLn3.js";import{M as f,r as g}from"./index-lpEtEmZj.js";function w(){const[e,t]=r.useState(null);return r.useEffect(()=>{let o=!0;return m.getAbout().then(n=>{o&&t(n)},()=>{}),()=>{o=!1}},[]),e?a.jsxs("p",{className:"help-version",title:e.revision??void 0,children:["Ontotator ",e.version,e.revision&&a.jsxs(a.Fragment,{children:[" · commit ",e.revision.slice(0,7)]})]}):null}const y=`# Ontotator user handbook
 
 This handbook explains how to work with Ontotator in the browser. It is for everyone who uses the app: annotators, translation reviewers, consolidators, leads and system administrators. It describes the version of Ontotator that you open it from. If you run the server, read the [server operations guide (for server operators)](../operations.md) instead.
 
@@ -500,7 +500,7 @@ Tools make mistakes. Check every proposal as if you had marked it yourself: the 
    - **Confirm**: the passage, term and all values are right. Values tagged **Defaulted** were not set by the tool but prefilled; Confirm accepts them as shown, so check them too.
    - **Reject**: the proposal is wrong and nothing should replace it.
    - **Edit & Replace**: the proposal is nearly right. You get an editable copy that replaces it; correct the term, values or text span in the copy. The copy is listed under its proposal in **Review Proposals**, as *Your copy*, not under **Your own findings**. In the details, the editor names the proposal it replaces and what you changed, for example *Assertion: Present → Absent*. Click **Done, back to the proposal** when you are finished. The proposal then reads *Replaced by* with the term and your changes. Confirming a default in the copy changes no value, so the proposal is not replaced by that alone.
-   - **Unresolved**: only if you really cannot decide; the other three decisions are the normal case. Write a **Reviewer note** saying why, then click **Save decision**. The proposal is submitted with your note and a reviewer flag. It does not block submitting; the lead (and a consolidator, if there is one) decides it. Only **Confirm** confirms a proposal's prefilled values: on an unresolved proposal they stay recorded as defaults, and its row shows **Defaults not confirmed**. The result line under **Your own findings** counts such a proposal as unresolved, for example "1 confirmed proposal, 1 unresolved proposal, 1 own finding".
+   - **Unresolved**: only if you really cannot decide; the other three decisions are the normal case. Write a **Reviewer note** saying why, then click **Save decision**. The proposal is submitted with your note and a reviewer flag. It does not block submitting. Another annotator's Confirm does not settle it: the finding does not count as agreed, and whoever decides, the consolidator or the lead, sees your flag and note. Only **Confirm** confirms a proposal's prefilled values: on an unresolved proposal they stay recorded as defaults, and its row shows **Defaults not confirmed**. The result line under **Your own findings** counts such a proposal as unresolved, for example "1 confirmed proposal, 1 unresolved proposal, 1 own finding".
 5. After each decision, the next open proposal is selected. Press \`k\` right after a decision to go back to it.
 6. When all proposals are decided, read the whole text again and add findings the tool missed: mark text that has no proposal, choose the term in **New finding** and set the values, as in [Mark text and add a finding](#mark-text-and-add-a-finding). Your additions appear under **Your own findings**, next to the proposals.
 
@@ -727,7 +727,8 @@ Ontotator puts the findings that different people marked on overlapping passages
 | **agreed** | Everyone who marked it chose the same term and values. It is already in the result and counts as decided. Open it and click **Reopen** if it is wrong. |
 | **to decide**, or *2 fields to decide* | Still open. The number counts the highlighted rows that need your choice. |
 | **Conflict** mark | People chose different terms or values. |
-| **to decide** without **Conflict** | Only the passage differs, or not everyone marked the finding. |
+| **to decide** without **Conflict** | Only the passage differs, not everyone marked the finding, or an annotator left it unresolved. |
+| **Unresolved** tag | An annotator could not decide this finding. It is not agreed, even if everyone marked the same: read the note in the **Unresolved** row of the table, then decide. |
 | **decided** | You decided it. |
 | **not in result** | You left it out. |
 | **attached** | A modifier term you attached to another finding. |
@@ -1683,9 +1684,9 @@ How to choose:
 What for: choose the final result of a text.
 
 1. On **Documents**, tab **Needs your decision**, click **Accept result…** or **Compare results…** in the row. The row reads **Accept result…** when there is one result to accept or the submissions agree in full, also on notes and modifier text spans, and **Compare results…** when they differ in anything. The card opens at **Finalization**.
-2. With one submission or a submitted consolidation, check it and click **Accept result**.
-3. If all annotations agree, the card says so. Click **Accept result**.
-4. If they differ, the card shows the agreement, for example *Agreement: 5 of 9 findings match, 1 differs in context only*. When matching findings still differ in a note, a text span or a modifier text span, a line below names them, for example *Notes differ on 1 finding: Ataxia*. **How is this counted?** explains the numbers. Open a submission with **Open submission** to read it in the read-only text view.
+2. With one submission or a submitted consolidation, check it and click **Accept result**. If an annotator left findings **Unresolved**, the card lists them with who wrote each note. Accepting a submission directly keeps the flag and the note in the export; open the submission to check them first.
+3. If all annotations agree, the card says so. Click **Accept result**. A finding an annotator left **Unresolved** never counts as agreed, so that text goes through the next step instead.
+4. If they differ, the card shows the agreement, for example *Agreement: 5 of 9 findings match, 1 differs in context only*. When matching findings still differ in a note, a text span or a modifier text span, a line below names them, for example *Notes differ on 1 finding: Ataxia*. Findings an annotator left **Unresolved** count as differences and are listed with who wrote each note. **How is this counted?** explains the numbers. Open a submission with **Open submission** to read it in the read-only text view.
 5. Warning: the next action saves at once, without a confirmation. Click **Use as final** in the row of the submission you want. Or [start a consolidation](#start-a-consolidation) instead.
 
 After saving, the card moves on to the next text that needs a decision. The decided row stays in the tab with a *Resolved* badge until you click **Refresh** or change the tab. To undo, [change the final result](#change-a-final-result).
@@ -1859,7 +1860,7 @@ What for: download the accepted final results.
 
 ![The final results check on the Export page](images/lead-export.png)
 
-Click **Check again** after you accepted more results. **What is in the file?** explains the contents. Values that annotators never confirmed are marked as *defaulted* in the file; unresolved proposals keep their reviewer flag and note. The file formats are described in the [scientific workflow guide](../scientific-workflow.md) and the [translation review export guide](../translation-review-export.md).
+Click **Check again** after you accepted more results. **What is in the file?** explains the contents. Values that annotators never confirmed are marked as *defaulted* in the file; proposals still unresolved in an accepted submission keep their reviewer flag and note. Once a consolidator decides such a group, the result is a normal decided finding, or no finding if left out, and the annotator's note stays in the provenance part of the export. The file formats are described in the [scientific workflow guide](../scientific-workflow.md) and the [translation review export guide](../translation-review-export.md).
 
 Each text in an export names the ontology release its work was made under, which can be older than the project's current release. If the texts of one export were made under different releases, the newest keeps the layer ID (for example \`hpo-layer\`) and each older release gets a layer of its own (\`hpo-layer@<start of its checksum>\`), which the file lists with its release and checksum.
 
