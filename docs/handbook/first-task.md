@@ -56,7 +56,7 @@ In a task *Annotation, from proposals*, the column **Review Proposals** lists fi
 
 1. Select the first proposal. The text shows where it was found.
 2. Check three things: the marked text, the term and every value.
-3. Click **Confirm** if all three are right, **Reject** if the proposal is wrong, or **Edit & Replace** to correct it in a copy, listed under the proposal, then click **Done, back to the proposal**. Only if you really cannot decide, click **Unresolved** and write a **Reviewer note** saying why.
+3. Click **Confirm** if all three are right, **Reject** if the proposal is wrong, or **Edit & Replace** to correct it in a copy, listed under the proposal, then click **Done, back to the proposal**. Changing a value or the text span in the copy replaces the proposal; confirming a default alone does not. Only if you really cannot decide, click **Unresolved** and write a **Reviewer note** saying why.
 4. The next open proposal is selected. Go on until every proposal is decided.
 5. Then read the whole text for findings the tool missed. Mark text that has no proposal and add the finding as in step 5. It appears under **Your own findings**, next to the proposals.
 
