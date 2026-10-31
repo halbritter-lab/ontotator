@@ -226,7 +226,7 @@ function FailureNotice({ failure: shown, onReview, onRetry, busy: saving }: { fa
 }
 
 /**
- * #246: findings annotators marked Unresolved, with who and why, for the person deciding. The title holds whether or
+ * Findings annotators marked Unresolved, with who and why, for the person deciding. The title holds whether or
  * not a consolidator has settled them since. `submissionId`: only that submission's.
  */
 function UnresolvedNotice({ data, submissionId, children }: { data: FinalPanelData; submissionId?: string; children?: ReactNode }): JSX.Element | null {
