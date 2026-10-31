@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-31
+
 ### Added
 
 - With *Annotate only after the translation review is accepted* on, a lead can assign annotators (one by one, in bulk and with *Distribute evenly…*) while the text's translation review is assigned or underway. The task shows in *My tasks* as *Waiting for translation review*, the server refuses to open, save or submit it (`TASK_WAITING_FOR_TRANSLATION_REVIEW`), and it opens by itself once the review is accepted, also on a corrected version. The review must run on that version or an ancestor: with parallel translations, the others are skipped with a reason. A task that cannot follow a correction (from proposals, paused, or on a correction that was rejected) shows *Waiting for the project lead*, and the lead withdraws it in *Handle text change…* (#213).
@@ -141,7 +143,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 First public release.
 
-[Unreleased]: https://github.com/halbritter-lab/ontotator/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/halbritter-lab/ontotator/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/halbritter-lab/ontotator/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/halbritter-lab/ontotator/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/halbritter-lab/ontotator/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/halbritter-lab/ontotator/compare/v0.1.0...v0.2.0
