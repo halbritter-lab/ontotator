@@ -19,7 +19,7 @@ What for: choose the final result of a text.
 1. On **Documents**, tab **Needs your decision**, click **Accept result…** or **Compare results…** in the row. The row reads **Accept result…** when there is one result to accept or the submissions agree in full, also on notes and modifier text spans, and **Compare results…** when they differ in anything. The card opens at **Finalization**.
 2. With one submission or a submitted consolidation, check it and click **Accept result**.
 3. If all annotations agree, the card says so. Click **Accept result**.
-4. If they differ, the card shows the agreement, for example *Agreement: 5 of 9 findings match, 1 differs in context only*. **How is this counted?** explains the numbers. Open a submission with **Open submission** to read it in the read-only text view.
+4. If they differ, the card shows the agreement, for example *Agreement: 5 of 9 findings match, 1 differs in context only*. When matching findings still differ in a note, a text span or a modifier text span, a line below names them, for example *Notes differ on 1 finding: Ataxia*. **How is this counted?** explains the numbers. Open a submission with **Open submission** to read it in the read-only text view.
 5. Warning: the next action saves at once, without a confirmation. Click **Use as final** in the row of the submission you want. Or [start a consolidation](#start-a-consolidation) instead.
 
 After saving, the card moves on to the next text that needs a decision. The decided row stays in the tab with a *Resolved* badge until you click **Refresh** or change the tab. To undo, [change the final result](#change-a-final-result).
@@ -104,7 +104,7 @@ What for: pick another result after you already chose one.
 
 What for: decide what happens after a reviewer rejected or queried a translation. The row's next step is **Resolve rejected translation** or **Resolve queried translation**.
 
-1. In the row, click **Resolve…**. The options open below the row with the reviewer's rationale.
+1. In the row, click **Resolve…**. The options open below the row with the reviewer's rationale. When someone holds an annotation that waits for this translation, a line names them, for example *Ana Weber is waiting for this decision to start the annotation.*
 2. Choose one:
    - **Assign a new review…**: someone reviews it again.
    - **Correct the translation…**: you correct it yourself ([Correct a translation yourself](#correct-a-translation-yourself)).
@@ -138,11 +138,11 @@ What for: decide what happens when a text gets a new version while someone is st
 
 Before you start: if the task is paused by a problem report, [decide the report](#decide-on-a-problem-report) first.
 
-1. In the row, click **Handle text change…**. A task from proposals, or a task on a correction that was not accepted, only offers **Withdraw**.
+1. In the row, click **Handle text change…**. A task from proposals, or a task on a correction that was not accepted, only offers **Withdraw**: tool proposals mark places in the old text and cannot follow the new one. The dialog says why and what to do next.
 2. Choose one:
    - Move to the new version: the annotator continues on the corrected text; their draft findings are carried and marked for checking.
    - Let the annotator finish on the old version: the result is carried to the new version for them to check.
-   - **Withdraw**: the draft stays with them, and the new version needs a new annotation.
+   - **Withdraw**: the task ends, nothing of the draft is carried, and the new version needs a new annotation. Assign it afterwards.
 3. Click **Apply**.
 
 ### Carry submitted work to a new text version

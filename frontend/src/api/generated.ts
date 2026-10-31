@@ -2577,6 +2577,24 @@ export interface components {
              */
             task: "annotate" | "review" | "translation_review";
         };
+        /**
+         * AgreementDetailView
+         * @description A matching finding whose note, text span or modifier text differs
+         *     (issue 230); ``term_label`` is the term's name, else its id.
+         */
+        AgreementDetailView: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "note" | "text" | "modifiers";
+            /** Layer Id */
+            layer_id: string;
+            /** Term Id */
+            term_id: string;
+            /** Term Label */
+            term_label: string;
+        };
         /** AgreementView */
         AgreementView: {
             /** Compared Version */
@@ -2587,6 +2605,8 @@ export interface components {
             matching: number;
             /** Context Differences */
             context_differences: number;
+            /** Detail Differences */
+            detail_differences?: components["schemas"]["AgreementDetailView"][];
         };
         /**
          * Annotation

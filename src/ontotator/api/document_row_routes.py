@@ -11,7 +11,7 @@ from ontotator.api.document_projection import AssignmentFilter, AssignmentStatus
 from ontotator.api.encoded_routes import EncodedParameterRoute
 from ontotator.api.identity import PrincipalDep
 from ontotator.api.person_views import PersonRefView
-from ontotator.api.routes import get_access
+from ontotator.api.routes import get_access, get_ontology
 from ontotator.api.work_plan_routes import (
     MAX_SELECTED_ROWS,
     PlanFlagsView,
@@ -572,11 +572,22 @@ class FinalPanelSubmissionView(RowSubmissionView):
     consolidation_origins: ConsolidationOriginsView | None = None
 
 
+class AgreementDetailView(_View):
+    """A matching finding whose note, text span or modifier text differs
+    (issue 230); ``term_label`` is the term's name, else its id."""
+
+    kind: Literal["note", "text", "modifiers"]
+    layer_id: str
+    term_id: str
+    term_label: str
+
+
 class AgreementView(_View):
     compared_version: int
     total: int
     matching: int
     context_differences: int
+    detail_differences: list[AgreementDetailView] = Field(default_factory=list)
 
 
 class FinalPanelView(_View):
@@ -740,7 +751,20 @@ def row_final_panel(
 ) -> dict[str, Any]:
     """Final-result panel of one row: submissions, agreement, label rule,
     causes and changed passages (leads only, nothing stored)."""
-    return _service(request, principal).final_panel(key, case_id, language)
+    data = _service(request, principal).final_panel(key, case_id, language)
+    details = (data.get("agreement") or {}).get("detail_differences") or []
+    if details:
+        repo, ontology = request.app.state.repo, get_ontology(request)
+        labels: dict[tuple[str, str], str] = {}
+        for item in details:
+            term = (item["layer_id"], item["term_id"])
+            if term not in labels:
+                status = ontology.for_package_layer(repo, key, term[0]).validate_term(
+                    term[1]
+                )
+                labels[term] = status.label or term[1]
+            item["term_label"] = labels[term]
+    return data
 
 
 @router.post("/documents/visit", response_model=DocumentsVisitView)

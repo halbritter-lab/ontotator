@@ -5,6 +5,7 @@ import { nextOpenTask } from "../app/caseOrder";
 import { MY_TASKS, routeHref, type Route, type RouteLeaveGuard } from "../app/router";
 import { isNotAvailable, NotFound, TASK_UNAVAILABLE, TASK_UNAVAILABLE_REASON } from "../app/NotFound";
 import { Button, Checkbox, ConfirmDialog, Dialog, IconRetry, InlineMessage, Kbd, MenuButton, StatusBadge, useMediaQuery, type StatusTone } from "../ui";
+import { PausedNotice } from "../editor/PausedNotice";
 import { useShortcut } from "../ui/shortcuts";
 import { caretInParagraph, paragraphStarts } from "../variants/paragraphs";
 import { useCoupledScroll } from "../variants/useCoupledScroll";
@@ -550,7 +551,7 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
     aria-disabled={canSubmit ? undefined : true} loading={busy} onClick={requestSubmit}>Submit review…</Button>;
 
   return <section className="translation-review" aria-label="Translation review" ref={screenRoot}>
-    {held && <InlineMessage tone="warning">Task paused: {props.holdReason ?? workspace.assignment.hold_reason ?? "A project problem needs attention."} Your local translation and review input are kept.</InlineMessage>}
+    {held && <PausedNotice reason={props.holdReason ?? workspace.assignment.hold_reason} kept="Your local translation and review input are kept." />}
     {/* Gone once the review is submitted here: the notice belongs to editable tasks. */}
     {!readOnly && props.guidelineNotice}
     <Button className="translation-skip" onClick={focusDecision}>Skip to decision</Button>

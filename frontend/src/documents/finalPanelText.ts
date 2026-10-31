@@ -102,10 +102,13 @@ export function allMatchText(submissions: number, findings: number): string {
   return submissions === 2 ? "Both submissions have no findings" : "No submission has findings";
 }
 
-/** Hint of "Consolidate…": "Resolve the 2 differences together" ("the 1 difference"); without a count none. */
+/**
+ * Hint of "Consolidate…": "Resolve the 2 differences together" ("the 1 difference"); without a count none. A note,
+ * text span or modifier text that differs on a matching finding counts as one difference each (issue 230).
+ */
 export function consolidateHint(agreement: AgreementView | null): string | null {
   if (!agreement) return null;
-  const differences = agreement.total - agreement.matching;
+  const differences = agreement.total - agreement.matching + (agreement.detail_differences?.length ?? 0);
   if (differences <= 0) return null;
   return `Resolve the ${differences} ${differences === 1 ? "difference" : "differences"} together`;
 }
@@ -165,6 +168,21 @@ export function agreementText(agreement: AgreementView): string {
   const context = agreement.context_differences;
   if (context <= 0) return base;
   return `${base}, ${context} ${context === 1 ? "differs" : "differ"} in context only`;
+}
+
+const DETAIL_TEXT: Record<string, string> = { note: "Notes differ", text: "Text spans differ", modifiers: "Modifier text spans differ" };
+
+/**
+ * Issue 230: matching findings that still differ in a detail, one line per kind with the findings' terms:
+ * "Notes differ on 1 finding: Ataxia". Empty when nothing differs; then the agreement line says everything.
+ */
+export function detailDifferenceLines(agreement: AgreementView): string[] {
+  const byKind = new Map<string, string[]>();
+  for (const item of agreement.detail_differences ?? []) byKind.set(item.kind, [...(byKind.get(item.kind) ?? []), item.term_label]);
+  return Object.keys(DETAIL_TEXT).filter(kind => byKind.has(kind)).map(kind => {
+    const terms = byKind.get(kind)!;
+    return `${DETAIL_TEXT[kind]} on ${plural(terms.length, "finding")}: ${terms.join(", ")}`;
+  });
 }
 
 /** One paragraph on V9 behind "How is this counted?". */

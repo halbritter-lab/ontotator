@@ -8472,6 +8472,41 @@
         ],
         "title": "AffectedTask"
       },
+      "AgreementDetailView": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "note",
+              "text",
+              "modifiers"
+            ],
+            "title": "Kind"
+          },
+          "layer_id": {
+            "type": "string",
+            "title": "Layer Id"
+          },
+          "term_id": {
+            "type": "string",
+            "title": "Term Id"
+          },
+          "term_label": {
+            "type": "string",
+            "title": "Term Label"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "layer_id",
+          "term_id",
+          "term_label"
+        ],
+        "title": "AgreementDetailView",
+        "description": "A matching finding whose note, text span or modifier text differs\n(issue 230); ``term_label`` is the term's name, else its id."
+      },
       "AgreementView": {
         "properties": {
           "compared_version": {
@@ -8489,6 +8524,13 @@
           "context_differences": {
             "type": "integer",
             "title": "Context Differences"
+          },
+          "detail_differences": {
+            "items": {
+              "$ref": "#/components/schemas/AgreementDetailView"
+            },
+            "type": "array",
+            "title": "Detail Differences"
           }
         },
         "additionalProperties": false,

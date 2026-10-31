@@ -5,7 +5,7 @@ import { errorMessage } from "../admin/errors";
 import { personName } from "../admin/assignSummary";
 import { Button, ConfirmDialog, Dialog } from "../ui";
 import {
-  CHECKING, finishDescription, finishingMessage, finishLabel, fromProposalsLine, handleTitle, heldLine, moveDescription, movedMessage, moveLabel,
+  CHECKING, finishDescription, finishingMessage, finishLabel, fromProposalsLine, handleTitle, heldLine, moveDescription, movedMessage, moveLabel, nextAfterWithdrawLine,
   notNewerLine, openWorkLine, RELOADED_MESSAGE, unplacedLine, WITHDRAW_LABEL, withdrawDescription, withdrawnMessage,
 } from "./textChangeText";
 
@@ -114,7 +114,10 @@ export function HandleTextChangeDialog(props: HandleTextChangeDialogProps): JSX.
   </>}>
     <div className="text-change-dialog">
       <p>{openWorkLine(person, from, to)}</p>
-      {withdrawOnly && !held && <p>{fromProposals ? fromProposalsLine(to) : notNewerLine(from, to)}</p>}
+      {withdrawOnly && !held && <>
+        <p>{fromProposals ? fromProposalsLine(person, from, to) : notNewerLine(from, to)}</p>
+        <p>{nextAfterWithdrawLine(to)}</p>
+      </>}
       {held ? <p className="text-change-held">
         {heldLine(person)}{" "}
         {props.onDecideReport && <Button size="sm" onClick={props.onDecideReport}>Decide on report…</Button>}

@@ -3218,7 +3218,10 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
           if (p.source_annotation_id) {
             snap.annotation.provenance = { ...snap.annotation.provenance, source_refs: [`${p.source_annotation_id}:${p.source_version}`] };
             // Like the server: an adopted proposal keeps its modifiers.
-            snap.annotation.modifiers = structuredClone((view.available_inputs ?? []).find((input: any) => input.annotation.annotation_id === p.source_annotation_id)?.annotation.modifiers ?? []);
+            const source = (view.available_inputs ?? []).find((input: any) => input.annotation.annotation_id === p.source_annotation_id) as any;
+            snap.annotation.modifiers = structuredClone(source?.annotation.modifiers ?? []);
+            // Like the server: unchanged defaulted values of the proposal stay defaulted.
+            snap.annotation.axes_defaulted = (source?.annotation.axes_defaulted ?? []).filter((axis: string) => p.axes_values[axis] != null && p.axes_values[axis] === source.annotation.axes_values[axis]);
           }
           current.annotations = [...(current.annotations ?? []), snap];
           evidence(p.evidence_id, p.segments);
@@ -3227,6 +3230,10 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
           evidence(p.evidence_id, p.segments);
         } else if (p.command === "detach_mention") {
           const ann = find(p.annotation_id); ann.evidence_refs = ann.evidence_refs.filter((ref: { evidence_id: string }) => ref.evidence_id !== p.evidence_id);
+        } else if (p.command === "set_axes") {
+          const ann = find(p.annotation_id);
+          ann.axes_values = { ...ann.axes_values, ...p.axes_values };
+          ann.axes_defaulted = (ann.axes_defaulted ?? []).filter((axis: string) => !p.chosen_axis_ids.includes(axis));
         } else if (p.command === "add_modifier") {
           const ann = find(p.annotation_id);
           ann.modifiers = [...(ann.modifiers ?? []).filter((m: Mod) => m.term_id !== p.term_id), { term_id: p.term_id, ...(p.segments ? { segments: p.segments } : {}) }];
@@ -3390,6 +3397,22 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
       expect(payloads(apply)[0]).toEqual(expect.objectContaining({ command: "create_annotation", source_annotation_id: "prop-seizure" }));
       await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
       expect(payloads(apply)).toHaveLength(1);
+      expect(decide).not.toHaveBeenCalled();
+    });
+
+    it("confirming a defaulted value on the copy does not replace the proposal (#231)", async () => {
+      const { view } = reviewView([], false);
+      const proposal = view.available_inputs![0] as any;
+      proposal.annotation.axes_values = { assertion: "present" }; proposal.annotation.axes_defaulted = ["assertion"];
+      const { container } = await setup(view, severeHits, false);
+      const { apply, decide } = draftSpy(view);
+      fireEvent.click(container.querySelector('[data-list-key^="target:"]')!);
+      fireEvent.click(screen.getByRole("button", { name: /Edit & Replace/ }));
+      await waitFor(() => expect(payloads(apply).map(p => p.command)).toEqual(["create_annotation"]));
+      fireEvent.click(await waitFor(() => { const button = container.querySelector<HTMLElement>("[data-confirm-defaults]"); expect(button).not.toBeNull(); return button!; }));
+      await waitFor(() => expect(payloads(apply).map(p => p.command)).toEqual(["create_annotation", "set_axes"]));
+      expect(payloads(apply)[1]).toEqual(expect.objectContaining({ chosen_axis_ids: ["assertion"] }));
+      await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
       expect(decide).not.toHaveBeenCalled();
     });
   });

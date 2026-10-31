@@ -207,7 +207,7 @@ Tools make mistakes. Check every proposal as if you had marked it yourself: the 
 4. Decide:
    - **Confirm**: the passage, term and all values are right. Values tagged **Defaulted** were not set by the tool but prefilled; Confirm accepts them as shown, so check them too.
    - **Reject**: the proposal is wrong and nothing should replace it.
-   - **Edit & Replace**: the proposal is nearly right. You get an editable copy that replaces it; correct the term, values or text span in the copy. The copy is listed under its proposal in **Review Proposals**, as *Your copy*, not under **Your own findings**. In the details, the editor names the proposal it replaces and what you changed, for example *Assertion: Present → Absent*. Click **Done, back to the proposal** when you are finished. The proposal then reads *Replaced by* with the term and your changes.
+   - **Edit & Replace**: the proposal is nearly right. You get an editable copy that replaces it; correct the term, values or text span in the copy. The copy is listed under its proposal in **Review Proposals**, as *Your copy*, not under **Your own findings**. In the details, the editor names the proposal it replaces and what you changed, for example *Assertion: Present → Absent*. Click **Done, back to the proposal** when you are finished. The proposal then reads *Replaced by* with the term and your changes. Confirming a default in the copy changes no value, so the proposal is not replaced by that alone.
    - **Unresolved**: only if you really cannot decide; the other three decisions are the normal case. Write a **Reviewer note** saying why, then click **Save decision**. The proposal is submitted with your note and a reviewer flag. It does not block submitting; the lead (and a consolidator, if there is one) decides it. Only **Confirm** confirms a proposal's prefilled values: on an unresolved proposal they stay recorded as defaults, and its row shows **Defaults not confirmed**. The result line under **Your own findings** counts such a proposal as unresolved, for example "1 confirmed proposal, 1 unresolved proposal, 1 own finding".
 5. After each decision, the next open proposal is selected. Press `k` right after a decision to go back to it.
 6. When all proposals are decided, read the whole text again and add findings the tool missed: mark text that has no proposal, choose the term in **New finding** and set the values, as in [Mark text and add a finding](#mark-text-and-add-a-finding). Your additions appear under **Your own findings**, next to the proposals.
@@ -318,6 +318,8 @@ The menu item reads **Text problems** when there is something to see, for exampl
 ## Resume a paused task or withdraw a report
 
 What for: continue work after a report, or take a report back.
+
+A paused task shows a one-line banner *Task paused: …* above the text with the reason. Click **Show more** to read all of it, **Show less** to fold it again.
 
 1. Open **More**, then **Text problems**. Your report card shows its state and your task's state.
 2. Choose one:

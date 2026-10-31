@@ -14,6 +14,7 @@ import { ErrorNotice } from "../admin/ErrorNotice";
 import { Button, Checkbox, InlineConfirm, InlineMessage, Textarea } from "../ui";
 import { correctionDocumentId, LeadCorrectionPanel, openLeadCorrection } from "./LeadCorrectionPanel";
 import { stepLabel } from "./nextStepLabels";
+import { shortName } from "./stageLabels";
 import { reasonDocumentId, reasonLead, ReviewReason, useReviewReason } from "./reviewReason";
 import { ACCEPT_EXTERNAL_LABEL, ACCEPTANCE_RECORDED, consequenceLines, PLAN_CHANGED_MESSAGE, WITHDRAW_CHECKBOX } from "./PlanChips";
 
@@ -65,6 +66,19 @@ function useHeadingFocus() {
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => { heading.current?.focus(); }, []);
   return heading;
+}
+
+/**
+ * Issue 234: who waits for this decision, from the Annotation cell (people with a task that opens once the
+ * translation is accepted): "Ana Weber is waiting for this decision to start the annotation."; null for nobody.
+ */
+export function waitingLine(row: Pick<DocumentRowView, "stages">): string | null {
+  const cell = row.stages?.annotation;
+  if (cell?.state !== "after_review" && cell?.state !== "blocked") return null;
+  const people = (cell.detail.people ?? []).map(shortName);
+  if (!people.length) return null;
+  const who = people.length === 1 ? people[0] : `${people.slice(0, -1).join(", ")} and ${people[people.length - 1]}`;
+  return `${who} ${people.length === 1 ? "is" : "are"} waiting for this decision to start the annotation.`;
 }
 
 function ResolveOptions(props: ResolveTranslationProps): JSX.Element {
@@ -144,6 +158,7 @@ function ResolveOptions(props: ResolveTranslationProps): JSX.Element {
   return <div className="documents-resolve" role="group" aria-labelledby={`${id}-title`}>
     <Heading id={`${id}-title`} ref={heading} tabIndex={-1} className="inline-confirm-title">{title}</Heading>
     {reviewReason && <ReviewReason record={reviewReason} lead={reasonLead(row, reviewReason)} />}
+    {waitingLine(row) && <p className="documents-resolve-waiting">{waitingLine(row)}</p>}
     <div className="documents-resolve-actions">
       <Button size="sm" onClick={onAssignReview}>Assign a new review…</Button>
       {own

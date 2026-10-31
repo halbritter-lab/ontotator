@@ -84,3 +84,8 @@
   .work-plan-acceptance,
   .work-plan-warning { border-color: CanvasText; }
 }
+
+/* Issue 236: the upload's work plan reads as a decision to check before importing. */
+.upload-preview .work-plan-upload.work-plan-upload { padding: var(--space-3); border: 1px solid var(--accent, var(--border)); border-left-width: 4px; border-radius: var(--radius); }
+.work-plan-intro { margin: 0; }
+.dialog-footer-plan { color: var(--text); flex: 1 1 12rem; min-width: 0; }
