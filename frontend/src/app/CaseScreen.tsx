@@ -23,6 +23,7 @@ import { errorMessage } from "../admin/errors";
 import type { AnnotationVersion } from "../api/client";
 import { routeHref, type Route } from "./router";
 import { InlineMessage } from "../ui/InlineMessage";
+import { PausedNotice } from "../editor/PausedNotice";
 import { Textarea } from "../ui/Textarea";
 import { Button } from "../ui/Button";
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
@@ -1141,15 +1142,18 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const value = draftNote ?? stored ?? "";
     return value.trim() || undefined;
   };
-  /** Whether an adopted copy differs from its source proposal (term, type, axes, modifiers, note or mentions). */
+  /**
+   * Whether an adopted copy differs from its source proposal (term, type, axes, modifiers, note or mentions).
+   * Issue 231: the same rule as "Replaced by" (`replacementChanges`): confirming a defaulted value keeps the value,
+   * so it is no change, and the note compares trimmed (the server trims the copy's note).
+   */
   const copyDiffersFromTarget = (copy: AnnotationSnapshot, target: { annotation_id: string; version: string }) => {
     const source = targetSnapshotOf(target);
     if (!source) return true;
-    if ((copy.annotation.note ?? "") !== (source.annotation.note ?? "")) return true;
+    if ((copy.annotation.note ?? "").trim() !== (source.annotation.note ?? "").trim()) return true;
     if (copy.annotation.term_id !== source.annotation.term_id) return true;
     if (copy.annotation.type_id !== source.annotation.type_id) return true;
     if (JSON.stringify(normalizeAxes(copy.annotation.axes_values)) !== JSON.stringify(normalizeAxes(source.annotation.axes_values))) return true;
-    if (JSON.stringify([...(copy.annotation.axes_defaulted ?? [])].sort()) !== JSON.stringify([...(source.annotation.axes_defaulted ?? [])].sort())) return true;
     // Compare with what the copy received, so a skipped or normalised modifier is no user change.
     // shortcut: lost on reload (then the source is compared), persist it if that matters.
     const baseline = copiedModifiers.current.get(copy.annotation.annotation_id) ?? modifiersKey(source.annotation.modifiers);
@@ -3511,7 +3515,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         </div>
       </Toolbar>
 
-      {held && <InlineMessage tone="warning">Task paused: {holdReason ?? "A project problem needs attention."} Saved work remains readable. Your local input is kept.</InlineMessage>}
+      {held && <PausedNotice reason={holdReason} kept="Saved work remains readable. Your local input is kept." />}
       {!!versionError && <><ErrorNotice error={versionError} /><Button onClick={retryVersions}>Retry version list</Button></>}
       {display && <InlineMessage tone="info"><span>Viewing {display.label} (read-only)</span>
         <Button disabled={versionBusy} onClick={() => { void chooseAnnotationVersion("draft"); }}>Back to my draft</Button>

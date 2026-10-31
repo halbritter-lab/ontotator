@@ -36,6 +36,7 @@ export function UploadPanel({ projectKey, languages, onImported, onClose, canOve
   const ids = useId().replace(/:/g, "");
   const formId = `${ids}-form`;
   const reasonId = `${ids}-reason`;
+  const planSummaryId = `${ids}-plan-summary`;
   const [kind, setKind] = useState<UploadKind>("t1");
   const [language, setLanguage] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -285,6 +286,7 @@ export function UploadPanel({ projectKey, languages, onImported, onClose, canOve
   const reason = phase === "choose" ? chooseReason : importReason;
   const footer = <>
     {reason && <span id={reasonId} className="dialog-footer-reason">{reason}</span>}
+    {!reason && phase === "preview" && workPlanResult && <span id={planSummaryId} className="dialog-footer-reason dialog-footer-plan">{workPlanResult.summary}</span>}
     {phase === "importing" || phase === "imported" || phase === "committed" ? <Button variant={phase === "importing" ? "secondary" : "primary"} onClick={closing}>Close</Button> : <>
       <Button onClick={cancel}>Cancel</Button>
       {/* After a failed check Discard also closes the dialog; after a good one it returns to step 1 with the files kept. */}
@@ -293,7 +295,7 @@ export function UploadPanel({ projectKey, languages, onImported, onClose, canOve
         onClick={event => { if (reason) event.preventDefault(); }}>Check</Button>}
       {phase === "preview" && (stale && files.length
         ? <Button variant="primary" onClick={() => { void check(); }}>Check again</Button>
-        : <Button variant="primary" aria-disabled={reason || busy ? "true" : undefined} aria-describedby={reason ? reasonId : undefined} onClick={() => { void commit(); }}>{importButtonLabel(view?.preview, unit)}</Button>)}
+        : <Button variant="primary" aria-disabled={reason || busy ? "true" : undefined} aria-describedby={reason ? reasonId : workPlanResult ? planSummaryId : undefined} onClick={() => { void commit(); }}>{importButtonLabel(view?.preview, unit)}</Button>)}
     </>}
   </>;
   return <Dialog open title="Upload texts" size="lg" className="upload-dialog" onClose={cancel} footer={footer}>

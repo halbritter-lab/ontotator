@@ -17,9 +17,16 @@ export const unplacedLine = (unplaced: number, findings: number, person: string)
 export const finishLabel = (person: string, from: string): string => `Let ${person} finish on ${from}`;
 export const finishDescription = (person: string, to: string): string => `When ${person} submits, the result is carried to ${to} for them to check.`;
 export const WITHDRAW_LABEL = "Withdraw";
-export const fromProposalsLine = (to: string): string => `Annotation from proposals stays on its version: it cannot move to ${to}. Withdraw it, then assign ${to}.`;
-export const notNewerLine = (from: string, to: string): string => `The correction ${from} was not accepted, so this task cannot move to ${to}. Withdraw it, then assign ${to}.`;
-export const withdrawDescription = (person: string, to: string): string => `${person}’s draft stays with them. ${to} needs a new annotation.`;
+/**
+ * Issue 235: why only Withdraw is offered, in plain words: what the task is, why it cannot follow the new text,
+ * and what the lead does next.
+ */
+export const fromProposalsLine = (person: string, from: string, to: string): string =>
+  `${person} checks tool proposals that were made for the text of ${from}. The proposals mark places in that text, so they cannot be moved to ${to}, and the task cannot either. That is why Withdraw is the only choice.`;
+export const notNewerLine = (from: string, to: string): string =>
+  `The correction ${from} was not accepted, so this task cannot move to ${to}. That is why Withdraw is the only choice.`;
+export const nextAfterWithdrawLine = (to: string): string => `Next: click Apply to withdraw the task, then assign an annotation of ${to}.`;
+export const withdrawDescription = (person: string, to: string): string => `${person}’s task ends. Nothing of the draft is carried to ${to}; ${to} needs a new annotation.`;
 export const heldLine = (person: string): string => `${person}’s task is paused by a problem report. Decide the report first.`;
 
 export const movedMessage = (person: string, to: string): string => `${person} continues on ${to}.`;

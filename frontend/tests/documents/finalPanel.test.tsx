@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, ApiError, AuthError, ConflictError, type DocumentRowView, type DocumentRowsPage, type FinalPanelView, type RowSubmissions, type WorkRoundView } from "../../src/api/client";
 import { formatTime } from "../../src/app/submissionLabels";
 import { DecisionBlock, type DecisionBlockProps } from "../../src/documents/FinalPanel";
-import { AGREEMENT_EXPLANATION, agreementText, compareSummary, consolidationBreakdown, remainingText, consolidationStartedToast, nextFinalDecision, nextOtherDecision } from "../../src/documents/finalPanelText";
+import { AGREEMENT_EXPLANATION, agreementText, compareSummary, consolidateHint, detailDifferenceLines, consolidationBreakdown, remainingText, consolidationStartedToast, nextFinalDecision, nextOtherDecision } from "../../src/documents/finalPanelText";
 import { notifyFinalSelectionChanged } from "../../src/variants/finalSelectionState";
 import { refKey } from "../../src/variants/versionState";
 import { guidelineListing, guidelineSummary } from "../projectFixtures";
@@ -675,6 +675,15 @@ describe("panel text", () => {
       .toBe("2 annotations submitted on v2, 7 findings in total");
     expect(agreementText(agreement({ total: 6, matching: 4, context_differences: 2 }))).toBe("Agreement: 4 of 6 findings match, 2 differ in context only");
     expect(agreementText(agreement({ total: 6, matching: 6 }))).toBe("Agreement: 6 of 6 findings match");
+    // Issue 230: a matching finding with another note, text span or modifier text is named.
+    const details = agreement({ total: 3, matching: 3, detail_differences: [
+      { kind: "note", layer_id: "hpo", term_id: "HP:1", term_label: "Ataxia" },
+      { kind: "text", layer_id: "hpo", term_id: "HP:2", term_label: "Seizure" },
+      { kind: "note", layer_id: "hpo", term_id: "HP:3", term_label: "Tremor" },
+    ] });
+    expect(detailDifferenceLines(details)).toEqual(["Notes differ on 2 findings: Ataxia, Tremor", "Text spans differ on 1 finding: Seizure"]);
+    expect(consolidateHint(details)).toBe("Resolve the 3 differences together");
+    expect(detailDifferenceLines(agreement({ total: 6, matching: 6 }))).toEqual([]);
     expect(remainingText(bar({ total: 2, confirm_final: 0 }))).toBe("2 more need your decision.");
     expect(remainingText(bar({ total: 1 }))).toBe("1 more needs your decision.");
     expect(remainingText(bar({ total: 0 }))).toBe("Nothing else needs your decision.");

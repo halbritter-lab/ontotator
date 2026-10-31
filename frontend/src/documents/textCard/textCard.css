@@ -164,6 +164,7 @@ dl.technical-details dd { margin: 0; overflow-wrap: anywhere; font-family: var(-
 .final-panel-links { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .final-panel-agreement { display: grid; gap: var(--space-1); justify-items: start; }
 .final-panel-agreement-bar { width: 100%; max-width: 16rem; height: 8px; }
+.final-panel-agreement-details { margin: 0; padding-left: var(--space-4); }
 .final-panel-table { width: 100%; overflow-wrap: normal; }
 .final-panel-table thead th { white-space: nowrap; }
 .final-panel-table th[scope="row"] .cell-secondary { white-space: nowrap; }

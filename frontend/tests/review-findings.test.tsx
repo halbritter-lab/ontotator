@@ -190,7 +190,8 @@ describe("A1/A7: dashboard blinding, identity and persistence", () => {
 describe("A4/A5: review decisions and notes", () => {
   const rejected = { decision_id: "d", target: { annotation_id: "prop", version: "p-v1" }, outcome: "rejected" as const, note: "wrong body site", reviewer_id: "dr-a" };
 
-  it.each([false, true])("same-value axis confirmation binds a changed replacement while preserving explicit rejection=%s", async (explicitRejection) => {
+  // Issue 231: confirming a default keeps the value, so the copy still equals the proposal: no "changed" decision.
+  it.each([false, true])("same-value axis confirmation records no replacement (explicit rejection=%s)", async (explicitRejection) => {
     const copy = proposal("copy", "c-v1", "HP:0001");
     copy.annotation.provenance = { actor: { actor_id: "dr-a", kind: "human" as any }, method: "manual", source_refs: ["prop:p-v1"] } as any;
     const view = reviewView(explicitRejection ? [rejected] : [], [copy], copy.evidence);
@@ -204,13 +205,8 @@ describe("A4/A5: review decisions and notes", () => {
     fireEvent.click(screen.getByRole("button", { name: "Confirm defaults (1)" }));
     await waitFor(() => expect(apply).toHaveBeenCalledTimes(1));
     expect(apply.mock.calls[0][1].payload).toEqual(expect.objectContaining({ command: "set_axes", chosen_axis_ids: ["assertion"], axes_values: { assertion: "absent" } }));
-    if (explicitRejection) {
-      await act(async () => { await Promise.resolve(); });
-      expect(decide).not.toHaveBeenCalled();
-    } else {
-      await waitFor(() => expect(decide).toHaveBeenCalledTimes(1));
-      expect(decide.mock.calls[0][1].payload).toEqual(expect.objectContaining({ outcome: "changed", replacement: { annotation_id: "copy", version: "c-v2" } }));
-    }
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+    expect(decide).not.toHaveBeenCalled();
   });
 
   it("confirms discarding an adopted edited copy before switching away from changed", async () => {

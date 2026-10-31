@@ -9,7 +9,7 @@ import { IconInfo } from "../ui/icons";
 import { DistributionDialog } from "./DistributionDialog";
 import { ErrorNotice } from "./ErrorNotice";
 import { errorMessage } from "./errors";
-import { leftLines, memberReason, memberUnavailable, onePersonSummary, partlyAssignedLines, personName, resultMessage, skippedLines, stepLabel, stepName, stepsOverview } from "./assignSummary";
+import { leftLines, memberReason, memberUnavailable, onePersonSummary, partlyAssignedLines, personName, resultMessage, skippedLines, stepLabel, stepName, stepShortLabel, stepsOverview } from "./assignSummary";
 
 export type AssignWorkTask = "translation_review" | "annotate";
 export type AssignWorkDialogProps =
@@ -457,7 +457,17 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
         <p id={limitId} className="assign-muted">{status}</p>
       </div>}
 
-      {props.mode === "cases" && steps && steps.length > 1 && <p className="assign-field"><strong>This selection needs</strong> <span>{stepsOverview(steps)}</span> <span className="assign-muted">{`Step ${steps.findIndex(step => stepKey(step.task, step.language) === current) + 1} of ${steps.length}`}</span></p>}
+      {props.mode === "cases" && steps && steps.length > 1 && <div className="assign-field">
+        <strong>This selection needs</strong>
+        {/* Issue 233: every step on its own (one task in one language), the walked ones ticked, the current one marked. */}
+        <ol className="assign-steps" aria-label="Steps">{steps.map(step => {
+          const key = stepKey(step.task, step.language), walked = done.steps.includes(key), here = key === current;
+          return <li key={key} aria-current={here ? "step" : undefined} className={here ? "assign-step assign-step--current" : walked ? "assign-step assign-step--done" : "assign-step"}>
+            {stepShortLabel(step.task, step.language)}{walked && <><span aria-hidden="true"> ✓</span><span className="visually-hidden">, done</span></>}
+          </li>;
+        })}</ol>
+        <span className="assign-muted">{`Step ${steps.findIndex(step => stepKey(step.task, step.language) === current) + 1} of ${steps.length}`}</span>
+      </div>}
       {done.steps.length > 0 && task && <p className="assign-done" role="status">{`${done.messages.length ? `${done.messages.join(". ")}. ` : ""}Next: ${stepsOverview([{ task, language }])}. Close when you are done.`}</p>}
       {props.mode === "cases" && stepsError !== undefined && <><ErrorNotice error={stepsError} /><Button onClick={() => setStepsRetry(value => value + 1)}>Retry</Button></>}
       {props.mode === "cases" && steps === null && stepsError === undefined && <p className="assign-muted">Loading members…</p>}

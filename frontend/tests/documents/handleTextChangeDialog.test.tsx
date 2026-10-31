@@ -38,7 +38,8 @@ describe("HandleTextChangeDialog", () => {
     expect((screen.getByRole("radio", { name: "Withdraw" }) as HTMLInputElement).checked).toBe(true);
     expect(screen.queryByRole("radio", { name: "Move to v2" })).toBeNull();
     expect(screen.queryByRole("radio", { name: "Let Tom Reis finish on v1" })).toBeNull();
-    expect(within(dialog()).getByText(/Annotation from proposals stays on its version/)).toBeDefined();
+    expect(within(dialog()).getByText("Tom Reis checks tool proposals that were made for the text of v1. The proposals mark places in that text, so they cannot be moved to v2, and the task cannot either. That is why Withdraw is the only choice.")).toBeDefined();
+    expect(within(dialog()).getByText("Next: click Apply to withdraw the task, then assign an annotation of v2.")).toBeDefined();
     expect(api.previewTextChange).not.toHaveBeenCalled();
     fireEvent.click(apply());
     await waitFor(() => expect(resolve).toHaveBeenCalledWith(41, { resolution: "withdrawn", target_document_id: V2, expected_workflow_revision: 7 }));
@@ -129,7 +130,7 @@ describe("HandleTextChangeDialog", () => {
     const described = (move.getAttribute("aria-describedby") ?? "").split(" ").map(id => document.getElementById(id)?.textContent).join(" ");
     expect(described).toContain("Tom Reis continues on the corrected text. Their draft findings are carried and marked “check after text change”.");
     const withdraw = screen.getByRole("radio", { name: "Withdraw" });
-    expect(document.getElementById(withdraw.getAttribute("aria-describedby")!)?.textContent).toBe("Tom Reis’s draft stays with them. v2 needs a new annotation.");
+    expect(document.getElementById(withdraw.getAttribute("aria-describedby")!)?.textContent).toBe("Tom Reis’s task ends. Nothing of the draft is carried to v2; v2 needs a new annotation.");
     fireEvent.click(withdraw);
     fireEvent.click(apply());
     await waitFor(() => expect(apply().getAttribute("aria-disabled")).toBe("true"));

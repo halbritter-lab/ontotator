@@ -350,6 +350,59 @@ def _full_agreement(
     return order
 
 
+# Kinds of a difference that leaves a finding matching in ``compare`` (same
+# term, layer and context) but keeps its group from ``match`` (issue 230).
+_DETAIL_KINDS: dict[str, str] = {
+    "notes_differ": "note",
+    "span_differs": "text",
+    "modifiers_differ": "modifiers",
+}
+_CONTEXT_KINDS = frozenset({"partial", "term_differs", "values_differ"})
+
+
+def _detail_differences(
+    comparable: Sequence[Candidate],
+    recorded_at: Mapping[str, datetime],
+    payloads: Mapping[str, Submission],
+    profile: TaskProfile,
+    defaults: AxisDefaults,
+    roles: ModifierRoles = NO_TERM_ROLES,
+) -> list[dict[str, str]]:
+    """Matching findings whose note, text span or modifier text still differs
+    among the compared submissions (issue 230), one entry per finding and
+    kind in reading order: ``{"kind", "layer_id", "term_id"}``. Empty with
+    fewer than two compared submissions or a payload that does not decode.
+
+    Groups that also differ in term or values, or that some submission lacks,
+    are counted by the agreement already and left out.
+    """
+    if len(comparable) < 2 or any(
+        item.submission_id not in payloads for item in comparable
+    ):
+        return []
+    order = sorted(
+        (item.submission_id for item in comparable),
+        key=lambda sid: (recorded_at[sid], sid),
+    )
+    findings = {
+        sid: findings_of(payloads[sid], profile, defaults, roles) for sid in order
+    }
+    by_key = {
+        (sid, finding.key): finding for sid, own in findings.items() for finding in own
+    }
+    result: list[dict[str, str]] = []
+    for group in groups(findings, order):
+        if group.kinds & _CONTEXT_KINDS:
+            continue
+        first = by_key[(group.keep, group.members[group.keep])]
+        for kind, name in _DETAIL_KINDS.items():
+            if kind in group.kinds:
+                result.append(
+                    {"kind": name, "layer_id": first.layer_id, "term_id": first.term_id}
+                )
+    return result
+
+
 def _all_match(
     comparable: Sequence[Candidate],
     recorded_at: Mapping[str, datetime],
@@ -535,18 +588,18 @@ def final_panel(
         }
         for item in listing["submissions"]
     ]
+    roles = project_roles(conn, pid, profile) if rule == "compare" else None
     all_match_id = (
         _all_match(
-            comparable,
-            recorded_at,
-            payloads,
-            profile,
-            defaults,
-            submissions,
-            project_roles(conn, pid, profile),
+            comparable, recorded_at, payloads, profile, defaults, submissions, roles
         )
-        if rule == "compare"
+        if roles is not None
         else None
+    )
+    details = (
+        _detail_differences(comparable, recorded_at, payloads, profile, defaults, roles)
+        if roles is not None and agreement is not None
+        else []
     )
     row = build_row(facts, case_id, language, ctx=ctx)
     causes = [
@@ -564,6 +617,7 @@ def final_panel(
                 "total": agreement.total,
                 "matching": agreement.matching,
                 "context_differences": agreement.context_differences,
+                "detail_differences": details,
             }
         ),
         "label_rule": rule,

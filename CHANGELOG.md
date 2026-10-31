@@ -23,6 +23,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Final result: findings that match but differ in a note, a text span or a modifier text span are named under the agreement, for example "Notes differ on 1 finding: Ataxia", and count in the Consolidate hint (`detail_differences` on the agreement) (#230).
+- Edit & Replace: confirming a defaulted value on the copy, or a note that differs only in surrounding spaces, no longer marks the proposal as replaced (#231).
+- Editor: the paused banner shows the reason in one line; **Show more** opens all of it (#232).
+- Assign dialog: **This selection needs** lists every step (one task in one language), ticks the steps you are through and marks the current one (#233).
+- Resolve rejected translation names who waits for the decision with an annotation task (#234).
+- Handle text change: for a task from proposals, the dialog explains why only Withdraw is possible and what to do next (#235).
+- Upload: the Work plan says to check it before importing, sources read "only cases without a translation", and the line next to the import button repeats the plan (#236).
 - Editor: the paused banner has its own row under the toolbar; term hits stay visible with the search field in the stacked editor; the Sections panel closes on an outside click; save errors show their text at every width and keep the title. Documents: the header checkbox shows checked when every filtered text is ticked by hand, the distribution proposal names texts, not internal IDs, and the text card spaces its assignment actions. The Assign dialog names a failed load, a failed project list no longer leaves a loading line, and the Documents and My tasks counters update after a closed report or a submitted consolidation.
 - An import no longer stops the project while it plans (#209). The preview takes no project lock, and the commit holds it exclusively only for the last part of the writes: about 15 to 19 s instead of over two minutes for 3,000 documents with 10 proposals each. These figures hold for proposal bundles; translation or correction bundles with many per-row updates were not measured. A project change behind the plan is still detected, and the import still applies fully or not at all. A commit also refuses (`UPLOAD_STALE`) when the work plan of a case in the upload changed since it planned: its work plan rows, or a translation review of that case assigned, submitted or decided in between. A commit request with work plan choices checks them against the stored preview instead of parsing the upload again.
 - At a width of exactly 700 px the annotation editor collapsed to no width, so the Document tab showed no text (#144).

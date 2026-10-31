@@ -12,6 +12,8 @@ export interface UploadWorkPlanResult {
   plan: CommitUploadPlan;
   /** Why the import cannot start yet (names the language), or null. */
   blockedReason: string | null;
+  /** Issue 236: the plan in one line, shown next to the Import button ("Work plan: translation review de; annotate de, Sources"). */
+  summary: string;
 }
 
 export interface UploadWorkPlanProps {
@@ -30,6 +32,20 @@ const SOURCE = "source";
 const rowKey = (item: { case_id: string; language: string }) => `${item.case_id}:${item.language}`;
 const keyOf = (item: PlanCase) => (item.review === null ? SOURCE : item.language);
 const languageLabel = (language: PlanLanguage) => (language.key === SOURCE ? "Sources" : `${language.key} MT`);
+
+const LANGUAGE_NAME = (language: PlanLanguage) => (language.key === SOURCE ? "Sources" : language.key);
+
+/**
+ * Issue 236: the language plan in one line for the dialog footer: "Work plan: translation review de; annotate Sources
+ * (only cases without a translation), de", "Work plan: no tasks", plus ", adjusted per case" after per-case changes.
+ */
+export function planSummary(rows: readonly { language: PlanLanguage; flags: Flags }[], adjusted = false): string {
+  const review = rows.filter(row => row.language.key !== SOURCE && row.flags.review).map(row => LANGUAGE_NAME(row.language));
+  const annotate = rows.filter(row => row.flags.annotate).map(row => row.language.key === SOURCE && row.language.source_rule === "if_no_translation"
+    ? "Sources (only cases without a translation)" : LANGUAGE_NAME(row.language));
+  const parts = [review.length ? `translation review ${review.join(", ")}` : null, annotate.length ? `annotate ${annotate.join(", ")}` : null].filter(Boolean);
+  return `Work plan: ${parts.length ? parts.join("; ") : "no tasks"}${adjusted ? ", adjusted per case" : ""}`;
+}
 
 /** The upload preview's "Work plan" step (spec "Planning at import"): chips by language, per-case exceptions and the external-review acceptance. */
 export function UploadWorkPlan({ workPlan, ruleOn = true, canAccept = false, kind = "t1", disabled = false, onChange }: UploadWorkPlanProps): JSX.Element {
@@ -77,8 +93,9 @@ export function UploadWorkPlan({ workPlan, ruleOn = true, canAccept = false, kin
     ...(acceptLanguages.length && reason.trim() ? { accept_external_review: { languages: acceptLanguages, reason: reason.trim() } } : {}),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the joined key stands for acceptLanguages
   }), [languageChoices, caseChoices, acceptLanguages.join(","), reason, workPlan]);
-  const resultKey = JSON.stringify([plan, blockedReason]);
-  useEffect(() => { onChangeRef.current({ plan, blockedReason }); }, [resultKey]); // eslint-disable-line react-hooks/exhaustive-deps -- resultKey stands for plan and blockedReason
+  const summary = planSummary(workPlan.languages.map(language => ({ language, flags: languageFlags(language) })), Object.keys(caseChoices).length > 0);
+  const resultKey = JSON.stringify([plan, blockedReason, summary]);
+  useEffect(() => { onChangeRef.current({ plan, blockedReason, summary }); }, [resultKey]); // eslint-disable-line react-hooks/exhaustive-deps -- resultKey stands for plan, blockedReason and summary
 
   const toggleLanguage = (language: PlanLanguage, flag: "review" | "annotate") => {
     if (disabled) return;
@@ -100,6 +117,7 @@ export function UploadWorkPlan({ workPlan, ruleOn = true, canAccept = false, kin
 
   return <section className="detail-section work-plan-upload" aria-labelledby={`${ids}-heading`}>
     <h3 id={`${ids}-heading`}>Work plan</h3>
+    <p className="work-plan-intro">Check this before you import: it decides which tasks the imported texts get. Click a chip to turn a task on or off.</p>
     <div className="work-plan-table-scroll"><table className="data-table density-compact work-plan-table">
       <thead><tr><th scope="col">Language</th><th scope="col">{kind === "text" ? "Versions in upload" : "Versions in bundle"}</th><th scope="col">Translation review</th><th scope="col">Annotate</th></tr></thead>
       <tbody>{workPlan.languages.map(language => {
@@ -110,7 +128,7 @@ export function UploadWorkPlan({ workPlan, ruleOn = true, canAccept = false, kin
           <th scope="row">{languageLabel(language)} ({language.rows})</th>
           <td className="work-plan-count">{language.versions}</td>
           <td>{language.key === SOURCE ? <span className="work-plan-none">–</span> : <PlanChip kind="review" pressed={!!flags.review} name={`Translation review, ${name}`} busy={disabled} onToggle={() => toggleLanguage(language, "review")} />}</td>
-          <td><PlanChip kind="annotate" pressed={flags.annotate} name={`Annotate, ${name}`} busy={disabled} onToggle={() => toggleLanguage(language, "annotate")} />{conditional && <span className="work-plan-note"> if no translation</span>}</td>
+          <td><PlanChip kind="annotate" pressed={flags.annotate} name={`Annotate, ${name}`} busy={disabled} onToggle={() => toggleLanguage(language, "annotate")} />{conditional && <span className="work-plan-note"> only cases without a translation</span>}</td>
         </tr>;
       })}</tbody>
     </table></div>

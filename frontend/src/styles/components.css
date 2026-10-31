@@ -1181,3 +1181,11 @@ button.stage-path-seg:focus-visible { outline: var(--focus-width) solid var(--fo
 @media (forced-colors: active) {
   .suggest-option[aria-selected="true"] { forced-color-adjust: none; background: Highlight; color: HighlightText; box-shadow: none; }
 }
+
+/* Issue 232: the paused banner in the editor, one line until it is opened. */
+.paused-notice { display: flex; align-items: baseline; gap: var(--space-2); min-width: 0; }
+.paused-notice__text { flex: 1; min-width: 0; display: grid; gap: var(--space-1); }
+.paused-notice__reason { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.paused-notice--open .paused-notice__reason { white-space: pre-wrap; overflow: visible; }
+.paused-notice__toggle { flex: none; }
+.notice-content:has(> .paused-notice) { flex: 1; }

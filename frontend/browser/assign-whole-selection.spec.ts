@@ -37,7 +37,10 @@ test("a de + en selection walks review, then annotation; Distribute moves on; cl
   const members = dialog.getByRole("table", { name: "Members" });
   const overview = dialog.getByText("This selection needs", { exact: true }).locator("..");
 
-  await expect(overview).toContainText("translation review (de), annotation (de, en)");
+  // Issue 233: one item per task and language, the current one marked.
+  const steps = dialog.getByRole("list", { name: "Steps" }).getByRole("listitem");
+  await expect(steps).toHaveText(["Translation review de", "Annotation en", "Annotation de"]);
+  await expect(steps.first()).toHaveAttribute("aria-current", "step");
   await expect(overview).toContainText("Step 1 of 3");
   await expect(dialog.getByRole("table", { name: "Members" })).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Skip this task", exact: true })).toBeVisible();
@@ -47,6 +50,8 @@ test("a de + en selection walks review, then annotation; Distribute moves on; cl
   await dialog.getByRole("button", { name: "Assign 1", exact: true }).click();
   await expect(dialog.getByRole("status").filter({ hasText: "1 translation review assigned to" })).toContainText("Next: annotation (");
   await expect(overview).toContainText("Step 2 of 3");
+  await expect(steps.first()).toContainText("✓");
+  await expect(steps.nth(1)).toHaveAttribute("aria-current", "step");
   await shot(lead, "2-moved-on-to-next-task");
 
   await dialog.getByRole("button", { name: "Distribute evenly…", exact: true }).click();

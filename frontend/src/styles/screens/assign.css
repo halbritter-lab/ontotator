@@ -81,3 +81,9 @@
 .assign-limit-field { display: flex; align-items: center; gap: var(--space-2); }
 .assign-limit-input.form-control { width: 4.5rem; min-height: 0; height: 30px; padding: 2px 6px; font-size: var(--size-sm); }
 .assign-limit-warn { padding: var(--space-2) var(--space-3); border: 1px solid var(--warning); border-radius: var(--radius-sm); background: var(--warning-light); }
+/* Issue 233: the steps of a selection, one per task and language. */
+.assign-steps { display: flex; flex-wrap: wrap; gap: 0 var(--space-2); margin: 0; padding: 0; list-style: none; }
+.assign-step + .assign-step::before { content: "·"; margin-right: var(--space-2); color: var(--text-muted); }
+.assign-step { font-weight: var(--weight-regular, 400); }
+.assign-step--done { color: var(--text-muted); }
+.assign-step--current { font-weight: var(--weight-strong); }

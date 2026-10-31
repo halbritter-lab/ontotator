@@ -23,6 +23,9 @@ export function stepLabel(task: AssignTask, language: string, versions: number):
   return `${stepNames[task]}, ${language}, ${versions} ${versions === 1 ? "version" : "versions"}`;
 }
 
+/** "Translation review de" (one step of the assign dialog's step list, issue 233). */
+export const stepShortLabel = (task: AssignTask, language: string): string => `${stepNames[task]} ${language}`;
+
 /** "translation review (de), annotation (en, fr)": the steps of a selection, reviews first. */
 export function stepsOverview(steps: readonly { task: AssignTask; language: string }[]): string {
   return (["translation_review", "annotate"] as const).flatMap(task => {

@@ -130,6 +130,7 @@ def submit_findings(
             type_id="phenotype",
             term_id=item["term"],
             axes_values=axes,
+            note=item.get("note"),
             evidence_refs=[
                 EvidenceRef(evidence_id=e.mention.evidence_id, version=e.version)
                 for e in evidence
@@ -249,6 +250,8 @@ def test_several_is_compare_with_agreement(env):
         "total": 4,
         "matching": 1,
         "context_differences": 1,
+        # The seizures match with shifted spans: named as a text difference (issue 230).
+        "detail_differences": [{"kind": "text", "layer_id": "hpo", "term_id": SEIZURE}],
     }
     subs = by_id(result)
     assert [s["submission_id"] for s in result["submissions"]] == ["s1", "s2"]
@@ -287,6 +290,7 @@ def test_other_version_submissions_not_compared_but_eligible(env):
         "total": 1,
         "matching": 1,
         "context_differences": 0,
+        "detail_differences": [],
     }
     assert (subs["s1"]["only_here"], subs["s2"]["only_here"]) == (0, 0)
     assert result["label_rule"] == "compare"
@@ -460,6 +464,7 @@ def test_consolidation_of_all_others_is_accept(rounds):
         "total": 2,
         "matching": 1,
         "context_differences": 0,
+        "detail_differences": [],
     }
     assert [subs[sid]["only_here"] for sid in [*inputs, consolidation]] == [0, 0, 1]
     # The Final cell shows "3 submissions" without a match count (accept).
@@ -846,6 +851,52 @@ def test_all_match_false_for_overlapping_but_different_spans(env):
     assert result["agreement"]["matching"] == 1
     assert result["all_match"] is False
     assert result["all_match_submission_id"] is None
+
+
+def test_note_difference_on_a_matching_finding_is_named(env):
+    """Issue 230: a finding that differs only in its note still matches, but
+    the panel names the difference (with the term's name over HTTP)."""
+    target = doc("c1", "en")
+    seizure = span_of(env, target, "Neonatalzeit")
+    submit_findings(
+        env,
+        assign(env, target, "anno", "annotate"),
+        "s1",
+        [
+            finding("x1", SEIZURE, seizure) | {"note": "Twice a week"},
+            finding("x2", HYPOTONIA, None),
+        ],
+    )
+    submit_findings(
+        env,
+        assign(env, target, "anno2", "annotate"),
+        "s2",
+        [finding("y1", SEIZURE, seizure), finding("y2", HYPOTONIA, None)],
+    )
+    result = panel(env)
+    assert (result["agreement"]["matching"], result["agreement"]["total"]) == (2, 2)
+    assert result["all_match"] is False
+    assert result["agreement"]["detail_differences"] == [
+        {"kind": "note", "layer_id": "hpo", "term_id": SEIZURE}
+    ]
+    response = env.lead.get(f"{BASE}/document-rows/c1/en/final-panel")
+    assert response.status_code == 200, response.text
+    details = response.json()["agreement"]["detail_differences"]
+    assert [(item["kind"], item["term_id"]) for item in details] == [("note", SEIZURE)]
+    assert details[0]["term_label"]
+
+
+def test_no_detail_differences_when_everything_matches(env):
+    target = doc("c1", "en")
+    seizure = span_of(env, target, "Neonatalzeit")
+    for user, sid in (("anno", "s1"), ("anno2", "s2")):
+        submit_findings(
+            env,
+            assign(env, target, user, "annotate"),
+            sid,
+            [finding(f"{sid}-1", SEIZURE, seizure) | {"note": "same"}],
+        )
+    assert panel(env)["agreement"]["detail_differences"] == []
 
 
 def test_all_match_with_zero_findings_everywhere(env):

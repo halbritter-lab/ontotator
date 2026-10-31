@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { api, ApiError, type AssignmentView, type DiscardResult, type PlanRowResult, type VariantSummary } from "../../src/api/client";
 import { ResolveTranslation, type ResolveTranslationProps } from "../../src/documents/ResolveTranslation";
-import { planRow, rejectedRow, stepOf, version, work } from "./fixtures";
+import { planRow, rejectedRow, stageCell, stages, stepOf, version, work } from "./fixtures";
 import { reviewRecord } from "../translationFixtures";
 
 const rejected = () => planRow("case-0101", "de", stepOf("resolve_rejected", { document_id: "case-0101-de" }), {
@@ -43,6 +43,17 @@ it("offers exactly three options", () => {
   expect(within(box).queryByText(/accept/i)).toBeNull();
   fireEvent.click(within(box).getByRole("button", { name: "Assign a new review…" }));
   expect(props.onAssignReview).toHaveBeenCalled();
+});
+
+it("names who waits for the decision (#234)", () => {
+  const person = (display_name: string) => ({ username: display_name.toLowerCase(), pseudonym: `ann-${display_name.length}`, display_name });
+  const row = { ...rejected(), stages: stages({ annotation: stageCell("after_review", "waiting", { people: [person("Ana Weber")] as never }) }) };
+  renderResolve({ row });
+  const box = screen.getByRole("group", { name: "Resolve rejected translation, case-0101 de" });
+  expect(within(box).getByText("Ana Weber is waiting for this decision to start the annotation.")).toBeTruthy();
+  cleanup();
+  renderResolve();
+  expect(screen.queryByText(/waiting for this decision/)).toBeNull();
 });
 
 it("Correct the translation… opens the panel", async () => {

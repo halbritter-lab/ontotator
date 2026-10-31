@@ -230,18 +230,22 @@ it("closes and reports the result for one person and split", async () => {
 
 const mixed = () => summary([{ task: "annotate", language: "en", versions: 20, cases: 20 }, { task: "translation_review", language: "de", versions: 20, cases: 20 }]);
 const overview = () => screen.getByText("This selection needs").parentElement!.textContent;
+/** Issue 233: the step list, one item per task and language, the current one marked. */
+const stepItems = () => within(screen.getByRole("list", { name: "Steps" })).getAllByRole("listitem").map(item => `${item.getAttribute("aria-current") ? "> " : ""}${item.textContent}`);
 
 it("walks a de + en selection through review, then annotation, and says what comes next (#218)", async () => {
   vi.mocked(api.selectionSummary).mockResolvedValue(mixed());
   const props = casesProps(); render(<AssignWorkDialog {...props} />); await ready();
   expect(lastPreview()).toMatchObject({ task: "translation_review", language: "de" });
-  expect(overview()).toBe("This selection needs translation review (de), annotation (en) Step 1 of 2");
+  expect(stepItems()).toEqual(["> Translation review de", "Annotation en"]);
+  expect(overview()).toContain("Step 1 of 2");
   fireEvent.click(radio(/Ana Weber/)); await waitForPreviewOf(["ana"]);
   fireEvent.click(screen.getByRole("button", { name: "Assign 20" }));
   await waitFor(() => expect(lastPreview()).toMatchObject({ task: "annotate", language: "en", usernames: [] }));
   expect(props.onAssigned).not.toHaveBeenCalled();
   expect(screen.getByText("20 translation reviews assigned to Ana Weber. Next: annotation (en). Close when you are done.")).toBeDefined();
   expect(overview()).toContain("Step 2 of 2");
+  expect(stepItems()).toEqual(["Translation review de ✓, done", "> Annotation en"]);
   expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Skip this task" })).toBeNull();
   expect((screen.getByRole("option", { name: "Translation review, de, 20 versions, done" }) as HTMLOptionElement).selected).toBe(false);
@@ -254,7 +258,8 @@ it("walks a de + en selection through review, then annotation, and says what com
 it("still walks the languages of one task, reviews before annotation (#195)", async () => {
   vi.mocked(api.selectionSummary).mockResolvedValue(summary([{ task: "annotate", language: "de", versions: 20, cases: 20 }, { task: "translation_review", language: "de", versions: 5, cases: 5 }, { task: "annotate", language: "fr", versions: 12, cases: 12 }]));
   render(<AssignWorkDialog {...casesProps()} />); await ready();
-  expect(overview()).toContain("translation review (de), annotation (de, fr) Step 1 of 3");
+  expect(stepItems()).toEqual(["> Translation review de", "Annotation de", "Annotation fr"]);
+  expect(overview()).toContain("Step 1 of 3");
   fireEvent.click(screen.getByRole("button", { name: "Skip this task" }));
   await waitFor(() => expect(lastPreview()).toMatchObject({ task: "annotate", language: "de" }));
   fireEvent.click(await screen.findByRole("button", { name: "Skip this task" }));
@@ -267,7 +272,8 @@ it("annotation that waits for the review shows up front and is the next step onc
     ? { ...preview(body), targets: [], skipped: [{ case_id: "case-0101", language: "de", reason: "waiting_for_review" }] } : preview(body));
   vi.mocked(api.selectionSummary).mockImplementation(async () => summary([{ task: "translation_review", language: "de", versions: 20, cases: 20 }, ...(taken.size ? [{ task: "annotate", language: "de", versions: 20, cases: 20 }] : [])]));
   render(<AssignWorkDialog {...casesProps()} />); await ready();
-  expect(overview()).toBe("This selection needs translation review (de), annotation (de) Step 1 of 2");
+  expect(stepItems()).toEqual(["> Translation review de", "Annotation de"]);
+  expect(overview()).toContain("Step 1 of 2");
   expect(screen.queryByRole("combobox", { name: "Task" })).toBeNull();
   fireEvent.click(radio(/Ana Weber/)); await waitForPreviewOf(["ana"]);
   fireEvent.click(screen.getByRole("button", { name: "Assign 20" }));

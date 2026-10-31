@@ -48,11 +48,13 @@ describe("UploadWorkPlan", () => {
     const rows = within(table).getAllByRole("row").slice(1);
     expect(rows.map(row => row.querySelector("th,td")!.textContent)).toEqual(["Sources (50)", "de MT (50)", "fr MT (30)"]);
     expect(rows[0].textContent).toContain("–");
-    expect(rows[0].textContent).toContain("if no translation");
+    expect(rows[0].textContent).toContain("only cases without a translation");
     expect(within(rows[0]).getByRole("button", { name: "Annotate, Sources" }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByRole("button", { name: "Translation review, de" }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByRole("button", { name: "Annotate, fr" }).getAttribute("aria-pressed")).toBe("true");
-    expect(last(onChange)).toEqual({ plan: { plan_languages: {}, plan_cases: [] }, blockedReason: null });
+    expect(last(onChange)).toEqual({ plan: { plan_languages: {}, plan_cases: [] }, blockedReason: null,
+      summary: "Work plan: translation review de, fr; annotate Sources (only cases without a translation), de, fr" });
+    expect(within(section).getByText(/^Check this before you import/)).toBeDefined();
   });
 
   it("changes a whole language row with one chip click", () => {
@@ -64,6 +66,7 @@ describe("UploadWorkPlan", () => {
     expect(last(onChange).plan.plan_languages).toEqual({ de: { review: true, annotate: false } });
     fireEvent.click(screen.getByRole("button", { name: "Annotate, Sources" }));
     expect(last(onChange).plan.plan_languages).toEqual({ de: { review: true, annotate: false }, source: { review: null, annotate: true } });
+    expect(last(onChange).summary).toBe("Work plan: translation review de; annotate Sources");
   });
 
   it("offers per-case exceptions under Adjust per case…", async () => {
@@ -116,6 +119,8 @@ describe("UploadPanel with a work plan", () => {
     fireEvent.click(screen.getByRole("button", { name: "Check" }));
     const importButton = await screen.findByRole("button", { name: "Import 50 cases" });
     expect(importButton.getAttribute("aria-disabled")).toBeNull();
+    // Issue 236: the plan is named next to the button it applies to.
+    expect(document.getElementById(importButton.getAttribute("aria-describedby")!)!.textContent).toBe("Work plan: translation review de, fr; annotate Sources (only cases without a translation), de, fr");
     fireEvent.click(screen.getByRole("button", { name: "Translation review, fr" }));
     expect(screen.getByText("fr: 12 of 30 translations are not marked as reviewed in the package. Annotation needs an accepted translation.")).toBeTruthy();
     expect(screen.getByText(/18 already marked as reviewed in the package metadata need nothing\./)).toBeTruthy();

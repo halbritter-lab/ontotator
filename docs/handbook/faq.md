@@ -48,7 +48,7 @@ The task was removed or given to someone else, or you followed a link meant for 
 
 ### My task is paused
 
-A problem report pauses the task, yours or the lead's. You can read your saved work but not change or submit it. If you reported the problem yourself, you can resume with a reason. If the lead paused it, only the lead can release it. See [Resume a paused task or withdraw a report](annotator.md#resume-a-paused-task-or-withdraw-a-report).
+A problem report pauses the task, yours or the lead's. A one-line banner *Task paused: …* above the text gives the reason; click **Show more** to read all of it. You can read your saved work but not change or submit it. If you reported the problem yourself, you can resume with a reason. If the lead paused it, only the lead can release it. See [Resume a paused task or withdraw a report](annotator.md#resume-a-paused-task-or-withdraw-a-report).
 
 ### My submitted task is read-only
 
