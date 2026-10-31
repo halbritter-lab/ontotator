@@ -49,7 +49,9 @@ def access_of(env: Any, username: str, *roles: str) -> tuple[Access, Actor]:
     return access, Actor.user(user.id, username)
 
 
-def build_round(tmp_path: Any) -> SimpleNamespace:
+def build_round(
+    tmp_path: Any, unresolved: dict[str, str] | None = None
+) -> SimpleNamespace:
     """Two submissions on c1-en and a consolidation round assigned to ``adj``.
 
     Groups in reading order: match (Neonatalzeit), term_differs (STATUS on
@@ -87,6 +89,7 @@ def build_round(tmp_path: Any) -> SimpleNamespace:
             finding("b3", HYPOTONIA, heavy, assertion="absent", temporality="current"),
             finding("b4", OTHER_TERM, late, temporality="current"),
         ],
+        unresolved,
     )
     review = assign(env, target, "adj", "review")
     lead_access, lead_actor = access_of(env, "leader", "lead")

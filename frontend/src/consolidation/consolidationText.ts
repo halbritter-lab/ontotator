@@ -33,10 +33,11 @@ export const fieldsToDecide = (count: number) => count === 0 ? "to decide" : cou
 export const NOT_IN_RESULT = "not in result";
 
 /** The state word of a group card: what is left to decide, or how it was resolved. */
-export function groupStatus(group: Pick<ConsolidationGroupView, "state" | "attached_to">, conflicts: number): string {
+export function groupStatus(group: Pick<ConsolidationGroupView, "state" | "attached_to"> & Partial<Pick<ConsolidationGroupView, "edited" | "kinds">>, conflicts: number): string {
   switch (group.state) {
     case "open": return fieldsToDecide(conflicts);
-    case "auto": return "agreed";
+    // #246: an Unresolved finding is not agreed; an older take-over edited in the editor was decided by that edit.
+    case "auto": return group.edited && group.kinds?.includes("unresolved") ? "decided" : "agreed";
     case "leave_out": return group.attached_to ? "attached" : NOT_IN_RESULT;
     default: return "decided";
   }

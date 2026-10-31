@@ -2,7 +2,7 @@
  * Copy and pure rules of the final-result side panel (documents overview spec "Final-result panel",
  * "Copy › Panel", V6, V9, VD16, VD17).
  */
-import type { AgreementView, DecisionBarView, DocumentRowView, DocumentRowsPage, FinalPanelSubmissionView, NextStepView } from "../api/client";
+import type { AgreementView, DecisionBarView, DocumentRowView, DocumentRowsPage, FinalPanelSubmissionView, FinalPanelView, NextStepView } from "../api/client";
 import { plural } from "../app/labels";
 import { formatTime } from "../app/submissionLabels";
 import { versionName } from "./labels";
@@ -185,12 +185,30 @@ export function detailDifferenceLines(agreement: AgreementView): string[] {
   });
 }
 
+/**
+ * #246: one line per finding (layer and term) annotators marked Unresolved, with every person's note:
+ * "Pallor, Ana Weber: Pale or just tired?; Tom Reis: no note". `submissionId`: only that submission's.
+ */
+export function unresolvedLines(panel: Pick<FinalPanelView, "submissions" | "unresolved">, submissionId?: string): string[] {
+  const byFinding = new Map<string, { term: string; notes: string[] }>();
+  for (const item of panel.unresolved ?? []) {
+    if (submissionId && item.submission_id !== submissionId) continue;
+    const submission = panel.submissions?.find(entry => entry.submission_id === item.submission_id);
+    const key = `${item.layer_id} ${item.term_id}`;
+    const entry = byFinding.get(key) ?? { term: item.term_label, notes: [] };
+    entry.notes.push(`${submission ? personName(submission) : "An annotator"}: ${item.note?.trim() || "no note"}`);
+    byFinding.set(key, entry);
+  }
+  return [...byFinding.values()].map(({ term, notes }) => `${term}, ${notes.join("; ")}`);
+}
+
 /** One paragraph on V9 behind "How is this counted?". */
 export const AGREEMENT_EXPLANATION = "Two findings match when they are in the same layer, have the same term and the same context "
   + "(every axis value and the set of modifiers), and their evidence overlaps by at least one character or both have no evidence "
   + "in the text. Same term and position with a different context counts as a context difference. Each finding pairs with at most "
   + "one finding of each other submission; only submissions on the same text version are compared. "
-  + "Modifier text spans do not count here. “All findings match” also needs the same text spans, notes and modifier text spans.";
+  + "Modifier text spans do not count here. “All findings match” also needs the same text spans, notes and modifier text spans. "
+  + "A finding an annotator left Unresolved never counts as a match.";
 
 /** The Only here cell: the count, "on v1, not compared" for a submission outside the comparison, else "—". */
 export function onlyHereText(submission: FinalPanelSubmissionView, parallel: boolean): string {

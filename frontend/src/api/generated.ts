@@ -3585,6 +3585,10 @@ export interface components {
             ][];
             /** Note */
             note?: string | null;
+            /** Unresolved */
+            unresolved?: boolean;
+            /** Unresolved Note */
+            unresolved_note?: string | null;
             /**
              * From Tool Proposal
              * @default false
@@ -4499,6 +4503,8 @@ export interface components {
             all_match: boolean;
             /** All Match Submission Id */
             all_match_submission_id?: string | null;
+            /** Unresolved */
+            unresolved?: components["schemas"]["UnresolvedFindingView"][];
             /** Causes */
             causes?: components["schemas"]["RowItemView"][];
             /** Changed Passages */
@@ -8214,6 +8220,24 @@ export interface components {
             revisions: {
                 [key: string]: number;
             };
+        };
+        /**
+         * UnresolvedFindingView
+         * @description A finding left Unresolved in a compared submission or in an input of a
+         *     compared consolidation (#246); ``term_label`` is the term's name, else its
+         *     id.
+         */
+        UnresolvedFindingView: {
+            /** Submission Id */
+            submission_id: string;
+            /** Layer Id */
+            layer_id: string;
+            /** Term Id */
+            term_id: string;
+            /** Term Label */
+            term_label: string;
+            /** Note */
+            note?: string | null;
         };
         /** UploadCreated */
         UploadCreated: {

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, ApiError, AuthError, ConflictError, type DocumentRowView, type DocumentRowsPage, type FinalPanelView, type RowSubmissions, type WorkRoundView } from "../../src/api/client";
 import { formatTime } from "../../src/app/submissionLabels";
 import { DecisionBlock, type DecisionBlockProps } from "../../src/documents/FinalPanel";
-import { AGREEMENT_EXPLANATION, agreementText, compareSummary, consolidateHint, detailDifferenceLines, consolidationBreakdown, remainingText, noMoreFinalsText, consolidationStartedToast, nextFinalDecision, nextOtherDecision } from "../../src/documents/finalPanelText";
+import { AGREEMENT_EXPLANATION, agreementText, compareSummary, consolidateHint, detailDifferenceLines, consolidationBreakdown, remainingText, noMoreFinalsText, consolidationStartedToast, nextFinalDecision, nextOtherDecision, unresolvedLines } from "../../src/documents/finalPanelText";
 import { notifyFinalSelectionChanged } from "../../src/variants/finalSelectionState";
 import { refKey } from "../../src/variants/versionState";
 import { guidelineListing, guidelineSummary } from "../projectFixtures";
@@ -166,7 +166,7 @@ describe("choose", () => {
     fireEvent.click(how);
     expect(how.getAttribute("aria-expanded")).toBe("true");
     expect(document.getElementById(how.getAttribute("aria-controls")!)!.textContent).toMatch(/^Two findings match when they are in the same layer/);
-    expect(AGREEMENT_EXPLANATION.endsWith(" Modifier text spans do not count here. “All findings match” also needs the same text spans, notes and modifier text spans.")).toBe(true);
+    expect(AGREEMENT_EXPLANATION.endsWith(" Modifier text spans do not count here. “All findings match” also needs the same text spans, notes and modifier text spans. A finding an annotator left Unresolved never counts as a match.")).toBe(true);
     // Consolidate…: primary (no full agreement, nothing preselected) with its hint.
     const consolidate = screen.getByRole("button", { name: "Consolidate…" });
     expect(consolidate.classList.contains("btn-primary")).toBe(true);
@@ -666,6 +666,59 @@ describe("failures", () => {
     expect(screen.getByText("Loading submissions…")).toBeTruthy();
     fireEvent.click(await screen.findByRole("button", { name: "Review again" }));
     await waitFor(() => expect(api.finalPanel).toHaveBeenCalledTimes(2));
+  });
+});
+
+describe("Unresolved findings (#246)", () => {
+  const flag = (caseId: string, submission = "s1", note: string | null = "Pale or just tired?") => ({ submission_id: `${caseId}-${submission}`, layer_id: "hpo", term_id: "HP:1", term_label: "Pallor", note });
+
+  it("the compare card lists the flag, the note and who wrote it", async () => {
+    panels[rowKey("case-107", "de")] = { ...comparePanel("case-107", "de"), unresolved: [flag("case-107")] };
+    renderPanel("case-107:de", page([group("case-107", [chooseRow("case-107", "de")])]));
+    expect((await screen.findByText("1 finding marked Unresolved")).closest(".notice")?.textContent).toContain("Pallor, Ana Weber: Pale or just tired?");
+    expect(screen.queryByRole("button", { name: "Accept result" })).toBeNull();
+  });
+
+  it("counts a finding once and keeps every person's note", async () => {
+    panels[rowKey("case-107", "de")] = { ...comparePanel("case-107", "de"), unresolved: [flag("case-107"), flag("case-107", "s2", "Too vague")] };
+    renderPanel("case-107:de", page([group("case-107", [chooseRow("case-107", "de")])]));
+    expect((await screen.findByText("1 finding marked Unresolved")).closest(".notice")?.textContent)
+      .toContain("Pallor, Ana Weber: Pale or just tired?; Tom Reis: Too vague");
+  });
+
+  it("review changes shows the newer result's flags before Use the newer result", async () => {
+    const newer = tomSubmission("case-114", "de", { submission_id: "newer" });
+    const target = reviewRow("case-114", "de");
+    const row = { ...target, issues: [...target.issues, item({ code: "SELECTED_NEWER_RESULT", cause_id: "SELECTED_NEWER_RESULT:newer", category: "confirm-final", document_id: "case-114-de" })] };
+    panels[rowKey("case-114", "de")] = finalPanel({ submissions: [anaSubmission("case-114", "de"), newer], causes: row.issues,
+      unresolved: [{ ...flag("case-114", "s1", "On the final"), term_label: "Tremor", term_id: "HP:2" }, { ...flag("case-114"), submission_id: "newer" }] });
+    renderPanel("case-114:de", page([group("case-114", [row])]));
+    await screen.findByRole("button", { name: "Use the newer result" });
+    const notice = screen.getByText("1 finding marked Unresolved").closest(".notice");
+    expect(notice?.textContent).toContain("Pallor, Tom Reis: Pale or just tired?");
+    expect(notice?.textContent).not.toContain("Tremor");
+  });
+
+  it("the accept card of a submission lists it and says the export keeps it", async () => {
+    panels[rowKey("case-107", "de")] = { ...acceptPanel("case-107", "de"), unresolved: [flag("case-107")] };
+    renderPanel("case-107:de", page([group("case-107", [chooseRow("case-107", "de")])]));
+    const notice = (await screen.findByText("1 finding marked Unresolved")).closest(".notice");
+    expect(notice?.textContent).toContain("Pallor, Ana Weber: Pale or just tired?");
+    expect(notice?.textContent).toContain("Accepting keeps the flag and the note in the export.");
+  });
+
+  it("the accept card of a consolidation lists its inputs' flags, without the export line", async () => {
+    panels[rowKey("case-107", "de")] = finalPanel({
+      submissions: [anaSubmission("case-107", "de"), tomSubmission("case-107", "de", { kind: "consolidation" })],
+      label_rule: "accept", accept_submission_id: "case-107-s2", unresolved: [flag("case-107")],
+    });
+    renderPanel("case-107:de", page([group("case-107", [chooseRow("case-107", "de")])]));
+    const notice = (await screen.findByText("1 finding marked Unresolved")).closest(".notice");
+    expect(notice?.textContent).not.toContain("in the export");
+  });
+
+  it("a note missing on an old submission reads as such", () => {
+    expect(unresolvedLines({ submissions: [], unresolved: [flag("c", "s9", null)] })).toEqual(["Pallor, An annotator: no note"]);
   });
 });
 

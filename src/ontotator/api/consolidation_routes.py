@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Literal
 
 from fastapi import APIRouter, Request
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from ontotator.api.identity import PrincipalDep, own_key
 from ontotator.api.routes import (
@@ -60,6 +60,10 @@ class ConsolidationMemberView(_View):
     spans: list[tuple[int, int]]
     cues: list[tuple[int, int]]
     note: str | None = None
+    # The person's review decision on this finding is Unresolved, with its
+    # note (empty only on old submissions).
+    unresolved: bool = Field(default_factory=bool)
+    unresolved_note: str | None = None
     # The finding is a confirmed or corrected tool proposal (robot icon).
     from_tool_proposal: bool = False
     modifiers: list[ConsolidationModifierView] = []

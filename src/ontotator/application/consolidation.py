@@ -13,7 +13,13 @@ Each input with a target snapshot is a finding keyed by its ``input_id``
 Group state lives in the consolidator's review decisions on the inputs'
 target snapshots: a group is *open* while a member has no decision or only
 an ``uncertain`` one; otherwise its state is the decisions'
-``ConsolidationMark.action``. A group is *edited* when its resulting
+``ConsolidationMark.action``. That ``uncertain`` is the consolidator's own
+decision. An input author's Unresolved decision in a source submission is the
+member's ``Finding.unresolved`` (the group kind ``unresolved``, #246), read
+from the source submission, so it also holds for rounds started before it. Such
+a group is not taken over automatically; one taken over before #246 reads open
+while its draft is live, unless the consolidator changed its result in the
+editor: that human edit stands as the decision. A group is *edited* when its resulting
 annotation's content hash differs from the mark's ``content_sha256``
 (``consolidated_content_sha256``) or the annotation was deleted.
 
@@ -30,13 +36,14 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import Connection, select
+from sqlalchemy import Connection, select, tuple_
 
 from ontotator.application.document_row_panel import (
     AxisDefaults,
     finding_of,
     project_profile,
     project_roles,
+    unresolved_notes,
 )
 from ontotator.application.people import person_refs
 from ontotator.authz.policy import Access, Action, can
@@ -58,6 +65,7 @@ from ontotator.ontology.modifiers import NO_TERM_ROLES, TermRoles, modifier_laye
 from ontotator.storage.final_tables import FinalSelectionRow
 from ontotator.storage.repository import Repository, _key_str
 from ontotator.storage.tables import (
+    AnnotationSnapshotRow,
     AuditEventRow,
     DocumentRow,
     ProposalAnnotationRow,
@@ -161,19 +169,24 @@ def round_members(
     sids = sorted(
         set(order) | {r.source_submission_id for r in rows if r.source_submission_id}
     )
-    authors: dict[str, str] = (
-        {
-            row.submission_id: row.annotator_id
-            for row in conn.execute(
-                select(SubmissionRow.submission_id, SubmissionRow.annotator_id).where(
-                    SubmissionRow.project_id == pid,
-                    SubmissionRow.submission_id.in_(sids),
-                )
+    authors: dict[str, str] = {}
+    # Source submission -> its Unresolved decisions (``unresolved_notes``).
+    unresolved: dict[str, dict[tuple[str, str], str | None]] = {}
+    if sids:
+        for source in conn.execute(
+            select(
+                SubmissionRow.submission_id,
+                SubmissionRow.annotator_id,
+                SubmissionRow.payload["decisions"].label("decisions"),
+            ).where(
+                SubmissionRow.project_id == pid,
+                SubmissionRow.submission_id.in_(sids),
             )
-        }
-        if sids
-        else {}
-    )
+        ):
+            authors[source.submission_id] = source.annotator_id
+            unresolved[source.submission_id] = unresolved_notes(
+                ReviewDecision.model_validate(item) for item in source.decisions or ()
+            )
     members: dict[str, RoundMember] = {}
     position = dict.fromkeys(order, 0)
     for row in rows:
@@ -186,8 +199,8 @@ def round_members(
             position[submission] = 0
             order.append(submission)
         if submission not in authors:  # a frozen draft: its snapshots' author
-            source = decode_snapshot(row.payload["source_snapshot"])
-            authors[submission] = source.annotation.provenance.actor.actor_id
+            frozen = decode_snapshot(row.payload["source_snapshot"])
+            authors[submission] = frozen.annotation.provenance.actor.actor_id
         raw = row.payload.get("target_snapshot")
         if raw is None:
             continue
@@ -195,6 +208,9 @@ def round_members(
         if item.annotation.layer_id not in editable:
             continue
         person = authors[submission]
+        origin = row.payload["source_snapshot"]
+        source_ref = (origin["annotation"]["annotation_id"], origin["version"])
+        notes = unresolved.get(submission, {})
         members[row.input_id] = RoundMember(
             input_id=row.input_id,
             submission_id=submission,
@@ -206,8 +222,10 @@ def round_members(
                 order=position[submission],
                 defaults=defaults,
                 roles=roles,
+                unresolved=source_ref in notes,
+                unresolved_note=notes.get(source_ref),
             ),
-            source_id=row.payload["source_snapshot"]["annotation"]["annotation_id"],
+            source_id=source_ref[0],
         )
         position[submission] += 1
     return RoundMembers(order=order, authors=authors, members=members, roles=roles)
@@ -249,17 +267,66 @@ def member_ref(member: RoundMember) -> AnnotationRef:
     )
 
 
+def _untouched_take_over(
+    decision: ReviewDecision, annotations: Mapping[str, Annotation]
+) -> bool:
+    """An automatic take-over whose result is as the mark recorded it."""
+    mark = decision.consolidation
+    if mark is None or mark.action != "auto":
+        return False
+    replacement = decision.replacement
+    current = annotations.get(replacement.annotation_id) if replacement else None
+    return (
+        current is None
+        or mark.content_sha256 is None
+        or consolidated_content_sha256(current) == mark.content_sha256
+    )
+
+
 def is_open(
-    targets: Iterable[tuple[str, str]], decisions: Sequence[ReviewDecision]
+    targets: Iterable[tuple[str, str]],
+    decisions: Sequence[ReviewDecision],
+    *,
+    unresolved: bool = False,
+    annotations: Mapping[str, Annotation] | None = None,
 ) -> bool:
     """Whether a group with these member targets is open: a member has no
-    decision or only an ``uncertain`` one (the read and submit gating)."""
+    decision or only an ``uncertain`` one (the read and submit gating). With
+    ``unresolved`` (a live group of that kind) an automatic take-over from
+    before #246 is no decision either, unless ``annotations`` (the draft's, by
+    id) show its result was edited since."""
     decided = {
         (d.target.annotation_id, d.target.version)
         for d in decisions
         if d.outcome != "uncertain"
+        and not (unresolved and _untouched_take_over(d, annotations or {}))
     }
     return any(target not in decided for target in targets)
+
+
+def _replacements(
+    conn: Connection, pid: int, decisions: Sequence[ReviewDecision]
+) -> dict[str, Annotation]:
+    """The current results of automatic take-overs, by annotation id."""
+    refs = {
+        (d.replacement.annotation_id, d.replacement.version)
+        for d in decisions
+        if d.replacement is not None
+        and d.consolidation is not None
+        and d.consolidation.action == "auto"
+    }
+    if not refs:
+        return {}
+    payloads = conn.execute(
+        select(AnnotationSnapshotRow.payload).where(
+            AnnotationSnapshotRow.project_id == pid,
+            tuple_(
+                AnnotationSnapshotRow.annotation_id, AnnotationSnapshotRow.version
+            ).in_(refs),
+        )
+    ).scalars()
+    found = [decode_snapshot(payload).annotation for payload in payloads]
+    return {annotation.annotation_id: annotation for annotation in found}
 
 
 def consolidation_progress(
@@ -269,6 +336,11 @@ def consolidation_progress(
     profile, defaults = project_profile(conn, pid)
     found = round_members(conn, pid, round_id, profile, defaults)
     groups = list(round_groups(found))
+    annotations = (
+        _replacements(conn, pid, decisions)
+        if any("unresolved" in group.kinds for group in groups)
+        else {}
+    )
     open_count = sum(
         1
         for group in groups
@@ -280,6 +352,8 @@ def consolidation_progress(
                 )
             ),
             decisions,
+            unresolved="unresolved" in group.kinds,
+            annotations=annotations,
         )
     )
     return open_count, len(groups)
@@ -300,6 +374,7 @@ class _Content:
     annotations: Sequence[AnnotationSnapshot]
     decisions: Sequence[ReviewDecision]
     revision: int = 0  # the live draft's revision (0 when read-only)
+    submitted: bool = False
 
 
 class ConsolidationReader:
@@ -583,11 +658,18 @@ def _group_view(
                 "spans": [list(span) for span in member.finding.spans],
                 "cues": [list(span) for span in member.finding.cues],
                 "note": annotation.note or None,
+                "unresolved": member.finding.unresolved,
+                "unresolved_note": member.finding.unresolved_note,
                 "from_tool_proposal": input_id in from_proposal,
                 "modifiers": _modifiers(annotation, roles),
             }
         )
-    state = _state(targets, content, roles)
+    state = _state(
+        targets,
+        content,
+        roles,
+        unresolved="unresolved" in group.kinds and not content.submitted,
+    )
     result = state.get("result")
     if result is not None and result["spans"] is None:
         result["spans"] = next(
@@ -615,6 +697,8 @@ def _state(
     targets: Mapping[tuple[str, str], Annotation],
     content: _Content,
     roles: TermRoles = NO_TERM_ROLES,
+    *,
+    unresolved: bool = False,
 ) -> dict[str, Any]:
     """State, note, flag, edit and resulting annotations of one group.
 
@@ -626,9 +710,13 @@ def _state(
     ``content_sha256`` on every decision with a resulting annotation (the
     hash of that annotation); a hash on a decision without one is ignored.
     The group is edited when a resulting annotation's hash differs from the
-    mark or a replacement no longer exists.
+    mark or a replacement no longer exists. ``unresolved`` as in ``is_open``.
     """
-    if is_open(targets, content.decisions):
+    snapshots = {s.annotation.annotation_id: s for s in content.annotations}
+    annotations = {key: s.annotation for key, s in snapshots.items()}
+    if is_open(
+        targets, content.decisions, unresolved=unresolved, annotations=annotations
+    ):
         return {"state": "open"}
     by_target = {
         (d.target.annotation_id, d.target.version): d
@@ -641,8 +729,6 @@ def _state(
         state = marks[0].action
     else:  # decided in the editor without the consolidation view
         state = "leave_out" if all(d.outcome == "rejected" for d in decided) else "keep"
-    snapshots = {s.annotation.annotation_id: s for s in content.annotations}
-    annotations = {key: s.annotation for key, s in snapshots.items()}
     edited = False
     for decision in decided:
         mark = decision.consolidation
@@ -721,7 +807,11 @@ def _submitted(conn: Connection, pid: int, submission_id: str | None) -> _Conten
         )
     ).scalar_one()
     submission = Submission.model_validate(payload)
-    return _Content(annotations=submission.snapshots, decisions=submission.decisions)
+    return _Content(
+        annotations=submission.snapshots,
+        decisions=submission.decisions,
+        submitted=True,
+    )
 
 
 def _draft(
