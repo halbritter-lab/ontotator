@@ -46,6 +46,7 @@ from ontotator.exchange.plan import (
     read_t1_upload,
     row_defaults,
     state_hash,
+    upload_work_plan,
     with_work_plan,
 )
 from ontotator.exchange.t1 import ImportCounts, ImportedDocument, ImportedSet
@@ -1344,13 +1345,7 @@ class UploadService:
             conn.execute(text(f"SET LOCAL lock_timeout = '{IMPORT_LOCK_TIMEOUT}'"))
             project_id = lock_import(conn, key, self.actor)
             row = conn.execute(
-                select(
-                    UploadRow.status,
-                    UploadRow.plan_sha256,
-                    UploadRow.kind,
-                    UploadRow.language,
-                    UploadRow.files,
-                )
+                select(UploadRow.status, UploadRow.plan_sha256)
                 .where(UploadRow.id == upload_id, UploadRow.project_id == project_id)
                 .with_for_update()
             ).one_or_none()
@@ -1361,10 +1356,22 @@ class UploadService:
                     "UPLOAD_STALE", "Upload is not ready or the plan hash changed."
                 )
             if normalized or choices.any:
-                plan, _, ctx = _prepare(
-                    self.db, conn, key, project_id, row.kind, row.language, row.files
+                # The stored plan, not a new parse under the locks (#209); the job
+                # replans before it writes, and refuses a plan that no longer holds.
+                plan = ImportPlan.model_validate(
+                    conn.scalar(
+                        select(UploadRow.preview).where(UploadRow.id == upload_id)
+                    )
                 )
-                if plan.plan_sha256 != digest:
+                project, profile, rules, state = _inventory(
+                    self.db, conn, key, project_id
+                )
+                ctx = _plan_context(conn, project_id, project, case_ids(plan))
+                rows = planned_rows(plan.variants, added_documents(plan), ctx)
+                if (
+                    state_hash(state, profile, rules) != plan.state_sha256
+                    or upload_work_plan(rows, ctx) != plan.work_plan
+                ):
                     raise DomainError(
                         "UPLOAD_STALE", "Project changed since preview; upload again."
                     )

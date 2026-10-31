@@ -17,6 +17,7 @@ from test_variant_import import audit_rows, commit, override, preview, units
 from ontotator.auth.audit import Actor
 from ontotator.domain.errors import DomainError
 from ontotator.domain.work_plans import PlanFlags, RowKey
+from ontotator.exchange import uploads
 from ontotator.exchange.t1 import ImportedDocument, document_from_unit
 from ontotator.exchange.uploads import PlanChoice, UploadService, _require_override
 from ontotator.exchange.variant_plan import package_review
@@ -402,6 +403,83 @@ def test_plan_choices_name_only_rows_of_the_upload(staged, tmp_path):
     assert response.status_code >= 400
     assert response.json()["code"] == "WORK_PLAN_INVALID"
     assert application.state.repo.list_documents("proj") == []
+
+
+def spy_parses(monkeypatch):
+    parses = []
+    real = uploads.read_sources
+    monkeypatch.setattr(
+        uploads, "read_sources", lambda *a: parses.append(a) or real(*a)
+    )
+    return parses
+
+
+def test_commit_with_choices_parses_nothing_in_the_request(
+    staged, tmp_path, monkeypatch
+):
+    """The request checks the stored plan under the locks; only the job parses."""
+    application, admin, _ = staged
+    upload = preview(application, admin, bundle(tmp_path, two_cases()))
+    parses = spy_parses(monkeypatch)
+    response = enqueue_plan(
+        admin, upload, plan_languages={"fr": {"review": False, "annotate": False}}
+    )
+    assert response.status_code == 200, response.text
+    assert parses == []
+    job = _run(application, response.json()["job_id"])
+    assert job.status == "succeeded", job.error
+    assert parses
+    assert stored_rows(application)[RowKey("c1", "fr")] == PlanFlags(False, False)
+
+
+def test_refused_choices_parse_nothing_in_the_request(staged, tmp_path, monkeypatch):
+    application, admin, _ = staged
+    upload = preview(application, admin, bundle(tmp_path, two_cases()))
+    parses = spy_parses(monkeypatch)
+    response = enqueue_plan(
+        admin,
+        upload,
+        plan_cases=[
+            {"case_id": "c9", "language": "de", "review": True, "annotate": True}
+        ],
+    )
+    assert response.json()["code"] == "WORK_PLAN_INVALID"
+    assert parses == []
+    assert admin.get(f"{BASE}/{upload['id']}").json()["status"] == "ready"
+
+
+def test_commit_with_choices_refuses_a_stale_project_state(
+    staged, tmp_path, monkeypatch
+):
+    application, admin, _ = staged
+    upload = preview(application, admin, bundle(tmp_path, two_cases()))
+    set_import_plan(application, "nothing")
+    parses = spy_parses(monkeypatch)
+    response = enqueue_plan(
+        admin, upload, plan_languages={"fr": {"review": False, "annotate": False}}
+    )
+    assert response.json()["code"] == "UPLOAD_STALE"
+    assert parses == []
+    assert admin.get(f"{BASE}/{upload['id']}").json()["status"] == "ready"
+    assert application.state.repo.list_documents("proj") == []
+
+
+def test_commit_with_choices_refuses_a_changed_work_plan(staged, tmp_path, monkeypatch):
+    """The project state is the same; only the rows the upload touches changed."""
+    application, admin, _ = staged
+    source, (de,) = case_units("c1", ("de",))
+    first = tmp_path / "first"
+    first.mkdir()
+    commit(application, admin, preview(application, admin, bundle(first, [source, de])))
+    es = translation_unit("c1", "es", "es text of c1.", source=source)
+    upload = preview(application, admin, bundle(tmp_path, [source, de, es]))
+    write_plan(application, {RowKey("c1", "de"): PlanFlags(False, False)})
+    parses = spy_parses(monkeypatch)
+    response = enqueue_plan(
+        admin, upload, plan_languages={"es": {"review": False, "annotate": False}}
+    )
+    assert response.json()["code"] == "UPLOAD_STALE"
+    assert parses == []
 
 
 def test_annotator_cannot_accept_external_review(staged, tmp_path):
