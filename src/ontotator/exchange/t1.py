@@ -7,7 +7,7 @@ annotation set of a unit into proposals; export turns a submission into an
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Literal, TypedDict
@@ -154,6 +154,112 @@ def layers_for(profile: TaskProfile, pins: Mapping[str, Pin]) -> list[ontospan.L
             )
         )
     return result
+
+
+def recorded_digests(
+    submission: Submission,
+    proposals: Mapping[tuple[str, str], AnnotationSnapshot],
+    ontology_of_layer: Mapping[str, str],
+) -> dict[str, set[str]]:
+    """Per ontology, the release digests the submission's findings are bound to."""
+    snapshots = list(submission.snapshots)
+    for decision in submission.decisions:
+        target = (decision.target.annotation_id, decision.target.version)
+        if decision.outcome in {"confirmed", "uncertain"} and target in proposals:
+            snapshots.append(proposals[target])
+    digests: dict[str, set[str]] = {}
+    for snap in snapshots:
+        ontology_id = ontology_of_layer.get(snap.annotation.layer_id)
+        if ontology_id is not None:
+            digests.setdefault(ontology_id, set()).add(snap.ontology_sha256)
+    return digests
+
+
+def recorded_layers(
+    layers: Sequence[ontospan.Layer],
+    recorded: Sequence[Mapping[str, set[str]]],
+    history: Mapping[str, Sequence[str]],
+    release_names: Mapping[str, str],
+) -> list[dict[str, ontospan.Layer]]:
+    """Per submission, its layers (by layer id) as they name the recorded release.
+
+    ``history`` lists the digests of each ontology, oldest first. A submission
+    counts under the newest of its digests: its submit checked every term
+    against that release, or a later one. A submission with no known digest
+    has no finding to speak for and follows the rest of the export.
+
+    A bundle allows one definition per layer id. When texts of one export were
+    made under different releases, the newest keeps the layer id and each older
+    one gets a layer of its own, ``<layer id>@<digest prefix>``.
+    """
+
+    def newest(ontology_id: str, digests: Iterable[str]) -> str | None:
+        known = history.get(ontology_id, ())
+        found = [digest for digest in digests if digest in known]
+        return max(found, key=list(known).index, default=None)
+
+    chosen = [
+        {oid: newest(oid, digests) for oid, digests in item.items()}
+        for item in recorded
+    ]
+    leading = {
+        layer.ontology.id: newest(
+            layer.ontology.id, {d.get(layer.ontology.id) or "" for d in chosen}
+        )
+        or layer.ontology.sha256
+        or ""
+        for layer in layers
+    }
+
+    def layer_for(layer: ontospan.Layer, digest: str) -> ontospan.Layer:
+        first = digest == leading[layer.ontology.id]
+        if first and digest == layer.ontology.sha256:
+            return layer
+        return layer.model_copy(
+            update={
+                "layer_id": layer.layer_id
+                if first
+                else f"{layer.layer_id}@{digest[:12]}",
+                "ontology": layer.ontology.model_copy(
+                    update={
+                        "version": release_names.get(digest) or digest[:12],
+                        "sha256": digest,
+                    }
+                ),
+            }
+        )
+
+    return [
+        {
+            layer.layer_id: layer_for(
+                layer, item.get(layer.ontology.id) or leading[layer.ontology.id]
+            )
+            for layer in layers
+        }
+        for item in chosen
+    ]
+
+
+def with_layers(
+    unit: ontospan.AnnotatedDocument, layers: Mapping[str, ontospan.Layer]
+) -> ontospan.AnnotatedDocument:
+    """``unit`` with its layers, and the annotations on them, replaced by id."""
+    aset = unit.annotation_set
+    return unit.model_copy(
+        update={
+            "annotation_set": aset.model_copy(
+                update={
+                    "layers": tuple(layers[item.layer_id] for item in aset.layers),
+                    "annotations": tuple(
+                        item.model_copy(
+                            update={"layer_id": layers[item.layer_id].layer_id}
+                        )
+                        for item in aset.annotations
+                    ),
+                }
+            )
+        }
+    )
 
 
 # --- import -----------------------------------------------------------------

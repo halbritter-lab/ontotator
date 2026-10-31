@@ -752,6 +752,7 @@ a.shell-product { color: inherit; text-decoration: none; }
 /* My tasks counts: a list whose separators are gaps, not glyphs. */
 ul.task-counts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); list-style: none; padding: 0; margin-block: var(--space-3); font-variant-numeric: tabular-nums; }
 /* My tasks: failed automatic checks of a translation review, on a second line of the Task cell; icon plus words, not colour alone. */
+.task-hold-reason { display: -webkit-box; margin: var(--space-1) 0 0; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; max-width: 28rem; white-space: normal; }
 .task-check-flag { display: flex; align-items: center; gap: var(--space-1); color: var(--warning); font-size: var(--size-sm); }
 .task-reopen-info { all: unset; cursor: pointer; border-radius: var(--radius-sm); }
 .task-reopen-info:focus-visible { outline: var(--focus-width) solid var(--focus-ring); outline-offset: 2px; }

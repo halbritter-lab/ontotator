@@ -42,3 +42,12 @@ describe("round labels", () => {
     expect(sourceOptionLabel({ round_ordinal: 2, recorded_at: null, language: "de", version: 1, finding_count: 2 }, { now })).toBe("Round 2 submission, de v1, 2 findings");
   });
 });
+
+describe("a carry to a new text version", () => {
+  it("does not read as a round continuing itself", () => {
+    const carried = { kind: "carry_forward" as const, round_ordinal: 1, source_round_ordinal: 1 };
+    expect(roundBadge(carried)).toBe("Round 1, continued from Round 1 of an earlier version");
+    expect(roundStartingPoint({ ...carried, input_submission_ids: [] })).toBe("from Round 1 of an earlier version submission");
+    expect(roundBadge({ ...carried, round_ordinal: 2 })).toBe("Round 2, continued from Round 1");
+  });
+});

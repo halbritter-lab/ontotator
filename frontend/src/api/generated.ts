@@ -6890,6 +6890,32 @@ export interface components {
              */
             finding_count: number;
         };
+        /**
+         * RowChangeView
+         * @description A change of who works on a row, or how: its History line.
+         */
+        RowChangeView: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "reassigned" | "mode_changed" | "mode_restored";
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Task */
+            task?: string | null;
+            from_person?: components["schemas"]["PersonRefView"] | null;
+            to_person?: components["schemas"]["PersonRefView"] | null;
+            /** From Mode */
+            from_mode?: string | null;
+            /** To Mode */
+            to_mode?: string | null;
+            /** Reason */
+            reason?: string | null;
+        };
         /** RowItemView */
         RowItemView: {
             /** Code */
@@ -7040,6 +7066,8 @@ export interface components {
             rounds: components["schemas"]["RowRoundView"][];
             /** Open Translation Reviews */
             open_translation_reviews: components["schemas"]["OpenTranslationReviewView"][];
+            /** Changes */
+            changes?: components["schemas"]["RowChangeView"][];
         };
         /**
          * RuleViolation

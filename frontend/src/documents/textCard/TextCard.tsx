@@ -167,7 +167,7 @@ export function TextCard(props: TextCardProps): JSX.Element {
   if (view === "history") {
     body = <div className="text-card-view">
       {back}
-      <RowActivity row={row} projectKey={projectKey} submissions={list} reportRoute={props.reportRoute} onNavigate={onNavigate} me={props.me?.pseudonym ?? null} now={now} />
+      <RowActivity row={row} projectKey={projectKey} submissions={list} changes={submissions.data?.changes} reportRoute={props.reportRoute} onNavigate={onNavigate} me={props.me?.pseudonym ?? null} now={now} />
     </div>;
   } else if (view === "details") {
     body = <div className="text-card-view">
@@ -207,7 +207,7 @@ export function TextCard(props: TextCardProps): JSX.Element {
       <IconButton label="Next text" icon={<IconChevronRight />} variant="quiet" size="sm" aria-keyshortcuts="J" onClick={() => onStep(1)} />
     </div>
     <div className="text-card-body">{body}</div>
-    {view === "path" && <CardFooter historyCount={list ? historyLines(row, list, { now }).length : null}
+    {view === "path" && <CardFooter historyCount={list ? historyLines(row, list, { now, changes: submissions.data?.changes }).length : null}
       onHistory={() => onView("history")} onDetails={() => onView("details")} />}
   </Dialog>;
 }

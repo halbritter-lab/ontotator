@@ -9,7 +9,7 @@ it("asks before reassigning started work then separately confirms language with 
   vi.mocked(api.reassign).mockRejectedValueOnce(new ApiError(422, "language", "LANGUAGE_CONFIRMATION_REQUIRED")).mockResolvedValueOnce(assignment);
   const changed = vi.fn(); render(<AssignmentActions assignment={{ ...assignment, status: "in_progress" }} members={members} onChanged={changed} />);
   fireEvent.click(screen.getByRole("button", { name: "Reassign…" })); fireEvent.change(screen.getByLabelText("New assignee"), { target: { value: "bob" } }); fireEvent.click(screen.getByRole("button", { name: "Reassign" }));
-  expect(api.reassign).not.toHaveBeenCalled(); expect(screen.getByText(/Work has started. The previous draft stays/)).toBeDefined();
+  expect(api.reassign).not.toHaveBeenCalled(); expect(screen.getByText(/Work has started. The new person starts/)).toBeDefined();
   fireEvent.click(screen.getByRole("button", { name: "Reassign started work" }));
   fireEvent.click(await screen.findByRole("button", { name: "Reassign anyway" }));
   await waitFor(() => expect(changed).toHaveBeenCalledOnce());

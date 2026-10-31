@@ -106,3 +106,22 @@ describe("historyLines", () => {
     expect(none.text).not.toContain("kept automatically");
   });
 });
+
+describe("reassignments and mode changes", () => {
+  const anna = { pseudonym: "ann-1", display_name: "Anna Early", is_me: false };
+  const ben = { pseudonym: "ann-2", display_name: "Ben Roth", is_me: false };
+  const now = new Date("2026-10-31T12:00:00");
+  const emptyRow = { versions: [], work: [], moved_work: [], issues: [], notes: [], final: null, stages: null } as unknown as Parameters<typeof historyLines>[0];
+  it("lists a reassignment on its stage and a mode change with its reason", () => {
+    const lines = historyLines(emptyRow, [], { now, changes: [
+      { kind: "reassigned", at: "2026-10-31T10:00:00", task: "annotate", from_person: anna, to_person: ben },
+      { kind: "reassigned", at: "2026-10-31T10:05:00", task: "translation_review", from_person: ben, to_person: anna },
+      { kind: "mode_changed", at: "2026-10-31T10:10:00", from_mode: "proposals", to_mode: "scratch", reason: "The tool proposals were wrong" },
+    ] });
+    expect(lines.map(line => [line.stage, line.text])).toEqual([
+      ["annotation", "Annotation: reassigned from Anna Early (ann-1) to Ben Roth (ann-2), 10:00"],
+      ["review", "Review: reassigned from Ben Roth (ann-2) to Anna Early (ann-1), 10:05"],
+      ["annotation", "Annotation: mode changed, now annotated from scratch, The tool proposals were wrong, 10:10"],
+    ]);
+  });
+});

@@ -33,8 +33,7 @@ def validate_resolution(
     ):
         raise DomainError("INVALID_REANCHOR_ITEM")
     scope = build_scope(repo.get_task_profile(draft.key.project_key), draft.key.mode)
-    if draft.key.scope_id and draft.key.scope_id != scope.scope_id:
-        raise DomainError("INVALID_SCOPE")
+    repo.require_workspace_scope(draft.key, scope)
     source, _ = repo.reanchor_source_identity(draft.key, resolution.item)
     if resolution.outcome == "dismissed":
         return

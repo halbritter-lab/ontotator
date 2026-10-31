@@ -85,11 +85,11 @@ export function useAssignmentBatch(projectKey: string, onChanged: () => void) {
   const languageRows = refused.filter(row => row.code === "LANGUAGE_CONFIRMATION_REQUIRED").map(({ document_id, username }) => ({ document_id, username }));
   return { busy, attempted, accepted, refused, error, submit, reset, languageRows };
 }
-export function BatchFeedback({ batch, onConfirmLanguage, disabled, languages }: { batch: ReturnType<typeof useAssignmentBatch>; onConfirmLanguage: () => void; disabled?: boolean; languages?: ReadonlyMap<string, readonly string[] | null> }) {
+export function BatchFeedback({ batch, onConfirmLanguage, disabled, languages, textName = id => id, personName = name => name }: { batch: ReturnType<typeof useAssignmentBatch>; onConfirmLanguage: () => void; disabled?: boolean; languages?: ReadonlyMap<string, readonly string[] | null>; textName?: (documentId: string) => string; personName?: (username: string) => string }) {
   return <>
     {batch.error !== undefined && <ErrorNotice error={batch.error} />}
     {batch.attempted && <InlineMessage tone="info">{[`${plural(batch.accepted, "assignment")} saved`, batch.refused.length > 0 && `${batch.refused.length} not saved`].filter(Boolean).join(", ")}.</InlineMessage>}
-    {batch.refused.length > 0 && <ul aria-label="Refused assignments">{batch.refused.map(row => <li key={rowKey(row)}>{row.document_id} — {row.username}: <span>{errorMessage(new ApiError(422, row.code, row.code))}</span></li>)}</ul>}
-    {batch.languageRows.length > 0 && <section aria-label="Confirm document languages"><p>These people's profiles do not list the required document languages. Assign anyway?</p><ul>{batch.languageRows.map(row => <li key={rowKey(row)}>{row.document_id} — {row.username}: {languages?.get(row.document_id)?.join(", ") || "Required languages unavailable"}</li>)}</ul><Button disabled={disabled} loading={batch.busy} onClick={onConfirmLanguage}>Assign anyway</Button></section>}
+    {batch.refused.length > 0 && <ul aria-label="Refused assignments">{batch.refused.map(row => <li key={rowKey(row)}>{textName(row.document_id)} — {personName(row.username)}: <span>{errorMessage(new ApiError(422, row.code, row.code))}</span></li>)}</ul>}
+    {batch.languageRows.length > 0 && <section aria-label="Confirm document languages"><p>These people's profiles do not list the required document languages. Assign anyway?</p><ul>{batch.languageRows.map(row => <li key={rowKey(row)}>{textName(row.document_id)} — {personName(row.username)}: {languages?.get(row.document_id)?.join(", ") || "Required languages unavailable"}</li>)}</ul><Button disabled={disabled} loading={batch.busy} onClick={onConfirmLanguage}>Assign anyway</Button></section>}
   </>;
 }

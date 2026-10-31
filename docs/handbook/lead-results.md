@@ -195,6 +195,8 @@ What for: download the accepted final results.
 
 Click **Check again** after you accepted more results. **What is in the file?** explains the contents. Values that annotators never confirmed are marked as *defaulted* in the file; unresolved proposals keep their reviewer flag and note. The file formats are described in the [scientific workflow guide](../scientific-workflow.md) and the [translation review export guide](../translation-review-export.md).
 
+Each text in an export names the ontology release its work was made under, which can be older than the project's current release. If the texts of one export were made under different releases, the newest keeps the layer ID (for example `hpo-layer`) and each older release gets a layer of its own (`hpo-layer@<start of its checksum>`), which the file lists with its release and checksum.
+
 ### Export research data
 
 What for: download raw material for analysis. People appear as pseudonyms.

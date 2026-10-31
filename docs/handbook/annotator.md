@@ -39,7 +39,7 @@ The toolbar shows the text name, its language and the mode:
 
 Next to the mode, the save status tells you whether your work is stored: **Saved**, **Saving...** or **Unsaved changes**. Work is saved automatically; there is no save button. If it reads **Offline** or shows an error, click **Retry**.
 
-The **More** menu holds **Work rounds**, **Report a text problem…**, the guidelines (for example *Guidelines v2*) and **Keyboard shortcuts (?)**.
+The **More** menu holds **Work rounds**, **Report a text problem…**, the guidelines (for example *Guidelines v2*), **Keyboard shortcuts (?)** and **Help for this screen**.
 
 If the text was changed elsewhere, a **Revision conflict** notice appears; click **Reload case**. A submitted task is read-only.
 
@@ -256,7 +256,7 @@ Before you start: submitting says you checked the whole text for further finding
 2. Click **Finish & submit text**. While items are open, the button shows how many. The full editor of a consolidation has no submit button; see [Work in the full editor](consolidator.md#work-in-the-full-editor).
 3. A dialog named after the text, for example *Submit CASE-1 en?*, lists what is still open: **Carried findings to check**, **Findings that need attention**, **Findings after text correction**, **Proposals not decided**. Click **Go to** to fix an item.
 4. When nothing blocks, click **Submit text**. If only warnings are left, the button reads **Submit with** and the number of warnings; see [Confirm values and acknowledge warnings](#confirm-values-and-acknowledge-warnings-in-the-submit-dialog) first.
-5. The next open task opens, preferably one of the same kind (another review after a review), or **My tasks** if none is left. To see what you sent, click **View result** in the message.
+5. The next open task opens, preferably one of the same kind (another review after a review), or **My tasks** if none is left. Paused tasks are passed over. To see what you sent, click **View result** in the message.
 
 The task is now read-only. To change it later, [start a new work round](#start-a-new-work-round) yourself under **More** › **Work rounds**; you do not need the lead for that. The submit dialog says the same.
 

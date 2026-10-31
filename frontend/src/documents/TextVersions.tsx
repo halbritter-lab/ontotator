@@ -161,7 +161,7 @@ export const TextVersions = forwardRef<HTMLUListElement, TextVersionsProps>(func
             return <li key={item.assignment_id}>
               <span>{personLabel(item.author_label, item.is_me, item.person)}, {labelFor(taskLabels, item.task)}, {moved != null ? `moved to v${moved}` : labelFor(assignmentStatusLabels, item.status)}</span>
               {item.held && <> <StatusBadge tone="warning">Paused</StatusBadge></>}
-              {assignment && tools && !(hideOpenWork && item.task === "annotate") && <AssignmentActions assignment={assignment} members={tools.members} onChanged={tools.onAssignmentsChanged} />}
+              {assignment && tools && !(hideOpenWork && item.task === "annotate") && <AssignmentActions assignment={assignment} textName={fullName} members={tools.members} onChanged={tools.onAssignmentsChanged} />}
             </li>;
           })}
         </ul>}

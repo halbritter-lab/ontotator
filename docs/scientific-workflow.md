@@ -118,6 +118,11 @@ cue segments and quoted text. `positive` means the submitted annotation set is
 nonempty; an annotation whose clinical assertion is `absent` remains an annotation
 and is not equivalent to a document with no findings.
 
+A T1 bundle names, per text, the ontology release recorded with its submission,
+which can be older than the project's current release. If its texts were made
+under different releases, the newest keeps the layer ID and each older release
+gets a layer of its own, `<layer id>@<digest prefix>`, with its release and digest.
+
 `review_targets` retains full proposal records, including rejected and uncertain
 targets, separately from approved `annotations`. Decisions refer to those exact
 target versions. This keeps uncertainty and rejection interpretable without

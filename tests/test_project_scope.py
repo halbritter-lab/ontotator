@@ -27,6 +27,7 @@ from ontotator.domain.documents import OntologyRef
 from ontotator.domain.errors import AccessDenied, DomainError
 from ontotator.domain.reanchor_resolution import PendingReanchorRef
 from ontotator.domain.review import ReviewTargetSet
+from ontotator.domain.scopes import TaskScope
 from ontotator.domain.workspace import Draft, MutationEnvelope, WorkspaceKey
 from ontotator.packages.models import SearchEventRecord, ValidatedPackage
 from ontotator.storage.database import Database
@@ -219,6 +220,16 @@ CALLS: dict[str, Callable[[Repository], object]] = {
     "export_package": lambda r: r.export_package("B"),
     "edit_events": lambda r: r.edit_events(_key("B")),
     "draft_state_at": lambda r: r.draft_state_at(_key("B"), 1),
+    "held_across_release_move": lambda r: r.held_across_release_move(_key("B")),
+    "require_workspace_scope": lambda r: r.require_workspace_scope(
+        _key("B"),
+        TaskScope(
+            scope_id="other",
+            mode="independent",
+            editable_layer_ids=[],
+            reference_layer_ids=[],
+        ),
+    ),
 }
 
 

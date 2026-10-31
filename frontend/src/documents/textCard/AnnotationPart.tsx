@@ -1,3 +1,4 @@
+import { textLabel } from "../../app/identity";
 import { useId, useRef, type ReactNode } from "react";
 import type { DocumentRowView, RowSubmissionView } from "../../api/client";
 import { plural } from "../../app/labels";
@@ -107,7 +108,7 @@ export function AnnotationPart({ row, projectKey, query, submissions, canManage,
           submittedText,
           assignedText ? <>{assignedText}{modeText && `, ${modeText}`}</> : modeText,
         ]);
-        return <WorkPersonRow key={item.assignment_id} item={item} caseId={row.case_id} details={details} canManage={canManage} tools={tools}
+        return <WorkPersonRow key={item.assignment_id} item={item} caseId={row.case_id} textName={textLabel(row)} details={details} canManage={canManage} tools={tools}
           onChanged={onChanged} onRemoved={focusAfterRemoval} open={layer ? openLayer(workerName(item), item.document_id, layer.submission_id) : undefined} />;
       })}
       {removedPeople.map(layer => {

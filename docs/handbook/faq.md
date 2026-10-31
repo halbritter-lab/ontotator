@@ -62,7 +62,7 @@ Project settings are for project leads. **Ontologies**, **Users** and **New proj
 
 ### Why is "Finish & submit" disabled?
 
-Something is still open. Click **Next open item** to jump to it, or open the submit dialog: it lists every open item with **Go to**. Typical reasons are undecided proposals, carried findings not yet checked, findings after a text correction, or values not yet chosen. See [Submit the text](annotator.md#submit-the-text).
+Only for the moment a submit is running. Otherwise the button stays available, and if something is still open it shows how many items. Click **Next open item** to jump to one, or open the submit dialog: it lists every open item with **Go to**. Typical open items are undecided proposals, carried findings not yet checked, findings after a text correction, or values not yet chosen. See [Submit the text](annotator.md#submit-the-text).
 
 ### The submit dialog shows "Values not chosen yet"
 
@@ -74,7 +74,7 @@ A finding uses a modifier term (such as a severity) as the finding itself, or ha
 
 ### Submitting fails with "Replace obsolete terms" or "Replace unknown terms"
 
-The project moved to a newer ontology release and a term in your draft no longer exists there. Pick another term for that finding, or reject or replace the affected proposal. Then submit again. See [Change term, note or delete a finding](annotator.md#change-term-note-or-delete-a-finding).
+The project moved to a newer ontology release and a term in your draft, or in a proposal you confirmed, is retired or no longer exists there. Your task stays open and your draft is kept. Pick another term for that finding, or reject or replace the affected proposal. Then submit again. See [Change term, note or delete a finding](annotator.md#change-term-note-or-delete-a-finding).
 
 ### "Add finding without a text span" is disabled
 

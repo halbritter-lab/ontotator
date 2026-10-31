@@ -113,6 +113,10 @@ test("S0 synthetic-accepted: the final is on old text after v2 corrected it; en 
   const de = textRow(page, caseId, "de");
   expect(await hasDecisionEdge(de)).toBe(true);
   await expect(de.getByRole("rowheader")).toContainText("v2 corrected");
+  // The version marker does not push the table past the page at 1280 px.
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const scroller = page.locator(".documents-page .data-table-scroll");
+  expect(await scroller.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(0);
   await expect(rowCell(de, "finalization")).toContainText("Final is on old text");
   await expect(rowCell(de, "annotation")).toContainText(new RegExp(`\\d+ of \\d+ submitted · open: ${ann}`));
   await expect(rowCell(de, "waiting")).toHaveText("You");

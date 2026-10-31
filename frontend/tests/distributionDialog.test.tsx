@@ -24,17 +24,22 @@ it("omits nobody, prevents duplicate document/person and preserves exact server 
   // A clean save closes the dialog; the caller reports it (#195).
   await waitFor(() => expect(options.onClose).toHaveBeenCalledOnce());
 });
-it("retries only language refusals with the exact original context and retains unassignables", async () => {
-  vi.mocked(api.createAssignments).mockResolvedValueOnce({ created: [assignment], refused: [{ document_id: "a", username: "alice", code: "LANGUAGE_CONFIRMATION_REQUIRED" }] }).mockRejectedValueOnce(new ApiError(409, "Changed after partial success", "DISTRIBUTION_STALE"));
+it("retries language refusals as ordinary assignments: the saved rows made the context stale", async () => {
+  vi.mocked(api.createAssignments).mockResolvedValueOnce({ created: [assignment], refused: [{ document_id: "a", username: "alice", code: "LANGUAGE_CONFIRMATION_REQUIRED" }] }).mockResolvedValueOnce({ created: [assignment], refused: [] });
   const options = props(); render(<DistributionDialog {...options} />); await propose(); fireEvent.change(screen.getByLabelText("a de, person 1"), { target: { value: "alice" } }); fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
   fireEvent.click(await screen.findByRole("button", { name: "Assign anyway" }));
   await waitFor(() => expect(api.createAssignments).toHaveBeenCalledTimes(2));
-  expect(api.createAssignments).toHaveBeenLastCalledWith("p/key", { task: "annotate", seed: 123, context: proposal.context, confirm_language: true, rows: [{ document_id: "a", username: "alice" }] });
-  expect(vi.mocked(api.createAssignments).mock.calls[1][1].context).toBe(proposal.context);
-  await screen.findByRole("alert");
-  expect(screen.getByRole("button", { name: "Assign anyway" })).toHaveProperty("disabled", true);
-  expect(options.onChanged).toHaveBeenCalledOnce();
-  expect(screen.getByText(/Only 1 reader.*2 places/)).toBeDefined();
+  expect(api.createAssignments).toHaveBeenLastCalledWith("p/key", { task: "annotate", confirm_language: true, rows: [{ document_id: "a", username: "alice" }] });
+  // Everything saved: the dialog closes, the caller checks what is left.
+  await waitFor(() => expect(options.onClose).toHaveBeenCalledOnce());
+  expect(options.onChanged).toHaveBeenCalledTimes(2);
+});
+it("names the text and person of a refused row, not their IDs", async () => {
+  vi.mocked(api.createAssignments).mockResolvedValue({ created: [], refused: [{ document_id: "a", username: "alice", code: "NOT_A_MEMBER" }] });
+  render(<DistributionDialog {...props()} />); await propose(); fireEvent.change(screen.getByLabelText("a de, person 1"), { target: { value: "alice" } }); fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+  const list = await screen.findByRole("list", { name: "Refused assignments" });
+  expect(list.textContent).toContain("a de — ");
+  expect(list.textContent).not.toContain("— alice");
 });
 it("refreshes all-task project load on each proposal for people chosen as overrides", async () => {
   const charlie = { ...members[0], username: "charlie", display_name: "Charlie" };

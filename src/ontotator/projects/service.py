@@ -25,7 +25,12 @@ from ontotator.exchange.t1 import Pin, T1Profile, check_t1_profile
 from ontotator.ontology.service import OntologyService
 from ontotator.ontology.store import OntologyStore
 from ontotator.packages.models import PackageManifest
-from ontotator.projects.repin import RepinReport, build_report, rewrite_draft
+from ontotator.projects.repin import (
+    RepinReport,
+    build_report,
+    open_draft,
+    rewrite_draft,
+)
 from ontotator.storage.database import Database
 from ontotator.storage.repository import Repository, _lock_id
 from ontotator.storage.tables import (
@@ -802,7 +807,7 @@ class ProjectService:
         profile: TaskProfile,
         services: Mapping[str, OntologyService],
     ) -> None:
-        """Rewrite every draft term the new releases move (see ``projects.repin``)."""
+        """Rewrite the open-draft terms the new releases move (see ``projects.repin``)."""
         if not services:
             return
         ontology_of_layer = {
@@ -810,7 +815,7 @@ class ProjectService:
         }
         drafts = conn.execute(
             select(DraftRow.draft_key, DraftRow.document_id)
-            .where(DraftRow.project_id == project_id)
+            .where(DraftRow.project_id == project_id, open_draft(project_id))
             .order_by(DraftRow.draft_key)
         ).all()
         target = {oid: service.ref.sha256 for oid, service in services.items()}

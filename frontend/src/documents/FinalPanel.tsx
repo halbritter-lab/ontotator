@@ -19,6 +19,7 @@ import {
   acceptQuestion, AGREEMENT_EXPLANATION, agreementText, allMatchText, detailDifferenceLines, remainingText, changedPassagesText, compareSummary, consolidateHint,
   consolidationInputs, decidedLine, decisionKind, earlyFinal, keepLabel, listedSubmissions, nextFinalDecision, nextOtherDecision, onlyHereText, panelMode, panelStep,
   consolidationBreakdown, personName, savedText, submissionLine, submissionName, submissionWhen, textChangedLine, type NextRow,
+  noMoreFinalsText,
 } from "./finalPanelText";
 import { versionName } from "./labels";
 import { submissionVersion } from "./SubmissionsTable";
@@ -94,7 +95,7 @@ export function DecisionBlock(props: DecisionBlockProps): JSX.Element | null {
   const [busy, setBusy] = useState<string | null>(null);
   const [failure, setFailure] = useState<FinalConfirmFailure | null>(null);
   const [success, setSuccess] = useState<Success | null>(null);
-  const [noneLeft, setNoneLeft] = useState<{ other: NextRow | null } | null>(null);
+  const [noneLeft, setNoneLeft] = useState<{ text: string; other: NextRow | null } | null>(null);
   const [focusHeading, setFocusHeading] = useState(0);
   const pending = useRef<Pending | null>(null);
   const lastRequest = useRef<{ request: FinalConfirmRequest; triggerId: string } | null>(null);
@@ -112,8 +113,8 @@ export function DecisionBlock(props: DecisionBlockProps): JSX.Element | null {
       announce(`Final result saved. Next: ${rowName(next.row)}.`);
       onAdvance(rowKeyOf(next.row));
     } else {
-      announce("Final result saved. No more final results to decide.");
-      setNoneLeft({ other: nextOtherDecision(page, saved.rowKey) });
+      announce(`Final result saved. ${noMoreFinalsText(page)}`);
+      setNoneLeft({ text: noMoreFinalsText(page), other: nextOtherDecision(page, saved.rowKey) });
     }
     setFocusHeading(value => value + 1);
     // Only a new page completes a save.
@@ -183,7 +184,7 @@ export function DecisionBlock(props: DecisionBlockProps): JSX.Element | null {
 
   let content: ReactNode;
   if (noneLeft) {
-    content = <NoneLeft other={noneLeft.other} onRowAction={props.onRowAction} onClose={close} />;
+    content = <NoneLeft text={noneLeft.text} other={noneLeft.other} onRowAction={props.onRowAction} onClose={close} />;
   } else if (!page || (!state.data && state.loading)) {
     content = <p className="cell-secondary">Loading submissions…</p>;
   } else if (!row) {
@@ -223,9 +224,9 @@ function FailureNotice({ failure: shown, onReview, onRetry, busy: saving }: { fa
   </div>;
 }
 
-function NoneLeft({ other, onRowAction, onClose }: { other: NextRow | null; onRowAction?: DecisionBlockProps["onRowAction"]; onClose: () => void }): JSX.Element {
+function NoneLeft({ text, other, onRowAction, onClose }: { text: string; other: NextRow | null; onRowAction?: DecisionBlockProps["onRowAction"]; onClose: () => void }): JSX.Element {
   return <div className="final-panel-none">
-    <p>No more final results to decide.</p>
+    <p>{text}</p>
     {other && onRowAction && <p><Button onClick={() => onRowAction(other.row, other.step)}>
       {`Next decision: ${rowName(other.row)} (${decisionKind(other.step)})`}
     </Button></p>}

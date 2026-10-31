@@ -6,7 +6,7 @@ from sqlalchemy import ColumnElement, Connection, and_, or_, select, update
 
 from ontotator.auth.audit import Actor, record_audit
 from ontotator.authz.policy import Role
-from ontotator.storage.tables import AssignmentRow
+from ontotator.storage.tables import AssignmentRow, DocumentRow
 
 
 def unsupported_assignments(
@@ -14,7 +14,8 @@ def unsupported_assignments(
 ) -> list[dict[str, object]]:
     """Lock active unsubmitted work whose task role is being removed.
 
-    A lead correction (FD1, FD2) rests on the lead role alone.
+    A translation review rests on the annotator role, a lead correction (FD1,
+    FD2) on the lead role alone.
     """
     tasks = [
         task
@@ -22,16 +23,30 @@ def unsupported_assignments(
         if role in removed_roles
     ]
     supported: ColumnElement[bool] = AssignmentRow.task.in_(tasks)
-    if "lead" in removed_roles:
-        supported = or_(
-            supported,
+    for role, lead_correction in (("annotator", False), ("lead", True)):
+        if role in removed_roles:
+            supported = or_(
+                supported,
+                and_(
+                    AssignmentRow.task == "translation_review",
+                    AssignmentRow.lead_correction.is_(lead_correction),
+                ),
+            )
+    rows = conn.execute(
+        select(
+            AssignmentRow.id,
+            AssignmentRow.document_id,
+            AssignmentRow.task,
+            DocumentRow.case_id,
+            DocumentRow.language,
+        )
+        .join(
+            DocumentRow,
             and_(
-                AssignmentRow.task == "translation_review",
-                AssignmentRow.lead_correction.is_(True),
+                DocumentRow.project_id == AssignmentRow.project_id,
+                DocumentRow.document_id == AssignmentRow.document_id,
             ),
         )
-    rows = conn.execute(
-        select(AssignmentRow.id, AssignmentRow.document_id, AssignmentRow.task)
         .where(
             AssignmentRow.project_id == project_id,
             AssignmentRow.user_id == user_id,
@@ -40,7 +55,7 @@ def unsupported_assignments(
             supported,
         )
         .order_by(AssignmentRow.id)
-        .with_for_update(key_share=True)
+        .with_for_update(key_share=True, of=AssignmentRow)
     ).mappings()
     return [dict(row) for row in rows]
 

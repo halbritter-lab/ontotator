@@ -21,6 +21,9 @@ export interface RoundFacts {
 }
 
 const roundTitle = (ordinal: number | null | undefined): string => (ordinal ? `Round ${ordinal}` : "This round");
+/** Rounds count per text version, so a carry can continue a round of the same number on an earlier version. */
+const sourceRound = (round: Pick<RoundFacts, "round_ordinal" | "source_round_ordinal">): string | null => !round.source_round_ordinal ? null
+  : `Round ${round.source_round_ordinal}${round.source_round_ordinal === round.round_ordinal ? " of an earlier version" : ""}`;
 const plural = (count: number, one: string, many: string): string => `${count} ${count === 1 ? one : many}`;
 
 function versionText(language: string | null | undefined, version: number | null | undefined): string {
@@ -38,7 +41,8 @@ export function roundIdentity(round: RoundFacts, options: FormatTimeOptions = {}
     case "consolidation":
       return `${title}, consolidation of ${plural(round.input_submission_ids?.length ?? 0, "submission", "submissions")}`;
     case "carry_forward": {
-      const source = round.source_round_ordinal ? `Round ${round.source_round_ordinal} submission` : "an earlier submission";
+      const from = sourceRound(round);
+      const source = from ? `${from} submission` : "an earlier submission";
       const time = round.source_submission_recorded_at ? ` (${formatTime(round.source_submission_recorded_at, options)})` : "";
       return withVersion(`continued from ${source}${time}`);
     }
@@ -110,9 +114,9 @@ export function sourceOptionLabel(source: CarrySourceFacts, options: FormatTimeO
 }
 
 /** Starting point in the Work rounds table: "from Round 2 submission", "restarted empty", … */
-export function roundStartingPoint(round: Pick<RoundFacts, "kind" | "source_round_ordinal" | "input_submission_ids">): string {
+export function roundStartingPoint(round: Pick<RoundFacts, "kind" | "round_ordinal" | "source_round_ordinal" | "input_submission_ids">): string {
   switch (round.kind) {
-    case "carry_forward": return round.source_round_ordinal ? `from Round ${round.source_round_ordinal} submission` : "from an earlier submission";
+    case "carry_forward": return sourceRound(round) ? `from ${sourceRound(round)} submission` : "from an earlier submission";
     case "clean_restart": return "restarted empty";
     case "consolidation": return `consolidation of ${plural(round.input_submission_ids?.length ?? 0, "submission", "submissions")}`;
     case "text_change": return "carried after text change";
@@ -124,5 +128,5 @@ export function roundStartingPoint(round: Pick<RoundFacts, "kind" | "source_roun
 /** Short toolbar badge of a carry-forward round ("Round 3, continued from Round 2"); undefined otherwise. */
 export function roundBadge(round: Pick<RoundFacts, "kind" | "round_ordinal" | "source_round_ordinal"> | null | undefined): string | undefined {
   if (round?.kind !== "carry_forward" || !round.round_ordinal) return undefined;
-  return `Round ${round.round_ordinal}, continued from ${round.source_round_ordinal ? `Round ${round.source_round_ordinal}` : "an earlier submission"}`;
+  return `Round ${round.round_ordinal}, continued from ${sourceRound(round) ?? "an earlier submission"}`;
 }

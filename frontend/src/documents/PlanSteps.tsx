@@ -17,9 +17,9 @@ export type PlanMode = "proposals" | "scratch";
 
 export const REVIEW_HELP = { on: "On: a person reviews the machine translation before annotation.", off: "Off: the translation is annotated as it is." } as const;
 export const ANNOTATION_LABELS = { off: "Off (not annotated)", proposals: "Annotate from proposals", scratch: "Annotate from scratch" } as const;
-/** Without a count (bulk: the counts differ per text) the sentence names "the tool proposals". */
+/** Without a count (bulk: the counts differ per text; none yet) the sentence names "the tool proposals". */
 export const proposalsHelp = (count?: number): string =>
-  `Annotate from proposals: each annotator confirms, rejects or corrects the ${count === undefined ? "" : `${count} `}tool proposals and adds the findings the tool missed.`;
+  `Annotate from proposals: each annotator confirms, rejects or corrects the ${count ? `${count} ` : ""}tool proposals and adds the findings the tool missed.`;
 export const SCRATCH_HELP = "Annotate from scratch: annotators start from the plain text and do not see the proposals.";
 export const NO_PROPOSALS_REASON = "This text has no tool proposals, so it is annotated from scratch.";
 export const LOCK_REASON = "The annotation of this text has already started this way, so it cannot change.";
@@ -246,7 +246,7 @@ export function CardPlanSelect({ row, step, groupRevision, saves, modeChange }: 
   const modeWords = textMode?.mode === "scratch" ? "from scratch" : "from proposals";
   const lockLine = !locked ? null : submittedWork
     ? `Fixed: ${starterName} has submitted work started ${modeWords}. Changing the mode discards that work.`
-    : `Fixed: ${starterName} has started ${modeWords}. Remove the unsubmitted assignment below to change it.`;
+    : `Fixed: ${starterName} ${starter?.status === "open" ? "is assigned to annotate" : "has started"} ${modeWords}. Remove the unsubmitted assignment below to change it.`;
   const choices = step === "review"
     ? [{ value: "on", label: "On" }, { value: "off", label: "Off" }]
     : [{ value: "proposals", label: CARD_ANNOTATION_OPTIONS.proposals }, { value: "scratch", label: CARD_ANNOTATION_OPTIONS.scratch }, { value: "off", label: CARD_ANNOTATION_OPTIONS.off }];

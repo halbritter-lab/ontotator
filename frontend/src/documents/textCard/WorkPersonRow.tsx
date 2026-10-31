@@ -44,9 +44,11 @@ const REVOKE_NOUN: Readonly<Record<CardWorkItem["task"], string>> = { annotate: 
  * (`removeAssignment`), everything else (submitted or reopened work, reviews, consolidations) is revoked
  * (`revokeAssignment`); the confirm dialog says which. A consolidation is not reassigned (D1).
  */
-export function WorkPersonRow({ item, caseId, details, canManage, tools, onChanged, onRemoved, open }: {
+export function WorkPersonRow({ item, caseId, textName, details, canManage, tools, onChanged, onRemoved, open }: {
   item: CardWorkItem;
   caseId: string;
+  /** The text's name in the assignment dialogs. */
+  textName: string;
   details?: ReactNode;
   /** The lead: Reassign…, Reopen…, Remove…. */
   canManage: boolean;
@@ -79,7 +81,7 @@ export function WorkPersonRow({ item, caseId, details, canManage, tools, onChang
     {actions}
     {dialog === "remove" && <RemoveAssignmentDialog assignmentId={item.assignment_id} name={name} caseId={caseId}
       onCancel={() => setDialog(null)} onRemoved={() => { setDialog(null); removed(); }} />}
-    {dialog && dialog !== "remove" && assignment && tools && <AssignmentActions assignment={assignment} members={tools.members} open={dialog}
+    {dialog && dialog !== "remove" && assignment && tools && <AssignmentActions assignment={assignment} textName={textName} members={tools.members} open={dialog}
       // The page's assignments reload refreshes the rows too (one reload, not two).
       onChanged={() => { tools.onAssignmentsChanged(); if (dialog === "revoke") onRemoved?.(nextRowTarget(row.current)); }} onClose={() => setDialog(null)} />}
   </PersonRow>;

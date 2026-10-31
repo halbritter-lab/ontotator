@@ -1,4 +1,4 @@
-import{r,a as m,j as a,b as h}from"./index-DWH_Q2s0.js";import{M as f,r as g}from"./index-Biax6k9W.js";function w(){const[e,t]=r.useState(null);return r.useEffect(()=>{let o=!0;return m.getAbout().then(n=>{o&&t(n)},()=>{}),()=>{o=!1}},[]),e?a.jsxs("p",{className:"help-version",title:e.revision??void 0,children:["Ontotator ",e.version,e.revision&&a.jsxs(a.Fragment,{children:[" · commit ",e.revision.slice(0,7)]})]}):null}const y=`# Ontotator user handbook
+import{r,a as m,j as a,b as h}from"./index-BmEOAHfG.js";import{M as f,r as g}from"./index-BWYYJ50k.js";function w(){const[e,t]=r.useState(null);return r.useEffect(()=>{let o=!0;return m.getAbout().then(n=>{o&&t(n)},()=>{}),()=>{o=!1}},[]),e?a.jsxs("p",{className:"help-version",title:e.revision??void 0,children:["Ontotator ",e.version,e.revision&&a.jsxs(a.Fragment,{children:[" · commit ",e.revision.slice(0,7)]})]}):null}const y=`# Ontotator user handbook
 
 This handbook explains how to work with Ontotator in the browser. It is for everyone who uses the app: annotators, translation reviewers, consolidators, leads and system administrators. It describes the version of Ontotator that you open it from. If you run the server, read the [server operations guide (for server operators)](../operations.md) instead.
 
@@ -331,7 +331,7 @@ The toolbar shows the text name, its language and the mode:
 
 Next to the mode, the save status tells you whether your work is stored: **Saved**, **Saving...** or **Unsaved changes**. Work is saved automatically; there is no save button. If it reads **Offline** or shows an error, click **Retry**.
 
-The **More** menu holds **Work rounds**, **Report a text problem…**, the guidelines (for example *Guidelines v2*) and **Keyboard shortcuts (?)**.
+The **More** menu holds **Work rounds**, **Report a text problem…**, the guidelines (for example *Guidelines v2*), **Keyboard shortcuts (?)** and **Help for this screen**.
 
 If the text was changed elsewhere, a **Revision conflict** notice appears; click **Reload case**. A submitted task is read-only.
 
@@ -548,7 +548,7 @@ Before you start: submitting says you checked the whole text for further finding
 2. Click **Finish & submit text**. While items are open, the button shows how many. The full editor of a consolidation has no submit button; see [Work in the full editor](consolidator.md#work-in-the-full-editor).
 3. A dialog named after the text, for example *Submit CASE-1 en?*, lists what is still open: **Carried findings to check**, **Findings that need attention**, **Findings after text correction**, **Proposals not decided**. Click **Go to** to fix an item.
 4. When nothing blocks, click **Submit text**. If only warnings are left, the button reads **Submit with** and the number of warnings; see [Confirm values and acknowledge warnings](#confirm-values-and-acknowledge-warnings-in-the-submit-dialog) first.
-5. The next open task opens, preferably one of the same kind (another review after a review), or **My tasks** if none is left. To see what you sent, click **View result** in the message.
+5. The next open task opens, preferably one of the same kind (another review after a review), or **My tasks** if none is left. Paused tasks are passed over. To see what you sent, click **View result** in the message.
 
 The task is now read-only. To change it later, [start a new work round](#start-a-new-work-round) yourself under **More** › **Work rounds**; you do not need the lead for that. The submit dialog says the same.
 
@@ -937,7 +937,7 @@ Project settings are for project leads. **Ontologies**, **Users** and **New proj
 
 ### Why is "Finish & submit" disabled?
 
-Something is still open. Click **Next open item** to jump to it, or open the submit dialog: it lists every open item with **Go to**. Typical reasons are undecided proposals, carried findings not yet checked, findings after a text correction, or values not yet chosen. See [Submit the text](annotator.md#submit-the-text).
+Only for the moment a submit is running. Otherwise the button stays available, and if something is still open it shows how many items. Click **Next open item** to jump to one, or open the submit dialog: it lists every open item with **Go to**. Typical open items are undecided proposals, carried findings not yet checked, findings after a text correction, or values not yet chosen. See [Submit the text](annotator.md#submit-the-text).
 
 ### The submit dialog shows "Values not chosen yet"
 
@@ -949,7 +949,7 @@ A finding uses a modifier term (such as a severity) as the finding itself, or ha
 
 ### Submitting fails with "Replace obsolete terms" or "Replace unknown terms"
 
-The project moved to a newer ontology release and a term in your draft no longer exists there. Pick another term for that finding, or reject or replace the affected proposal. Then submit again. See [Change term, note or delete a finding](annotator.md#change-term-note-or-delete-a-finding).
+The project moved to a newer ontology release and a term in your draft, or in a proposal you confirmed, is retired or no longer exists there. Your task stays open and your draft is kept. Pick another term for that finding, or reject or replace the affected proposal. Then submit again. See [Change term, note or delete a finding](annotator.md#change-term-note-or-delete-a-finding).
 
 ### "Add finding without a text span" is disabled
 
@@ -1076,7 +1076,7 @@ Before you start: you need the address of your Ontotator server, your username a
 
 ## 2. Find your task
 
-After login you see **My tasks**, or **Projects** the first time.
+After login you see **My tasks**. Leads and administrators see **Projects** the first time.
 
 1. Click **My tasks** in the sidebar.
 2. On the tab **To do**, find a row whose **Task** is *Annotation, from scratch* or *Annotation, from proposals*.
@@ -1246,7 +1246,7 @@ Each row is one task. The **Task** column says what to do, for example **Annotat
 
 - **Reopened**: the lead reopened your submission. Click the badge to read why.
 - A **Consolidation** task shows the lead's reason under the task, for example *Reason from the lead: Term and assertion differ*, if the lead gave one.
-- **Paused**: the task waits for a decision on a problem report. **Answer to your report** means the lead has replied.
+- **Paused**: the task waits for a decision on a problem report. A long reason is cut off here; the task shows all of it. **Answer to your report** means the lead has replied.
 - **Waiting for translation review**: the lead assigned the annotation ahead, and the translation is still being reviewed. You cannot start yet; the **Action** column says **Opens once a translation is accepted**. Once it is accepted, the task shows **Start** by itself. A rejected review keeps the task waiting. If the review leads to a corrected version, the task opens on that version.
 - **Waiting for the project lead**: the text of this task was corrected and the task cannot follow by itself. You cannot start it; the lead decides how it continues, and it may leave your list.
 
@@ -1481,7 +1481,7 @@ In the card:
 What for: see what happened to a text and its technical IDs.
 
 1. In the text card footer, click **History** or **Details**.
-   - **History** lists all activity, newest first, with reviewers' reasons.
+   - **History** lists all activity, newest first, with reviewers' reasons, reassignments and mode changes.
    - **Details** shows the **Plan**, the **Problem reports** and the **Technical details**.
 2. Click **Back** to return to the path.
 
@@ -1572,17 +1572,23 @@ What for: set the work plan for a selection.
 
 What for: switch one text between from proposals, from scratch and not annotated.
 
-Before you start: once someone started or submitted work in one mode, the mode is fixed.
-
 1. Open the text card and click **Annotation**.
 2. Under **Annotation**, choose **From proposals**, **From scratch** or **Off**. It saves at once.
+
+Once someone is assigned, started or submitted work, a line *Fixed: …* says who fixes the mode:
+
+- While the work is not submitted, remove the assignment ([Remove, reassign or reopen an assignment](#remove-reassign-or-reopen-an-assignment)), then choose.
+- To change it anyway, click **Change mode…** next to the line. The dialog names whose work is affected. Enter the **Reason**, then click **Change mode**, or **Discard work and change mode** if submitted work is discarded. Their assignments are removed. Discarded work is kept, not deleted: it no longer counts for progress, consolidation, the final result or exports.
+- **Restore…** in the text card brings the discarded work back while no new annotation has started.
+
+**History** in the text card shows the change and its reason.
 
 ### Assign work to the selected texts
 
 What for: give translation reviews or annotations to people.
 
 1. Select the texts, then click the assign button in the selection bar, for example **Assign annotation…**.
-2. Check what the selection needs. If it needs more than one task or language, the line **This selection needs** lists every step, one task in one language each, for example *Translation review de ✓ · Annotation de · Annotation en*. Steps you are through have a tick, the current step is bold, and *Step 2 of 3* says where you are. Then check the **Task**.
+2. Check what the selection needs. If it needs more than one task or language, the line **This selection needs** lists every step, one task in one language each, for example *Translation review de ✓ · Annotation de · Annotation en*. Steps you are through have a tick, a skipped step reads *(skipped)*, the current step is bold, and *Step 2 of 3* says where you are. Then check the **Task**. Annotation that waits for a review you skipped is no longer listed: it cannot start in this dialog.
 3. In the table of people (**Person**, **Reads**, **Open tasks**), pick the reviewer, or tick everyone who should annotate. The task has one language: each ticked person gets every selected text in that language that still has a free place. *Administrator* marks a system administrator; leave them unticked unless they take part.
 4. Read the summary below the table, for example *Ana Weber gets 3 translation reviews (de).*
 5. Click the assign button, for example *Assign 20*.
@@ -1626,7 +1632,9 @@ The proposal uses the languages in each person's profile: a person is proposed f
 3. Check the proposal. Change a person in any cell, or click **Propose again**. Texts nobody can take are listed under **Unassignable documents**.
 4. Click **Confirm**. This covers only the task shown in the assign dialog. If the selection needs more, the assign dialog comes back on the next step; otherwise it closes and the message says the assignments are saved.
 
-If you chose someone whose profile lists other languages than the text needs, the dialog stays open after **Confirm** and asks; click **Assign anyway**, then **Close**.
+If you chose someone whose profile lists other languages than the text needs, the dialog stays open after **Confirm** and asks; click **Assign anyway**. The other rows are already saved.
+
+If a text is still without anyone after you close the proposal, the assign dialog comes back on the same step and names it. Choose someone there, or **Close**: the closing message lists what is left unassigned.
 
 ### Remove, reassign or reopen an assignment
 
@@ -1638,7 +1646,7 @@ A task that waits for the translation review shows **Waiting for review** in the
 
 1. Open the text card and click **Annotation** (or **Translation** for reviews).
 2. In the person's row, click one of these:
-   - **Reassign…**: choose the **New assignee** and click **Reassign**.
+   - **Reassign…**: choose the **New assignee** and click **Reassign**. If work has started, confirm with **Reassign started work**. The new person starts from the document's inputs. The previous draft stays stored, but nobody can open it, its author included.
    - **Reopen…**: optional **Reason (optional)**, then **Reopen assignment**.
    - **Remove…**: confirm with **Remove** or **Confirm removal**.
 
@@ -1853,6 +1861,8 @@ What for: download the accepted final results.
 
 Click **Check again** after you accepted more results. **What is in the file?** explains the contents. Values that annotators never confirmed are marked as *defaulted* in the file; unresolved proposals keep their reviewer flag and note. The file formats are described in the [scientific workflow guide](../scientific-workflow.md) and the [translation review export guide](../translation-review-export.md).
 
+Each text in an export names the ontology release its work was made under, which can be older than the project's current release. If the texts of one export were made under different releases, the newest keeps the layer ID (for example \`hpo-layer\`) and each older release gets a layer of its own (\`hpo-layer@<start of its checksum>\`), which the file lists with its release and checksum.
+
 ### Export research data
 
 What for: download raw material for analysis. People appear as pseudonyms.
@@ -2010,12 +2020,14 @@ Before you start: an administrator must have uploaded the new release ([Upload o
 3. Click **Check changes**.
 4. Read the panel **Check before moving**:
    - The first table (**Becomes**, **Why**) lists draft terms that will be replaced by their successor.
-   - The second table (**Status**, **Suggestions**) lists draft terms that are obsolete or missing in the new release. Their annotators must change them before submitting.
+   - The second table (**Status**, **Suggestions**) lists draft terms that are obsolete or missing in the new release, and proposals on such terms that are not yet rejected or replaced. Proposals are never rewritten. Their annotators must change them before submitting.
 5. Click **Move to this release**, or **Cancel**. The page says **Ontology release changed.**
 
 ![The check before moving to another release. The first table shows which draft terms are replaced automatically, the second which ones annotators must change by hand.](images/lead-move-release-check.png)
 
 If drafts changed meanwhile, you see **Drafts or pins changed since the check. Check the changes again before moving.** Click **Check changes** again.
+
+Tasks already opened stay open and keep their drafts. A submitted task shows what was submitted, also when it is reopened: terms the new release retired are then flagged at submit. Exports name the release recorded with each text ([Export](lead-results.md#export)).
 
 ## Set the submission rules
 
@@ -2110,7 +2122,7 @@ Warning: if the person still has open work, removing them revokes their open ass
 1. Open **Settings**, tab **People**.
 2. In the person's row, click **Remove…**.
 3. Confirm with **Remove from project**.
-4. If the person still has open work, the dialog **Revoke affected assignments?** lists it. Click **Remove and revoke their open assignments**.
+4. If the person still has open work, the dialog **Revoke affected assignments?** lists it, annotations and translation reviews alike. Click **Remove and revoke their open assignments**.
 
 ## Publish the first or a new guideline version
 
@@ -2183,4 +2195,4 @@ The lead's tasks are in three chapters:
 10. Export the final results: [Export final results](lead-results.md#export-final-results).
 
 Try it with the demo project: the [demo project guide](../../examples/demo-project/README.md) walks through every step with invented clinical letters, tool proposals, translations and guidelines.
-`,I="/assets/admin-new-project-Dh9HTAXI.png",W="/assets/admin-setup-code-DQqCxWzi.png",R="/assets/annotator-carried-finding-Br5si5VR.png",_="/assets/annotator-editor-C0STFqvB.png",P="/assets/annotator-finding-values-D2ECSdqP.png",D="/assets/annotator-new-finding-DTdP61Oo.png",M="/assets/annotator-proposal-review-HROkp7Gb.png",E="/assets/annotator-submit-dialog-J9SPtleB.png",N="/assets/annotator-translation-review-pFw-1CUJ.png",U="/assets/consolidator-group-table-DvlDfTN2.png",Y="/assets/consolidator-submit-dialog-B-2o_-oH.png",F="/assets/getting-started-my-tasks-8Hf7T-Ml.png",L="/assets/getting-started-set-password-B-t2wqsk.png",H="/assets/lead-assign-DqQEZGGX.png",B="/assets/lead-compare-results-C98HgX8F.png",G="/assets/lead-documents-DgeyQuMh.png",q="/assets/lead-export-CL6Mxn2k.png",z="/assets/lead-move-release-check-Ca3qN1WP.png",K="/assets/lead-problem-report-C2_5wfUT.png",V="/assets/lead-progress-BpFmDc1i.png",Q="/assets/lead-text-card-D0-gnUHT.png",Z="/assets/lead-upload-preview-BDVHW6J3.png",$="/assets/lead-work-plan-CHvPnaDg.png",J="/assets/workflow-Dii9V6xB.png",X="https://github.com/halbritter-lab/ontotator/blob/main",l="https://handbook.invalid/docs/handbook/",ee=Object.assign({"../../../docs/handbook/README.md":y,"../../../docs/handbook/admin.md":k,"../../../docs/handbook/annotator.md":b,"../../../docs/handbook/consolidator.md":v,"../../../docs/handbook/faq.md":x,"../../../docs/handbook/first-task.md":T,"../../../docs/handbook/getting-started.md":C,"../../../docs/handbook/lead-documents.md":A,"../../../docs/handbook/lead-results.md":S,"../../../docs/handbook/lead-settings.md":j,"../../../docs/handbook/lead.md":O}),te=Object.assign({"../../../docs/handbook/images/admin-new-project.png":I,"../../../docs/handbook/images/admin-setup-code.png":W,"../../../docs/handbook/images/annotator-carried-finding.png":R,"../../../docs/handbook/images/annotator-editor.png":_,"../../../docs/handbook/images/annotator-finding-values.png":P,"../../../docs/handbook/images/annotator-new-finding.png":D,"../../../docs/handbook/images/annotator-proposal-review.png":M,"../../../docs/handbook/images/annotator-submit-dialog.png":E,"../../../docs/handbook/images/annotator-translation-review.png":N,"../../../docs/handbook/images/consolidator-group-table.png":U,"../../../docs/handbook/images/consolidator-submit-dialog.png":Y,"../../../docs/handbook/images/getting-started-my-tasks.png":F,"../../../docs/handbook/images/getting-started-set-password.png":L,"../../../docs/handbook/images/lead-assign.png":H,"../../../docs/handbook/images/lead-compare-results.png":B,"../../../docs/handbook/images/lead-documents.png":G,"../../../docs/handbook/images/lead-export.png":q,"../../../docs/handbook/images/lead-move-release-check.png":z,"../../../docs/handbook/images/lead-problem-report.png":K,"../../../docs/handbook/images/lead-progress.png":V,"../../../docs/handbook/images/lead-text-card.png":Q,"../../../docs/handbook/images/lead-upload-preview.png":Z,"../../../docs/handbook/images/lead-work-plan.png":$,"../../../docs/handbook/images/workflow.png":J}),c=e=>e.slice(e.lastIndexOf("/")+1),i=Object.fromEntries(Object.entries(ee).map(([e,t])=>[c(e).replace(/\.md$/,""),t])),ne=Object.fromEntries(Object.entries(te).map(([e,t])=>[`images/${c(e)}`,t]));function oe(e){var t;return((t=/^# +(.+)$/m.exec(i[e]??""))==null?void 0:t[1].trim())??e}function ae(){const e=[...(i.README??"").matchAll(/\]\(([A-Za-z0-9_-]+)\.md[)#]/g)].map(t=>t[1]);return[...new Set(["README",...e,...Object.keys(i).sort()])].filter(t=>t in i)}function se(e){return e.toLowerCase().replace(/[^\p{L}\p{M}\p{N}\p{Pc} -]/gu,"").replace(/ /g,"-")}function ie(){const e=new Map;return t=>{const o=se(t);let n=o;for(;e.has(n);){const s=e.get(o)+1;e.set(o,s),n=`${o}-${s}`}return e.set(n,0),n}}function re(e,t){var d;if(/^[a-z][a-z0-9+.-]*:/i.test(e))return{kind:"external",href:e};const o=new URL(e,`${l}${t}.md`),n=decodeURIComponent(o.hash.slice(1)),s=(d=/^\/docs\/handbook\/([A-Za-z0-9_-]+)\.md$/.exec(o.pathname))==null?void 0:d[1];return s&&s in i?s===t&&n?{kind:"anchor",id:n}:{kind:"chapter",href:h({name:"help",chapter:s,...n?{section:n}:{}})}:{kind:"external",href:`${X}${o.pathname}${o.hash}`}}function he(e,t){if(/^[a-z][a-z0-9+.-]*:/i.test(e))return null;const o=new URL(e,`${l}${t}.md`).pathname.replace(/^\/docs\/handbook\//,"");return ne[o]??null}const p=e=>e.type==="text"?e.value:"children"in e?e.children.map(p).join(""):"";function de(){return e=>{const t=ie(),o=n=>n.children.forEach(s=>{s.type==="element"&&(/^h[1-6]$/.test(s.tagName)?s.properties.id=t(p(s)):o(s))});o(e)}}function u(e){var t;(t=document.getElementById(e))==null||t.scrollIntoView()}const le=e=>e.button===0&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey&&!e.altKey;function ce(e){return{a:({href:t,children:o})=>{if(!t)return a.jsx(a.Fragment,{children:o});const n=re(t,e);return n.kind==="external"?a.jsx("a",{href:n.href,target:"_blank",rel:"noopener noreferrer",children:o}):n.kind==="chapter"?a.jsx("a",{href:n.href,children:o}):a.jsx("a",{href:h({name:"help",chapter:e,section:n.id}),onClick:s=>{le(s)&&(s.preventDefault(),u(n.id))},children:o})},img:({src:t,alt:o})=>{const n=t?he(t,e):null;return n?a.jsx("a",{className:"help-image-link",href:n,target:"_blank",rel:"noopener noreferrer",title:"Open the image at full size in a new tab",children:a.jsx("img",{className:"help-image",src:n,alt:o??"",loading:"lazy"})}):a.jsx("span",{className:"guideline-image-text",children:o?`Image: ${o}`:"Image"})},table:({children:t})=>a.jsx("div",{className:"guideline-table-scroll",tabIndex:0,role:"region","aria-label":"Table",children:a.jsx("table",{children:t})})}}function me({chapter:e="README",section:t}){const o=i[e];return r.useEffect(()=>{var n,s;t?u(t):(s=(n=document.getElementById("main"))==null?void 0:n.scrollTo)==null||s.call(n,0,0)},[e,t]),a.jsxs("div",{className:"help-page",children:[a.jsxs("nav",{className:"help-chapters","aria-label":"Handbook chapters",children:[a.jsx("ul",{children:ae().map(n=>a.jsx("li",{children:a.jsx("a",{href:h({name:"help",chapter:n}),"aria-current":n===e?"page":void 0,children:oe(n)})},n))}),a.jsx(w,{})]}),a.jsx("article",{className:"guideline-document help-document",children:o===void 0?a.jsxs(a.Fragment,{children:[a.jsx("h1",{children:"Chapter not found"}),a.jsxs("p",{children:["This handbook has no chapter “",e,"”. Pick one from the list."]})]}):a.jsx("div",{className:"guideline-markdown",children:a.jsx(f,{remarkPlugins:[g],rehypePlugins:[de],skipHtml:!0,components:ce(e),children:o})})})]})}export{me as default};
+`,I="/assets/admin-new-project-Dh9HTAXI.png",R="/assets/admin-setup-code-DQqCxWzi.png",W="/assets/annotator-carried-finding-Br5si5VR.png",_="/assets/annotator-editor-C0STFqvB.png",P="/assets/annotator-finding-values-D2ECSdqP.png",D="/assets/annotator-new-finding-DTdP61Oo.png",E="/assets/annotator-proposal-review-HROkp7Gb.png",M="/assets/annotator-submit-dialog-J9SPtleB.png",N="/assets/annotator-translation-review-pFw-1CUJ.png",U="/assets/consolidator-group-table-DvlDfTN2.png",Y="/assets/consolidator-submit-dialog-B-2o_-oH.png",F="/assets/getting-started-my-tasks-8Hf7T-Ml.png",L="/assets/getting-started-set-password-B-t2wqsk.png",H="/assets/lead-assign-D1VUbjPF.png",B="/assets/lead-compare-results-C98HgX8F.png",G="/assets/lead-documents-DgeyQuMh.png",q="/assets/lead-export-CL6Mxn2k.png",z="/assets/lead-move-release-check-Ca3qN1WP.png",K="/assets/lead-problem-report-C2_5wfUT.png",V="/assets/lead-progress-BpFmDc1i.png",Q="/assets/lead-text-card-D0-gnUHT.png",Z="/assets/lead-upload-preview-88Rdzt-O.png",$="/assets/lead-work-plan-CHvPnaDg.png",J="/assets/workflow-Dii9V6xB.png",X="https://github.com/halbritter-lab/ontotator/blob/main",l="https://handbook.invalid/docs/handbook/",ee=Object.assign({"../../../docs/handbook/README.md":y,"../../../docs/handbook/admin.md":k,"../../../docs/handbook/annotator.md":b,"../../../docs/handbook/consolidator.md":v,"../../../docs/handbook/faq.md":x,"../../../docs/handbook/first-task.md":T,"../../../docs/handbook/getting-started.md":C,"../../../docs/handbook/lead-documents.md":A,"../../../docs/handbook/lead-results.md":S,"../../../docs/handbook/lead-settings.md":j,"../../../docs/handbook/lead.md":O}),te=Object.assign({"../../../docs/handbook/images/admin-new-project.png":I,"../../../docs/handbook/images/admin-setup-code.png":R,"../../../docs/handbook/images/annotator-carried-finding.png":W,"../../../docs/handbook/images/annotator-editor.png":_,"../../../docs/handbook/images/annotator-finding-values.png":P,"../../../docs/handbook/images/annotator-new-finding.png":D,"../../../docs/handbook/images/annotator-proposal-review.png":E,"../../../docs/handbook/images/annotator-submit-dialog.png":M,"../../../docs/handbook/images/annotator-translation-review.png":N,"../../../docs/handbook/images/consolidator-group-table.png":U,"../../../docs/handbook/images/consolidator-submit-dialog.png":Y,"../../../docs/handbook/images/getting-started-my-tasks.png":F,"../../../docs/handbook/images/getting-started-set-password.png":L,"../../../docs/handbook/images/lead-assign.png":H,"../../../docs/handbook/images/lead-compare-results.png":B,"../../../docs/handbook/images/lead-documents.png":G,"../../../docs/handbook/images/lead-export.png":q,"../../../docs/handbook/images/lead-move-release-check.png":z,"../../../docs/handbook/images/lead-problem-report.png":K,"../../../docs/handbook/images/lead-progress.png":V,"../../../docs/handbook/images/lead-text-card.png":Q,"../../../docs/handbook/images/lead-upload-preview.png":Z,"../../../docs/handbook/images/lead-work-plan.png":$,"../../../docs/handbook/images/workflow.png":J}),c=e=>e.slice(e.lastIndexOf("/")+1),i=Object.fromEntries(Object.entries(ee).map(([e,t])=>[c(e).replace(/\.md$/,""),t])),ne=Object.fromEntries(Object.entries(te).map(([e,t])=>[`images/${c(e)}`,t]));function oe(e){var t;return((t=/^# +(.+)$/m.exec(i[e]??""))==null?void 0:t[1].trim())??e}function ae(){const e=[...(i.README??"").matchAll(/\]\(([A-Za-z0-9_-]+)\.md[)#]/g)].map(t=>t[1]);return[...new Set(["README",...e,...Object.keys(i).sort()])].filter(t=>t in i)}function se(e){return e.toLowerCase().replace(/[^\p{L}\p{M}\p{N}\p{Pc} -]/gu,"").replace(/ /g,"-")}function ie(){const e=new Map;return t=>{const o=se(t);let n=o;for(;e.has(n);){const s=e.get(o)+1;e.set(o,s),n=`${o}-${s}`}return e.set(n,0),n}}function re(e,t){var d;if(/^[a-z][a-z0-9+.-]*:/i.test(e))return{kind:"external",href:e};const o=new URL(e,`${l}${t}.md`),n=decodeURIComponent(o.hash.slice(1)),s=(d=/^\/docs\/handbook\/([A-Za-z0-9_-]+)\.md$/.exec(o.pathname))==null?void 0:d[1];return s&&s in i?s===t&&n?{kind:"anchor",id:n}:{kind:"chapter",href:h({name:"help",chapter:s,...n?{section:n}:{}})}:{kind:"external",href:`${X}${o.pathname}${o.hash}`}}function he(e,t){if(/^[a-z][a-z0-9+.-]*:/i.test(e))return null;const o=new URL(e,`${l}${t}.md`).pathname.replace(/^\/docs\/handbook\//,"");return ne[o]??null}const p=e=>e.type==="text"?e.value:"children"in e?e.children.map(p).join(""):"";function de(){return e=>{const t=ie(),o=n=>n.children.forEach(s=>{s.type==="element"&&(/^h[1-6]$/.test(s.tagName)?s.properties.id=t(p(s)):o(s))});o(e)}}function u(e){var t;(t=document.getElementById(e))==null||t.scrollIntoView()}const le=e=>e.button===0&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey&&!e.altKey;function ce(e){return{a:({href:t,children:o})=>{if(!t)return a.jsx(a.Fragment,{children:o});const n=re(t,e);return n.kind==="external"?a.jsx("a",{href:n.href,target:"_blank",rel:"noopener noreferrer",children:o}):n.kind==="chapter"?a.jsx("a",{href:n.href,children:o}):a.jsx("a",{href:h({name:"help",chapter:e,section:n.id}),onClick:s=>{le(s)&&(s.preventDefault(),u(n.id))},children:o})},img:({src:t,alt:o})=>{const n=t?he(t,e):null;return n?a.jsx("a",{className:"help-image-link",href:n,target:"_blank",rel:"noopener noreferrer",title:"Open the image at full size in a new tab",children:a.jsx("img",{className:"help-image",src:n,alt:o??"",loading:"lazy"})}):a.jsx("span",{className:"guideline-image-text",children:o?`Image: ${o}`:"Image"})},table:({children:t})=>a.jsx("div",{className:"guideline-table-scroll",tabIndex:0,role:"region","aria-label":"Table",children:a.jsx("table",{children:t})})}}function me({chapter:e="README",section:t}){const o=i[e];return r.useEffect(()=>{var n,s;t?u(t):(s=(n=document.getElementById("main"))==null?void 0:n.scrollTo)==null||s.call(n,0,0)},[e,t]),a.jsxs("div",{className:"help-page",children:[a.jsxs("nav",{className:"help-chapters","aria-label":"Handbook chapters",children:[a.jsx("ul",{children:ae().map(n=>a.jsx("li",{children:a.jsx("a",{href:h({name:"help",chapter:n}),"aria-current":n===e?"page":void 0,children:oe(n)})},n))}),a.jsx(w,{})]}),a.jsx("article",{className:"guideline-document help-document",children:o===void 0?a.jsxs(a.Fragment,{children:[a.jsx("h1",{children:"Chapter not found"}),a.jsxs("p",{children:["This handbook has no chapter “",e,"”. Pick one from the list."]})]}):a.jsx("div",{className:"guideline-markdown",children:a.jsx(f,{remarkPlugins:[g],rehypePlugins:[de],skipHtml:!0,components:ce(e),children:o})})})]})}export{me as default};

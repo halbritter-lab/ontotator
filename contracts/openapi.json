@@ -20480,6 +20480,96 @@
         ],
         "title": "RoundSourceView"
       },
+      "RowChangeView": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "reassigned",
+              "mode_changed",
+              "mode_restored"
+            ],
+            "title": "Kind"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "task": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task"
+          },
+          "from_person": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonRefView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "to_person": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonRefView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "from_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Mode"
+          },
+          "to_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Mode"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "at"
+        ],
+        "title": "RowChangeView",
+        "description": "A change of who works on a row, or how: its History line."
+      },
       "RowItemView": {
         "properties": {
           "code": {
@@ -20991,6 +21081,13 @@
             },
             "type": "array",
             "title": "Open Translation Reviews"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/RowChangeView"
+            },
+            "type": "array",
+            "title": "Changes"
           }
         },
         "additionalProperties": false,

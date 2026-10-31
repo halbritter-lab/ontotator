@@ -109,10 +109,11 @@ export function cardSegments(row: DocumentRowView, now = new Date()): PathSegmen
   ];
 }
 
-/** On open: the segment that needs work now; else the first that is not done; else Finalization. */
+/** On open: the segment that needs work now; else the first that is not done; else Finalization, or Annotation when nothing is planned to finalize. */
 export function defaultSegment(segments: readonly PathSegment[]): SegmentId {
   const now = segments.find(s => s.tone === "now") ?? segments.find(s => s.tone === "later");
-  return (now?.id ?? "finalization") as SegmentId;
+  if (now) return now.id as SegmentId;
+  return segments.find(s => s.id === "finalization")?.tone === "optional" ? "annotation" : "finalization";
 }
 
 /** The text view of a version (`variant`), with `show` / `compare`; keeps the Documents query for Back. */

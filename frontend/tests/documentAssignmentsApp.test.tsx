@@ -95,12 +95,12 @@ it("reopens the submitted assignee from their person row in the card and reloads
   // The submitted annotation's actions live in its row of the Annotation part (#108).
   const people = await screen.findByRole("list", { name: "Annotators" });
   await user.click(await within(people).findByRole("button", { name: "Reopen A’s annotation" }));
-  const dialog = await screen.findByRole("dialog", { name: "Reopen z/doc" });
+  const dialog = await screen.findByRole("dialog", { name: /^Reopen / });
   fireEvent.change(within(dialog).getByLabelText("Reason (optional)"), { target: { value: "Recheck evidence" } });
   await user.click(within(dialog).getByRole("button", { name: "Reopen assignment" }));
   await waitFor(() => expect(api.listDocumentRows).toHaveBeenCalledTimes(2));
   expect(api.reopenAssignment).toHaveBeenCalledWith(3, "Recheck evidence");
   expect(api.listAssignments).toHaveBeenCalledTimes(2);
   expect(api.listDocumentRows).toHaveBeenCalledTimes(2);
-  expect(screen.queryByRole("dialog", { name: "Reopen z/doc" })).toBeNull();
+  expect(screen.queryByRole("dialog", { name: /^Reopen / })).toBeNull();
 });

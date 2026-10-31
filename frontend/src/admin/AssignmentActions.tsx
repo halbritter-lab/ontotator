@@ -4,15 +4,19 @@ import { Button, ConfirmDialog, Dialog, Select, Textarea } from "../ui";
 import { eligibleMembers, memberOptionLabel, useAlive } from "./assignmentUI";
 import { ErrorNotice } from "./ErrorNotice";
 import { assignmentStatusLabels, labelFor, taskLabels } from "../app/labels";
+import { personLabel } from "../app/identity";
 export interface AssignmentActionsProps {
   assignment: AssignmentView; members: Member[]; onChanged: () => void;
+  /** The text's name in the dialogs ("case-7 de"); falls back on the assignment's document. */
+  textName?: string;
   /** Only this action's dialog, open at once (no buttons); `onClose` runs when it closes or the action is done. */
   open?: "reassign" | "reopen" | "revoke";
   onClose?: () => void;
 }
 export function AssignmentActions(props: AssignmentActionsProps): JSX.Element { return <Actions key={JSON.stringify([props.assignment.project_key, props.assignment.id, props.assignment.updated_at, props.assignment.status, props.assignment.revoked_at])} {...props} />; }
-const startedMessage = "Work has started. The previous draft stays with its author; the new person starts from the document's inputs.";
-function Actions({ assignment, members, onChanged, open, onClose }: AssignmentActionsProps): JSX.Element {
+const startedMessage = "Work has started. The new person starts from the document's inputs. The previous draft stays stored, but nobody can open it, its author included.";
+function Actions({ assignment, members, onChanged, open, onClose, textName = assignment.document_id }: AssignmentActionsProps): JSX.Element {
+  const person = personLabel(assignment);
   const [action, setAction] = useState<"reassign" | "reopen" | "revoke" | null>(open ?? null);
   const [target, setTarget] = useState("");
   const [reason, setReason] = useState("");
@@ -50,17 +54,17 @@ function Actions({ assignment, members, onChanged, open, onClose }: AssignmentAc
       {assignment.status === "submitted" && <Button size="sm" onClick={() => setAction("reopen")}>Reopen</Button>}
       <Button size="sm" variant="danger" onClick={() => setAction("revoke")}>Remove assignment</Button>
     </>}
-    <Dialog open={action === "reassign"} title={`Reassign ${assignment.document_id}`} onClose={busy || confirmation ? undefined : close} footer={<><Button disabled={busy || confirmation !== null} onClick={close}>Cancel</Button><Button disabled={!target || confirmation !== null} loading={busy} onClick={() => { if (assignment.status !== "open" && !confirmedStarted) setConfirmation("started"); else void mutate(confirmedStarted, false); }}>Reassign</Button></>}>
-      <p>{assignment.pseudonym}: {labelFor(taskLabels, assignment.task)}, {labelFor(assignmentStatusLabels, assignment.status).toLowerCase()}</p>
+    <Dialog open={action === "reassign"} title={`Reassign ${textName}`} onClose={busy || confirmation ? undefined : close} footer={<><Button disabled={busy || confirmation !== null} onClick={close}>Cancel</Button><Button disabled={!target || confirmation !== null} loading={busy} onClick={() => { if (assignment.status !== "open" && !confirmedStarted) setConfirmation("started"); else void mutate(confirmedStarted, false); }}>Reassign</Button></>}>
+      <p>{person}: {labelFor(taskLabels, assignment.task)}, {labelFor(assignmentStatusLabels, assignment.status).toLowerCase()}</p>
       {confirmedStarted && <p>{startedMessage}</p>}
       <Select id={`reassign-${assignment.id}`} label="New assignee" value={target} disabled={busy || confirmation !== null} onChange={event => { setTarget(event.target.value); setConfirmedStarted(false); setConfirmedLanguage(false); setError(undefined); }}><option value="">Choose a member</option>{eligibleMembers(members, assignment.task).filter(member => member.username !== assignment.username).map(member => <option key={member.username} value={member.username}>{memberOptionLabel(member)}</option>)}</Select>
       {error !== undefined && <ErrorNotice error={error} />}
     </Dialog>
     <ConfirmDialog open={confirmation === "unreviewed"} title="Annotate before the review is accepted?" message={<><p>Translation not reviewed yet.</p>{error !== undefined && <ErrorNotice error={error} />}</>} confirmLabel="Annotate before the review is accepted" busy={busy} onCancel={() => { setConfirmation(null); setError(undefined); }} onConfirm={() => { void mutate(confirmedStarted, confirmedLanguage, true); }} />
     <ConfirmDialog open={confirmation === "started" || confirmation === "language"} title={confirmation === "started" ? "Reassign started work?" : "Confirm document language?"} message={<>{confirmation === "started" ? startedMessage : <><p>This person's profile does not list the document language. Reassign anyway?</p>{confirmedStarted && <p>{startedMessage}</p>}</>}{error !== undefined && <ErrorNotice error={error} />}</>} confirmLabel={confirmation === "started" ? "Reassign started work" : "Reassign anyway"} busy={busy} onCancel={() => { setConfirmation(null); setError(undefined); }} onConfirm={() => { if (confirmation === "started") { setConfirmedStarted(true); void mutate(true, false); } else void mutate(confirmedStarted, true); }} />
-    <Dialog open={action === "reopen"} title={`Reopen ${assignment.document_id}`} onClose={busy ? undefined : close} footer={<><Button disabled={busy} onClick={close}>Cancel</Button><Button loading={busy} onClick={() => { void mutate(); }}>Reopen assignment</Button></>}>
+    <Dialog open={action === "reopen"} title={`Reopen ${textName}`} onClose={busy ? undefined : close} footer={<><Button disabled={busy} onClick={close}>Cancel</Button><Button loading={busy} onClick={() => { void mutate(); }}>Reopen assignment</Button></>}>
       <Textarea id={`reopen-reason-${assignment.id}`} label="Reason (optional)" disabled={busy} value={reason} onChange={event => setReason(event.target.value)} />{error !== undefined && <ErrorNotice error={error} />}
     </Dialog>
-    <ConfirmDialog open={action === "revoke"} title="Remove assignment?" message={<><p>Remove {assignment.pseudonym}'s {labelFor(taskLabels, assignment.task).toLowerCase()} assignment for {assignment.document_id}?</p><p>{assignment.status === "submitted" || assignment.status === "reopened" || assignment.last_submission_id ? "The assignment is revoked; their submitted work stays in the history." : "The assignment is revoked; their draft is kept, not deleted."}</p>{error !== undefined && <ErrorNotice error={error} />}</>} confirmLabel="Confirm removal" tone="danger" busy={busy} onCancel={close} onConfirm={() => { void mutate(); }} />
+    <ConfirmDialog open={action === "revoke"} title="Remove assignment?" message={<><p>Remove {person}'s {labelFor(taskLabels, assignment.task).toLowerCase()} assignment for {textName}?</p><p>{assignment.status === "submitted" || assignment.status === "reopened" || assignment.last_submission_id ? "The assignment is revoked; their submitted work stays in the history." : "The assignment is revoked; their draft is kept, not deleted."}</p>{error !== undefined && <ErrorNotice error={error} />}</>} confirmLabel="Confirm removal" tone="danger" busy={busy} onCancel={close} onConfirm={() => { void mutate(); }} />
   </>;
 }

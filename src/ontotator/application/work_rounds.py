@@ -576,6 +576,8 @@ class WorkRoundService:
                 source.scope is not None
                 and source.scope.scope_id
                 != build_scope(profile, source.origin_key.mode).scope_id
+                # Work from before a release move keeps its scope (#81).
+                and not self.repo.held_across_release_move(source.origin_key)
             ):
                 raise DomainError(
                     "ROUND_INPUT_INVALID",

@@ -14,6 +14,9 @@ export type StageName = "review" | "annotation" | "final";
 export const STAGE_TITLES: Readonly<Record<StageName, string>> = { review: "Translation", annotation: "Annotation", final: "Finalization" };
 
 /** The stage word `historyLines` puts before a line ("Review: …"); a tag replaces it. */
+/** How a text is annotated, for "annotated from scratch". */
+export const MODE_WORDS: Readonly<Record<"proposals" | "scratch", string>> = { proposals: "from proposals", scratch: "from scratch" };
+
 export const HISTORY_LINE_PREFIX: Readonly<Record<StageName, string>> = { review: "Review", annotation: "Annotation", final: "Final" };
 export interface StageText {
   /** Decorative glyph (`aria-hidden`); empty when the word itself is the dash. */

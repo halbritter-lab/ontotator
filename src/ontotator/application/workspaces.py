@@ -243,11 +243,7 @@ class WorkspaceService:
         profile = self.repo.get_task_profile(key.project_key)
         scope = build_scope(profile, key.mode)
 
-        if key.scope_id and key.scope_id != scope.scope_id:
-            raise DomainError(
-                "INVALID_SCOPE",
-                f"Workspace scope_id '{key.scope_id}' does not match expected '{scope.scope_id}'",
-            )
+        self.repo.require_workspace_scope(key, scope)
         if not key.scope_id:
             key = key.model_copy(update={"scope_id": scope.scope_id})
 

@@ -4,7 +4,7 @@
  * a paused task; under the list the admin actions (built by the caller).
  */
 import type { ReactNode } from "react";
-import type { DocumentRowView, RowSubmissionView } from "../api/client";
+import type { DocumentRowView, RowChangeView, RowSubmissionView } from "../api/client";
 import type { PanelStage, Route } from "../app/router";
 import { historyLines, type HistoryLine } from "./historyLines";
 import { reasonDocumentId, ReviewReason, useReviewReason } from "./reviewReason";
@@ -16,6 +16,8 @@ export interface RowActivityProps {
   projectKey: string;
   /** Submissions of the row; null while they load (the lines fall back to the work items). */
   submissions: readonly RowSubmissionView[] | null;
+  /** Reassignments and mode changes of the row. */
+  changes?: readonly RowChangeView[] | null;
   /** Route of a problem report ("Open report" on a paused task). */
   reportRoute: (reportId: string) => Route;
   onNavigate: (route: Route) => void;
@@ -40,10 +42,10 @@ function lineParts(line: HistoryLine): { separator: string; body: string } {
   return line.text.startsWith(prefix) ? { separator: ": ", body: line.text.slice(prefix.length) } : { separator: " ", body: line.text };
 }
 
-export function RowActivity({ row, projectKey, submissions, reportRoute, onNavigate, actions, me, now }: RowActivityProps): JSX.Element {
+export function RowActivity({ row, projectKey, submissions, changes, reportRoute, onNavigate, actions, me, now }: RowActivityProps): JSX.Element {
   const reason = useReviewReason(projectKey, reasonDocumentId(row));
   // Newest first: the lines come oldest first (review, annotation, final).
-  const lines = historyLines(row, submissions, { me, now }).reverse();
+  const lines = historyLines(row, submissions, { me, now, changes }).reverse();
   return <div className="row-activity">
     {lines.length > 0
       ? <ul className="row-activity-lines" aria-label="Activity">{lines.map(line => <li key={line.key} className="row-activity-line">

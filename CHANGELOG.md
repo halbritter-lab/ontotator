@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- Exports name the ontology release recorded with the work instead of the project's current one, and check each text against that release. When the texts of one export were made under different releases, the newest keeps the layer ID and each older one gets its own layer `<layer id>@<digest prefix>`; an export of one release keeps its shape (#81).
+- The check before moving to another release also lists proposals on retired terms that an open draft still carries; they are never rewritten. Drafts of submitted work are no longer rewritten (#81).
+- The assign dialog marks a skipped step as *(skipped)*, no longer as done, and stops counting annotation that waits for a skipped review. Steps keep their order (#233).
+- History in the text card lists reassignments and mode changes with their reason (`changes` on the row submissions).
+- My tasks clips a long paused reason to two lines; the full text stays in the task.
+
+### Fixed
+
+- After a move to another ontology release every task opened before it refused to open or save (`INVALID_SCOPE`), and consolidations and carries of earlier work were refused (`ROUND_INPUT_INVALID`). Stored workspaces now keep their identity across the move, with no repair needed (#81).
+- *Remove from project* and removing the annotator role list and revoke open translation reviews too.
+- *Distribute evenly…*: **Assign anyway** works after a partial save, a text still without anyone keeps its step open and is named, and the outcome of **Confirm** scrolls into view.
+- After submitting, the next task is never a paused one.
+- The final panel names the number of the *Needs your decision* tab, and says "in this view" while a filter hides other decisions.
+- Reassigning started work says what really happens to the draft: it stays stored, but nobody can open it.
+- The dialogs for reassigning, reopening and removing work, the member removal list and refused distribution rows name texts and people, not internal IDs.
+- A text card outside the plan opens on Annotation, not on Finalization. "the 0 tool proposals" and "to from scratch" no longer appear; "Fixed: … has started" only appears once someone has. After a carry to a new version the round reads "continued from Round 1 of an earlier version". The final export's counts match its lists, with one row per text. A version chip no longer widens the Documents table at 1280 px. The offer to link a modifier's text span ends once it has one.
+
 ## [0.5.0] - 2026-10-31
 
 ### Added

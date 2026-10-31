@@ -1,3 +1,4 @@
+import { textLabel } from "../../app/identity";
 import type { ReactNode } from "react";
 import type { DocumentRowView } from "../../api/client";
 import type { ProjectDocumentsQuery, Route } from "../../app/router";
@@ -58,7 +59,7 @@ export function TranslationPart({ row, projectKey, query, canManage, onAssign, o
       {reviewers.map(item => {
         const review = reviewOf(item.document_id);
         const assigned = assignedLine(item, now, !review);
-        return <WorkPersonRow key={item.assignment_id} item={item} caseId={row.case_id} canManage={canManage} tools={textVersionTools} onChanged={onChanged}
+        return <WorkPersonRow key={item.assignment_id} item={item} caseId={row.case_id} textName={textLabel(row)} canManage={canManage} tools={textVersionTools} onChanged={onChanged}
           onRemoved={focusAfterRemoval} details={review && assigned ? <>{review} · {assigned}</> : review ?? assigned} />;
       })}
     </PersonList>}

@@ -157,7 +157,7 @@ In the card:
 What for: see what happened to a text and its technical IDs.
 
 1. In the text card footer, click **History** or **Details**.
-   - **History** lists all activity, newest first, with reviewers' reasons.
+   - **History** lists all activity, newest first, with reviewers' reasons, reassignments and mode changes.
    - **Details** shows the **Plan**, the **Problem reports** and the **Technical details**.
 2. Click **Back** to return to the path.
 
@@ -248,17 +248,23 @@ What for: set the work plan for a selection.
 
 What for: switch one text between from proposals, from scratch and not annotated.
 
-Before you start: once someone started or submitted work in one mode, the mode is fixed.
-
 1. Open the text card and click **Annotation**.
 2. Under **Annotation**, choose **From proposals**, **From scratch** or **Off**. It saves at once.
+
+Once someone is assigned, started or submitted work, a line *Fixed: …* says who fixes the mode:
+
+- While the work is not submitted, remove the assignment ([Remove, reassign or reopen an assignment](#remove-reassign-or-reopen-an-assignment)), then choose.
+- To change it anyway, click **Change mode…** next to the line. The dialog names whose work is affected. Enter the **Reason**, then click **Change mode**, or **Discard work and change mode** if submitted work is discarded. Their assignments are removed. Discarded work is kept, not deleted: it no longer counts for progress, consolidation, the final result or exports.
+- **Restore…** in the text card brings the discarded work back while no new annotation has started.
+
+**History** in the text card shows the change and its reason.
 
 ### Assign work to the selected texts
 
 What for: give translation reviews or annotations to people.
 
 1. Select the texts, then click the assign button in the selection bar, for example **Assign annotation…**.
-2. Check what the selection needs. If it needs more than one task or language, the line **This selection needs** lists every step, one task in one language each, for example *Translation review de ✓ · Annotation de · Annotation en*. Steps you are through have a tick, the current step is bold, and *Step 2 of 3* says where you are. Then check the **Task**.
+2. Check what the selection needs. If it needs more than one task or language, the line **This selection needs** lists every step, one task in one language each, for example *Translation review de ✓ · Annotation de · Annotation en*. Steps you are through have a tick, a skipped step reads *(skipped)*, the current step is bold, and *Step 2 of 3* says where you are. Then check the **Task**. Annotation that waits for a review you skipped is no longer listed: it cannot start in this dialog.
 3. In the table of people (**Person**, **Reads**, **Open tasks**), pick the reviewer, or tick everyone who should annotate. The task has one language: each ticked person gets every selected text in that language that still has a free place. *Administrator* marks a system administrator; leave them unticked unless they take part.
 4. Read the summary below the table, for example *Ana Weber gets 3 translation reviews (de).*
 5. Click the assign button, for example *Assign 20*.
@@ -302,7 +308,9 @@ The proposal uses the languages in each person's profile: a person is proposed f
 3. Check the proposal. Change a person in any cell, or click **Propose again**. Texts nobody can take are listed under **Unassignable documents**.
 4. Click **Confirm**. This covers only the task shown in the assign dialog. If the selection needs more, the assign dialog comes back on the next step; otherwise it closes and the message says the assignments are saved.
 
-If you chose someone whose profile lists other languages than the text needs, the dialog stays open after **Confirm** and asks; click **Assign anyway**, then **Close**.
+If you chose someone whose profile lists other languages than the text needs, the dialog stays open after **Confirm** and asks; click **Assign anyway**. The other rows are already saved.
+
+If a text is still without anyone after you close the proposal, the assign dialog comes back on the same step and names it. Choose someone there, or **Close**: the closing message lists what is left unassigned.
 
 ### Remove, reassign or reopen an assignment
 
@@ -314,7 +322,7 @@ A task that waits for the translation review shows **Waiting for review** in the
 
 1. Open the text card and click **Annotation** (or **Translation** for reviews).
 2. In the person's row, click one of these:
-   - **Reassign…**: choose the **New assignee** and click **Reassign**.
+   - **Reassign…**: choose the **New assignee** and click **Reassign**. If work has started, confirm with **Reassign started work**. The new person starts from the document's inputs. The previous draft stays stored, but nobody can open it, its author included.
    - **Reopen…**: optional **Reason (optional)**, then **Reopen assignment**.
    - **Remove…**: confirm with **Remove** or **Confirm removal**.
 
