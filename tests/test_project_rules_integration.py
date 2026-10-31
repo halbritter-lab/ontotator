@@ -475,6 +475,7 @@ def test_submission_requires_each_frozen_reanchor_resolution(profile, resolved):
         get_submissions_for_workspace=lambda _: [],
         get_project_rules=lambda _: ProjectRules(),
         workspace_input_snapshots=lambda *_: [],
+        require_workspace_scope=lambda *_: None,
         reanchor_source_identity=lambda *_: (None, None),
     )
     if resolved:
