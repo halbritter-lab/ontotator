@@ -6,8 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-10-31
+
 ### Fixed
 
+- The Docker image bundles the handbook again: every chapter showed "Chapter not found". The image build now fails when the handbook is missing (#245).
+- An Unresolved finding and its note stay visible to whoever decides: an Unresolved finding no longer counts as matching another annotator's finding, so it is never taken over automatically or accepted in one click. Compare, accept and review-changes cards list it with every person's note, the consolidation group is open and tagged **Unresolved**, and the export of the selected result keeps the note (`FinalPanelView.unresolved`, group kind `unresolved`) (#246).
 - Term search: a hit that does not match the query closely is tagged **Weak match** and listed last (`weak_match` on the search candidates), and Enter adds it only after it was chosen with the arrow keys. If all hits are weak, the hint line says "no close match" (#247).
 
 ## [0.6.0] - 2026-10-31
@@ -175,7 +179,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 First public release.
 
-[Unreleased]: https://github.com/halbritter-lab/ontotator/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/halbritter-lab/ontotator/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/halbritter-lab/ontotator/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/halbritter-lab/ontotator/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/halbritter-lab/ontotator/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/halbritter-lab/ontotator/compare/v0.3.0...v0.4.0
