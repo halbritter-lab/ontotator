@@ -85,7 +85,8 @@ export function ModifiersSection({ finding, modifiers, text, termInfo, readOnly 
       return <p className="mod-selected">{`${termInfo(chosen.term_id)?.label ?? chosen.term_id} · ${chosen.term_id} · ${quote ? `in the text: “${quote}”` : "no text span"}`}</p>;
     })()}
     {warnings.map(warning => <p key={warning} className="mod-warning">{warning}</p>)}
-    <div role="status" className="mod-status">{status && <>
+    {/* The offer to link ends once the modifier has its span, however it got it. */}
+    <div role="status" className="mod-status">{status && !modifiers.find(modifier => modifier.term_id === status.linkTermId)?.segments?.length && <>
       {status.text}
       {status.linkTermId && onLinkSpan && <Button size="sm" onClick={() => { const id = status.linkTermId!; setStatus(null); onLinkSpan(id); }}>Link a text span</Button>}
     </>}</div>

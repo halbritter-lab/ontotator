@@ -17,7 +17,7 @@ it("a submitted annotation gets Reopen… under Annotation, which opens the reop
   const text = row({ case_id: "z", language: "en", versions: [version({ document_id: "z/doc" })] });
   render(<StageActions row={text} stage="annotation" textVersionTools={tools("submitted")} />);
   fireEvent.click(screen.getByRole("button", { name: "Reopen…, Alice (A)" }));
-  expect(screen.getByRole("dialog", { name: "Reopen z/doc" })).toBeTruthy();
+  expect(screen.getByRole("dialog", { name: "Reopen z en" })).toBeTruthy();
   cleanup();
   render(<StageActions row={text} stage="review" textVersionTools={tools("submitted")} />);
   expect(screen.queryByRole("button", { name: /^Reopen/ })).toBeNull();

@@ -146,12 +146,14 @@ Before you start: an administrator must have uploaded the new release ([Upload o
 3. Click **Check changes**.
 4. Read the panel **Check before moving**:
    - The first table (**Becomes**, **Why**) lists draft terms that will be replaced by their successor.
-   - The second table (**Status**, **Suggestions**) lists draft terms that are obsolete or missing in the new release. Their annotators must change them before submitting.
+   - The second table (**Status**, **Suggestions**) lists draft terms that are obsolete or missing in the new release, and proposals on such terms that are not yet rejected or replaced. Proposals are never rewritten. Their annotators must change them before submitting.
 5. Click **Move to this release**, or **Cancel**. The page says **Ontology release changed.**
 
 ![The check before moving to another release. The first table shows which draft terms are replaced automatically, the second which ones annotators must change by hand.](images/lead-move-release-check.png)
 
 If drafts changed meanwhile, you see **Drafts or pins changed since the check. Check the changes again before moving.** Click **Check changes** again.
+
+Tasks already opened stay open and keep their drafts. A submitted task shows what was submitted, also when it is reopened: terms the new release retired are then flagged at submit. Exports name the release recorded with each text ([Export](lead-results.md#export)).
 
 ## Set the submission rules
 
@@ -246,7 +248,7 @@ Warning: if the person still has open work, removing them revokes their open ass
 1. Open **Settings**, tab **People**.
 2. In the person's row, click **Remove…**.
 3. Confirm with **Remove from project**.
-4. If the person still has open work, the dialog **Revoke affected assignments?** lists it. Click **Remove and revoke their open assignments**.
+4. If the person still has open work, the dialog **Revoke affected assignments?** lists it, annotations and translation reviews alike. Click **Remove and revoke their open assignments**.
 
 ## Publish the first or a new guideline version
 

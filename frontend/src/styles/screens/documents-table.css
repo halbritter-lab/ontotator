@@ -60,7 +60,7 @@
 .documents-more { padding: 0 var(--space-1); border: 1px solid var(--border); border-radius: 999px; color: var(--text-muted); font-size: var(--size-xs); line-height: var(--leading-xs); white-space: nowrap; }
 button.documents-more { background: transparent; font-family: inherit; cursor: pointer; }
 button.documents-more:hover { border-color: var(--text-muted); color: var(--text); }
-.documents-row-header { display: flex; flex-wrap: nowrap; align-items: center; gap: var(--space-1) var(--space-3); font-weight: var(--weight-regular); }
+.documents-row-header { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); font-weight: var(--weight-regular); }
 .documents-language { display: inline-flex; align-items: center; gap: var(--space-1); font-weight: var(--weight-strong); }
 /* Row header name: a focus target of deep links and "Next decision"; in the table a button in plain
    text style (not a link) that opens the text card. */
@@ -87,7 +87,7 @@ button.documents-text-name { min-height: 24px; padding: 0; border: 0; background
 /* Below 1400 px (#10): the status and Waiting on cells cut earlier (ellipsis, full text in title); Last activity
    stays and the table scrolls sideways with the Text column pinned (#8). */
 @media (max-width: 1399px) {
-  .documents-status-cell { max-width: 9rem; }
+  .documents-status-cell { max-width: 7.5rem; }
   .documents-waiting-on { max-width: 7rem; }
 }
 /* The checkbox and Text cells stay at the left edge while the table scrolls sideways, so actions keep their row

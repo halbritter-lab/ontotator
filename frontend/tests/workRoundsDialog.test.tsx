@@ -21,7 +21,7 @@ function renderDialog(props: Partial<Parameters<typeof WorkRoundsDialog>[0]> = {
   vi.spyOn(api, "listWorkRounds").mockResolvedValue(data.rounds ?? rounds);
   vi.spyOn(api, "listRoundSources").mockResolvedValue(data.sources ?? [source]);
   const handlers = { onClose: vi.fn(), onCreate: vi.fn().mockResolvedValue(undefined), onOpen: vi.fn().mockResolvedValue(undefined), onReload: vi.fn() };
-  render(<WorkRoundsDialog assignment={assignment} documentLabel={{ textId: "case-12", language: "de" }} currentRoundId="round-2" {...handlers} {...props} />);
+  render(<WorkRoundsDialog assignment={assignment} documentLabel="case-12 de" currentRoundId="round-2" {...handlers} {...props} />);
   return handlers;
 }
 const dialog = () => screen.getByRole("dialog");

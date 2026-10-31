@@ -20,7 +20,11 @@ def doc(case: str) -> str:
 
 
 def proposal_env(
-    tmp_path: Any, *, per_text: int = 2, mode: str = "proposals"
+    tmp_path: Any,
+    *,
+    per_text: int = 2,
+    mode: str = "proposals",
+    proposal_term: str = "HP:0001250",
 ) -> SimpleNamespace:
     from auth_harness import grant, logged_in
     from t1_builders import bundle, native_unit
@@ -44,7 +48,7 @@ def proposal_env(
             "p2",
             (period, period + len("Neonatalzeit")),
             text=TEXT,
-            term_id="HP:0001250",
+            term_id=proposal_term,
         ),
         annotation(
             "p3", (second, second + len("Krampfanfälle")), text=TEXT, assertion="absent"

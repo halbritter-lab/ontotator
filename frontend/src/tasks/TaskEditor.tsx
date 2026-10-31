@@ -1,3 +1,4 @@
+import { taskText } from "../app/identity";
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import { api, ApiError, type AssignmentOpenRequest, type AssignmentView, type AssignmentWorkspace, type CurrentUser, type RoundInputView, type TaskSummary, type WorkRoundView } from "../api/client";
 import { ErrorNotice } from "../admin/ErrorNotice";
@@ -226,7 +227,7 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
   </CaseErrorBoundary>
     </>} />
   {roundDialogOpen && <WorkRoundsDialog assignment={assignment} currentRoundId={workspace.view.key.round_id ?? undefined}
-    documentLabel={{ textId: assignment.document_id, language: roundInfo?.document_language ?? workspace.view.document.language }} onClose={() => setRoundDialogOpen(false)} onOpen={openRound}
+    documentLabel={taskText(current)} onClose={() => setRoundDialogOpen(false)} onOpen={openRound}
     onReload={() => { setRoundDialogOpen(false); void load(); }} onCreate={async request => {
       if (routeLeaveRef.current && !await routeLeaveRef.current()) return;
       const created = await api.startWorkRound(assignmentId, request);

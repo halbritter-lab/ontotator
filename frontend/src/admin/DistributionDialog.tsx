@@ -21,6 +21,9 @@ function DistributionEditor({ projectKey, documents, cases, task, confirmUnrevie
   const alive = useAlive();
   const { members, notice } = useMembers(projectKey);
   const batch = useAssignmentBatch(projectKey, onChanged);
+  const feedback = useRef<HTMLDivElement>(null);
+  // The outcome sits below Confirm, under the fold of a long proposal.
+  useEffect(() => { feedback.current?.scrollIntoView?.({ block: "nearest" }); }, [batch.attempted, batch.error, batch.refused.length]);
   const context = useCaseVariants(projectKey, cases);
   const reviewAllowed = canReviewSelection(documents, context.variants);
   const languages = new Map(documents.map(doc => [doc.document_id, taskLanguages(doc, task, context.variants)]));
@@ -55,7 +58,11 @@ function DistributionEditor({ projectKey, documents, cases, task, confirmUnrevie
   const newRows = editedRows.filter(row => !(inventory ?? []).some(existing => !existing.revoked_at && existing.project_key === projectKey && existing.document_id === row.document_id && existing.username === row.username && existing.task === proposal?.context.task));
   const confirm = (confirm_language: boolean) => {
     if (!proposal || stale || busy || duplicate || (!confirm_language && batch.attempted)) return;
-    void batch.submit({ rows: confirm_language ? batch.languageRows : editedRows, task: proposal.context.task, seed: proposal.seed, context: proposal.context, confirm_language, ...(confirmUnreviewedTranslation ? { confirm_unreviewed_translation: true } : {}) });
+    const unreviewed = confirmUnreviewedTranslation ? { confirm_unreviewed_translation: true } : {};
+    // The rows the first Confirm saved make its context stale, so the language retry goes through the ordinary assignment, which checks each row.
+    void batch.submit(confirm_language
+      ? { rows: batch.languageRows, task: proposal.context.task, confirm_language, ...unreviewed }
+      : { rows: editedRows, task: proposal.context.task, seed: proposal.seed, context: proposal.context, confirm_language, ...unreviewed });
   };
   const eligible = members ? eligibleMembers(members, task) : [];
   const loadBefore = new Map<string, number>();
@@ -81,7 +88,7 @@ function DistributionEditor({ projectKey, documents, cases, task, confirmUnrevie
       <section aria-label="Resulting load"><h3>Resulting load</h3><p>Open, in progress and reopened work across this project, before and after the selected rows.</p><ul>{eligible.map(member => <li key={member.username}>{personLabel(member)}: {loadBefore.has(member.username) || inventory !== null ? `${loadBefore.get(member.username) ?? 0} now, ${(loadBefore.get(member.username) ?? 0) + newRows.filter(row => row.username === member.username).length} after` : "Load unavailable"}</li>)}</ul></section>
       <Button variant="primary" disabled={busy || batch.busy || batch.attempted || stale || duplicate} onClick={() => confirm(false)}>Confirm</Button>
     </>}
-    <BatchFeedback batch={batch} languages={languages} disabled={stale || busy} onConfirmLanguage={() => confirm(true)} />
+    <div ref={feedback}><BatchFeedback batch={batch} languages={languages} textName={textName} personName={name => { const member = members?.find(item => item.username === name); return member ? personLabel(member) : name; }} disabled={stale || busy} onConfirmLanguage={() => confirm(true)} /></div>
   </Dialog>;
 }
 

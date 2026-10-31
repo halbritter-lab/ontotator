@@ -12,12 +12,17 @@ per draft annotation, what the new release does to its terms:
   it, as for any obsolete term;
 * every other term stays.
 
-Drafts are the only thing rewritten. Each rewrite is a new revision of the
-draft, logged in ``edit_events`` like an edit, with one ``project.repin``
+Open drafts are the only thing rewritten. Each rewrite is a new revision of
+the draft, logged in ``edit_events`` like an edit, with one ``project.repin``
 audit entry for the whole move. Submissions and their annotation snapshots
 are append-only records of the release they were made under: they are not
-touched, only counted in the report. The pin remembers the digests it
-replaced, so those submissions stay valid review targets.
+touched, only counted in the report, and neither is the draft of a submitted
+round, which is what its read-only view shows. The pin remembers the digests
+it replaced, so those submissions stay valid review targets.
+
+Proposals a draft still has to answer are immutable too. One whose term the
+new release retires is flagged, successor or not: the submit check refuses it
+until the annotator rejects or replaces it.
 """
 
 from __future__ import annotations
@@ -27,7 +32,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import Connection, and_, select
+from sqlalchemy import ColumnElement, Connection, and_, select, tuple_
 
 from ontotator.domain.annotations import (
     AnnotationRef,
@@ -46,7 +51,12 @@ from ontotator.storage.tables import (
     AnnotationSnapshotRow,
     DraftAnnotationRow,
     DraftRow,
+    ReviewDecisionRow,
     SubmissionRow,
+)
+from ontotator.storage.workflow_tables import (
+    RoundWorkspaceBindingRow,
+    WorkRoundStateRow,
 )
 from ontotator.vendor.hpo_span_annotator.hpo import Ontology
 
@@ -185,6 +195,21 @@ class _DraftAnnotation:
     snap: AnnotationSnapshot
 
 
+def open_draft(project_id: int) -> ColumnElement[bool]:
+    """Filter ``DraftRow`` to the drafts a move updates, not those of submitted work."""
+    return DraftRow.draft_key.not_in(
+        select(RoundWorkspaceBindingRow.workspace_key)
+        .join(
+            WorkRoundStateRow,
+            WorkRoundStateRow.round_id == RoundWorkspaceBindingRow.round_id,
+        )
+        .where(
+            RoundWorkspaceBindingRow.project_id == project_id,
+            WorkRoundStateRow.state.in_(["submitted", "superseded"]),
+        )
+    )
+
+
 def _draft_annotations(conn: Connection, project_id: int) -> list[_DraftAnnotation]:
     rows = conn.execute(
         select(
@@ -203,7 +228,7 @@ def _draft_annotations(conn: Connection, project_id: int) -> list[_DraftAnnotati
                 AnnotationSnapshotRow.version == DraftAnnotationRow.version,
             ),
         )
-        .where(DraftRow.project_id == project_id)
+        .where(DraftRow.project_id == project_id, open_draft(project_id))
         .order_by(
             DraftRow.draft_key,
             DraftAnnotationRow.annotation_id,
@@ -219,6 +244,74 @@ def _draft_annotations(conn: Connection, project_id: int) -> list[_DraftAnnotati
             decode_snapshot(row.payload),
         )
         for row in rows
+    ]
+
+
+def _answerable_targets(conn: Connection, project_id: int) -> list[_DraftAnnotation]:
+    """The proposals of open drafts that a submit would still carry along."""
+    drafts = conn.execute(
+        select(
+            DraftRow.id,
+            DraftRow.draft_key,
+            DraftRow.document_id,
+            DraftRow.annotator_id,
+            DraftRow.mode,
+            DraftRow.targets,
+        )
+        .where(
+            DraftRow.project_id == project_id,
+            DraftRow.mode != "independent",
+            open_draft(project_id),
+        )
+        .order_by(DraftRow.draft_key)
+    ).all()
+    settled = {
+        (row.draft_id, row.target_id, row.target_version)
+        for row in conn.execute(
+            select(
+                ReviewDecisionRow.draft_id,
+                ReviewDecisionRow.target_id,
+                ReviewDecisionRow.target_version,
+            )
+            .join(DraftRow, DraftRow.id == ReviewDecisionRow.draft_id)
+            .where(
+                DraftRow.project_id == project_id,
+                ReviewDecisionRow.outcome.in_(["rejected", "changed"]),
+            )
+        )
+    }
+    answerable = [
+        (draft, target["annotation_id"], target["version"])
+        for draft in drafts
+        for target in draft.targets.get("targets") or []
+        if (draft.id, target["annotation_id"], target["version"]) not in settled
+    ]
+    refs = sorted({(item[1], item[2]) for item in answerable})
+    payloads: dict[tuple[str, str], Any] = {}
+    for start in range(0, len(refs), 1000):
+        for row in conn.execute(
+            select(
+                AnnotationSnapshotRow.annotation_id,
+                AnnotationSnapshotRow.version,
+                AnnotationSnapshotRow.payload,
+            ).where(
+                AnnotationSnapshotRow.project_id == project_id,
+                tuple_(
+                    AnnotationSnapshotRow.annotation_id, AnnotationSnapshotRow.version
+                ).in_(refs[start : start + 1000]),
+            )
+        ):
+            payloads[(row.annotation_id, row.version)] = row.payload
+    return [
+        _DraftAnnotation(
+            draft.draft_key,
+            draft.document_id,
+            draft.annotator_id,
+            draft.mode,
+            decode_snapshot(payloads[(annotation_id, version)]),
+        )
+        for draft, annotation_id, version in answerable
+        if (annotation_id, version) in payloads
     ]
 
 
@@ -340,6 +433,35 @@ def build_report(
                         consider=list(outcome.consider),
                     )
                 )
+    for item in _answerable_targets(conn, project_id):
+        annotation = item.snap.annotation
+        ontology_id = ontology_of_layer.get(annotation.layer_id)
+        if ontology_id is None or ontology_id not in changed:
+            continue
+        ontology = changed[ontology_id].ontology
+        terms = [("finding", annotation.term_id)]
+        terms.extend(("modifier", m.term_id) for m in annotation.modifiers)
+        for role, term_id in terms:
+            outcome = term_outcome(ontology, term_id)
+            if outcome.kind == "keep":
+                continue
+            flagged.append(
+                TermFlag(
+                    ontology_id=ontology_id,
+                    layer_id=annotation.layer_id,
+                    document_id=item.document_id,
+                    annotator_id=item.annotator_id,
+                    mode=item.mode,
+                    annotation_id=annotation.annotation_id,
+                    role=role,
+                    term_id=term_id,
+                    status=outcome.status or "obsolete",
+                    replaced_by=[outcome.term_id]
+                    if outcome.kind == "rewrite"
+                    else list(outcome.replaced_by),
+                    consider=list(outcome.consider),
+                )
+            )
     changes = [
         PinChange(
             ontology_id=oid,

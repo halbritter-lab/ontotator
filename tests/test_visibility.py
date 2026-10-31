@@ -429,6 +429,7 @@ def test_document_method_enumeration_uses_central_guard(assigned, monkeypatch):
     from ontotator.domain.annotations import AnnotationRef
     from ontotator.domain.reanchor_resolution import PendingReanchorRef
     from ontotator.domain.review import ReviewTargetSet
+    from ontotator.domain.scopes import TaskScope
     from ontotator.domain.workspace import Draft, MutationEnvelope
     from ontotator.packages.models import SearchEventRecord
     from ontotator.storage.repository import Repository
@@ -599,6 +600,16 @@ def test_document_method_enumeration_uses_central_guard(assigned, monkeypatch):
         ),
         "edit_events": lambda: repo.edit_events(key),
         "draft_state_at": lambda: repo.draft_state_at(key, 1),
+        "held_across_release_move": lambda: repo.held_across_release_move(key),
+        "require_workspace_scope": lambda: repo.require_workspace_scope(
+            key,
+            TaskScope(
+                scope_id=key.scope_id,
+                mode=key.mode,
+                editable_layer_ids=[],
+                reference_layer_ids=[],
+            ),
+        ),
     }
     expected = {
         name

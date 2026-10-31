@@ -9,11 +9,10 @@ import { api, ApiError, type DocumentRowView, type ModeChangePreview, type ModeC
 import { errorMessage } from "../admin/errors";
 import { plural } from "../app/labels";
 import { Button, ConfirmDialog, Dialog, InlineMessage, Textarea } from "../ui";
-import { shortName } from "./stageLabels";
+import { MODE_WORDS, shortName } from "./stageLabels";
 
 export type ModeName = "proposals" | "scratch";
 
-const MODE_WORDS: Record<ModeName, string> = { proposals: "from proposals", scratch: "from scratch" };
 
 /** One line per person: what the change does to their work, submitted work first. */
 export interface AffectedPerson {
@@ -114,7 +113,7 @@ export function ChangeModeDialog({ projectKey, row, mode, revision, onCancel, on
   const people = preview ? affectedPeople(preview) : [];
   const discarded = people.filter(person => person.submissions > 0);
   const from = preview ? MODE_WORDS[preview.from_mode] : null;
-  const title = `Change annotation of ${row.case_id} ${row.language} to ${MODE_WORDS[mode]}?`;
+  const title = `Annotate ${row.case_id} ${row.language} ${MODE_WORDS[mode]} instead?`;
   const footer = <>
     <Button disabled={busy} onClick={onCancel}>Cancel</Button>
     <Button variant="danger" loading={busy} aria-disabled={preview ? undefined : "true"} onClick={() => { void confirm(); }}>
@@ -126,7 +125,7 @@ export function ChangeModeDialog({ projectKey, row, mode, revision, onCancel, on
       {!preview && !loadError && <p role="status">Checking the work on this text…</p>}
       {loadError && <InlineMessage tone="error">{loadError}</InlineMessage>}
       {preview && <>
-        <p>{`The annotation of this text started ${from}. Changing it to ${MODE_WORDS[mode]} starts the annotation again.`}</p>
+        <p>{`The annotation of this text started ${from}. Annotating it ${MODE_WORDS[mode]} starts the annotation again.`}</p>
         {discarded.length > 0
           ? <p><strong>{`Submitted work of ${plural(discarded.length, "person", "people")} is discarded:`}</strong></p>
           : <p>No submitted work is discarded.</p>}
@@ -209,7 +208,7 @@ export function ModeChangeNotice({ projectKey, row, revision, onChanged, now = n
     : day.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
   const blocked = change.restore_blocked ? BLOCKED[change.restore_blocked] ?? errorMessage(new ApiError(409, change.restore_blocked, change.restore_blocked)) : null;
   return <div className="text-card-mode-change">
-    <p className="text-card-muted">{`Mode changed to ${MODE_WORDS[change.to_mode]} on ${when}${names.length ? `; discarded work of ${names.join(", ")}` : ""}.`}</p>
+    <p className="text-card-muted">{`Mode changed on ${when}: now annotated ${MODE_WORDS[change.to_mode]}${names.length ? `; discarded work of ${names.join(", ")}` : ""}.`}</p>
     {blocked ? <p className="text-card-muted">{blocked}</p>
       : change.restorable && <Button size="sm" onClick={() => setRestoring(true)}>Restore…</Button>}
     {restoring && <RestoreModeDialog projectKey={projectKey} change={change} revision={revision} onCancel={() => setRestoring(false)}

@@ -92,7 +92,7 @@ it("resolves exact correction ancestry without guessing source language or newes
   expect(reviewLanguages(correction.document_id, map)).toBeNull();
 });
 
-it("keeps translation distribution context exact through partial language retry", async () => {
+it("keeps the exact translation distribution context on Confirm; the language retry is an ordinary assignment", async () => {
   vi.mocked(api.listMembers).mockResolvedValue(members);
   const context = { document_ids: [readyTarget.document_id], task: "translation_review" as const, per_document: 2, seed: 42, state_sha256: "exact-state" };
   vi.spyOn(api, "proposeDistribution").mockResolvedValue({ rows: [{ document_id: readyTarget.document_id, language: "de", username: "alice", display_name: "Alice", load_before: 4 }, { document_id: readyTarget.document_id, language: "de", username: "bob", display_name: "Bob", load_before: 2 }], unassignable: [], seed: 42, per_document: 2, context });
@@ -107,7 +107,7 @@ it("keeps translation distribution context exact through partial language retry"
   fireEvent.click(await screen.findByRole("button", { name: "Assign anyway" }));
   await waitFor(() => expect(api.createAssignments).toHaveBeenCalledTimes(2));
   expect(vi.mocked(api.createAssignments).mock.calls[0][1].context).toBe(context);
-  expect(vi.mocked(api.createAssignments).mock.calls[1][1]).toEqual({ task: "translation_review", seed: 42, context, confirm_language: true, rows: [{ document_id: readyTarget.document_id, username: "alice" }] });
+  expect(vi.mocked(api.createAssignments).mock.calls[1][1]).toEqual({ task: "translation_review", confirm_language: true, rows: [{ document_id: readyTarget.document_id, username: "alice" }] });
 });
 
 const overridePlan: ImportPlan = { documents: [{ document_id: "internal", language: "de", text_sha256: "t".repeat(64), action: "add", normalised: false, label: "case.zip/documents/1.json" }], duplicates: [], collisions: [], proposal_sets: [], documents_only: [], errors: [], warnings: [], normalised_count: 0, counts: {}, input_sha256: "input", state_sha256: "state", plan_sha256: "real-plan", committable: true, variants: [{ document_id: "internal", external_id: "external:/ß", case_id: "case", language: "de", version: 3, origin: "correction", derived_from: "previous", derived_in_upload: false, translation: null, status: "ready_for_review", failed_checks: [], marked_in_package: false }] };

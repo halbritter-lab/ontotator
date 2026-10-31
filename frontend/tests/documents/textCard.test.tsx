@@ -240,14 +240,14 @@ describe("annotation part", () => {
     // The status pills say it in words and shape.
     expect(rows.map(item => item.querySelector(".status-pill")!.textContent)).toEqual(["Reopened", "In progress", "Submitted"]);
     fireEvent.click(within(rows[2]).getByRole("button", { name: "Reopen Ana Weber’s annotation" }));
-    expect(screen.getByRole("dialog", { name: "Reopen case-200-de" })).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: "Reopen case-200 de" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     fireEvent.click(within(rows[0]).getByRole("button", { name: "Remove Luc Martin’s assignment" }));
     const revoke = screen.getByRole("dialog", { name: "Remove assignment?" });
     expect(revoke.textContent).toContain("The assignment is revoked; their submitted work stays in the history.");
     fireEvent.click(within(revoke).getByRole("button", { name: "Cancel" }));
     fireEvent.click(within(rows[1]).getByRole("button", { name: "Reassign Tom Reis’s annotation" }));
-    expect(screen.getByRole("dialog", { name: "Reassign case-200-de" })).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: "Reassign case-200 de" })).toBeTruthy();
   });
 
   it("a person removed after submitting stays listed as Removed with Open annotation", async () => {

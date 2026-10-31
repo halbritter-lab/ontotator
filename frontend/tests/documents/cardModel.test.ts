@@ -123,3 +123,9 @@ describe("segments", () => {
     expect(defaultSegment(cardSegments(done, now))).toBe("finalization");
   });
 });
+
+describe("a text outside the plan", () => {
+  it("opens on Annotation, not on a Finalization that cannot start", () => {
+    expect(defaultSegment([{ id: "translation", title: "Translation", state: "source text", tone: "done" }, { id: "annotation", title: "Annotation", state: "not planned", tone: "optional" }, { id: "finalization", title: "Finalization", state: "—", tone: "optional" }])).toBe("annotation");
+  });
+});

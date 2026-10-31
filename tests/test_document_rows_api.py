@@ -93,6 +93,7 @@ def test_bar_uses_underscore_keys_and_rows_carry_retained(case_env):
         "case_id",
         "language",
         "adjudicator_not_annotator",
+        "changes",
         "submissions",
         "rounds",
         "open_translation_reviews",

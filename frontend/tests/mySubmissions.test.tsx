@@ -149,7 +149,7 @@ describe("TaskEditor round identity wiring", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "More actions" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Work rounds" }));
-    const rounds = await screen.findByRole("dialog", { name: "Work rounds: doc de" });
+    const rounds = await screen.findByRole("dialog", { name: /^Work rounds: doc/ });
     await within(rounds).findByText("You are here");
     fireEvent.click(within(rounds.querySelector(".modal-actions") as HTMLElement).getByRole("button", { name: "Close" }));
 

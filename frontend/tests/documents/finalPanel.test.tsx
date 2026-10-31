@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, ApiError, AuthError, ConflictError, type DocumentRowView, type DocumentRowsPage, type FinalPanelView, type RowSubmissions, type WorkRoundView } from "../../src/api/client";
 import { formatTime } from "../../src/app/submissionLabels";
 import { DecisionBlock, type DecisionBlockProps } from "../../src/documents/FinalPanel";
-import { AGREEMENT_EXPLANATION, agreementText, compareSummary, consolidateHint, detailDifferenceLines, consolidationBreakdown, remainingText, consolidationStartedToast, nextFinalDecision, nextOtherDecision } from "../../src/documents/finalPanelText";
+import { AGREEMENT_EXPLANATION, agreementText, compareSummary, consolidateHint, detailDifferenceLines, consolidationBreakdown, remainingText, noMoreFinalsText, consolidationStartedToast, nextFinalDecision, nextOtherDecision } from "../../src/documents/finalPanelText";
 import { notifyFinalSelectionChanged } from "../../src/variants/finalSelectionState";
 import { refKey } from "../../src/variants/versionState";
 import { guidelineListing, guidelineSummary } from "../projectFixtures";
@@ -533,9 +533,9 @@ describe("after a decision", () => {
     const next = reviewRow("case-109", "de");
     panels[rowKey("case-107", "de")] = acceptPanel("case-107", "de");
     panels[rowKey("case-109", "de")] = finalPanel({ submissions: [anaSubmission("case-109", "de")], causes: next.issues });
-    renderPanel("case-107:de", page([group("case-107", [first]), group("case-108", [between]), group("case-109", [next])], { bar: bar({ total: 3, missing_final: 1 }) }));
+    renderPanel("case-107:de", page([group("case-107", [first]), group("case-108", [between]), group("case-109", [next])], { bar: bar({ needs_decision: 3, missing_final: 1 }) }));
     const decided = { ...first, next_step: null, steps: [], categories: [] };
-    afterDecision = page([group("case-107", [decided]), group("case-108", [between]), group("case-109", [next])], { bar: bar({ total: 2, missing_final: 0 }) });
+    afterDecision = page([group("case-107", [decided]), group("case-108", [between]), group("case-109", [next])], { bar: bar({ needs_decision: 2, missing_final: 0 }) });
     await acceptResult();
     await waitFor(() => expect(screen.getByRole("heading", { level: 2 }).textContent).toBe("Final result: case-109 de"));
     expect(screen.getByText("Final result saved for case-107 de.")).toBeTruthy();
@@ -684,9 +684,10 @@ describe("panel text", () => {
     expect(detailDifferenceLines(details)).toEqual(["Notes differ on 2 findings: Ataxia, Tremor", "Text spans differ on 1 finding: Seizure"]);
     expect(consolidateHint(details)).toBe("Resolve the 3 differences together");
     expect(detailDifferenceLines(agreement({ total: 6, matching: 6 }))).toEqual([]);
-    expect(remainingText(bar({ total: 2, confirm_final: 0 }))).toBe("2 more need your decision.");
-    expect(remainingText(bar({ total: 1 }))).toBe("1 more needs your decision.");
-    expect(remainingText(bar({ total: 0 }))).toBe("Nothing else needs your decision.");
+    // The tab's number, not the bar's categories.
+    expect(remainingText(bar({ total: 3, needs_decision: 2 }))).toBe("2 more need your decision.");
+    expect(remainingText(bar({ needs_decision: 1 }))).toBe("1 more needs your decision.");
+    expect(remainingText(bar({ total: 1, needs_decision: 0 }))).toBe("Nothing else needs your decision.");
   });
 
   it("finds the next final decision after the row, wrapping around", () => {
@@ -714,5 +715,14 @@ describe("consolidationStartedToast", () => {
 
   it("is a plain message when someone else consolidates", () => {
     expect(consolidationStartedToast("case-112 de", 9, { self: false, roleGranted: false })).toEqual({ message: "Consolidation started for case-112 de." });
+  });
+});
+
+describe("noMoreFinalsText", () => {
+  const rows = (count: number) => [{ rows: Array.from({ length: count }, () => ({})) }] as never;
+  it("claims none left only for what is true of the project", () => {
+    expect(noMoreFinalsText({ groups: rows(1), bar: { all: 140, needs_decision: 9 } } as never)).toBe("No more final results to decide in this view.");
+    expect(noMoreFinalsText({ groups: rows(1), bar: { all: 140, needs_decision: 0 } } as never)).toBe("No more final results to decide.");
+    expect(noMoreFinalsText({ groups: rows(140), bar: { all: 140, needs_decision: 9 } } as never)).toBe("No more final results to decide.");
   });
 });

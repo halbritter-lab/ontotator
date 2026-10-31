@@ -4,7 +4,7 @@ import { Button, Checkbox, ConfirmDialog, DataTable, EmptyState, InlineMessage, 
 import { ErrorNotice } from "./ErrorNotice";
 import { SettingsHint } from "./SettingsCard";
 import { labelFor, roleLabels, taskLabels } from "../app/labels";
-import { personLabel } from "../app/identity";
+import { personLabel, textLabel } from "../app/identity";
 export interface MembersSectionProps { projectKey: string }
 
 const roles = ["lead", "annotator", "adjudicator"] as const;
@@ -25,7 +25,7 @@ export function roleChangeText(name: string, before: readonly string[], after: r
   if (!after.length) return `${name} is no longer a member of this project.`;
   return parts.join(" ") || `${name}'s roles are unchanged.`;
 }
-type Affected = { id: number; document_id: string; task: string };
+type Affected = { id: number; document_id: string; case_id?: string | null; language?: string | null; task: string };
 type Pending = { username: string; roles: string[]; assignments: Affected[]; fromAdd: boolean };
 type Removal = { username: string; name: string; roles: string[]; removed: string };
 function affectedAssignments(error: unknown): Affected[] | null {
@@ -106,6 +106,8 @@ function MemberEditor({ projectKey }: MembersSectionProps): JSX.Element {
   const exact = username.trim() ? suggestions.find(user => user.username === username.trim()) : undefined;
   const closeAdd = () => { setAdding(false); setUsername(""); setNewRoles([]); setSuggestions([]); requestAnimationFrame(() => addButton.current?.focus()); };
   const memberName = (member: Member) => member.display_name?.trim() || member.username || personLabel(member);
+  const pendingMember = members?.find(member => member.username === pending?.username);
+  const pendingName = pendingMember ? memberName(pendingMember) : pending?.username;
   const columns: Column<Member>[] = [
     { id: "person", header: "Person", cell: member => personLabel(member) },
     { id: "username", header: "Username", cell: member => member.username },
@@ -153,7 +155,7 @@ function MemberEditor({ projectKey }: MembersSectionProps): JSX.Element {
       onCancel={() => { if (!writing.current) { setRemoval(null); setError(undefined); } }}
       onConfirm={() => { if (removal) void change(removal.username, removal.roles, false); }} />
     <ConfirmDialog open={pending !== null} title="Revoke affected assignments?" busy={busy} confirmLabel="Remove and revoke their open assignments"
-      message={pending && <><p>Changing roles for {pending.username} affects these assignments:</p><ul>{pending.assignments.map(assignment => <li key={assignment.id}>{assignment.document_id} — {labelFor(taskLabels, assignment.task)} (assignment {assignment.id})</li>)}</ul>{error !== undefined && <ErrorNotice error={error} />}</>}
+      message={pending && <><p>{`Changing roles for ${pendingName} affects these assignments:`}</p><ul>{pending.assignments.map(assignment => <li key={assignment.id}>{assignment.case_id && assignment.language ? textLabel({ case_id: assignment.case_id, language: assignment.language }) : assignment.document_id} — {labelFor(taskLabels, assignment.task)}</li>)}</ul>{error !== undefined && <ErrorNotice error={error} />}</>}
       onCancel={() => { if (!writing.current) { setPending(null); setError(undefined); } }}
       onConfirm={() => { if (pending) void change(pending.username, pending.roles, true, pending.fromAdd); }} />
   </section>;

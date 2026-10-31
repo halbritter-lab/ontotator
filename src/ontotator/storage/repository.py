@@ -50,7 +50,7 @@ from ontotator.domain.project_rules import ProjectRules
 from ontotator.domain.reanchor_resolution import PendingReanchorRef, ReanchorItem
 from ontotator.domain.results import latest_submissions
 from ontotator.domain.review import ReviewDecision, ReviewTargetSet
-from ontotator.domain.scopes import build_scope, is_review_like
+from ontotator.domain.scopes import TaskScope, build_scope, is_review_like
 from ontotator.domain.serialization import decode_snapshot, encode_snapshot
 from ontotator.domain.variants import VariantInfo
 from ontotator.domain.work_rounds import (
@@ -2143,8 +2143,7 @@ class Repository:
         if key.mode == "independent" or not offered:
             return []
         scope = build_scope(self.get_task_profile(key.project_key), key.mode)
-        if key.scope_id and key.scope_id != scope.scope_id:
-            raise DomainError("INVALID_SCOPE")
+        self.require_workspace_scope(key, scope)
         layers = scope.reference_layer_ids + (
             scope.editable_layer_ids if is_review_like(key.mode) else []
         )
@@ -3431,6 +3430,50 @@ class Repository:
             conn, project_id, row.id, result, envelope, revision, datetime.now(UTC)
         )
         return result
+
+    def require_workspace_scope(self, key: WorkspaceKey, scope: TaskScope) -> None:
+        """Refuse a key that was not issued for this project's current profile.
+
+        A key keeps the scope it was created under, and moving a project to
+        another release changes the profile hash in ``scope_id``. A workspace
+        the project already holds stays valid after such a move, under the
+        identity its draft and submissions are stored with (#81).
+        """
+        if not key.scope_id or key.scope_id == scope.scope_id:
+            return
+        if not self.held_across_release_move(key):
+            raise DomainError(
+                "INVALID_SCOPE",
+                f"Workspace scope_id '{key.scope_id}' does not match expected "
+                f"'{scope.scope_id}'",
+            )
+
+    def held_across_release_move(self, key: WorkspaceKey) -> bool:
+        """Whether ``key`` names stored work of a project that changed release."""
+        if not any(self.superseded_pins(key.project_key).values()):
+            return False
+        from ontotator.storage.workflow_tables import RoundWorkspaceBindingRow
+
+        aliases = _workspace_aliases(key)
+        with self.db.transaction() as conn:
+            project_id = self._require_project(conn, key.project_key)
+            return any(
+                conn.execute(query.limit(1)).first() is not None
+                for query in (
+                    select(RoundWorkspaceBindingRow.round_id).where(
+                        RoundWorkspaceBindingRow.project_id == project_id,
+                        RoundWorkspaceBindingRow.workspace_key.in_(aliases),
+                    ),
+                    select(DraftRow.id).where(
+                        DraftRow.project_id == project_id,
+                        DraftRow.draft_key.in_(aliases),
+                    ),
+                    select(SubmissionRow.submission_id).where(
+                        SubmissionRow.project_id == project_id,
+                        SubmissionRow.local_key.in_(aliases),
+                    ),
+                )
+            )
 
     def superseded_pins(self, project_key: str) -> dict[str, set[str]]:
         """Ontology id -> the digests its pin pointed to before (#81)."""

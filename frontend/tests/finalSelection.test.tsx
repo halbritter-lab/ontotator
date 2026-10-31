@@ -232,3 +232,17 @@ it("groups texts that need a decision, collapses long lists so the actions stay 
   expect(screen.getAllByRole("link", { name: /^Open in Documents, case-/ })).toHaveLength(120);
   expect(screen.queryByRole("button", { name: "Show all 121" })).toBeNull();
 });
+
+it("counts the texts it lists: one row per text, a text to decide is not also left out", async () => {
+  const warning = { ...preflight.warnings[0], case_id: "a", language: "en" };
+  vi.spyOn(api, "finalExportPreflight").mockResolvedValue({ ...preflight, selections: [], warnings: [
+    { ...warning, id: "w1", code: "OPEN_REPORT", reason: "An open problem report needs a lead decision." },
+    { ...warning, id: "w2", code: "TASK_ON_HOLD", reason: "Paragraph two is missing." },
+  ], omissions: [{ case_id: "a", language: "en" }, { case_id: "b", language: "en" }, { case_id: "c", language: "en" }] } as never);
+  render(<FinalExportPanel projectKey="p" username="lead" />);
+  await screen.findByText("need your decision");
+  expect(screen.getByText("Needs your decision (1)")).toBeDefined();
+  expect(screen.getByText("Left out: no final result (2)")).toBeDefined();
+  expect(screen.getByText("An open problem report needs a lead decision. Paragraph two is missing.")).toBeDefined();
+  expect(screen.getByText("left out: no final result").parentElement!.textContent).toContain("2");
+});

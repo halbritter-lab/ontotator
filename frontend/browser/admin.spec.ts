@@ -321,7 +321,7 @@ test.describe("Administration through real accounts and jobs", () => {
     await expect(document.getByRole("button", { name: /^Reopen/ })).toHaveCount(0);
     await showSegment(textCard(page, "one", "en"), "Annotation");
     await textCard(page, "one", "en").getByRole("list", { name: "Annotators", exact: true }).getByRole("button", { name: /^Reopen .+’s annotation$/ }).click();
-    const reopen = page.getByRole("dialog", { name: "Reopen one", exact: true });
+    const reopen = page.getByRole("dialog", { name: "Reopen one en", exact: true });
     await reopen.getByLabel("Reason (optional)").fill("Check this finding again.");
     await reopen.getByRole("button", { name: "Reopen assignment", exact: true }).click();
     await expect(reopen).toHaveCount(0);

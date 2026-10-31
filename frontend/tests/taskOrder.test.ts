@@ -136,3 +136,9 @@ describe("nextOpenTask", () => {
     expect(nextOpenTask([task(5, { status: "submitted" }), task(3, { project_key: "other" })], 5, "project-a")).toEqual({ next: null, remaining: 0 });
   });
 });
+
+describe("nextOpenTask and paused tasks", () => {
+  it("skips a paused task: nothing can be done in it", () => {
+    expect(nextOpenTask([task(1), task(2, { held: true }), task(3)], 1, "project-a")).toEqual({ next: task(3), remaining: 1 });
+  });
+});

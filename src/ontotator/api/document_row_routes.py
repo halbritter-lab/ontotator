@@ -538,6 +538,19 @@ class OpenTranslationReviewView(_View):
     reviewer: PersonRefView | None = None
 
 
+class RowChangeView(_View):
+    """A change of who works on a row, or how: its History line."""
+
+    kind: Literal["reassigned", "mode_changed", "mode_restored"]
+    at: datetime
+    task: str | None = None
+    from_person: PersonRefView | None = None
+    to_person: PersonRefView | None = None
+    from_mode: str | None = None
+    to_mode: str | None = None
+    reason: str | None = None
+
+
 class RowSubmissions(_View):
     case_id: str
     language: str
@@ -546,6 +559,7 @@ class RowSubmissions(_View):
     submissions: list[RowSubmissionView]
     rounds: list[RowRoundView]
     open_translation_reviews: list[OpenTranslationReviewView]
+    changes: list[RowChangeView] = Field(default_factory=list)
 
 
 class ConsolidationOriginsView(_View):

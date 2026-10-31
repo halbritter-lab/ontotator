@@ -194,7 +194,7 @@ export function MyTasks({ project, status, projects, onNavigate, username }: MyT
         if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
         event.preventDefault(); onNavigate(answerRoute(task, task.answered_report_id!));
       }}><StatusBadge tone="info">Answer to your report</StatusBadge></a> : <StatusBadge tone="info">Answer to your report</StatusBadge>)}
-      {task.held && <><StatusBadge tone="warning">Paused</StatusBadge><p>{task.hold_reason ?? "A project problem needs attention."}</p></>}
+      {task.held && <><StatusBadge tone="warning">Paused</StatusBadge><p className="task-hold-reason" title={task.hold_reason ?? undefined}>{task.hold_reason ?? "A project problem needs attention."}</p></>}
     </> },
     { id: "assigned", header: "Assigned", cell: task => <AssignedDate at={task.assigned_at} /> },
     { id: "changed", header: "Last change", cell: task => <time dateTime={task.updated_at}>{formatDateTime(task.updated_at)}</time> },

@@ -1,3 +1,4 @@
+import { textLabel } from "../../app/identity";
 import { useId, useState, type ReactNode } from "react";
 import { AssignmentActions } from "../../admin/AssignmentActions";
 import type { AssignmentView, DocumentRowView } from "../../api/client";
@@ -83,7 +84,7 @@ export function FinalizationPart({ row, projectKey, query, decision, onNavigate,
     {running.length > 0 ? <PersonList label="Consolidators">
       {running.map(item => {
         const assigned = assignedLine(item, now, !groups);
-        return <WorkPersonRow key={item.assignment_id} item={item} caseId={row.case_id} canManage={canManage} tools={tools} onChanged={() => onChanged?.()}
+        return <WorkPersonRow key={item.assignment_id} item={item} caseId={row.case_id} textName={textLabel(row)} canManage={canManage} tools={tools} onChanged={() => onChanged?.()}
           onRemoved={focusAfterRemoval} details={groups && assigned ? <>{groups} · {assigned}</> : groups ?? assigned}
           open={item.is_me ? consolidationLink(`Open consolidation of ${workerName(item)}`, item.assignment_id) : undefined} />;
       })}
@@ -92,7 +93,7 @@ export function FinalizationPart({ row, projectKey, query, decision, onNavigate,
       {consolidators.length > 0 && <p>{`Consolidating with ${consolidators.map(person => (person.is_me ? "you" : shortName(person))).join(", ")}${groups ? ` · ${groups}` : ""}`}</p>}
       {openable && <div className="text-card-actions">{consolidationLink()}</div>}
     </>}
-    {revoking && tools && <AssignmentActions assignment={revoking} members={tools.members} open="revoke"
+    {revoking && tools && <AssignmentActions assignment={revoking} textName={textLabel(row)} members={tools.members} open="revoke"
       onChanged={() => { tools.onAssignmentsChanged(); onChanged?.(); }} onClose={() => setRevoking(null)} />}
     {decision}
     {row.final && <p>

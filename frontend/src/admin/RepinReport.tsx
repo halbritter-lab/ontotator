@@ -20,7 +20,7 @@ export function RepinReportPanel({ report, busy, onApply, onCancel }: {
     </ul>
     <p className="settings-card-text">
       {report.rewrites.length ? `${report.rewrites.length} draft term(s) will be rewritten to their successor.` : "No draft term needs rewriting."}
-      {" "}{report.flagged.length ? `${report.flagged.length} draft term(s) stay as they are and must be changed by their annotator before submitting.` : ""}
+      {" "}{report.flagged.length ? `${report.flagged.length} draft term(s) or open proposal(s) stay as they are and must be changed by their annotator before submitting.` : ""}
     </p>
     {report.rewrites.length > 0 && <table className="settings-table" aria-label="Rewritten draft terms">
       <thead><tr><th scope="col">Text</th><th scope="col">Annotator</th><th scope="col">Term</th><th scope="col">Becomes</th><th scope="col">Why</th></tr></thead>

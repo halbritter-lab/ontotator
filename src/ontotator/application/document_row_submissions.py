@@ -15,7 +15,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import Connection, and_, func, select
+from sqlalchemy import Connection, Text, and_, cast, func, select
 
 from ontotator.application.people import person_refs
 from ontotator.domain import document_rows as rules
@@ -24,8 +24,10 @@ from ontotator.domain.submission_labels import round_ordinals, submission_kind
 from ontotator.packages.models import PackageManifest
 from ontotator.storage.guidelines import guideline_facts
 from ontotator.storage.live_submissions import live_submission
+from ontotator.storage.mode_change_tables import AnnotationModeChangeRow
 from ontotator.storage.tables import (
     AssignmentRow,
+    AuditEventRow,
     DocumentRow,
     ProjectRow,
     SubmissionRow,
@@ -423,6 +425,88 @@ def _kept_automatically(
     return {sid: item.kept_automatically for sid, item in summaries.items()}
 
 
+def _row_changes(
+    conn: Connection,
+    pid: int,
+    documents: list[str],
+    case_id: str,
+    language: str,
+    viewer_user_id: int,
+) -> list[dict[str, Any]]:
+    """Reassignments and mode changes of the row, oldest first."""
+    reassigned = conn.execute(
+        select(
+            AuditEventRow.at,
+            AuditEventRow.details,
+            AssignmentRow.task,
+            AssignmentRow.user_id,
+        )
+        .join(AssignmentRow, cast(AssignmentRow.id, Text) == AuditEventRow.target_id)
+        .where(
+            AuditEventRow.project_id == pid,
+            AuditEventRow.action == "assignment.reassign",
+            AssignmentRow.project_id == pid,
+            AssignmentRow.document_id.in_(documents),
+        )
+    ).all()
+    replacements = dict(
+        conn.execute(
+            select(AssignmentRow.id, AssignmentRow.user_id).where(
+                AssignmentRow.id.in_(
+                    [row.details["replacement_assignment_id"] for row in reassigned]
+                )
+            )
+        )
+        .tuples()
+        .all()
+    )
+    modes = conn.execute(
+        select(AnnotationModeChangeRow).where(
+            AnnotationModeChangeRow.project_id == pid,
+            AnnotationModeChangeRow.case_id == case_id,
+            AnnotationModeChangeRow.language == language,
+        )
+    ).all()
+    people = person_refs(
+        conn,
+        {*(row.user_id for row in reassigned), *replacements.values()},
+        viewer_id=viewer_user_id,
+        viewer_is_lead=True,
+    )
+    changes: list[dict[str, Any]] = [
+        {
+            "kind": "reassigned",
+            "at": row.at,
+            "task": row.task,
+            "from_person": people[row.user_id].model_dump(),
+            "to_person": people[
+                replacements[row.details["replacement_assignment_id"]]
+            ].model_dump(),
+        }
+        for row in reassigned
+    ]
+    for row in modes:
+        changes.append(
+            {
+                "kind": "mode_changed",
+                "at": row.changed_at,
+                "from_mode": row.from_mode,
+                "to_mode": row.to_mode,
+                "reason": row.reason,
+            }
+        )
+        if row.restored_at is not None:
+            changes.append(
+                {
+                    "kind": "mode_restored",
+                    "at": row.restored_at,
+                    "from_mode": row.to_mode,
+                    "to_mode": row.from_mode,
+                }
+            )
+    return sorted(changes, key=lambda change: change["at"])
+
+
 def build_submissions(
     conn: Connection,
     key: str,
@@ -583,5 +667,8 @@ def build_submissions(
         "adjudicator_not_annotator": rule,
         "submissions": submissions,
         "rounds": rounds,
+        "changes": _row_changes(
+            conn, pid, documents, case_id, language, viewer_user_id
+        ),
         "open_translation_reviews": reviews,
     }

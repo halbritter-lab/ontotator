@@ -49,6 +49,7 @@ from ontotator.domain.profiles import TaskProfile
 from ontotator.domain.project_rules import ProjectRules
 from ontotator.domain.reanchor_resolution import PendingReanchorRef, ReanchorItem
 from ontotator.domain.review import ReviewTargetSet
+from ontotator.domain.scopes import TaskScope
 from ontotator.domain.variants import VariantInfo
 from ontotator.domain.work_rounds import WorkRoundView
 from ontotator.domain.workspace import (
@@ -467,6 +468,14 @@ class ScopedRepository(Repository):
     def superseded_pins(self, project_key: str) -> dict[str, set[str]]:
         self._visible(project_key)
         return super().superseded_pins(project_key)
+
+    def require_workspace_scope(self, key: WorkspaceKey, scope: TaskScope) -> None:
+        self._document(key.project_key, key.document_id)
+        super().require_workspace_scope(key, scope)
+
+    def held_across_release_move(self, key: WorkspaceKey) -> bool:
+        self._document(key.project_key, key.document_id)
+        return super().held_across_release_move(key)
 
     def add_snapshots(
         self,

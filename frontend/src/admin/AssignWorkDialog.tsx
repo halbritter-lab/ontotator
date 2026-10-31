@@ -27,7 +27,8 @@ export type AssignWorkDialogProps =
 type Preview = BatchPreview;
 /** `later`: annotation that becomes assignable once the review of its text is assigned; shown, not yet walked to. */
 type Step = { task: AssignWorkTask; language: string; versions: number; later?: boolean };
-type Walked = { steps: string[]; messages: string[]; assigned: string[]; skipped: string[] };
+/** `steps` are done, `passed` were skipped; `assigned` and `skipped` are cases. */
+type Walked = { steps: string[]; passed: string[]; messages: string[]; assigned: string[]; skipped: string[] };
 type CasesProps = Extract<AssignWorkDialogProps, { mode: "cases" }>;
 type Refused = { case_id: string; language: string; username: string; code: string };
 const stepKey = (task: string, language: string) => `${task}:${language}`;
@@ -160,7 +161,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
   const [chosen, setChosen] = useState<string[]>([]);
   const [self, setSelf] = useState(false);
   const [reload, setReload] = useState(0);
-  const [preview, setPreview] = useState<{ key: string; value: Preview } | null>(null);
+  const [preview, setPreview] = useState<{ key: string; step: string; value: Preview } | null>(null);
   const [previewError, setPreviewError] = useState<{ key: string; error: unknown } | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -172,7 +173,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
   const [limitSaved, setLimitSaved] = useState<string | null>(null);
   const [allTexts, setAllTexts] = useState(false);
   /** Cases mode walks through the selection's steps (issues 195, 218): what earlier steps of this dialog assigned. */
-  const [done, setDone] = useState<Walked>({ steps: [], messages: [], assigned: [], skipped: [] });
+  const [done, setDone] = useState<Walked>({ steps: [], passed: [], messages: [], assigned: [], skipped: [] });
   const randomChanged = useRef(false);
   const writing = useRef(false);
   const alive = useRef(true);
@@ -204,7 +205,8 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
   const rowMulti = isRow && multi;
   /** "Assign review…" for a changed source: the review resolves the source-change obligation (spec V5). */
   const sourceChanged = props.mode === "row" && props.reviewReason === "source_changed" && task === "translation_review";
-  const shown = preview?.value ?? null;
+  // A step's preview stays while its people are ticked, never under the next step's title.
+  const shown = preview?.step === current ? preview.value : null;
   const me = props.mode === "row" && task === "annotate" ? props.me ?? null : null;
   const people = shown ? sortMembers(shown.people.filter(person => person.username !== me?.username)) : [];
   /** One text: people who already hold this task show a status instead of a choice (F24). */
@@ -225,7 +227,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
     const seq = ++sequence.current;
     const [body] = JSON.parse(requestKey) as [BatchAssignRequest];
     void api.previewAssignmentBatch(props.projectKey, body).then(value => {
-      if (alive.current && seq === sequence.current) { setPreview({ key: requestKey, value }); setPreviewError(null); }
+      if (alive.current && seq === sequence.current) { setPreview({ key: requestKey, step: stepKey(body.task, body.language), value }); setPreviewError(null); }
     }, error => { if (alive.current && seq === sequence.current) setPreviewError({ key: requestKey, error }); });
   }, [props.projectKey, requestKey]);
 
@@ -310,15 +312,23 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
   /** The first step of the selection not yet through in this dialog, or null. */
   const nextStep = (through: readonly string[], known: readonly Step[] = steps ?? []): Step | null => known.find(step => !step.later && !through.includes(stepKey(step.task, step.language))) ?? null;
   /** One step is through (assigned, distributed or skipped): on to the next, else close. The steps reload: an assigned review opens the annotation of its text. */
-  const advance = async ({ message = "", skipped = [], assigned = [] }: { message?: string; skipped?: readonly string[]; assigned?: readonly string[] }) => {
-    const walked: Walked = { steps: [...done.steps, ...(current ? [current] : [])], messages: message ? [...done.messages, message] : done.messages, assigned: [...done.assigned, ...assigned], skipped: [...done.skipped, ...skipped] };
+  const advance = async ({ message = "", skipped = [], assigned = [], skip = false }: { message?: string; skipped?: readonly string[]; assigned?: readonly string[]; skip?: boolean }) => {
+    const here = current ? [current] : [];
+    const walked: Walked = { steps: skip ? done.steps : [...done.steps, ...here], passed: skip ? [...done.passed, ...here] : done.passed.filter(key => key !== current), messages: message ? [...done.messages, message] : done.messages, assigned: [...done.assigned, ...assigned], skipped: [...done.skipped, ...skipped] };
+    const through = [...walked.steps, ...walked.passed];
     const latest = props.mode === "cases" ? await loadSteps(props).catch(() => null) : null;
     if (!alive.current) return;
-    const next = props.mode === "cases" ? nextStep(walked.steps, latest ?? steps ?? []) : null;
+    // The list keeps its order: the server's changes as tasks get assigned.
+    const known = steps ?? [];
+    const before = known.map(step => stepKey(step.task, step.language));
+    const at = (step: Step) => { const index = before.indexOf(stepKey(step.task, step.language)); return index < 0 ? before.length : index; };
+    const kept = known.filter(step => through.includes(stepKey(step.task, step.language)) && !latest?.some(item => item.task === step.task && item.language === step.language));
+    const ordered = latest ? walkOrder([...kept, ...latest].sort((a, b) => at(a) - at(b))) : known;
+    const next = props.mode === "cases" ? nextStep(through, ordered) : null;
     if (!next) { await finish(walked); return; }
     setDone(walked);
     setChosen([]); setAcknowledged(false); setAllTexts(false);
-    if (latest) setSteps(known => walkOrder([...(known ?? []).filter(step => walked.steps.includes(stepKey(step.task, step.language)) && !latest.some(item => item.task === step.task && item.language === step.language)), ...latest]));
+    setSteps(ordered);
     setCurrent(stepKey(next.task, next.language));
   };
   /** `advance` and `finish` report what they could not check, so nothing here can fail. */
@@ -420,15 +430,18 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
     ? (["translation_review", "annotate"] as const).filter(item => item !== "translation_review" || !props.row.is_source).map(item => ({ value: stepKey(item, props.row.language), label: stepName(item) }))
     : (steps ?? []).filter(step => !step.later).map(step => {
       const key = stepKey(step.task, step.language);
-      return { value: key, label: `${stepLabel(step.task, step.language, step.versions)}${done.steps.includes(key) ? ", done" : ""}` };
+      return { value: key, label: `${stepLabel(step.task, step.language, step.versions)}${done.steps.includes(key) ? ", done" : done.passed.includes(key) ? ", skipped" : ""}` };
     });
   const changeStep = (value: string) => { reset(); setChosen([]); setAcknowledged(false); setCurrent(value); };
   // B7-5: one hint in normal text with the (i) popover; it also says why further rows are blocked.
   const limitInfo = shown && <LimitInfo key={shown.per_text} projectKey={props.projectKey} current={shown.per_text}
     textName={props.mode === "row" ? textLabel(props.row) : undefined}
     onSaved={value => { reset(); setLimitSaved(`Annotators per text: ${value}, for all texts.`); setReload(count => count + 1); }} />;
-  /** After a step was assigned, closing reports it (the selection and toast follow the assigned work). */
-  const close = () => { if (done.steps.length) whileBusy(() => finish(done)); else props.onClose(); };
+  /** Annotation waiting for a skipped review cannot run in this dialog: it is no step of it. */
+  const listed = (steps ?? []).filter(step => !step.later || !done.passed.includes(stepKey("translation_review", step.language)));
+  /** After a step was assigned or skipped, closing reports it (the selection and toast follow the assigned work). */
+  const reported = done.steps.length > 0 || done.passed.length > 0 || done.messages.length > 0;
+  const close = () => { if (reported) whileBusy(() => finish(done)); else props.onClose(); };
   const closing = busy ? undefined : close;
 
   // "Distribute evenly…" takes the dialog's place (issue 210); after a save the walk-through goes on from here.
@@ -438,15 +451,25 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
     onClose={() => {
       if (!randomChanged.current) { setRandomOpen(false); return; }
       whileBusy(async () => {
-        await advance({ message: "Assignments from the even distribution saved", skipped: fresh.skipped.map(item => item.case_id), assigned: fresh.targets.map(item => item.case_id) });
+        const message = "Assignments from the even distribution saved";
+        // The step is through only if every text got someone (a refused row, "Nobody" or an unassignable text leaves it open).
+        const after = await api.previewAssignmentBatch(props.projectKey, { ...request!, usernames: [] }).catch(() => null);
+        const empty = after?.targets.filter(target => target.remaining === after.per_text) ?? [];
+        if (!alive.current) return;
+        if (empty.length) {
+          randomChanged.current = false;
+          setDone(walked => ({ ...walked, messages: [...walked.messages, message], assigned: [...walked.assigned, ...fresh.targets.filter(item => !empty.some(target => target.case_id === item.case_id)).map(item => item.case_id)] }));
+          setNotice(`${message}. Still without anyone: ${targetTextNames(empty).join(", ")}. Choose someone, or close.`);
+          setChosen([]); setReload(value => value + 1);
+        } else await advance({ message, skipped: fresh.skipped.map(item => item.case_id), assigned: fresh.targets.map(item => item.case_id) });
         if (alive.current) setRandomOpen(false);
       });
     }} />;
 
   return <Dialog open title={title} size="md" onClose={closing} footer={<>
     {reason && <span id={reasonId} className="dialog-footer-reason">{reason}</span>}
-    <Button disabled={busy} onClick={close}>{done.steps.length ? "Close" : "Cancel"}</Button>
-    {props.mode === "cases" && current && nextStep([...done.steps, current]) && <Button disabled={busy} onClick={() => whileBusy(() => advance({}))}>Skip this task</Button>}
+    <Button disabled={busy} onClick={close}>{reported ? "Close" : "Cancel"}</Button>
+    {props.mode === "cases" && current && nextStep([...done.steps, ...done.passed, current]) && <Button disabled={busy} onClick={() => whileBusy(() => advance({ skip: true }))}>Skip this task</Button>}
     <Button variant="primary" loading={busy} aria-disabled={reason ? "true" : undefined} aria-describedby={reason ? reasonId : undefined} onClick={assign}>{confirming ? "Assign anyway" : rowMulti
       ? (picked ? `Assign ${picked === 1 ? "1 person" : `${picked} people`}` : "Assign") : !count || (isRow && !usernames.length) ? "Assign" : `Assign ${count}`}</Button>
   </>}>
@@ -457,18 +480,18 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
         <p id={limitId} className="assign-muted">{status}</p>
       </div>}
 
-      {props.mode === "cases" && steps && steps.length > 1 && <div className="assign-field">
+      {props.mode === "cases" && listed.length > 1 && <div className="assign-field">
         <strong>This selection needs</strong>
-        {/* Issue 233: every step on its own (one task in one language), the walked ones ticked, the current one marked. */}
-        <ol className="assign-steps" aria-label="Steps">{steps.map(step => {
-          const key = stepKey(step.task, step.language), walked = done.steps.includes(key), here = key === current;
-          return <li key={key} aria-current={here ? "step" : undefined} className={here ? "assign-step assign-step--current" : walked ? "assign-step assign-step--done" : "assign-step"}>
-            {stepShortLabel(step.task, step.language)}{walked && <><span aria-hidden="true"> ✓</span><span className="visually-hidden">, done</span></>}
+        {/* Issue 233: every step on its own (one task in one language), the walked ones ticked, skipped ones named, the current one marked. */}
+        <ol className="assign-steps" aria-label="Steps">{listed.map(step => {
+          const key = stepKey(step.task, step.language), walked = done.steps.includes(key), passed = !walked && done.passed.includes(key), here = key === current;
+          return <li key={key} aria-current={here ? "step" : undefined} className={here ? "assign-step assign-step--current" : walked || passed ? "assign-step assign-step--done" : "assign-step"}>
+            {stepShortLabel(step.task, step.language)}{walked && <><span aria-hidden="true"> ✓</span><span className="visually-hidden">, done</span></>}{passed && !here && " (skipped)"}
           </li>;
         })}</ol>
-        <span className="assign-muted">{`Step ${steps.findIndex(step => stepKey(step.task, step.language) === current) + 1} of ${steps.length}`}</span>
+        <span className="assign-muted">{`Step ${listed.findIndex(step => stepKey(step.task, step.language) === current) + 1} of ${listed.length}`}</span>
       </div>}
-      {done.steps.length > 0 && task && <p className="assign-done" role="status">{`${done.messages.length ? `${done.messages.join(". ")}. ` : ""}Next: ${stepsOverview([{ task, language }])}. Close when you are done.`}</p>}
+      {reported && task && <p className="assign-done" role="status">{`${done.messages.length ? `${done.messages.join(". ")}. ` : ""}Next: ${stepsOverview([{ task, language }])}. Close when you are done.`}</p>}
       {props.mode === "cases" && stepsError !== undefined && <><ErrorNotice error={stepsError} /><Button onClick={() => setStepsRetry(value => value + 1)}>Retry</Button></>}
       {props.mode === "cases" && steps === null && stepsError === undefined && <p className="assign-muted">Loading members…</p>}
       {props.mode === "cases" && steps !== null && !steps.length && <p>No cases in the selection need this task.</p>}

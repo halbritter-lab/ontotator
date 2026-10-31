@@ -203,9 +203,16 @@ export function savedText(caseId: string, language: string): string {
   return `Final result saved for ${caseId} ${language}.`;
 }
 
-/** What is left after a decision: "2 more need your decision." / "Nothing else needs your decision." */
+/** What is left after a decision, as the Needs your decision tab counts it: "2 more need your decision." / "Nothing else needs your decision." */
 export function remainingText(after: DecisionBarView): string {
-  return after.total ? `${after.total} more ${after.total === 1 ? "needs" : "need"} your decision.` : "Nothing else needs your decision.";
+  const left = after.needs_decision ?? 0;
+  return left ? `${left} more ${left === 1 ? "needs" : "need"} your decision.` : "Nothing else needs your decision.";
+}
+
+/** No next final decision on this page: for the project only if the page shows every row or no decision is left. */
+export function noMoreFinalsText(page: DocumentRowsPage): string {
+  const shown = page.groups.reduce((sum, group) => sum + group.rows.length, 0);
+  return shown < page.bar.all && (page.bar.needs_decision ?? 0) > 0 ? "No more final results to decide in this view." : "No more final results to decide.";
 }
 
 /** Short kind of a decision for "Next decision: case-109 de (problem report)". */

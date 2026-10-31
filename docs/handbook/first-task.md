@@ -12,7 +12,7 @@ Before you start: you need the address of your Ontotator server, your username a
 
 ## 2. Find your task
 
-After login you see **My tasks**, or **Projects** the first time.
+After login you see **My tasks**. Leads and administrators see **Projects** the first time.
 
 1. Click **My tasks** in the sidebar.
 2. On the tab **To do**, find a row whose **Task** is *Annotation, from scratch* or *Annotation, from proposals*.

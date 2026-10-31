@@ -5,11 +5,12 @@
  * "Annotation: Tom Reis (ann-0004), Round 1, 1 finding, 22:15", "Final: chosen by you, 20 Oct, 22:20"; a consolidation
  * adds "4 kept automatically (all matched)" (U14).
  */
-import type { DocumentRowView, RowSubmissionView } from "../api/client";
+import type { DocumentRowView, RowChangeView, RowSubmissionView } from "../api/client";
 import { assignmentStatusLabels, labelFor, plural } from "../app/labels";
 import { formatTime, personLabel } from "../app/submissionLabels";
 import { decisionLabels } from "../translation/labels";
 import { acceptanceLabel, acceptanceOf, isDiscarded } from "./TextVersions";
+import { MODE_WORDS } from "./stageLabels";
 
 /** Stage of an activity line (the row panel's stage tag and filter). */
 export type HistoryStage = "review" | "annotation" | "final";
@@ -27,6 +28,8 @@ export interface HistoryOptions {
   /** Pseudonym of the signed-in lead ("chosen by you"). */
   me?: string | null;
   now?: Date;
+  /** Reassignments and mode changes of the row (with the submissions). */
+  changes?: readonly RowChangeView[] | null;
 }
 
 type WorkItem = DocumentRowView["work"][number];
@@ -104,6 +107,19 @@ export function historyLines(row: DocumentRowView, submissions: readonly RowSubm
     const round = item.moved_to_version == null && item.round_ordinal != null ? `Round ${item.round_ordinal}` : null;
     lines.push({ key: `work-${item.assignment_id}`, stage: "annotation", text: `${workPrefix(item)}: ${join(who(item), round, status)}` });
   }
+
+  (options.changes ?? []).forEach((change, index) => {
+    const stage: HistoryStage = change.task === "translation_review" ? "review" : "annotation";
+    const when = timeText(change.at, now);
+    const key = `change-${index}`;
+    if (change.kind === "reassigned") {
+      const name = (person: RowChangeView["from_person"]) => personLabel(person?.pseudonym ?? "", !!person?.is_me, person ?? undefined);
+      lines.push({ key, stage, text: `${stage === "review" ? "Review" : change.task === "review" ? "Consolidation" : "Annotation"}: ${join(`reassigned from ${name(change.from_person)} to ${name(change.to_person)}`, when)}` });
+    } else {
+      const mode = change.to_mode === "proposals" || change.to_mode === "scratch" ? MODE_WORDS[change.to_mode] : change.to_mode;
+      lines.push({ key, stage, text: `Annotation: ${join(`${change.kind === "mode_restored" ? "mode restored" : "mode changed"}, now annotated ${mode}`, change.reason, when)}` });
+    }
+  });
 
   // A task on hold stays a history line (spec "Expansion": TASK_ON_HOLD).
   for (const entry of [...row.issues, ...row.notes]) {

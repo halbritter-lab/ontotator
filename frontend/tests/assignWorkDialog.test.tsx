@@ -287,6 +287,7 @@ it("Distribute evenly… covers the task shown and moves on (#218)", async () =>
   fireEvent.click(screen.getByRole("button", { name: "Distribute evenly…" }));
   // One visible dialog (#210): the distribution takes the assign dialog's place.
   expect(screen.getAllByRole("dialog").map(dialog => dialog.getAttribute("aria-label"))).toEqual(["Propose distribution"]);
+  caseIds.forEach(id => taken.add(`translation_review:de:${id}`));
   fireEvent.click(await screen.findByRole("button", { name: "Confirm distribution" }));
   await waitFor(() => expect(lastPreview()).toMatchObject({ task: "annotate", language: "en" }));
   expect(screen.queryByRole("dialog", { name: "Propose distribution" })).toBeNull();
@@ -718,4 +719,60 @@ it("names one text without Show all (issue 129, U4)", async () => {
   const line = screen.getByText("Text", { exact: true }).closest("p")!;
   expect(line.textContent).toBe("Text case-0101 de");
   expect(within(line).queryByRole("button")).toBeNull();
+});
+
+it("a distribution that leaves a text without anyone keeps its step open and says so", async () => {
+  const few = ["case-0101", "case-0102"];
+  vi.mocked(api.selectionSummary).mockResolvedValue(summary([{ task: "translation_review", language: "de", versions: 2, cases: 2 }, { task: "annotate", language: "en", versions: 2, cases: 2 }]));
+  const props = { ...casesProps(), caseIds: few }; render(<AssignWorkDialog {...props} />); await ready();
+  fireEvent.click(screen.getByRole("button", { name: "Distribute evenly…" }));
+  taken.add("translation_review:de:case-0101");
+  fireEvent.click(await screen.findByRole("button", { name: "Confirm distribution" }));
+  const notice = await screen.findByRole("alert");
+  expect(notice.textContent).toBe("Assignments from the even distribution saved. Still without anyone: case-0102 de. Choose someone, or close.");
+  expect(stepItems()).toEqual(["> Translation review de", "Annotation en"]);
+  expect(overview()).toContain("Step 1 of 2");
+  await ready();
+  fireEvent.click(screen.getAllByRole("button", { name: "Close" }).at(-1)!);
+  await waitFor(() => expect(props.onAssigned).toHaveBeenCalled());
+  expect(props.onAssigned.mock.lastCall![0]).toContain("Assignments from the even distribution saved");
+  expect(props.onAssigned.mock.lastCall![0]).toContain("translation review of case-0102 de");
+});
+
+it("a skipped step reads skipped, not done; annotation that waits for it is no step of this dialog", async () => {
+  vi.mocked(api.selectionSummary).mockResolvedValue(summary([{ task: "translation_review", language: "de", versions: 20, cases: 20 }, { task: "annotate", language: "en", versions: 20, cases: 20 }]));
+  vi.mocked(api.previewAssignmentBatch).mockImplementation(async (_key, body) => body.task === "annotate" && body.language === "de"
+    ? { ...preview(body), targets: [], skipped: [{ case_id: "case-0101", language: "de", reason: "waiting_for_review" }] } : preview(body));
+  render(<AssignWorkDialog {...casesProps()} />); await ready();
+  expect(stepItems()).toEqual(["> Translation review de", "Annotation en", "Annotation de"]);
+  expect(overview()).toContain("Step 1 of 3");
+  fireEvent.click(screen.getByRole("button", { name: "Skip this task" }));
+  await waitFor(() => expect(lastPreview()).toMatchObject({ task: "annotate", language: "en" }));
+  await waitFor(() => expect(stepItems()).toEqual(["Translation review de (skipped)", "> Annotation en"]));
+  expect(overview()).toContain("Step 2 of 2");
+  expect(screen.getByRole("option", { name: "Translation review, de, 20 versions, skipped" })).toBeDefined();
+});
+
+it("keeps the order of the steps when the server lists them differently after a step", async () => {
+  let walked = false;
+  const before = summary([{ task: "annotate", language: "en", versions: 4, cases: 4 }, { task: "annotate", language: "de", versions: 4, cases: 4 }]);
+  const after = summary([{ task: "annotate", language: "de", versions: 4, cases: 4 }, { task: "annotate", language: "en", versions: 2, cases: 2 }]);
+  vi.mocked(api.selectionSummary).mockImplementation(async () => walked ? after : before);
+  render(<AssignWorkDialog {...casesProps()} />); await ready();
+  expect(stepItems()).toEqual(["> Annotation en", "Annotation de"]);
+  walked = true;
+  fireEvent.click(screen.getByRole("button", { name: "Skip this task" }));
+  await waitFor(() => expect(lastPreview()).toMatchObject({ task: "annotate", language: "de" }));
+  await waitFor(() => expect(stepItems()).toEqual(["Annotation en (skipped)", "> Annotation de"]));
+});
+
+it("never shows the texts of the step before under the next step's task", async () => {
+  vi.mocked(api.selectionSummary).mockResolvedValue(summary([{ task: "translation_review", language: "de", versions: 20, cases: 20 }, { task: "annotate", language: "en", versions: 20, cases: 20 }]));
+  render(<AssignWorkDialog {...casesProps()} />); await ready();
+  const answers: (() => void)[] = [];
+  vi.mocked(api.previewAssignmentBatch).mockImplementation((_key, body) => body.language === "en" ? new Promise(resolve => { answers.push(() => resolve(preview(body))); }) : Promise.resolve(preview(body)));
+  fireEvent.click(screen.getByRole("button", { name: "Skip this task" }));
+  await waitFor(() => expect(answers.length).toBeGreaterThan(0));
+  await waitFor(() => expect(screen.getByRole("list", { name: "Steps" }).textContent).toContain("(skipped)"));
+  expect(screen.queryByText(/case-0101 de/)).toBeNull();
 });

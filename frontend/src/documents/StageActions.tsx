@@ -1,4 +1,5 @@
 /** Admin actions of one stage (moved out of the row panel, U3); the cards' stage popover lists them. */
+import { textLabel } from "../app/identity";
 import { useState } from "react";
 import type { AssignmentView, DocumentRowView } from "../api/client";
 import { AssignmentActions } from "../admin/AssignmentActions";
@@ -58,12 +59,12 @@ export function StageActions({ row, stage, onAssign, onRequestCorrection, canReq
   return <>
     {reassignable.map(assignment => <div key={assignment.id} className="stage-actions-reassign">
       <span>{personOf(assignment.pseudonym)}</span>
-      {textVersionTools && <AssignmentActions assignment={assignment} members={textVersionTools.members} onChanged={textVersionTools.onAssignmentsChanged} />}
+      {textVersionTools && <AssignmentActions assignment={assignment} textName={textLabel(row)} members={textVersionTools.members} onChanged={textVersionTools.onAssignmentsChanged} />}
     </div>)}
     {reopenable.map(assignment => <div key={assignment.id} className="stage-actions-reassign">
       <span>{personOf(assignment.pseudonym)}</span>
       <Button size="sm" aria-label={`Reopen…, ${personOf(assignment.pseudonym)}`} onClick={() => setReopening(assignment.id)}>Reopen…</Button>
-      {reopening === assignment.id && textVersionTools && <AssignmentActions assignment={assignment} members={textVersionTools.members} open="reopen"
+      {reopening === assignment.id && textVersionTools && <AssignmentActions assignment={assignment} textName={textLabel(row)} members={textVersionTools.members} open="reopen"
         onChanged={textVersionTools.onAssignmentsChanged} onClose={() => setReopening(null)} />}
     </div>)}
     {correction && <Button size="sm" onClick={() => onRequestCorrection(row)}>Request correction…</Button>}

@@ -1443,7 +1443,7 @@ describe("plan chips on the page", () => {
     renderPage({ query: { panel: "case-0101:fr", panel_stage: "annotation" } });
     const card = await textCard("case-0101 fr");
     fireEvent.click(await within(card).findByRole("button", { name: "Change mode…" }));
-    const warning = await screen.findByRole("dialog", { name: "Change annotation of case-0101 fr to from scratch?" });
+    const warning = await screen.findByRole("dialog", { name: "Annotate case-0101 fr from scratch instead?" });
     expect(await within(warning).findByText("Tom Reis: 1 submission is discarded.")).toBeTruthy();
     expect(previewCall).toHaveBeenCalledWith(expect.any(String), { case_id: "case-0101", language: "fr", mode: "scratch" });
   });

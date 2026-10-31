@@ -90,6 +90,7 @@ export type AnnotationTargetPreview = components["schemas"]["AnnotationTargetPre
 export type DiscardRequest = Defaulted<components["schemas"]["DiscardRequest"], "confirm">;
 export type DiscardResult = components["schemas"]["DiscardResult"];
 // Annotation-mode change after submissions, and its restore
+export type RowChangeView = components["schemas"]["RowChangeView"];
 export type ModeChangeTarget = components["schemas"]["ModeChangeTarget"];
 export type ModeChangeRequest = components["schemas"]["ModeChangeRequest"];
 export type ModeChangePreview = components["schemas"]["ModeChangePreview"];

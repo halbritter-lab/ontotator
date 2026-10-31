@@ -62,7 +62,7 @@ test("a de + en selection walks review, then annotation; Distribute moves on; cl
   await expect(dialog.getByRole("status").filter({ hasText: "Assignments from the even distribution saved" })).toContainText("Next: annotation (");
   await expect(overview).toContainText("Step 3 of 3");
   await expect(dialog.getByRole("button", { name: "Distribute evenly…", exact: true })).toBeVisible();
-  await expect(dialog.getByText("Each ticked person gets every selected en text", { exact: false })).toBeVisible();
+  await expect(dialog.getByText("Each ticked person gets every selected de text", { exact: false })).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Skip this task", exact: true })).toHaveCount(0);
   await shot(lead, "3-after-distribute");
 
@@ -72,7 +72,7 @@ test("a de + en selection walks review, then annotation; Distribute moves on; cl
   await expect(toast).toContainText("Left unassigned: annotation of");
   await shot(lead, "4-closing-summary");
   await toast.getByRole("button", { name: "Select the 1 skipped case", exact: true }).click();
-  await expect(lead.getByText(/next step: Assign annotation \(en\)/)).toBeVisible();
+  await expect(lead.getByText(/next step: Assign annotation \(de\)/)).toBeVisible();
   await shot(lead, "5-left-texts-selected");
 });
 

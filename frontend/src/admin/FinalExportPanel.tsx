@@ -140,8 +140,13 @@ function FinalExportContent({ projectKey }: { projectKey: string }): JSX.Element
   const newExport = () => { focusCheck.current = true; checkAgain(); };
 
   const notInPlan = state?.not_in_plan ?? [];
-  const decisions = state ? state.warnings.filter(warning => warning.code !== LEFT_OUT) : [];
-  const decided = new Set(decisions.map(rowKey));
+  const warnings = state ? state.warnings.filter(warning => warning.code !== LEFT_OUT) : [];
+  const decided = new Set(warnings.map(rowKey));
+  // One row per text, whatever number of warnings it has.
+  const decisions = [...decided].map(key => {
+    const lines = warnings.filter(warning => rowKey(warning) === key);
+    return { ...lines[0], why: [...new Set(lines.map(warning => warning.reason))].join(" ") };
+  });
   // One row per text: a text that needs a decision is not listed again under "Left out".
   const leftOut = (state?.omissions ?? []).filter(row => !decided.has(rowKey(row)));
   const clear = state && !state.warnings.length && !state.omissions.length && !notInPlan.length;
@@ -170,13 +175,13 @@ function FinalExportContent({ projectKey }: { projectKey: string }): JSX.Element
           : <>
             <dl className="stat-row stat-row--number-first">
               <div><dt>ready to export</dt><dd>{state.selections.length}</dd></div>
-              <div><dt>left out: no final result</dt><dd>{state.omissions.length}</dd></div>
+              <div><dt>left out: no final result</dt><dd>{leftOut.length}</dd></div>
               <div><dt>need your decision</dt><dd>{decided.size}</dd></div>
             </dl>
             {!clear && <table className="data-table final-export-table">
               <caption className="visually-hidden">Texts that need attention</caption>
               <thead><tr><th scope="col">Text</th><th scope="col">Why</th><th scope="col"><span className="visually-hidden">Action</span></th></tr></thead>
-              <Group projectKey={projectKey} title="Needs your decision" lines={decisions.map(warning => ({ ...warning, why: warning.reason }))} />
+              <Group projectKey={projectKey} title="Needs your decision" lines={decisions} />
               <Group projectKey={projectKey} title="Left out: no final result" muted lines={leftOut.map(row => ({ ...row, why: "No final result selected" }))} />
               <Group projectKey={projectKey} title="Not planned, not exported" muted lines={notInPlan.map(row => ({ ...row, why: "Annotate is off in the work plan. For information only." }))} />
             </table>}

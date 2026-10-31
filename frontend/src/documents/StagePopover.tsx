@@ -45,7 +45,7 @@ export function StagePopover({ row, stage, projectKey, anchorRef, onClose, onOpe
   // Only annotation lines come from the submissions; review and final lines are in the row itself.
   const submissions = useRowSubmissions(projectKey, row.case_id, row.language, stage === "annotation");
   const loading = stage === "annotation" && !submissions.data && submissions.error == null;
-  const lines = historyLines(row, submissions.data?.submissions ?? null, { me, now }).reverse().filter(line => line.stage === stage).slice(0, LATEST);
+  const lines = historyLines(row, submissions.data?.submissions ?? null, { me, now, changes: submissions.data?.changes }).reverse().filter(line => line.stage === stage).slice(0, LATEST);
   const hasActions = actions != null && actions !== false;
 
   return <Popover open anchorRef={anchorRef} label={`${title} activity, ${rowName(row)}`} width={320} onClose={onClose}

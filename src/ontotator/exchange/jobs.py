@@ -33,7 +33,10 @@ from ontotator.exchange.review_export import translation_review_export
 from ontotator.exchange.t1 import (
     ExportCounts,
     layers_for,
+    recorded_digests,
+    recorded_layers,
     submission_to_unit,
+    with_layers,
 )
 from ontotator.exchange.uploads import upload_commit, upload_preview
 from ontotator.jobs.queue import Handler, Job, JobContext, StructuredJobError
@@ -42,6 +45,7 @@ from ontotator.storage.repository import ProjectExport
 from ontotator.storage.tables import (
     JobRow,
     OntologyFileRow,
+    ProjectOntologyRow,
     ProjectResourceRow,
     ProjectRow,
     ProposalSetRow,
@@ -183,12 +187,12 @@ def _warnings(report: ontospan.ValidationReport) -> dict[str, int]:
 
 def _validate(
     units: Sequence[ontospan.AnnotatedDocument],
-    ontologies: Mapping[str, ontospan.OntologyView],
+    ontologies: Sequence[Mapping[str, ontospan.OntologyView]],
 ) -> dict[str, int]:
-    """Validate every unit against the pinned ontologies; warning counts by code."""
+    """Validate each unit against its ontologies; warning counts by code."""
     report = ontospan.ValidationReport()
-    for index, unit in enumerate(units):
-        for issue in ontospan.validate(unit, ontologies).issues:
+    for index, (unit, views) in enumerate(zip(units, ontologies, strict=True)):
+        for issue in ontospan.validate(unit, views).issues:
             report.add(
                 issue.level, issue.code, f"units[{index}].{issue.path}", issue.message
             )
@@ -208,6 +212,38 @@ def t1_import(job: Job, ctx: JobContext) -> dict[str, Any]:
     from ontotator.exchange.uploads import run_import
 
     return run_import(job, ctx)
+
+
+def _release_history(
+    db: Database, project: str
+) -> tuple[dict[str, list[str]], dict[str, str]]:
+    """Each ontology's stored digests, oldest first, and the release of each digest."""
+    with db.transaction() as conn:
+        pins = conn.execute(
+            select(
+                ProjectOntologyRow.ontology_id,
+                ProjectOntologyRow.sha256,
+                ProjectOntologyRow.superseded_sha256,
+            )
+            .join(ProjectRow, ProjectRow.id == ProjectOntologyRow.project_id)
+            .where(ProjectRow.project_key == project)
+        ).all()
+        digests = [d for pin in pins for d in (*pin.superseded_sha256, pin.sha256)]
+        names = dict(
+            conn.execute(
+                select(OntologyFileRow.sha256, OntologyFileRow.release).where(
+                    OntologyFileRow.sha256.in_(digests),
+                    OntologyFileRow.kind == "ontology",
+                )
+            )
+            .tuples()
+            .all()
+        )
+    history = {
+        pin.ontology_id: [d for d in (*pin.superseded_sha256, pin.sha256) if d in names]
+        for pin in pins
+    }
+    return history, {digest: name or "" for digest, name in names.items()}
 
 
 def _project_id(db: Database, project: str) -> int:
@@ -319,15 +355,28 @@ def serialize_t1_content(
     if not content.submissions:
         raise DomainError("EXPORT_EMPTY", f"Project '{project}' has no submissions.")
     layers = layers_for(content.profile, content.pins)
-    ontologies: dict[str, ontospan.OntologyView] = {
-        ontology_id: ontospan.ObographOntology.load(db.blobs.path(pin.sha256))
-        for ontology_id, pin in content.pins.items()
-    }
+    views: dict[str, ontospan.OntologyView] = {}
+
+    def view_of(digest: str) -> ontospan.OntologyView:
+        if digest not in views:
+            views[digest] = ontospan.ObographOntology.load(db.blobs.path(digest))
+        return views[digest]
+
     # Validate historical unresolved targets before serialization, which may
     # otherwise fail without the submission context or fill missing axes.
     from ontotator.application.submissions import validate_annotation_completion
 
     ontology_by_layer = {layer.layer_id: layer.ontology.id for layer in layers}
+    history, release_names = _release_history(db, project)
+    submission_layers = recorded_layers(
+        layers,
+        [
+            recorded_digests(submission, content.proposals, ontology_by_layer)
+            for submission in content.submissions
+        ],
+        history,
+        release_names,
+    )
     for submission in content.submissions:
         for decision in submission.decisions:
             if decision.outcome != "uncertain":
@@ -339,7 +388,12 @@ def serialize_t1_content(
                 if proposal is None:
                     raise DomainError("TARGET_NOT_FOUND", decision.target.model_dump())
                 validate_annotation_completion(proposal, content.profile)
-                view = ontologies[ontology_by_layer[proposal.annotation.layer_id]]
+                ontology_id = ontology_by_layer[proposal.annotation.layer_id]
+                view = view_of(
+                    proposal.ontology_sha256
+                    if proposal.ontology_sha256 in history.get(ontology_id, ())
+                    else content.pins[ontology_id].sha256
+                )
                 term_id = proposal.annotation.term_id
                 if not view.is_active(term_id):
                     code = (
@@ -388,7 +442,9 @@ def serialize_t1_content(
             case_sizes[entry.variant.case_id] = (
                 case_sizes.get(entry.variant.case_id, 0) + 1
             )
-    for submission in content.submissions:
+    for submission, by_layer in zip(
+        content.submissions, submission_layers, strict=True
+    ):
         key = submission.origin_key
         stored = content.documents[key.document_id]
         unit, unit_counts = submission_to_unit(
@@ -428,12 +484,21 @@ def serialize_t1_content(
                     )
                 }
             )
-        units.append(unit)
+        units.append(with_layers(unit, by_layer))
         for name in counts:
             counts[name] += unit_counts[name]  # type: ignore[literal-required]
     # write_bundle checks the format without ontology views. Validate against
-    # the same pinned ontologies as import before storing an export artifact.
-    warning_counts = _validate(units, ontologies)
+    # the release each unit names before storing an export artifact.
+    warning_counts = _validate(
+        units,
+        [
+            {
+                layer.ontology.id: view_of(layer.ontology.sha256 or "")
+                for layer in by_layer.values()
+            }
+            for by_layer in submission_layers
+        ],
+    )
     now = datetime.now(UTC).replace(microsecond=0)
     bundle_id = (
         f"{final_bundle_kind}-{final_snapshot_id}"

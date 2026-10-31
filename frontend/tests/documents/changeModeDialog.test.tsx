@@ -32,7 +32,7 @@ function setup(found: ModeChangePreview = preview()) {
   render(<ChangeModeDialog projectKey="demo" row={row} mode="scratch" revision={4} {...props} />);
   return props;
 }
-const dialog = () => screen.getByRole("dialog", { name: "Change annotation of case-7 de to from scratch?" });
+const dialog = () => screen.getByRole("dialog", { name: "Annotate case-7 de from scratch instead?" });
 const confirmButton = () => within(dialog()).getByRole("button", { name: "Discard work and change mode" });
 
 describe("affectedPeople", () => {
@@ -139,7 +139,7 @@ describe("restore", () => {
     const { rerender } = render(<ModeChangeNotice projectKey="demo" row={{ ...row, annotation_mode: { ...mode, discarded_count: 0 } }} revision={5} onChanged={vi.fn()} now={new Date("2026-10-28T00:00:00Z")} />);
     expect(list).not.toHaveBeenCalled();
     rerender(<ModeChangeNotice projectKey="demo" row={{ ...row, annotation_mode: { ...mode, discarded_count: 1 } }} revision={5} onChanged={vi.fn()} now={new Date("2026-10-28T00:00:00Z")} />);
-    expect(await screen.findByText("Mode changed to from scratch on 21 Oct; discarded work of Anne Notator.")).toBeDefined();
+    expect(await screen.findByText("Mode changed on 21 Oct: now annotated from scratch; discarded work of Anne Notator.")).toBeDefined();
     fireEvent.click(screen.getByRole("button", { name: "Restore…" }));
     expect(screen.getByRole("dialog", { name: "Restore discarded work?" })).toBeDefined();
   });
