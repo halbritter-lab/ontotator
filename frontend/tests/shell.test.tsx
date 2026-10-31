@@ -53,6 +53,17 @@ describe("role-based shell", () => {
     expect(nav.closest("details")?.open).toBe(false);
     expect(document.activeElement).toBe(summary);
   });
+  it("closes the Sections panel on a press outside it, not inside", async () => {
+    const state = props({ projects: [project("managed", true)], route: { name: "task", assignmentId: 42 }, taskProject: "managed" });
+    render(<Shell {...state} />);
+    const sections = document.querySelector<HTMLDetailsElement>(".shell-reading-navigation")!;
+    sections.open = true;
+    fireEvent.pointerDown(within(sections).getByRole("navigation", { name: "Sections" }));
+    expect(sections.open).toBe(true);
+    fireEvent.pointerDown(screen.getByRole("main"));
+    expect(sections.open).toBe(false);
+  });
+
   it("the logo links to the start page: a lead's Documents, an annotator's My tasks (R-1)", () => {
     const lead = props({ projects: [project("managed", true)], route: { name: "projectProgress", key: "managed" } });
     render(<Shell {...lead} />);
@@ -364,6 +375,15 @@ describe("Documents counter (V3, VD7)", () => {
       await screen.findByRole("link", { name: "Documents, 6 need your decision" });
       expect(api.documentsSummary).toHaveBeenCalledTimes(4);
     } finally { vi.useRealTimers(); }
+  });
+
+  it("reloads on tasks-changed: a submitted task can settle a decision", async () => {
+    vi.mocked(api.documentsSummary).mockResolvedValue({ needs_decision: 1 });
+    render(<Shell {...led()} />);
+    await screen.findByRole("link", { name: "Documents, 1 need your decision" });
+    vi.mocked(api.documentsSummary).mockResolvedValue({ needs_decision: 0 });
+    act(() => { notifyTasksChanged(); });
+    await screen.findByRole("link", { name: "Documents" });
   });
 
   it("non-leads see no count", async () => {

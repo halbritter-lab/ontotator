@@ -1326,6 +1326,18 @@
   line-height: var(--leading-sm);
 }
 
+/* The stacked inspector is too short for a pinned preview: it would cover the hits, so it follows them. */
+@media (max-width: 1024px) {
+  .candidate-preview { position: static; }
+  .search-panel .candidate-card { scroll-margin-bottom: 0; }
+}
+@media (min-width: 1025px) {
+  @container case-screen (max-width: 1059px) {
+    .candidate-preview { position: static; }
+    .search-panel .candidate-card { scroll-margin-bottom: 0; }
+  }
+}
+
 .candidate-preview-title {
   font-weight: var(--weight-strong);
   overflow-wrap: anywhere;
@@ -1497,6 +1509,10 @@
   flex: 1 1 auto;
   flex-wrap: nowrap;
 }
+/* An error's text must show: the actions may take a second row rather than squeeze the title out. */
+.case-toolbar:has(.status-error) {
+  flex-wrap: wrap;
+}
 .case-toolbar > .app-actions {
   flex: 0 0 auto;
   white-space: nowrap;
@@ -1531,19 +1547,13 @@
   .case-mode { display: none; }
   .case-consolidation-hint { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .case-status__lock { display: inline-flex; }
-  /* "Saved" keeps its dot; the word stays for assistive technology. */
-  .status-badge__text,
+  /* "Saved" and "Saving" keep their dot, the word stays for assistive technology; an error always shows its text. */
+  .status-badge:not(.status-error) .status-badge__text,
   .case-status__note { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }
 @media (max-width: 700px) {
   .case-toolbar { flex-wrap: wrap; }
   .case-toolbar > .app-actions { flex-wrap: wrap; white-space: normal; }
-}
-
-/* A notice in the actions row (submitted, paused) is as high as the buttons beside it. */
-.app-actions > .notice {
-  margin: 0 0 0 var(--space-2);
-  padding: 4px 12px;
 }
 
 .app-actions .status-badge {
@@ -2002,6 +2012,11 @@
   margin-bottom: var(--space-3);
   padding-top: var(--space-3);
   border-top: 1px solid var(--border);
+}
+
+/* In the inspector, outside the review actions' padding: the inset of the back-to-text button. */
+.replacement-strip {
+  margin-inline: var(--space-3);
 }
 
 .review-actions__block-head {

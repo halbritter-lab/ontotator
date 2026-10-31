@@ -32,7 +32,7 @@ describe("My tasks component", () => {
     render(<MyTasks projects={[]} onNavigate={vi.fn()} />);
     const row = await screen.findByTestId("task-row");
     expect(within(row).getByText("Waiting for translation review")).toBeDefined();
-    expect(within(row).getByText("Opens after the review")).toBeDefined();
+    expect(within(row).getByText("Opens once a translation is accepted")).toBeDefined();
     expect(within(row).queryByRole("link")).toBeNull();
     expect(within(row).queryByText("Open")).toBeNull();
   });
@@ -43,7 +43,7 @@ describe("My tasks component", () => {
     const row = await screen.findByTestId("task-row");
     expect(within(row).getByText("Waiting for the project lead")).toBeDefined();
     expect(within(row).getByText("The lead decides how it continues")).toBeDefined();
-    expect(within(row).queryByText("Opens after the review")).toBeNull();
+    expect(within(row).queryByText("Opens once a translation is accepted")).toBeNull();
     expect(within(row).queryByRole("link")).toBeNull();
   });
 

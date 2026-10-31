@@ -24,7 +24,7 @@ describe("filter model", () => {
     ["Bar segments → tabs (no chip)", { segment: "done" }, { segment: "done" }, []],
     ["Decision category → chip under Needs your decision", { decision: "translation" }, { decision: "translation" }, ["Translation rejected or queried"]],
     ["Stage → chip", { stage: "final" }, { stage: "final" }, ["Stage: Final result"]],
-    ["Owner → chip", { owner: "me" }, { owner: "me" }, ["Owner: You"]],
+    ["Owner → chip", { owner: "me" }, { owner: "me" }, ["Waiting on: You"]],
     ["Assignee → chip", { assignee: "ann-0001" }, { assignee: "ann-0001" }, ["Assigned to: ann-0001"]],
     ["Paused → chip", { paused: "yes" }, { paused: "yes" }, ["Paused tasks"]],
     ["Review facet", { review_state: "in_progress,re_review,check_failed" }, { review_state: ["in_progress", "re_review", "check_failed"] }, ["Translation review: In progress", "Translation review: Check failed"]],
@@ -47,9 +47,13 @@ describe("filter model", () => {
     expect(labels({ review_state: "nope", status: "x" })).toEqual([]);
   });
 
+  it("names the person of the owner chip like the other people chips", () => {
+    expect(chipsOf({ owner: "ann-0011" }, new Map([["ann-0011", "Ana Weber"]]))[0].label).toBe("Waiting on: Ana Weber");
+  });
+
   it("legacy step, stage, paused, status, translation_status, final, owner become chips with labels", () => {
     expect(labels({ step: "resolve_rejected,resolve_queried", stage: "final,done", paused: "no", status: "held", translation_status: "automatic_check_failed", final: "missing", owner: "ann-0004" })).toEqual([
-      "Step: Resolve rejected translation", "Step: Resolve queried translation", "Stage: Final result", "Stage: Done", "Owner: ann-0004",
+      "Step: Resolve rejected translation", "Step: Resolve queried translation", "Stage: Final result", "Stage: Done", "Waiting on: ann-0004",
       "Not paused", "Assignment status: Paused", "Translation status: Check failed", "Final result missing",
     ]);
     // Removing one value of a comma-joined parameter keeps the others.

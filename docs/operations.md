@@ -480,7 +480,7 @@ Two limits bound this for web requests. They are set per connection when the app
 | `ONTOTATOR_LOCK_TIMEOUT_MS` | `20000` | Waiting for one lock (advisory or row). A request that takes two locks can wait for each. |
 | `ONTOTATOR_STATEMENT_TIMEOUT_MS` | `60000` | One SQL statement, so a transaction of many short statements can last longer. |
 
-`0` switches a limit off. A request also waits at most 10 s for a free pooled connection. When any of the three is hit, the transaction rolls back and the client gets HTTP 503 with code `PROJECT_BUSY` and `Retry-After: 5`, and the user reads that the project is busy and nothing was changed. The Documents page tries again on its next refresh, the editor keeps unsaved changes for its Retry button.
+`0` switches a limit off. A request also waits at most 10 s for a free pooled connection. When any of the three is hit, the transaction rolls back and the client gets HTTP 503 with code `PROJECT_BUSY` and `Retry-After: 5`, and the user reads that the project is busy and to try again in a moment. The Documents page tries again on its next refresh, the editor keeps unsaved changes for its Retry button.
 
 Writers need no extra rule to get their turn: the queue is first come, first served, so readers that arrive later cannot overtake a waiting writer, and a writer that hits the limit gives up its place, so the readers behind it go on.
 

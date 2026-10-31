@@ -163,7 +163,7 @@ it("tabs, search, Filter popover and chips replace the filter selects (VD9)", as
   await waitFor(() => expect(live().textContent).toBe("2 texts shown"));
   expect(api.listDocumentRows).toHaveBeenLastCalledWith("p", { plan: "review", step: "choose_final", sort: "import", final: "none", owner: "me", stage: "final", review_state: ["accepted", "check_failed"], waiting_on: "me" });
   expect(within(filterTools()).getAllByRole("button", { name: /^Remove filter / }).map(chip => chip.textContent)).toEqual([
-    "Translation review: Accepted", "Translation review: Check failed", "Plan: Translation review", "Waiting on: You", "Step: Choose final result", "Stage: Final result", "Owner: You", "Final result: None",
+    "Translation review: Accepted", "Translation review: Check failed", "Plan: Translation review", "Waiting on: You", "Step: Choose final result", "Stage: Final result", "Waiting on: You", "Final result: None",
   ]);
   // Only text and case checkboxes select inside the table; no old "Assign …".
   expect(within(screen.getByRole("table", { name: "Documents" })).getAllByRole("checkbox").every(box => box.getAttribute("aria-label")?.startsWith("Select "))).toBe(true);
@@ -364,7 +364,7 @@ it("names a busy project on a failed refetch and recovers with Retry (#217)", as
   vi.mocked(api.listDocumentRows).mockRejectedValueOnce(new ApiError(503, "raw", "PROJECT_BUSY"));
   act(() => { window.dispatchEvent(new Event("focus")); });
   const alert = await screen.findByRole("alert");
-  expect(alert.textContent).toContain("The project is busy, so nothing was changed.");
+  expect(alert.textContent).toContain("The project is busy right now.");
   fireEvent.click(within(alert).getByRole("button", { name: "Retry" }));
   await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
 });
@@ -376,7 +376,7 @@ it("shows a busy project once on the first load and reloads the page data with R
   const members = vi.mocked(api.listMembers);
   members.mockRejectedValueOnce(busy);
   renderPage();
-  const message = await screen.findByText("The project is busy, so nothing was changed. Try again in a moment.");
+  const message = await screen.findByText("The project is busy right now. Try again in a moment.");
   await waitFor(() => expect(members).toHaveBeenCalled());
   await new Promise(done => { setTimeout(done, 0); });
   expect(screen.getAllByText(message.textContent ?? "")).toHaveLength(1);
@@ -528,6 +528,22 @@ describe("case selection", () => {
     await screen.findByRole("button", { name: "Remove filter Selected texts" });
     fireEvent.click(within(selectionRegion()).getByRole("button", { name: "Clear selection" }));
     await screen.findByRole("button", { name: "Remove filter Language: de" });
+  });
+
+  it("header checkbox shows checked once row clicks selected every filtered text", async () => {
+    mockRows(casesPage(2, { group_count: 2, text_count: 2 }));
+    vi.spyOn(api, "documentRowKeys").mockResolvedValue(deKeys(["case-0101", "case-0102"]));
+    renderPage();
+    await loaded();
+    const header = screen.getByRole("checkbox", { name: "Select all 2 filtered texts" }) as HTMLInputElement;
+    fireEvent.click(caseBox("case-0101"));
+    expect(header.indeterminate).toBe(true);
+    expect(api.documentRowKeys).not.toHaveBeenCalled();
+    fireEvent.click(caseBox("case-0102"));
+    await waitFor(() => expect(header.checked).toBe(true));
+    expect(header.indeterminate).toBe(false);
+    fireEvent.click(header);
+    await waitFor(() => expect(screen.queryByRole("region", { name: "Selection" })).toBeNull());
   });
 
   it("header checkbox selects all filtered texts across pages", async () => {

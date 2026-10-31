@@ -274,7 +274,7 @@ export function chipsOf(query: ProjectDocumentsQuery, people: PeopleNames = new 
   }
   chips.push(...listChips(query, "step", value => `Step: ${stepLabel(value as StepCode)}`));
   chips.push(...listChips(query, "stage", value => `Stage: ${STAGE_LABELS[value]}`));
-  if (query.owner) chips.push({ id: "owner", label: `Owner: ${query.owner === "me" ? "You" : query.owner}`, patch: { owner: undefined } });
+  if (query.owner) chips.push({ id: "owner", label: `Waiting on: ${query.owner === "me" ? "You" : people.get(query.owner) ?? query.owner}`, patch: { owner: undefined } });
   if (query.assignee) chips.push({ id: "assignee", label: `Assigned to: ${people.get(query.assignee) ?? query.assignee}`, patch: { assignee: undefined } });
   if (query.paused === "yes" || query.paused === "no") chips.push({ id: "paused", label: query.paused === "yes" ? "Paused tasks" : "Not paused", patch: { paused: undefined } });
   const status = STATUS_OPTIONS.find(([value]) => value === query.status);

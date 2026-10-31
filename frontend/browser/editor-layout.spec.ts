@@ -454,3 +454,90 @@ test.describe("half-width editor", () => {
     await shot(page, "1600-drawer-tree");
   });
 });
+
+/** Visual findings of 31 Oct: the toolbar's paused banner and busy status, the term hits in a short stacked pane. */
+test.describe("toolbar and search layout", () => {
+  const SIZES = [{ width: 800, height: 800 }, { width: 1280, height: 800 }];
+  const LONG_REASON = "A very long report reason so the paused banner has to compete with the title in the toolbar of the editor at this width.";
+
+  async function openTask(page: Page, held = false) {
+    const s = await guidelineScenario(page, "PUBLISHED");
+    await loginGuidelineUser(page, s, "ana");
+    const assignment = s.assignments["annotate-1"];
+    // The task opens with its assignment: pause it there, as a problem report would.
+    if (held) await page.route(`**/api/v1/assignments/${assignment}/open`, async route => {
+      const response = await route.fetch();
+      const body = await response.json() as { assignment: object };
+      await route.fulfill({ response, json: { ...body, assignment: { ...body.assignment, held: true, hold_reason: LONG_REASON } } });
+    });
+    await page.goto(`/#/tasks/${assignment}`);
+    await expect(page.locator(".text-container")).toBeVisible({ timeout: 30_000 });
+  }
+
+  /** The element is inside the window and nothing lies over its centre. */
+  async function expectOnTop(locator: Locator, label: string) {
+    const free = await locator.evaluate(element => {
+      const box = element.getBoundingClientRect();
+      const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+      return box.left >= 0 && box.right <= innerWidth && box.bottom <= innerHeight && !!hit && (element === hit || element.contains(hit));
+    });
+    expect(free, label).toBe(true);
+  }
+
+  /** The search field and the first hit show together, without scrolling the pane. */
+  async function expectHitsVisible(page: Page, label: string) {
+    await expect(page.locator(".candidate-card").first()).toBeVisible();
+    await expectOnTop(page.getByLabel("Search term", { exact: true }), `${label}: search field`);
+    const hit = page.locator(".candidate-card").first();
+    const room = await hit.evaluate(element => {
+      const pane = element.closest(".inspector-pane")!.getBoundingClientRect();
+      const box = element.getBoundingClientRect();
+      const header = element.querySelector(".candidate-header")!.getBoundingClientRect();
+      const covering = document.elementFromPoint(header.left + 4, header.top + header.height / 2);
+      return { onTop: !!covering && element.contains(covering), visible: Math.min(pane.bottom, innerHeight) - box.top };
+    });
+    expect(room.onTop, `${label}: first hit not covered`).toBe(true);
+    expect(room.visible, `${label}: first hit in view`).toBeGreaterThanOrEqual(40);
+  }
+
+  for (const size of SIZES) {
+    test(`${size.width} px: the paused banner has its own row under the toolbar`, async ({ page }) => {
+      await page.setViewportSize(size);
+      await openTask(page, true);
+      const banner = page.locator(".notice").filter({ hasText: "Task paused:" });
+      await expect(banner).toBeVisible();
+      const [toolbar, notice] = await Promise.all([page.locator(".case-toolbar").boundingBox(), banner.boundingBox()]);
+      expect(notice!.y).toBeGreaterThanOrEqual(toolbar!.y + toolbar!.height - 1);
+      await expect(page.locator(".case-title")).toBeVisible();
+      expect((await page.locator(".case-title").boundingBox())!.width).toBeGreaterThan(40);
+      await expectOnTop(page.getByRole("button", { name: "More actions" }), "More");
+      await expectOnTop(page.locator(".case-navigation"), "pager");
+    });
+
+    test(`${size.width} px: a busy project keeps the title and shows its status text`, async ({ page }) => {
+      await page.setViewportSize(size);
+      await openTask(page);
+      await page.route("**/api/v1/workspaces/*/commands", route => route.fulfill({ status: 503, json: { code: "PROJECT_BUSY" } }));
+      await selectText(page, 18, 25);
+      await page.getByLabel("Search term", { exact: true }).fill("seizure");
+      await page.locator(".candidate-card").filter({ hasText: "HP:0001250" }).first().click();
+      await expect(page.getByRole("button", { name: "Retry" })).toBeVisible();
+      await expect(page.locator(".status-badge.status-error .status-badge__text")).toBeVisible();
+      await expect(page.locator(".status-badge.status-error")).toContainText("Project busy");
+      expect((await page.locator(".case-title").boundingBox())!.width).toBeGreaterThan(40);
+      await expectOnTop(page.getByRole("button", { name: "More actions" }), "More");
+    });
+
+    test(`${size.width} px: term hits show with the search field`, async ({ page }) => {
+      await page.setViewportSize(size);
+      await openTask(page);
+      await selectText(page, 18, 25);
+      await page.getByLabel("Search term", { exact: true }).fill("seizure");
+      await expectHitsVisible(page, "with a span");
+      await page.keyboard.press("Escape");
+      await page.getByRole("button", { name: "Add finding without a text span" }).click();
+      await page.getByLabel("Search term", { exact: true }).fill("seizure");
+      await expectHitsVisible(page, "without a span");
+    });
+  }
+});

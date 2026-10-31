@@ -100,7 +100,7 @@ export function auditDetails(event: AuditEvent, userNames?: ReadonlyMap<number, 
   if (Array.isArray(details.roles)) return details.roles.map(role => labelFor(roleLabels, String(role))).join(", ");
   if (typeof details.active === "boolean") return details.active ? "Activated" : "Deactivated";
   if (typeof details.is_system_admin === "boolean") return details.is_system_admin ? "Granted" : "Withdrawn";
-  if (Array.isArray(details.fields)) return details.fields.join(", ");
+  if (Array.isArray(details.fields)) return details.fields.map(field => humanize(String(field))).join(", ");
   if (typeof details.purpose === "string" && Object.keys(details).length === 1) return `${humanize(details.purpose)} code`;
   return auditEntries(details, userNames).join("; ");
 }

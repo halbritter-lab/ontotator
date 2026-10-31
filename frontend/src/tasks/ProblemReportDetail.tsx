@@ -14,6 +14,7 @@ import { ReportTimeline } from "../problems/ReportTimeline";
 import { useLeadReport } from "../problems/useLeadReport";
 import { Button, EmptyState, IconChevronLeft, InlineMessage, EmptyValue, StatusBadge } from "../ui";
 import { refKey } from "../variants/versionState";
+import { notifyDocumentsChanged } from "../documents/documentsEvents";
 import { onSpaceActivate } from "../ui/spaceActivates";
 
 const TASK_TYPES = { annotate: "Annotation", review: "Consolidation", translation_review: "Translation review" } as const;
@@ -129,6 +130,7 @@ export function ProblemReportDetail({ projectKey, reportId, canManage, action: r
   };
   const done = (intent: Intent, before: ProblemReportView, after: ProblemReportView, released?: number[]) => {
     lead.replace(after);
+    notifyDocumentsChanged();
     setOpen(null);
     setSuccess(leadOutcome(intent, before, after, released));
     setNext(null);

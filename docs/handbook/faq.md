@@ -26,9 +26,9 @@ Reload the page in the browser, then repeat the last action. If the message asks
 
 ## Tasks and projects
 
-### The page says "The project is busy, so nothing was changed."
+### The page says "The project is busy right now."
 
-Another operation, often a running import, is holding the project. What you just did was not applied, so nothing needs undoing. Wait a moment and click **Retry**, or repeat the action. In the editor your unsaved edits stay on the page until the save goes through.
+Another operation, often a running import, is holding the project. What you just did was not applied, so nothing needs undoing. Wait a moment and click **Retry**, or repeat the action. In the editor the save status says **Project busy – changes not saved**, and your unsaved edits stay on the page until the save goes through.
 
 ### After login I see Projects, not My tasks
 

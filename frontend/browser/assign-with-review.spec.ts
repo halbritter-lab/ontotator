@@ -57,7 +57,7 @@ test("annotation assigned during the review waits, then opens without a lead ste
   const annotator = await session(browser, s.users.other);
   const row = annotator.getByTestId("task-row").filter({ hasText: "Waiting for translation review" });
   await expect(row).toBeVisible();
-  await expect(row.getByText("Opens after the review")).toBeVisible();
+  await expect(row.getByText("Opens once a translation is accepted")).toBeVisible();
   await expect(row.getByRole("link")).toHaveCount(0);
   await shot(annotator, "3-my-tasks-waiting");
   await annotator.goto(`/#/tasks/${task.id}`);
@@ -104,7 +104,7 @@ test("a task from proposals after a correction waits for the lead, who withdraws
   await expect(row).toBeVisible();
   await expect(row.getByText("The lead decides how it continues")).toBeVisible();
   await expect(row.getByRole("link")).toHaveCount(0);
-  await expect(annotator.getByText("Opens after the review")).toHaveCount(0);
+  await expect(annotator.getByText("Opens once a translation is accepted")).toHaveCount(0);
   await shot(annotator, "7-my-tasks-waiting-for-lead");
 
   const lead = await session(browser, s.users.lead);

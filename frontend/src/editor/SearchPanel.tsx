@@ -218,8 +218,12 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
     if (shownActive < 0) return;
     listRef.current?.querySelector<HTMLElement>(`[data-option-index="${shownActive}"]`)?.scrollIntoView?.({ block: "nearest" });
   }, [shownActive]);
+  // A short stacked pane can leave the first hit below its edge: bring it in, the field stays in view above it.
+  useEffect(() => {
+    if (expanded) listRef.current?.firstElementChild?.scrollIntoView?.({ block: "nearest" });
+  }, [expanded, state.candidates]);
 
-  const moveActive = (step: 1 | -1) => {
+  const moveActive =(step: 1 | -1) => {
     if (!expanded) return;
     for (let index = shownActive + step; index >= 0 && index < candidates.length; index += step) {
       if (isUsable(candidates[index])) {

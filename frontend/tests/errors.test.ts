@@ -18,8 +18,8 @@ describe("shared API error messages", () => {
     expect(errorMessage(new ApiError(404, "raw", "PROJECT_NOT_FOUND"))).toContain("You do not have access to this project");
   });
 
-  it("says a busy project changed nothing, whatever the server text", () => {
-    expect(errorMessage(new ApiError(503, "raw", "PROJECT_BUSY"))).toBe("The project is busy, so nothing was changed. Try again in a moment.");
+  it("says a busy project in words true for loads and writes, whatever the server text", () => {
+    expect(errorMessage(new ApiError(503, "raw", "PROJECT_BUSY"))).toBe("The project is busy right now. Try again in a moment.");
   });
 
   it.each(["FUTURE_CODE", "toString", "constructor"])("uses the server message for unmapped code %s", code => {
