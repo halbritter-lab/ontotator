@@ -596,6 +596,19 @@ class AgreementDetailView(_View):
     term_label: str
 
 
+class UnresolvedFindingView(_View):
+    """A finding left Unresolved in a compared submission or in an input of a
+    compared consolidation (#246); ``term_label`` is the term's name, else its
+    id."""
+
+    submission_id: str
+    layer_id: str
+    term_id: str
+    term_label: str
+    # Empty only on old submissions.
+    note: str | None = None
+
+
 class AgreementView(_View):
     compared_version: int
     total: int
@@ -614,6 +627,7 @@ class FinalPanelView(_View):
     # earliest eligible one). False under the label rule "accept".
     all_match: bool = False
     all_match_submission_id: str | None = None
+    unresolved: list[UnresolvedFindingView] = Field(default_factory=list)
     causes: list[RowItemView] = Field(default_factory=list)
     # Findings of a final on old text in changed passages of the newer text.
     changed_passages: int | None = None
@@ -766,7 +780,10 @@ def row_final_panel(
     """Final-result panel of one row: submissions, agreement, label rule,
     causes and changed passages (leads only, nothing stored)."""
     data = _service(request, principal).final_panel(key, case_id, language)
-    details = (data.get("agreement") or {}).get("detail_differences") or []
+    details = [
+        *((data.get("agreement") or {}).get("detail_differences") or []),
+        *data["unresolved"],
+    ]
     if details:
         repo, ontology = request.app.state.repo, get_ontology(request)
         labels: dict[tuple[str, str], str] = {}

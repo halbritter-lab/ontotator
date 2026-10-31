@@ -53,6 +53,7 @@ from ontotator.domain.consolidation_origins import finding_origins, origin_count
 from ontotator.domain.errors import DomainError
 from ontotator.domain.profiles import TaskProfile
 from ontotator.domain.project_rules import ModifierRoles
+from ontotator.domain.review import ReviewDecision
 from ontotator.domain.workspace import Submission
 from ontotator.ontology.modifiers import NO_TERM_ROLES, TermRoles, term_roles
 from ontotator.projects.service import axis_defaults
@@ -73,6 +74,7 @@ __all__ = [
     "findings_of",
     "project_profile",
     "project_roles",
+    "unresolved_notes",
 ]
 
 LabelRule = Literal["accept", "compare"]
@@ -117,6 +119,17 @@ def row_comparison(ctx: _Context, case_id: str, language: str) -> RowComparison:
     )
 
 
+def unresolved_notes(
+    decisions: Iterable[ReviewDecision],
+) -> dict[tuple[str, str], str | None]:
+    """(annotation id, version) -> note of the Unresolved decisions on them."""
+    return {
+        (d.target.annotation_id, d.target.version): d.note
+        for d in decisions
+        if d.outcome == "uncertain"
+    }
+
+
 def findings_of(
     submission: Submission,
     profile: TaskProfile,
@@ -127,11 +140,13 @@ def findings_of(
 
     Axis values are filled with the layer's defaults (``axis_defaults``);
     modifiers and standalone modifier findings as ``finding_of``. A finding
-    without evidence is spanless.
+    without evidence is spanless. A target its author left Unresolved stays a
+    finding of the submission, flagged ``unresolved``.
     """
     editable = {
         layer.layer_id for layer in profile.layers if layer.access == "editable"
     }
+    notes = unresolved_notes(submission.decisions)
     return [
         finding_of(
             item,
@@ -139,6 +154,8 @@ def findings_of(
             order=order,
             defaults=defaults,
             roles=roles,
+            unresolved=(item.annotation.annotation_id, item.version) in notes,
+            unresolved_note=notes.get((item.annotation.annotation_id, item.version)),
         )
         for order, item in enumerate(submission.snapshots)
         if item.annotation.layer_id in editable
@@ -152,6 +169,8 @@ def finding_of(
     order: int,
     defaults: AxisDefaults | None = None,
     roles: ModifierRoles = NO_TERM_ROLES,
+    unresolved: bool = False,
+    unresolved_note: str | None = None,
 ) -> Finding:
     """One snapshot as a ``Finding`` (the one rule the final panel's agreement
     and the consolidation grouping share).
@@ -190,6 +209,8 @@ def finding_of(
         ),
         standalone_modifier=roles.kind(annotation.layer_id, annotation.term_id)
         is not None,
+        unresolved=unresolved,
+        unresolved_note=unresolved_note,
     )
 
 
@@ -357,7 +378,7 @@ _DETAIL_KINDS: dict[str, str] = {
     "span_differs": "text",
     "modifiers_differ": "modifiers",
 }
-_CONTEXT_KINDS = frozenset({"partial", "term_differs", "values_differ"})
+_CONTEXT_KINDS = frozenset({"partial", "term_differs", "values_differ", "unresolved"})
 
 
 def _detail_differences(
@@ -416,6 +437,27 @@ def _all_match(
     order = _full_agreement(comparable, recorded_at, payloads, profile, defaults, roles)
     eligible = {item["submission_id"] for item in submissions if item["eligible"]}
     return next((sid for sid in order or () if sid in eligible), None)
+
+
+def _unresolved(
+    payloads: Mapping[str, Submission],
+    submission_ids: Iterable[str],
+    profile: TaskProfile,
+) -> list[dict[str, str | None]]:
+    """Findings left Unresolved in these submissions (#246); the route fills
+    ``term_label``."""
+    return [
+        {
+            "submission_id": sid,
+            "layer_id": finding.layer_id,
+            "term_id": finding.term_id,
+            "note": finding.unresolved_note,
+        }
+        for sid in submission_ids
+        if sid in payloads
+        for finding in findings_of(payloads[sid], profile)
+        if finding.unresolved
+    ]
 
 
 def fill_agreement(
@@ -601,6 +643,23 @@ def final_panel(
         if roles is not None and agreement is not None
         else []
     )
+    # A consolidation's inputs too: the flags stay visible to the lead accepting it.
+    flagged = sorted(
+        comparable_ids
+        | {
+            sid
+            for item in comparable
+            for sid in inputs.get(item.consolidation_round or "", ())
+        }
+    )
+    unresolved = _unresolved(
+        {
+            **_payloads(conn, pid, set(flagged) - set(payloads), strict=False),
+            **payloads,
+        },
+        flagged,
+        profile,
+    )
     row = build_row(facts, case_id, language, ctx=ctx)
     causes = [
         item
@@ -624,6 +683,7 @@ def final_panel(
         "accept_submission_id": accept_id,
         "all_match": all_match_id is not None,
         "all_match_submission_id": all_match_id,
+        "unresolved": unresolved,
         "causes": causes,
         "changed_passages": _changed_passages(
             conn, pid, row["final"], comparison, profile

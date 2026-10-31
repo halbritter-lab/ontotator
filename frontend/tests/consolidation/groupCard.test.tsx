@@ -22,6 +22,43 @@ const result = () => document.querySelector(".cons-result")?.textContent ?? "";
 const keep = () => fireEvent.click(screen.getByRole("button", { name: "Keep" }));
 
 describe("GroupCard", () => {
+  describe("Unresolved finding (#246)", () => {
+    const flagged = (extra: Partial<ConsolidationGroupView> = {}) => group("g", ["unresolved"], [
+      member("in-luc", LUC, "HP:1", "Pallor", [span("two seizures")]),
+      member("in-tom", TOM, "HP:1", "Pallor", [span("two seizures")], { unresolved: true, unresolved_note: "Pale or just tired?" }),
+    ], extra);
+
+    it("an open group shows the tag and, in its person's column, the note; Keep settles it", () => {
+      const { props } = renderCard(flagged());
+      const toggle = screen.getByRole("button", { expanded: true });
+      expect(toggle.textContent).toContain("to decide");
+      expect(within(toggle).getByText("Unresolved")).toBeTruthy();
+      const row = screen.getByRole("rowheader", { name: "Unresolved" }).closest("tr")!;
+      expect(within(row).getByText("Pale or just tired?")).toBeTruthy();
+      expect(document.querySelector(".cons-group-agreed")).toBeNull();
+      keep();
+      expect(props.onResolve).toHaveBeenCalledWith({ input_ids: ["in-luc", "in-tom"], action: "keep" }, expect.anything());
+    });
+
+    it("a closed group previews the flag with who wrote it", () => {
+      renderCard(flagged(), { expanded: false });
+      expect(document.querySelector(".cons-note-preview")?.textContent).toBe("Unresolved, Tom Reis: Pale or just tired?");
+    });
+
+    it("a decided group drops the tag but keeps the note in its table", () => {
+      renderCard(flagged({ state: "keep", annotation_ids: ["cons-g"] }));
+      expect(within(screen.getByRole("button", { expanded: true })).queryByText("Unresolved")).toBeNull();
+      expect(screen.getByRole("rowheader", { name: "Unresolved" })).toBeTruthy();
+    });
+
+    it("an older automatic take-over stays visibly flagged in a read-only view", () => {
+      renderCard(flagged({ state: "auto", annotation_ids: ["cons-g"] }), { readOnly: true });
+      const toggle = screen.getByRole("button", { expanded: true });
+      expect(toggle.textContent).toContain("agreed");
+      expect(within(toggle).getByText("Unresolved")).toBeTruthy();
+    });
+  });
+
   it("the card shows the conflict marker, the name and the count of fields to decide", () => {
     renderCard(hypotoniaThree(), { people: THREE });
     const toggle = screen.getByRole("button", { expanded: true });

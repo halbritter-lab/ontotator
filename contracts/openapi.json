@@ -11096,6 +11096,21 @@
             ],
             "title": "Note"
           },
+          "unresolved": {
+            "type": "boolean",
+            "title": "Unresolved"
+          },
+          "unresolved_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unresolved Note"
+          },
           "from_tool_proposal": {
             "type": "boolean",
             "title": "From Tool Proposal",
@@ -13959,6 +13974,13 @@
               }
             ],
             "title": "All Match Submission Id"
+          },
+          "unresolved": {
+            "items": {
+              "$ref": "#/components/schemas/UnresolvedFindingView"
+            },
+            "type": "array",
+            "title": "Unresolved"
           },
           "causes": {
             "items": {
@@ -24246,6 +24268,47 @@
           "revisions"
         ],
         "title": "UndoView"
+      },
+      "UnresolvedFindingView": {
+        "properties": {
+          "submission_id": {
+            "type": "string",
+            "title": "Submission Id"
+          },
+          "layer_id": {
+            "type": "string",
+            "title": "Layer Id"
+          },
+          "term_id": {
+            "type": "string",
+            "title": "Term Id"
+          },
+          "term_label": {
+            "type": "string",
+            "title": "Term Label"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "submission_id",
+          "layer_id",
+          "term_id",
+          "term_label"
+        ],
+        "title": "UnresolvedFindingView",
+        "description": "A finding left Unresolved in a compared submission or in an input of a\ncompared consolidation (#246); ``term_label`` is the term's name, else its\nid."
       },
       "UploadCreated": {
         "properties": {

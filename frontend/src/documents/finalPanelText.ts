@@ -2,7 +2,7 @@
  * Copy and pure rules of the final-result side panel (documents overview spec "Final-result panel",
  * "Copy › Panel", V6, V9, VD16, VD17).
  */
-import type { AgreementView, DecisionBarView, DocumentRowView, DocumentRowsPage, FinalPanelSubmissionView, NextStepView } from "../api/client";
+import type { AgreementView, DecisionBarView, DocumentRowView, DocumentRowsPage, FinalPanelSubmissionView, FinalPanelView, NextStepView } from "../api/client";
 import { plural } from "../app/labels";
 import { formatTime } from "../app/submissionLabels";
 import { versionName } from "./labels";
@@ -185,12 +185,21 @@ export function detailDifferenceLines(agreement: AgreementView): string[] {
   });
 }
 
+/** #246: "Pallor, Ana Weber: Pale or just tired?", one line per finding an annotator left Unresolved. */
+export function unresolvedLines(panel: Pick<FinalPanelView, "submissions" | "unresolved">): string[] {
+  return (panel.unresolved ?? []).map(item => {
+    const submission = panel.submissions?.find(entry => entry.submission_id === item.submission_id);
+    return `${item.term_label}, ${submission ? personName(submission) : "an annotator"}: ${item.note?.trim() || "no note"}`;
+  });
+}
+
 /** One paragraph on V9 behind "How is this counted?". */
 export const AGREEMENT_EXPLANATION = "Two findings match when they are in the same layer, have the same term and the same context "
   + "(every axis value and the set of modifiers), and their evidence overlaps by at least one character or both have no evidence "
   + "in the text. Same term and position with a different context counts as a context difference. Each finding pairs with at most "
   + "one finding of each other submission; only submissions on the same text version are compared. "
-  + "Modifier text spans do not count here. “All findings match” also needs the same text spans, notes and modifier text spans.";
+  + "Modifier text spans do not count here. “All findings match” also needs the same text spans, notes and modifier text spans. "
+  + "A finding an annotator left Unresolved never counts as a match.";
 
 /** The Only here cell: the count, "on v1, not compared" for a submission outside the comparison, else "—". */
 export function onlyHereText(submission: FinalPanelSubmissionView, parallel: boolean): string {
