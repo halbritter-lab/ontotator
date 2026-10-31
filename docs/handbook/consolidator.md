@@ -37,7 +37,8 @@ Ontotator puts the findings that different people marked on overlapping passages
 | **agreed** | Everyone who marked it chose the same term and values. It is already in the result and counts as decided. Open it and click **Reopen** if it is wrong. |
 | **to decide**, or *2 fields to decide* | Still open. The number counts the highlighted rows that need your choice. |
 | **Conflict** mark | People chose different terms or values. |
-| **to decide** without **Conflict** | Only the passage differs, or not everyone marked the finding. |
+| **to decide** without **Conflict** | Only the passage differs, not everyone marked the finding, or an annotator left it unresolved. |
+| **Unresolved** tag | An annotator could not decide this finding. It is not agreed, even if everyone marked the same: read the note in the **Unresolved** row of the table, then decide. |
 | **decided** | You decided it. |
 | **not in result** | You left it out. |
 | **attached** | A modifier term you attached to another finding. |

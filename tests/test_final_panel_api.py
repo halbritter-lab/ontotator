@@ -36,6 +36,7 @@ from ontotator.auth.audit import Actor
 from ontotator.domain.annotations import (
     ActorRef,
     Annotation,
+    AnnotationRef,
     Provenance,
     snapshot,
 )
@@ -46,7 +47,7 @@ from ontotator.domain.documents import (
     Segment,
 )
 from ontotator.domain.errors import AccessDenied
-from ontotator.domain.review import ReviewTargetSet
+from ontotator.domain.review import ReviewDecision, ReviewTargetSet
 from ontotator.domain.work_plans import PlanFlags, RowKey
 from ontotator.domain.workspace import Submission, WorkspaceKey
 from ontotator.storage.overview_tables import TextChangeResolutionRow
@@ -101,9 +102,16 @@ def finding(
 
 
 def submit_findings(
-    env: Any, assignment_id: int, sid: str, findings: list[dict[str, Any]]
+    env: Any,
+    assignment_id: int,
+    sid: str,
+    findings: list[dict[str, Any]],
+    unresolved: dict[str, str] | None = None,
 ) -> None:
-    """Record a submission with real snapshots and mark the assignment submitted."""
+    """Record a submission with real snapshots and mark the assignment submitted.
+
+    ``unresolved``: annotation id -> note of an Unresolved decision on it.
+    """
     repo = env.app.state.repo
     with env.db.transaction() as conn:
         row = conn.execute(
@@ -154,7 +162,19 @@ def submit_findings(
         targets=ReviewTargetSet.create([]),
         draft_revision=1,
         snapshots=snapshots,
-        decisions=[],
+        decisions=[
+            ReviewDecision(
+                decision_id=f"{sid}-{item.annotation.annotation_id}",
+                target=AnnotationRef(
+                    annotation_id=item.annotation.annotation_id, version=item.version
+                ),
+                outcome="uncertain",
+                reviewer_id=row.pseudonym,
+                note=(unresolved or {})[item.annotation.annotation_id],
+            )
+            for item in snapshots
+            if item.annotation.annotation_id in (unresolved or {})
+        ],
         created_at="2026-10-16T10:00:00Z",
     )
     with env.db.transaction() as conn:

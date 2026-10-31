@@ -43,7 +43,9 @@ event). ``input_ids`` must name exactly one group of the round
   ``WorkRoundService.create_in`` for consolidation rounds): every ``match``
   group gets the result of ``keep`` (the ``cons-…`` annotation with
   ``merged`` provenance and ``changed`` decisions), marked ``auto``; one
-  edit event. Groups already decided are skipped, so it is idempotent.
+  edit event. Groups already decided are skipped, so it is idempotent. A
+  group with an annotator's Unresolved finding is no ``match`` (#246): it
+  stays open for a decision; the Unresolved note stays in provenance.
 
 An edit of a ``cons-…`` annotation in the editor keeps the marked decisions
 (``EditingService._update_decision_replacements``): the group stays

@@ -7,6 +7,7 @@
  */
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { api, type WorkRoundView, type DocumentRowView, type DocumentRowsPage, type FinalPanelSubmissionView, type NextStepView, type RowItemView } from "../api/client";
+import { plural } from "../app/labels";
 import { routeHref, type ProjectDocumentsQuery, type Route } from "../app/router";
 import { Time } from "../app/Time";
 import { submissionGuidelineLabel } from "../guidelines/submissionLabel";
@@ -16,7 +17,7 @@ import { ConsolidationLauncher, type ConsolidationStarted } from "../variants/Co
 import { refKey } from "../variants/versionState";
 import { failureOf, keepRequest, selectionPayload, selectRequest, type FinalConfirmFailure, type FinalConfirmRequest } from "./FinalConfirm";
 import {
-  acceptQuestion, AGREEMENT_EXPLANATION, agreementText, allMatchText, detailDifferenceLines, remainingText, changedPassagesText, compareSummary, consolidateHint,
+  acceptQuestion, AGREEMENT_EXPLANATION, agreementText, allMatchText, detailDifferenceLines, remainingText, changedPassagesText, compareSummary, consolidateHint, unresolvedLines,
   consolidationInputs, decidedLine, decisionKind, earlyFinal, keepLabel, listedSubmissions, nextFinalDecision, nextOtherDecision, onlyHereText, panelMode, panelStep,
   consolidationBreakdown, personName, savedText, submissionLine, submissionName, submissionWhen, textChangedLine, type NextRow,
   noMoreFinalsText,
@@ -224,6 +225,19 @@ function FailureNotice({ failure: shown, onReview, onRetry, busy: saving }: { fa
   </div>;
 }
 
+/**
+ * Findings annotators marked Unresolved, with who and why, for the person deciding. The title holds whether or
+ * not a consolidator has settled them since. `submissionId`: only that submission's.
+ */
+function UnresolvedNotice({ data, submissionId, children }: { data: FinalPanelData; submissionId?: string; children?: ReactNode }): JSX.Element | null {
+  const lines = unresolvedLines(data.panel, submissionId);
+  if (!lines.length) return null;
+  return <InlineMessage tone="warning" live={false} title={`${plural(lines.length, "finding")} marked Unresolved`}>
+    <ul className="final-panel-agreement-details">{lines.map(line => <li key={line}>{line}</li>)}</ul>
+    {children}
+  </InlineMessage>;
+}
+
 function NoneLeft({ text, other, onRowAction, onClose }: { text: string; other: NextRow | null; onRowAction?: DecisionBlockProps["onRowAction"]; onClose: () => void }): JSX.Element {
   return <div className="final-panel-none">
     <p>{text}</p>
@@ -357,6 +371,9 @@ function AcceptContent(props: ContentProps & { submission: FinalPanelSubmissionV
   return <div className="final-panel-choose">
     {submission.kind === "consolidation" && <p className="final-panel-consolidated"><strong>{submissionName(submission)}</strong>
       {breakdown && ` · ${breakdown}`}</p>}
+    <UnresolvedNotice data={data}>
+      {submission.kind !== "consolidation" && <p>Accepting keeps the flag and the note in the export.</p>}
+    </UnresolvedNotice>
     <p className="final-panel-question">{acceptQuestion(submission)}</p>
     <p className="cell-secondary">{submissionLine(submission, row.language, row.parallel_roots, now)}</p>
     <p className="cell-secondary">{submissionGuidelineLabel(submission.guideline_version, submission.guideline_withdrawn, guidelineCurrent)}</p>
@@ -424,6 +441,7 @@ function CompareContent(props: ContentProps): JSX.Element {
       <Button size="sm" variant="quiet" className="btn-link" aria-expanded={explain} aria-controls={explanationId} onClick={() => setExplain(value => !value)}>How is this counted?</Button>
       {explain && <p id={explanationId} className="cell-secondary">{AGREEMENT_EXPLANATION}</p>}
     </div>}
+    <UnresolvedNotice data={data} />
     <SubmissionTable {...props} listed={listed} />
     <Consolidate {...props} listed={listed} primary={!preselectedOf(row, data) && !data.panel.all_match} />
   </div>;
@@ -537,6 +555,8 @@ function ReviewContent(props: ContentProps): JSX.Element {
         {data.panel.changed_passages != null && <>{", "}{changedPassagesText(data.panel.changed_passages)}</>}
       </p>
     </div>}
+    {/* A newer consolidation's flags are on its inputs, so it shows the whole list. */}
+    {newer && <UnresolvedNotice data={data} submissionId={newer.kind === "consolidation" ? undefined : newer.submission_id} />}
     <div className="final-panel-actions">
       <ChoiceButton id={keepId} label={keepLabel(row)} variant={onlyTextChange ? "primary" : "secondary"} blocked={ownBlocked} busy={busy} onAnnounce={onAnnounce}
         onChoose={() => onSave(keepRequest(row, data.submissions, causes.map(item => item.cause_id), keepId), keepId)} />

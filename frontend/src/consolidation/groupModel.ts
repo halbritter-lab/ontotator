@@ -131,6 +131,15 @@ export function duplicateTerms(groups: readonly ConsolidationGroupView[]): strin
     .map(entry => entry.label);
 }
 
+/** #246: the group still shows an annotator's Unresolved flag: nobody decided it (open, or taken over before the flag counted). */
+export const showsUnresolved = (group: ConsolidationGroupView) => hasKind(group, "unresolved") && (group.state === "open" || group.state === "auto");
+
+/** "Ana Weber: Pale or just tired?" per member who left the finding Unresolved. */
+export function unresolvedNotes(group: ConsolidationGroupView, people: readonly ConsolidationPersonView[]): string[] {
+  const names = peopleOf(people, group.members);
+  return group.members.flatMap((member, index) => member.unresolved ? [`${personName(names[index].label)}: ${unresolvedOf(member)}`] : []);
+}
+
 export type RowKind = "term" | "axis" | "text" | "modifiers" | "note";
 /** One ✓ toggle of a member's modifier (or "No modifiers") in the Modifiers row. */
 export interface ModifierToggleCell {
@@ -169,6 +178,7 @@ export interface ComparisonRow {
 /** " (all agree)" only when there is someone to agree with. */
 export const allAgree = (members: readonly ConsolidationMemberView[]) => members.length > 1 ? " (all agree)" : "";
 const noteOf = (member: ConsolidationMemberView) => member.note?.trim() ?? "";
+const unresolvedOf = (member: ConsolidationMemberView) => member.unresolved ? member.unresolved_note?.trim() || "No note" : "";
 export const firstName = (label: string) => personName(label).split(" ")[0];
 
 /** Axes of the group's members in first-seen order. */
@@ -210,6 +220,8 @@ export function comparisonRows(group: ConsolidationGroupView, people: readonly C
   if (modifiers) rows.push(modifiers);
   // Notes are information, never a decision: the kept finding keeps its own note.
   if (members.some(noteOf)) rows.push(row("note", "note", "Note", false, noteOf, noteOf));
+  // #246: an annotator's Unresolved flag and note, in the column of whoever wrote it; first of the rows without a decision.
+  if (members.some(member => member.unresolved)) rows.unshift(row("note", "unresolved", "Unresolved", false, unresolvedOf, unresolvedOf));
   return rows;
 }
 

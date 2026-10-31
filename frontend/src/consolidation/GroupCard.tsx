@@ -20,7 +20,7 @@ import { Button, Checkbox, InlineConfirm, MenuButton, Select, Textarea } from ".
 import { IconUndo, IconWarning } from "../ui/icons";
 import { ComparisonTable } from "./ComparisonTable";
 import { axisLabel, duplicateTermHint, groupStatus, labelWithQuote, keepLabel, namesOf, NOT_IN_RESULT, partialText, REOPEN_EDITED_WARNING, standaloneWarning } from "./consolidationText";
-import { absentPeople, attachCandidates, choicesComplete, choose, comparisonRows, groupName, hasKind, isStandalone, memberSets, needsTerm, presentPeople, resolvePayload, resultLine, sameTermGroups, standaloneText, storedResult, type Choices, type OtherTerm } from "./groupModel";
+import { absentPeople, attachCandidates, choicesComplete, choose, comparisonRows, groupName, hasKind, isStandalone, memberSets, needsTerm, presentPeople, resolvePayload, resultLine, sameTermGroups, showsUnresolved, standaloneText, storedResult, unresolvedNotes, type Choices, type OtherTerm } from "./groupModel";
 import { crossLinks, setText, type ModifierView } from "./modifierSets";
 import { ResultLine } from "./ResultLine";
 import { TermPicker, useTermSearch } from "./TermPicker";
@@ -222,6 +222,7 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
       <span className={open ? "cons-group-state" : "cons-group-done"}>{status}{!open && decidedText && decidedText !== status ? `: ${decidedText}` : ""}</span>
       {group.edited && <>{" "}<span className="cons-tag">edited in editor</span></>}
       {group.guidelines_unclear && <>{" "}<span className="cons-tag">flagged</span></>}
+      {showsUnresolved(group) && <>{" "}<span className="cons-tag">Unresolved</span></>}
     </button>
   </h2>;
 
@@ -332,6 +333,7 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
     {narrow && <Snippet group={group} text={text} />}
     {/* issue 198: a closed group's note shows in the list, not only after opening it. */}
     {!expanded && group.note && <p className="cons-note-text cons-note-preview" title={group.note}>Note: {notePreview(group.note)}</p>}
+    {!expanded && showsUnresolved(group) && unresolvedNotes(group, people).map(line => <p key={line} className="cons-note-text cons-note-preview" title={line}>Unresolved, {notePreview(line)}</p>)}
     {expanded && <div className="cons-group-body">
       {open ? openBody : resolvedBody}
       {outcomeBlock}

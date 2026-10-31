@@ -33,6 +33,11 @@ is ``modifiers_differ`` too. A standalone modifier (a modifier term used as a
 finding) never joins the term merge; its group is ``modifier_as_finding``
 unless everyone agrees (then ``match``, A103).
 
+A finding an annotator marked Unresolved (#246, ``Finding.unresolved``) never
+agrees: ``compare`` does not count its cluster as matching, and its group has
+the kind ``unresolved`` and never ``match``, so it is neither taken over nor
+accepted as full agreement.
+
 Which differences are a consolidation *decision* (acceptance 2026-10-22):
 the term and every differing axis always are; the text only when the
 members' spans genuinely conflict (``spans_conflict``); notes never (they
@@ -72,6 +77,7 @@ GroupKind = Literal[
     "partial",
     "modifiers_differ",
     "modifier_as_finding",
+    "unresolved",
 ]
 
 
@@ -91,6 +97,8 @@ class Finding:
     cues: tuple[Span, ...] = ()  # cue segments, compared with spans by groups()
     modifier_spans: ModifierSpans = ()  # compared exactly by groups() only
     standalone_modifier: bool = False  # a modifier term used as a finding
+    unresolved: bool = False  # its author's review decision is Unresolved
+    unresolved_note: str | None = None  # the note of that decision
 
 
 @dataclass(frozen=True)
@@ -160,11 +168,20 @@ def compare(
 
     ``findings`` maps submission id to its findings; a submission without
     findings may be absent. With fewer than two submissions nothing matches.
+    A cluster holding an unresolved finding is not ``matching``, whatever else
+    agrees; it stays a difference within ``total``.
     """
     _check_order(findings, order)
     clusters = _clusters(findings, order, _bucket)
     complete = [c for c in clusters if len(order) >= 2 and len(c.members) == len(order)]
-    matching = sum(1 for c in complete if all(c.members.values()))
+    exact = [c for c in complete if all(c.members.values())]
+    unresolved = {
+        (submission, finding.key)
+        for submission, own in findings.items()
+        for finding in own
+        if finding.unresolved
+    }
+    matching = sum(1 for c in exact if not unresolved & set(c.keys.items()))
     only_here = {submission: 0 for submission in order}
     for cluster in clusters:
         if len(cluster.members) == 1:
@@ -172,7 +189,7 @@ def compare(
     return Agreement(
         total=len(clusters),
         matching=matching,
-        context_differences=len(complete) - matching,
+        context_differences=len(complete) - len(exact),
         only_here=only_here,
     )
 
@@ -347,7 +364,10 @@ def _group(members: Sequence[tuple[str, Finding]], submissions: int) -> Group:
         kinds.add("notes_differ")
     if len({finding.modifier_spans for finding in findings}) > 1:
         kinds.add("modifiers_differ")
-    # A unanimous modifier term is a match (A103): only a difference flags it.
+    if any(finding.unresolved for finding in findings):
+        kinds.add("unresolved")
+    # A unanimous modifier term is a match (A103): only a difference or an
+    # Unresolved flag flags it.
     if kinds and any(finding.standalone_modifier for finding in findings):
         kinds.add("modifier_as_finding")
     if not kinds:
