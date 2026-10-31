@@ -18,7 +18,8 @@ decision. An input author's Unresolved decision in a source submission is the
 member's ``Finding.unresolved`` (the group kind ``unresolved``, #246), read
 from the source submission, so it also holds for rounds started before it. Such
 a group is not taken over automatically; one taken over before #246 reads open
-while its draft is live. A group is *edited* when its resulting
+while its draft is live, unless the consolidator changed its result in the
+editor: that human edit stands as the decision. A group is *edited* when its resulting
 annotation's content hash differs from the mark's ``content_sha256``
 (``consolidated_content_sha256``) or the annotation was deleted.
 
@@ -35,7 +36,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import Connection, select
+from sqlalchemy import Connection, select, tuple_
 
 from ontotator.application.document_row_panel import (
     AxisDefaults,
@@ -64,6 +65,7 @@ from ontotator.ontology.modifiers import NO_TERM_ROLES, TermRoles, modifier_laye
 from ontotator.storage.final_tables import FinalSelectionRow
 from ontotator.storage.repository import Repository, _key_str
 from ontotator.storage.tables import (
+    AnnotationSnapshotRow,
     AuditEventRow,
     DocumentRow,
     ProposalAnnotationRow,
@@ -265,27 +267,66 @@ def member_ref(member: RoundMember) -> AnnotationRef:
     )
 
 
+def _untouched_take_over(
+    decision: ReviewDecision, annotations: Mapping[str, Annotation]
+) -> bool:
+    """An automatic take-over whose result is as the mark recorded it."""
+    mark = decision.consolidation
+    if mark is None or mark.action != "auto":
+        return False
+    replacement = decision.replacement
+    current = annotations.get(replacement.annotation_id) if replacement else None
+    return (
+        current is None
+        or mark.content_sha256 is None
+        or consolidated_content_sha256(current) == mark.content_sha256
+    )
+
+
 def is_open(
     targets: Iterable[tuple[str, str]],
     decisions: Sequence[ReviewDecision],
     *,
     unresolved: bool = False,
+    annotations: Mapping[str, Annotation] | None = None,
 ) -> bool:
     """Whether a group with these member targets is open: a member has no
     decision or only an ``uncertain`` one (the read and submit gating). With
     ``unresolved`` (a live group of that kind) an automatic take-over from
-    before #246 is no decision either."""
+    before #246 is no decision either, unless ``annotations`` (the draft's, by
+    id) show its result was edited since."""
     decided = {
         (d.target.annotation_id, d.target.version)
         for d in decisions
         if d.outcome != "uncertain"
-        and not (
-            unresolved
-            and d.consolidation is not None
-            and d.consolidation.action == "auto"
-        )
+        and not (unresolved and _untouched_take_over(d, annotations or {}))
     }
     return any(target not in decided for target in targets)
+
+
+def _replacements(
+    conn: Connection, pid: int, decisions: Sequence[ReviewDecision]
+) -> dict[str, Annotation]:
+    """The current results of automatic take-overs, by annotation id."""
+    refs = {
+        (d.replacement.annotation_id, d.replacement.version)
+        for d in decisions
+        if d.replacement is not None
+        and d.consolidation is not None
+        and d.consolidation.action == "auto"
+    }
+    if not refs:
+        return {}
+    payloads = conn.execute(
+        select(AnnotationSnapshotRow.payload).where(
+            AnnotationSnapshotRow.project_id == pid,
+            tuple_(
+                AnnotationSnapshotRow.annotation_id, AnnotationSnapshotRow.version
+            ).in_(refs),
+        )
+    ).scalars()
+    found = [decode_snapshot(payload).annotation for payload in payloads]
+    return {annotation.annotation_id: annotation for annotation in found}
 
 
 def consolidation_progress(
@@ -295,6 +336,11 @@ def consolidation_progress(
     profile, defaults = project_profile(conn, pid)
     found = round_members(conn, pid, round_id, profile, defaults)
     groups = list(round_groups(found))
+    annotations = (
+        _replacements(conn, pid, decisions)
+        if any("unresolved" in group.kinds for group in groups)
+        else {}
+    )
     open_count = sum(
         1
         for group in groups
@@ -307,6 +353,7 @@ def consolidation_progress(
             ),
             decisions,
             unresolved="unresolved" in group.kinds,
+            annotations=annotations,
         )
     )
     return open_count, len(groups)
@@ -665,7 +712,11 @@ def _state(
     The group is edited when a resulting annotation's hash differs from the
     mark or a replacement no longer exists. ``unresolved`` as in ``is_open``.
     """
-    if is_open(targets, content.decisions, unresolved=unresolved):
+    snapshots = {s.annotation.annotation_id: s for s in content.annotations}
+    annotations = {key: s.annotation for key, s in snapshots.items()}
+    if is_open(
+        targets, content.decisions, unresolved=unresolved, annotations=annotations
+    ):
         return {"state": "open"}
     by_target = {
         (d.target.annotation_id, d.target.version): d
@@ -678,8 +729,6 @@ def _state(
         state = marks[0].action
     else:  # decided in the editor without the consolidation view
         state = "leave_out" if all(d.outcome == "rejected" for d in decided) else "keep"
-    snapshots = {s.annotation.annotation_id: s for s in content.annotations}
-    annotations = {key: s.annotation for key, s in snapshots.items()}
     edited = False
     for decision in decided:
         mark = decision.consolidation

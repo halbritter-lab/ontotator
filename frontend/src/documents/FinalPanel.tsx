@@ -225,11 +225,14 @@ function FailureNotice({ failure: shown, onReview, onRetry, busy: saving }: { fa
   </div>;
 }
 
-/** #246: findings an annotator left Unresolved, with who and why, for the person deciding. */
-function UnresolvedNotice({ data, children }: { data: FinalPanelData; children?: ReactNode }): JSX.Element | null {
-  const lines = unresolvedLines(data.panel);
+/**
+ * #246: findings annotators marked Unresolved, with who and why, for the person deciding. The title holds whether or
+ * not a consolidator has settled them since. `submissionId`: only that submission's.
+ */
+function UnresolvedNotice({ data, submissionId, children }: { data: FinalPanelData; submissionId?: string; children?: ReactNode }): JSX.Element | null {
+  const lines = unresolvedLines(data.panel, submissionId);
   if (!lines.length) return null;
-  return <InlineMessage tone="warning" live={false} title={`${plural(lines.length, "finding")} left Unresolved`}>
+  return <InlineMessage tone="warning" live={false} title={`${plural(lines.length, "finding")} marked Unresolved`}>
     <ul className="final-panel-agreement-details">{lines.map(line => <li key={line}>{line}</li>)}</ul>
     {children}
   </InlineMessage>;
@@ -552,6 +555,8 @@ function ReviewContent(props: ContentProps): JSX.Element {
         {data.panel.changed_passages != null && <>{", "}{changedPassagesText(data.panel.changed_passages)}</>}
       </p>
     </div>}
+    {/* A newer consolidation's flags are on its inputs, so it shows the whole list. */}
+    {newer && <UnresolvedNotice data={data} submissionId={newer.kind === "consolidation" ? undefined : newer.submission_id} />}
     <div className="final-panel-actions">
       <ChoiceButton id={keepId} label={keepLabel(row)} variant={onlyTextChange ? "primary" : "secondary"} blocked={ownBlocked} busy={busy} onAnnounce={onAnnounce}
         onChoose={() => onSave(keepRequest(row, data.submissions, causes.map(item => item.cause_id), keepId), keepId)} />

@@ -51,6 +51,14 @@ describe("GroupCard", () => {
       expect(screen.getByRole("rowheader", { name: "Unresolved" })).toBeTruthy();
     });
 
+    it("an older take-over edited in the editor reads decided and keeps the flag", () => {
+      renderCard(flagged({ state: "auto", edited: true, annotation_ids: ["cons-g"] }));
+      const toggle = screen.getByRole("button", { expanded: true });
+      expect(toggle.textContent).toContain("decided");
+      expect(toggle.textContent).toContain("edited in editor");
+      expect(within(toggle).getByText("Unresolved")).toBeTruthy();
+    });
+
     it("an older automatic take-over stays visibly flagged in a read-only view", () => {
       renderCard(flagged({ state: "auto", annotation_ids: ["cons-g"] }), { readOnly: true });
       const toggle = screen.getByRole("button", { expanded: true });

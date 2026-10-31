@@ -675,14 +675,34 @@ describe("Unresolved findings (#246)", () => {
   it("the compare card lists the flag, the note and who wrote it", async () => {
     panels[rowKey("case-107", "de")] = { ...comparePanel("case-107", "de"), unresolved: [flag("case-107")] };
     renderPanel("case-107:de", page([group("case-107", [chooseRow("case-107", "de")])]));
-    expect((await screen.findByText("1 finding left Unresolved")).closest(".notice")?.textContent).toContain("Pallor, Ana Weber: Pale or just tired?");
+    expect((await screen.findByText("1 finding marked Unresolved")).closest(".notice")?.textContent).toContain("Pallor, Ana Weber: Pale or just tired?");
     expect(screen.queryByRole("button", { name: "Accept result" })).toBeNull();
+  });
+
+  it("counts a finding once and keeps every person's note", async () => {
+    panels[rowKey("case-107", "de")] = { ...comparePanel("case-107", "de"), unresolved: [flag("case-107"), flag("case-107", "s2", "Too vague")] };
+    renderPanel("case-107:de", page([group("case-107", [chooseRow("case-107", "de")])]));
+    expect((await screen.findByText("1 finding marked Unresolved")).closest(".notice")?.textContent)
+      .toContain("Pallor, Ana Weber: Pale or just tired?; Tom Reis: Too vague");
+  });
+
+  it("review changes shows the newer result's flags before Use the newer result", async () => {
+    const newer = tomSubmission("case-114", "de", { submission_id: "newer" });
+    const target = reviewRow("case-114", "de");
+    const row = { ...target, issues: [...target.issues, item({ code: "SELECTED_NEWER_RESULT", cause_id: "SELECTED_NEWER_RESULT:newer", category: "confirm-final", document_id: "case-114-de" })] };
+    panels[rowKey("case-114", "de")] = finalPanel({ submissions: [anaSubmission("case-114", "de"), newer], causes: row.issues,
+      unresolved: [{ ...flag("case-114", "s1", "On the final"), term_label: "Tremor", term_id: "HP:2" }, { ...flag("case-114"), submission_id: "newer" }] });
+    renderPanel("case-114:de", page([group("case-114", [row])]));
+    await screen.findByRole("button", { name: "Use the newer result" });
+    const notice = screen.getByText("1 finding marked Unresolved").closest(".notice");
+    expect(notice?.textContent).toContain("Pallor, Tom Reis: Pale or just tired?");
+    expect(notice?.textContent).not.toContain("Tremor");
   });
 
   it("the accept card of a submission lists it and says the export keeps it", async () => {
     panels[rowKey("case-107", "de")] = { ...acceptPanel("case-107", "de"), unresolved: [flag("case-107")] };
     renderPanel("case-107:de", page([group("case-107", [chooseRow("case-107", "de")])]));
-    const notice = (await screen.findByText("1 finding left Unresolved")).closest(".notice");
+    const notice = (await screen.findByText("1 finding marked Unresolved")).closest(".notice");
     expect(notice?.textContent).toContain("Pallor, Ana Weber: Pale or just tired?");
     expect(notice?.textContent).toContain("Accepting keeps the flag and the note in the export.");
   });
@@ -693,12 +713,12 @@ describe("Unresolved findings (#246)", () => {
       label_rule: "accept", accept_submission_id: "case-107-s2", unresolved: [flag("case-107")],
     });
     renderPanel("case-107:de", page([group("case-107", [chooseRow("case-107", "de")])]));
-    const notice = (await screen.findByText("1 finding left Unresolved")).closest(".notice");
+    const notice = (await screen.findByText("1 finding marked Unresolved")).closest(".notice");
     expect(notice?.textContent).not.toContain("in the export");
   });
 
   it("a note missing on an old submission reads as such", () => {
-    expect(unresolvedLines({ submissions: [], unresolved: [flag("c", "s9", null)] })).toEqual(["Pallor, an annotator: no note"]);
+    expect(unresolvedLines({ submissions: [], unresolved: [flag("c", "s9", null)] })).toEqual(["Pallor, An annotator: no note"]);
   });
 });
 

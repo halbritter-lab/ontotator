@@ -87,7 +87,7 @@ What for: confirm a final result after something changed, for example a newer su
 2. Optional: if the text changed, click **Show changes** to see the changed passages.
 3. Choose one:
    - Keep the final result on the old version, for example *Keep final on v1*.
-   - **Use the newer result**.
+   - **Use the newer result**. If annotators marked findings in it **Unresolved**, the block lists them with who wrote each note.
    - Carry it to the new version, for example *Carry to v2…* (see [Carry submitted work to a new text version](#carry-submitted-work-to-a-new-text-version)).
 
 ### Change a final result

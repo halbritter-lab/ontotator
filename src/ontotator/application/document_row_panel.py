@@ -444,8 +444,8 @@ def _unresolved(
     submission_ids: Iterable[str],
     profile: TaskProfile,
 ) -> list[dict[str, str | None]]:
-    """Findings left Unresolved in these submissions (#246); the route fills
-    ``term_label``."""
+    """Findings left Unresolved in these submissions (#246), one entry per
+    person; the route fills ``term_label``."""
     return [
         {
             "submission_id": sid,
@@ -643,14 +643,20 @@ def final_panel(
         if roles is not None and agreement is not None
         else []
     )
-    # A consolidation's inputs too: the flags stay visible to the lead accepting it.
+    # What the panel offers as final, and a consolidation's inputs: the flags
+    # stay visible to the lead accepting it.
+    listed = [
+        item
+        for item in listing["submissions"]
+        if item["is_latest_in_round"] is not False
+    ]
+    consolidated = _inputs(
+        conn,
+        pid,
+        (item["round_id"] for item in listed if item["kind"] == "consolidation"),
+    )
     flagged = sorted(
-        comparable_ids
-        | {
-            sid
-            for item in comparable
-            for sid in inputs.get(item.consolidation_round or "", ())
-        }
+        {item["submission_id"] for item in listed}.union(*consolidated.values())
     )
     unresolved = _unresolved(
         {

@@ -364,11 +364,12 @@ def _group(members: Sequence[tuple[str, Finding]], submissions: int) -> Group:
         kinds.add("notes_differ")
     if len({finding.modifier_spans for finding in findings}) > 1:
         kinds.add("modifiers_differ")
-    # A unanimous modifier term is a match (A103): only a difference flags it.
-    if kinds and any(finding.standalone_modifier for finding in findings):
-        kinds.add("modifier_as_finding")
     if any(finding.unresolved for finding in findings):
         kinds.add("unresolved")
+    # A unanimous modifier term is a match (A103): only a difference or an
+    # Unresolved flag flags it.
+    if kinds and any(finding.standalone_modifier for finding in findings):
+        kinds.add("modifier_as_finding")
     if not kinds:
         kinds.add("match")
 

@@ -185,12 +185,21 @@ export function detailDifferenceLines(agreement: AgreementView): string[] {
   });
 }
 
-/** #246: "Pallor, Ana Weber: Pale or just tired?", one line per finding an annotator left Unresolved. */
-export function unresolvedLines(panel: Pick<FinalPanelView, "submissions" | "unresolved">): string[] {
-  return (panel.unresolved ?? []).map(item => {
+/**
+ * #246: one line per finding (layer and term) annotators marked Unresolved, with every person's note:
+ * "Pallor, Ana Weber: Pale or just tired?; Tom Reis: no note". `submissionId`: only that submission's.
+ */
+export function unresolvedLines(panel: Pick<FinalPanelView, "submissions" | "unresolved">, submissionId?: string): string[] {
+  const byFinding = new Map<string, { term: string; notes: string[] }>();
+  for (const item of panel.unresolved ?? []) {
+    if (submissionId && item.submission_id !== submissionId) continue;
     const submission = panel.submissions?.find(entry => entry.submission_id === item.submission_id);
-    return `${item.term_label}, ${submission ? personName(submission) : "an annotator"}: ${item.note?.trim() || "no note"}`;
-  });
+    const key = `${item.layer_id} ${item.term_id}`;
+    const entry = byFinding.get(key) ?? { term: item.term_label, notes: [] };
+    entry.notes.push(`${submission ? personName(submission) : "An annotator"}: ${item.note?.trim() || "no note"}`);
+    byFinding.set(key, entry);
+  }
+  return [...byFinding.values()].map(({ term, notes }) => `${term}, ${notes.join("; ")}`);
 }
 
 /** One paragraph on V9 behind "How is this counted?". */

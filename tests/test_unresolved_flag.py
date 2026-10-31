@@ -10,6 +10,7 @@ the flag and note in the selected export.
 from __future__ import annotations
 
 import zipfile
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +30,8 @@ from test_consolidation_resolve_api import (
 from test_consolidation_submit_gating import submit_acknowledged
 from test_final_panel_api import (
     SEIZURE,
+    accepted_correction,
+    by_id,
     final_cell,
     finding,
     panel,
@@ -96,6 +99,14 @@ def test_a_context_difference_stays_one_with_an_unresolved_finding() -> None:
     assert groups(data, ["a", "b"])[0].kinds == {"values_differ", "unresolved"}
 
 
+def test_a_unanimous_modifier_term_with_a_flag_stays_a_modifier_finding() -> None:
+    data = {
+        "a": [replace(_finding("x"), standalone_modifier=True)],
+        "b": [replace(_finding("y", unresolved=True), standalone_modifier=True)],
+    }
+    assert groups(data, ["a", "b"])[0].kinds == {"unresolved", "modifier_as_finding"}
+
+
 @pytest.fixture
 def env(tmp_path: Path) -> Any:
     return plan_env(tmp_path)
@@ -155,6 +166,23 @@ def test_one_annotator_accept_card_lists_the_flag(env):
     assert [item["note"] for item in result["unresolved"]] == [NOTE]
 
 
+def test_flags_on_listed_submissions_outside_the_comparison_show(env):
+    target = doc("c1", "en")
+    span = span_of(env, target, "Neonatalzeit")
+    submit_findings(
+        env,
+        assign(env, target, "anno", "annotate"),
+        "s1",
+        [finding("a1", SEIZURE, span)],
+        unresolved={"a1": NOTE},
+    )
+    accepted_correction(env, target, "c1-en-v2")
+    submit_findings(env, assign(env, "c1-en-v2", "anno2", "annotate"), "s2", [])
+    result = panel(env)
+    assert by_id(result)["s1"]["comparable"] is False
+    assert [item["note"] for item in result["unresolved"]] == [NOTE]
+
+
 @pytest.fixture
 def flagged(tmp_path: Path) -> Any:
     """A consolidation of two submissions whose ``a1`` and ``b1`` match, with
@@ -202,6 +230,23 @@ def test_an_older_automatic_take_over_reads_open_while_live():
     content = _Content(annotations=[], decisions=[taken], submitted=True)
     assert _state(targets, content)["state"] == "auto"  # a submitted round stays
     assert _state(targets, content, unresolved=True)["state"] == "open"
+
+
+def test_an_older_take_over_edited_in_the_editor_stays_decided_and_edited(flagged):
+    item = group(flagged, "unresolved")
+    ok(mutate(flagged, "resolve", {"input_ids": inputs(item), "action": "keep"}))
+    draft = flagged.env.app.state.repo.open_draft(flagged.round.workspace_key)
+    [result] = draft.annotations
+    marked = ConsolidationMark(action="auto", content_sha256="other")
+    decisions = [
+        d.model_copy(update={"consolidation": marked}) for d in draft.decisions
+    ]
+    targets = {
+        (d.target.annotation_id, d.target.version): result.annotation for d in decisions
+    }
+    content = _Content(annotations=[result], decisions=decisions)
+    state = _state(targets, content, unresolved=True)
+    assert (state["state"], state["edited"]) == ("auto", True)
 
 
 def _lead(db: Database) -> tuple[Access, Actor]:
@@ -325,13 +370,23 @@ def test_a_live_automatic_take_over_from_before_blocks_submit(flagged):
     ok(mutate(flagged, "resolve", {"input_ids": inputs(item), "action": "keep"}))
     env = flagged.env
     draft = env.app.state.repo.open_draft(flagged.round.workspace_key)
-    older = [
-        d.model_copy(
-            update={"consolidation": ConsolidationMark(action="auto")},
-        )
-        for d in draft.decisions
-    ]
+
+    def as_auto(digest: str | None) -> list[ReviewDecision]:
+        return [
+            d.model_copy(
+                update={
+                    "consolidation": ConsolidationMark(
+                        action="auto",
+                        content_sha256=digest or d.consolidation.content_sha256,
+                    )
+                }
+            )
+            for d in draft.decisions
+        ]
+
+    round_id = flagged.round.round_id
     with env.db.transaction() as conn:
-        open_now = open_group_count(conn, env.pid, flagged.round.round_id, older)
-    # The three groups with differences, and the flagged one.
-    assert open_now == 4
+        # The three groups with differences, and the flagged one.
+        assert open_group_count(conn, env.pid, round_id, as_auto(None)) == 4
+        # A result changed since the mark: the consolidator's edit stands.
+        assert open_group_count(conn, env.pid, round_id, as_auto("other")) == 3
