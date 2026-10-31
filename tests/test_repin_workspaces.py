@@ -182,8 +182,7 @@ def test_a_scope_this_project_never_issued_stays_refused(tmp_path: Any) -> None:
     assert response.json()["code"] == "INVALID_SCOPE"
 
 
-def test_work_from_before_the_move_can_be_consolidated(tmp_path: Any) -> None:
-    env = scratch_env(tmp_path, per_text=2)
+def two_submissions(env: SimpleNamespace) -> list[str]:
     submitted = []
     for username in ("anno", "anno2"):
         row = assign(env, doc("c1"), username)
@@ -193,19 +192,54 @@ def test_work_from_before_the_move_can_be_consolidated(tmp_path: Any) -> None:
         response = submit(env, username, opened)
         assert response.status_code == 200, response.text
         submitted.append(response.json()["submission_id"])
-    move(env)
-    started = env.lead.post(
+    return submitted
+
+
+def consolidate(env: SimpleNamespace, sources: list[str]) -> Any:
+    return env.lead.post(
         "/api/v1/projects/proj/consolidations",
         json={
             "document_id": doc("c1"),
             "reviewer": "leader",
-            "source_submission_ids": submitted,
+            "source_submission_ids": sources,
             "reason": None,
             "confirm_language": True,
             "request_id": "after-move",
             "expected_workflow_revision": None,
         },
     )
+
+
+def test_work_from_before_the_move_can_be_consolidated(tmp_path: Any) -> None:
+    env = scratch_env(tmp_path, per_text=2)
+    submitted = two_submissions(env)
+    move(env)
+    started = consolidate(env, submitted)
+    assert started.status_code == 200, started.text
+
+
+def test_imported_work_is_looked_up_in_this_project_after_the_move(
+    tmp_path: Any, monkeypatch: Any
+) -> None:
+    """An imported submission's origin key names the exporting project."""
+    env = scratch_env(tmp_path, per_text=2)
+    submitted = two_submissions(env)
+    move(env)
+    repository = type(env.app.state.repo)
+    stored = repository.get_submission
+
+    def imported(*args: Any, **kwargs: Any) -> Any:
+        submission = stored(*args, **kwargs)
+        return submission and submission.model_copy(
+            update={
+                "origin_key": submission.origin_key.model_copy(
+                    update={"project_key": "exporter"}
+                )
+            }
+        )
+
+    monkeypatch.setattr(repository, "get_submission", imported)
+    started = consolidate(env, submitted)
     assert started.status_code == 200, started.text
 
 

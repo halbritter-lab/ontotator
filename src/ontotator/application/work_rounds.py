@@ -577,7 +577,10 @@ class WorkRoundService:
                 and source.scope.scope_id
                 != build_scope(profile, source.origin_key.mode).scope_id
                 # Work from before a release move keeps its scope (#81).
-                and not self.repo.held_across_release_move(source.origin_key)
+                # An imported source's origin key names the exporting project.
+                and not self.repo.held_across_release_move(
+                    source.origin_key.model_copy(update={"project_key": project})
+                )
             ):
                 raise DomainError(
                     "ROUND_INPUT_INVALID",
