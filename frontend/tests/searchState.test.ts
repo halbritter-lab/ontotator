@@ -73,6 +73,7 @@ describe("SearchManager", () => {
       route: "lexical",
       rank: 1,
       display_pos: 0,
+      weak_match: false,
       role: "finding",
     };
     const mockResult: SearchResult = {
@@ -124,6 +125,7 @@ describe("SearchManager", () => {
       route: "lexical",
       rank: 1,
       display_pos: 0,
+      weak_match: false,
       role: "finding",
     };
     const candidateB: SearchCandidate = {
@@ -136,6 +138,7 @@ describe("SearchManager", () => {
       route: "lexical",
       rank: 1,
       display_pos: 0,
+      weak_match: false,
       role: "finding",
     };
 
@@ -183,6 +186,7 @@ describe("SearchManager", () => {
       route: "lexical",
       rank: 1,
       display_pos: 0,
+      weak_match: false,
       role: "finding",
     };
     searchOntologySpy.mockResolvedValue({
@@ -235,6 +239,7 @@ describe("SearchManager", () => {
             obsolete: false,
             rank: 1,
             display_pos: 0,
+            weak_match: false,
             role: "finding",
           },
         ],
@@ -269,6 +274,7 @@ describe("SearchManager", () => {
           route: "lexical",
           rank: 1,
           display_pos: 0,
+          weak_match: false,
           role: "finding",
         },
       ],

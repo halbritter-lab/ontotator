@@ -10,7 +10,7 @@ import type { SearchCandidate } from "../api/client";
 import { SearchLanguageButton } from "./SearchLanguageButton";
 import type { SearchLanguageControl } from "./searchLanguages";
 import { SearchManager, type SearchState, type WorkspaceKey } from "./searchState";
-import { matchLine } from "./termSearch";
+import { firstUsableIndex, matchLine } from "./termSearch";
 import { COHORT_TAG, MODIFIER_ROOTS } from "./modifiers";
 import "./modifiers.css";
 
@@ -203,11 +203,11 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   const expanded = candidates.length > 0;
   const noHits = resultsCurrent && candidates.length === 0;
 
-  // The active hit resets to the first usable one whenever a new result list arrives.
+  // The active hit resets to the first usable close match whenever a new result list arrives; weak matches wait for ↓ ↑ (#247).
   const [active, setActive] = useState<{ list: SearchCandidate[]; index: number } | null>(null);
   const activeIndex = active && active.list === state.candidates
     ? active.index
-    : state.candidates.findIndex(isUsable);
+    : firstUsableIndex(state.candidates, canAssign);
   const shownActive = expanded && activeIndex >= 0 && activeIndex < candidates.length ? activeIndex : -1;
   const optionId = (index: number) => `${listboxId}-${index}-${candidates[index].term_id}`;
 
@@ -369,7 +369,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
           ) : expanded ? (
             anyUsable ? (
               <>
-                {hitCount}, <Kbd>↓</Kbd><Kbd>↑</Kbd> choose, <Kbd>Enter</Kbd> add, <Kbd>Esc</Kbd> cancel
+                {hitCount}, {shownActive < 0 && "no close match, "}<Kbd>↓</Kbd><Kbd>↑</Kbd> choose, <Kbd>Enter</Kbd> add, <Kbd>Esc</Kbd> cancel
               </>
             ) : (
               hitCount
@@ -404,7 +404,8 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
                 // Keep the focus in the field: the hits are options of the combobox, not buttons.
                 onMouseDown={(event) => event.preventDefault()}
                 onPointerEnter={() => {
-                  if (usable && !isActive) setActive({ list: state.candidates, index });
+                  // A pointer resting where the list appears must not arm a weak match for Enter.
+                  if (usable && !isActive && !cand.weak_match) setActive({ list: state.candidates, index });
                 }}
                 onClick={() => addCandidate(cand)}
               >
@@ -412,6 +413,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
                   <strong className="candidate-label" title={cand.label}>{cand.label}</strong>
                   <span className="candidate-id">{cand.term_id}</span>
                   {isModifierHit(cand) && <span className="candidate-role">{cand.role === "cohort" ? COHORT_TAG : "Modifier"}</span>}
+                  {cand.weak_match && <span className="candidate-role">Weak match</span>}
                   {canAssign && (
                     // Reserved in every row and shown only on the active one, so activity never changes the layout.
                     <span className="candidate-enter" aria-hidden="true"><Kbd><span className="candidate-enter-word">Enter</span><span className="candidate-enter-symbol">⏎</span></Kbd></span>

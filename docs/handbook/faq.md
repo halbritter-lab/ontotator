@@ -90,7 +90,7 @@ The connection to the server is lost. Keep the window open; your input stays in 
 
 ### The term search does not find the right term
 
-The search compares your words with term names and synonyms; it does not understand meaning. Terms whose name or synonym equals your words come first, then terms whose name or synonym contains all your words; other similar terms follow in a shuffled order. Read all hits, then try another word, a synonym, the English name or a code. See [Search a term](annotator.md#search-a-term).
+The search compares your words with term names and synonyms; it does not understand meaning. Terms whose name or synonym equals your words come first, then terms whose name or synonym contains all your words; other similar terms follow in a shuffled order, those tagged **Weak match** last. Enter takes a weak match only after you choose it. Read all hits, then try another word, a synonym, the English name or a code. See [Search a term](annotator.md#search-a-term).
 
 ## Translation review
 

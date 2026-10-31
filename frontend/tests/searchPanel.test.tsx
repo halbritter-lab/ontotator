@@ -201,6 +201,52 @@ describe("SearchPanel", () => {
     expect(onSelectCandidate).toHaveBeenCalledWith(expect.objectContaining({ term_id: "HP:0001250" }), "s-1");
   });
 
+  it("a weak top hit is listed and named but not armed; Enter adds nothing until it is chosen (#247)", async () => {
+    const onSelectCandidate = vi.fn();
+    const weakHits = { search_id: "s-1", candidates: [
+      hit("HP:0100001", "Fractured metatarsal bone of digit 1", { weak_match: true }),
+      hit("HP:0100002", "Thumb hypoplasia grade 2", { weak_match: true }),
+    ] };
+    const input = renderPanel(vi.fn().mockResolvedValue(weakHits), { onSelectCandidate });
+    fireEvent.change(input, { target: { value: "bone metastases" } });
+    await waitFor(() => expect(options()).toHaveLength(2));
+    expect(activeId(input)).toBeNull();
+    expect(within(options()[0]).getByText("Weak match")).toBeTruthy();
+    expect(document.querySelector(".search-hint")!.textContent).toBe("2 terms, no close match, ↓↑ choose, Enter add, Esc cancel");
+    expect(input.getAttribute("aria-describedby")).toBe(document.querySelector(".search-hint")!.id);
+    fireEvent.pointerEnter(options()[1]);
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(activeId(input)).toBeNull();
+    expect(onSelectCandidate).not.toHaveBeenCalled();
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    expect(activeId(input)).toBe(options()[0].id);
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onSelectCandidate.mock.calls[0][0].term_id).toBe("HP:0100002");
+  });
+
+  it("a queued Enter adds nothing when the answer's top hit is weak (#247)", async () => {
+    const onSelectCandidate = vi.fn();
+    const searchOntology = vi.fn().mockResolvedValue({ search_id: "s-1", candidates: [hit("HP:0100002", "Thumb hypoplasia grade 2", { weak_match: true })] });
+    const input = renderPanel(searchOntology, { onSelectCandidate, debounceMs: 20 });
+    fireEvent.change(input, { target: { value: "sangrado" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(options()).toHaveLength(1));
+    expect(onSelectCandidate).not.toHaveBeenCalled();
+  });
+
+  it("a click still takes a weak hit; a close hit above it stays armed (#247)", async () => {
+    const onSelectCandidate = vi.fn();
+    const mixed = { search_id: "s-1", candidates: [hit("HP:0100003", "Sclerotic foci in forearm bones"), hit("HP:0100001", "Fractured metatarsal bone of digit 1", { weak_match: true })] };
+    const input = renderPanel(vi.fn().mockResolvedValue(mixed), { onSelectCandidate });
+    fireEvent.change(input, { target: { value: "sclerotic foci" } });
+    await waitFor(() => expect(options()).toHaveLength(2));
+    expect(activeId(input)).toBe(options()[0].id);
+    expect(within(options()[0]).queryByText("Weak match")).toBeNull();
+    fireEvent.click(options()[1]);
+    expect(onSelectCandidate.mock.calls[0][0].term_id).toBe("HP:0100001");
+  });
+
   it("Enter while a search is pending runs it and adds its active hit when it answers (#31)", async () => {
     const onSelectCandidate = vi.fn();
     const searchOntology = vi.fn().mockResolvedValue(threeHits);

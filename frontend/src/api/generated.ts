@@ -7155,6 +7155,11 @@ export interface components {
             /** Match Language */
             match_language?: string | null;
             /**
+             * Weak Match
+             * @default false
+             */
+            weak_match: boolean;
+            /**
              * Role
              * @default finding
              * @enum {string}
