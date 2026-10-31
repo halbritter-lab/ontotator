@@ -198,7 +198,7 @@ export function MyTasks({ project, status, projects, onNavigate, username }: MyT
     </> },
     { id: "assigned", header: "Assigned", cell: task => <AssignedDate at={task.assigned_at} /> },
     { id: "changed", header: "Last change", cell: task => <time dateTime={task.updated_at}>{formatDateTime(task.updated_at)}</time> },
-    { id: "open", header: "Action", cell: task => task.waiting_for_translation_review ? <span className="cell-secondary">Opens after the review</span> : task.waiting_for_lead ? <span className="cell-secondary">The lead decides how it continues</span> : <a className="btn btn-secondary" href={routeHref({ name: "task", assignmentId: task.assignment_id })} onKeyDown={onSpaceActivate} onClick={event => {
+    { id: "open", header: "Action", cell: task => task.waiting_for_translation_review ? <span className="cell-secondary">Opens once a translation is accepted</span> : task.waiting_for_lead ? <span className="cell-secondary">The lead decides how it continues</span> : <a className="btn btn-secondary" href={routeHref({ name: "task", assignmentId: task.assignment_id })} onKeyDown={onSpaceActivate} onClick={event => {
       if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
       event.preventDefault(); onNavigate({ name: "task", assignmentId: task.assignment_id });
     }}>{task.held ? "View paused task" : taskActionLabels[task.status]}</a> },

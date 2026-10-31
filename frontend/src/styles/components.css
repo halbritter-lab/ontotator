@@ -584,7 +584,7 @@ textarea.form-control {
 .data-table-scroll { max-width: 100%; overflow-x: auto; }
 .data-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 .data-table th, .data-table td { padding: var(--cell-pad-y) var(--cell-pad-x); border-bottom: 1px solid var(--border); vertical-align: top; }
-.data-table th { font-weight: var(--weight-strong); background: var(--surface-sunken); }
+.data-table th { font-weight: var(--weight-strong); background: var(--surface-sunken); text-align: start; }
 /* Row headers (rowHeader columns) read as body cells: no header shading. */
 .data-table tbody th { background: transparent; text-align: start; }
 .data-table .is-selected { background: var(--accent-light); }

@@ -239,8 +239,13 @@ describe("ConsolidationScreen", () => {
     // #143: the dialog already says who accepts the result.
     expect(within(dialog).getByText("Then accept the result in Documents.")).toBeTruthy();
     expect(within(dialog).queryByText("The lead then accepts the result.")).toBeNull();
+    const tasksChanged = vi.fn();
+    window.addEventListener("tasks-changed", tasksChanged);
     fireEvent.click(within(dialog).getByRole("button", { name: "Submit" }));
     expect(await screen.findByText("Consolidation submitted. Accept the result in Documents.")).toBeTruthy();
+    // "My tasks (n)" and "Documents (n)" recount.
+    expect(tasksChanged).toHaveBeenCalledTimes(1);
+    window.removeEventListener("tasks-changed", tasksChanged);
   });
 
   it("asks the project list whether the consolidator leads, before the submit dialog (#143)", async () => {

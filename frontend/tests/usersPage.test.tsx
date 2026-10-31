@@ -329,7 +329,7 @@ describe("account status, projects at creation, history and erasure", () => {
   it("words audit details", () => {
     const base = { at: "", actor: "", action: "", target_type: "user", target_id: "x", project_key: null };
     expect(auditDetails({ ...base, details: { active: false } })).toBe("Deactivated");
-    expect(auditDetails({ ...base, details: { fields: ["email"] } })).toBe("email");
+    expect(auditDetails({ ...base, details: { fields: ["email", "display_name"] } })).toBe("Email, Display name");
     expect(auditDetails({ ...base, details: {} })).toBe("");
     expect(auditDetails({ ...base, details: { purpose: "setup" } })).toBe("Setup code");
     expect(auditDetails({ ...base, details: { task: "annotate", user_id: 4, document_id: "case-1", ok: true } })).toBe("Task: Annotation; User 4; Document id: case-1; Ok: yes");

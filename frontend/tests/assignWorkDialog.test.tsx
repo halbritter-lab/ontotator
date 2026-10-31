@@ -313,6 +313,18 @@ it("a skipped step is left unassigned; a step with some annotators is not (#218)
   expect(props.onClose).not.toHaveBeenCalled();
 });
 
+it("names a failed load of the selection's steps in the footer and recovers with Retry", async () => {
+  vi.mocked(api.selectionSummary).mockRejectedValueOnce(new Error("offline"));
+  render(<AssignWorkDialog {...casesProps()} />);
+  const retry = await screen.findByRole("button", { name: "Retry" });
+  expect(screen.getByText("The tasks could not load. Use Retry.")).toBeTruthy();
+  expect(screen.queryByText("Loading…")).toBeNull();
+  expect(screen.getByRole("button", { name: "Assign" }).getAttribute("aria-disabled")).toBe("true");
+  fireEvent.click(retry);
+  await ready();
+  expect(screen.queryByText("The tasks could not load. Use Retry.")).toBeNull();
+});
+
 it("says so when it cannot check what is left, and still reports the assignments (#218)", async () => {
   const props = casesProps(); render(<AssignWorkDialog {...props} />); await ready();
   fireEvent.click(radio(/Ana Weber/)); await waitForPreviewOf(["ana"]);

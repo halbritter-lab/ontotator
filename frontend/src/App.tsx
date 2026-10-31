@@ -286,11 +286,13 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
   let content: JSX.Element;
   // X-1: a page the role cannot use says so instead of showing a form the server refuses.
   const notice = (title: string, message: string) => <section className="detail-section"><h1>{title}</h1><InlineMessage tone="info">{message}</InlineMessage></section>;
+  // With a failed project list only its error and Retry show (above the page), not a loading line that never ends.
+  const accessLoading = projectError ? <></> : <InlineMessage tone="info">Loading project access…</InlineMessage>;
   const projectGate = (key: string, page: string): JSX.Element | null => {
     const loaded = projectContext?.identity === projectIdentity;
     const known = loaded ? projects : lastProjects.current.username === user.username ? lastProjects.current.projects : [];
     const project = known.find(item => item.project_key === key);
-    if (!project && !loaded) return <InlineMessage tone="info">Loading project access…</InlineMessage>;
+    if (!project && !loaded) return accessLoading;
     if (!project) return <NotFound title="Project not found or no access" reason="It does not exist or you are not a member." onNavigate={go} />;
     return project.can_manage ? null : notice(page, `${page} is for project leads. Your tasks for this project are under My tasks.`);
   };
@@ -315,7 +317,7 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
       // Display capability only; the import endpoint rechecks current authority.
       const canOverrideTranslationStatus = !!currentProject?.can_manage && (user.is_system_admin || currentProject.roles.includes("lead"));
       // Lead access is decided from the projects list before the page shows anything (open question 6).
-      content = projectContext?.identity !== projectIdentity ? <InlineMessage tone="info">Loading project access…</InlineMessage>
+      content = projectContext?.identity !== projectIdentity ? accessLoading
         : !currentProject ? <NotFound title="Project not found or no access" reason="It does not exist or you are not a member." onNavigate={go} />
         : <DocumentsPage projectKey={route.key} currentUser={user} canManage={!!currentProject?.can_manage} canOverrideTranslationStatus={canOverrideTranslationStatus} query={route} onNavigate={go} />;
       break;
@@ -327,7 +329,7 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
       canManage={!!projects.find(project => project.project_key === route.key)?.can_manage} onNavigate={go} />; break;
     case 'projectProblemReport': {
       const canManage = !!projects.find(project => project.project_key === route.key)?.can_manage;
-      content = projectContext?.identity !== projectIdentity ? <InlineMessage tone="info">Loading project access…</InlineMessage>
+      content = projectContext?.identity !== projectIdentity ? accessLoading
         : canManage ? <ProblemReportDetail key={JSON.stringify([user.username, route.key, route.reportId])} projectKey={route.key} reportId={route.reportId} canManage={canManage} action={route.action} section={route.section} documents={route.documents} onNavigate={go} />
         // A reporter's link to their own report; the server refuses everyone else's (REPORT_NOT_FOUND).
         : <ReporterReportPage key={JSON.stringify([user.username, route.reportId])} reportId={route.reportId} onNavigate={go} />;

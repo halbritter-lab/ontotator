@@ -160,6 +160,7 @@ it("does not treat a failed current-project request as override authority and ca
   vi.mocked(api.listProjects).mockRejectedValueOnce(new ApiError(403, "Project rights changed", "NOT_ALLOWED")).mockResolvedValueOnce([project]);
   render(<App user={lead} />);
   const retry = await screen.findByRole("button", { name: "Retry projects" });
+  expect(screen.queryByText("Loading project access…")).toBeNull();
   expect(screen.queryByRole("button", { name: "Upload texts…" })).toBeNull();
   expect(screen.queryByLabelText(ACCEPT)).toBeNull();
   fireEvent.click(retry);

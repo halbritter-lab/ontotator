@@ -984,7 +984,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     : queueState === "error" ? (
       isSessionProblem(queueError) ? "Session ended – changes kept"
       : isNetworkError(queueError) || isOffline ? "Offline – changes not saved"
-      : queueError instanceof ApiError && queueError.code === "PROJECT_BUSY" ? errorMessage(queueError)
+      : queueError instanceof ApiError && queueError.code === "PROJECT_BUSY" ? "Project busy – changes not saved"
       : "Save error – changes not saved"
     )
     : unsavedAnnotationNotes().length > 0 ? "Annotation note changes not saved"
@@ -3475,8 +3475,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             <span className="status-dot" aria-hidden="true" />
             <span className="status-badge__text">{statusText}</span>
           </span>}
-          {held && <InlineMessage tone="warning">Task paused: {holdReason ?? "A project problem needs attention."} Saved work remains readable. Your local input is kept.</InlineMessage>}
-
           {queueState === "error" && (
             <Button
               type="button"
@@ -3513,6 +3511,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         </div>
       </Toolbar>
 
+      {held && <InlineMessage tone="warning">Task paused: {holdReason ?? "A project problem needs attention."} Saved work remains readable. Your local input is kept.</InlineMessage>}
       {!!versionError && <><ErrorNotice error={versionError} /><Button onClick={retryVersions}>Retry version list</Button></>}
       {display && <InlineMessage tone="info"><span>Viewing {display.label} (read-only)</span>
         <Button disabled={versionBusy} onClick={() => { void chooseAnnotationVersion("draft"); }}>Back to my draft</Button>

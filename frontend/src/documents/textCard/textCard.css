@@ -135,7 +135,8 @@
 .text-versions { gap: var(--space-3); }
 .text-version { display: grid; gap: var(--space-1); padding-left: var(--space-2); border-left: 2px solid var(--border); }
 .text-version-head,
-.text-version-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.text-version-actions,
+.text-version-work > li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .text-version-head .form-group { margin-bottom: 0; }
 .text-version-name { font-weight: var(--weight-strong); }
 .text-version-origin,

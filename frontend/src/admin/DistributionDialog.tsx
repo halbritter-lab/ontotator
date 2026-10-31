@@ -3,12 +3,12 @@ import { api, ApiError, type AssignmentRow, type AssignmentView, type ProposalRe
 import { Button, Dialog, InlineMessage, TextInput } from "../ui";
 import { labelFor, taskLabels } from "../app/labels";
 import { BatchFeedback, eligibleMembers, memberOptionLabel, useAlive, useAssignmentBatch, useMembers, type Task, type TaskDocument, useCaseVariants, canReviewSelection, taskLanguages } from "./assignmentUI";
-import { personLabel } from "../app/identity";
+import { personLabel, textLabel } from "../app/identity";
 import type { CaseSummary } from "../api/client";
 import { ErrorNotice } from "./ErrorNotice";
 type Slot = { document_id: string; language: string; username: string; place: number };
 /** `task` is fixed by the assign dialog ("Distribute evenly…"). */
-export interface DistributionDialogProps { projectKey: string; documents: readonly TaskDocument[]; cases?: readonly CaseSummary[] | null; task: Task; confirmUnreviewedTranslation?: boolean; onClose: () => void; onChanged: () => void }
+export interface DistributionDialogProps { projectKey: string; documents: readonly (TaskDocument & { case_id: string })[]; cases?: readonly CaseSummary[] | null; task: Task; confirmUnreviewedTranslation?: boolean; onClose: () => void; onChanged: () => void }
 export function DistributionDialog(props: DistributionDialogProps): JSX.Element { return <DistributionEditor key={JSON.stringify([props.projectKey, props.documents.map(doc => [doc.document_id, doc.language]), props.task])} {...props} />; }
 function DistributionEditor({ projectKey, documents, cases, task, confirmUnreviewedTranslation, onClose, onChanged }: DistributionDialogProps): JSX.Element {
   const [count, setCount] = useState("1");
@@ -24,6 +24,7 @@ function DistributionEditor({ projectKey, documents, cases, task, confirmUnrevie
   const context = useCaseVariants(projectKey, cases);
   const reviewAllowed = canReviewSelection(documents, context.variants);
   const languages = new Map(documents.map(doc => [doc.document_id, taskLanguages(doc, task, context.variants)]));
+  const textName = (documentId: string) => { const text = documents.find(doc => doc.document_id === documentId); return text ? textLabel(text) : documentId; };
   const clear = () => { setProposal(null); setSlots([]); batch.reset(); setError(undefined); };
   const propose = async () => {
     if (writing.current || batch.busy || !members || !documents.length || (task === "translation_review" && !reviewAllowed)) return;
@@ -70,13 +71,13 @@ function DistributionEditor({ projectKey, documents, cases, task, confirmUnrevie
     {error !== undefined && <ErrorNotice error={error} />}
     {proposal && <>
       <h3>Proposal</h3>
-      <table><caption>Proposed assignments</caption><thead><tr><th>Document</th><th>Languages</th><th>Person</th></tr></thead><tbody>{slots.map((slot, index) => <tr key={JSON.stringify([slot.document_id, slot.place])}><td>{slot.document_id}</td><td>{languages.get(slot.document_id)?.join(", ") || "Required languages unavailable"}</td><td>
-        <select id={`distribution-slot-${index}`} className="form-select" aria-label={`${slot.document_id}, person ${slot.place + 1}`} value={slot.username} disabled={batch.busy || batch.attempted || stale || busy} onChange={event => setSlots(current => current.map((item, itemIndex) => itemIndex === index ? { ...item, username: event.target.value } : item))}>
+      <table className="data-table density-compact"><caption className="visually-hidden">Proposed assignments</caption><thead><tr><th>Document</th><th>Languages</th><th>Person</th></tr></thead><tbody>{slots.map((slot, index) => <tr key={JSON.stringify([slot.document_id, slot.place])}><td>{textName(slot.document_id)}</td><td>{languages.get(slot.document_id)?.join(", ") || "Required languages unavailable"}</td><td>
+        <select id={`distribution-slot-${index}`} className="form-select" aria-label={`${textName(slot.document_id)}, person ${slot.place + 1}`} value={slot.username} disabled={batch.busy || batch.attempted || stale || busy} onChange={event => setSlots(current => current.map((item, itemIndex) => itemIndex === index ? { ...item, username: event.target.value } : item))}>
           <option value="">Nobody</option>{slot.username && !eligible.some(member => member.username === slot.username) && <option value={slot.username}>{proposal.rows.find(row => row.username === slot.username)?.display_name || "Former member"}</option>}
           {eligible.map(member => <option key={member.username} value={member.username} disabled={slots.some((other, otherIndex) => index !== otherIndex && other.document_id === slot.document_id && other.username === member.username)}>{memberOptionLabel(member)}</option>)}
         </select></td></tr>)}</tbody></table>
       {duplicate && <InlineMessage tone="warning">Choose each person only once per document.</InlineMessage>}
-      <section aria-label="Unassignable documents"><h3>Unassignable documents</h3>{proposal.unassignable.length ? <ul>{proposal.unassignable.map(row => <li key={row.document_id}>{row.document_id} ({row.language}): {unassignableLabel(row, proposal.per_document, languages.get(row.document_id))}</li>)}</ul> : <p>Every document has a proposal.</p>}</section>
+      <section aria-label="Unassignable documents"><h3>Unassignable documents</h3>{proposal.unassignable.length ? <ul>{proposal.unassignable.map(row => <li key={row.document_id}>{textName(row.document_id)}: {unassignableLabel(row, proposal.per_document, languages.get(row.document_id))}</li>)}</ul> : <p>Every document has a proposal.</p>}</section>
       <section aria-label="Resulting load"><h3>Resulting load</h3><p>Open, in progress and reopened work across this project, before and after the selected rows.</p><ul>{eligible.map(member => <li key={member.username}>{personLabel(member)}: {loadBefore.has(member.username) || inventory !== null ? `${loadBefore.get(member.username) ?? 0} now, ${(loadBefore.get(member.username) ?? 0) + newRows.filter(row => row.username === member.username).length} after` : "Load unavailable"}</li>)}</ul></section>
       <Button variant="primary" disabled={busy || batch.busy || batch.attempted || stale || duplicate} onClick={() => confirm(false)}>Confirm</Button>
     </>}

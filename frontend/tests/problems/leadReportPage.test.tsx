@@ -195,6 +195,19 @@ describe("confirmations", () => {
     expect(recordDecision).not.toHaveBeenCalled();
   });
 
+  it("a decision refreshes the Documents counter", async () => {
+    const { act } = await setup();
+    act.mockResolvedValue(leadReport({ state: "resolved", revision: 2, resolution: "Fixed text" }));
+    const changed = vi.fn();
+    window.addEventListener("documents-changed", changed);
+    fireEvent.click(intent("Close, keep paused…"));
+    const box = within(confirmBox("Close report"));
+    fireEvent.change(box.getByRole("textbox", { name: /Outcome for ann-0004/ }), { target: { value: "Fixed text" } });
+    fireEvent.click(box.getByRole("button", { name: "Close report" }));
+    await waitFor(() => expect(changed).toHaveBeenCalledTimes(1));
+    window.removeEventListener("documents-changed", changed);
+  });
+
   it("close and resume releases the pause, then closes with the same answer text in one click (R-16)", async () => {
     const { act } = await setup();
     act.mockResolvedValueOnce(leadReport({ revision: 2, holds: [hold({ active: false, release_action: "resume", released_by_label: "lead-0002" })] }))

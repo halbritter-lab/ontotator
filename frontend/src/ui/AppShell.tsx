@@ -1,4 +1,4 @@
-import { useRef, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import type { CurrentUser } from "../api/client";
 import { personLabel } from "../app/identity";
 import { Button } from "./Button";
@@ -31,7 +31,17 @@ export interface AppShellProps {
 
 export function AppShell({ user, onLogout, breadcrumb, actions, nav, navLabel = "Sections", density = "compact", role, homeHref, onHome, children }: AppShellProps): JSX.Element {
   const mainRef = useRef<HTMLElement>(null);
+  const sectionsRef = useRef<HTMLDetailsElement>(null);
   const hasNav = nav != null && nav !== false;
+  // The open Sections panel lies over the page: a press anywhere else closes it.
+  useEffect(() => {
+    const closeSections = (event: PointerEvent) => {
+      const sections = sectionsRef.current;
+      if (sections?.open && !sections.contains(event.target as Node)) sections.open = false;
+    };
+    document.addEventListener("pointerdown", closeSections);
+    return () => document.removeEventListener("pointerdown", closeSections);
+  }, []);
   // On phones the reading header has no room for Handbook; the Sections menu carries it there (CSS).
   const navigation = hasNav ? <nav className="app-nav" aria-label={navLabel}>{nav}
     {density === "reading" && <a className="shell-nav-link shell-nav-help" href={HANDBOOK_HREF}>Handbook</a>}</nav> : null;
@@ -42,7 +52,7 @@ export function AppShell({ user, onLogout, breadcrumb, actions, nav, navLabel = 
     }}>Skip to content</a>
     <header className="app-header shell-header">
       <div className="shell-heading">
-        {density === "reading" && hasNav && <details className="shell-reading-navigation" onKeyDown={event => {
+        {density === "reading" && hasNav && <details ref={sectionsRef} className="shell-reading-navigation" onKeyDown={event => {
           if (event.key !== "Escape" || !event.currentTarget.open) return;
           event.preventDefault();
           event.currentTarget.open = false;

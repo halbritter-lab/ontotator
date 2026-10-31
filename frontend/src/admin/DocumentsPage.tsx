@@ -478,6 +478,17 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     ? `Select the texts of the first ${MAX_SELECTION} of ${filteredCases} filtered cases`
     : filteredTexts === 1 ? "Select the only filtered text" : `Select all ${filteredTexts} filtered texts`;
   const filters = useMemo(() => selectionFilters(request), [requestIdentity]); // eslint-disable-line react-hooks/exhaustive-deps -- requestIdentity stands for request
+  // Selected row by row: the server tells whether that is every filtered text, so the header shows checked.
+  useEffect(() => {
+    if (showSelected || allSelected || !filteredTexts || selection.keys.size < filteredTexts) return;
+    let active = true;
+    const { page: _page, sort, retain: _retain, ...rowFilters } = request;
+    api.documentRowKeys(projectKey, { filters: rowFilters, sort: sort ?? "case" }).then(result => {
+      if (active) setAllFiltered({ identity: filterIdentity, keys: result.keys.map(textKeyOf) });
+    }, () => { /* The header stays mixed; a click on it reports the failure. */ });
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- filterIdentity stands for request and projectKey
+  }, [selection.keys, filterIdentity, filteredTexts, showSelected]);
   const toggleAll = async () => {
     if (selectingAll) return;
     setSelectionError(undefined);

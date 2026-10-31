@@ -286,7 +286,8 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
     setSelf(checked && (picked < limit || self));
   };
 
-  const reason = !task || steps === null ? "Loading…"
+  const reason = stepsError !== undefined ? "The tasks could not load. Use Retry."
+    : !task || steps === null ? "Loading…"
     : previewError && !fresh ? "The preview could not load. Use Retry."
     : calculating || !fresh ? "Calculating…"
     : !fresh.targets.length ? blocked ?? "No cases in the selection need this task."
@@ -432,7 +433,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
 
   // "Distribute evenly…" takes the dialog's place (issue 210); after a save the walk-through goes on from here.
   if (randomOpen && fresh && task) return <DistributionDialog projectKey={props.projectKey} task={task} confirmUnreviewedTranslation={acknowledged}
-    documents={fresh.targets.map(item => ({ document_id: item.document_id, language: item.language }))}
+    documents={fresh.targets.map(item => ({ document_id: item.document_id, case_id: item.case_id, language: item.language }))}
     onChanged={() => { randomChanged.current = true; }}
     onClose={() => {
       if (!randomChanged.current) { setRandomOpen(false); return; }
@@ -447,7 +448,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
     <Button disabled={busy} onClick={close}>{done.steps.length ? "Close" : "Cancel"}</Button>
     {props.mode === "cases" && current && nextStep([...done.steps, current]) && <Button disabled={busy} onClick={() => whileBusy(() => advance({}))}>Skip this task</Button>}
     <Button variant="primary" loading={busy} aria-disabled={reason ? "true" : undefined} aria-describedby={reason ? reasonId : undefined} onClick={assign}>{confirming ? "Assign anyway" : rowMulti
-      ? (picked ? `Assign ${picked === 1 ? "1 person" : `${picked} people`}` : "Assign") : isRow && !usernames.length ? "Assign" : `Assign ${count}`}</Button>
+      ? (picked ? `Assign ${picked === 1 ? "1 person" : `${picked} people`}` : "Assign") : !count || (isRow && !usernames.length) ? "Assign" : `Assign ${count}`}</Button>
   </>}>
     <div className="assign-dialog">
       {props.mode === "row" && <div className="assign-context">

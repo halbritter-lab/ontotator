@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, type ConsolidationAnnotatePayload, type ConsolidationReopenPayload, type ConsolidationResolvePayload, type ConsolidationView, type Draft, type MutationEnvelope, type Submission } from "../api/client";
 import type { WorkspaceView } from "../app/CaseScreen";
 import { randomId } from "../editor/ids";
+import { notifyTasksChanged } from "../tasks/tasksEvents";
 
 export type GroupOutcome =
   | { kind: "conflict"; onReview: () => void }
@@ -173,6 +174,7 @@ export function useConsolidation(roundId: string, options: { workspaceView?: Wor
     const run = queue.current.then(async (): Promise<SubmitResult> => {
       try {
         const submission = await api.submitWorkspace(workspaceId, envelope);
+        notifyTasksChanged();
         await refresh();
         return { kind: "submitted", submission };
       } catch (failure) {

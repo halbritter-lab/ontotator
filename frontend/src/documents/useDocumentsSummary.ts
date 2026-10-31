@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, onSessionRestored } from "../api/client";
+import { TASKS_CHANGED } from "../tasks/tasksEvents";
 import { DOCUMENTS_CHANGED } from "./documentsEvents";
 
 /** Background refresh interval of the navigation counter. */
@@ -7,7 +8,7 @@ export const DOCUMENTS_SUMMARY_REFRESH_MS = 60_000;
 
 /**
  * Navigation counter "Documents (n)": `needs_decision` of the project (undecided rows included, V10).
- * Loaded once, on window focus, on a restored session, every 60 s and on `documents-changed`.
+ * Loaded once, on window focus, on a restored session, every 60 s, on `documents-changed` and `tasks-changed` (a submission).
  * Null while unknown, when disabled (non-leads) or without a project; a failed reload keeps the last value.
  */
 export function useDocumentsSummary(projectKey: string | undefined, enabled: boolean): number | null {
@@ -26,12 +27,14 @@ export function useDocumentsSummary(projectKey: string | undefined, enabled: boo
     load();
     window.addEventListener("focus", load);
     window.addEventListener(DOCUMENTS_CHANGED, load);
+    window.addEventListener(TASKS_CHANGED, load);
     const timer = window.setInterval(load, DOCUMENTS_SUMMARY_REFRESH_MS);
     const stopRestored = onSessionRestored(load);
     return () => {
       active = false;
       window.removeEventListener("focus", load);
       window.removeEventListener(DOCUMENTS_CHANGED, load);
+      window.removeEventListener(TASKS_CHANGED, load);
       window.clearInterval(timer);
       stopRestored();
     };
