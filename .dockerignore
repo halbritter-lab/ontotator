@@ -16,6 +16,7 @@ frontend/playwright-report
 build
 dist
 docs
+!docs/handbook
 tests
 loadtest
 **/*.db
