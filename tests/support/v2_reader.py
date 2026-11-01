@@ -167,7 +167,10 @@ def _read_package(
         if ont.resource_path:
             allowed_files.add(ont.resource_path)
 
-    for condition in manifest.search_conditions or []:
+    for condition in [
+        *(manifest.search_conditions or []),
+        *(manifest.earlier_search_conditions or []),
+    ]:
         allowed_files.update(item.resource_path for item in condition.translations)
 
     for name in file_contents:
@@ -194,7 +197,10 @@ def _read_package(
                 )
 
     captured_paths = validate_resources(
-        manifest.search_conditions, manifest.task_profile, file_contents
+        manifest.search_conditions,
+        manifest.task_profile,
+        file_contents,
+        earlier=manifest.earlier_search_conditions or [],
     )
 
     # Verify embedded ontology resources
@@ -313,7 +319,11 @@ def _read_package(
         search_events.append(SearchEventRecord.model_validate_json(line))
 
     validate_search_events(
-        manifest.search_conditions, manifest.task_profile, search_events
+        manifest.search_conditions,
+        manifest.task_profile,
+        search_events,
+        earlier=manifest.earlier_search_conditions or [],
+        unrecoverable=manifest.unrecoverable_search_condition_ids or [],
     )
 
     # Cross-dataset integrity checks

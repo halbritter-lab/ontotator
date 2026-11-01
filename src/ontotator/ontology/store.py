@@ -21,7 +21,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import Row, func, select, update
+from sqlalchemy import Connection, Row, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from ontotator.application.uploads import (
@@ -475,6 +475,23 @@ class OntologyStore:
                 )
             )
             return [_file(row) for row in rows]
+
+    def translation_versions(self, conn: Connection | None = None) -> dict[str, str]:
+        """SHA-256 of the newest stored translation file, by file name.
+
+        Read in ``conn`` when given, so a caller holding a lock sees what
+        was committed before it got the lock (#285).
+        """
+        # Oldest first: a later upload of the same name replaces an earlier one.
+        query = (
+            select(OntologyFileRow.filename, OntologyFileRow.sha256)
+            .where(OntologyFileRow.kind == "translation")
+            .order_by(OntologyFileRow.uploaded_at, OntologyFileRow.sha256)
+        )
+        if conn is None:
+            with self.db.transaction() as own:
+                return dict(own.execute(query).tuples().all())
+        return dict(conn.execute(query).tuples().all())
 
     def loaded_prefixes(self) -> dict[str, str]:
         """Dominant prefix by SHA-256 of the ontologies this worker has loaded."""

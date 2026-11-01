@@ -405,8 +405,15 @@ def create_project(
 
 @router.get("/{key}/settings")
 def settings(key: str, principal: PrincipalDep, request: Request) -> ProjectSettings:
+    """Any member. Who changed the translations (``frozen_translations``
+    ``updated.by`` and ``history[].by``) only for leads (``MANAGE_ASSIGNMENTS``),
+    as in ``/members`` (#281)."""
     _guard(request, Action.VIEW_PROJECT, key)
-    return _service(request).settings(key)
+    return _service(request).settings(
+        key,
+        viewer=Actor.user(principal.user_id, principal.username),
+        viewer_is_lead=can(get_access(request), Action.MANAGE_ASSIGNMENTS, key),
+    )
 
 
 @router.patch("/{key}/settings")

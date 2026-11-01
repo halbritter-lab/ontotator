@@ -6453,6 +6453,7 @@
           "projects"
         ],
         "summary": "Settings",
+        "description": "Any member. Who changed the translations (``frozen_translations``\n``updated.by`` and ``history[].by``) only for leads (``MANAGE_ASSIGNMENTS``),\nas in ``/members`` (#281).",
         "operationId": "settings_api_v1_projects__key__settings_get",
         "parameters": [
           {
@@ -14228,8 +14229,19 @@
             "title": "Until"
           },
           "by": {
-            "type": "string",
-            "title": "By"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonRefView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "by_command_line": {
+            "type": "boolean",
+            "title": "By Command Line",
+            "default": false
           },
           "reason": {
             "type": "string",
@@ -14257,13 +14269,12 @@
         "type": "object",
         "required": [
           "until",
-          "by",
           "reason",
           "condition_ids",
           "files"
         ],
         "title": "EarlierTranslations",
-        "description": "Translation files the project's searches used until ``until``.\n\n``reason`` is what ended them: a move to the newest translations\n(``refresh``) or a change of the ontology version or task profile\n(``ontology``). Searches that ran with them keep their\n``search_condition_id``, one of ``condition_ids``."
+        "description": "Translation files the project's searches used until ``until``.\n\n``reason`` is what ended them: a move to the newest translations\n(``refresh``) or a change of the ontology version or task profile\n(``ontology``). Searches that ran with them keep their\n``search_condition_id``, one of ``condition_ids``. ``by`` and\n``by_command_line`` as in ``TranslationsUpdate``."
       },
       "EditorProposal": {
         "properties": {
@@ -25504,17 +25515,27 @@
             "title": "At"
           },
           "by": {
-            "type": "string",
-            "title": "By"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonRefView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "by_command_line": {
+            "type": "boolean",
+            "title": "By Command Line",
+            "default": false
           }
         },
         "type": "object",
         "required": [
-          "at",
-          "by"
+          "at"
         ],
         "title": "TranslationsUpdate",
-        "description": "When and by whom the project moved to the newest translations."
+        "description": "When and by whom the project moved to the newest translations.\n\nWho made the change is shown to leads only (D1, #281): other members get\nneither ``by`` nor ``by_command_line``."
       },
       "TreeLevel": {
         "properties": {

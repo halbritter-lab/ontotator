@@ -159,18 +159,43 @@ class SearchExecution(BaseModel):
     k: int | None = Field(default=None, ge=1, le=100)
 
 
+def _validate_files(
+    condition: SearchCondition, resources: dict[str, bytes], declared: set[str]
+) -> None:
+    # Revalidate even model_copy-created objects passed to the writer/importer.
+    SearchCondition.model_validate(condition.model_dump())
+    for item in condition.translations:
+        declared.add(item.resource_path)
+        data = resources.get(item.resource_path)
+        if data is None:
+            raise InvalidPackage(
+                f"Missing captured translation: '{item.resource_path}'"
+            )
+        if len(data) > 16 * 1024 * 1024:
+            raise InvalidPackage("Captured translation exceeds 16 MiB limit")
+        if hashlib.sha256(data).hexdigest() != item.sha256:
+            raise InvalidPackage(
+                f"Captured translation SHA-256 mismatch: '{item.filename}'"
+            )
+
+
 def validate_resources(
     conditions: list[SearchCondition] | None,
     profile: TaskProfile,
     resources: dict[str, bytes],
+    *,
+    earlier: Iterable[SearchCondition] = (),
 ) -> set[str]:
-    """Validate complete declarations and return the translation archive paths."""
+    """Validate complete declarations and return the translation archive paths.
+
+    ``earlier``: conditions the project searched with before (#282). Their
+    files must be present too, but they need not be bound to the current
+    profile: a change of pins or profile ended them.
+    """
     declared: set[str] = set()
     seen: set[str] = set()
     ontologies = {ont.sha256.lower() for ont in profile.ontologies}
     for condition in conditions or []:
-        # Revalidate even model_copy-created objects passed to the writer/importer.
-        SearchCondition.model_validate(condition.model_dump())
         if condition.ontology_sha256 not in ontologies:
             raise InvalidPackage(
                 "Search condition ontology is not bound to the task profile"
@@ -178,19 +203,14 @@ def validate_resources(
         if condition.ontology_sha256 in seen:
             raise InvalidPackage("Duplicate search condition ontology binding")
         seen.add(condition.ontology_sha256)
-        for item in condition.translations:
-            declared.add(item.resource_path)
-            data = resources.get(item.resource_path)
-            if data is None:
-                raise InvalidPackage(
-                    f"Missing captured translation: '{item.resource_path}'"
-                )
-            if len(data) > 16 * 1024 * 1024:
-                raise InvalidPackage("Captured translation exceeds 16 MiB limit")
-            if hashlib.sha256(data).hexdigest() != item.sha256:
-                raise InvalidPackage(
-                    f"Captured translation SHA-256 mismatch: '{item.filename}'"
-                )
+        _validate_files(condition, resources, declared)
+    current = {condition.condition_id for condition in conditions or []}
+    earlier_ids: set[str] = set()
+    for condition in earlier:
+        if condition.condition_id in current | earlier_ids:
+            raise InvalidPackage("Duplicate earlier search condition")
+        earlier_ids.add(condition.condition_id)
+        _validate_files(condition, resources, declared)
     if conditions is not None and seen != ontologies:
         raise InvalidPackage("Captured conditions must cover every profile ontology")
     undeclared = {
@@ -216,9 +236,22 @@ def validate_search_events(
     conditions: list[SearchCondition] | None,
     profile: TaskProfile,
     events: Iterable[SearchEventRecord],
+    *,
+    earlier: Iterable[SearchCondition] = (),
+    unrecoverable: Iterable[str] = (),
 ) -> None:
-    """Keep uncaptured history distinct and reject contradictory new metadata."""
+    """Keep uncaptured history distinct and reject contradictory new metadata.
+
+    An event may name a current condition, one of ``earlier`` (#282) or one
+    of ``unrecoverable``: conditions ended before the project kept them,
+    which a package declares instead of carrying. Any other condition is
+    missing. Only an event of a current condition must match its layer in
+    ``profile``; an earlier one may be of an ontology the profile no longer
+    pins. An unrecoverable one cannot be checked further.
+    """
     by_id = {condition.condition_id: condition for condition in conditions or []}
+    ended = {condition.condition_id: condition for condition in earlier}
+    lost = set(unrecoverable)
     for event in events:
         if event.search_condition_id is None:
             if event.execution is not None or event.runtime_drift is not None:
@@ -226,7 +259,12 @@ def validate_search_events(
                     "Search execution metadata requires captured conditions"
                 )
             continue
-        condition = by_id.get(event.search_condition_id)
+        current = event.search_condition_id in by_id
+        condition = by_id.get(event.search_condition_id) or ended.get(
+            event.search_condition_id
+        )
+        if condition is None and event.search_condition_id in lost:
+            continue
         if (
             condition is None
             or condition.ontology_sha256 != event.ontology_sha256.lower()
@@ -234,15 +272,16 @@ def validate_search_events(
             raise InvalidPackage(
                 "Search event condition is missing or bound to a different ontology"
             )
-        try:
-            layer = resolve_layer(profile, event.layer_id)
-            ontology = resolve_ontology(profile, layer.ontology_id)
-        except DomainError as exc:
-            raise InvalidPackage(
-                "Search event condition refers to an unknown layer"
-            ) from exc
-        if condition.ontology_sha256 != ontology.sha256.lower():
-            raise InvalidPackage("Search event condition does not match its layer")
+        if current:
+            try:
+                layer = resolve_layer(profile, event.layer_id)
+                ontology = resolve_ontology(profile, layer.ontology_id)
+            except DomainError as exc:
+                raise InvalidPackage(
+                    "Search event condition refers to an unknown layer"
+                ) from exc
+            if condition.ontology_sha256 != ontology.sha256.lower():
+                raise InvalidPackage("Search event condition does not match its layer")
         execution = event.execution
         if execution is None or event.runtime_drift is None:
             raise InvalidPackage("Captured search event is missing execution identity")

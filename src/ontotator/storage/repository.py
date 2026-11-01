@@ -74,7 +74,11 @@ from ontotator.exchange.t1 import (
     T1Profile,
     check_t1_profile,
 )
-from ontotator.ontology.conditions import SearchCondition, validate_resources
+from ontotator.ontology.conditions import (
+    SearchCondition,
+    validate_resources,
+    validate_search_events,
+)
 from ontotator.ontology.translation_freeze import condition_history
 from ontotator.packages.models import (
     PackageManifest,
@@ -755,10 +759,23 @@ class Repository:
             )
         manifest_hash = self.package_manifest_hash(package)
         profile_sha = manifest.task_profile_sha256 or profile_hash(profile)
-        if manifest.search_conditions is not None:
+        earlier = manifest.earlier_search_conditions or []
+        if manifest.search_conditions is not None or earlier:
             validate_resources(
-                manifest.search_conditions, profile, package.embedded_files
+                manifest.search_conditions,
+                profile,
+                package.embedded_files,
+                earlier=earlier,
             )
+        # Every condition an event names is in the package or declared
+        # unrecoverable (#282).
+        validate_search_events(
+            manifest.search_conditions,
+            profile,
+            package.search_events,
+            earlier=earlier,
+            unrecoverable=manifest.unrecoverable_search_condition_ids or [],
+        )
         with self.db.transaction() as conn:
             files = {
                 path: (self.db.put_blob(conn, data), len(data))
@@ -1127,6 +1144,36 @@ class Repository:
             == wanted
             for item in condition_history(conn, project_id)
         )
+
+    @staticmethod
+    def _earlier_for_export(
+        conn: Connection,
+        project_id: int,
+        imported: list[SearchCondition],
+        current: list[SearchCondition],
+        files: Mapping[str, bytes],
+    ) -> list[SearchCondition]:
+        """The project's ended search conditions an export carries (#282).
+
+        Oldest first: those an imported package brought, then those the
+        project's own audit trail keeps (:func:`condition_history`). A
+        condition whose captured files the project no longer has is left
+        out; the export declares it unrecoverable.
+        """
+        known = {condition.condition_id for condition in current}
+        result: list[SearchCondition] = []
+        history = [
+            SearchCondition.model_validate(stored)
+            for item in condition_history(conn, project_id)
+            for stored in item.conditions
+        ]
+        for condition in [*imported, *history]:
+            if condition.condition_id in known:
+                continue
+            known.add(condition.condition_id)
+            if all(item.resource_path in files for item in condition.translations):
+                result.append(condition)
+        return result
 
     @staticmethod
     def _search_conditions(
@@ -4110,6 +4157,17 @@ class Repository:
                 else None
             )
             stored_files = self.get_embedded_files(project_key)
+            earlier = (
+                self._earlier_for_export(
+                    conn,
+                    project_id,
+                    manifest.earlier_search_conditions or [],
+                    conditions or [],
+                    stored_files,
+                )
+                if include_captured_conditions
+                else []
+            )
             from ontotator.storage.workflow_tables import (
                 RoundSubmissionBindingRow,
                 WorkRoundRow,
@@ -4156,6 +4214,26 @@ class Repository:
             ]
         if conditions is not None:
             manifest = manifest.model_copy(update={"search_conditions": conditions})
+        search_events = [SearchEventRecord.model_validate(p) for p in event_payloads]
+        # Events of a condition the package cannot carry are declared, not
+        # dropped (#282): ended before the project kept its conditions.
+        resolvable = {c.condition_id for c in [*(conditions or []), *earlier]}
+        unrecoverable = sorted(
+            {
+                event.search_condition_id
+                for event in search_events
+                if event.search_condition_id is not None
+                and event.search_condition_id not in resolvable
+            }
+        )
+        manifest = manifest.model_copy(
+            update={
+                "earlier_search_conditions": earlier or None,
+                "unrecoverable_search_condition_ids": (
+                    (unrecoverable or None) if include_captured_conditions else None
+                ),
+            }
+        )
         annotations: dict[tuple[str, str], AnnotationSnapshot] = {}
         for payload in annotation_payloads:
             snap = decode_snapshot(payload)
@@ -4194,11 +4272,14 @@ class Repository:
             )
         declared = {
             item.resource_path
-            for condition in manifest.search_conditions or []
+            for condition in [
+                *(manifest.search_conditions or []),
+                *(manifest.earlier_search_conditions or []),
+            ]
             for item in condition.translations
         }
-        # Captured resources belong to the export only with their conditions
-        # (not when ``include_captured_conditions`` is false).
+        # Captured resources belong to the export only with their conditions,
+        # current or earlier (not when ``include_captured_conditions`` is false).
         embedded_files = {
             path: content
             for path, content in stored_files.items()
@@ -4210,6 +4291,6 @@ class Repository:
             annotations=annotations,
             evidence=evidence,
             submissions=submissions,
-            search_events=[SearchEventRecord.model_validate(p) for p in event_payloads],
+            search_events=search_events,
             embedded_files=embedded_files,
         )

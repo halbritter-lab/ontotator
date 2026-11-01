@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- Settings › Ontology, card **Translations**: who moved the project to the newest translations or ended its translations is no longer sent to every member as the login name (`user:<login>`) or the operating-system user of the command line (`cli:<name>`). Leads and system administrators see the person as display name and pseudonym, or *from the command line*; other members see only when. `by` on `frozen_translations.updated` and `history[]` is now a person reference or `null`, with the new `by_command_line` (#281).
+- Package exports now carry the project's ended search conditions (`earlier_search_conditions`) and their captured translation files, so search events from before a move to the newest translations or a change of pins still name a condition in the package. Conditions a change of pins or profile before 0.8.0 deleted cannot be recovered: the export lists them in `unrecoverable_search_condition_ids` instead. Import checks that every search event names a condition of the package or a declared unrecoverable one (#282).
+- **Use the newest translations** run twice around an upload can no longer write the older file back: a refresh that captured the files before the upload captures again, or reports that the project already uses the newest translations (#285).
+
 ## [0.8.0] - 2026-11-01
 
 ### Added
