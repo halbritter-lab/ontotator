@@ -1,4 +1,4 @@
-import{r as i,a as m,j as a,b as h}from"./index-CXBqlN_z.js";import{M as f,r as g}from"./index-BFiJ5GQL.js";function w(){const[e,t]=i.useState(null);return i.useEffect(()=>{let o=!0;return m.getAbout().then(n=>{o&&t(n)},()=>{}),()=>{o=!1}},[]),e?a.jsxs("p",{className:"help-version",title:e.revision??void 0,children:["Ontotator ",e.version,e.revision&&a.jsxs(a.Fragment,{children:[" · commit ",e.revision.slice(0,7)]})]}):null}const y=`# Ontotator user handbook
+import{r as i,a as m,j as a,b as h}from"./index-Cp3AgJhH.js";import{M as f,r as g}from"./index-BAT8pP7N.js";function w(){const[e,t]=i.useState(null);return i.useEffect(()=>{let o=!0;return m.getAbout().then(n=>{o&&t(n)},()=>{}),()=>{o=!1}},[]),e?a.jsxs("p",{className:"help-version",title:e.revision??void 0,children:["Ontotator ",e.version,e.revision&&a.jsxs(a.Fragment,{children:[" · commit ",e.revision.slice(0,7)]})]}):null}const y=`# Ontotator user handbook
 
 This handbook explains how to work with Ontotator in the browser. It is for everyone who uses the app: annotators, translation reviewers, consolidators, leads and system administrators. It describes the version of Ontotator that you open it from. If you run the server, read the [server operations guide (for server operators)](../operations.md) instead.
 
@@ -245,7 +245,7 @@ What for: read what users report about error messages, pages that do not load, c
 
 1. In the sidebar, open **Administration** › **Technical reports**. The number after it counts the open reports.
 2. **Show** lists the **Open** reports. Choose **Done** or **All** to see the others.
-3. Read a report. It shows its reference (for example *TR-12*), the user's text, who sent it and when. Below are the details Ontotator added: app version, the task if it was sent from one (its kind, for example *Annotation, from proposals*, the project and the text), screen, browser, window size, the last error the app received and, from the crash message, the error.
+3. Read a report. It shows its reference (for example *TR-12*), the user's text, who sent it and when. Below are the details Ontotator added: app version, the task if it was sent from one (its kind, for example *Annotation, from proposals*, the project and the text; for a practice task only *A practice task*, as practice projects are private), screen, browser, window size, the last error the app received and, from the crash message, the error.
 4. Click **Mark as done** when the report is handled. Click **Reopen** to open it again.
 
 Users send reports with **Technical problem…** in the sidebar or **Report a technical problem…** in the editor; see [Report a technical problem](getting-started.md#report-a-technical-problem). Their task is not paused, and project leads do not see these reports. A user can send at most 20 reports per hour.
@@ -330,7 +330,7 @@ To see them:
 
 To delete one, click **Delete…** in its row, then **Delete practice project**. Only that practice project goes; its audit entries stay. A real project can never be deleted this way.
 
-A practice project is also deleted after 30 days without activity, and when its owner's account is deactivated.
+A practice project is also deleted after 30 days without activity, and when its owner's account is deactivated. All practice projects are called *Practice project*, so no owner's name reaches the audit trail.
 
 To switch the offer off:
 
@@ -1376,7 +1376,7 @@ You get practice if you are an annotator or a translation reviewer in at least o
 2. Your practice tasks appear in their own group, marked **Practice**, above your real tasks:
    - **Annotate from scratch**: mark findings yourself.
    - **Annotate from proposals**: check a tool's proposals. One is right, one has a prefilled value, one needs **Edit & Replace**, and the tool missed one finding. **Discard copy** takes a copy back if you change your mind.
-   - **Translation review**: the German translation has one error. Find and correct it.
+   - **Translation review**: the German translation has one error. Find and correct it. To edit the text, **Mark checked sentences** and **Show changes** must be off.
    - **Consolidation**, if you are also a consolidator: two virtual colleagues disagree. Decide. Nobody accepts the result afterwards.
 3. Open a task with **Start**. Above the task you see **Nothing here counts. Invented texts only.**
 4. The panel **Your practice** lists the steps of the task. A step ticks itself when you have really done it. **Next:** says what to do now. Each step has a **Help** link to its handbook section.
