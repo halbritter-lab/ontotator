@@ -47,6 +47,20 @@ function regexSegments(line: string): Segment[] {
   return segments;
 }
 
+/** Abbreviations whose full stop does not end a sentence. */
+const ABBREVIATIONS = new Set(["approx", "bzw", "ca", "dr", "evtl", "ggf", "inkl", "mind", "mr", "mrs", "ms", "nr", "prof", "sog", "st", "tgl", "vgl", "vs"]);
+
+/**
+ * Whether the text ends in an abbreviation, so the sentence goes on ("Dr. Müller", "z. B.", in German "am 3. Mai").
+ * shortcut: a sentence ending in a lone letter ("Vitamin D.") joins the next one, two sentences get one mark; add an exception list if reviewers trip over it.
+ */
+function endsInAbbreviation(text: string, lang: string | undefined): boolean {
+  // A word of its own: the "C" of "39 °C." does end a sentence.
+  const word = /(?:^|[\s(])([\p{L}\p{N}]+)\.$/u.exec(text)?.[1].toLowerCase();
+  if (!word) return false;
+  return ([...word].length === 1 && /\p{L}/u.test(word)) || ABBREVIATIONS.has(word) || (lang?.startsWith("de") === true && /^\d+$/.test(word));
+}
+
 function segmenterFor(lang: string | undefined, useSegmenter: boolean): SegmentText {
   const Segmenter = useSegmenter ? (Intl as { Segmenter?: typeof Intl.Segmenter }).Segmenter : undefined;
   if (!Segmenter) return regexSegments;
@@ -59,23 +73,29 @@ function segmenterFor(lang: string | undefined, useSegmenter: boolean): SegmentT
 /**
  * The sentences of a text in its language. Every line break ends a sentence, so a
  * sentence never spans paragraphs; a text of one long paragraph still splits into its
- * sentences. White space between sentences belongs to none of them.
+ * sentences. White space between sentences belongs to none of them. A split after an
+ * abbreviation is undone: clinical texts are full of them.
  */
 export function splitSentences(text: string, lang?: string, { segmenter: useSegmenter = true } = {}): Sentence[] {
   const segment = segmenterFor(lang, useSegmenter);
-  const sentences: Sentence[] = [];
+  const spans: { start: number; end: number }[] = [];
   let lineStart = 0;
   for (const line of text.split("\n")) {
+    let open: { start: number; end: number } | null = null;
     for (const part of segment(line)) {
       const lead = part.segment.length - part.segment.trimStart().length;
       const body = part.segment.trim();
       if (!body) continue;
-      const start = lineStart + part.index + lead;
-      sentences.push({ index: sentences.length, start, end: start + body.length, text: body, hash: sentenceHash(body) });
+      const start = lineStart + part.index + lead, end = start + body.length;
+      if (open && endsInAbbreviation(text.slice(open.start, open.end), lang)) open.end = end;
+      else spans.push(open = { start, end });
     }
     lineStart += line.length + 1;
   }
-  return sentences;
+  return spans.map(({ start, end }, index) => {
+    const body = text.slice(start, end);
+    return { index, start, end, text: body, hash: sentenceHash(body) };
+  });
 }
 
 /**
@@ -128,7 +148,3 @@ export function withRange(states: readonly MarkState[], from: number, to: number
   const low = Math.min(from, to), high = Math.max(from, to);
   return states.map((state, i) => i < low || i > high ? state : checked ? { kind: "checked" } : null);
 }
-
-/** "Source 6 of 10 · Translation 5 of 11 sentences checked". */
-export const checkedSummary = (source: { checked: number; total: number }, translation: { checked: number; total: number }): string =>
-  `Source ${source.checked} of ${source.total} · Translation ${translation.checked} of ${translation.total} sentences checked`;

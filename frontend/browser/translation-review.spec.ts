@@ -583,7 +583,7 @@ test('axe has no violations in the column head with coupling on', async ({ page 
   await expect(page.getByText(couplingEditingNote, { exact: true })).toBeVisible();
   await placeCaret(page, 'Absatz 3.', 5); await page.keyboard.press('Alt+KeyM');
   await expect(matchStatus(page)).not.toHaveText('');
-  const results = await new AxeBuilder({ page }).include('.translation-column-head').include('.translation-column-hint').analyze();
+  const results = await new AxeBuilder({ page }).include('.translation-tools').include('.translation-column-head').include('.translation-column-hint').analyze();
   expect(results.violations.flatMap(v => v.nodes.map(n => `${v.id} ${n.target.join(' ')}: ${n.failureSummary ?? ''}`))).toEqual([]);
 });
 
@@ -613,10 +613,10 @@ test('Mark checked sentences: click, Shift+click and drag per side, kept on relo
   await page.mouse.up();
   for (const index of [0, 1, 2]) await expect(sentence(source, index)).toHaveAttribute('aria-pressed', 'true');
   expect((await done).ok()).toBe(true);
-  await expect(page.getByRole('group', { name: 'Checked sentences', exact: true })).toContainText(/Source 3 of \d+ · Translation 3 of \d+ sentences checked/);
+  await expect(page.locator('.sentence-count')).toHaveText([/3 of \d+ checked/, /3 of \d+ checked/]);
   await page.getByRole('button', { name: 'Next unchecked', exact: true }).click();
   await expect(sentence(translation, 3)).toBeFocused();
-  const results = await new AxeBuilder({ page }).include('.checked-sentences-bar').include('.translation-sentences').analyze();
+  const results = await new AxeBuilder({ page }).include('.translation-tools').include('.translation-sentences').analyze();
   expect(results.violations.flatMap(v => v.nodes.map(n => `${v.id} ${n.target.join(' ')}: ${n.failureSummary ?? ''}`))).toEqual([]);
   // Marking alone does not start the task.
   const tasks = await (await authenticatedRequest(page, '/api/v1/me/tasks')).json() as { assignment_id: number; status: string }[];

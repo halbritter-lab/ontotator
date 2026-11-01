@@ -1,7 +1,6 @@
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode } from "react";
 import { paragraphStarts } from "../variants/paragraphs";
-import { Button } from "../ui";
-import { checkedSummary, isChecked, type MarkState, type Sentence } from "./sentences";
+import { isChecked, type MarkState, type Sentence } from "./sentences";
 import "./translation.css";
 
 export interface SentenceViewProps {
@@ -137,17 +136,8 @@ export const SentenceView = forwardRef<HTMLDivElement, SentenceViewProps>(functi
 /** Counts of one side. */
 export interface SideCount { checked: number; total: number; stale: number }
 
-/** The bar above the texts in marking mode: counts, two meters and Next unchecked. */
-export function CheckedSentencesBar({ source, translation, onNext, saveError, onRetry }: {
-  source: SideCount; translation: SideCount; onNext: () => void; saveError: boolean; onRetry: () => void;
-}): JSX.Element {
-  const meter = (name: string, count: SideCount) => <meter className="checked-sentences-meter" min={0} max={Math.max(1, count.total)} value={count.checked}
-    aria-label={`${name} sentences checked`} />;
-  return <div className="checked-sentences-bar" role="group" aria-label="Checked sentences">
-    <p className="checked-sentences-count" role="status">{checkedSummary(source, translation)}
-      {translation.stale > 0 && <span className="checked-sentences-stale">{` · ${translation.stale} changed since checked`}</span>}</p>
-    {meter("Source", source)}{meter("Translation", translation)}
-    <Button size="sm" onClick={onNext} disabled={translation.checked >= translation.total}>Next unchecked</Button>
-    {saveError && <p className="checked-sentences-error" role="alert">Checked sentences are not saved. <Button size="sm" variant="quiet" onClick={onRetry}>Retry</Button></p>}
-  </div>;
+/** How far one side is, in its column head. */
+export function SentenceCount({ name, count }: { name: string; count: SideCount }): JSX.Element {
+  return <p className="sentence-count" role="status"><span className="review-sr-only">{`${name}: `}</span><strong>{count.checked}</strong>{` of ${count.total} checked`}
+    {count.stale > 0 && <span title="Changed since checked">{` · ${count.stale} changed`}</span>}</p>;
 }

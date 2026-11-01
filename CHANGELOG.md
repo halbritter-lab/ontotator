@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- Translation review: **Mark checked sentences** splits source and translation into sentences that the reviewer ticks off one by one, with Shift+click or a drag for a range, a counter per text and **Next unchecked**. A checked translation sentence that is edited later shows as *changed since checked*. The marks are a working aid saved with the draft (`checked_sentences` on the review workspace, `PUT /api/v1/translation-reviews/{assignment_id}/checked-sentences`); saving them does not start the task, and they are not part of the review, the exports or the lead's views (#256).
+- Translation review: **Mark checked sentences** splits source and translation into sentences that the reviewer ticks off one by one, with Shift+click or a drag for a range, a counter in the head of each text and **Next unchecked**. A checked translation sentence that is edited later shows as *changed*. All text controls of the review now share one line above the texts, and **Compare** names the version in its tooltip. The mode is not offered on touch-only devices. The marks are a working aid saved with the draft (`checked_sentences` on the review workspace, `PUT /api/v1/translation-reviews/{assignment_id}/checked-sentences`); saving them does not start the task, and they are not part of the review, the exports or the lead's views (#256).
 
 ### Fixed
 

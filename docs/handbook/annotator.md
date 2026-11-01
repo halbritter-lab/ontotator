@@ -378,17 +378,19 @@ If the source text was updated, **Source updates to review** appears. Open it, c
 
 What for: keep track of the sentences you have already checked in a long text.
 
-1. Tick **Mark checked sentences** above the translation. Both texts are now split into sentences. To edit the translation again, untick it. Your choice is remembered in this browser.
+1. Tick **Mark checked sentences** above the texts. Both texts are now split into sentences. To edit the translation again, untick it. Your choice is remembered in this browser.
 2. Click a sentence to mark it as checked. Click it again to remove the mark. Source and translation are marked separately.
 3. Shift+click a sentence to mark all sentences from the last one you clicked up to this one.
 4. Or press on a sentence and drag across others. Starting on an unmarked sentence marks all of them. Starting on a marked sentence removes the marks.
-5. The bar above the texts shows how many sentences of each text are checked. **Next unchecked** jumps to the first unchecked sentence of the translation.
+5. The head of each text shows how many of its sentences are checked. **Next unchecked** jumps to the first unchecked sentence of the translation.
 
-Checked sentences are green. If you edit a checked sentence later, it is marked *changed since checked* in amber. Read it again, then click it to mark it as checked.
+Checked sentences are green. If you edit a checked sentence later, it turns amber, and the head of the text counts it as *changed*. Read it again, then click it to mark it as checked.
 
 The marks are only for you. They are saved with your review, so they are kept when you reload or the task is paused. They do not change your decision, and the lead and the exports never see them.
 
 With the keyboard: Tab to a sentence, then press Enter or Space to mark it. Shift+Enter marks the range from the last sentence you marked.
+
+On a touch-only device such as a phone or tablet, **Mark checked sentences** is not offered, because a swipe on the text has to scroll.
 
 ## Keyboard shortcuts
 

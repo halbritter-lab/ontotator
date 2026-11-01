@@ -21,7 +21,7 @@ import { autoNoteText, chooseDecision, reactToTextEdit, USER_ORIGIN, type Decisi
 import { categoryLabels, comparisonCountsDiffer, couplingEditingNote, couplingNote, decisionKeyHint, decisionLabels, decisionOutcomes, formatReviewDate, issueMessages, languageName, leadCorrectionKeyHint, leadCorrectionNote, matchingParagraphStatus, nextTaskLabel, paragraphCountChanged, paragraphCountsDiffer, remainingTasksText, reviewIssueMessage, showMatchingLabel, showMatchingShortcut, showMatchingTitle } from "./labels";
 import { checkReview, type ClinicalCategory, type ReviewDecisionCode, type ReviewForm as FormValue } from "./reviewRules";
 import { LanguageTag } from "../ui/LanguageTag";
-import { CheckedSentencesBar, SentenceView } from "./SentenceMarks";
+import { SentenceCount, SentenceView } from "./SentenceMarks";
 import { isChecked, resolveMarks, splitSentences, storedMarks, toggled, withRange, type MarkState, type Side, type StoredMarks } from "./sentences";
 
 export interface TranslationReviewScreenProps {
@@ -160,6 +160,8 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
     setMarkingOn(on);
     try { window.localStorage.setItem(markingKey, on ? "1" : "0"); } catch { /* Blocked storage: not remembered. */ }
   };
+  // On a touch screen a swipe on the text would mark instead of scroll, so the mode is not offered there.
+  const touchOnly = useMediaQuery("(hover: none) and (pointer: coarse)");
   /** The reviewer's marks, saved on their own (never with the draft revision) shortly after each change. */
   const [marks, setMarks] = useState<StoredMarks>(() => storedOf(workspace.checked_sentences));
   const [marksError, setMarksError] = useState(false);
@@ -186,7 +188,7 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
   const readOnly = immutableReadOnly || submitted !== null || held; readOnlyRef.current = readOnly;
   const text = record?.proposed_text ?? draft.text, rawForm = record ? recordForm(record) : draft.form;
   /** Marking mode: both texts split into sentences the reviewer ticks, each side on its own. */
-  const marking = markingOn && !readOnly;
+  const marking = markingOn && !readOnly && !touchOnly;
   const sourceSentences = useMemo(() => marking ? splitSentences(workspace.source.text, workspace.source.variant.language) : [], [marking, workspace]);
   const targetSentences = useMemo(() => marking ? splitSentences(text, workspace.variant.language) : [], [marking, text, workspace]);
   const sourceStates = useMemo(() => resolveMarks(sourceSentences, marks.source), [sourceSentences, marks.source]);
@@ -541,7 +543,7 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
     };
     const observer = new ResizeObserver(measure);
     observer.observe(root);
-    root.querySelectorAll(".translation-review > .notice, .translation-review-bar, .translation-checks, .checked-sentences-bar, .translation-pinned-bar, .translation-column-head, .translation-column-note, .translation-column-hint")
+    root.querySelectorAll(".translation-review > .notice, .translation-review-bar, .translation-checks, .translation-tools, .translation-pinned-bar, .translation-column-head, .translation-column-note, .translation-column-hint")
       .forEach(element => observer.observe(element));
     return () => observer.disconnect();
   }, [wide, readOnly, showChanges, comparisonId, comparisonOpen, coupled, marking]);
@@ -630,11 +632,26 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
     <ChecksSummary failed={workspace.failed_checks} all={allChecks} />
     <div className="translation-workspace">
       <div className="translation-texts">
-        {marking && <CheckedSentencesBar source={sideCount(sourceStates)} translation={sideCount(targetStates)} onNext={nextUnchecked}
-          saveError={marksError} onRetry={() => { pendingMarks.current ??= marks; sendMarks(); }} />}
+        <div className="translation-tools" role="group" aria-label="Text view">
+          {!readOnly && !touchOnly && <Checkbox id="review-mark-checked" label="Mark checked sentences" checked={marking} onChange={event => chooseMarking(event.target.checked)} />}
+          {!readOnly && !touchOnly && <span className="translation-tools-divider" aria-hidden="true" />}
+          <Checkbox id="review-show-changes" label="Show changes" checked={showChanges && !marking} disabled={marking} onChange={event => setShowChanges(event.target.checked)} />
+          {pairing.available && <Checkbox id="review-couple" label="Couple scrolling" checked={coupled} onChange={event => setRequestedCoupling(event.target.checked ? couplingIdentity : null)} />}
+          <div className="translation-tools-end">
+            <Button ref={matchButton} size="sm" title={showMatchingTitle} aria-keyshortcuts="Alt+M" onMouseDown={event => event.preventDefault()} onClick={showMatching}>
+              {showMatchingLabel}<span aria-hidden="true"> <Kbd>Alt M</Kbd></span></Button>
+            {!comparison && (workspace.comparisons.length === 1
+              ? <Button size="sm" className="translation-compare-open" title={`Compare with ${comparisonName(workspace.comparisons[0])}`} aria-label={`Compare with ${comparisonName(workspace.comparisons[0])}`}
+                  onClick={() => showComparison(true, workspace.comparisons[0].variant.document_id)}>Compare</Button>
+              : workspace.comparisons.length > 1 && <MenuButton className="translation-compare-open" label="Compare with…" buttonLabel="Compare"
+                items={workspace.comparisons.map(row => ({ id: row.variant.document_id, label: comparisonName(row), onSelect: () => showComparison(true, row.variant.document_id) }))} />)}
+          </div>
+          {marksError && marking && <p className="sentence-save-error" role="alert">Checked sentences are not saved. <Button size="sm" variant="quiet" onClick={() => { pendingMarks.current ??= marks; sendMarks(); }}>Retry</Button></p>}
+        </div>
         <div className={`translation-columns${comparison ? " translation-columns--comparison" : ""}`}>
           <div className="translation-column">
-            <div className="translation-column-head density-compact"><h2 className="translation-column-title">Source <LanguageTag code={sourceLanguage} /></h2></div>
+            <div className="translation-column-head density-compact"><h2 className="translation-column-title">Source <LanguageTag code={sourceLanguage} /></h2>
+              {marking && <SentenceCount name="Source" count={sideCount(sourceStates)} />}</div>
             {marking
               ? <SentenceView ref={setSourceElement} text={workspace.source.text} sentences={sourceSentences} states={sourceStates} label={`Source (${sourceLanguage})`} lang={sourceLanguage}
                   disabled={busy} onToggle={index => applyMarks("source", states => toggled(states, index))}
@@ -644,17 +661,8 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
           <div className="translation-column">
             <div className="translation-column-head density-compact">
               <h2 className="translation-column-title">Translation <LanguageTag code={targetLanguage} /></h2>
-              <div className="translation-column-controls">
-              <Checkbox id="review-show-changes" label="Show changes" checked={showChanges && !marking} disabled={marking} onChange={event => setShowChanges(event.target.checked)} />
-              {pairing.available && <Checkbox id="review-couple" label="Couple scrolling" checked={coupled} onChange={event => setRequestedCoupling(event.target.checked ? couplingIdentity : null)} />}
-              {!readOnly && <Checkbox id="review-mark-checked" label="Mark checked sentences" checked={marking} onChange={event => chooseMarking(event.target.checked)} />}
-              <Button ref={matchButton} size="sm" title={showMatchingTitle} aria-keyshortcuts="Alt+M" onMouseDown={event => event.preventDefault()} onClick={showMatching}>
-                {showMatchingLabel}<span aria-hidden="true"> <Kbd>Alt M</Kbd></span></Button>
-              {!comparison && (workspace.comparisons.length === 1
-                ? <Button size="sm" className="translation-compare-open" onClick={() => showComparison(true, workspace.comparisons[0].variant.document_id)}>Compare with {comparisonName(workspace.comparisons[0])}</Button>
-                : workspace.comparisons.length > 1 && <MenuButton className="translation-compare-open" label="Compare with…" buttonLabel="Compare with…"
-                  items={workspace.comparisons.map(row => ({ id: row.variant.document_id, label: comparisonName(row), onSelect: () => showComparison(true, row.variant.document_id) }))} />)}
-              </div>
+              {marking && <SentenceCount name="Translation" count={sideCount(targetStates)} />}
+              {marking && <Button size="sm" className="sentence-next" onClick={nextUnchecked} disabled={targetStates.every(isChecked)}>Next unchecked</Button>}
               <span role="status" className="review-sr-only">{matchStatus}</span>
               {/* The text box keeps its full name; the visible title shows the flag instead of the code in brackets. */}
               <label id="review-translation-label" htmlFor="review-translation" className="visually-hidden">{`Translation (${targetLanguage})`}</label>
@@ -680,7 +688,7 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
           {comparison && <div className="translation-column">
             <div className="translation-column-head density-compact">
               <h2 className="translation-column-title">Comparison <span className="translation-column-subtitle">{comparisonName(comparison)}</span></h2>
-              {/* Another comparison is chosen from "Compare with…" after closing this one. */}
+              {/* Another comparison is chosen from "Compare" after closing this one. */}
               <div className="translation-column-controls">
               <Button size="sm" className="translation-compare-close" aria-label="Close comparison" onClick={() => showComparison(false)}>Close</Button>
               </div>
