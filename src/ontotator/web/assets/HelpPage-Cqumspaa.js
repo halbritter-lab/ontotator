@@ -1,4 +1,4 @@
-import{r,a as m,j as a,b as h}from"./index-BA3kkovG.js";import{M as f,r as g}from"./index-D-mspFwc.js";function w(){const[e,t]=r.useState(null);return r.useEffect(()=>{let o=!0;return m.getAbout().then(n=>{o&&t(n)},()=>{}),()=>{o=!1}},[]),e?a.jsxs("p",{className:"help-version",title:e.revision??void 0,children:["Ontotator ",e.version,e.revision&&a.jsxs(a.Fragment,{children:[" · commit ",e.revision.slice(0,7)]})]}):null}const y=`# Ontotator user handbook
+import{r as i,a as m,j as a,b as h}from"./index-N16sIOBE.js";import{M as f,r as g}from"./index-DVCjRzBY.js";function w(){const[e,t]=i.useState(null);return i.useEffect(()=>{let o=!0;return m.getAbout().then(n=>{o&&t(n)},()=>{}),()=>{o=!1}},[]),e?a.jsxs("p",{className:"help-version",title:e.revision??void 0,children:["Ontotator ",e.version,e.revision&&a.jsxs(a.Fragment,{children:[" · commit ",e.revision.slice(0,7)]})]}):null}const y=`# Ontotator user handbook
 
 This handbook explains how to work with Ontotator in the browser. It is for everyone who uses the app: annotators, translation reviewers, consolidators, leads and system administrators. It describes the version of Ontotator that you open it from. If you run the server, read the [server operations guide (for server operators)](../operations.md) instead.
 
@@ -142,7 +142,7 @@ What for: find the pages only system administrators see.
 
 1. Log in. Your role line in the header reads **System administrator**.
 2. In the sidebar, open the group **Administration**.
-3. Click **Users**, **Ontologies** or **New project**.
+3. Click **Users**, **Ontologies**, **New project** or **Server settings**.
 
 Other users do not see this group. If they open such a page by its address, they get a short explanation instead.
 
@@ -298,6 +298,31 @@ What for: as system administrator you can manage every project, also without a p
 1. Click **Projects** in the sidebar, or **All projects** in the project switcher.
 2. In the project's row, click **Open** to go to its documents, or **Settings** to change it.
 3. Work as a lead would; see the [lead overview](lead.md).
+
+## Practice projects
+
+What for: see and remove the private practice projects of annotators and translation reviewers, and switch the offer on or off.
+
+A practice project belongs to one person. It has invented texts only, and nothing done in it counts. Practice projects are never in your project lists, the project switcher, the Users page or the ontology inventory, and your administrator rights do not open them. Their actions go to the audit trail, marked as practice.
+
+To see them:
+
+1. Click **Projects** in the sidebar.
+2. Tick **Show practice projects**. The number in brackets counts them.
+3. Each row shows a **Practice** pill, the owner, the progress and the date it will be deleted.
+
+To delete one, click **Delete…** in its row, then **Delete practice project**. Only that practice project goes; its audit entries stay. A real project can never be deleted this way.
+
+A practice project is also deleted after 30 days without activity, and when its owner's account is deactivated.
+
+To switch the offer off:
+
+1. Click **Server settings** under **Administration**.
+2. Under **Practice projects**, clear **Offer practice projects to annotators and translation reviewers**.
+3. Click **Save changes**.
+
+Off hides the card on **My tasks** and **Start practice** in the profile. Existing practice projects stay until they are deleted or expire.
+
 `,b=`# Annotator reference
 
 This chapter is for annotators and translation reviewers. It explains the editor, how to mark findings, check tool proposals and carried findings, submit a text and review a translation. Back to the [handbook overview](README.md).
@@ -1078,6 +1103,8 @@ This chapter takes you through one annotation task, from your first login to a s
 
 Before you start: you need the address of your Ontotator server, your username and a setup code from your administrator, and a lead must have assigned a text to you.
 
+Want to try first? A private practice project with invented texts lets you do every step without it counting; see [Try it out in a practice project](getting-started.md#try-it-out-in-a-practice-project).
+
 ## 1. Log in
 
 1. Open the address of your Ontotator server.
@@ -1230,7 +1257,7 @@ The header is the same on every page:
 - **Handbook** in the header opens this handbook inside the app. On the Documents, consolidation and translation review screens, **Help** opens the handbook section about that screen; in the editor it is **More** > **Help for this screen**. On the project forms, a link next to the task profile opens the section that explains it. Click a screenshot in the handbook to open it at full size in a new tab.
 - Below the chapter list, the handbook shows the app's version and commit, for example \`Ontotator 0.3.0 · commit cc65cea\`. Quote it when you report a problem.
 
-The sidebar lists **My tasks**, **Projects** and **Profile**. The number after **My tasks** counts your open tasks, the same tasks as the **To do** tab; it updates as soon as you submit a text. Clicking **My tasks** or **Projects** loads your projects and the count again, so a project you were just added to shows up without reloading the page. Leads also see their project's pages (**Documents**, **Progress**, **Settings**, **Export**). System administrators also see **Administration** with **Users**, **Ontologies** and **New project** (see [Administration](admin.md)). In the editor, the sidebar folds into **Sections**; click it to open it.
+The sidebar lists **My tasks**, **Projects** and **Profile**. The number after **My tasks** counts your open tasks, the same tasks as the **To do** tab; it updates as soon as you submit a text. Clicking **My tasks** or **Projects** loads your projects and the count again, so a project you were just added to shows up without reloading the page. Leads also see their project's pages (**Documents**, **Progress**, **Settings**, **Export**). System administrators also see **Administration** with **Users**, **Ontologies**, **New project** and **Server settings** (see [Administration](admin.md)). In the editor, the sidebar folds into **Sections**; click it to open it.
 
 ## Switch project
 
@@ -1263,6 +1290,30 @@ Each row is one task. The **Task** column says what to do, for example **Annotat
 If the project has guidelines, a link such as *Project guidelines v2* appears above the table. Read them before you start: they say what to mark and how.
 
 If you see **No texts are assigned to you yet.**, wait until your lead assigns texts to you.
+
+## Try it out in a practice project
+
+What for: learn the work on invented texts before your first real task.
+
+A practice project is private. Only you see it, your lead does not. It has short, invented letters, no real patients. Nothing you do there counts: it is not in any project list, count or export.
+
+You get practice if you are an annotator or a translation reviewer in at least one project.
+
+1. In **My tasks**, the card **New here? Try it out first** appears. Click **Try it out**.
+2. Your practice tasks appear in their own group **Practice**, below your real tasks:
+   - **Annotate from scratch**: mark findings yourself.
+   - **Annotate from proposals**: check a tool's proposals. One is right, one has a prefilled value, one needs **Edit & Replace**, and the tool missed one finding.
+   - **Translation review**: the German translation has one error. Find and correct it.
+   - **Consolidation**, if you are also a consolidator: two virtual colleagues disagree. Decide.
+3. Open a task with **Start**. Above the task you see **Practice: nothing here counts. Invented texts only.**
+4. The panel **Your practice** lists the steps of the task. A step ticks itself when you have really done it. **Next:** says what to do now. Each step has a **Help** link to its handbook section.
+5. To stop, click **Leave practice**. You return to **My tasks**.
+
+When all practice tasks are done, the group folds to **Practice complete**. Click **Delete** to remove the practice project.
+
+Click **Not now** to hide the card for good. Practice stays in your [profile](#practice-in-your-profile).
+
+If practice is not available, **Try it out** says why. For example, the server may have no suitable HPO release yet; ask your administrator.
 
 ## Open a task
 
@@ -1308,6 +1359,21 @@ What for: keep your name, languages and qualification up to date.
 Your **Username** and **Pseudonym** cannot be changed. Exports show your pseudonym, not your name, unless you tick the box in step 3.
 
 Fill in **Qualification** if you do translation reviews: you cannot submit a translation review without it.
+
+## Practice in your profile
+
+What for: start, continue or remove your practice project at any time.
+
+1. Click **Profile** in the sidebar.
+2. Go to **Practice**.
+3. Without a practice project, click **Start practice**.
+4. With a practice project, you see the progress, for example *1 of 4 tasks done*, and the date it will be deleted:
+   - **Continue** opens **My tasks** with your practice tasks.
+   - **Reset…** deletes the practice project and makes a fresh one with the same texts.
+   - **Delete…** deletes the practice project.
+5. Tick or clear **Show the card New here? on My tasks**.
+
+A practice project is deleted after 30 days without activity. Every change in it moves the date. Deleting it removes only the practice project, never real work.
 
 ## Set your search preferences
 
@@ -1677,7 +1743,7 @@ What for: see the whole project at a glance.
 ![The Progress page with the stage cards and the People table](images/lead-progress.png)
 
 Click **Refresh progress** to update.
-`,S=`# Lead: results, decisions and export
+`,j=`# Lead: results, decisions and export
 
 This chapter is for project leads. It covers choosing the final result of each text, consolidations, the decisions on translations, text changes and problem reports, and the export. Back to the [lead overview](lead.md).
 
@@ -1885,7 +1951,7 @@ What for: download raw material for analysis. People appear as pseudonyms.
 3. Click **Create**, then **Download** when it is ready.
 
 How to analyse these files is described in the [scientific workflow guide](../scientific-workflow.md).
-`,j=`# Lead: project settings
+`,S=`# Lead: project settings
 
 This chapter is for project leads. It covers every tab under **Settings**: the project name and languages, the ontology, the submission rules, the workflow, the people and the guidelines. Back to the [lead overview](lead.md).
 
@@ -2219,4 +2285,4 @@ The lead's tasks are in three chapters:
 10. Export the final results: [Export final results](lead-results.md#export-final-results).
 
 Try it with the demo project: the [demo project guide](../../examples/demo-project/README.md) walks through every step with invented clinical letters, tool proposals, translations and guidelines.
-`,I="/assets/admin-new-project-Dh9HTAXI.png",W="/assets/admin-setup-code-DQqCxWzi.png",R="/assets/annotator-carried-finding-Br5si5VR.png",P="/assets/annotator-editor-C0STFqvB.png",_="/assets/annotator-finding-values-D2ECSdqP.png",D="/assets/annotator-new-finding-DTdP61Oo.png",E="/assets/annotator-proposal-review-HROkp7Gb.png",M="/assets/annotator-submit-dialog-J9SPtleB.png",N="/assets/annotator-translation-review-pFw-1CUJ.png",U="/assets/consolidator-group-table-DvlDfTN2.png",F="/assets/consolidator-submit-dialog-B-2o_-oH.png",Y="/assets/getting-started-my-tasks-8Hf7T-Ml.png",L="/assets/getting-started-set-password-B-t2wqsk.png",H="/assets/lead-assign-D1VUbjPF.png",B="/assets/lead-compare-results-C98HgX8F.png",G="/assets/lead-documents-DgeyQuMh.png",z="/assets/lead-export-CL6Mxn2k.png",q="/assets/lead-move-release-check-Ca3qN1WP.png",K="/assets/lead-problem-report-VGBlXFR7.png",V="/assets/lead-progress-BpFmDc1i.png",Q="/assets/lead-text-card-D0-gnUHT.png",Z="/assets/lead-upload-preview-88Rdzt-O.png",$="/assets/lead-work-plan-CHvPnaDg.png",J="/assets/workflow-Dii9V6xB.png",X="https://github.com/halbritter-lab/ontotator/blob/main",l="https://handbook.invalid/docs/handbook/",ee=Object.assign({"../../../docs/handbook/README.md":y,"../../../docs/handbook/admin.md":k,"../../../docs/handbook/annotator.md":b,"../../../docs/handbook/consolidator.md":v,"../../../docs/handbook/faq.md":x,"../../../docs/handbook/first-task.md":T,"../../../docs/handbook/getting-started.md":C,"../../../docs/handbook/lead-documents.md":A,"../../../docs/handbook/lead-results.md":S,"../../../docs/handbook/lead-settings.md":j,"../../../docs/handbook/lead.md":O}),te=Object.assign({"../../../docs/handbook/images/admin-new-project.png":I,"../../../docs/handbook/images/admin-setup-code.png":W,"../../../docs/handbook/images/annotator-carried-finding.png":R,"../../../docs/handbook/images/annotator-editor.png":P,"../../../docs/handbook/images/annotator-finding-values.png":_,"../../../docs/handbook/images/annotator-new-finding.png":D,"../../../docs/handbook/images/annotator-proposal-review.png":E,"../../../docs/handbook/images/annotator-submit-dialog.png":M,"../../../docs/handbook/images/annotator-translation-review.png":N,"../../../docs/handbook/images/consolidator-group-table.png":U,"../../../docs/handbook/images/consolidator-submit-dialog.png":F,"../../../docs/handbook/images/getting-started-my-tasks.png":Y,"../../../docs/handbook/images/getting-started-set-password.png":L,"../../../docs/handbook/images/lead-assign.png":H,"../../../docs/handbook/images/lead-compare-results.png":B,"../../../docs/handbook/images/lead-documents.png":G,"../../../docs/handbook/images/lead-export.png":z,"../../../docs/handbook/images/lead-move-release-check.png":q,"../../../docs/handbook/images/lead-problem-report.png":K,"../../../docs/handbook/images/lead-progress.png":V,"../../../docs/handbook/images/lead-text-card.png":Q,"../../../docs/handbook/images/lead-upload-preview.png":Z,"../../../docs/handbook/images/lead-work-plan.png":$,"../../../docs/handbook/images/workflow.png":J}),c=e=>e.slice(e.lastIndexOf("/")+1),i=Object.fromEntries(Object.entries(ee).map(([e,t])=>[c(e).replace(/\.md$/,""),t])),ne=Object.fromEntries(Object.entries(te).map(([e,t])=>[`images/${c(e)}`,t]));function oe(e){var t;return((t=/^# +(.+)$/m.exec(i[e]??""))==null?void 0:t[1].trim())??e}function ae(){const e=[...(i.README??"").matchAll(/\]\(([A-Za-z0-9_-]+)\.md[)#]/g)].map(t=>t[1]);return[...new Set(["README",...e,...Object.keys(i).sort()])].filter(t=>t in i)}function se(e){return e.toLowerCase().replace(/[^\p{L}\p{M}\p{N}\p{Pc} -]/gu,"").replace(/ /g,"-")}function ie(){const e=new Map;return t=>{const o=se(t);let n=o;for(;e.has(n);){const s=e.get(o)+1;e.set(o,s),n=`${o}-${s}`}return e.set(n,0),n}}function re(e,t){var d;if(/^[a-z][a-z0-9+.-]*:/i.test(e))return{kind:"external",href:e};const o=new URL(e,`${l}${t}.md`),n=decodeURIComponent(o.hash.slice(1)),s=(d=/^\/docs\/handbook\/([A-Za-z0-9_-]+)\.md$/.exec(o.pathname))==null?void 0:d[1];return s&&s in i?s===t&&n?{kind:"anchor",id:n}:{kind:"chapter",href:h({name:"help",chapter:s,...n?{section:n}:{}})}:{kind:"external",href:`${X}${o.pathname}${o.hash}`}}function he(e,t){if(/^[a-z][a-z0-9+.-]*:/i.test(e))return null;const o=new URL(e,`${l}${t}.md`).pathname.replace(/^\/docs\/handbook\//,"");return ne[o]??null}const p=e=>e.type==="text"?e.value:"children"in e?e.children.map(p).join(""):"";function de(){return e=>{const t=ie(),o=n=>n.children.forEach(s=>{s.type==="element"&&(/^h[1-6]$/.test(s.tagName)?s.properties.id=t(p(s)):o(s))});o(e)}}function u(e){var t;(t=document.getElementById(e))==null||t.scrollIntoView()}const le=e=>e.button===0&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey&&!e.altKey;function ce(e){return{a:({href:t,children:o})=>{if(!t)return a.jsx(a.Fragment,{children:o});const n=re(t,e);return n.kind==="external"?a.jsx("a",{href:n.href,target:"_blank",rel:"noopener noreferrer",children:o}):n.kind==="chapter"?a.jsx("a",{href:n.href,children:o}):a.jsx("a",{href:h({name:"help",chapter:e,section:n.id}),onClick:s=>{le(s)&&(s.preventDefault(),u(n.id))},children:o})},img:({src:t,alt:o})=>{const n=t?he(t,e):null;return n?a.jsx("a",{className:"help-image-link",href:n,target:"_blank",rel:"noopener noreferrer",title:"Open the image at full size in a new tab",children:a.jsx("img",{className:"help-image",src:n,alt:o??"",loading:"lazy"})}):a.jsx("span",{className:"guideline-image-text",children:o?`Image: ${o}`:"Image"})},table:({children:t})=>a.jsx("div",{className:"guideline-table-scroll",tabIndex:0,role:"region","aria-label":"Table",children:a.jsx("table",{children:t})})}}function me({chapter:e="README",section:t}){const o=i[e];return r.useEffect(()=>{var n,s;t?u(t):(s=(n=document.getElementById("main"))==null?void 0:n.scrollTo)==null||s.call(n,0,0)},[e,t]),a.jsxs("div",{className:"help-page",children:[a.jsxs("nav",{className:"help-chapters","aria-label":"Handbook chapters",children:[a.jsx("ul",{children:ae().map(n=>a.jsx("li",{children:a.jsx("a",{href:h({name:"help",chapter:n}),"aria-current":n===e?"page":void 0,children:oe(n)})},n))}),a.jsx(w,{})]}),a.jsx("article",{className:"guideline-document help-document",children:o===void 0?a.jsxs(a.Fragment,{children:[a.jsx("h1",{children:"Chapter not found"}),a.jsxs("p",{children:["This handbook has no chapter “",e,"”. Pick one from the list."]})]}):a.jsx("div",{className:"guideline-markdown",children:a.jsx(f,{remarkPlugins:[g],rehypePlugins:[de],skipHtml:!0,components:ce(e),children:o})})})]})}export{me as default};
+`,I="/assets/admin-new-project-Dh9HTAXI.png",W="/assets/admin-setup-code-DQqCxWzi.png",R="/assets/annotator-carried-finding-Br5si5VR.png",P="/assets/annotator-editor-C0STFqvB.png",D="/assets/annotator-finding-values-D2ECSdqP.png",_="/assets/annotator-new-finding-DTdP61Oo.png",E="/assets/annotator-proposal-review-HROkp7Gb.png",M="/assets/annotator-submit-dialog-J9SPtleB.png",N="/assets/annotator-translation-review-pFw-1CUJ.png",U="/assets/consolidator-group-table-DvlDfTN2.png",F="/assets/consolidator-submit-dialog-B-2o_-oH.png",Y="/assets/getting-started-my-tasks-8Hf7T-Ml.png",L="/assets/getting-started-set-password-B-t2wqsk.png",H="/assets/lead-assign-D1VUbjPF.png",B="/assets/lead-compare-results-C98HgX8F.png",G="/assets/lead-documents-DgeyQuMh.png",z="/assets/lead-export-CL6Mxn2k.png",q="/assets/lead-move-release-check-Ca3qN1WP.png",K="/assets/lead-problem-report-VGBlXFR7.png",V="/assets/lead-progress-BpFmDc1i.png",Q="/assets/lead-text-card-D0-gnUHT.png",Z="/assets/lead-upload-preview-88Rdzt-O.png",$="/assets/lead-work-plan-CHvPnaDg.png",J="/assets/workflow-Dii9V6xB.png",X="https://github.com/halbritter-lab/ontotator/blob/main",l="https://handbook.invalid/docs/handbook/",ee=Object.assign({"../../../docs/handbook/README.md":y,"../../../docs/handbook/admin.md":k,"../../../docs/handbook/annotator.md":b,"../../../docs/handbook/consolidator.md":v,"../../../docs/handbook/faq.md":x,"../../../docs/handbook/first-task.md":T,"../../../docs/handbook/getting-started.md":C,"../../../docs/handbook/lead-documents.md":A,"../../../docs/handbook/lead-results.md":j,"../../../docs/handbook/lead-settings.md":S,"../../../docs/handbook/lead.md":O}),te=Object.assign({"../../../docs/handbook/images/admin-new-project.png":I,"../../../docs/handbook/images/admin-setup-code.png":W,"../../../docs/handbook/images/annotator-carried-finding.png":R,"../../../docs/handbook/images/annotator-editor.png":P,"../../../docs/handbook/images/annotator-finding-values.png":D,"../../../docs/handbook/images/annotator-new-finding.png":_,"../../../docs/handbook/images/annotator-proposal-review.png":E,"../../../docs/handbook/images/annotator-submit-dialog.png":M,"../../../docs/handbook/images/annotator-translation-review.png":N,"../../../docs/handbook/images/consolidator-group-table.png":U,"../../../docs/handbook/images/consolidator-submit-dialog.png":F,"../../../docs/handbook/images/getting-started-my-tasks.png":Y,"../../../docs/handbook/images/getting-started-set-password.png":L,"../../../docs/handbook/images/lead-assign.png":H,"../../../docs/handbook/images/lead-compare-results.png":B,"../../../docs/handbook/images/lead-documents.png":G,"../../../docs/handbook/images/lead-export.png":z,"../../../docs/handbook/images/lead-move-release-check.png":q,"../../../docs/handbook/images/lead-problem-report.png":K,"../../../docs/handbook/images/lead-progress.png":V,"../../../docs/handbook/images/lead-text-card.png":Q,"../../../docs/handbook/images/lead-upload-preview.png":Z,"../../../docs/handbook/images/lead-work-plan.png":$,"../../../docs/handbook/images/workflow.png":J}),c=e=>e.slice(e.lastIndexOf("/")+1),r=Object.fromEntries(Object.entries(ee).map(([e,t])=>[c(e).replace(/\.md$/,""),t])),ne=Object.fromEntries(Object.entries(te).map(([e,t])=>[`images/${c(e)}`,t]));function oe(e){var t;return((t=/^# +(.+)$/m.exec(r[e]??""))==null?void 0:t[1].trim())??e}function ae(){const e=[...(r.README??"").matchAll(/\]\(([A-Za-z0-9_-]+)\.md[)#]/g)].map(t=>t[1]);return[...new Set(["README",...e,...Object.keys(r).sort()])].filter(t=>t in r)}function se(e){return e.toLowerCase().replace(/[^\p{L}\p{M}\p{N}\p{Pc} -]/gu,"").replace(/ /g,"-")}function re(){const e=new Map;return t=>{const o=se(t);let n=o;for(;e.has(n);){const s=e.get(o)+1;e.set(o,s),n=`${o}-${s}`}return e.set(n,0),n}}function ie(e,t){var d;if(/^[a-z][a-z0-9+.-]*:/i.test(e))return{kind:"external",href:e};const o=new URL(e,`${l}${t}.md`),n=decodeURIComponent(o.hash.slice(1)),s=(d=/^\/docs\/handbook\/([A-Za-z0-9_-]+)\.md$/.exec(o.pathname))==null?void 0:d[1];return s&&s in r?s===t&&n?{kind:"anchor",id:n}:{kind:"chapter",href:h({name:"help",chapter:s,...n?{section:n}:{}})}:{kind:"external",href:`${X}${o.pathname}${o.hash}`}}function he(e,t){if(/^[a-z][a-z0-9+.-]*:/i.test(e))return null;const o=new URL(e,`${l}${t}.md`).pathname.replace(/^\/docs\/handbook\//,"");return ne[o]??null}const p=e=>e.type==="text"?e.value:"children"in e?e.children.map(p).join(""):"";function de(){return e=>{const t=re(),o=n=>n.children.forEach(s=>{s.type==="element"&&(/^h[1-6]$/.test(s.tagName)?s.properties.id=t(p(s)):o(s))});o(e)}}function u(e){var t;(t=document.getElementById(e))==null||t.scrollIntoView()}const le=e=>e.button===0&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey&&!e.altKey;function ce(e){return{a:({href:t,children:o})=>{if(!t)return a.jsx(a.Fragment,{children:o});const n=ie(t,e);return n.kind==="external"?a.jsx("a",{href:n.href,target:"_blank",rel:"noopener noreferrer",children:o}):n.kind==="chapter"?a.jsx("a",{href:n.href,children:o}):a.jsx("a",{href:h({name:"help",chapter:e,section:n.id}),onClick:s=>{le(s)&&(s.preventDefault(),u(n.id))},children:o})},img:({src:t,alt:o})=>{const n=t?he(t,e):null;return n?a.jsx("a",{className:"help-image-link",href:n,target:"_blank",rel:"noopener noreferrer",title:"Open the image at full size in a new tab",children:a.jsx("img",{className:"help-image",src:n,alt:o??"",loading:"lazy"})}):a.jsx("span",{className:"guideline-image-text",children:o?`Image: ${o}`:"Image"})},table:({children:t})=>a.jsx("div",{className:"guideline-table-scroll",tabIndex:0,role:"region","aria-label":"Table",children:a.jsx("table",{children:t})})}}function me({chapter:e="README",section:t}){const o=r[e];return i.useEffect(()=>{var n,s;t?u(t):(s=(n=document.getElementById("main"))==null?void 0:n.scrollTo)==null||s.call(n,0,0)},[e,t]),a.jsxs("div",{className:"help-page",children:[a.jsxs("nav",{className:"help-chapters","aria-label":"Handbook chapters",children:[a.jsx("ul",{children:ae().map(n=>a.jsx("li",{children:a.jsx("a",{href:h({name:"help",chapter:n}),"aria-current":n===e?"page":void 0,children:oe(n)})},n))}),a.jsx(w,{})]}),a.jsx("article",{className:"guideline-document help-document",children:o===void 0?a.jsxs(a.Fragment,{children:[a.jsx("h1",{children:"Chapter not found"}),a.jsxs("p",{children:["This handbook has no chapter “",e,"”. Pick one from the list."]})]}):a.jsx("div",{className:"guideline-markdown",children:a.jsx(f,{remarkPlugins:[g],rehypePlugins:[de],skipHtml:!0,components:ce(e),children:o})})})]})}export{me as default};
