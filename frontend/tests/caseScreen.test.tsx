@@ -3243,6 +3243,10 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
       const decide = vi.spyOn(api, "recordDecision").mockImplementation(async (_ws, envelope) => {
         const payload = envelope.payload as Record<string, any>;
         current = structuredClone(current); current.revision += 1;
+        // Like the server: a decision removes the adopted copies of its target, except its replacement.
+        const source = `${payload.target.annotation_id}:${payload.target.version}`;
+        current.annotations = (current.annotations ?? []).filter(a => !a.annotation.provenance.source_refs?.includes(source)
+          || a.annotation.annotation_id === payload.replacement?.annotation_id);
         current.decisions = [...(current.decisions ?? []).filter(d => d.target.annotation_id !== payload.target.annotation_id),
           ...(payload.outcome ? [{ decision_id: "d", target: payload.target, outcome: payload.outcome, replacement: payload.replacement, reviewer_id: "ann" }] : [])] as never;
         return current;
@@ -3398,6 +3402,102 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
       await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
       expect(payloads(apply)).toHaveLength(1);
       expect(decide).not.toHaveBeenCalled();
+    });
+
+    describe("the way back from a copy (#240, #257)", () => {
+      const proposalRow = (container: HTMLElement) => container.querySelector<HTMLElement>('[data-list-key^="target:"]')!;
+      const copyRows = (container: HTMLElement) => container.querySelectorAll('[data-list-key^="annotation:"]');
+      /** Edit & Replace on the proposal; resolves once the copy's details are open. */
+      const editAndReplace = async (container: HTMLElement) => {
+        fireEvent.click(proposalRow(container));
+        fireEvent.click(screen.getByRole("button", { name: /Edit & Replace/ }));
+        await screen.findByRole("button", { name: "Done, back to the proposal" });
+      };
+      const start = async () => {
+        const { view, target } = reviewView([], false);
+        const { container } = await setup(view, severeHits, false);
+        const spies = draftSpy(view);
+        await editAndReplace(container);
+        return { container, target, ...spies };
+      };
+      const setAbsent = async (container: HTMLElement, decide: ReturnType<typeof vi.fn> | any) => {
+        fireEvent.click(container.querySelector('[data-axis-field="assertion"] input[type="radio"][value="absent"]')!);
+        await waitFor(() => expect(decide).toHaveBeenCalledWith("ws-mod", expect.objectContaining({ payload: expect.objectContaining({ outcome: "changed" }) })));
+      };
+
+      it("from the first Edit & Replace the proposal reads Being replaced and its copy says it replaces it", async () => {
+        const { container, decide } = await start();
+        expect(proposalRow(container).textContent).toContain("Being replaced");
+        expect(proposalRow(container).textContent).not.toContain("Pending");
+        const copy = copyRows(container)[0]!;
+        expect(copy.textContent).toContain("replaces this proposal");
+        expect(copy.textContent).toContain("No changes yet");
+        expect(decide).not.toHaveBeenCalled();
+        await setAbsent(container, decide);
+        await waitFor(() => expect(proposalRow(container).textContent).toContain("Replaced"));
+        expect(copyRows(container)[0]!.textContent).toContain("Assertion: Present → Absent");
+      });
+
+      it("Discard copy on an unchanged copy removes it without a question and focuses the open proposal", async () => {
+        const { container, decide, target } = await start();
+        fireEvent.click(screen.getByRole("button", { name: /Discard copy/ }));
+        await waitFor(() => expect(decide).toHaveBeenCalledWith("ws-mod", expect.objectContaining({ payload: expect.objectContaining({ target, outcome: null }) })));
+        expect(screen.queryByRole("dialog")).toBeNull();
+        await waitFor(() => expect(copyRows(container)).toHaveLength(0));
+        expect(proposalRow(container).textContent).toContain("Pending");
+        expect(document.activeElement).toBe(proposalRow(container));
+        expect(proposalRow(container).getAttribute("aria-pressed")).toBe("true");
+        expect(strip(container)).toBe("Copy discarded. The proposal is open again.");
+      });
+
+      it("Discard copy on a changed copy asks first and names the change; Keep editing keeps the copy", async () => {
+        const { container, decide, target } = await start();
+        await setAbsent(container, decide);
+        fireEvent.click(proposalRow(container));
+        fireEvent.click(await screen.findByRole("button", { name: /Discard copy/ }));
+        const dialog = await screen.findByRole("dialog", { name: "Discard your copy?" });
+        expect(dialog.textContent).toContain("Your change is lost: Assertion: Present → Absent. The proposal is open again.");
+        fireEvent.click(within(dialog).getByRole("button", { name: "Keep editing" }));
+        await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+        expect(decide).toHaveBeenCalledTimes(1);
+        expect(copyRows(container)).toHaveLength(1);
+        // The copy's own Discard copy asks the same question.
+        fireEvent.click(copyRows(container)[0]!);
+        fireEvent.click(await screen.findByRole("button", { name: /Discard copy/ }));
+        fireEvent.click(within(await screen.findByRole("dialog", { name: "Discard your copy?" })).getByRole("button", { name: "Discard copy" }));
+        await waitFor(() => expect(decide).toHaveBeenLastCalledWith("ws-mod", expect.objectContaining({ payload: expect.objectContaining({ target, outcome: null }) })));
+        await waitFor(() => expect(copyRows(container)).toHaveLength(0));
+        expect(proposalRow(container).textContent).toContain("Pending");
+        expect(document.activeElement).toBe(proposalRow(container));
+      });
+
+      it("key 0 on the proposal discards an unchanged copy without a question", async () => {
+        const { container, decide } = await start();
+        fireEvent.click(proposalRow(container));
+        await screen.findByRole("button", { name: /Discard copy/ });
+        fireEvent.keyDown(document.body, { key: "0" });
+        await waitFor(() => expect(decide).toHaveBeenCalledWith("ws-mod", expect.objectContaining({ payload: expect.objectContaining({ outcome: null }) })));
+        expect(screen.queryByRole("dialog")).toBeNull();
+        await waitFor(() => expect(copyRows(container)).toHaveLength(0));
+      });
+
+      it("Done, back to the proposal removes an unchanged copy and keeps a changed one", async () => {
+        const { container, decide } = await start();
+        fireEvent.click(screen.getByRole("button", { name: "Done, back to the proposal" }));
+        await waitFor(() => expect(copyRows(container)).toHaveLength(0));
+        expect(decide).toHaveBeenCalledWith("ws-mod", expect.objectContaining({ payload: expect.objectContaining({ outcome: null }) }));
+        expect(strip(container)).toBe("Copy removed: it had no changes.");
+        expect(document.activeElement).toBe(proposalRow(container));
+        // A changed copy stays and replaces the proposal.
+        await editAndReplace(container);
+        await setAbsent(container, decide);
+        const calls = decide.mock.calls.length;
+        fireEvent.click(screen.getByRole("button", { name: "Done, back to the proposal" }));
+        await waitFor(() => expect(proposalRow(container).getAttribute("aria-pressed")).toBe("true"));
+        expect(decide.mock.calls.length).toBe(calls);
+        expect(copyRows(container)).toHaveLength(1);
+        expect(proposalRow(container).textContent).toContain("Replaced");
+      });
     });
 
     it("confirming a defaulted value on the copy does not replace the proposal (#231)", async () => {

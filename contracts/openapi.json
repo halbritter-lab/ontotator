@@ -22259,6 +22259,28 @@
             ],
             "title": "Round Ordinal"
           },
+          "started": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started"
+          },
+          "open_tasks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Open Tasks"
+          },
           "label_rule": {
             "anyOf": [
               {

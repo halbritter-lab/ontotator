@@ -57,6 +57,8 @@ DETAIL_KEYS = {
     "compared",
     "causes",
     "round_ordinal",
+    "started",
+    "open_tasks",
 }
 
 
@@ -482,3 +484,50 @@ def test_final_cell_names_author_and_kind(env):
     assert names(final) == ["Anne Notator"]
     assert final["detail"]["note"] == "round"
     assert final["detail"]["version"] is None  # on the newest version
+
+
+def start(env: Any, assignment_id: int) -> None:
+    """The first saved change: the assignment leaves ``open`` (issue 258)."""
+    with env.db.transaction() as conn:
+        conn.execute(
+            update(AssignmentRow)
+            .where(AssignmentRow.id == assignment_id)
+            .values(status="in_progress")
+        )
+
+
+def test_cells_count_started_assignments(env):
+    """Issue 258: assigned work reads "not started" until its first save."""
+    plan(env, c1_de=REVIEW)
+    review_id = assign(env, doc("c1", "de"), "ana", "translation_review")
+    review = rows(env)[("c1", "de")]["stages"]["review"]
+    assert review["state"] == "in_progress"
+    assert (review["detail"]["started"], review["detail"]["open_tasks"]) == (0, 1)
+    start(env, review_id)
+    review = rows(env)[("c1", "de")]["stages"]["review"]
+    assert (review["detail"]["started"], review["detail"]["open_tasks"]) == (1, 1)
+
+    first = assign(env, doc("c1", "en"), "anno", "annotate")
+    assign(env, doc("c1", "en"), "anno2", "annotate")
+    annotation = rows(env)[("c1", "en")]["stages"]["annotation"]
+    assert annotation["state"] == "in_progress"
+    assert (annotation["detail"]["started"], annotation["detail"]["open_tasks"]) == (
+        0,
+        2,
+    )
+    start(env, first)
+    annotation = rows(env)[("c1", "en")]["stages"]["annotation"]
+    assert (annotation["detail"]["started"], annotation["detail"]["open_tasks"]) == (
+        1,
+        2,
+    )
+    # A submitted annotation leaves the count; the other is still not started.
+    submit(env, first, "s1")
+    annotation = rows(env)[("c1", "en")]["stages"]["annotation"]
+    assert (annotation["detail"]["started"], annotation["detail"]["open_tasks"]) == (
+        0,
+        1,
+    )
+    # Nothing counted where no open work is named.
+    final = rows(env)[("c1", "en")]["stages"]["final"]
+    assert (final["detail"]["started"], final["detail"]["open_tasks"]) == (None, None)

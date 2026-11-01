@@ -56,6 +56,7 @@ If the text was changed elsewhere, a **Revision conflict** notice appears; click
 | Frame | The finding you point at or selected. |
 | **AI** | Proposed by a tool. Point at the badge to see which tool. |
 | **Pending** | A proposal you have not decided yet. Decided proposals show **Confirmed**, **Rejected**, **Replaced** or **Unresolved**. |
+| **Being replaced** | A proposal with your copy from **Edit & Replace** that has no changes yet. |
 | **Defaults to confirm** | The finding still has prefilled values you have not confirmed. |
 | **Check needed** | A carried finding you have not checked yet. |
 | **Spanless** | A finding without a text passage. |
@@ -208,12 +209,14 @@ Tools make mistakes. Check every proposal as if you had marked it yourself: the 
 4. Decide:
    - **Confirm**: the passage, term and all values are right. Values tagged **Defaulted** were not set by the tool but prefilled; Confirm accepts them as shown, so check them too.
    - **Reject**: the proposal is wrong and nothing should replace it.
-   - **Edit & Replace**: the proposal is nearly right. You get an editable copy that replaces it; correct the term, values or text span in the copy. The copy is listed under its proposal in **Review Proposals**, as *Your copy*, not under **Your own findings**. In the details, the editor names the proposal it replaces and what you changed, for example *Assertion: Present → Absent*. Click **Done, back to the proposal** when you are finished. The proposal then reads *Replaced by* with the term and your changes. Confirming a default in the copy changes no value, so the proposal is not replaced by that alone.
+   - **Edit & Replace**: the proposal is nearly right. You get an editable copy that replaces it; correct the term, values or text span in the copy. The copy is listed indented under its proposal in **Review Proposals**, as *Your copy*, with the line *replaces this proposal*, not under **Your own findings**. The row shows *No changes yet* or what you changed, for example *Assertion: Present → Absent*. The proposal reads **Being replaced** until the copy differs, then **Replaced**. In the details, the editor names the proposal it replaces and what you changed. Click **Done, back to the proposal** when you are finished. The proposal then reads *Replaced by* with the term and your changes. If the copy has no changes, Done removes it and the proposal is open again. Confirming a default in the copy changes no value, so the proposal is not replaced by that alone. While the copy exists, the proposal's button reads **Open your copy**.
    - **Unresolved**: only if you really cannot decide; the other three decisions are the normal case. Write a **Reviewer note** saying why, then click **Save decision**. The proposal is submitted with your note and a reviewer flag. It does not block submitting. Another annotator's Confirm does not settle it: the finding does not count as agreed, and whoever decides, the consolidator or the lead, sees your flag and note. Only **Confirm** confirms a proposal's prefilled values: on an unresolved proposal they stay recorded as defaults, and its row shows **Defaults not confirmed**. The result line under **Your own findings** counts such a proposal as unresolved, for example "1 confirmed proposal, 1 unresolved proposal, 1 own finding".
 5. After each decision, the next open proposal is selected. Press `k` right after a decision to go back to it.
 6. When all proposals are decided, read the whole text again and add findings the tool missed: mark text that has no proposal, choose the term in **New finding** and set the values, as in [Mark text and add a finding](#mark-text-and-add-a-finding). Your additions appear under **Your own findings**, next to the proposals.
 
 To undo a decision, click **Reset decision (open)** or press `0`.
+
+To drop your copy, click **Discard copy**, in the copy's details or in the proposal's details, or press `0` on the proposal. The copy is removed and the proposal is open (**Pending**) and selected again. A copy without changes goes at once. A changed copy asks first and names the changes you lose; click **Discard copy** to confirm or **Keep editing** to keep it.
 
 **Unresolved** is a flag for the lead, not clinical uncertainty. For clinical uncertainty ("possible seizures"), use the value **Uncertain**.
 
@@ -389,7 +392,7 @@ What for: work without the mouse. Shortcuts are off while you type in a field or
 | `←` / `→`, `Ctrl+←` / `Ctrl+→` | Move the focused mention edge |
 | `j` / `k` | Next open / previous proposal. Right after a decision, `k` goes back to that proposal. |
 | `1` `2` `3` `4` | Confirm, Reject, Edit & Replace, Unresolved |
-| `0` | Reset the decision to open |
+| `0` | Reset the decision to open, or discard your copy of the proposal |
 | `n` / `Shift+N` | Next / previous unchecked carried finding |
 | `c` | Mark carried finding as checked |
 | `Ctrl+Z` (macOS: `Cmd+Z`) | Undo deleting a finding or removing a modifier |

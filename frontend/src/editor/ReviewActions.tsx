@@ -56,6 +56,10 @@ export interface ReviewActionsProps {
   documentText?: string;
   onDecide: (payload: DecisionPayload) => void;
   onAdoptAndEdit?: () => void;
+  /** Issue 257: an Edit & Replace copy of this proposal exists (changed or not). */
+  hasCopy?: boolean;
+  /** Issue 257: removes the copy; the proposal is open again. */
+  onDiscardCopy?: () => void;
   onEditReplacement?: (annotationId: string) => void;
   onDeselect?: () => void;
   /** The outcome the proposal already has, chosen again with an unchanged note: move on, save nothing. */
@@ -118,6 +122,8 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
   draftAnnotations,
   onDecide,
   onAdoptAndEdit,
+  hasCopy = false,
+  onDiscardCopy,
   onEditReplacement,
   onDeselect,
   onRepeatDecision,
@@ -213,6 +219,8 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
             <span className={`badge decision-tag decision-tag--${currentDecision.outcome}`}>
               {outcomeLabels[currentDecision.outcome as ReviewDecisionOutcome] ?? currentDecision.outcome}
             </span>
+          ) : hasCopy ? (
+            <span className="badge decision-tag decision-tag--replacing">Being replaced</span>
           ) : (
             <span className="badge decision-tag decision-tag--open">Pending</span>
           )}
@@ -319,12 +327,12 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
             }
           }}
           title={
-            pressed("changed")
-              ? "Continue editing replacement in draft (Key: 3)"
+            pressed("changed") || hasCopy
+              ? "Continue editing your copy in draft (Key: 3)"
               : "Adopt proposal and edit in draft (Key: 3)"
           }
         >
-          <span className="decision-btn__label"><IconPencil />Edit & Replace</span>
+          <span className="decision-btn__label"><IconPencil />{hasCopy ? "Open your copy" : "Edit & Replace"}</span>
           <kbd className="kbd">3</kbd>
         </Button>
 
@@ -340,8 +348,20 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
         </Button>
       </div>
 
-      {/* Reset Decision Button */}
-      {currentDecision && (
+      {/* Issue 257: with a copy, the way back removes the copy; otherwise Reset clears the decision. */}
+      {hasCopy && onDiscardCopy ? (
+        <div className="review-actions__row">
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => { cancelNoteSave(noteSession); setAttemptedUnresolved(null); onDiscardCopy(); }}
+            title="Remove your copy; the proposal is open again"
+          >
+            <IconUndo />
+            Discard copy <kbd className="kbd">0</kbd>
+          </Button>
+        </div>
+      ) : currentDecision && (
         <div className="review-actions__row">
           <Button
             type="button"

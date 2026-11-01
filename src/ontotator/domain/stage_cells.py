@@ -134,10 +134,20 @@ class StageFacts:
     ``submissions``; the Final cell counts ``final_submissions`` (consolidation
     submissions included), falling back to ``submissions``;
     ``annotators_submitted`` only names people.
+
+    Started (issue 258): an assignment has started once it left the status
+    ``open``, which its first saved change does (a translation review's first
+    draft save, an annotation's first draft mutation; opening the task does
+    not). ``review_tasks`` / ``annotate_tasks`` count the open assignments
+    behind ``review_people`` / ``annotators_open``, ``review_started`` /
+    ``annotate_started`` the started ones among them; ``None`` = not counted
+    (the cells then carry no started count).
     """
 
     step: StepFacts
     review_people: tuple[int, ...] = ()  # open translation review(s)
+    review_tasks: int | None = None  # open translation review assignments
+    review_started: int = 0  # of ``review_tasks``: no longer status open
     review_reason: Literal["correction", "new_review", "source_changed"] | None = None
     review_reason_text: str | None = None  # free text, e.g. "Dosis prüfen"
     review_decided_by: int | None = None  # latest decision on the newest version
@@ -147,6 +157,8 @@ class StageFacts:
     newest_version: int = 1
     newest_origin: str | None = None  # VariantOrigin of the target
     annotators_open: tuple[int, ...] = ()  # on the target(s), not held
+    annotate_tasks: int | None = None  # their assignments
+    annotate_started: int = 0  # of ``annotate_tasks``: no longer status open
     annotators_submitted: tuple[int, ...] = ()  # authors of ``submissions``
     round_ordinal: int | None = None  # the one open round, if exactly one
     findings: int | None = None  # finding_count when exactly one submission
@@ -186,7 +198,9 @@ class CellDetail:
     minimum over the row's target versions ("1 of 2 assigned", "1 of 2
     submitted"). ``reason`` is free text only (Review re_review: "Dosis
     prüfen"); codes go to ``note``, Final ``confirm`` cause codes to
-    ``causes``.
+    ``causes``. ``started`` of ``open_tasks``: how many of the open
+    assignments the cell names have started (``StageFacts``, issue 258);
+    "Assigned, not started" at 0. Both None where nothing is counted.
     """
 
     people: tuple[int, ...] = ()
@@ -206,6 +220,8 @@ class CellDetail:
     compared: int | None = None
     # "Round 2" (Annotation in progress) / "Round 1 · Ana Weber" (Final).
     round_ordinal: int | None = None
+    started: int | None = None
+    open_tasks: int | None = None
 
 
 @dataclass(frozen=True)
@@ -313,6 +329,13 @@ def _roots(facts: StageFacts, count: int) -> dict[str, Any]:
     return {"assigned": min(count, total), "total": total}
 
 
+def _started(tasks: int | None, started: int) -> dict[str, Any]:
+    """``started`` / ``open_tasks`` of a cell naming open work (issue 258)."""
+    if not tasks:
+        return {}
+    return {"started": min(started, tasks), "open_tasks": tasks}
+
+
 def _review(facts: StageFacts, codes: frozenset[str]) -> StageCell:
     step = facts.step
     if step.is_source:
@@ -326,6 +349,7 @@ def _review(facts: StageFacts, codes: frozenset[str]) -> StageCell:
     if step.open_translation_reviews or facts.review_people:
         roots = _roots(facts, step.open_translation_reviews)
         people = facts.review_people
+        started = _started(facts.review_tasks, facts.review_started)
         if facts.review_reason is not None:
             return _cell(
                 "re_review",
@@ -334,8 +358,9 @@ def _review(facts: StageFacts, codes: frozenset[str]) -> StageCell:
                 note=facts.review_reason,
                 reason=facts.review_reason_text,
                 **roots,
+                **started,
             )
-        return _cell("in_progress", "running", people=people, **roots)
+        return _cell("in_progress", "running", people=people, **roots, **started)
     decided_by = () if facts.review_decided_by is None else (facts.review_decided_by,)
     if "resolve_rejected" in codes or "resolve_queried" in codes:
         rejected = "resolve_rejected" in codes
@@ -397,6 +422,11 @@ def _annotation(facts: StageFacts, codes: frozenset[str]) -> StageCell:
     waiting_note: dict[str, Any] = (
         {"note": "text_change_waiting"} if facts.correction_waiting else {}
     )
+    started = (
+        _started(facts.annotate_tasks, facts.annotate_started)
+        if facts.annotators_open
+        else {}
+    )
     if not _may_annotate(step):
         # Issue 213: the people whose tasks wait, and their count against the
         # limit (the text card's "n of m annotators assigned").
@@ -426,6 +456,7 @@ def _annotation(facts: StageFacts, codes: frozenset[str]) -> StageCell:
                 people=facts.annotators_open
                 or _people((*step.old_open, *step.finishing)),
                 **waiting_note,
+                **started,
             )
         return _cell("after_review", "waiting", **waiting_note, **waiters)
     newest = facts.newest_version
@@ -458,6 +489,7 @@ def _annotation(facts: StageFacts, codes: frozenset[str]) -> StageCell:
             assigned=assigned if counted else None,
             target=per_text if counted else None,
             **waiting_note,
+            **started,
         )
     if step.finishing and not facts.correction_waiting:
         return _cell(
@@ -494,6 +526,7 @@ def _annotation(facts: StageFacts, codes: frozenset[str]) -> StageCell:
             total=per_text if many else None,
             round_ordinal=facts.round_ordinal,
             **note,
+            **started,
         )
     old = step.old_submitted
     if submitted or old or step.has_final:
