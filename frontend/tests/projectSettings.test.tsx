@@ -499,9 +499,10 @@ describe("project settings sections", () => {
 
     vi.mocked(api.getProjectSettings).mockResolvedValue({ ...settings, locked: true, frozen_translations: { files: [de], not_included: ["hp-de.babelon.tsv", "hp-es.babelon.tsv"] } });
     const at = "2026-10-30T09:15:00Z";
+    const lena = { pseudonym: "lead-0001", display_name: "Lena Berg", is_me: true };
     const refreshed = vi.spyOn(api, "refreshTranslations").mockResolvedValue({ ...settings, locked: true, frozen_translations: {
-      files: [newerDe, es], not_included: [], updated: { at, by: "user:lena" },
-      history: [{ until: at, by: "user:lena", reason: "refresh", condition_ids: ["f".repeat(64)], files: [de] }],
+      files: [newerDe, es], not_included: [], updated: { at, by: lena, by_command_line: false },
+      history: [{ until: at, by: lena, by_command_line: false, reason: "refresh", condition_ids: ["f".repeat(64)], files: [de] }],
     } });
     const saved = vi.fn();
     renderSettings("ontology", { onSaved: saved });
@@ -521,14 +522,33 @@ describe("project settings sections", () => {
     expect(refreshed).toHaveBeenCalledWith(settings.project_key);
     expect(saved).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(screen.getByText(/^Translations updated on/).textContent).toContain("by lena.");
+    expect(screen.getByText(/^Translations updated on/).textContent).toContain("by Lena Berg (lead-0001, you).");
     expect(screen.queryByRole("button", { name: "Use the newest translations" })).toBeNull();
     expect(within(screen.getByRole("list", { name: "Frozen translations" })).getAllByRole("listitem")).toHaveLength(2);
     // Earlier states: collapsed.
     const history = screen.getByRole("list", { name: "Earlier translations" });
     expect(history.closest("details")!.open).toBe(false);
     expect(screen.getByText("Earlier translations (1)")).toBeDefined();
-    expect(within(history).getByRole("listitem").textContent).toContain("updated by lena): hp-de.babelon.tsv");
+    expect(within(history).getByRole("listitem").textContent).toContain("updated by Lena Berg (lead-0001, you)): hp-de.babelon.tsv");
+  });
+
+  it("Ontology: who changed the translations only when the server names them (issue 281)", async () => {
+    const de = { ontology_id: "HP", filename: "hp-de.babelon.tsv", sha256: "c".repeat(64), languages: ["de"] };
+    const at = "2026-10-30T09:15:00Z";
+    vi.mocked(api.getProjectSettings).mockResolvedValue({ ...settings, frozen_translations: {
+      files: [de], not_included: [], updated: { at, by: null, by_command_line: false },
+      history: [
+        { until: at, by: null, by_command_line: false, reason: "refresh", condition_ids: ["f".repeat(64)], files: [] },
+        { until: "2026-10-29T09:15:00Z", by: null, by_command_line: true, reason: "ontology", condition_ids: ["e".repeat(64)], files: [de] },
+      ],
+    } });
+    renderSettings("ontology");
+    const updated = await screen.findByText(/^Translations updated on/);
+    expect(updated.textContent).toMatch(/^Translations updated on [^]*\d\.$/);
+    expect(updated.textContent).not.toContain(" by ");
+    const items = within(screen.getByRole("list", { name: "Earlier translations" })).getAllByRole("listitem").map(item => item.textContent);
+    expect(items[0]).toContain("(updated): English names only");
+    expect(items[1]).toContain("(ontology changed from the command line): hp-de.babelon.tsv");
   });
 
   it("Ontology: a refused refresh keeps the dialog open with the reason (issue 254)", async () => {
