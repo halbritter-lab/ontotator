@@ -3,7 +3,7 @@
 import re
 from collections.abc import Mapping
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 
 import ontospan
 from pydantic import BaseModel, ConfigDict, Field
@@ -17,17 +17,27 @@ from ontotator.authz.project_authority import require_project_management
 from ontotator.domain.annotation_modes import AnnotationMode
 from ontotator.domain.canonical import canonical_hash
 from ontotator.domain.documents import Document
-from ontotator.domain.errors import DomainError
+from ontotator.domain.errors import DomainError, RevisionConflict
 from ontotator.domain.profiles import TaskProfile, profile_hash
 from ontotator.domain.work_plans import ImportPlanSetting
 from ontotator.domain.workspace import Draft
 from ontotator.exchange.t1 import Pin, T1Profile, check_t1_profile
+from ontotator.ontology.conditions import (
+    SearchCondition,
+    TranslationResource,
+    validate_resources,
+)
 from ontotator.ontology.service import OntologyService
 from ontotator.ontology.store import OntologyStore
 from ontotator.ontology.translation_freeze import (
+    REFRESH_ACTION,
+    SUPERSEDED,
+    condition_history,
     frozen_files,
     not_included,
     ontology_prefixes,
+    same_translations,
+    translation_changes,
 )
 from ontotator.packages.models import PackageManifest
 from ontotator.projects.repin import (
@@ -84,6 +94,38 @@ class FrozenTranslations(BaseModel):
 
     files: list[FrozenTranslation]
     not_included: list[str] = Field(default_factory=list)
+    # The last move to the newest translations, when the current files came
+    # from one (not from the first use).
+    updated: "TranslationsUpdate | None" = None
+    # The files searches used before, newest first.
+    history: list["EarlierTranslations"] = Field(default_factory=list)
+
+
+class TranslationsUpdate(BaseModel):
+    """When and by whom the project moved to the newest translations."""
+
+    at: datetime
+    # The audit actor label, e.g. ``user:lena`` or ``cli:operator``.
+    by: str
+
+
+class EarlierTranslations(BaseModel):
+    """Translation files the project's searches used until ``until``.
+
+    ``reason`` is what ended them: a move to the newest translations
+    (``refresh``) or a change of the ontology version or task profile
+    (``ontology``). Searches that ran with them keep their
+    ``search_condition_id``, one of ``condition_ids``.
+    """
+
+    until: datetime
+    by: str
+    reason: Literal["refresh", "ontology"]
+    condition_ids: list[str]
+    files: list[FrozenTranslation]
+
+
+FrozenTranslations.model_rebuild()
 
 
 class ProjectSettingsChange(BaseModel):
@@ -296,6 +338,25 @@ def _superseded(earlier: list[str], old: Pin | None, sha256: str) -> list[str]:
     return [digest for digest in history if digest != sha256]
 
 
+def _keep_dropped(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:
+    """``new`` with the translation files of ``old`` it has no file of that name for."""
+    names = {str(item["filename"]).lower() for item in new.get("translations") or []}
+    kept = [
+        item
+        for item in old.get("translations") or []
+        if str(item.get("filename", "")).lower() not in names
+    ]
+    if not kept:
+        return new
+    payload = SearchCondition.model_validate(new).model_dump(exclude={"condition_id"})
+    payload["translations"] += [
+        TranslationResource.model_validate(item).model_dump() for item in kept
+    ]
+    return SearchCondition.model_validate(
+        {"condition_id": canonical_hash(payload), **payload}
+    ).model_dump(mode="json")
+
+
 class RepinRequest(BaseModel):
     """Apply a re-pin whose dry run the lead has seen."""
 
@@ -389,9 +450,9 @@ class ProjectService:
         ontology_ids = {
             item.sha256.lower(): item.ontology_id for item in profile.ontologies
         }
-        prefixes = ontology_prefixes(conn, self.store.loaded_prefixes())
-        return FrozenTranslations(
-            files=[
+
+        def files(stored: list[Any]) -> list[FrozenTranslation]:
+            return [
                 FrozenTranslation(
                     ontology_id=ontology_ids.get(
                         item.ontology_sha256, item.ontology_sha256
@@ -400,10 +461,154 @@ class ProjectService:
                     sha256=item.sha256,
                     languages=list(item.languages),
                 )
-                for item in frozen_files(conditions)
-            ],
+                for item in frozen_files(stored)
+            ]
+
+        prefixes = ontology_prefixes(conn, self.store.loaded_prefixes())
+        history = condition_history(conn, project_id)
+        last = history[-1] if history else None
+        return FrozenTranslations(
+            files=files(conditions),
             not_included=not_included(conn, conditions, prefixes),
+            updated=(
+                TranslationsUpdate(at=last.at, by=last.actor_label)
+                if last is not None and last.action == REFRESH_ACTION
+                else None
+            ),
+            history=[
+                EarlierTranslations(
+                    until=item.at,
+                    by=item.actor_label,
+                    reason="refresh" if item.action == REFRESH_ACTION else "ontology",
+                    condition_ids=[
+                        str(c.get("condition_id", "")) for c in item.conditions
+                    ],
+                    files=files(item.conditions),
+                )
+                for item in reversed(history)
+            ],
         )
+
+    def refresh_translations(self, actor: Actor, key: str) -> ProjectSettings:
+        """Move the project to the newest translations (#254).
+
+        The conditions a first use would capture now replace those of each
+        ontology whose translation files differ; an ontology whose files are
+        the same keeps its condition. A file the project uses that the server
+        no longer offers stays (its bytes are captured): a refresh adds and
+        replaces files, it never drops a language. The replaced conditions are kept whole
+        in the ``project.translations_refresh`` audit entry, so searches that
+        ran with them stay resolvable, and their captured files stay among
+        the project's resources. Drafts, submissions and search events are
+        not touched. Allowed at any time, also with submitted work.
+
+        Refused with ``TRANSLATIONS_NOT_FROZEN`` before the first use and
+        with ``TRANSLATIONS_CURRENT`` when no file would change.
+        """
+        # Take up files another worker stored, then capture without any lock
+        # (parsing a translation can take seconds).
+        self.store.sync_translations()
+        with self.db.transaction() as conn:
+            row = self._project(conn, key)
+        profile = TaskProfile.model_validate(row["task_profile"])
+        captured, resources = self.store.registry.capture_current(profile)
+        fresh = {c.ontology_sha256: c.model_dump(mode="json") for c in captured}
+        with self.db.transaction() as conn:
+            conn.execute(
+                select(func.pg_advisory_xact_lock_shared(_lock_id("members", key)))
+            )
+            conn.execute(select(func.pg_advisory_xact_lock(_lock_id("project", key))))
+            locked_row = self._project(conn, key)
+            project_id = locked_row["id"]
+            require_project_management(
+                conn, actor, key, project_id, Action.MANAGE_PROJECT_SETTINGS
+            )
+            if locked_row["task_profile_sha256"] != row["task_profile_sha256"]:
+                raise RevisionConflict(
+                    "The ontology or task profile changed meanwhile; try again."
+                )
+            current = conn.execute(
+                select(ProjectSearchConditionsRow.conditions).where(
+                    ProjectSearchConditionsRow.project_id == project_id
+                )
+            ).scalar_one_or_none()
+            if current is None:
+                raise DomainError(
+                    "TRANSLATIONS_NOT_FROZEN",
+                    "The project has not frozen its translations yet. Its first "
+                    "term search takes the newest files.",
+                )
+            refreshed: list[dict[str, Any]] = []
+            for condition in current:
+                new = fresh.get(str(condition.get("ontology_sha256")))
+                merged = None if new is None else _keep_dropped(condition, new)
+                if merged is None or same_translations(condition, merged):
+                    refreshed.append(condition)
+                else:
+                    refreshed.append(merged)
+            changes = translation_changes(current, refreshed)
+            if changes.empty:
+                raise DomainError(
+                    "TRANSLATIONS_CURRENT",
+                    "The project already uses the newest translations.",
+                )
+            conditions = [SearchCondition.model_validate(c) for c in refreshed]
+            declared = {
+                item.resource_path
+                for condition in conditions
+                for item in condition.translations
+            }
+            needed = {
+                path: data for path, data in resources.items() if path in declared
+            }
+            # A kept file the server no longer offers: its captured bytes.
+            for path, sha in conn.execute(
+                select(
+                    ProjectResourceRow.resource_path, ProjectResourceRow.sha256
+                ).where(
+                    ProjectResourceRow.project_id == project_id,
+                    ProjectResourceRow.resource_path.in_(declared - needed.keys()),
+                )
+            ).tuples():
+                needed[path] = self.db.blobs.get(sha)
+            validate_resources(conditions, profile, needed)
+            files = {
+                path: (self.db.put_blob(conn, data), len(data))
+                for path, data in needed.items()
+            }
+            conn.execute(
+                update(ProjectSearchConditionsRow)
+                .where(ProjectSearchConditionsRow.project_id == project_id)
+                .values(conditions=refreshed)
+            )
+            Repository._store_files(conn, project_id, files)
+
+            def summary(stored: list[Any]) -> list[dict[str, str]]:
+                return [
+                    {"filename": item.filename, "sha256": item.sha256}
+                    for item in frozen_files(stored)
+                ]
+
+            record_audit(
+                conn,
+                actor,
+                REFRESH_ACTION,
+                target_type="project",
+                target_id=key,
+                project_id=project_id,
+                details={
+                    "added": changes.added,
+                    "replaced": changes.replaced,
+                    "removed": changes.removed,
+                    "files_before": summary(current),
+                    "files_after": summary(refreshed),
+                    "condition_ids_before": [c["condition_id"] for c in current],
+                    "condition_ids_after": [c["condition_id"] for c in refreshed],
+                    SUPERSEDED: current,
+                },
+                at=datetime.now(UTC),
+            )
+            return self.settings(key)
 
     def create(
         self,
@@ -827,18 +1032,15 @@ class ProjectService:
                         "submitted": [s.model_dump() for s in report.submitted],
                     },
                 )
-            conn.execute(
-                delete(ProjectSearchConditionsRow).where(
-                    ProjectSearchConditionsRow.project_id == row["id"]
-                )
-            )
-            # Preserve package ontology bytes; captured translations must be recaptured.
-            conn.execute(
-                delete(ProjectResourceRow).where(
-                    ProjectResourceRow.project_id == row["id"],
-                    ProjectResourceRow.resource_path.startswith("search-resources/"),
-                )
-            )
+            # The new structure is searched with conditions its first use
+            # captures. The ended ones stay in the audit entry below, and their
+            # captured files among the project's resources: search events
+            # that ran with them still name them (#254).
+            ended_conditions = conn.execute(
+                delete(ProjectSearchConditionsRow)
+                .where(ProjectSearchConditionsRow.project_id == row["id"])
+                .returning(ProjectSearchConditionsRow.conditions)
+            ).scalar_one_or_none()
             record_audit(
                 conn,
                 actor,
@@ -852,7 +1054,8 @@ class ProjectService:
                         ["creation_defaults"]
                         if creation_defaults != row["creation_defaults"]
                         else []
-                    )
+                    ),
+                    **({SUPERSEDED: ended_conditions} if ended_conditions else {}),
                 },
             )
             return self.settings(key)

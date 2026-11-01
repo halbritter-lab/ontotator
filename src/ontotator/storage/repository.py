@@ -75,6 +75,7 @@ from ontotator.exchange.t1 import (
     check_t1_profile,
 )
 from ontotator.ontology.conditions import SearchCondition, validate_resources
+from ontotator.ontology.translation_freeze import condition_history
 from ontotator.packages.models import (
     PackageManifest,
     SearchEventRecord,
@@ -1075,8 +1076,15 @@ class Repository:
     ) -> None:
         if conditions is not None:
             existing = self._search_conditions(conn, project_id)
-            if existing is not None and existing != conditions:
+            if (
+                existing is not None
+                and existing != conditions
+                and not self._earlier_conditions(conn, project_id, conditions)
+            ):
                 raise InvalidPackage("Conflicting immutable package search conditions")
+            # Conditions the project had before a move to the newest
+            # translations (#254) are its own history: the package is accepted
+            # and the project keeps searching with its current conditions.
             conn.execute(
                 pg_insert(ProjectSearchConditionsRow)
                 .values(
@@ -1103,6 +1111,21 @@ class Repository:
                 {"project_id": project_id, "resource_path": path, "sha256": sha}
                 for path, (sha, _size) in files.items()
             ],
+        )
+
+    @staticmethod
+    def _earlier_conditions(
+        conn: Connection, project_id: int, conditions: list[SearchCondition]
+    ) -> bool:
+        """Whether ``conditions`` are ones the project searched with earlier."""
+        wanted = [c.model_dump(mode="json") for c in conditions]
+        return any(
+            [
+                SearchCondition.model_validate(c).model_dump(mode="json")
+                for c in item.conditions
+            ]
+            == wanted
+            for item in condition_history(conn, project_id)
         )
 
     @staticmethod
