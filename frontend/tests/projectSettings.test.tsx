@@ -487,6 +487,61 @@ describe("project settings sections", () => {
     expect(await screen.findByText("No translations: searches use the English names only.")).toBeDefined();
   });
 
+  it("Ontology: Use the newest translations only when a file is not used, after a confirmation (issue 254)", async () => {
+    const de = { ontology_id: "HP", filename: "hp-de.babelon.tsv", sha256: "c".repeat(64), languages: ["de"] };
+    const newerDe = { ...de, sha256: "d".repeat(64) };
+    const es = { ontology_id: "HP", filename: "hp-es.babelon.tsv", sha256: "e".repeat(64), languages: ["es"] };
+    vi.mocked(api.getProjectSettings).mockResolvedValue({ ...settings, frozen_translations: { files: [de], not_included: [] } });
+    const view = renderSettings("ontology");
+    await screen.findByRole("list", { name: "Frozen translations" });
+    expect(screen.queryByRole("button", { name: "Use the newest translations" })).toBeNull();
+    view.unmount();
+
+    vi.mocked(api.getProjectSettings).mockResolvedValue({ ...settings, locked: true, frozen_translations: { files: [de], not_included: ["hp-de.babelon.tsv", "hp-es.babelon.tsv"] } });
+    const at = "2026-10-30T09:15:00Z";
+    const refreshed = vi.spyOn(api, "refreshTranslations").mockResolvedValue({ ...settings, locked: true, frozen_translations: {
+      files: [newerDe, es], not_included: [], updated: { at, by: "user:lena" },
+      history: [{ until: at, by: "user:lena", reason: "refresh", condition_ids: ["f".repeat(64)], files: [de] }],
+    } });
+    const saved = vi.fn();
+    renderSettings("ontology", { onSaved: saved });
+    fireEvent.click(await screen.findByRole("button", { name: "Use the newest translations" }));
+    const dialog = screen.getByRole("dialog", { name: "Use the newest translations?" });
+    expect(within(within(dialog).getByRole("list", { name: "Translation changes" })).getAllByRole("listitem").map(item => item.textContent))
+      .toEqual(["Added: hp-es.babelon.tsv", "Replaced by a newer file: hp-de.babelon.tsv"]);
+    expect(dialog.textContent).toContain("Findings do not change");
+    expect(dialog.textContent).toContain("Earlier searches keep the record of the translations they used.");
+    // Cancel changes nothing.
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(refreshed).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Use the newest translations" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Use the newest translations" }));
+    expect(await screen.findByText(/^Translations updated on/)).toBeDefined();
+    expect(refreshed).toHaveBeenCalledWith(settings.project_key);
+    expect(saved).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getByText(/^Translations updated on/).textContent).toContain("by lena.");
+    expect(screen.queryByRole("button", { name: "Use the newest translations" })).toBeNull();
+    expect(within(screen.getByRole("list", { name: "Frozen translations" })).getAllByRole("listitem")).toHaveLength(2);
+    // Earlier states: collapsed.
+    const history = screen.getByRole("list", { name: "Earlier translations" });
+    expect(history.closest("details")!.open).toBe(false);
+    expect(screen.getByText("Earlier translations (1)")).toBeDefined();
+    expect(within(history).getByRole("listitem").textContent).toContain("updated by lena): hp-de.babelon.tsv");
+  });
+
+  it("Ontology: a refused refresh keeps the dialog open with the reason (issue 254)", async () => {
+    vi.mocked(api.getProjectSettings).mockResolvedValue({ ...settings, frozen_translations: { files: [], not_included: ["hp-de.babelon.tsv"] } });
+    vi.spyOn(api, "refreshTranslations").mockRejectedValue(new ApiError(409, "nothing newer", "TRANSLATIONS_CURRENT"));
+    renderSettings("ontology");
+    fireEvent.click(await screen.findByRole("button", { name: "Use the newest translations" }));
+    const dialog = screen.getByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Use the newest translations" }));
+    expect(await within(dialog).findByText("The project already uses the newest translations.")).toBeDefined();
+    expect(screen.getByText("No translations: searches use the English names only.")).toBeDefined();
+  });
+
   it("Ontology when locked: moves to another release only after its check (#81)", async () => {
     const locked = { ...settings, locked: true };
     vi.mocked(api.getProjectSettings).mockResolvedValue(locked);

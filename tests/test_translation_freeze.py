@@ -140,6 +140,8 @@ def test_an_upload_after_the_first_search_names_the_frozen_project(
             }
         ],
         "not_included": ["hp-es.babelon.tsv"],
+        "updated": None,
+        "history": [],
     }
     # Reading changed nothing: the project keeps searching as it froze.
     assert _conditions(client) == frozen
@@ -184,6 +186,8 @@ def test_the_upload_result_names_the_projects(tmp_path: Path) -> None:
     assert _settings(client, project) == {
         "files": [],
         "not_included": ["hp-de.babelon.tsv"],
+        "updated": None,
+        "history": [],
     }
 
 

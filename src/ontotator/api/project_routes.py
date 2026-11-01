@@ -458,6 +458,24 @@ def apply_pins(
     )
 
 
+@router.post("/{key}/translations/refresh")
+def refresh_translations(
+    key: str, principal: PrincipalDep, request: Request
+) -> ProjectSettings:
+    """Move the project to the newest translation files (#254).
+
+    For a lead of the project or a system admin, at any time. Searches use
+    the new files at once; earlier searches keep the condition they ran with,
+    listed in ``frozen_translations.history``. 409 ``TRANSLATIONS_CURRENT``
+    when no file would change, 409 ``TRANSLATIONS_NOT_FROZEN`` before the
+    first use.
+    """
+    _guard(request, Action.MANAGE_PROJECT_SETTINGS, key)
+    return _service(request).refresh_translations(
+        Actor.user(principal.user_id, principal.username), key
+    )
+
+
 @router.put("/{key}/profile")
 def update_profile(
     key: str, body: TaskProfile, principal: PrincipalDep, request: Request

@@ -768,6 +768,45 @@ def projects_remove_member(
     _print_roles(username.strip().lower(), project, roles)
 
 
+@projects_app.command("refresh-translations")
+def projects_refresh_translations(ctx: typer.Context, project: ProjectArgument) -> None:
+    """Move a project to the newest stored translation files (#254).
+
+    Like "Use the newest translations" in Settings > Ontology: term searches
+    use the new files at once; earlier searches keep the files they ran
+    with, and findings do not change. Takes the files stored with
+    'admin ontologies add' or the Ontologies page. Fails with
+    TRANSLATIONS_CURRENT when no file would change.
+    """
+    from ontotator.projects.service import ProjectService
+
+    with _open_database(ctx) as db:
+        store = _ontology_store(db)
+        store.register_all()
+        settings = ProjectService(db, store).refresh_translations(Actor.cli(), project)
+    frozen = settings.frozen_translations
+    assert frozen is not None and frozen.history
+    before = {(f.ontology_id, f.filename): f.sha256 for f in frozen.history[0].files}
+    after = {(f.ontology_id, f.filename): f.sha256 for f in frozen.files}
+    added = sorted(name for key, name in after.keys() - before.keys())
+    replaced = sorted(
+        name
+        for (key, name), sha in after.items()
+        if before.get((key, name), sha) != sha
+    )
+    removed = sorted(name for key, name in before.keys() - after.keys())
+    parts = [
+        f"{label} {', '.join(names)}"
+        for label, names in (
+            ("added", added),
+            ("replaced", replaced),
+            ("removed", removed),
+        )
+        if names
+    ]
+    typer.echo(f"'{project}' now uses the newest translations: {'; '.join(parts)}.")
+
+
 def _pairs(
     values: list[str] | None, option: str, *, allow_empty: bool = False
 ) -> dict[str, str]:

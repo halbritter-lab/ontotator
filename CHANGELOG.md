@@ -9,6 +9,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - Practice projects: annotators and translation reviewers can try the work in a private practice project with short, invented texts in German, from the card **New here? Try it out first** on My tasks or from Profile › Practice (**Start practice**, **Continue**, **Reset…**, **Delete…**). It has a task from scratch, one from proposals, a translation review and, for consolidators, a consolidation against two virtual colleagues. Each practice task shows a practice banner and the panel **Your practice**, whose steps tick themselves from the real work. Practice projects are never listed, counted or exported with real projects, admin rights do not reach them, and their audit entries are marked practice. They are deleted after 30 days without activity. Administrators see them on Projects with **Show practice projects** and can delete them; **Server settings** › **Practice projects** switches the offer off. Migration 0028 adds `projects.practice` and `practice_projects` and changes no existing row (`/api/v1/me/practice`, `/api/v1/admin/practice-projects`, `/api/v1/admin/settings/practice`) (#266).
+- A lead or a system admin can move a frozen project to the newest translations with **Use the newest translations** in Settings › Ontology, at any time (`POST /api/v1/projects/{key}/translations/refresh`, `ontotator admin projects refresh-translations`). Findings do not change. The earlier search conditions are kept in the `project.translations_refresh` audit entry, so earlier searches stay resolvable, and the card lists them under **Earlier translations** (`updated` and `history` on `frozen_translations`). A change of pins or profile now also keeps the conditions it ends and their captured files, and re-importing a seed package with earlier conditions of the project is accepted (#254).
+
+### Fixed
+
+- A change of pins or profile, such as a move to another ontology release, no longer deletes the project's search conditions and captured translation files. Searches and submitted selections made before the change stay resolvable; the ended conditions go into the `project.update` audit entry. Changes made before this version cannot be recovered (#254).
 
 ## [0.7.0] - 2026-11-01
 
