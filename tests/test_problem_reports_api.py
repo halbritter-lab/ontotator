@@ -123,6 +123,8 @@ def test_translation_hold_and_agreed_restart_preserve_abandoned_draft(case_env):
         },
     )
     assert saved.status_code == 200, saved.text
+    marks = {"source": [], "translation": [{"index": 0, "hash": "deadbeef"}]}
+    assert env.alice.put(url + "/checked-sentences", json=marks).status_code == 200
     report = env.alice.post(
         f"/api/v1/assignments/{row['id']}/problem-reports",
         json={
@@ -140,6 +142,7 @@ def test_translation_hold_and_agreed_restart_preserve_abandoned_draft(case_env):
             {"expected_revision": 1, "text": "Overwrite", "form": {}},
         ),
         (env.alice.post, "/submit", {"expected_revision": 1}),
+        (env.alice.put, "/checked-sentences", marks),
     ]:
         blocked = method(url + path, json=body)
         assert blocked.status_code == 409, blocked.text
@@ -159,9 +162,14 @@ def test_translation_hold_and_agreed_restart_preserve_abandoned_draft(case_env):
     assert (
         event["abandoned_translation_draft"]["text"] == "Private unfinished correction"
     )
+    # The checked-sentence marks are the reviewer's aid, not part of the audit record.
+    assert event["abandoned_translation_draft"]["form"] == {
+        "rationale": "Keep this history"
+    }
     opened = env.alice.get(url).json()
     assert opened["draft"]["text"] == original["text"]
     assert opened["draft"]["form"] == {}
+    assert opened["checked_sentences"] == {"source": [], "translation": []}
     assert opened["draft"]["revision"] == 2
     assert opened["read_only"] is False
     stale = env.alice.put(

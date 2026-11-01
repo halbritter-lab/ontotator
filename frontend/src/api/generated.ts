@@ -699,6 +699,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/technical-reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Report
+         * @description Send a technical report to the administrators; no task is paused.
+         */
+        post: operations["create_report_api_v1_technical_reports_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/technical-reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Reports
+         * @description Reports newest first, optionally only open or done ones.
+         */
+        get: operations["list_reports_api_v1_admin_technical_reports_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/technical-reports/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Report Summary
+         * @description The number of open reports (the navigation badge).
+         */
+        get: operations["report_summary_api_v1_admin_technical_reports_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/technical-reports/{report_id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set Report Status
+         * @description Mark a report done, or open it again.
+         */
+        post: operations["set_report_status_api_v1_admin_technical_reports__report_id__status_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/translation-reviews/{assignment_id}": {
         parameters: {
             query?: never;
@@ -726,6 +806,26 @@ export interface paths {
         get?: never;
         /** Save Review */
         put: operations["save_review_api_v1_translation_reviews__assignment_id__draft_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/translation-reviews/{assignment_id}/checked-sentences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save Checked Sentences
+         * @description The reviewer's own checked-sentence marks; not part of the review.
+         */
+        put: operations["save_checked_sentences_api_v1_translation_reviews__assignment_id__checked_sentences_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -3489,6 +3589,26 @@ export interface components {
             /** Variants */
             variants: components["schemas"]["VariantSummary"][];
         };
+        /**
+         * CheckedSentence
+         * @description One checked sentence: its position and a short hash of its text.
+         */
+        CheckedSentence: {
+            /** Index */
+            index: number;
+            /** Hash */
+            hash: string;
+        };
+        /**
+         * CheckedSentences
+         * @description Checked sentences per side; each side is marked on its own.
+         */
+        CheckedSentences: {
+            /** Source */
+            source?: components["schemas"]["CheckedSentence"][];
+            /** Translation */
+            translation?: components["schemas"]["CheckedSentence"][];
+        };
         /** CodeResponse */
         CodeResponse: {
             /** Code */
@@ -5139,6 +5259,21 @@ export interface components {
             mode_no_proposals?: number;
             /** Review Kept Started */
             review_kept_started?: number;
+        };
+        /**
+         * LastApiError
+         * @description The last refused API request this browser tab saw (in memory only).
+         */
+        LastApiError: {
+            /** Status */
+            status: number;
+            /** Code */
+            code?: string | null;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
         };
         /**
          * LayerDefinition
@@ -6933,6 +7068,7 @@ export interface components {
              * @default false
              */
             lead_correction: boolean;
+            checked_sentences?: components["schemas"]["CheckedSentences"];
         };
         /** RevokedAssignmentView */
         RevokedAssignmentView: {
@@ -7885,6 +8021,127 @@ export interface components {
              * @default false
              */
             waiting_for_lead: boolean;
+        };
+        /** TechnicalReportContext */
+        TechnicalReportContext: {
+            /** Route */
+            route?: string | null;
+            /** Viewport */
+            viewport?: string | null;
+            last_api_error?: components["schemas"]["LastApiError"] | null;
+            /** Crash Message */
+            crash_message?: string | null;
+        };
+        /**
+         * TechnicalReportReceipt
+         * @description What the reporter sees after sending: the reference to quote.
+         */
+        TechnicalReportReceipt: {
+            /** Id */
+            id: number;
+            /** Reference */
+            reference: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** TechnicalReportRequest */
+        TechnicalReportRequest: {
+            /** Request Id */
+            request_id: string;
+            /** Description */
+            description: string;
+            context?: components["schemas"]["TechnicalReportContext"];
+        };
+        /** TechnicalReportStatusRequest */
+        TechnicalReportStatusRequest: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "done";
+        };
+        /** TechnicalReportSummary */
+        TechnicalReportSummary: {
+            /** Open */
+            open: number;
+        };
+        /**
+         * TechnicalReportTask
+         * @description The reporter's own task a report was sent from, as stored today.
+         */
+        TechnicalReportTask: {
+            /**
+             * Task
+             * @enum {string}
+             */
+            task: "annotate" | "review" | "translation_review";
+            /** Annotation Mode */
+            annotation_mode: ("proposals" | "scratch") | null;
+            /** Project Key */
+            project_key: string;
+            /** Document Id */
+            document_id: string;
+            /** Case Id */
+            case_id: string;
+            /** External Id */
+            external_id: string;
+            /** Language */
+            language: string;
+            /** Version */
+            version: number;
+            /** Origin */
+            origin: string;
+        };
+        /**
+         * TechnicalReportView
+         * @description One report as administrators read it.
+         */
+        TechnicalReportView: {
+            /** Id */
+            id: number;
+            /** Reference */
+            reference: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "done";
+            /** Description */
+            description: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            reporter: components["schemas"]["PersonRefView"];
+            /** Reporter Username */
+            reporter_username: string;
+            /** App Version */
+            app_version: string;
+            /** App Revision */
+            app_revision: string | null;
+            /** Route */
+            route: string | null;
+            task: components["schemas"]["TechnicalReportTask"] | null;
+            /** User Agent */
+            user_agent: string | null;
+            /** Viewport */
+            viewport: string | null;
+            /** Last Error Status */
+            last_error_status: number | null;
+            /** Last Error Code */
+            last_error_code: string | null;
+            /** Last Error At */
+            last_error_at: string | null;
+            /** Crash Message */
+            crash_message: string | null;
+            /** Closed At */
+            closed_at: string | null;
+            /** Closed By */
+            closed_by: string | null;
         };
         /** TemplateInfo */
         TemplateInfo: {
@@ -10253,6 +10510,127 @@ export interface operations {
             };
         };
     };
+    create_report_api_v1_technical_reports_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TechnicalReportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TechnicalReportReceipt"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_reports_api_v1_admin_technical_reports_get: {
+        parameters: {
+            query?: {
+                status?: ("open" | "done") | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TechnicalReportView"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    report_summary_api_v1_admin_technical_reports_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TechnicalReportSummary"];
+                };
+            };
+        };
+    };
+    set_report_status_api_v1_admin_technical_reports__report_id__status_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TechnicalReportStatusRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TechnicalReportView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     open_review_api_v1_translation_reviews__assignment_id__get: {
         parameters: {
             query?: never;
@@ -10306,6 +10684,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DraftResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_checked_sentences_api_v1_translation_reviews__assignment_id__checked_sentences_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assignment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckedSentences"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckedSentences"];
                 };
             };
             /** @description Validation Error */

@@ -38,7 +38,7 @@ You can have more than one role. Roles other than system administrator apply to 
 | **Translation reviewer** | Not a separate role you can be given: any annotator can get a translation review task. The header shows this name while you work on one. | [Review a translation](annotator.md#review-a-translation) |
 | **Consolidator** | Merge the differing submissions on one text into one result. | [Consolidator chapter](consolidator.md) |
 | **Lead** | Set up the project, upload texts, plan and assign work, publish guidelines, accept results, export. | [Lead overview](lead.md) |
-| **System administrator** | Create user accounts, upload ontology releases, create projects. | [Administration](admin.md) |
+| **System administrator** | Create user accounts, upload ontology releases, create projects, handle technical reports. | [Administration](admin.md) |
 
 ## How work flows
 

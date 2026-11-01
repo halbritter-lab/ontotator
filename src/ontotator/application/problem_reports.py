@@ -33,6 +33,7 @@ from ontotator.application.problem_report_views import (
     build_pause_candidates,
     build_report_view,
 )
+from ontotator.application.translation_reviews import review_form
 from ontotator.assignments.service import AssignmentService
 from ontotator.auth.audit import Actor, record_audit
 from ontotator.auth.authority import lock_user_authority
@@ -436,7 +437,8 @@ class ProblemReportService:
         archived: dict[str, Any] = (
             {
                 "text": draft["text"],
-                "form": draft["form"],
+                # The checked-sentence marks are the reviewer's aid, not audit data.
+                "form": review_form(draft["form"]),
                 "revision": draft["revision"],
             }
             if draft

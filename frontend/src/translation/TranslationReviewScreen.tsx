@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MutableRefObject, type ReactNode } from "react";
-import { api, ApiError, type ReviewWorkspace, type TaskSummary, type TranslationReviewRecord, type SourceObligationView } from "../api/client";
+import { api, ApiError, type CheckedSentences, type ReviewWorkspace, type TaskSummary, type TranslationReviewRecord, type SourceObligationView } from "../api/client";
 import { ErrorNotice } from "../admin/ErrorNotice";
 import { nextOpenTask } from "../app/caseOrder";
 import { MY_TASKS, routeHref, type Route, type RouteLeaveGuard } from "../app/router";
@@ -21,6 +21,8 @@ import { autoNoteText, chooseDecision, reactToTextEdit, USER_ORIGIN, type Decisi
 import { categoryLabels, comparisonCountsDiffer, couplingEditingNote, couplingNote, decisionKeyHint, decisionLabels, decisionOutcomes, formatReviewDate, issueMessages, languageName, leadCorrectionKeyHint, leadCorrectionNote, matchingParagraphStatus, nextTaskLabel, paragraphCountChanged, paragraphCountsDiffer, remainingTasksText, reviewIssueMessage, showMatchingLabel, showMatchingShortcut, showMatchingTitle } from "./labels";
 import { checkReview, type ClinicalCategory, type ReviewDecisionCode, type ReviewForm as FormValue } from "./reviewRules";
 import { LanguageTag } from "../ui/LanguageTag";
+import { SentenceCount, SentenceView } from "./SentenceMarks";
+import { isChecked, resolveMarks, splitSentences, storedMarks, toggled, withRange, type MarkState, type Side, type StoredMarks } from "./sentences";
 
 export interface TranslationReviewScreenProps {
   assignmentId: number; username: string; onNavigate: (route: Route) => void;
@@ -69,6 +71,7 @@ const lacksImpliedClinical = (form: Record<string, unknown>): boolean =>
 const decisionKeys: readonly ReviewDecisionCode[] = ["accepted_unchanged", "accepted_corrected", "query", "rejected"];
 /** A lead correction (spec F1, FD4) is submitted only as Accepted with corrections. */
 const leadDecisions: readonly ReviewDecisionCode[] = ["accepted_corrected"];
+const storedOf = (value: CheckedSentences | undefined): StoredMarks => ({ source: value?.source ?? [], translation: value?.translation ?? [] });
 const recordForm = (record: TranslationReviewRecord): Record<string, unknown> => ({ decision: record.decision, clinical_change: record.clinical_change, categories: record.categories, rationale: record.rationale });
 
 const paragraphMarkers = (element: HTMLElement) => [...element.querySelectorAll<HTMLElement>("[data-paragraph]")];
@@ -150,15 +153,57 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
     try { window.localStorage.setItem(comparisonOpenKey, open ? "1" : "0"); } catch { /* Blocked storage: not remembered. */ }
     window.requestAnimationFrame(() => screenRoot.current?.querySelector<HTMLElement>(open ? ".translation-compare-close" : ".translation-compare-open")?.focus());
   };
+  // "Mark checked sentences" (issue 256) starts off; on or off is remembered per user in this browser.
+  const markingKey = `ontotator.translationReview.markChecked.v1:${props.username}`;
+  const [markingOn, setMarkingOn] = useState(() => { try { return window.localStorage.getItem(markingKey) === "1"; } catch { return false; } });
+  const chooseMarking = (on: boolean) => {
+    setMarkingOn(on);
+    try { window.localStorage.setItem(markingKey, on ? "1" : "0"); } catch { /* Blocked storage: not remembered. */ }
+  };
+  // On a touch screen a swipe on the text would mark instead of scroll, so the mode is not offered there.
+  const touchOnly = useMediaQuery("(hover: none) and (pointer: coarse)");
+  /** The reviewer's marks, saved on their own (never with the draft revision) shortly after each change. */
+  const [marks, setMarks] = useState<StoredMarks>(() => storedOf(workspace.checked_sentences));
+  const [marksError, setMarksError] = useState(false);
+  const marksTimer = useRef<number | undefined>(undefined), pendingMarks = useRef<StoredMarks | null>(null);
+  const marksChain = useRef<Promise<unknown>>(Promise.resolve());
+  const sendMarks = () => {
+    window.clearTimeout(marksTimer.current); marksTimer.current = undefined;
+    const value = pendingMarks.current;
+    if (!value) return;
+    pendingMarks.current = null;
+    // One request at a time, so the last change is the one stored.
+    marksChain.current = marksChain.current.then(() => api.saveCheckedSentences(props.assignmentId, value)).then(
+      () => { if (alive.current && !pendingMarks.current) setMarksError(false); },
+      () => { pendingMarks.current ??= value; if (alive.current) setMarksError(true); });
+  };
+  const changeMarks = (next: StoredMarks) => {
+    setMarks(next); pendingMarks.current = next;
+    window.clearTimeout(marksTimer.current); marksTimer.current = window.setTimeout(sendMarks, 600);
+  };
+  const sendMarksRef = useRef(sendMarks); sendMarksRef.current = sendMarks;
+  useEffect(() => () => sendMarksRef.current(), []);
   const [sourceElement, setSourceElement] = useState<HTMLDivElement | null>(null), [targetElement, setTargetElement] = useState<HTMLDivElement | null>(null), [comparisonElement, setComparisonElement] = useState<HTMLDivElement | null>(null);
   const record = submitted ?? (immutableReadOnly ? workspace.submitted_record : null);
   const readOnly = immutableReadOnly || submitted !== null || held; readOnlyRef.current = readOnly;
   const text = record?.proposed_text ?? draft.text, rawForm = record ? recordForm(record) : draft.form;
+  /** Marking mode: both texts split into sentences the reviewer ticks, each side on its own. */
+  const marking = markingOn && !readOnly && !touchOnly;
+  const sourceSentences = useMemo(() => marking ? splitSentences(workspace.source.text, workspace.source.variant.language) : [], [marking, workspace]);
+  const targetSentences = useMemo(() => marking ? splitSentences(text, workspace.variant.language) : [], [marking, text, workspace]);
+  const sourceStates = useMemo(() => resolveMarks(sourceSentences, marks.source), [sourceSentences, marks.source]);
+  const targetStates = useMemo(() => resolveMarks(targetSentences, marks.translation), [targetSentences, marks.translation]);
+  const applyMarks = (side: Side, change: (states: readonly MarkState[]) => MarkState[]) => {
+    if (busy) return;
+    const [sentences, states] = side === "source" ? [sourceSentences, sourceStates] : [targetSentences, targetStates];
+    changeMarks({ ...marks, [side]: storedMarks(sentences, change(states)) });
+  };
+  const sideCount = (states: readonly MarkState[]) => ({ checked: states.filter(isChecked).length, total: states.length, stale: states.filter(state => state?.kind === "stale").length });
   const form = typedForm(rawForm), issues = form ? checkReview(form, workspace.text, text, workspace.failed_checks.length > 0) : [];
   const comparison = comparisonOpen ? workspace.comparisons.find(row => row.variant.document_id === comparisonId) : undefined;
   const comparisonName = (row: ReviewWorkspace["comparisons"][number]) => `${row.variant.external_id} ${row.variant.language}`;
   /** The editable translation is shown: it is the fixed leader and its pairing waits for a recompute (spec 2.2, 2.3). */
-  const editing = !readOnly && !showChanges;
+  const editing = !readOnly && !showChanges && !marking;
   const sourceStarts = useMemo(() => paragraphStarts(workspace.source.text), [workspace.source.text]);
   const comparisonStarts = useMemo(() => paragraphStarts(comparison?.text ?? ""), [comparison?.text]);
   /** Translation starts lag the text while editing: 300 ms after the last edit, at once on blur, never during composition. */
@@ -498,14 +543,20 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
     };
     const observer = new ResizeObserver(measure);
     observer.observe(root);
-    root.querySelectorAll(".translation-review > .notice, .translation-review-bar, .translation-checks, .translation-pinned-bar, .translation-column-head, .translation-column-note, .translation-column-hint")
+    root.querySelectorAll(".translation-review > .notice, .translation-review-bar, .translation-checks, .translation-tools, .translation-pinned-bar, .translation-column-head, .translation-column-note, .translation-column-hint")
       .forEach(element => observer.observe(element));
     return () => observer.disconnect();
-  }, [wide, readOnly, showChanges, comparisonId, comparisonOpen, coupled]);
+  }, [wide, readOnly, showChanges, comparisonId, comparisonOpen, coupled, marking]);
   const closeDetails = (event: KeyboardEvent<HTMLDetailsElement>) => {
     if (event.key !== "Escape" || !event.currentTarget.open) return;
     event.preventDefault(); event.stopPropagation();
     event.currentTarget.open = false; detailsSummary.current?.focus({ preventScroll: true });
+  };
+  /** Next unchecked: the first translation sentence not (or no longer) checked. */
+  const nextUnchecked = () => {
+    const index = targetStates.findIndex(state => !isChecked(state));
+    const element = index < 0 ? null : targetElement?.querySelector<HTMLElement>(`[data-sentence="${index}"]`);
+    element?.scrollIntoView?.({ block: "center" }); element?.focus({ preventScroll: true });
   };
   const focusDecision = () => { decisionHeading.current?.scrollIntoView?.({ block: "nearest" }); decisionHeading.current?.focus(); };
   /** "Change ↓" in the pinned bar: bring the decision legend into view and move focus to it. */
@@ -581,29 +632,46 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
     <ChecksSummary failed={workspace.failed_checks} all={allChecks} />
     <div className="translation-workspace">
       <div className="translation-texts">
+        <div className="translation-tools" role="group" aria-label="Text view">
+          {!readOnly && !touchOnly && <Checkbox id="review-mark-checked" label="Mark checked sentences" checked={marking} onChange={event => chooseMarking(event.target.checked)} />}
+          {!readOnly && !touchOnly && <span className="translation-tools-divider" aria-hidden="true" />}
+          <Checkbox id="review-show-changes" label="Show changes" checked={showChanges && !marking} disabled={marking} onChange={event => setShowChanges(event.target.checked)} />
+          {pairing.available && <Checkbox id="review-couple" label="Couple scrolling" checked={coupled} onChange={event => setRequestedCoupling(event.target.checked ? couplingIdentity : null)} />}
+          <div className="translation-tools-end">
+            <Button ref={matchButton} size="sm" title={showMatchingTitle} aria-keyshortcuts="Alt+M" onMouseDown={event => event.preventDefault()} onClick={showMatching}>
+              {showMatchingLabel}<span aria-hidden="true"> <Kbd>Alt M</Kbd></span></Button>
+            {!comparison && (workspace.comparisons.length === 1
+              ? <Button size="sm" className="translation-compare-open" title={`Compare with ${comparisonName(workspace.comparisons[0])}`} aria-label={`Compare with ${comparisonName(workspace.comparisons[0])}`}
+                  onClick={() => showComparison(true, workspace.comparisons[0].variant.document_id)}>Compare</Button>
+              : workspace.comparisons.length > 1 && <MenuButton className="translation-compare-open" label="Compare with…" buttonLabel="Compare"
+                items={workspace.comparisons.map(row => ({ id: row.variant.document_id, label: comparisonName(row), onSelect: () => showComparison(true, row.variant.document_id) }))} />)}
+          </div>
+          {marksError && marking && <p className="sentence-save-error" role="alert">Checked sentences are not saved. <Button size="sm" variant="quiet" onClick={() => { pendingMarks.current ??= marks; sendMarks(); }}>Retry</Button></p>}
+        </div>
         <div className={`translation-columns${comparison ? " translation-columns--comparison" : ""}`}>
           <div className="translation-column">
-            <div className="translation-column-head density-compact"><h2 className="translation-column-title">Source <LanguageTag code={sourceLanguage} /></h2></div>
-            <TextView ref={setSourceElement} text={workspace.source.text} label={`Source (${sourceLanguage})`} lang={sourceLanguage} />
+            <div className="translation-column-head density-compact"><h2 className="translation-column-title">Source <LanguageTag code={sourceLanguage} /></h2>
+              {marking && <SentenceCount name="Source" count={sideCount(sourceStates)} />}</div>
+            {marking
+              ? <SentenceView ref={setSourceElement} text={workspace.source.text} sentences={sourceSentences} states={sourceStates} label={`Source (${sourceLanguage})`} lang={sourceLanguage}
+                  disabled={busy} onToggle={index => applyMarks("source", states => toggled(states, index))}
+                  onRange={(from, to, checked) => applyMarks("source", states => withRange(states, from, to, checked))} />
+              : <TextView ref={setSourceElement} text={workspace.source.text} label={`Source (${sourceLanguage})`} lang={sourceLanguage} />}
           </div>
           <div className="translation-column">
             <div className="translation-column-head density-compact">
               <h2 className="translation-column-title">Translation <LanguageTag code={targetLanguage} /></h2>
-              <div className="translation-column-controls">
-              <Checkbox id="review-show-changes" label="Show changes" checked={showChanges} onChange={event => setShowChanges(event.target.checked)} />
-              {pairing.available && <Checkbox id="review-couple" label="Couple scrolling" checked={coupled} onChange={event => setRequestedCoupling(event.target.checked ? couplingIdentity : null)} />}
-              <Button ref={matchButton} size="sm" title={showMatchingTitle} aria-keyshortcuts="Alt+M" onMouseDown={event => event.preventDefault()} onClick={showMatching}>
-                {showMatchingLabel}<span aria-hidden="true"> <Kbd>Alt M</Kbd></span></Button>
-              {!comparison && (workspace.comparisons.length === 1
-                ? <Button size="sm" className="translation-compare-open" onClick={() => showComparison(true, workspace.comparisons[0].variant.document_id)}>Compare with {comparisonName(workspace.comparisons[0])}</Button>
-                : workspace.comparisons.length > 1 && <MenuButton className="translation-compare-open" label="Compare with…" buttonLabel="Compare with…"
-                  items={workspace.comparisons.map(row => ({ id: row.variant.document_id, label: comparisonName(row), onSelect: () => showComparison(true, row.variant.document_id) }))} />)}
-              </div>
+              {marking && <SentenceCount name="Translation" count={sideCount(targetStates)} />}
+              {marking && <Button size="sm" className="sentence-next" onClick={nextUnchecked} disabled={targetStates.every(isChecked)}>Next unchecked</Button>}
               <span role="status" className="review-sr-only">{matchStatus}</span>
               {/* The text box keeps its full name; the visible title shows the flag instead of the code in brackets. */}
               <label id="review-translation-label" htmlFor="review-translation" className="visually-hidden">{`Translation (${targetLanguage})`}</label>
             </div>
-            {showChanges
+            {marking
+              ? <SentenceView ref={setTargetElement} text={text} sentences={targetSentences} states={targetStates} label={`Translation (${targetLanguage})`} lang={targetLanguage}
+                  disabled={busy} onToggle={index => applyMarks("translation", states => toggled(states, index))}
+                  onRange={(from, to, checked) => applyMarks("translation", states => withRange(states, from, to, checked))} />
+              : showChanges
               ? <DiffView ref={setTargetElement} before={workspace.text} after={text} lang={targetLanguage} />
               : <TranslationEditor ref={setTargetElement} id="review-translation" labelledBy="review-translation-label" describedBy="review-translation-note"
                   machineText={workspace.text} value={text} lang={targetLanguage} readOnly={readOnly} disabled={busy}
@@ -611,14 +679,16 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
                   onBlur={() => { composing.current = false; commitStarts(); }}
                   onCompositionStart={() => { composing.current = true; window.clearTimeout(startsTimer.current); }}
                   onCompositionEnd={() => { composing.current = false; scheduleStarts(); }} />}
-            <p id="review-translation-note" className="translation-column-note">{showChanges
+            <p id="review-translation-note" className="translation-column-note">{marking
+              ? "Click a sentence to mark it as checked. Turn off Mark checked sentences to edit."
+              : showChanges
               ? "Showing changes against the machine translation. Turn off Show changes to edit."
               : changed ? "Underlined text differs from the machine translation." : "Same as the machine translation."}</p>
           </div>
           {comparison && <div className="translation-column">
             <div className="translation-column-head density-compact">
               <h2 className="translation-column-title">Comparison <span className="translation-column-subtitle">{comparisonName(comparison)}</span></h2>
-              {/* Another comparison is chosen from "Compare with…" after closing this one. */}
+              {/* Another comparison is chosen from "Compare" after closing this one. */}
               <div className="translation-column-controls">
               <Button size="sm" className="translation-compare-close" aria-label="Close comparison" onClick={() => showComparison(false)}>Close</Button>
               </div>
