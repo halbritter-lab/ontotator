@@ -7,6 +7,9 @@ import { projectDestination, ProjectSwitcher } from "./ProjectPicker";
 import { rememberedProject } from "./lastProject";
 import { useDocumentsSummary } from "../documents/useDocumentsSummary";
 import { TASKS_CHANGED } from "../tasks/tasksEvents";
+import { TechnicalReportHost } from "../reports/TechnicalReportDialog";
+import { TECHNICAL_REPORTS_CHANGED } from "../reports/TechnicalReportsPage";
+import { openTechnicalReport, REPORT_ENTRY_LABEL } from "../reports/technicalReport";
 
 export interface ShellProps {
   user: CurrentUser;
@@ -91,6 +94,28 @@ function useOpenTaskCount(username: string, navigation: unknown): number | null 
   return count?.username === username ? count.value : null;
 }
 
+/** Open technical reports for a system administrator (the navigation badge); null for others or while unknown. */
+function useOpenReportCount(admin: boolean, navigation: unknown): number | null {
+  const [count, setCount] = useState<number | null>(null);
+  useEffect(() => {
+    if (!admin) { setCount(null); return; }
+    let active = true;
+    const load = () => {
+      api.adminTechnicalReportSummary().then(summary => { if (active) setCount(summary.open); },
+        () => { /* The link keeps its plain label; the page itself reports errors. */ });
+    };
+    load();
+    window.addEventListener("focus", load);
+    window.addEventListener(TECHNICAL_REPORTS_CHANGED, load);
+    return () => {
+      active = false;
+      window.removeEventListener("focus", load);
+      window.removeEventListener(TECHNICAL_REPORTS_CHANGED, load);
+    };
+  }, [admin, navigation]);
+  return admin ? count : null;
+}
+
 export function Shell({ user, projects, route, onNavigate, onLogout, breadcrumb, children, taskProject, taskKind, navigation }: ShellProps): JSX.Element {
   const [choice, setChoice] = useState<{ username: string; key: string } | null>(null);
   const explicitKey = 'key' in route ? route.key : route.name === 'tasks' ? route.project : route.name === 'task' ? taskProject : undefined;
@@ -100,6 +125,7 @@ export function Shell({ user, projects, route, onNavigate, onLogout, breadcrumb,
     ?? (remembered !== null && projects.some(project => project.project_key === remembered) ? remembered : undefined);
   const current = projects.find(project => project.project_key === currentKey);
   const openTasks = useOpenTaskCount(user.username, navigation);
+  const openReports = useOpenReportCount(user.is_system_admin, navigation);
   // "Documents (n)": rows needing the lead's decision (V3); the summary is lead only.
   const needsDecision = useDocumentsSummary(current?.project_key, !!current?.can_manage && current.roles.includes("lead"));
   const switcher = projects.length > 0 && <ProjectSwitcher projects={projects} current={current} route={route}
@@ -118,12 +144,16 @@ export function Shell({ user, projects, route, onNavigate, onLogout, breadcrumb,
       {link(MY_TASKS, openTasks === null ? "My tasks" : `My tasks (${openTasks})`)}
       {projects.length > 0 && link({ name: "projects" }, "Projects")}
       {link({ name: "me" }, "Profile")}
+      <li><button type="button" className="shell-nav-link" onClick={openTechnicalReport}>{REPORT_ENTRY_LABEL}</button></li>
     </ul>
     {user.is_system_admin && <section className="shell-nav-group" aria-label="Administration">
       <h2>Administration</h2>
       <ul className="shell-nav-list">
         {link({ name: "adminUsers" }, "Users")}
         {link({ name: "adminOntologies" }, "Ontologies")}
+        {openReports
+          ? link({ name: "adminReports" }, `Technical reports (${openReports})`, `Technical reports, ${openReports} open`)
+          : link({ name: "adminReports" }, "Technical reports")}
         {link({ name: "projectNew" }, "New project")}
       </ul>
     </section>}
@@ -141,5 +171,5 @@ export function Shell({ user, projects, route, onNavigate, onLogout, breadcrumb,
   const home = current ? projectDestination(current) : MY_TASKS;
   return <AppShell user={user} onLogout={onLogout} breadcrumb={breadcrumb} nav={nav} role={shellRole(user, projects, current, route.name === "task" ? taskKind : undefined)}
     homeHref={routeHref(home)} onHome={() => onNavigate(home)}
-    density={(route.name === "task" || route.name === "projectCase") ? "reading" : "compact"}>{children}</AppShell>;
+    density={(route.name === "task" || route.name === "projectCase") ? "reading" : "compact"}>{children}<TechnicalReportHost /></AppShell>;
 }

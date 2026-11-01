@@ -5,6 +5,7 @@ import { ErrorNotice } from "../admin/ErrorNotice";
 import { Button, Dialog, InlineMessage, Select, type ToastMessage } from "../ui";
 import { CaseScreen } from "../app/CaseScreen";
 import { CaseErrorBoundary } from "../app/ErrorBoundary";
+import { openTechnicalReport, REPORT_ENTRY_LABEL } from "../reports/technicalReport";
 import { MY_TASKS, routeHref, type Route, type RouteLeaveGuard } from "../app/router";
 import { isNotAvailable, NotFound, TASK_UNAVAILABLE, TASK_UNAVAILABLE_REASON } from "../app/NotFound";
 import { useVersionAccess } from "../variants/useVersionAccess";
@@ -207,7 +208,8 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
       menuItems={[{ id: "rounds", label: "Work rounds", onSelect: () => {
         // Save pending edits first: the dialog tells an untouched round from one with saved work.
         void (saveBeforeReportRef.current?.() ?? Promise.resolve()).catch(() => undefined).then(() => { if (active.current) setRoundDialogOpen(true); });
-      } }, problemItem, ...(guidelines.item ? [guidelines.item] : []),
+      } }, problemItem, { id: "technical-report", label: REPORT_ENTRY_LABEL, onSelect: openTechnicalReport },
+        ...(guidelines.item ? [guidelines.item] : []),
         { id: "help", label: "Help for this screen", onSelect: () => window.open(helpHref(helpScreen), "_blank", "noopener,noreferrer") }]}
       roundInputs={roundInputs} roundKind={roundInfo?.kind} roundActive={roundInfo?.active} roundBadge={roundBadge} roundTitle={roundTitle}
       roundOrdinal={roundInfo?.round_ordinal} documentVersion={roundInfo?.document_version}

@@ -1,0 +1,55 @@
+/* Technical reports (#259): the admin list and the report dialog. Tokens from styles/tokens.css only. */
+
+.technical-report-list {
+  list-style: none;
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-4);
+}
+
+.technical-report-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+}
+
+.technical-report-card h2 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--size-md);
+  line-height: var(--leading-md);
+}
+
+/* Quoted user text: line breaks kept, long words wrap. */
+.technical-report-description {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 0 0 var(--space-3);
+}
+
+.technical-report-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-1) var(--space-3);
+  margin: 0 0 var(--space-3);
+  font-size: var(--size-sm);
+  line-height: var(--leading-sm);
+}
+
+.technical-report-facts > div { display: contents; }
+.technical-report-facts dt { color: var(--text-muted); }
+.technical-report-facts dd { margin: 0; overflow-wrap: anywhere; }
+
+.technical-report-context { margin-top: var(--space-3); }
+.technical-report-context ul { margin: var(--space-2) 0 0; padding-left: var(--space-5); overflow-wrap: anywhere; }
+.technical-report-receipt { font-weight: var(--weight-strong); }
+
+/* The navigation entry is a button that reads like the links around it. */
+button.shell-nav-link {
+  width: 100%;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  text-align: start;
+  cursor: pointer;
+}
