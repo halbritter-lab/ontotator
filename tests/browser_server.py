@@ -356,6 +356,7 @@ def spanless_decisions_package() -> ValidatedPackage:
 FIXTURE_SPECS = (
     "decision-semantics",
     "design",
+    "practice",
     "quick-fixes",
     "spans",
     "spans-resize",

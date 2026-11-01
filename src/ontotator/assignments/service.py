@@ -153,6 +153,8 @@ class TaskSummary:
     # Closed on a version the text moved on from: the lead decides, no review
     # opens it.
     waiting_for_lead: bool = False
+    # A task of the user's practice project (issue 266): listed apart.
+    practice: bool | None = None
 
 
 def _assignments() -> Select[tuple[object, ...]]:
@@ -1152,6 +1154,7 @@ class AssignmentService:
                 AssignmentRow.updated_at,
                 AssignmentRow.created_at.label("assigned_at"),
                 AssignmentRow.annotation_mode,
+                ProjectRow.practice,
             )
             .join(ProjectRow, ProjectRow.id == AssignmentRow.project_id)
             .join(

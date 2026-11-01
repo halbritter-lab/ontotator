@@ -116,7 +116,7 @@ What for: decide what happens after a reviewer rejected or queried a translation
 What for: fix a queried or rejected translation without assigning another review.
 
 1. In the row, click **Resolve…**, then **Correct the translation…** (or **Continue your correction**).
-2. Read the panel: you review the version yourself, and your corrected text becomes the next text version and counts as accepted. If your profile lists languages but not this one, tick *Correct despite missing de in your profile*.
+2. Read the panel: you review the version yourself, and your corrected text becomes the next text version and counts as accepted. If your profile lists languages but not this one, tick *Correct despite missing de in your profile*. Without a qualification in your profile, the panel links to **Add your qualification in your profile**; after saving, **Back to Documents** returns you to the texts.
 3. Click **Open translation review**. The screen says **You are correcting this translation as project lead.**
 4. Correct the translation as described in [Review a translation](annotator.md#review-a-translation). Only **Accepted with corrections** is offered.
 5. Submit with **Submit review…** (or `Ctrl+Enter`), then click **Back to Documents**.

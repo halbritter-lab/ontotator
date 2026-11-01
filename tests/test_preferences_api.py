@@ -19,6 +19,7 @@ EMPTY_PREFERENCES = {
     "last_annotator_id": None,
     "mode_by_package": {},
     "search_languages_by_annotator": {},
+    "practice_card_hidden": False,
 }
 
 

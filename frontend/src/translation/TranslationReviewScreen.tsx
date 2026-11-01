@@ -597,7 +597,7 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
         ? <><p>Before submitting:</p><ol className="review-issues" aria-label="Review issues">{issues.map((issue, index) => <li key={`${issue}-${index}`}>{issueMessages[issue]}</li>)}</ol></>
         : <p>{submitBlocker}</p>}
   </div>;
-  const qualificationNote = !nonblank(qualification) && <p className="translation-submit-note">{navigateLink({ name: "me" }, "Add your qualification in your profile", "btn btn-secondary btn-sm")}</p>;
+  const qualificationNote = !nonblank(qualification) && <p className="translation-submit-note">{navigateLink({ name: "me", task: props.assignmentId }, "Add your qualification in your profile", "btn btn-secondary btn-sm")}</p>;
   const submitButton = <Button ref={submitControl} variant="primary" aria-describedby={reasonShown ? "review-submit-reason" : undefined}
     aria-disabled={canSubmit ? undefined : true} loading={busy} onClick={requestSubmit}>Submit review…</Button>;
 

@@ -11,6 +11,9 @@ import { LanguageText } from "../ui/LanguageTag";
 import { AssignedDate } from "../ui/AssignedDate";
 import { onSpaceActivate } from "../ui/spaceActivates";
 import { annotationTaskName } from "../editor/modes";
+import { PracticeCard, PracticeGroup } from "../practice/PracticeOnMyTasks";
+import { usePractice } from "../practice/usePractice";
+import { notifyTasksChanged } from "./tasksEvents";
 
 export interface MyTasksProps {
   project?: string;
@@ -139,7 +142,14 @@ export function MyTasks({ project, status, projects, onNavigate, username }: MyT
     return () => { active = false; };
   }, [projectIdentity, loads]);
 
-  const tasks = state.kind === "ready" ? state.tasks : [];
+  // Practice tasks (issue 266) are listed in their own group, never among the real tasks.
+  const practice = usePractice();
+  const practiceState = practice.load.kind === "ready" ? practice.load.state : null;
+  const practiceChanged = (next: NonNullable<typeof practiceState>) => {
+    practice.set(next); setRetry(value => value + 1); notifyTasksChanged();
+  };
+  const tasks = state.kind === "ready" ? state.tasks.filter(task => !task.practice) : [];
+  const practiceTasks = state.kind === "ready" ? state.tasks.filter(task => task.practice) : [];
   const filtered = project === undefined ? tasks : tasks.filter(task => task.project_key === project);
   const options = new Map(tasks.map(task => [task.project_key, projectLabel(task.project_name, task.project_key)]));
   if (project !== undefined && !options.has(project)) {
@@ -221,12 +231,16 @@ export function MyTasks({ project, status, projects, onNavigate, username }: MyT
   const table = <DataTable label="My tasks" className="data-table--pin-end" rows={shown} columns={columns} rowKey={task => String(task.assignment_id)} rowProps={task => ({ "data-testid": "task-row", "aria-label": `${projectLabel(task.project_name, task.project_key)}: ${taskText(task)}${failedChecks(task) > 0 ? `, ${failedChecksTitle(failedChecks(task))}` : ""}${task.waiting_for_translation_review ? `, ${WAITING_FOR_REVIEW}` : task.waiting_for_lead ? `, ${WAITING_FOR_LEAD}` : ""}` })} />;
   return <section aria-label="My tasks">
     <h1>My tasks</h1>
+    {practiceState && <PracticeCard state={practiceState} onChange={practiceChanged} onNavigate={onNavigate} />}
     {state.kind === "loading" && <InlineMessage tone="info">Loading tasks…</InlineMessage>}
     {state.kind === "error" && <>
       <ErrorNotice error={state.error} />
       <Button onClick={() => setRetry(value => value + 1)}>Try again</Button>
     </>}
     {state.kind === "ready" && <>
+      {/* Practice (issue 266): its own group above the real tasks, where the card was. */}
+      <PracticeGroup tasks={practiceTasks} state={practiceState} onChange={practiceChanged} onNavigate={onNavigate}
+        actionLabel={task => taskActionLabels[task.status]} />
       {showFilter && <Select id="project-select" label="Filter my tasks by project" value={project ?? allProjectsValue} onChange={event => selectProject(event.target.value)}>
         <option value={allProjectsValue}>All my tasks</option>
         {[...options].map(([key, name]) => <option key={key} value={key}>{name}</option>)}

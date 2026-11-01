@@ -39,6 +39,8 @@ export interface ConsolidationScreenProps {
   readOnly?: boolean;
   /** The consolidator's task: enables "Open in full editor" and "Next task" after submitting. */
   assignmentId?: number;
+  /** A practice task (issue 266): no lead accepts the result. */
+  practice?: boolean;
   onNavigate?: (route: Route) => void;
   /** The editor view of the round when the task already opened it (layers, axes, creation defaults). */
   workspaceView?: WorkspaceView | null;
@@ -299,7 +301,7 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
   </section>;
 
   const lead = props.assignmentId === undefined || !!isLead;
-  const reason = view.read_only ? readOnlyText(view, lead) : null;
+  const reason = !view.read_only ? null : props.practice && view.read_only_reason === "submitted" ? "Submitted. Read-only." : readOnlyText(view, lead);
   const showText = !narrow && (wide || !textHidden);
   const textToolbar = <>
     {!readOnly && addTarget && <Button ref={addRef} size="sm" aria-expanded={adding || typing}
@@ -339,7 +341,7 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
     {view.consolidation_reason && <InlineMessage tone="info" live={false}><p className="cons-lead-reason">{consolidationReasonText(view.consolidation_reason)}</p></InlineMessage>}
     {reason && !submitted && <InlineMessage tone="info">{reason}</InlineMessage>}
     {submitted && <div className="cons-submitted" role="status">
-      <p>{submittedText(!!isLead)}</p>
+      <p>{props.practice ? "Consolidation submitted." : submittedText(!!isLead)}</p>
       <div className="cons-actions">
         {nextTask?.kind === "loading" && <Button variant="primary" loading>Next task</Button>}
         {nextTask?.kind === "ready" && nextTask.next && <Button variant="primary" onClick={() => navigate({ name: "task", assignmentId: nextTask.next!.assignment_id })}>{nextTaskLabel(nextTask.next)}</Button>}
@@ -374,7 +376,7 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
     {typing && <PassageForm text={view.text} anchorRef={addRef} onPick={pickPassage} onClose={() => setTyping(false)} />}
     {data.workspace && addTarget && <TermPicker open={adding} anchorRef={addRef} label="Add finding" workspace={data.workspace} layerId={addTarget.layerId} annotationId={newAnnotationId}
       initialQuery={range ? prefillQuery(view.text, [range]) : undefined} onClose={() => setAdding(false)} onPick={(candidate, searchId) => { void addFinding(candidate, searchId); }} />}
-    <SummaryDialog open={dialog.open} lead={!!isLead} summary={summaryText(groups, added.length)} duplicates={duplicatesText(duplicateTerms(groups))} busy={dialog.busy} warning={dialog.warning} error={dialog.error}
+    <SummaryDialog open={dialog.open} lead={!!isLead} practice={props.practice} summary={summaryText(groups, added.length)} duplicates={duplicatesText(duplicateTerms(groups))} busy={dialog.busy} warning={dialog.warning} error={dialog.error}
       onSubmit={acknowledged => { void submit(acknowledged); }} onClose={() => setDialog({ open: false, busy: false, warning: null, error: null })} />
     <p className="visually-hidden" role="status" aria-live="polite">{announcement}</p>
     <ConfirmDialog open={reopeningAll.open} busy={reopeningAll.busy} title={`Reopen ${decidedCount} decided ${decidedCount === 1 ? "group" : "groups"}?`}

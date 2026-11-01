@@ -170,7 +170,7 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
   if (roundInfo?.kind === "consolidation" && roundInfo.active && view !== "editor") {
     // The task's guidelines and "Report a text problem" stay at hand: the consolidator decides guideline questions.
     return <TaskGuidelines assignment={assignment} place="header" readOnly={workspace.read_only || assignment.held}>{guidelines => <>
-      <ConsolidationScreen projectKey={assignment.project_key} roundId={roundInfo.round_id} assignmentId={assignmentId}
+      <ConsolidationScreen projectKey={assignment.project_key} roundId={roundInfo.round_id} assignmentId={assignmentId} practice={!!listed?.practice}
         onNavigate={onNavigate} workspaceView={workspace.read_only ? null : workspace.view} notice={guidelines.notice}
         headerActions={<>{guidelines.button}<HelpLink screen="consolidation" />
           {/* Group commands save at once: nothing to save before a report. */}

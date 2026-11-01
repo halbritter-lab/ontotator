@@ -52,6 +52,7 @@ def _listed(store: OntologyStore) -> list[AdminOntology]:
             select(ProjectOntologyRow.sha256, ProjectRow.project_key)
             .distinct()
             .join(ProjectRow, ProjectRow.id == ProjectOntologyRow.project_id)
+            .where(ProjectRow.practice.is_(False))
             .order_by(ProjectRow.project_key)
         ).tuples():
             projects.setdefault(sha, []).append(key)

@@ -21,6 +21,7 @@ from ontotator.authz.policy import ROLES, Access, Action, Role
 from ontotator.authz.project_authority import require_project_management
 from ontotator.domain.errors import DomainError
 from ontotator.storage.database import Database
+from ontotator.storage.practice_store import practice_keys
 from ontotator.storage.tables import ProjectMembershipRow, ProjectRow, UserRow
 
 
@@ -370,6 +371,7 @@ class MembershipService:
                 .join(ProjectRow, ProjectRow.id == ProjectMembershipRow.project_id)
                 .where(ProjectMembershipRow.user_id == principal.user_id)
             ).all()
+            practice = practice_keys(conn) if principal.is_system_admin else frozenset()
         roles: dict[str, set[Role]] = {}
         for project_key, role in rows:
             roles.setdefault(project_key, set()).add(role)
@@ -378,6 +380,7 @@ class MembershipService:
             pseudonym=principal.pseudonym,
             is_system_admin=principal.is_system_admin,
             roles={key: frozenset(value) for key, value in roles.items()},
+            practice=practice,
         )
 
     @staticmethod

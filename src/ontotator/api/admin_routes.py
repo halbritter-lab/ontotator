@@ -125,7 +125,11 @@ def admin_users(accounts: AccountService, users: list[User]) -> list[AdminUser]:
                     ProjectMembershipRow.role,
                 )
                 .join(ProjectRow, ProjectRow.id == ProjectMembershipRow.project_id)
-                .where(ProjectMembershipRow.user_id.in_(projects))
+                .where(
+                    ProjectMembershipRow.user_id.in_(projects),
+                    # Practice projects (issue 266) are not real projects.
+                    ProjectRow.practice.is_(False),
+                )
                 .order_by(ProjectRow.project_key, ProjectMembershipRow.role)
             )
             for row in rows:

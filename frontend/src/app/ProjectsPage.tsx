@@ -3,6 +3,7 @@ import { api, type ProjectSummary } from "../api/client";
 import { DataTable, EmptyState, IconCheck, TextInput, type Column } from "../ui";
 import { PROJECT_SEARCH_THRESHOLD, projectDestination, projectRoles } from "./ProjectPicker";
 import { routeHref, type Route } from "./router";
+import { AdminPracticeProjects } from "../practice/AdminPracticeProjects";
 import "../styles/screens/projects.css";
 
 export interface ProjectsPageProps {
@@ -10,6 +11,8 @@ export interface ProjectsPageProps {
   /** The current (last-used) project; marked "✓ Current". */
   currentKey?: string;
   onNavigate: (route: Route) => void;
+  /** A system administrator also gets "Show practice projects (n)" (issue 266). */
+  isAdmin?: boolean;
 }
 
 const leads = (project: ProjectSummary) => project.can_manage && project.roles.includes("lead");
@@ -53,7 +56,7 @@ function useOpenTasks(enabled: boolean): Counts | null {
 }
 
 /** Every project of the user (spec F8, D4): the landing of a lead when no last-used project is accessible. */
-export function ProjectsPage({ projects, currentKey, onNavigate }: ProjectsPageProps): JSX.Element {
+export function ProjectsPage({ projects, currentKey, onNavigate, isAdmin = false }: ProjectsPageProps): JSX.Element {
   const [search, setSearch] = useState("");
   const decisions = useDecisionCounts(projects);
   const openTasks = useOpenTasks(projects.length > 0);
@@ -98,5 +101,6 @@ export function ProjectsPage({ projects, currentKey, onNavigate }: ProjectsPageP
         rowProps={item => item.project_key === currentKey ? { "aria-current": "true", className: "projects-table__row--current" } : {}}
         empty="No matching projects." />
     </>}
+    {isAdmin && <AdminPracticeProjects />}
   </section>;
 }

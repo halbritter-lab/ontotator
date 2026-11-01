@@ -236,6 +236,11 @@ export type Preferences = components["schemas"]["Preferences"];
 export type PreferencesUpdate = components["schemas"]["PreferencesUpdate"];
 export type ProjectSummary = components["schemas"]["ProjectSummary"];
 export type TaskSummary = components["schemas"]["TaskSummary"];
+export type PracticeState = components["schemas"]["PracticeState"];
+export type PracticeProject = components["schemas"]["PracticeProject"];
+export type PracticeTask = components["schemas"]["PracticeTask"];
+export type AdminPracticeProject = components["schemas"]["AdminPracticeProject"];
+export type PracticeSettings = components["schemas"]["PracticeSettings"];
 export type AssignmentWorkspace = components["schemas"]["AssignmentOpenResponse"];
 export type AssignmentOpenRequest = components["schemas"]["AssignmentOpenRequest"];
 export type CaseSummary = components["schemas"]["CaseSummary"];
@@ -689,6 +694,44 @@ export class ApiClient {
     const body = new FormData();
     for (const file of files) body.append("files[]", file);
     return this.request<OntologyUploadResult[]>("/api/v1/admin/ontologies/upload-results", { method: "POST", body });
+  }
+
+  /** Practice (issue 266): the user's practice project and whether practice is offered. */
+  async getPractice(): Promise<PracticeState> {
+    return this.request<PracticeState>("/api/v1/me/practice", { method: "GET" });
+  }
+
+  async startPractice(): Promise<PracticeState> {
+    return this.request<PracticeState>("/api/v1/me/practice", { method: "POST" });
+  }
+
+  async resetPractice(): Promise<PracticeState> {
+    return this.request<PracticeState>("/api/v1/me/practice/reset", { method: "POST" });
+  }
+
+  async deletePractice(): Promise<PracticeState> {
+    return this.request<PracticeState>("/api/v1/me/practice", { method: "DELETE" });
+  }
+
+  /** Show or hide the "New here?" card on My tasks. */
+  async setPracticeCard(show: boolean): Promise<PracticeState> {
+    return this.request<PracticeState>("/api/v1/me/practice/card", { method: "PUT", body: JSON.stringify({ show }) });
+  }
+
+  async adminListPracticeProjects(): Promise<AdminPracticeProject[]> {
+    return this.request<AdminPracticeProject[]>("/api/v1/admin/practice-projects", { method: "GET" });
+  }
+
+  async adminDeletePracticeProject(key: string): Promise<void> {
+    return this.request<void>(`/api/v1/admin/practice-projects/${encodeURIComponent(key)}`, { method: "DELETE" });
+  }
+
+  async adminPracticeSettings(): Promise<PracticeSettings> {
+    return this.request<PracticeSettings>("/api/v1/admin/settings/practice", { method: "GET" });
+  }
+
+  async adminSetPracticeSettings(offer: boolean): Promise<PracticeSettings> {
+    return this.request<PracticeSettings>("/api/v1/admin/settings/practice", { method: "PUT", body: JSON.stringify({ offer }) });
   }
 
   async listMyTasks(): Promise<TaskSummary[]> {

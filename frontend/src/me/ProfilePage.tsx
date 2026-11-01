@@ -4,13 +4,21 @@ import { api, type OwnProfilePatch, type Profile } from "../api/client";
 import { ErrorNotice } from "../admin/ErrorNotice";
 import { LanguagesField } from "../admin/LanguagesField";
 import { Button, Checkbox, Dialog, InlineMessage, TextInput } from "../ui";
-import type { RouteLeaveGuard } from "../app/router";
+import type { Route, RouteLeaveGuard } from "../app/router";
+import { PracticeSection } from "../practice/PracticeSection";
+import { RouteLink } from "../documents/RowCells";
 
 /** The future app controller can refresh displayed identity from the saved response. */
 export interface ProfilePageProps {
   onSaved?: (profile: Profile) => void;
   routeLeaveRef?: MutableRefObject<RouteLeaveGuard | null>;
   leaveGuardRef?: MutableRefObject<((proceed: () => void) => void) | null>;
+  /** Profile › Practice: "Continue" opens My tasks. */
+  onNavigate?: (route: Route) => void;
+  /** The task the user came from: shows "Back to the task". */
+  backToTask?: number;
+  /** The project whose Documents page the user came from: shows "Back to Documents". */
+  backToDocuments?: string;
 }
 
 function profileChanges(baseline: Profile, draft: Profile): OwnProfilePatch {
@@ -42,7 +50,7 @@ function passwordProblem(username: string, next: string, repeat: string): string
   if (folded === stripForComparison(username.normalize("NFC")).toLowerCase()) return "The password must differ from the username.";
 }
 
-export function ProfilePage({ onSaved, routeLeaveRef, leaveGuardRef }: ProfilePageProps): JSX.Element {
+export function ProfilePage({ backToTask, backToDocuments, onSaved, routeLeaveRef, leaveGuardRef, onNavigate }: ProfilePageProps): JSX.Element {
   const [searchDirty, setSearchDirty] = useState(false);
   const [model, setModel] = useState<{ baseline: Profile; draft: Profile } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -164,6 +172,8 @@ export function ProfilePage({ onSaved, routeLeaveRef, leaveGuardRef }: ProfilePa
   const draft = model.draft;
   return <div className="density-compact">
     <section className="detail-section">
+      {backToTask !== undefined && <RouteLink route={{ name: "task", assignmentId: backToTask }} onNavigate={onNavigate}>Back to the task</RouteLink>}
+      {backToTask === undefined && backToDocuments !== undefined && <RouteLink route={{ name: "projectDocuments", key: backToDocuments }} onNavigate={onNavigate}>Back to Documents</RouteLink>}
       <h1>Profile</h1>
       <dl>
         <dt>Username</dt><dd>{model.baseline.username}</dd>
@@ -182,6 +192,7 @@ export function ProfilePage({ onSaved, routeLeaveRef, leaveGuardRef }: ProfilePa
       </form>
     </section>
     <SearchPreferencesSection pseudonym={model.baseline.pseudonym} onDirty={setSearchDirty} />
+    <PracticeSection onNavigate={onNavigate} />
     <section className="detail-section">
       <h2>Change password</h2>
       <form aria-label="Change password" onSubmit={(event) => { event.preventDefault(); void changePassword(); }}>

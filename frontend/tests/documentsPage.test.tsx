@@ -1703,6 +1703,19 @@ describe("Resolve renders inline under the row (Change 13, F1, F5)", () => {
     expect(screen.queryByRole("button", { name: /Correct the translation/ })).toBeNull();
   });
 
+  it("without a qualification the profile link leads back to Documents", async () => {
+    vi.spyOn(api, "getVariantMetadata").mockResolvedValue({ document_id: "case-1-de", text_sha256: "sha-1" } as Awaited<ReturnType<typeof api.getVariantMetadata>>);
+    vi.spyOn(api, "startLeadCorrection").mockRejectedValue(new ApiError(409, "Qualification required", "QUALIFICATION_REQUIRED"));
+    mockRows(page([group("case-1", [rejectedRow("case-1", "de")])]));
+    renderStateful({});
+    fireEvent.click(await screen.findByRole("button", { name: "Resolve…, case-1 de" }));
+    fireEvent.click(within(resolveBox()!).getByRole("button", { name: "Correct the translation…" }));
+    const panel = screen.getByRole("group", { name: "Correct the translation, case-1 de" });
+    fireEvent.click(within(panel).getByRole("button", { name: "Open translation review" }));
+    const link = await within(panel).findByRole("link", { name: "Add your qualification in your profile" });
+    expect(link.getAttribute("href")).toBe("#/me?documents=p");
+  });
+
   it("cards behave the same", async () => {
     vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(max-width: 699px)", media: query, addEventListener: () => {}, removeEventListener: () => {} }));
     mockRows(page([group("case-1", [rejected()])]));

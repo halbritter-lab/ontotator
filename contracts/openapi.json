@@ -7476,6 +7476,255 @@
         }
       }
     },
+    "/api/v1/me/practice": {
+      "get": {
+        "tags": [
+          "practice"
+        ],
+        "summary": "Get Practice",
+        "description": "The user's practice project with its tasks, and whether practice is\noffered (the \"New here?\" card on My tasks).",
+        "operationId": "get_practice_api_v1_me_practice_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PracticeState"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "practice"
+        ],
+        "summary": "Start Practice",
+        "description": "Create the user's practice project (or keep the one they have).\n\nRefused with ``PRACTICE_UNAVAILABLE`` (and the reason) when practice is\nswitched off, the user has no Annotator role, or no suitable HPO release\nis installed.",
+        "operationId": "start_practice_api_v1_me_practice_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PracticeState"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "practice"
+        ],
+        "summary": "Delete Practice",
+        "description": "Delete the user's practice project; only its own rows go.",
+        "operationId": "delete_practice_api_v1_me_practice_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PracticeState"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me/practice/reset": {
+      "post": {
+        "tags": [
+          "practice"
+        ],
+        "summary": "Reset Practice",
+        "description": "Delete the practice project and create a fresh one.",
+        "operationId": "reset_practice_api_v1_me_practice_reset_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PracticeState"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me/practice/card": {
+      "put": {
+        "tags": [
+          "practice"
+        ],
+        "summary": "Set Practice Card",
+        "description": "Show or hide the \"New here?\" card on My tasks (stored per user).",
+        "operationId": "set_practice_card_api_v1_me_practice_card_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PracticeCard"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PracticeState"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/practice-projects": {
+      "get": {
+        "tags": [
+          "practice"
+        ],
+        "summary": "List Practice Projects",
+        "description": "Every practice project, newest first (the Projects page filter).",
+        "operationId": "list_practice_projects_api_v1_admin_practice_projects_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AdminPracticeProject"
+                  },
+                  "type": "array",
+                  "title": "Response List Practice Projects Api V1 Admin Practice Projects Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/practice-projects/{key}": {
+      "delete": {
+        "tags": [
+          "practice"
+        ],
+        "summary": "Delete Practice Project",
+        "description": "Delete one practice project; any other project is refused with\n``NOT_A_PRACTICE_PROJECT``.",
+        "operationId": "delete_practice_project_api_v1_admin_practice_projects__key__delete",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/settings/practice": {
+      "get": {
+        "tags": [
+          "practice"
+        ],
+        "summary": "Get Practice Settings",
+        "operationId": "get_practice_settings_api_v1_admin_settings_practice_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PracticeSettings"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "practice"
+        ],
+        "summary": "Set Practice Settings",
+        "description": "Switch the offer on or off; existing practice projects stay until\nthey are deleted or expire.",
+        "operationId": "set_practice_settings_api_v1_admin_settings_practice_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PracticeSettings"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PracticeSettings"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/about": {
       "get": {
         "tags": [
@@ -8634,6 +8883,62 @@
           "projects"
         ],
         "title": "AdminOntology"
+      },
+      "AdminPracticeProject": {
+        "properties": {
+          "project_key": {
+            "type": "string",
+            "title": "Project Key"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "owner_username": {
+            "type": "string",
+            "title": "Owner Username"
+          },
+          "owner_display_name": {
+            "type": "string",
+            "title": "Owner Display Name"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "last_activity_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Activity At"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "done": {
+            "type": "integer",
+            "title": "Done"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "project_key",
+          "name",
+          "owner_username",
+          "owner_display_name",
+          "created_at",
+          "last_activity_at",
+          "expires_at",
+          "done",
+          "total"
+        ],
+        "title": "AdminPracticeProject"
       },
       "AdminUser": {
         "properties": {
@@ -18114,6 +18419,321 @@
         ],
         "title": "PlannedVariant"
       },
+      "PracticeCard": {
+        "properties": {
+          "show": {
+            "type": "boolean",
+            "title": "Show"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "show"
+        ],
+        "title": "PracticeCard"
+      },
+      "PracticeDecision": {
+        "properties": {
+          "term_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Term Id"
+          },
+          "outcome": {
+            "type": "string",
+            "title": "Outcome"
+          },
+          "replacement_term_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replacement Term Id"
+          },
+          "action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action"
+          }
+        },
+        "type": "object",
+        "required": [
+          "outcome"
+        ],
+        "title": "PracticeDecision",
+        "description": "A decision on a proposal or on a colleague's finding."
+      },
+      "PracticeFinding": {
+        "properties": {
+          "term_id": {
+            "type": "string",
+            "title": "Term Id"
+          },
+          "assertion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assertion"
+          },
+          "defaulted": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Defaulted",
+            "default": []
+          },
+          "replacement": {
+            "type": "boolean",
+            "title": "Replacement",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "term_id"
+        ],
+        "title": "PracticeFinding"
+      },
+      "PracticeProject": {
+        "properties": {
+          "project_key": {
+            "type": "string",
+            "title": "Project Key"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "last_activity_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Activity At"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "tasks": {
+            "items": {
+              "$ref": "#/components/schemas/PracticeTask"
+            },
+            "type": "array",
+            "title": "Tasks"
+          },
+          "done": {
+            "type": "integer",
+            "title": "Done"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "project_key",
+          "name",
+          "created_at",
+          "last_activity_at",
+          "expires_at",
+          "tasks",
+          "done",
+          "total"
+        ],
+        "title": "PracticeProject"
+      },
+      "PracticeSettings": {
+        "properties": {
+          "offer": {
+            "type": "boolean",
+            "title": "Offer"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "offer"
+        ],
+        "title": "PracticeSettings"
+      },
+      "PracticeState": {
+        "properties": {
+          "offered": {
+            "type": "boolean",
+            "title": "Offered"
+          },
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "offer_off",
+                  "not_eligible",
+                  "no_ontology"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unavailable Reason"
+          },
+          "unavailable_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unavailable Message"
+          },
+          "show_card": {
+            "type": "boolean",
+            "title": "Show Card"
+          },
+          "card_hidden": {
+            "type": "boolean",
+            "title": "Card Hidden"
+          },
+          "reads_german": {
+            "type": "boolean",
+            "title": "Reads German"
+          },
+          "project": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PracticeProject"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "offered",
+          "available",
+          "show_card",
+          "card_hidden",
+          "reads_german"
+        ],
+        "title": "PracticeState",
+        "description": "``GET /api/v1/me/practice``."
+      },
+      "PracticeTask": {
+        "properties": {
+          "assignment_id": {
+            "type": "integer",
+            "title": "Assignment Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "scratch",
+              "proposals",
+              "translation_review",
+              "consolidation"
+            ],
+            "title": "Kind"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/PracticeFinding"
+            },
+            "type": "array",
+            "title": "Findings",
+            "default": []
+          },
+          "decisions": {
+            "items": {
+              "$ref": "#/components/schemas/PracticeDecision"
+            },
+            "type": "array",
+            "title": "Decisions",
+            "default": []
+          },
+          "translation_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Translation Text"
+          },
+          "translation_decision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Translation Decision"
+          }
+        },
+        "type": "object",
+        "required": [
+          "assignment_id",
+          "kind",
+          "status",
+          "case_id",
+          "language"
+        ],
+        "title": "PracticeTask",
+        "description": "One practice task and the facts its steps are ticked from."
+      },
       "Preferences": {
         "properties": {
           "multilingual_search": {
@@ -18154,6 +18774,17 @@
             },
             "type": "object",
             "title": "Search Languages By Annotator"
+          },
+          "practice_card_hidden": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Practice Card Hidden"
           }
         },
         "type": "object",
@@ -18214,6 +18845,17 @@
               }
             ],
             "title": "Search Languages By Annotator"
+          },
+          "practice_card_hidden": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Practice Card Hidden"
           }
         },
         "additionalProperties": false,
@@ -23604,6 +24246,17 @@
             "type": "boolean",
             "title": "Waiting For Lead",
             "default": false
+          },
+          "practice": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Practice"
           }
         },
         "type": "object",

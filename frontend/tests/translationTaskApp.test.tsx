@@ -93,7 +93,8 @@ it("flushes raw review work before following its real qualification profile link
   await waitFor(() => expect(save).toHaveBeenCalledWith(17, { text: "Preserve this correction", form: { decision: "accepted_corrected", clinical_change: false }, expected_revision: 6 }));
   expect(window.location.hash).toBe("#/tasks/17"); expect(screen.getByRole("textbox", { name: "Translation (de)" })).toBe(input);
   await act(async () => { finish({ revision: 31 }); });
-  await screen.findByRole("heading", { name: "Profile" }); expect(window.location.hash).toBe("#/me");
+  await screen.findByRole("heading", { name: "Profile" }); expect(window.location.hash).toBe("#/me?task=17");
+  expect(screen.getByRole("link", { name: "Back to the task" }).getAttribute("href")).toBe("#/tasks/17");
 });
 it("keeps the mounted review and history on cancelled raw-hash leave, then explicitly discards", async () => {
   const { save } = appReview(); save.mockRejectedValue(new TypeError("Offline"));
