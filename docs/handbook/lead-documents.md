@@ -82,7 +82,7 @@ The **Documents** page lists every text of the project and what it needs next. O
 | **Next step** | A button for the next action on this text, for example **Assign annotation…**, **Accept result…** or, when submissions differ, **Compare results…**. Rows that need your decision also have a coloured left edge. |
 | **Last activity** | When something last happened on the text. |
 
-A task starts with the person's first saved change; opening it is not enough. Until then **Translation** and **Annotation** read *assigned, not started* with the person's name, in the table, its tooltip, the narrow cards and the text card. After the first save they read *in review* or *In progress*. With several people or parallel versions the cell counts them, for example *1 of 2 started*.
+A task starts with the person's first saved change; opening it is not enough. Until then **Translation** and **Annotation** read *assigned, not started* with the person's name, in the table, its tooltip, the narrow cards and the text card. After the first save they read *in review* or *In progress*. With several people or parallel versions the cell counts them, for example *1 of 2 started*. Below 1400 px the table keeps one line per text: the cells leave out the names that **Waiting on** already shows and read *not started* or *after review*; **Waiting on** shows one name and *+1* for each other person. Point at a cell to read all of it.
 
 ### Use the Documents tabs
 
