@@ -126,6 +126,9 @@ describe("Mark checked sentences", () => {
     expect(pressed("Source (en)")).toEqual([true, true, true]);
     fireEvent.keyDown(sentences("Source (en)")[1], { key: " " });
     expect(pressed("Source (en)")).toEqual([true, false, true]);
+    // The submit shortcut leaves the marks alone.
+    fireEvent.keyDown(sentences("Source (en)")[1], { key: "Enter", ctrlKey: true });
+    expect(pressed("Source (en)")).toEqual([true, false, true]);
   });
 
   it("drag from an unchecked sentence marks the range and from a checked one unmarks it", async () => {

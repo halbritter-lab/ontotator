@@ -105,6 +105,8 @@ export const SentenceView = forwardRef<HTMLDivElement, SentenceViewProps>(functi
   const keyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const index = sentenceOf(event.target);
     if (disabled || index === null || (event.key !== "Enter" && event.key !== " ")) return;
+    // Ctrl+Enter is the screen's submit shortcut, not a mark.
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
     event.preventDefault();
     if (event.shiftKey && anchor.current !== null) onRange(anchor.current, index, true);
     else onToggle(index);
