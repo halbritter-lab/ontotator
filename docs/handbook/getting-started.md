@@ -196,6 +196,8 @@ What for: start, continue or remove your practice project at any time.
 
 A practice project is deleted after 30 days without activity. Every change in it moves the date. Deleting it removes only the practice project, never real work.
 
+A practice project keeps the translations it started with. If your administrator uploads a newer translation file, **Reset…** makes a fresh practice project that uses it.
+
 ## Set your search preferences
 
 What for: search ontology terms in your own languages too.

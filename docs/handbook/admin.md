@@ -223,3 +223,5 @@ To switch the offer off:
 
 Off hides the card on **My tasks** and **Start practice** in the profile. Existing practice projects stay until they are deleted or expire.
 
+A practice project freezes its translations like any project. A translation file uploaded later does not reach a practice project that is already in use, and the upload warning does not name practice projects. The owner gets the new file with **Reset…** in the profile.
+
