@@ -108,7 +108,7 @@ export function LeadCorrectionPanel({ row, projectKey, onNavigate, onCancel, hea
       checked={confirmLanguage} onChange={event => setConfirmLanguage(event.target.checked)} />}
     {failure?.kind === "qualification" && <InlineMessage tone="warning">
       A translation review records your qualification. Your profile has none yet.{" "}
-      <RouteLink route={{ name: "me" }} className="btn btn-secondary btn-sm" onNavigate={onNavigate}>Add your qualification in your profile</RouteLink>
+      <RouteLink route={{ name: "me", documents: projectKey }} className="btn btn-secondary btn-sm" onNavigate={onNavigate}>Add your qualification in your profile</RouteLink>
     </InlineMessage>}
     {failure?.kind === "not_available" && <InlineMessage tone="warning">{failure.text}</InlineMessage>}
     {failure?.kind === "error" && <ErrorNotice error={failure.error} />}

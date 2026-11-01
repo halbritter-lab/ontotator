@@ -98,6 +98,8 @@ describe("hash route parsing and links", () => {
     expect(parseRoute("#/me?task=7")).toEqual({ name: "me", task: 7 });
     expect(parseRoute("#/me?task=x")).toEqual({ name: "me" });
     expect(routeHref({ name: "me", task: 7 })).toBe("#/me?task=7");
+    expect(parseRoute("#/me?documents=study%20a")).toEqual({ name: "me", documents: "study a" });
+    expect(routeHref({ name: "me", documents: "study a" })).toBe("#/me?documents=study+a");
     expect(parseRoute("#/projects/a/documents?project=other&language=de&status=reopened&q=prefix+%25&select=doc%2F1"))
       .toEqual({ name: "projectDocuments", key: "a", language: "de", status: "reopened", q: "prefix %", select: "doc/1" });
   });

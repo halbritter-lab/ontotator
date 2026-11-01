@@ -42,6 +42,12 @@ describe("ProfilePage component", () => {
     expect(save).toHaveBeenCalledOnce();
   });
 
+  it("offers the way back to the Documents page the user came from", async () => {
+    render(<ProfilePage backToDocuments="study a" />); await loaded();
+    expect(screen.getByRole("link", { name: "Back to Documents" }).getAttribute("href")).toBe("#/projects/study%20a/documents");
+    expect(screen.queryByRole("link", { name: "Back to the task" })).toBeNull();
+  });
+
   it("uses the actual normalized server response as the next baseline", async () => {
     const save = vi.spyOn(api, "updateOwnProfile").mockResolvedValue({ ...profile, display_name: "Alex Smith" });
     render(<ProfilePage />); await loaded();

@@ -17,6 +17,8 @@ export interface ProfilePageProps {
   onNavigate?: (route: Route) => void;
   /** The task the user came from: shows "Back to the task". */
   backToTask?: number;
+  /** The project whose Documents page the user came from: shows "Back to Documents". */
+  backToDocuments?: string;
 }
 
 function profileChanges(baseline: Profile, draft: Profile): OwnProfilePatch {
@@ -48,7 +50,7 @@ function passwordProblem(username: string, next: string, repeat: string): string
   if (folded === stripForComparison(username.normalize("NFC")).toLowerCase()) return "The password must differ from the username.";
 }
 
-export function ProfilePage({ backToTask, onSaved, routeLeaveRef, leaveGuardRef, onNavigate }: ProfilePageProps): JSX.Element {
+export function ProfilePage({ backToTask, backToDocuments, onSaved, routeLeaveRef, leaveGuardRef, onNavigate }: ProfilePageProps): JSX.Element {
   const [searchDirty, setSearchDirty] = useState(false);
   const [model, setModel] = useState<{ baseline: Profile; draft: Profile } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -171,6 +173,7 @@ export function ProfilePage({ backToTask, onSaved, routeLeaveRef, leaveGuardRef,
   return <div className="density-compact">
     <section className="detail-section">
       {backToTask !== undefined && <RouteLink route={{ name: "task", assignmentId: backToTask }} onNavigate={onNavigate}>Back to the task</RouteLink>}
+      {backToTask === undefined && backToDocuments !== undefined && <RouteLink route={{ name: "projectDocuments", key: backToDocuments }} onNavigate={onNavigate}>Back to Documents</RouteLink>}
       <h1>Profile</h1>
       <dl>
         <dt>Username</dt><dd>{model.baseline.username}</dd>

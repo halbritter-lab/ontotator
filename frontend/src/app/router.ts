@@ -120,8 +120,8 @@ export type Route =
   | { name: "tasks"; project?: string; status?: TaskStatusTab }
   /** `view: "editor"` opens the editor of a consolidation task instead of the consolidation view (acceptance fixes WP-E). */
   | { name: "task"; assignmentId: number; view?: "editor" }
-  /** `task`: the task the user came from, offered as a way back (issue 266). */
-  | { name: "me"; task?: number }
+  /** `task`, or `documents` (a project key): the task or the Documents page the user came from, offered as a way back (issue 266). */
+  | { name: "me"; task?: number; documents?: string }
   | { name: "adminUsers" }
   | { name: "adminOntologies" }
   /** Server-wide settings (today: Practice projects). */
@@ -169,7 +169,9 @@ export function parseRoute(hash: string): Route {
     switch (path) {
       case "#/me": {
         const task = Number(params.get("task"));
-        return Number.isInteger(task) && task > 0 ? { name: "me", task } : { name: "me" };
+        if (Number.isInteger(task) && task > 0) return { name: "me", task };
+        const documents = params.get("documents");
+        return documents ? { name: "me", documents } : { name: "me" };
       }
       case "#/admin/users": return { name: "adminUsers" };
       case "#/admin/ontologies": return { name: "adminOntologies" };
@@ -265,7 +267,7 @@ export function routeHref(route: Route): string {
         throw new RangeError("Assignment ID must be a positive safe integer");
       }
       return `#/tasks/${route.assignmentId}${querySuffix([["view", route.view]])}`;
-    case "me": return route.task === undefined ? "#/me" : `#/me?task=${route.task}`;
+    case "me": return `#/me${querySuffix([["task", route.task === undefined ? undefined : String(route.task)], ["documents", route.documents]])}`;
     case "adminUsers": return "#/admin/users";
     case "adminOntologies": return "#/admin/ontologies";
     case "adminSettings": return "#/admin/settings";
