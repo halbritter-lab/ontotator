@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- Documents: an assigned translation review or annotation that nobody has saved yet reads *Assigned, not started* with the person's name, no longer *In progress*. A task starts with its first saved change; opening it does not. With several people or parallel versions the Translation and Annotation cells, the text card and the row's tooltip count them, for example *1 of 2 started* (`started` and `open_tasks` on the stage cell detail) (#258).
 ### Changed
 
 - New project: allowed roots and annotation scheme filled from an uploaded profile say "Loaded from the profile." until you change them (#239).

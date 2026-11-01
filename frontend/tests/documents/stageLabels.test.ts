@@ -27,6 +27,15 @@ describe("Review cell", () => {
     // Parallel roots: versions in review of the roots.
     expect(text("review", cell("in_progress", "running", { people: [ana], assigned: 1, total: 2 }))).toEqual(["◐ 1 of 2 versions in review", "Ana Weber"]);
   });
+  it("in_progress before the first save reads not started (issue 258)", () => {
+    expect(text("review", cell("in_progress", "running", { people: [ana], started: 0, open_tasks: 1 }))).toEqual(["○ Assigned, not started", "Ana Weber"]);
+    expect(text("review", cell("in_progress", "running", { people: [ana], started: 1, open_tasks: 1 }))).toEqual(["◐ In progress", "Ana Weber"]);
+    expect(text("review", cell("in_progress", "running", { people: [ana, tom], started: 1, open_tasks: 2 }))).toEqual(["◐ 1 of 2 started", "Ana Weber, Tom Reis"]);
+    expect(text("review", cell("in_progress", "running", { people: [ana, tom], assigned: 2, total: 2, started: 1, open_tasks: 2 })))
+      .toEqual(["◐ 2 of 2 versions in review", "Ana Weber, Tom Reis, 1 of 2 started"]);
+    expect(text("review", cell("re_review", "running", { people: [ana], note: "correction", started: 0, open_tasks: 1 })))
+      .toEqual(["○ Re-review assigned, not started", "Ana Weber, correction"]);
+  });
   it("re_review", () => {
     expect(text("review", cell("re_review", "running", { people: [ana], note: "new_review", reason: "Dosis prüfen" }))).toEqual(["◐ Re-review in progress", "Ana Weber, reason: “Dosis prüfen”"]);
     expect(text("review", cell("re_review", "running", { people: [ana], note: "source_changed" }))).toEqual(["◐ Re-review in progress", "Ana Weber, source changed"]);
@@ -70,6 +79,15 @@ describe("Annotation cell", () => {
     expect(text("annotation", cell("in_progress", "running", { people: [tom], submitted: 1, total: 2 }))).toEqual(["◐ 1 of 2 submitted", "waiting: Tom Reis"]);
     expect(text("annotation", cell("in_progress", "running", { people: [ana], round_ordinal: 2 }))).toEqual(["◐ In progress", "Ana Weber, Round 2"]);
     expect(text("annotation", cell("in_progress", "running", { people: [tom], note: "may_change", version: 1 }))).toEqual(["◐ In progress", "Tom Reis, v1, may change"]);
+  });
+  it("in_progress before the first save reads not started (issue 258)", () => {
+    expect(text("annotation", cell("in_progress", "running", { people: [ana], started: 0, open_tasks: 1 }))).toEqual(["○ Assigned, not started", "Ana Weber"]);
+    expect(text("annotation", cell("in_progress", "running", { people: [ana], started: 1, open_tasks: 1 }))).toEqual(["◐ In progress", "Ana Weber"]);
+    expect(text("annotation", cell("in_progress", "running", { people: [ana, tom], started: 1, open_tasks: 2 }))).toEqual(["◐ 1 of 2 started", "Ana Weber, Tom Reis"]);
+    expect(text("annotation", cell("in_progress", "running", { people: [tom], submitted: 1, total: 2, started: 0, open_tasks: 1 })))
+      .toEqual(["◐ 1 of 2 submitted", "waiting: Tom Reis, not started"]);
+    expect(text("annotation", cell("partly_assigned", "todo", { people: [tom], assigned: 1, target: 2, started: 0, open_tasks: 1 })))
+      .toEqual(["○ 1 annotator · max 2", "Tom Reis assigned, not started"]);
   });
   it("paused", () => expect(text("annotation", cell("paused", "decision", { people: [tom], excerpt: "Satz 3 unvollständig…" }))).toEqual(["⏸ Paused", "Tom Reis: “Satz 3 unvollständig…”"]));
   it("consolidating", () => expect(text("annotation", cell("consolidating", "running", { people: [luc] }))).toEqual(["◐ Consolidating", "Luc Martin"]));

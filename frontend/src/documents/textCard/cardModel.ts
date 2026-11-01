@@ -3,7 +3,7 @@ import type { DocumentRowView } from "../../api/client";
 import type { ProjectDocumentsQuery, Route } from "../../app/router";
 import type { PathSegment, PathTone } from "../../ui/StagePath";
 import { earlyFinal } from "../finalPanelText";
-import { annotatorCount, shortName, stageText } from "../stageLabels";
+import { annotatorCount, shortName, stageText, startedOf, startedPart } from "../stageLabels";
 
 export type SegmentId = "translation" | "annotation" | "finalization";
 export type CardView = "path" | "history" | "details";
@@ -20,15 +20,28 @@ function cellLabel(row: DocumentRowView, stage: "review" | "annotation" | "final
   return cell ? stageText(stage, cell, row).word : "—";
 }
 
+/**
+ * A running review without the people: "in review", "in review, 1 of 2 started", or "assigned, not started" while
+ * no reviewer has saved anything yet (issue 258); null when no review runs.
+ */
+export function reviewWord(row: DocumentRowView): string | null {
+  const cell = row.stages?.review;
+  if (cell?.state !== "in_progress" && cell?.state !== "re_review") return null;
+  if (startedOf(cell.detail) === "none") return "assigned, not started";
+  const part = startedPart(cell.detail);
+  return part ? `in review, ${part}` : "in review";
+}
+
 export function translationState(row: DocumentRowView): State {
   const cell = row.stages?.review;
   const state = cell?.state;
   if (row.is_source || state === "source") return { state: "source text", tone: "done" };
   if (state === "accepted") return { state: "accepted", tone: "done" };
   if (state === "not_planned" || cell?.detail.note === "review_off") return { state: "not reviewed, optional", tone: "optional" };
-  if (state === "in_progress" || state === "re_review") {
+  const word = reviewWord(row);
+  if (word) {
     const people = (cell?.detail.people ?? []).map(shortName).join(", ");
-    return { state: people ? `in review (${people})` : "in review", tone: "now" };
+    return { state: people ? `${word} (${people})` : word, tone: "now" };
   }
   if (!cell || state === "none") return { state: "—", tone: "later" };
   return { state: cellLabel(row, "review"), tone: "now" };
@@ -43,6 +56,10 @@ export function annotationState(row: DocumentRowView): State {
   const total = detail.total ?? detail.target ?? work.length;
   const done = detail.submitted ?? work.filter(item => item.status === "submitted").length;
   const submitted = total > 0 ? `${done} of ${total} submitted` : cell?.state === "in_progress" || cell?.state === "paused" ? "in progress" : "submitted";
+  // Issue 258: assigned annotators who have not saved anything yet.
+  const started = cell?.state === "in_progress" ? startedOf(detail) : "all";
+  const running = started === "none" && done === 0 ? "assigned, not started"
+    : started === "all" ? submitted : `${submitted}, ${startedPart(detail)}`;
   switch (cell?.state) {
     case "not_planned": return { state: "not planned", tone: "optional" };
     case "after_review":
@@ -58,7 +75,7 @@ export function annotationState(row: DocumentRowView): State {
       const assigned = detail.assigned ?? 0;
       return { state: target > 1 ? annotatorCount(assigned, target) : assigned === 0 ? "Unassigned" : `${assigned} assigned`, tone: "now" };
     }
-    case "in_progress":
+    case "in_progress": return { state: running, tone: "now" };
     case "paused": return { state: submitted, tone: "now" };
     case "submitted":
     case "consolidating": return { state: submitted, tone: "done" };

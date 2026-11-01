@@ -22,6 +22,11 @@ describe("Translation", () => {
   });
   it("in review names the reviewers", () => {
     expect(translationState(cardRow({ review: cell("in_progress", "running", { people: [ana, tom] }) }))).toEqual({ state: "in review (Ana Weber, Tom Reis)", tone: "now" });
+    // Issue 258: assigned, nothing saved yet; then one of two reviewers saved.
+    expect(translationState(cardRow({ review: cell("in_progress", "running", { people: [ana], started: 0, open_tasks: 1 }) })))
+      .toEqual({ state: "assigned, not started (Ana Weber)", tone: "now" });
+    expect(translationState(cardRow({ review: cell("in_progress", "running", { people: [ana, tom], started: 1, open_tasks: 2 }) })))
+      .toEqual({ state: "in review, 1 of 2 started (Ana Weber, Tom Reis)", tone: "now" });
     expect(translationState(cardRow({ review: cell("re_review", "running", { people: [ana] }) }))).toEqual({ state: "in review (Ana Weber)", tone: "now" });
   });
   it("other review states keep the short cell label and need work now", () => {
@@ -47,6 +52,17 @@ describe("Annotation", () => {
   });
   it("in progress counts the submissions", () => {
     expect(annotationState(cardRow({ annotation: cell("in_progress", "running", { submitted: 1, total: 2 }) }))).toEqual({ state: "1 of 2 submitted", tone: "now" });
+  });
+  it("in progress before the first save reads not started (issue 258)", () => {
+    const one = [annotateItem({ assignment_id: 1, status: "open" })];
+    expect(annotationState(cardRow({ annotation: cell("in_progress", "running", { people: [ana], started: 0, open_tasks: 1 }) }, { work: one })))
+      .toEqual({ state: "assigned, not started", tone: "now" });
+    expect(annotationState(cardRow({ annotation: cell("in_progress", "running", { people: [ana], started: 1, open_tasks: 1 }) }, { work: one })))
+      .toEqual({ state: "0 of 1 submitted", tone: "now" });
+    expect(annotationState(cardRow({ annotation: cell("in_progress", "running", { submitted: 0, total: 2, started: 1, open_tasks: 2 }) })))
+      .toEqual({ state: "0 of 2 submitted, 1 of 2 started", tone: "now" });
+    expect(annotationState(cardRow({ annotation: cell("in_progress", "running", { submitted: 1, total: 2, started: 0, open_tasks: 1 }) })))
+      .toEqual({ state: "1 of 2 submitted, not started", tone: "now" });
   });
   it("without server counts counts the annotate work items, never 0 of 0", () => {
     const work = [annotateItem({ assignment_id: 1, status: "submitted" }), annotateItem({ assignment_id: 2, status: "submitted" })];

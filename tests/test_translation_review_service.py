@@ -134,6 +134,14 @@ def test_open_exact_text_source_checks_comparisons_and_raw_revision_draft(review
     )
     assert [c.variant.document_id for c in opened.comparisons] == ["comparison"]
     assert [c.code for c in opened.failed_checks] == ["units_added"]
+    # Opening does not start the task; the first saved draft does (issue 258).
+    with env.db.transaction() as conn:
+        assert (
+            conn.execute(
+                select(AssignmentRow.status).where(AssignmentRow.id == env.ids["alice"])
+            ).scalar_one()
+            == "open"
+        )
     revision = env.service.save_draft(
         env.accesses["alice"],
         env.ids["alice"],
