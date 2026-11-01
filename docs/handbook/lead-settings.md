@@ -11,7 +11,7 @@ General, Annotation, Workflow and Ontology have a **Save changes** button at the
 | **Workflow** | [Plan for new imports](#choose-the-plan-for-new-imports), [texts with tool proposals](#choose-how-texts-with-tool-proposals-are-annotated), [annotators per text and consolidation rules](#set-annotators-per-text-and-the-consolidation-rules) |
 | **Guidelines** | [Publish](#publish-the-first-or-a-new-guideline-version), [see who read them](#see-who-has-read-the-guidelines), [republish](#republish-an-earlier-guideline-version), [withdraw](#withdraw-a-guideline-version) |
 | **People** | [Add](#add-a-member), [change roles](#change-a-members-roles), [remove](#remove-a-member) |
-| **Ontology** | [Ontology version and annotation scheme](#choose-the-ontology-version-branches-and-annotation-scheme), [task profile](#task-profiles) and [replacing it](#replace-the-task-profile), [move to a newer release](#move-a-started-project-to-a-newer-release) |
+| **Ontology** | [Ontology version and annotation scheme](#choose-the-ontology-version-branches-and-annotation-scheme), [task profile](#task-profiles) and [replacing it](#replace-the-task-profile), [move to a newer release](#move-a-started-project-to-a-newer-release), [translations](#see-which-translations-the-project-uses) |
 
 ## Open project settings
 
@@ -154,6 +154,17 @@ Before you start: an administrator must have uploaded the new release ([Upload o
 If drafts changed meanwhile, you see **Drafts or pins changed since the check. Check the changes again before moving.** Click **Check changes** again.
 
 Tasks already opened stay open and keep their drafts. A submitted task shows what was submitted, also when it is reopened: terms the new release retired are then flagged at submit. Exports name the release recorded with each text ([Export](lead-results.md#export)).
+
+## See which translations the project uses
+
+What for: check which translation files term searches use in this project.
+
+1. Open **Settings**, tab **Ontology**.
+2. Read the card **Translations**.
+   - *Not frozen yet.* The first term search or opening the ontology information takes the translation files on the server then.
+   - Otherwise the card lists the frozen files with their language, ontology and checksum. *Uploaded later, not used here* names files on the server that the project does not use.
+
+The project froze its translations at the first use of its ontology. A file an administrator uploads after that does not reach the project ([When a translation reaches a project](admin.md#when-a-translation-reaches-a-project)). Changing the ontology version, the branches or the annotation scheme, or replacing the task profile, ends the freeze: the next use takes the files on the server then.
 
 ## Set the submission rules
 

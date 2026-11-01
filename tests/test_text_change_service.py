@@ -383,6 +383,24 @@ def test_move_snapshots_draft_creates_target_round_and_revokes_old(env):
     assert (resolution.from_document_id, resolution.to_document_id) == tuple(env.docs)
 
 
+def test_move_keeps_started_work_started(env):
+    """Issue 258: a moved draft the person saved stays "in progress" on the
+    target (a round only opened, nothing saved, stays "open": next test)."""
+    work = _started(env)
+    assert _assignment(env, work["assignment_id"]).status == "in_progress"
+    moved = _move(env, work["assignment_id"])
+    assert _assignment(env, moved.assignment_id).status == "in_progress"
+
+
+def test_move_keeps_opened_work_not_started(env):
+    opened = assign(env.scenario, env.docs[0], "ana", "annotate")
+    start_round(env.scenario, opened, "ana")
+    assert _assignment(env, opened).status == "open"
+    again = _move(env, opened)
+    assert again.round is not None
+    assert _assignment(env, again.assignment_id).status == "open"
+
+
 def test_move_freezes_only_editable_findings(env):
     """Reference-layer findings are not carried: the frozen draft leaves them
     out (as the preview counts), so the target round accepts it."""

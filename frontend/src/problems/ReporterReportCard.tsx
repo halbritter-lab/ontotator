@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type Ref } from "react";
 import { api, ApiError, type AssignmentView, type ProblemReportView } from "../api/client";
+import { textLabel } from "../app/identity";
 import { Time } from "../app/Time";
 import { Button, InlineConfirm, InlineMessage, Textarea, type InlineConfirmOutcome } from "../ui";
 import { reportStateFact, reportTitle, yourTaskFact } from "./labels";
@@ -131,7 +132,7 @@ export function ReporterReportCard({ report, assignment, confirm, onConfirmChang
       {paused && <Button ref={triggers.resume} onClick={() => start("resume")}>Resume my task…</Button>}
       {report.withdrawable && <Button ref={triggers.withdraw} onClick={() => start("withdraw")}>Withdraw report…</Button>}
     </div>}
-    {confirm?.kind === "resume" && <InlineConfirm title={`Resume Task ${assignment.id}`} confirmLabel="Resume my task" busy={busy}
+    {confirm?.kind === "resume" && <InlineConfirm title={`Resume your task on ${textLabel(report)}`} confirmLabel="Resume my task" busy={busy}
       outcome={outcome} conflictMessage={conflictMessage} onConfirm={() => { void act(); }} onCancel={cancel}
       message={<>
         <p>{open ? "The report stays open. A project lead decides on it." : "The report is already closed. Only the pause is released."}</p>

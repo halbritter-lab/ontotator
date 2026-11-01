@@ -506,7 +506,7 @@ test.describe("lead.md", () => {
     await page.goto(`/#/projects/${encodeURIComponent(s.project)}/problem-reports/${encodeURIComponent(s.report_id!)}?section=decide`);
     await expect(page.getByText(s.report_reason!).first()).toBeVisible();
     await expect(page.getByText(/Loading…/)).toHaveCount(0);
-    const resume = page.getByRole("button", { name: /^Close and resume Task \d+$/ });
+    const resume = page.getByRole("button", { name: /^Close and resume the annotation of / });
     await expect(resume).toBeVisible();
     await expect(page.getByRole("heading", { name: "Other decisions", exact: true })).toBeVisible();
     await shot(page, "lead-problem-report");

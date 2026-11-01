@@ -21,7 +21,7 @@ import {
   versionText,
 } from "./labels";
 import { isActiveRow, shortName, stageText, versionMarkerText, waitingOnText, type StageName } from "./stageLabels";
-import { annotationState, finalizationState, translationState } from "./textCard/cardModel";
+import { annotationState, finalizationState, reviewWord, translationState } from "./textCard/cardModel";
 import { LanguageFlag } from "../ui/LanguageTag";
 import { StageSymbol, type StageTone } from "../ui/StageCell";
 
@@ -285,8 +285,8 @@ function stagePeople(row: DocumentRowView, stage: StageName): string {
 /** The state a stage cell shows (also its sort value); texts outside the plan: "not in plan" and no finalization (D10). */
 export function stageCellText(row: DocumentRowView, stage: StageName): string {
   if (!isActiveRow(row) && stage !== "review") return stage === "annotation" ? "not in plan" : "—";
-  // The card's "in review (Ana Weber)" becomes "in review" plus the grey who.
-  return stage === "review" && stagePeople(row, stage) ? "in review" : STATE_OF[stage](row).state;
+  // The card's "in review (Ana Weber)" becomes "in review" plus the grey who ("assigned, not started" before the first save).
+  return stage === "review" && stagePeople(row, stage) ? reviewWord(row) ?? "in review" : STATE_OF[stage](row).state;
 }
 
 /**

@@ -2787,6 +2787,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   );
 
   const completionResults = resultSnapshots(draft, view.available_inputs ?? []);
+  // Issue 248: proposals submitted as Unresolved are findings, but the submit summary names them.
+  const unresolvedResultCount = isReviewLike(view.key.mode) ? (draft.decisions ?? []).filter(decision => decision.outcome === "uncertain"
+    && completionResults.some(s => s.annotation.annotation_id === decision.target.annotation_id && s.version === decision.target.version)).length : 0;
   /** A finding whose term is a modifier or cohort term (R3, old or imported data). */
   const isModifierTerm = (snapshot: SnapshotLike) => {
     const role = termLabel.info(snapshot.annotation.layer_id, snapshot.annotation.term_id)?.role;
@@ -4242,6 +4245,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         open={submitDialogOpen}
         textName={assignmentNavigation ? taskText(assignmentNavigation.current) : view.document.document_id}
         findingCount={isReviewLike(view.key.mode) ? completionResults.length : (draft.annotations ?? []).length}
+        unresolvedCount={unresolvedResultCount}
         items={openItems}
         unconfirmed={unconfirmed}
         requireChosenAxes={view.require_chosen_axes === true}

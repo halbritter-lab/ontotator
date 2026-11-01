@@ -191,6 +191,12 @@ describe("GroupCard", () => {
     expect(screen.queryByRole("button", { name: "Leave out" })).toBeNull();
   });
 
+  it("says who rejected the proposal instead of nothing here (#248)", () => {
+    renderCard({ ...byId("g-micro"), rejected_by: ["ann-0007"] });
+    expect(screen.getByText("Luc Martin marked this. Tom Reis rejected the proposal.")).toBeTruthy();
+    expect(screen.queryByText(/has nothing here/)).toBeNull();
+  });
+
   it("shows each person's colour key next to their column", () => {
     renderCard(byId("g-hypo"));
     const headers = within(screen.getByRole("table")).getAllByRole("columnheader");

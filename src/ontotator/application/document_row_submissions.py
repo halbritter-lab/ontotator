@@ -69,6 +69,9 @@ class ConsolidationSummary:
     """Findings of a submitted consolidation by their consolidation mark."""
 
     kept_automatically: int = 0  # groups in state "auto"
+    # Groups left out of the result ("not in result"); an attached
+    # standalone modifier is not counted (#248).
+    left_out: int = 0
     flagged_unclear: int = 0  # groups flagged "guidelines unclear"
     # The first flagged group in reading order (``consolidation_group_id``).
     flagged_group_id: str | None = None
@@ -134,7 +137,7 @@ def consolidation_summaries(
         findings: dict[str, list[Finding]] = {sid: [] for sid in found.order}
         for member in found.members.values():
             findings[member.submission_id].append(member.finding)
-        kept = flagged = 0
+        kept = flagged = left_out = 0
         first: str | None = None
         for group in groups(findings, found.order):
             inputs = list(group.members.values())
@@ -148,17 +151,22 @@ def consolidation_summaries(
             state = _state(targets, content)
             if state["state"] == "auto":
                 kept += 1
+            if state["state"] == "leave_out" and not state.get("attached_to"):
+                left_out += 1
             if state["state"] != "open" and state["guidelines_unclear"]:
                 flagged += 1
                 if first is None:
                     first = consolidation_group_id(inputs)
         result[submission_id] = ConsolidationSummary(
-            kept_automatically=kept, flagged_unclear=flagged, flagged_group_id=first
+            kept_automatically=kept,
+            flagged_unclear=flagged,
+            flagged_group_id=first,
+            left_out=left_out,
         )
     return result
 
 
-def _stored_decisions(
+def stored_decisions(
     conn: Connection, pid: int, submission_ids: Iterable[str]
 ) -> dict[str, Any]:
     """The stored decisions JSON per submission (without the snapshots)."""
@@ -220,7 +228,7 @@ def load_consolidation_flags(
         latest[row.document_id] = (row.round_id, row.latest_submission_id)
     if not latest:
         return {}
-    decisions = _stored_decisions(conn, pid, (sid for _, sid in latest.values()))
+    decisions = stored_decisions(conn, pid, (sid for _, sid in latest.values()))
     return {
         document_id: FlaggedConsolidation(round_id=rid, submission_id=sid)
         for document_id, (rid, sid) in latest.items()
@@ -252,7 +260,7 @@ def fill_consolidation_flags(
         for row in rows
         if row["flagged_round_id"] in by_round
     }
-    decisions = _stored_decisions(conn, pid, wanted)
+    decisions = stored_decisions(conn, pid, wanted)
     summaries = consolidation_summaries(
         conn, pid, {sid: (rid, decisions.get(sid)) for sid, rid in wanted.items()}
     )
@@ -416,7 +424,7 @@ def _kept_automatically(
     submission id -> its live consolidation round)."""
     if not rounds:
         return {}
-    decisions = _stored_decisions(conn, pid, rounds)
+    decisions = stored_decisions(conn, pid, rounds)
     summaries = consolidation_summaries(
         conn,
         pid,

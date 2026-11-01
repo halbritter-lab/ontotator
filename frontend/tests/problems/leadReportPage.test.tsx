@@ -55,7 +55,7 @@ describe("lead report page structure", () => {
     expect(back.getAttribute("href")).toBe(routeHref({ name: "projectDocuments", key: "p", ...documents }));
     fireEvent.click(back);
     expect(navigate).toHaveBeenCalledWith({ name: "projectDocuments", key: "p", ...documents });
-    expect(screen.getByText("Problem report · Task 4 (ann-0004) · Annotation · Round 2")).toBeTruthy();
+    expect(screen.getByText("Problem report · accepted-translation de · ann-0004 · Annotation · Round 2")).toBeTruthy();
     expect(screen.getByRole("link", { name: "View text" })).toBeTruthy();
     expect(screen.getByText("Technical details")).toBeTruthy();
   });
@@ -103,11 +103,11 @@ describe("current state panel", () => {
     }) });
     const panel = within(stateSection());
     const facts = [...stateSection().querySelectorAll(".lead-state > div")].map(item => item.textContent);
-    expect(facts[0]).toMatch(/^Task 4Resumed by reporter \(ann-0004\), .*, "upsi"$/);
-    expect(facts[1]).toMatch(/^Task 7Resumed by lead-0002 \(you\), .* · ann-0005, accepted-translation en$/);
-    expect(facts[2]).toMatch(/^Task 8Restarted Round 3 started empty/);
+    expect(facts[0]).toMatch(/^Task of the reporterResumed by reporter \(ann-0004\), .*, "upsi"$/);
+    expect(facts[1]).toMatch(/^Other taskResumed by lead-0002 \(you\), .* · ann-0005, accepted-translation en, annotation$/);
+    expect(facts[2]).toMatch(/^Other taskRestarted Round 3 started empty/);
     expect(facts[3]).toContain("Released (no record of who released it)");
-    expect(facts[4]).toMatch(/^Task 10Paused since .* · ann-0008, accepted-translation de/);
+    expect(facts[4]).toMatch(/^Other taskPaused since .* · ann-0008, accepted-translation de, annotation/);
     expect(facts[4]).toContain("Also paused by another report");
     expect(facts[5]).toBe("Final resultNone · never changed here");
     expect(panel.getByRole("link", { name: "Open report" }).getAttribute("href")).toBe(routeHref({ name: "projectProblemReport", key: "p", reportId: "r2" }));
@@ -134,9 +134,9 @@ describe("current state panel", () => {
 describe("intents", () => {
   // Only what is possible now: unavailable intents are not shown at all (no disabled button, no "Unavailable: …").
   const cases: [string, Partial<ProblemReportView>, string, string | null, string[]][] = [
-    ["open with pause", {}, "Decide", "Close and resume Task 4", ["Close, keep paused…", "Release pause…", "Pause other tasks…", "Agree empty restart…"]],
+    ["open with pause", {}, "Decide", "Close and resume the annotation of accepted-translation de by ann-0004", ["Close, keep paused…", "Release pause…", "Pause other tasks…", "Agree empty restart…"]],
     ["open without pause", { holds: [hold({ active: false })] }, "Decide", null, ["Close report…", "Pause other tasks…", "Agree empty restart…"]],
-    ["closed with pause", { state: "resolved" }, "One step left", "Release pause on Task 4…", ["Reopen report…"]],
+    ["closed with pause", { state: "resolved" }, "One step left", "Release pause on the annotation of accepted-translation de by ann-0004…", ["Reopen report…"]],
     ["closed", { state: "resolved", holds: [hold({ active: false })] }, "Decided", null, ["Reopen report…"]],
     ["withdrawn", { state: "withdrawn", holds: [hold({ active: false })] }, "Decided", null, ["Reopen report…"]],
   ];
@@ -151,7 +151,7 @@ describe("intents", () => {
     // "Other decisions" groups the rest only under the inline "Close and resume".
     expect(screen.queryByRole("heading", { level: 3, name: "Other decisions" }) !== null).toBe(title === "Decide" && primary !== null);
     // The answer field belongs to "Close and resume" only.
-    expect(screen.queryByRole("textbox", { name: /^Answer to / }) !== null).toBe(primary === "Close and resume Task 4");
+    expect(screen.queryByRole("textbox", { name: /^Answer to / }) !== null).toBe(primary === "Close and resume the annotation of accepted-translation de by ann-0004");
   });
 
   it("hides restart while another report also pauses the reporter's task", async () => {
@@ -182,13 +182,13 @@ describe("confirmations", () => {
     act.mockResolvedValue(leadReport({ state: "resolved", revision: 2, resolution: "Fixed text" }));
     fireEvent.click(intent("Close, keep paused…"));
     const box = within(confirmBox("Close report"));
-    expect(box.getByText("Task 4 stays paused. Release it separately with Release pause.")).toBeTruthy();
+    expect(box.getByText("The annotation of accepted-translation de by ann-0004 stays paused. Release it separately with Release pause.")).toBeTruthy();
     fireEvent.click(box.getByRole("button", { name: "Close report" }));
     expect(await box.findByText("Enter a reason.")).toBeTruthy();
     expect(act).not.toHaveBeenCalled();
     fireEvent.change(box.getByRole("textbox", { name: /Outcome for ann-0004/ }), { target: { value: "Fixed text" } });
     fireEvent.click(box.getByRole("button", { name: "Close report" }));
-    const message = await screen.findByText("Report closed. Task 4 is still paused by this report; release it when work can continue.");
+    const message = await screen.findByText("Report closed. The annotation of accepted-translation de by ann-0004 is still paused by this report; release it when work can continue.");
     expect(act).toHaveBeenCalledWith("r1", expect.objectContaining({ action: "resolve", reason: "Fixed text", expected_revision: 1, assignment_ids: [] }));
     await waitFor(() => expect(document.activeElement?.contains(message)).toBe(true));
     expect(screen.getAllByRole("link", { name: /Back to Documents/ })).toHaveLength(2);
@@ -214,8 +214,8 @@ describe("confirmations", () => {
       .mockResolvedValueOnce(leadReport({ state: "resolved", revision: 3, resolution: "Text is fine", holds: [hold({ active: false, release_action: "resume", released_by_label: "lead-0002" })] }));
     expect(answer()).toBe(screen.getByLabelText("Answer to ann-0004"));
     fireEvent.change(answer(), { target: { value: "Text is fine" } });
-    fireEvent.click(screen.getByRole("button", { name: "Close and resume Task 4" }));
-    expect(await screen.findByText(/^Report closed\. Released the pause on .*Task 4.*\. The final result did not change\.$/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Close and resume the annotation of accepted-translation de by ann-0004" }));
+    expect(await screen.findByText(/^Report closed\. Released the pause on .*ann-0004.*\. The final result did not change\.$/)).toBeTruthy();
     expect(act).toHaveBeenNthCalledWith(1, "r1", expect.objectContaining({ action: "resume", reason: "Text is fine", expected_revision: 1, assignment_ids: [4] }));
     expect(act).toHaveBeenNthCalledWith(2, "r1", expect.objectContaining({ action: "resolve", reason: "Text is fine", expected_revision: 2, assignment_ids: [] }));
   });
@@ -224,7 +224,7 @@ describe("confirmations", () => {
     const { act } = await setup();
     act.mockResolvedValueOnce(leadReport({ revision: 2, holds: [hold({ active: false, release_action: "resume", released_by_label: "lead-0002" })] }))
       .mockResolvedValueOnce(leadReport({ state: "resolved", revision: 3, holds: [hold({ active: false, release_action: "resume", released_by_label: "lead-0002" })] }));
-    fireEvent.click(screen.getByRole("button", { name: "Close and resume Task 4" }));
+    fireEvent.click(screen.getByRole("button", { name: "Close and resume the annotation of accepted-translation de by ann-0004" }));
     await screen.findByText(/^Report closed\. Released the pause/);
     expect(act).toHaveBeenNthCalledWith(1, "r1", expect.objectContaining({ action: "resume", reason: DEFAULT_RESUME_ANSWER }));
     expect(act).toHaveBeenNthCalledWith(2, "r1", expect.objectContaining({ action: "resolve", reason: DEFAULT_RESUME_ANSWER }));
@@ -237,9 +237,9 @@ describe("confirmations", () => {
     act.mockResolvedValueOnce(leadReport({ revision: 2, holds: [hold({ active: false, release_action: "resume", released_by_label: "lead-0002" })] }))
       .mockRejectedValueOnce(new TypeError("Failed to fetch"));
     fireEvent.change(answer(), { target: { value: "Text is fine" } });
-    fireEvent.click(screen.getByRole("button", { name: "Close and resume Task 4" }));
-    expect(await screen.findByText(/^Released the pause on .*Task 4.*\. The report is still open\.$/)).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Close and resume Task 4" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Close and resume the annotation of accepted-translation de by ann-0004" }));
+    expect(await screen.findByText(/^Released the pause on .*ann-0004.*\. The report is still open\.$/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Close and resume the annotation of accepted-translation de by ann-0004" })).toBeNull();
   });
 
   it("close and resume: a conflict stays shown even when the pause is gone, Review again lets it go", async () => {
@@ -247,7 +247,7 @@ describe("confirmations", () => {
     act.mockRejectedValue(new ConflictError("changed", "WORKFLOW_REVISION_CONFLICT", { reason: "REPORT_RESOLVED" }));
     get.mockResolvedValue(leadReport({ revision: 2, holds: [hold({ active: false, release_action: "resume", released_by_label: "ann-0004" })] }));
     fireEvent.change(answer(), { target: { value: "Text is fine" } });
-    fireEvent.click(screen.getByRole("button", { name: "Close and resume Task 4" }));
+    fireEvent.click(screen.getByRole("button", { name: "Close and resume the annotation of accepted-translation de by ann-0004" }));
     expect(await screen.findByText(/This report changed since you opened it/)).toBeTruthy();
     expect(answer()).toHaveProperty("value", "Text is fine");
     fireEvent.click(screen.getByRole("button", { name: "Review again" }));
@@ -260,7 +260,7 @@ describe("confirmations", () => {
       .mockResolvedValueOnce(leadReport({ revision: 2, holds: [hold({ active: false, release_action: "resume", released_by_label: "lead-0002" })] }))
       .mockResolvedValueOnce(leadReport({ state: "resolved", revision: 3, holds: [hold({ active: false, release_action: "resume", released_by_label: "lead-0002" })] }));
     fireEvent.change(answer(), { target: { value: "Fine" } });
-    fireEvent.click(screen.getByRole("button", { name: "Close and resume Task 4" }));
+    fireEvent.click(screen.getByRole("button", { name: "Close and resume the annotation of accepted-translation de by ann-0004" }));
     fireEvent.click(await screen.findByRole("button", { name: "Retry" }));
     await screen.findByText(/^Report closed\. Released the pause/);
     expect(act.mock.calls[0]![1].request_id).toBe(act.mock.calls[1]![1].request_id);
@@ -272,32 +272,32 @@ describe("confirmations", () => {
     act.mockResolvedValue(leadReport({ revision: 2, holds: [hold({ active: false, release_action: "resume", released_by_label: "lead-0002" }), two[1]!] }));
     fireEvent.click(intent("Release pause…"));
     let box = within(confirmBox("Release pause"));
-    expect(box.getByRole("checkbox", { name: /Task 4/ })).toHaveProperty("checked", false);
+    expect(box.getByRole("checkbox", { name: /^ann-0004,/ })).toHaveProperty("checked", false);
     expect(box.getByText(/Also paused by another report: stays paused/)).toBeTruthy();
     fireEvent.change(box.getByRole("textbox", { name: /Reason/ }), { target: { value: "Fixed" } });
     fireEvent.click(box.getByRole("button", { name: "Release pause" }));
     expect(await box.findByText("Choose at least one task.")).toBeTruthy();
-    fireEvent.click(box.getByRole("checkbox", { name: /Task 4/ }));
-    fireEvent.click(box.getByRole("checkbox", { name: /Task 7/ }));
+    fireEvent.click(box.getByRole("checkbox", { name: /^ann-0004,/ }));
+    fireEvent.click(box.getByRole("checkbox", { name: /^ann-0005,/ }));
     expect(box.getByRole("button", { name: "Release 2 pauses" })).toBeTruthy();
-    fireEvent.click(box.getByRole("checkbox", { name: /Task 7/ }));
+    fireEvent.click(box.getByRole("checkbox", { name: /^ann-0005,/ }));
     fireEvent.click(box.getByRole("button", { name: "Release pause" }));
-    await screen.findByText(/Released the pause on Task 4 \(ann-0004\)\. The report is still open\./);
+    await screen.findByText(/Released the pause on the annotation of accepted-translation de by ann-0004\. The report is still open\./);
     expect(act).toHaveBeenCalledWith("r1", expect.objectContaining({ action: "resume", assignment_ids: [4] }));
     cleanup(); vi.restoreAllMocks();
 
     await setup();
     fireEvent.click(intent("Release pause…"));
     box = within(confirmBox("Release pause"));
-    expect(box.getByRole("checkbox", { name: /Task 4/ })).toHaveProperty("checked", true);
+    expect(box.getByRole("checkbox", { name: /^ann-0004,/ })).toHaveProperty("checked", true);
   });
 
   it("action=resume opens Release pause with the reporter's task preselected and sends nothing", async () => {
     const two = [hold({ hold_id: "h2", assignment_id: 7, owner_label: "ann-0005" }), hold()];
     const { act } = await setup({ view: leadReport({ holds: two }), action: "resume" });
     const box = within(await screen.findByRole("group", { name: "Release pause" }));
-    expect(box.getByRole("checkbox", { name: /Task 4/ })).toHaveProperty("checked", true);
-    expect(box.getByRole("checkbox", { name: /Task 7/ })).toHaveProperty("checked", false);
+    expect(box.getByRole("checkbox", { name: /^ann-0004,/ })).toHaveProperty("checked", true);
+    expect(box.getByRole("checkbox", { name: /^ann-0005,/ })).toHaveProperty("checked", false);
     expect(act).not.toHaveBeenCalled();
   });
 
@@ -314,19 +314,19 @@ describe("confirmations", () => {
     const box = within(confirmBox("Pause other tasks"));
     const same = await box.findByRole("group", { name: "Same text: accepted-translation" });
     expect(listCandidates).toHaveBeenCalledTimes(1);
-    const paused = within(same).getByRole("checkbox", { name: /Task 4/ });
+    const paused = within(same).getByRole("checkbox", { name: /^ann-0004,/ });
     expect(paused.getAttribute("aria-disabled")).toBe("true");
     expect(within(same).getByText("Already paused by this report")).toBeTruthy();
     fireEvent.click(paused);
     expect(paused).toHaveProperty("checked", false);
-    expect(box.queryByRole("checkbox", { name: /Task 12/ })).toBeNull();
+    expect(box.queryByRole("checkbox", { name: /ann-0009/ })).toBeNull();
     fireEvent.change(box.getByRole("textbox", { name: "Search other tasks" }), { target: { value: "other" } });
-    expect(box.queryByRole("checkbox", { name: /Task 13/ })).toBeNull();
-    fireEvent.click(within(same).getByRole("checkbox", { name: /Task 7/ }));
-    fireEvent.click(box.getByRole("checkbox", { name: /Task 12/ }));
+    expect(box.queryByRole("checkbox", { name: /^rev-0001,/ })).toBeNull();
+    fireEvent.click(within(same).getByRole("checkbox", { name: /^ann-0005,/ }));
+    fireEvent.click(box.getByRole("checkbox", { name: /ann-0009/ }));
     fireEvent.change(box.getByRole("textbox", { name: /Reason shown to the task owners/ }), { target: { value: "Same source" } });
     fireEvent.click(box.getByRole("button", { name: "Pause 2 tasks" }));
-    await screen.findByText("Paused Task 7 (ann-0005) and Task 12 (ann-0009). Their owners see your reason. The report is still open.");
+    await screen.findByText("Paused the annotation of accepted-translation de by ann-0005 and the annotation of accepted-translation de by ann-0009. Their owners see your reason. The report is still open.");
     expect(act).toHaveBeenCalledWith("r1", expect.objectContaining({ action: "extend_hold", assignment_ids: [7, 12] }));
   });
 
@@ -336,7 +336,7 @@ describe("confirmations", () => {
     act.mockRejectedValue(new ConflictError("held", "TASK_HELD", { assignment_id: 4 }));
     get.mockResolvedValue(view);
     fireEvent.click(intent("Agree empty restart…"));
-    const box = within(confirmBox("Agree empty restart of Task 4"));
+    const box = within(confirmBox("Agree empty restart of the annotation of accepted-translation de by ann-0004"));
     expect(box.getByText("Round 3 is abandoned and kept; Round 4 starts empty.")).toBeTruthy();
     expect(box.getByText("Final result stays: None.")).toBeTruthy();
     const confirm = box.getByRole("button", { name: "Restart with empty round" });
@@ -347,7 +347,7 @@ describe("confirmations", () => {
     expect(act).not.toHaveBeenCalled();
     fireEvent.click(box.getByRole("checkbox", { name: /I agreed this restart with ann-0004/ }));
     fireEvent.click(confirm);
-    expect(await box.findByText(/Task 4 is also paused by another report\. Nothing changed\. Release that pause first\./)).toBeTruthy();
+    expect(await box.findByText(/The annotation of accepted-translation de by ann-0004 is also paused by another report\. Nothing changed\. Release that pause first\./)).toBeTruthy();
     expect(act).toHaveBeenCalledWith("r1", expect.objectContaining({ action: "restart", assignment_ids: [4] }));
     expect(box.getByRole("link", { name: "Open report" }).getAttribute("href")).toBe(routeHref({ name: "projectProblemReport", key: "p", reportId: "r9" }));
   });
@@ -373,7 +373,7 @@ describe("confirmations", () => {
     let box = within(confirmBox("Close report"));
     fireEvent.change(box.getByRole("textbox", { name: /Outcome for/ }), { target: { value: "My outcome" } });
     fireEvent.click(box.getByRole("button", { name: "Close report" }));
-    expect(await box.findByText(/This report changed since you opened it\. Nothing was saved\. ann-0004 resumed Task 4 \(ann-0004\)\./)).toBeTruthy();
+    expect(await box.findByText(/This report changed since you opened it\. Nothing was saved\. ann-0004 resumed the annotation of accepted-translation de by ann-0004\./)).toBeTruthy();
     expect(box.getByText(/Changed by ann-0004 at/)).toBeTruthy();
     fireEvent.click(box.getByRole("button", { name: "Review again" }));
     box = within(confirmBox("Close report"));
@@ -428,10 +428,10 @@ describe("display names for leads", () => {
       ] }),
       candidates: [candidate({ owner: BEN })],
     });
-    expect(screen.getByText("Problem report · Task 4, Ana Weber (ann-0004) · Annotation · Round 2")).toBeTruthy();
+    expect(screen.getByText("Problem report · accepted-translation de · Ana Weber (ann-0004) · Annotation · Round 2")).toBeTruthy();
     expect(screen.getByText(/Reported by Ana Weber \(ann-0004\)/)).toBeTruthy();
     const facts = [...stateSection().querySelectorAll(".lead-state > div")].map(item => item.textContent);
-    expect(facts[0]).toMatch(/^Task 4Paused since/);
+    expect(facts[0]).toMatch(/^Task of the reporterPaused since/);
     expect(facts[1]).toContain("Resumed by Lea Lang (lead-0002, you)");
     expect(facts[1]).toContain("Ben Ito (ann-0005), accepted-translation de");
     expect(facts[2]).toContain("Cleo Park (ann-0006)");
@@ -439,7 +439,7 @@ describe("display names for leads", () => {
     expect(within(screen.getByRole("region", { name: "History" })).getByText(/^Ana Weber \(ann-0004\) reported the problem\./)).toBeTruthy();
     fireEvent.click(intent("Pause other tasks…"));
     const same = await within(confirmBox("Pause other tasks")).findByRole("group", { name: "Same text: accepted-translation" });
-    expect(within(same).getByRole("checkbox", { name: /Task 7, Ben Ito \(ann-0005\), accepted-translation en/ })).toBeTruthy();
+    expect(within(same).getByRole("checkbox", { name: /^Ben Ito \(ann-0005\), accepted-translation en, annotation/ })).toBeTruthy();
     cleanup(); vi.restoreAllMocks();
 
     await setup({ view: leadReport({ state: "resolved", resolution: "Done", state_changed_by_label: "lead-0002", state_changed_by: ME, state_changed_at: T2 }) });
@@ -455,12 +455,12 @@ describe("display names for leads", () => {
     const box = within(confirmBox("Pause other tasks"));
     const search = await box.findByRole("textbox", { name: "Search other tasks" });
     fireEvent.change(search, { target: { value: "dora" } });
-    expect(box.getByRole("checkbox", { name: /Task 12, Dora Diaz \(ann-0009\), other-text en/ })).toBeTruthy();
-    expect(box.queryByRole("checkbox", { name: /Task 13/ })).toBeNull();
+    expect(box.getByRole("checkbox", { name: /^Dora Diaz \(ann-0009\), other-text en, annotation/ })).toBeTruthy();
+    expect(box.queryByRole("checkbox", { name: /^rev-0001,/ })).toBeNull();
     fireEvent.change(search, { target: { value: "ann-0009" } });
-    expect(box.getByRole("checkbox", { name: /Task 12/ })).toBeTruthy();
+    expect(box.getByRole("checkbox", { name: /ann-0009/ })).toBeTruthy();
     fireEvent.change(search, { target: { value: "rev-0001" } });
-    expect(box.getByRole("checkbox", { name: /Task 13, rev-0001, third-text/ })).toBeTruthy();
+    expect(box.getByRole("checkbox", { name: /^rev-0001, third-text/ })).toBeTruthy();
   });
 
   it("confirmation copy names the reporter as Name (ann-…)", async () => {
@@ -472,7 +472,7 @@ describe("display names for leads", () => {
     expect(box.getByRole("textbox", { name: /Outcome for Ana Weber \(ann-0004\)/ })).toBeTruthy();
     expect(box.getByText("Ana Weber (ann-0004) sees this in the report.")).toBeTruthy();
     fireEvent.click(intent("Agree empty restart…"));
-    box = within(confirmBox("Agree empty restart of Task 4"));
+    box = within(confirmBox("Agree empty restart of the annotation of accepted-translation de by Ana Weber (ann-0004)"));
     expect(box.getByRole("checkbox", { name: /I agreed this restart with Ana Weber \(ann-0004\)/ })).toBeTruthy();
     expect(box.getByRole("textbox", { name: /Reason \(becomes the outcome Ana Weber \(ann-0004\) sees\)/ })).toBeTruthy();
     act.mockResolvedValue(leadReport({ reporter: ANA, revision: 2, holds: [hold({ owner: ANA, active: false, release_action: "resume", released_by_label: "lead-0002" })] }));
@@ -480,6 +480,6 @@ describe("display names for leads", () => {
     box = within(confirmBox("Release pause"));
     fireEvent.change(box.getByRole("textbox", { name: /Reason/ }), { target: { value: "Go on" } });
     fireEvent.click(box.getByRole("button", { name: "Release pause" }));
-    await screen.findByText(/Released the pause on Task 4, Ana Weber \(ann-0004\)\./);
+    await screen.findByText(/Released the pause on the annotation of accepted-translation de by Ana Weber \(ann-0004\)\./);
   });
 });

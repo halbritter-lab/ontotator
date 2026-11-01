@@ -202,7 +202,7 @@ test("D15: import, plan de, assign de, plan fr, assign fr", async ({ page }) => 
   // The selection is cleared after a successful assign.
   await expect(bar(page)).toHaveCount(0);
   for (const caseId of [de[0], de[19]]) {
-    await expect(rowCell(row(page, caseId, "de"), "translation")).toContainText(`in review (${s.display_names.ana})`);
+    await expect(rowCell(row(page, caseId, "de"), "translation")).toContainText(`assigned, not started (${s.display_names.ana})`);
     await expect(rowCell(row(page, caseId, "de"), "waiting")).toContainText(person(s, "ana"));
   }
   await expect(documentsTab(page, "In progress", 20)).toBeVisible();
@@ -274,7 +274,7 @@ test("ANNOTATION_BATCH: later annotation batch via To assign (5 clicks) while 6 
   await page.keyboard.press("Escape");
   await expect(page.getByRole("button", { name: /^Text case-\d{4} de$/ })).toHaveCount(6);
   for (const caseId of s.in_review!) {
-    await expect(rowCell(row(page, caseId, "de"), "translation")).toContainText(`in review (${s.display_names.ana})`);
+    await expect(rowCell(row(page, caseId, "de"), "translation")).toContainText(`assigned, not started (${s.display_names.ana})`);
     await expect(rowCell(row(page, caseId, "de"), "annotation")).toContainText("after translation review");
     await expect(rowCell(row(page, caseId, "de"), "waiting")).toContainText(person(s, "ana"));
   }

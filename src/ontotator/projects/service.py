@@ -24,6 +24,11 @@ from ontotator.domain.workspace import Draft
 from ontotator.exchange.t1 import Pin, T1Profile, check_t1_profile
 from ontotator.ontology.service import OntologyService
 from ontotator.ontology.store import OntologyStore
+from ontotator.ontology.translation_freeze import (
+    frozen_files,
+    not_included,
+    ontology_prefixes,
+)
 from ontotator.packages.models import PackageManifest
 from ontotator.projects.repin import (
     RepinReport,
@@ -61,6 +66,26 @@ class PinnedOntology(ProjectPin):
     release: str
 
 
+class FrozenTranslation(BaseModel):
+    """A translation file a project's search conditions hold (#254)."""
+
+    ontology_id: str
+    filename: str
+    sha256: str
+    languages: list[str]
+
+
+class FrozenTranslations(BaseModel):
+    """The translations frozen at the project's first use of its ontology.
+
+    A later upload does not reach the project; ``not_included`` names the
+    current server files of its ontologies that it does not use.
+    """
+
+    files: list[FrozenTranslation]
+    not_included: list[str] = Field(default_factory=list)
+
+
 class ProjectSettingsChange(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str = ""
@@ -92,6 +117,8 @@ class ProjectSettings(ProjectSettingsChange):
     locked: bool
     axis_defaults: dict[str, dict[str, str]]
     annotation_policy_revision: int = 1
+    # ``None``: not frozen yet, the first use takes the server's translations.
+    frozen_translations: FrozenTranslations | None = None
 
 
 def validate_creation_defaults(
@@ -345,7 +372,38 @@ class ProjectService:
                 locked=self._locked(conn, row["id"]),
                 axis_defaults=axis_defaults(profile, pins),
                 annotation_policy_revision=row["annotation_policy_revision"],
+                frozen_translations=self._frozen_translations(conn, row["id"], profile),
             )
+
+    def _frozen_translations(
+        self, conn: Connection, project_id: int, profile: TaskProfile
+    ) -> FrozenTranslations | None:
+        """Read the captured conditions only; never capture them (#254)."""
+        conditions = conn.execute(
+            select(ProjectSearchConditionsRow.conditions).where(
+                ProjectSearchConditionsRow.project_id == project_id
+            )
+        ).scalar_one_or_none()
+        if conditions is None:
+            return None
+        ontology_ids = {
+            item.sha256.lower(): item.ontology_id for item in profile.ontologies
+        }
+        prefixes = ontology_prefixes(conn, self.store.loaded_prefixes())
+        return FrozenTranslations(
+            files=[
+                FrozenTranslation(
+                    ontology_id=ontology_ids.get(
+                        item.ontology_sha256, item.ontology_sha256
+                    ),
+                    filename=item.filename,
+                    sha256=item.sha256,
+                    languages=list(item.languages),
+                )
+                for item in frozen_files(conditions)
+            ],
+            not_included=not_included(conn, conditions, prefixes),
+        )
 
     def create(
         self,

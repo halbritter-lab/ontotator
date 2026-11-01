@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import Connection, RowMapping, func, insert, select
+from sqlalchemy import Connection, RowMapping, func, insert, select, update
 
 from ontotator.application.work_plans import _chains
 from ontotator.application.work_plans import _target as _row_target
@@ -746,6 +746,15 @@ class TextChangeService:
                     lead=True,
                     owner=owner,
                 )
+                if old["status"] != "open":
+                    # Issue 258: the person's saved draft continues on the
+                    # target, so the work stays started ("in progress"); the
+                    # new round would otherwise read "Assigned, not started".
+                    conn.execute(
+                        update(AssignmentRow)
+                        .where(AssignmentRow.id == created.id)
+                        .values(status="in_progress")
+                    )
             revoke_assignments(conn, actor, pid, [dict(old)], now, reason=MOVED_REASON)
             self._record(
                 conn,

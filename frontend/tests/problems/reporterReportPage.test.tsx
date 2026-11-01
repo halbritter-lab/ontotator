@@ -13,7 +13,7 @@ it("shows the reporter's own report from a direct link and marks it seen (#49 R-
   expect(await screen.findByRole("heading", { level: 1, name: "Text is cut off after the second paragraph" })).toBeDefined();
   expect(seen).toHaveBeenCalledWith("r1");
   expect(screen.getByText(/Outcome: Source fixed/)).toBeDefined();
-  fireEvent.click(screen.getByRole("link", { name: "Open Task 4" }));
+  fireEvent.click(screen.getByRole("link", { name: "Open your task on accepted-translation de" }));
   expect(onNavigate).toHaveBeenCalledWith({ name: "task", assignmentId: 4 });
 });
 

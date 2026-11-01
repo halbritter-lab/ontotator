@@ -57,7 +57,7 @@ const SCENARIOS: Record<Exclude<OverviewScenarioName, "WALKTHROUGH">, (RowExpect
     { case_id: "case-102", language: "de", translation: { state: "Check failed", who: "" }, annotation: AFTER_REVIEW, finalization: WAITING, waiting: "You", action: "Assign review…", edge: false },
   ],
   S3: [
-    { case_id: "case-103", language: "de", translation: { state: `in review (${ANA})`, who: "" }, annotation: AFTER_REVIEW, finalization: WAITING, waiting: [ANA], action: "Assign annotation…", edge: false },
+    { case_id: "case-103", language: "de", translation: { state: `assigned, not started (${ANA})`, who: "" }, annotation: AFTER_REVIEW, finalization: WAITING, waiting: [ANA], action: "Assign annotation…", edge: false },
   ],
   S4: [
     { case_id: "case-104", language: "de", translation: { state: "Rejected", who: "" }, annotation: AFTER_REVIEW, finalization: WAITING, waiting: "You", action: "Resolve…", edge: true },
@@ -67,7 +67,7 @@ const SCENARIOS: Record<Exclude<OverviewScenarioName, "WALKTHROUGH">, (RowExpect
     { case_id: "case-105", language: "de", translation: ACCEPTED, annotation: { state: "Unassigned", who: "" }, finalization: WAITING, waiting: "You", action: "Assign annotation…", edge: false },
   ],
   S6: [
-    { case_id: "case-106", language: "de", translation: ACCEPTED, annotation: { state: "1 of 2 submitted", who: TOM }, finalization: CAN_ACCEPT, waiting: [TOM], action: null, edge: false },
+    { case_id: "case-106", language: "de", translation: ACCEPTED, annotation: { state: "1 of 2 submitted, not started", who: TOM }, finalization: CAN_ACCEPT, waiting: [TOM], action: null, edge: false },
   ],
   S7a: [
     { case_id: "case-107", language: "de", translation: ACCEPTED, annotation: SUBMITTED, finalization: { state: "Your choice", who: "" }, waiting: "You", action: "Accept result…", edge: true },
@@ -105,7 +105,7 @@ const SCENARIOS: Record<Exclude<OverviewScenarioName, "WALKTHROUGH">, (RowExpect
     { case_id: "case-115", language: "de", translation: { state: "Source changed", who: "" }, annotation: SUBMITTED, finalization: { state: "may be outdated", who: "" }, waiting: "You", action: "Assign review…", edge: false },
   ],
   S16: [
-    { case_id: "case-116", language: "de", translation: { state: `in review (${ANA})`, who: "" }, annotation: { state: /\d+ of \d+ submitted/, who: TOM }, finalization: WAITING, waiting: [ANA, TOM], action: null, edge: false },
+    { case_id: "case-116", language: "de", translation: { state: `in review (${ANA})`, who: "" }, annotation: { state: "assigned, not started", who: TOM }, finalization: WAITING, waiting: [ANA, TOM], action: null, edge: false },
   ],
 };
 

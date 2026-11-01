@@ -437,6 +437,14 @@ describe("Review cases", () => {
     expect(dialog.textContent).toContain("2 findings, nothing open.");
   });
 
+  it("names a proposal left Unresolved in the summary (#248)", async () => {
+    const unresolved = { ...confirmed, outcome: "uncertain" as const, note: "Pale or just tired?" };
+    render(<CaseScreen view={reviewView([unresolved])} workspaceId="ws" onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Finish & submit/i }));
+    const dialog = await screen.findByRole("dialog", { name: /Submit text/i });
+    expect(dialog.textContent).toContain("1 finding, 1 unresolved, nothing open.");
+  });
+
   it("quotes each proposal's text so equally named proposals can be told apart", () => {
     const view = reviewView();
     const second = proposal("prop-2", "p2-v1", "HP:0001", [{ start: 11, end: 16 }]);

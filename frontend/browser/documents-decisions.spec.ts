@@ -357,7 +357,6 @@ test("S13 session ends during a decision: nothing is saved and the decision stay
 test("S12 Resume task opens the report with the pause preselected; releasing it and going back shows Resolved", async ({ page }) => {
   const { s, labels } = await prepare(page, "S12");
   const caseId = "case-0512";
-  const assignments = s.assignments as Record<string, number>;
   await openDocuments(page, s, "?decision=report-or-pause");
   await expect(textRow(page, caseId, "de")).toBeVisible();
   await expect(textRow(page, caseId, "en")).toBeVisible();
@@ -380,7 +379,7 @@ test("S12 Resume task opens the report with the pause preselected; releasing it 
   await expect(page.getByText(/^Problem report · /)).toBeVisible();
   const release = page.getByRole("group", { name: "Release pause", exact: true });
   await expect(release).toBeVisible();
-  await expect(release.getByRole("checkbox", { name: new RegExp(`^Task ${assignments.de}${SEP}`) })).toBeChecked();
+  await expect(release.getByRole("checkbox", { name: new RegExp(`, ${esc(caseId)} de, annotation$`) })).toBeChecked();
   await release.getByRole("textbox", { name: /Reason/ }).fill("The question is answered; continue the annotation.");
   await release.getByRole("button", { name: "Release pause", exact: true }).click();
   await expect(page.getByText(/^Released the pause on /)).toBeVisible();
@@ -399,14 +398,14 @@ test("S14 waiting: an open translation review and open work after an early selec
   await expect(documentsTab(page, "Needs your decision", 0)).toBeVisible();
   await expect(documentsTab(page, "In progress", 2)).toBeVisible();
 
-  // de: the translation review of v1 is open; it waits on the reviewer, no action.
+  // de: the translation review of v1 is open, nobody saved it yet (issue 258); it waits on the reviewer, no action.
   const de = textRow(page, caseId, "de");
-  await expect(rowCell(de, "translation")).toContainText("in review");
+  await expect(rowCell(de, "translation")).toContainText("assigned, not started");
   await expect(rowCell(de, "waiting")).toContainText(labels.reviewer);
   await expect(rowCell(de, "next")).toHaveText("");
   // en: Round 1 of ann-0002 is still open after the early selection; it waits on ann-0002.
   const en = textRow(page, caseId, "en");
-  await expect(rowCell(en, "annotation")).toContainText("1 of 1 submitted");
+  await expect(rowCell(en, "annotation")).toContainText("1 of 1 submitted, not started");
   await expect(rowCell(en, "waiting")).toContainText(labels["ann-0002"]);
   await expect(rowCell(en, "next")).toHaveText("");
   const area = await openCardHistory(page, caseId, "en");
