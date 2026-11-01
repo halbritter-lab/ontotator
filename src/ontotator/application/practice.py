@@ -59,6 +59,9 @@ from ontotator.storage.workflow_tables import RoundInputRow
 logger = logging.getLogger(__name__)
 
 LIFETIME = timedelta(days=30)
+# The same for everyone: a person's name in it would stay in the audit trail
+# (``project.create``) after the account is anonymised (issue 280).
+NAME = "Practice project"
 # User languages are free two- or three-letter codes, not mapped to one form.
 GERMAN = frozenset({"de", "deu", "ger"})
 ACTOR = Actor(None, "system:practice")
@@ -159,6 +162,10 @@ class _Owner:
     username: str
     display_name: str
     pseudonym: str
+
+
+class _AlreadyStarted(Exception):
+    """Another request (a second tab) created the practice project first."""
 
 
 def _activity(project_id: Any) -> Any:
@@ -477,23 +484,22 @@ class PracticeService:
         ).one()
         return _Owner(row.id, row.username, row.display_name, row.pseudonym)
 
-    def start(self, user_id: int) -> PracticeState:
-        """Create the user's practice project, or keep the one they have.
+    @staticmethod
+    def _lock(conn: Connection, user_id: int) -> None:
+        from ontotator.storage.repository import _lock_id
+
+        conn.execute(
+            select(func.pg_advisory_xact_lock(_lock_id("practice", str(user_id))))
+        )
+
+    def _require_available(self, user_id: int) -> tuple[Any, Pin]:
+        """The HPO release for a new practice project of this user.
 
         Raises:
             DomainError: ``PRACTICE_UNAVAILABLE`` with the reason.
         """
-        from ontotator.storage.repository import _lock_id
-
         with self.db.transaction() as conn:
-            conn.execute(
-                select(func.pg_advisory_xact_lock(_lock_id("practice", str(user_id))))
-            )
-            if store.practice_project_of(conn, user_id) is not None:
-                return self.state(user_id)
             reason, _ = self._unavailable(conn, user_id)
-            consolidation = "adjudicator" in self._roles_elsewhere(conn, user_id)
-            owner = self._owner(conn, user_id)
         chosen = None if reason else self._ontology()
         if reason is None and chosen is None:
             reason = "no_ontology"
@@ -502,13 +508,32 @@ class PracticeService:
                 "PRACTICE_UNAVAILABLE", {"reason": reason, "message": _MESSAGES[reason]}
             )
         assert chosen is not None
-        key = f"practice-{owner.id}-{secrets.token_hex(3)}"
-        try:
-            self._build(key, owner, chosen[0], chosen[1], consolidation)
-        except Exception:
-            # A half-built practice project is removed again.
-            self._remove(key, ACTOR, "start_failed")
-            raise
+        return chosen
+
+    def start(self, user_id: int) -> PracticeState:
+        """Create the user's practice project, or keep the one they have.
+
+        Raises:
+            DomainError: ``PRACTICE_UNAVAILABLE`` with the reason.
+        """
+        with self.db.transaction() as conn:
+            self._lock(conn, user_id)
+            existing = store.practice_project_of(conn, user_id)
+            consolidation = "adjudicator" in self._roles_elsewhere(conn, user_id)
+            owner = self._owner(conn, user_id)
+        if existing is None:
+            ontology, pin = self._require_available(user_id)
+            key = f"practice-{owner.id}-{secrets.token_hex(3)}"
+            try:
+                self._build(key, owner, ontology, pin, consolidation)
+            except _AlreadyStarted:
+                # A second tab: the project the first one built is the answer.
+                pass
+            except Exception:
+                # A half-built practice project is removed again.
+                self._remove(key, ACTOR, "start_failed")
+                raise
+        # Read after the commit, so a due sweep removes its files as well.
         return self.state(user_id)
 
     def _build(
@@ -521,18 +546,24 @@ class PracticeService:
 
         profile = hpo_phenotype(ontology)
         projects = ProjectService(self.db, self.ontologies)
-        projects.create(
-            ACTOR,
-            key=key,
-            name=f"Practice · {owner.display_name}"[:200],
-            description="Invented texts for practice. Nothing here counts.",
-            profile=profile,
-            pins={"HP": pin},
-            languages=content.LANGUAGES,
-            practice=True,
-        )
         now = self._now()
+        # The project and its owner row commit together: a crash leaves both
+        # (the owner sees it, resets it or lets it expire) or neither.
         with self.db.transaction() as conn:
+            # Held until the commit: a second request waits, then finds the row.
+            self._lock(conn, owner.id)
+            if store.practice_project_of(conn, owner.id) is not None:
+                raise _AlreadyStarted
+            projects.create(
+                ACTOR,
+                key=key,
+                name=NAME,
+                description="Invented texts for practice. Nothing here counts.",
+                profile=profile,
+                pins={"HP": pin},
+                languages=content.LANGUAGES,
+                practice=True,
+            )
             pid = conn.execute(
                 select(ProjectRow.id).where(ProjectRow.project_key == key)
             ).scalar_one()
@@ -767,7 +798,7 @@ class PracticeService:
             )
 
     def _remove(self, key: str, actor: Actor, reason: str) -> None:
-        from ontotator.exchange.jobs import unlink_deleted_files
+        from ontotator.exchange.jobs import unlink_after_commit
 
         with self.db.transaction() as conn:
             exists = conn.execute(
@@ -780,8 +811,8 @@ class PracticeService:
                 if exists
                 else []
             )
-        if not self.db.in_transaction():
-            unlink_deleted_files(self.db, deleted)
+            # Inside a caller's transaction, the files go after its commit.
+            unlink_after_commit(self.db, deleted)
 
     def delete(self, user_id: int, actor: Actor) -> PracticeState:
         with self.db.transaction() as conn:
@@ -791,7 +822,13 @@ class PracticeService:
         return self.state(user_id)
 
     def reset(self, user_id: int, actor: Actor) -> PracticeState:
-        """Delete the practice project and start a fresh one."""
+        """Delete the practice project and start a fresh one.
+
+        Raises:
+            DomainError: ``PRACTICE_UNAVAILABLE``, before anything is deleted,
+                when no new project could be started.
+        """
+        self._require_available(user_id)
         with self.db.transaction() as conn:
             key = store.practice_project_of(conn, user_id)
         if key is not None:
@@ -862,7 +899,9 @@ class PracticeService:
     # --- expiry ---------------------------------------------------------------
 
     def expire(self) -> list[str]:
-        """Delete every practice project without activity for ``LIFETIME``."""
+        """Delete every practice project without activity for ``LIFETIME``,
+        and every practice project without an owner row: one a build left
+        behind when it crashed before creation became atomic (issue 286)."""
         cutoff = self._now() - LIFETIME
         with self.db.transaction() as conn:
             keys = list(
@@ -877,6 +916,16 @@ class PracticeService:
                     )
                 ).scalars()
             )
+            keys += conn.execute(
+                select(ProjectRow.project_key)
+                .outerjoin(
+                    PracticeProjectRow, PracticeProjectRow.project_id == ProjectRow.id
+                )
+                .where(
+                    ProjectRow.practice.is_(True),
+                    PracticeProjectRow.project_id.is_(None),
+                )
+            ).scalars()
         removed = []
         for key in keys:
             try:
