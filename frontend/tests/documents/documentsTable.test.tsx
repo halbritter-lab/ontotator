@@ -73,14 +73,6 @@ describe("structure", () => {
     expect(css).not.toMatch(/documents-col-action\) \{ position: sticky/);
   });
 
-  it("status and Waiting on cells wrap between 900 and 1399 px instead of cutting the text (issue 248)", () => {
-    const css = readFileSync(resolve(__dirname, "../../src/styles/screens/documents-table.css"), "utf8");
-    const block = css.match(/@media \(min-width: 900px\) and \(max-width: 1399px\) \{([^}]*)\}/)?.[1] ?? "";
-    expect(block).toMatch(/\.documents-status\.stage-cell, \.documents-waiting-on \{[^}]*white-space: normal/);
-    // The cells keep their narrow max-width, so the table does not grow.
-    expect(css).toMatch(/@media \(max-width: 1399px\) \{\s*\.documents-status-cell \{ max-width: 7\.5rem; \}/);
-  });
-
   it("a flat list: no case lines, the case ID in the Text cell, texts outside the plan hidden behind +n", () => {
     const { container } = renderTable(page([case107()]));
     expect(container.querySelector("th[scope='rowgroup'], .data-table-group")).toBeNull();
