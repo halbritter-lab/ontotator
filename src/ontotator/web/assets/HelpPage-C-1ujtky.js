@@ -1,4 +1,4 @@
-import{r,a as m,j as a,b as h}from"./index-PoVjQpA1.js";import{M as f,r as g}from"./index-BWlOzvyh.js";function w(){const[e,t]=r.useState(null);return r.useEffect(()=>{let o=!0;return m.getAbout().then(n=>{o&&t(n)},()=>{}),()=>{o=!1}},[]),e?a.jsxs("p",{className:"help-version",title:e.revision??void 0,children:["Ontotator ",e.version,e.revision&&a.jsxs(a.Fragment,{children:[" · commit ",e.revision.slice(0,7)]})]}):null}const y=`# Ontotator user handbook
+import{r,a as m,j as a,b as h}from"./index-DP1UAex1.js";import{M as f,r as g}from"./index-u-Dxj97X.js";function w(){const[e,t]=r.useState(null);return r.useEffect(()=>{let o=!0;return m.getAbout().then(n=>{o&&t(n)},()=>{}),()=>{o=!1}},[]),e?a.jsxs("p",{className:"help-version",title:e.revision??void 0,children:["Ontotator ",e.version,e.revision&&a.jsxs(a.Fragment,{children:[" · commit ",e.revision.slice(0,7)]})]}):null}const y=`# Ontotator user handbook
 
 This handbook explains how to work with Ontotator in the browser. It is for everyone who uses the app: annotators, translation reviewers, consolidators, leads and system administrators. It describes the version of Ontotator that you open it from. If you run the server, read the [server operations guide (for server operators)](../operations.md) instead.
 
@@ -1777,7 +1777,7 @@ What for: decide what happens after a reviewer rejected or queried a translation
    - **Assign a new review…**: someone reviews it again.
    - **Correct the translation…**: you correct it yourself ([Correct a translation yourself](#correct-a-translation-yourself)).
    - The discard item, for example *Discard the de translation…*: enter a **Reason** and click **Discard**. Nothing is deleted; the versions are marked as discarded.
-3. Or click **Cancel**.
+3. Or click **Cancel**. Changing a filter, the tab, the order or the page also closes the options; nothing is saved until you choose.
 
 ### Correct a translation yourself
 

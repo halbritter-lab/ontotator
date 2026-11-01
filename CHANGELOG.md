@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- Documents: the *Resolve…* options of a row close when the filter, tab, order or page changes, as *Cancel* does. They no longer open again once the row is back on the page (#238).
+
 ## [0.6.1] - 2026-10-31
 
 ### Fixed
