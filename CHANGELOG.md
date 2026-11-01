@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- Opening the same task twice at the same moment, for example from two tabs, no longer answers 500: both opens get the same workspace (#272).
+
 ## [0.8.0] - 2026-11-01
 
 ### Added
