@@ -138,6 +138,10 @@ For plain text, each file name without `.txt` becomes the text ID. Rename the fi
 
 The ontology release can be chosen freely only until the first work is submitted; after that, use **Move to another release**. The task profile can only be replaced before work starts, and only by a file with the same ontology ID as the project (upper and lower case count as the same) and the checksum of the chosen release. See [Move a started project to a newer release](lead-settings.md#move-a-started-project-to-a-newer-release) and [Replace the task profile](lead-settings.md#replace-the-task-profile).
 
+### I uploaded a translation file, but term searches do not use it
+
+The project froze its translations at the first use of its ontology. A later file reaches it only when a lead clicks **Use the newest translations** under **Settings**, tab **Ontology**, card **Translations**. Findings do not change. See [Use the newest translations](lead-settings.md#use-the-newest-translations).
+
 ### My bundle is refused: the ontology settings do not match
 
 The check names, per text, what the bundle uses, what the project uses and who can change it: a lead changes the release, branches or annotation scheme under **Settings**, tab **Ontology**; the ontology ID of a project cannot change. See [What must match a bundle](lead-settings.md#what-must-match-a-bundle).

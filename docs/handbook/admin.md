@@ -138,7 +138,9 @@ Each file is stored on its own. If one file fails, earlier files may already be 
 
 A project freezes its translations at the first use of its ontology, such as a term search or opening its ontology information. A bundle import does not freeze them. The freeze records what each search ran with, so results stay comparable.
 
-A translation file uploaded after that does not reach the project. The project keeps searching with the files it froze. So upload translation files before anyone works in a project. The lead sees the frozen files in the project settings, see [See which translations the project uses](lead-settings.md#see-which-translations-the-project-uses).
+A translation file uploaded after that does not reach the project by itself. The project keeps searching with the files it froze. So upload translation files before anyone works in a project. The lead sees the frozen files in the project settings, see [See which translations the project uses](lead-settings.md#see-which-translations-the-project-uses).
+
+To let a frozen project use a newer file, a lead of the project or a system administrator clicks **Use the newest translations** in its settings, see [Use the newest translations](lead-settings.md#use-the-newest-translations). Findings do not change, and earlier searches keep the record of the files they ran with. On the server, `ontotator admin projects refresh-translations <project>` does the same.
 
 ## Check the ontology inventory and which projects use a file
 

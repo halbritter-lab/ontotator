@@ -479,6 +479,8 @@ export class ApiClient {
   async previewPins(key: string, pins: ProjectPin[]): Promise<RepinReport> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/pins/preview`, { method: "POST", body: JSON.stringify(pins) }); }
   /** Apply a previewed move; refused with REPIN_REPORT_STALE when the report changed since. */
   async applyPins(key: string, pins: ProjectPin[], reportSha256: string): Promise<ProjectSettings> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/pins/apply`, { method: "POST", body: JSON.stringify({ pins, report_sha256: reportSha256 }) }); }
+  /** Move to the newest translation files (issue 254); TRANSLATIONS_CURRENT when nothing is newer. */
+  async refreshTranslations(key: string): Promise<ProjectSettings> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/translations/refresh`, { method: "POST" }); }
   async updateProjectProfile(key: string, profile: TaskProfile): Promise<ProjectSettings> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/profile`, { method: "PUT", body: JSON.stringify(profile) }); }
   async listMembers(key: string): Promise<Member[]> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/members`, { method: "GET" }); }
   async listMemberCandidates(key: string, query: string): Promise<MemberCandidate[]> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/member-candidates?q=${encodeURIComponent(query)}`, { method: "GET" }); }
