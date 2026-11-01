@@ -128,7 +128,7 @@ What for: read what users report about error messages, pages that do not load, c
 
 1. In the sidebar, open **Administration** › **Technical reports**. The number after it counts the open reports.
 2. **Show** lists the **Open** reports. Choose **Done** or **All** to see the others.
-3. Read a report. It shows its reference (for example *TR-12*), the user's text, who sent it and when. Below are the details Ontotator added: app version, the task if it was sent from one (its kind, for example *Annotation, from proposals*, the project and the text), screen, browser, window size, the last error the app received and, from the crash message, the error.
+3. Read a report. It shows its reference (for example *TR-12*), the user's text, who sent it and when. Below are the details Ontotator added: app version, the task if it was sent from one (its kind, for example *Annotation, from proposals*, the project and the text; for a practice task only *A practice task*, as practice projects are private), screen, browser, window size, the last error the app received and, from the crash message, the error.
 4. Click **Mark as done** when the report is handled. Click **Reopen** to open it again.
 
 Users send reports with **Technical problem…** in the sidebar or **Report a technical problem…** in the editor; see [Report a technical problem](getting-started.md#report-a-technical-problem). Their task is not paused, and project leads do not see these reports. A user can send at most 20 reports per hour.
@@ -213,7 +213,7 @@ To see them:
 
 To delete one, click **Delete…** in its row, then **Delete practice project**. Only that practice project goes; its audit entries stay. A real project can never be deleted this way.
 
-A practice project is also deleted after 30 days without activity, and when its owner's account is deactivated.
+A practice project is also deleted after 30 days without activity, and when its owner's account is deactivated. All practice projects are called *Practice project*, so no owner's name reaches the audit trail.
 
 To switch the offer off:
 

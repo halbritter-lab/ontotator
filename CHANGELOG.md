@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- Practice projects no longer carry their owner's name: every one is called *Practice project*, so the `project.create` audit entry keeps no display name after the account is anonymised. Migration 0030 renames existing practice projects and rewrites `details.name` of their `project.create` entries; entries of real projects do not change (#280).
+- Practice cleanup and failures: deactivating or anonymising an account, and the expiry sweep, now also remove the practice project's stored files once the change is committed. A second **Try it out** at the same time returns the practice project the first one built instead of an error. A practice project and its owner row are created in one transaction; the sweep removes a practice project left without one by an earlier crash, and the downgrade of migration 0029 counts it. **Reset…** checks first that a new practice project can start, so it no longer deletes the old one and then answers 409. A technical report sent from a practice task reads *A practice task* instead of naming the private project and text (`practice` on the technical report) (#286).
+- Practice: the translation review step says that **Mark checked sentences** and **Show changes** must be off to edit the text. At phone width the practice group on My tasks shows the status under the task name, so **Start** no longer touches or clips the right edge (#287).
+
 ## [0.8.0] - 2026-11-01
 
 ### Added
