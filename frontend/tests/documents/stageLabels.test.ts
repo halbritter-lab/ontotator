@@ -100,11 +100,14 @@ describe("Annotation cell", () => {
     expect(text("annotation", cell("submitted", "done", { people: [ana, tom], submitted: 2, total: 2 }))).toEqual(["✓ 2 of 2 submitted", "Ana Weber, Tom Reis"]);
     expect(text("annotation", cell("submitted", "done", { people: [ana], findings: 3, version: 1 }))).toEqual(["✓ submitted", "Ana Weber, 3 findings"]);
   });
-  it("counts everyone holding the text when the limit was lowered later, never 2 of 1 (issue 248)", () => {
-    expect(text("annotation", cell("in_progress", "running", { people: [tom], submitted: 2, total: 1, started: 0, open_tasks: 1 }))[0]).toBe("◐ 2 of 3 submitted");
-    expect(text("annotation", cell("in_progress", "running", { people: [tom], submitted: 2, total: 1 }))[0]).toBe("◐ 2 of 3 submitted");
+  it("never reads 2 of 1 when the limit was lowered later (issue 248); the server counts the holders (issue 283)", () => {
+    expect(text("annotation", cell("in_progress", "running", { people: [tom], submitted: 2, total: 3, started: 0, open_tasks: 1 }))[0]).toBe("◐ 2 of 3 submitted");
     expect(text("annotation", cell("submitted", "done", { submitted: 2, total: 1 }))[0]).toBe("✓ 2 of 2 submitted");
-    expect(submittedOf(1, 2, 1)).toBe("1 of 2 submitted");
+    expect(submittedOf(2, 1)).toBe("2 of 2 submitted");
+  });
+  it("parallel versions: open tasks summed over the versions do not raise the total (issue 283)", () => {
+    // Limit 2, two versions with 1 submitted and 1 open each: the server sends the total of one version.
+    expect(text("annotation", cell("in_progress", "running", { people: [ana, tom], submitted: 1, total: 2, started: 0, open_tasks: 2 }))[0]).toBe("◐ 1 of 2 submitted");
   });
 });
 
@@ -194,7 +197,7 @@ describe("Waiting on", () => {
     });
     const two = row({ case_id: "c", language: "de", next_step: stepOf("annotation_in_progress", { owner: { kind: "people", person: null, count: 2, people: [ana, tom] } }) });
     expect(waitingOnText(two).text).toBe("Ana Weber, Tom Reis");
-    // Issue 248: below 1400 px the cell shows one name and "+n".
+    // Issue 248: below 1600 px the cell shows one name and "+n".
     expect(waitingOnText(two).narrow).toBe("Ana Weber +1");
   });
 });

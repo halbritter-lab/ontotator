@@ -56,9 +56,7 @@ export function annotationState(row: DocumentRowView): State {
   const total = detail.total ?? detail.target ?? work.length;
   const done = detail.submitted ?? work.filter(item => item.status === "submitted").length;
   const working = cell?.state === "in_progress" || cell?.state === "paused";
-  // Open tasks count too: more people than "annotators per text" hold the text when the limit was lowered later.
-  const open = working ? detail.open_tasks ?? detail.people?.length ?? 0 : 0;
-  const submitted = total > 0 ? submittedOf(done, total, open) : working ? "in progress" : "submitted";
+  const submitted = total > 0 ? submittedOf(done, total) : working ? "in progress" : "submitted";
   // Issue 258: assigned annotators who have not saved anything yet.
   const started = cell?.state === "in_progress" ? startedOf(detail) : "all";
   const running = started === "none" && done === 0 ? "assigned, not started"

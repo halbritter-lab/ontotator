@@ -77,14 +77,15 @@ export function startedPart(detail: StageCellView["detail"]): string | null {
 
 /**
  * "2 of 3 submitted": out of "annotators per text", or out of everyone holding the text when more do (the limit was
- * lowered after they were assigned), never "2 of 1 submitted". `open` counts the annotate tasks still open.
+ * lowered after they were assigned). The server counts that total on the version with the fewest submissions, as
+ * `submitted` (issue 283); the guard keeps it from ever reading "2 of 1 submitted".
  */
-export function submittedOf(submitted: number, total: number, open = 0): string {
-  return `${submitted} of ${Math.max(total, submitted + open)} submitted`;
+export function submittedOf(submitted: number, total: number): string {
+  return `${submitted} of ${Math.max(total, submitted)} submitted`;
 }
 
 /**
- * Shorter words for a stage cell of the narrow table (below 1400 px, issue 248), so the cell keeps one line without
+ * Shorter words for a stage cell of the narrow table (below 1600 px, issues 248 and 279), so the cell keeps one line without
  * cutting the state; the title and screen readers keep the full state. Only states longer than the narrow cell
  * have one.
  */
@@ -206,7 +207,7 @@ function annotationText(cell: StageCellView): StageText {
     }
     case "in_progress": {
       if (detail.total != null && detail.submitted != null) {
-        return { symbol: "◐", word: submittedOf(detail.submitted, detail.total, detail.open_tasks ?? detail.people?.length), detail: join(people && `waiting: ${people}`, startedPart(detail), waiting) };
+        return { symbol: "◐", word: submittedOf(detail.submitted, detail.total), detail: join(people && `waiting: ${people}`, startedPart(detail), waiting) };
       }
       const change = detail.note === "may_change" ? join(version(detail.version), "may change") : null;
       const started = startedOf(detail);
