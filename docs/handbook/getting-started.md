@@ -76,7 +76,7 @@ What for: tell the system administrators about an error message, a page that doe
 
 The report goes to the system administrators, not to your project lead. Your task is not paused.
 
-Ontotator adds what the administrators need to find the cause: the app version, the screen, your browser, the window size and the last error the app received. From the crash message it also adds the error. Open **Added automatically** to see it before you send.
+Ontotator adds what the administrators need to find the cause: the app version, the task if you send it from one (its kind, the project and the text), the screen, your browser, the window size and the last error the app received. From the crash message it also adds the error. Open **Added automatically** to see it before you send.
 
 The report stays inside Ontotator; nothing is sent by e-mail or elsewhere. Do not write patient details beyond what is needed to describe the problem.
 
