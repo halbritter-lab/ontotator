@@ -137,6 +137,88 @@ def test_a_consolidator_also_gets_the_consolidation_task(app: FastAPI) -> None:
     assert not any(name.startswith("practice-colleague") for name in users)
 
 
+def test_consolidation_decisions_name_their_terms(app: FastAPI) -> None:
+    client = _member(app, "cons", ["annotator", "adjudicator"])
+    project = client.post("/api/v1/me/practice").json()["project"]
+    task = next(t for t in project["tasks"] if t["kind"] == "consolidation")
+    opened = client.post(f"/api/v1/assignments/{task['assignment_id']}/open").json()
+    workspace, revision = opened["workspace_id"], opened["view"]["draft"]["revision"]
+    tasks = client.get("/api/v1/me/tasks").json()
+    round_id = next(
+        t["active_round_id"]
+        for t in tasks
+        if t["assignment_id"] == task["assignment_id"]
+    )
+    view = client.get(f"/api/v1/rounds/{round_id}/consolidation").json()
+    groups = [group for group in view["groups"] if group["state"] == "open"]
+    assert len(groups) == 2
+
+    for group in groups:
+        response = client.post(
+            f"/api/v1/workspaces/{workspace}/consolidation-groups/resolve",
+            json={
+                "mutation_id": f"resolve-{group['group_id']}",
+                "expected_revision": revision,
+                "payload": {
+                    "input_ids": [m["input_id"] for m in group["members"]],
+                    "action": "leave_out",
+                },
+            },
+        )
+        assert response.status_code == 200, response.text
+        revision = response.json()["revision"]
+
+    facts = next(
+        t
+        for t in client.get("/api/v1/me/practice").json()["project"]["tasks"]
+        if t["kind"] == "consolidation"
+    )
+    decided = {
+        (d["term_id"], d["outcome"])
+        for d in facts["decisions"]
+        if d["action"] == "leave_out"
+    }
+    assert decided == {
+        (content.HYPOTONIA, "rejected"),
+        (content.AREFLEXIA, "rejected"),
+    }
+
+
+def test_an_unchanged_copy_is_not_an_own_finding(app: FastAPI) -> None:
+    client = _member(app, "ann", ["annotator"])
+    project = client.post("/api/v1/me/practice").json()["project"]
+    task = next(t for t in project["tasks"] if t["kind"] == "proposals")
+    opened = client.post(f"/api/v1/assignments/{task['assignment_id']}/open").json()
+    target = opened["view"]["targets"]["targets"][0]
+    start = content.PROPOSALS_TEXT.index("Muskeleigenreflexe fehlen")
+    response = client.post(
+        f"/api/v1/workspaces/{opened['workspace_id']}/commands",
+        json={
+            "mutation_id": "copy-1",
+            "expected_revision": opened["view"]["draft"]["revision"],
+            "payload": {
+                "command": "create_annotation",
+                "annotation_id": "copy-1",
+                "evidence_id": "ev-copy-1",
+                "term_id": content.AREFLEXIA,
+                "layer_id": "hpo-layer",
+                "type_id": "phenotype",
+                "segments": [{"start": start, "end": start + 25}],
+                "source_annotation_id": target["annotation_id"],
+                "source_version": target["version"],
+            },
+        },
+    )
+    assert response.status_code == 200, response.text
+
+    facts = next(
+        t
+        for t in client.get("/api/v1/me/practice").json()["project"]["tasks"]
+        if t["kind"] == "proposals"
+    )
+    assert [f["replacement"] for f in facts["findings"]] == [True]
+
+
 def test_practice_says_whether_the_profile_has_german(app: FastAPI) -> None:
     client = _member(app, "ann", ["annotator"])
     # No languages listed counts as not reading German.
@@ -144,6 +226,9 @@ def test_practice_says_whether_the_profile_has_german(app: FastAPI) -> None:
     app.state.accounts.set_languages(Actor(None, "system:test"), "ann", ["en"])
     assert client.get("/api/v1/me/practice").json()["reads_german"] is False
     app.state.accounts.set_languages(Actor(None, "system:test"), "ann", ["en", "de"])
+    assert client.get("/api/v1/me/practice").json()["reads_german"] is True
+    # Languages are free codes: the three-letter forms of German count too.
+    app.state.accounts.set_languages(Actor(None, "system:test"), "ann", ["deu"])
     assert client.get("/api/v1/me/practice").json()["reads_german"] is True
 
 

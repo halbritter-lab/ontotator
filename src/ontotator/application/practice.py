@@ -54,10 +54,13 @@ from ontotator.storage.tables import (
     TranslationReviewDraftRow,
     UserRow,
 )
+from ontotator.storage.workflow_tables import RoundInputRow
 
 logger = logging.getLogger(__name__)
 
 LIFETIME = timedelta(days=30)
+# User languages are free two- or three-letter codes, not mapped to one form.
+GERMAN = frozenset({"de", "deu", "ger"})
 ACTOR = Actor(None, "system:practice")
 # The sweep runs at most this often per process (opportunistic, on use).
 SWEEP_INTERVAL = timedelta(hours=1)
@@ -267,7 +270,7 @@ class PracticeService:
             unavailable_message=_MESSAGES[reason] if reason else None,
             show_card=offered and project is None and not prefs.practice_card_hidden,
             card_hidden=bool(prefs.practice_card_hidden),
-            reads_german="de" in self.accounts.languages_of([user_id])[user_id],
+            reads_german=bool(GERMAN & self.accounts.languages_of([user_id])[user_id]),
             project=project,
         )
 
@@ -378,9 +381,25 @@ class PracticeService:
         if draft_id is None:
             return
 
+        # A consolidation decides on round inputs: their target snapshots are
+        # kept in the round, not in annotation_snapshots.
+        input_terms: dict[tuple[str, str], str] = {}
+        if kind == "consolidation":
+            for payload in conn.execute(
+                select(RoundInputRow.payload).where(RoundInputRow.project_id == pid)
+            ).scalars():
+                item = payload.get("target_snapshot")
+                if item is not None:
+                    annotation = item["annotation"]
+                    input_terms[(annotation["annotation_id"], item["version"])] = (
+                        annotation["term_id"]
+                    )
+
         def term_of(annotation_id: str | None, version: str | None) -> str | None:
             if annotation_id is None or version is None:
                 return None
+            if (annotation_id, version) in input_terms:
+                return input_terms[(annotation_id, version)]
             payload = conn.execute(
                 select(AnnotationSnapshotRow.payload).where(
                     AnnotationSnapshotRow.project_id == pid,
@@ -431,7 +450,10 @@ class PracticeService:
                     term_id=str(annotation.get("term_id", "")),
                     assertion=axes.get("assertion"),
                     defaulted=list(annotation.get("axes_defaulted") or []),
-                    replacement=annotation_id in replacements,
+                    # An Edit & Replace copy names its proposal from the start;
+                    # the decision only follows once the copy differs.
+                    replacement=annotation_id in replacements
+                    or bool((annotation.get("provenance") or {}).get("source_refs")),
                 )
             )
 
