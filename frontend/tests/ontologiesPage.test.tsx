@@ -155,4 +155,26 @@ describe("ontology administration page", () => {
     await act(async () => retry.resolve([{ ...translated[0], status: "already_present" }]));
     await screen.findByText("Already present");
   });
+  it("names the projects an uploaded translation does not reach, in the result and the inventory (#254)", async () => {
+    const frozen = { ...translation, frozen_without: ["alpha", "beta"] };
+    vi.mocked(api.adminUploadOntologies).mockResolvedValue([{ filename: "mondo-de.tsv", status: "added", ontology: frozen }, { filename: "again.tsv", status: "already_present", ontology: frozen }]);
+    vi.mocked(api.adminListOntologies).mockResolvedValueOnce([ontology]).mockResolvedValue([ontology, frozen]);
+    const navigate = vi.fn(); render(<OntologiesPage onNavigate={navigate} />); await screen.findByText("mondo.json");
+    fireEvent.change(chosen(), { target: { files: files() } }); fireEvent.click(upload());
+    const notice = await screen.findByText(/does not reach alpha and beta/);
+    expect(notice.textContent).toBe("mondo-de.tsv does not reach alpha and beta. These projects froze their translations at first use and keep searching without it.");
+    expect(screen.getAllByText(/does not reach/)).toHaveLength(1);
+    const table = screen.getByRole("table", { name: "Ontology files" });
+    await within(table).findByText("mondo-de.tsv");
+    expect(within(table).getByRole("columnheader", { name: /Frozen without/ })).toBeTruthy();
+    fireEvent.click(within(table).getByRole("link", { name: "beta" }));
+    expect(navigate).toHaveBeenCalledWith({ name: "projectSettings", key: "beta", section: "ontology" });
+  });
+
+  it("shows no notice for a translation every project gets", async () => {
+    render(<OntologiesPage onNavigate={vi.fn()} />); await screen.findByText("mondo.json");
+    fireEvent.change(chosen(), { target: { files: files() } }); fireEvent.click(upload());
+    await screen.findByRole("table", { name: "Upload results" });
+    expect(screen.queryByText(/does not reach/)).toBeNull();
+  });
 });

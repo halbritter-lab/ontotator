@@ -179,6 +179,8 @@ A project can move to a newer release in Settings › Ontology, also after work 
 
 `ontotator admin ontologies check-roots` lists project pins whose allowed roots are missing from the pinned release; findings of such a pin are not restricted until the roots are corrected.
 
+`ontotator admin ontologies add` names on stderr the projects a translation file does not reach because they froze their translations before; the **Ontologies** page and the project settings show the same (`frozen_without` on `GET /api/v1/admin/ontologies/`, `frozen_translations` on `GET /api/v1/projects/{key}/settings`).
+
 To check a single file against the checksum its release publishes, add `--sha256 <hex>`: a different file is refused with `ONTOLOGY_DIGEST_MISMATCH` and nothing is stored.
 
 Replace `ONTOLOGY_SHA256` with the full hash printed for the ontology JSON; the task profile must define ontology id `hp` and the intended layers. [smoke-profile.json](../tests/fixtures/smoke-profile.json) illustrates the JSON structure with synthetic fixtures; supply your own release identity, hash and protocol. See the [scientific workflow](scientific-workflow.md) for protocol guidance. `--allowed-roots` and `--t1-profile` are optional when the profile sets `allowed_roots` and `t1_profile`; given, they win, and `--allowed-roots hp=` allows every term. Workers discover uploaded ontologies on use; no restart is needed for a new upload.
