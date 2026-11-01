@@ -367,7 +367,7 @@ it("binds a changed decision to the replacement version after queued edits", asy
  const decide = vi.spyOn(api, "recordDecision").mockResolvedValue({ ...updated, revision: 2 });
  render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
  fireEvent.click(screen.getByText("HP:1"));
- fireEvent.click(screen.getByRole("button", { name: /Edit & Replace/ }));
+ fireEvent.click(screen.getByRole("button", { name: /Open your copy/ }));
  await screen.findByRole("heading", { name: "Values" });
  expect(apply).not.toHaveBeenCalled(); // Existing adopted copy is resumed rather than cloned again.
  fireEvent.click(screen.getByRole("radio", { name: /Present|Vorhanden/i }));
@@ -585,10 +585,10 @@ it("adopts a review proposal as an editable copy and records 'changed' only once
   expect(decideSpy).not.toHaveBeenCalled();
   expect(screen.getByText(/Replacement for proposal/i)).toBeDefined();
 
-  // 3. Going back and pressing Edit & Replace again re-opens the same copy instead of duplicating it
+  // 3. Going back and pressing Open your copy re-opens the same copy instead of duplicating it
   fireEvent.click(screen.getByRole("button", { name: /View review target/i }));
   await waitFor(() => expect(screen.getByText(/Review decision for this proposal/i)).toBeDefined());
-  fireEvent.click(screen.getByRole("button", { name: /Edit & Replace/i }));
+  fireEvent.click(screen.getByRole("button", { name: /Open your copy/ }));
   await waitFor(() => expect(screen.getByRole("heading", { name: "Values" })).toBeDefined());
   expect(commands.length).toBe(1);
 

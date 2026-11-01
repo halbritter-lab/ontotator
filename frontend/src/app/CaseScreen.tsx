@@ -103,7 +103,7 @@ import { attachCandidates, findingDescription, modifierDisplayId, modifierMarks,
 import { Toast } from "../ui/Toast";
 import { type MentionDisplay, type SelectionPayload } from "../spans/adapter";
 import { markColourSlot } from "../editor/markColours";
-import { IconCheck, IconClose, IconLock, IconMore, IconPencil, IconQuestion, IconRetry } from "../ui/icons";
+import { IconCheck, IconClose, IconLock, IconMore, IconPencil, IconQuestion, IconRetry, IconUndo } from "../ui/icons";
 import { MenuButton, type MenuItem } from "../ui/MenuButton";
 import { isNegated } from "../editor/negation";
 import { Dialog } from "../ui/Dialog";
@@ -155,6 +155,7 @@ interface ConfirmRequest {
   title: string;
   message: string;
   confirmLabel: string;
+  cancelLabel?: string;
   resolve: (ok: boolean) => void;
 }
 
@@ -762,8 +763,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   };
 
   /** In-app confirmation dialog (resolves true when confirmed). */
-  const askConfirm = (title: string, message: string, confirmLabel = "Continue") =>
-    new Promise<boolean>((resolve) => setConfirmRequest({ title, message, confirmLabel, resolve }));
+  const askConfirm = (title: string, message: string, confirmLabel = "Continue", cancelLabel?: string) =>
+    new Promise<boolean>((resolve) => setConfirmRequest({ title, message, confirmLabel, cancelLabel, resolve }));
   const closeConfirm = (ok: boolean) => {
     const request = confirmRequest;
     setConfirmRequest(null);
@@ -1135,6 +1136,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const refs = snap.annotation.provenance.source_refs ?? [];
     return reviewTargets.find((t) => refs.includes(`${t.annotation_id}:${t.version}`)) ?? null;
   };
+  /** Issue 240: an Edit & Replace copy of this proposal is in the draft (changed or not). */
+  const proposalHasCopy = (t: { annotation_id: string; version: string }) =>
+    (draft.annotations ?? []).some(a => a.annotation.provenance.source_refs?.includes(`${t.annotation_id}:${t.version}`));
   /** Current reviewer note for a target: unsaved UI text wins over the stored decision note. */
   const currentNoteFor = (targetKey: string): string | undefined => {
     const draftNote = noteDraftsRef.current[targetKey];
@@ -1165,14 +1169,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   };
 
   /** issue 198: what a replacement changed against its proposal, in words ("Assertion: Present → Absent"); null without both. */
-  const replacementChangesOf = (target: TargetProposal, copyId: string | undefined): string[] | null => {
+  const replacementChangesOf = (target: TargetProposal, copyId: string | undefined, current: Draft = draft): string[] | null => {
     const source = targetSnapshotOf(target);
-    const copy = (draft.annotations ?? []).find(a => a.annotation.annotation_id === copyId);
+    const copy = (current.annotations ?? []).find(a => a.annotation.annotation_id === copyId);
     if (!source || !copy) return null;
     const quotes = (evidence: readonly EvidenceSnapshot[]) => [...evidence].map(ev => ev.mention.segments)
       .sort((a, b) => (a[0]?.start ?? 0) - (b[0]?.start ?? 0)).map(segments => quoteSegments(view.document.text, segments, 40));
     const copyEvidence = (copy.annotation.evidence_refs ?? [])
-      .map(ref => (draft.evidence ?? []).find(ev => ev.mention.evidence_id === ref.evidence_id))
+      .map(ref => (current.evidence ?? []).find(ev => ev.mention.evidence_id === ref.evidence_id))
       .filter((ev): ev is EvidenceSnapshot => !!ev);
     const layer = copy.annotation.layer_id;
     const axesConfig = view.layers?.find(l => l.layer_id === layer)?.annotation_types.find(type => type.type_id === copy.annotation.type_id)?.axes ?? view.axes_config;
@@ -2136,28 +2140,29 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   };
 
   // Review Decision Handler: always carries the current reviewer note.
-  const handleReviewDecision = async (payload: DecisionPayload, forTarget?: TargetProposal | null) => {
-    if (readOnlyRef.current) return;
+  const handleReviewDecision = async (payload: DecisionPayload, forTarget?: TargetProposal | null,
+    { copyDiscardSettled = false }: { copyDiscardSettled?: boolean } = {}): Promise<boolean> => {
+    if (readOnlyRef.current) return false;
     const target = forTarget ?? selectedTarget;
-    if (!target) return;
+    if (!target) return false;
     setActionError(null);
     const key = targetKeyOf(target);
     const submittedIntentToken = decisionIntentTokens.current[key];
     if (payload.outcome === "uncertain" && !(payload.note !== undefined ? payload.note.trim() : currentNoteFor(key))) {
       requestReviewerNote(target);
-      return;
+      return false;
     }
     setRequiredNoteKey(null); setSubmitError(null);
     const abandonedCopies = (latestDraft.current.annotations ?? []).filter((a) =>
       a.annotation.provenance.source_refs?.includes(`${target.annotation_id}:${target.version}`)
       && a.annotation.annotation_id !== payload.replacement?.annotation_id);
-    if (abandonedCopies.length > 0) {
+    if (abandonedCopies.length > 0 && !copyDiscardSettled) {
       const ok = await askConfirm(
         "Discard adopted copy?",
         "Changing this decision removes the editable copy adopted from this proposal, including its edits. Independently added findings are kept.",
         "Discard copy and change decision",
       );
-      if (!ok) return;
+      if (!ok) return false;
     }
     let note: string | undefined;
     let resetNote: string | undefined;
@@ -2193,7 +2198,65 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           return rest;
         });
       }
-    } catch (error) { reportError(error); }
+      return true;
+    } catch (error) { reportError(error); return false; }
+  };
+
+  /**
+   * Issue 257: the Edit & Replace copy of a proposal (its replacement, else the copy adopted from it) and whether it
+   * differs from the proposal. Confirmed defaults are no change (issue 231). Reads the latest draft.
+   */
+  const copyOfTarget = (target: TargetProposal) => {
+    const key = refKey(target);
+    const annotations = latestDraft.current.annotations ?? [];
+    const decision = (latestDraft.current.decisions ?? []).find(d => refKey(d.target) === key);
+    const replacementId = decision?.outcome === "changed" ? decision.replacement?.annotation_id : undefined;
+    const snapshot = annotations.find(a => a.annotation.annotation_id === replacementId)
+      ?? annotations.find(a => { const src = sourceTargetOf(a); return src !== null && refKey(src) === key; });
+    if (!snapshot) return null;
+    const id = snapshot.annotation.annotation_id;
+    // A note typed but not saved yet is a change too.
+    const unsavedNote = id in annotationNoteDraftsRef.current
+      && (annotationNoteDraftsRef.current[id] ?? "").trim() !== (snapshot.annotation.note ?? "").trim();
+    return { snapshot, changed: unsavedNote || copyDiffersFromTarget(snapshot, target) };
+  };
+
+  /** Selects the proposal again and puts focus on it: its list row, or its details where the list is hidden. */
+  const returnToProposal = (target: TargetProposal) => {
+    flushSync(() => selectProposal(target));
+    const row = [...sidebarScrollRef.current?.querySelectorAll<HTMLElement>("[data-list-key]") ?? []]
+      .find(item => item.dataset.listKey === `target:${refKey(target)}`);
+    if (row && !panesLayout) row.focus();
+    else inspectorRef.current?.querySelector<HTMLElement>(".review-actions__proposal")?.focus();
+  };
+
+  /**
+   * Issue 257: removes the Edit & Replace copy of a proposal and opens the proposal again, as the reset (key 0) does.
+   * An unchanged copy goes without a question; a changed one asks first and names what is lost.
+   * Pending edits of the copy are saved first, so nothing reaches the copy after it is gone.
+   */
+  const discardCopy = async (target: TargetProposal, { from = "proposal", onlyUnchanged = false }:
+    { from?: "proposal" | "copy"; onlyUnchanged?: boolean } = {}): Promise<void> => {
+    if (readOnlyRef.current) return;
+    const initial = copyOfTarget(target);
+    if (!initial) { if (from === "copy") returnToProposal(target); return; }
+    // A value choice of the copy that is still waiting is sent first.
+    flushPendingAxes();
+    try { await flushAnnotationNotes(); } catch (error) { reportError(error); return; }
+    const copy = copyOfTarget(target);
+    if (!copy) { returnToProposal(target); return; }
+    if (copy.changed) {
+      if (onlyUnchanged) { returnToProposal(target); return; }
+      const changes = replacementChangesOf(target, copy.snapshot.annotation.annotation_id, latestDraft.current) ?? [];
+      const lost = changes.length === 0 ? "Your changes are lost."
+        : `Your ${changes.length === 1 ? "change is" : "changes are"} lost: ${changes.join("; ")}.`;
+      const ok = await askConfirm("Discard your copy?", `${lost} The proposal is open again.`, "Discard copy", "Keep editing");
+      if (!ok) return;
+    }
+    if (!await handleReviewDecision({ outcome: null }, target, { copyDiscardSettled: true })) return;
+    returnToProposal(target);
+    setAdvanceStatus({ listKey: `target:${refKey(target)}`, decidedKey: "",
+      text: onlyUnchanged ? "Copy removed: it had no changes." : "Copy discarded. The proposal is open again." });
   };
 
   /** Selects the next open proposal after `target` (wrapping), or "Finish & submit" when none is left. */
@@ -3265,7 +3328,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     if (repeatDecision(selectedTarget, "uncertain")) return;
     requestReviewerNote(selectedTarget, true);
   }, { ...reviewShortcutOptions, description: "Mark selected proposal as unresolved (note required)" });
-  useShortcut("0", () => { void handleReviewDecision({ outcome: null }); }, { ...reviewShortcutOptions, description: "Reset selected review decision to open" });
+  useShortcut("0", () => {
+    if (selectedTarget && copyOfTarget(selectedTarget)) { void discardCopy(selectedTarget); return; }
+    void handleReviewDecision({ outcome: null });
+  }, { ...reviewShortcutOptions, description: "Reset selected review decision to open, or discard your copy" });
   // Single-character bindings ignore Shift, so Shift+N reaches this handler too.
   useShortcut("n", event => goToUnchecked(event.shiftKey ? -1 : 1) ? undefined : false,
     { ...shortcutOptions, enabled: carriedActive && !display, group: "Carried findings", description: "Next unchecked carried finding" });
@@ -3326,7 +3392,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     if (target) proposalCopies.set(refKey(target), [...proposalCopies.get(refKey(target)) ?? [], snapshot]);
   }
   const copyIds = new Set([...proposalCopies.values()].flat().map(snapshot => snapshot.annotation.annotation_id));
-  const findingRow = (annSnap: AnnotationSnapshot, copy = false) => {
+  const findingRow = (annSnap: AnnotationSnapshot, copyOf?: TargetProposal) => {
     const isSelected =
       annSnap.annotation.annotation_id === selectedAnnotationId;
     const axesValues = annSnap.annotation.axes_values ?? (annSnap.annotation as any).axes?.values ?? {};
@@ -3339,7 +3405,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         key={annSnap.annotation.annotation_id}
         snapshot={annSnap}
         selected={isSelected}
-        copy={copy}
+        copy={!!copyOf}
+        copyChanges={copyOf ? replacementChangesOf(copyOf, annSnap.annotation.annotation_id) ?? [] : undefined}
         termLabel={termLabel}
         layerName={layerName}
         showLayer={(view.layers ?? []).length > 1}
@@ -3679,6 +3746,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                                : dec.outcome === "changed" ? <><IconPencil />Replaced</>
                                : <><IconQuestion />Unresolved</>}
                             </span>
+                          ) : proposalHasCopy(t) ? (
+                            // Issue 240: the copy replaces this proposal from the start, before it differs.
+                            <span className="decision-tag decision-tag--replacing"><IconPencil />Being replaced</span>
                           ) : (
                             <span className="decision-tag decision-tag--open">Pending</span>
                           )}
@@ -3706,7 +3776,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                         {attachHere && <div className="mod-attach-here" aria-hidden="true">Attach {attachModifier!.termLabel} here, as your copy <Kbd>Enter</Kbd></div>}
                       </div></li>
                       {replacedBy && <li className={`doc-item doc-item--resolved doc-meta doc-item--replaced-by${isSelected ? " selected" : ""}`}>{replacedBy}</li>}
-                      {proposalCopies.get(refKey(t))?.map(copy => findingRow(copy, true))}
+                      {proposalCopies.get(refKey(t))?.map(copy => findingRow(copy, t))}
                       </React.Fragment>
                     );
                   })}
@@ -4002,6 +4072,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 setNoteDrafts((prev) => ({ ...prev, [k]: value }));
               }}
               onAdoptAndEdit={() => { void handleAdoptAndEditTarget(selectedTarget); }}
+              hasCopy={proposalHasCopy(selectedTarget)}
+              onDiscardCopy={() => { void discardCopy(selectedTarget); }}
               onEditReplacement={(repId) => {
                 setSelectedTargetId(null);
                 setSelectedSourceId(null);
@@ -4029,7 +4101,16 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               return <div className="review-actions__block replacement-strip" data-replacement-strip>
                 <p className="review-actions__block-title">Your replacement for the proposal {proposalName}</p>
                 <p className="field-hint">{changes.length ? `Changes: ${changes.join("; ")}.` : "No changes yet. Edit the term, values or text below; the proposal counts as replaced once the copy differs."}</p>
-                <Button type="button" variant="primary" size="sm" onClick={() => selectProposal(replaced)}>Done, back to the proposal</Button>
+                {/* Issue 257: an unchanged copy goes on Done; Discard copy is the way back that drops the copy. */}
+                <div className="review-actions__row">
+                  <Button type="button" variant="primary" size="sm" onClick={() => {
+                    if (readOnly) { selectProposal(replaced); return; }
+                    void discardCopy(replaced, { from: "copy", onlyUnchanged: true });
+                  }}>Done, back to the proposal</Button>
+                  {!readOnly && <Button type="button" size="sm" onClick={() => { void discardCopy(replaced, { from: "copy" }); }}>
+                    <IconUndo />Discard copy
+                  </Button>}
+                </div>
               </div>;
             })()}
             {panesLayout && !readOnly && selectedAnnotation && selectedAnnotationId === loopAnnotationId && (
@@ -4195,7 +4276,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         message={<p>Your latest changes are not saved yet.</p>} confirmLabel="Save and log out"
         busy={logoutSaving} onConfirm={() => { void saveAndLogout(); }} onCancel={() => setLogoutProceed(null)} />
       {confirmRequest && <ConfirmDialog open title={confirmRequest.title} message={<p>{confirmRequest.message}</p>}
-        confirmLabel={confirmRequest.confirmLabel} onConfirm={() => closeConfirm(true)} onCancel={() => closeConfirm(false)} />}
+        confirmLabel={confirmRequest.confirmLabel} cancelLabel={confirmRequest.cancelLabel} onConfirm={() => closeConfirm(true)} onCancel={() => closeConfirm(false)} />}
     </div>
     </ProposalMetadataProvider>
   );

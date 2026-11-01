@@ -38,6 +38,8 @@ export interface FindingRowProps {
   onFrame?: (on: boolean) => void;
   /** An Edit & Replace copy, listed under the proposal it replaces (issue 211). */
   copy?: boolean;
+  /** Issue 240: what the copy changed against its proposal, in words; empty while it is unchanged. */
+  copyChanges?: readonly string[];
 }
 
 /** "Modifiers: Recurrent, Severe" (label order) under a finding or proposal row; nothing without modifiers. */
@@ -55,7 +57,7 @@ export function ModifierLine({ modifiers, layerId, termLabel }: {
 }
 
 /** One row of the saved findings list in the editor sidebar. */
-export function FindingRow({ snapshot: annSnap, selected: isSelected, termLabel, layerName, showLayer, axes, defaulted, proposal, onActivate, children, attachTarget, convertSource, onFrame, copy }: FindingRowProps) {
+export function FindingRow({ snapshot: annSnap, selected: isSelected, termLabel, layerName, showLayer, axes, defaulted, proposal, onActivate, children, attachTarget, convertSource, onFrame, copy, copyChanges = [] }: FindingRowProps) {
   const evCount = annSnap.annotation.evidence_refs?.length ?? 0;
   const termId = annSnap.annotation.term_id;
   const layerId = annSnap.annotation.layer_id;
@@ -97,6 +99,10 @@ export function FindingRow({ snapshot: annSnap, selected: isSelected, termLabel,
         {copy && "Your copy, "}{evCount === 0 ? "Spanless" : plural(evCount, "mention")}
         {" "}<AiBadge provenance={annSnap.annotation.provenance} source={proposal} />
       </div>
+      {copy && <div className="doc-meta copy-replaces">
+        <span>replaces this proposal</span>
+        <span className="copy-replaces__changes">{copyChanges.length ? copyChanges.join("; ") : "No changes yet"}</span>
+      </div>}
       {convertSource && <div className="mod-attach-here">Becomes a modifier of the finding you choose</div>}
       {attachTarget?.active && <div className="mod-attach-here" aria-hidden="true">Attach {attachTarget.term} here <Kbd>Enter</Kbd></div>}
       <ModifierLine modifiers={annSnap.annotation.modifiers} layerId={layerId} termLabel={termLabel} />
