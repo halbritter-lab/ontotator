@@ -6454,6 +6454,49 @@
         }
       }
     },
+    "/api/v1/projects/{key}/translations/refresh": {
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Refresh Translations",
+        "description": "Move the project to the newest translation files (#254).\n\nFor a lead of the project or a system admin, at any time. Searches use\nthe new files at once; earlier searches keep the condition they ran with,\nlisted in ``frozen_translations.history``. 409 ``TRANSLATIONS_CURRENT``\nwhen no file would change, 409 ``TRANSLATIONS_NOT_FROZEN`` before the\nfirst use.",
+        "operationId": "refresh_translations_api_v1_projects__key__translations_refresh_post",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectSettings"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{key}/profile": {
       "put": {
         "tags": [
@@ -13574,6 +13617,51 @@
         ],
         "title": "Duplicate"
       },
+      "EarlierTranslations": {
+        "properties": {
+          "until": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Until"
+          },
+          "by": {
+            "type": "string",
+            "title": "By"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "refresh",
+              "ontology"
+            ],
+            "title": "Reason"
+          },
+          "condition_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Condition Ids"
+          },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/FrozenTranslation"
+            },
+            "type": "array",
+            "title": "Files"
+          }
+        },
+        "type": "object",
+        "required": [
+          "until",
+          "by",
+          "reason",
+          "condition_ids",
+          "files"
+        ],
+        "title": "EarlierTranslations",
+        "description": "Translation files the project's searches used until ``until``.\n\n``reason`` is what ended them: a move to the newest translations\n(``refresh``) or a change of the ontology version or task profile\n(``ontology``). Searches that ran with them keep their\n``search_condition_id``, one of ``condition_ids``."
+      },
       "EditorProposal": {
         "properties": {
           "schema_version": {
@@ -14556,6 +14644,23 @@
             },
             "type": "array",
             "title": "Not Included"
+          },
+          "updated": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TranslationsUpdate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/EarlierTranslations"
+            },
+            "type": "array",
+            "title": "History"
           }
         },
         "type": "object",
@@ -23986,6 +24091,26 @@
           "provider"
         ],
         "title": "TranslationRunView"
+      },
+      "TranslationsUpdate": {
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "by": {
+            "type": "string",
+            "title": "By"
+          }
+        },
+        "type": "object",
+        "required": [
+          "at",
+          "by"
+        ],
+        "title": "TranslationsUpdate",
+        "description": "When and by whom the project moved to the newest translations."
       },
       "TreeLevel": {
         "properties": {

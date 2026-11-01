@@ -1753,6 +1753,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{key}/translations/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refresh Translations
+         * @description Move the project to the newest translation files (#254).
+         *
+         *     For a lead of the project or a system admin, at any time. Searches use
+         *     the new files at once; earlier searches keep the condition they ran with,
+         *     listed in ``frozen_translations.history``. 409 ``TRANSLATIONS_CURRENT``
+         *     when no file would change, 409 ``TRANSLATIONS_NOT_FROZEN`` before the
+         *     first use.
+         */
+        post: operations["refresh_translations_api_v1_projects__key__translations_refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{key}/profile": {
         parameters: {
             query?: never;
@@ -4359,6 +4385,33 @@ export interface components {
             same_text_as: string[];
         };
         /**
+         * EarlierTranslations
+         * @description Translation files the project's searches used until ``until``.
+         *
+         *     ``reason`` is what ended them: a move to the newest translations
+         *     (``refresh``) or a change of the ontology version or task profile
+         *     (``ontology``). Searches that ran with them keep their
+         *     ``search_condition_id``, one of ``condition_ids``.
+         */
+        EarlierTranslations: {
+            /**
+             * Until
+             * Format: date-time
+             */
+            until: string;
+            /** By */
+            by: string;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "refresh" | "ontology";
+            /** Condition Ids */
+            condition_ids: string[];
+            /** Files */
+            files: components["schemas"]["FrozenTranslation"][];
+        };
+        /**
          * EditorProposal
          * @description Editor projection; producer metadata never changes snapshot hashes.
          */
@@ -4679,6 +4732,9 @@ export interface components {
             files: components["schemas"]["FrozenTranslation"][];
             /** Not Included */
             not_included?: string[];
+            updated?: components["schemas"]["TranslationsUpdate"] | null;
+            /** History */
+            history?: components["schemas"]["EarlierTranslations"][];
         };
         /** GuidelineDocument */
         GuidelineDocument: {
@@ -8124,6 +8180,19 @@ export interface components {
             recipe?: string | null;
             /** Checks */
             checks?: components["schemas"]["TranslationCheckView"][];
+        };
+        /**
+         * TranslationsUpdate
+         * @description When and by whom the project moved to the newest translations.
+         */
+        TranslationsUpdate: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** By */
+            by: string;
         };
         /**
          * TreeLevel
@@ -12327,6 +12396,37 @@ export interface operations {
                 "application/json": components["schemas"]["RepinRequest"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectSettings"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    refresh_translations_api_v1_projects__key__translations_refresh_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
