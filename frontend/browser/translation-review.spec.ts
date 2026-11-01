@@ -586,3 +586,46 @@ test('axe has no violations in the column head with coupling on', async ({ page 
   const results = await new AxeBuilder({ page }).include('.translation-column-head').include('.translation-column-hint').analyze();
   expect(results.violations.flatMap(v => v.nodes.map(n => `${v.id} ${n.target.join(' ')}: ${n.failureSummary ?? ''}`))).toEqual([]);
 });
+
+test('Mark checked sentences: click, Shift+click and drag per side, kept on reload, task stays open', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 }); const s = await scenario(page, 'target'); await openReview(page, s);
+  const toggle = page.getByRole('checkbox', { name: 'Mark checked sentences', exact: true });
+  await expect(toggle).not.toBeChecked();
+  await toggle.check();
+  await expect(target(page)).toHaveCount(0);
+  const translation = page.getByRole('region', { name: 'Translation (de)', exact: true });
+  const source = page.getByRole('region', { name: 'Source (en)', exact: true });
+  const sentence = (region: Locator, index: number) => region.locator(`[data-sentence="${index}"]`);
+  const saved = () => page.waitForResponse(r => r.url().endsWith(`/translation-reviews/${s.assignment_id}/checked-sentences`) && r.request().method() === 'PUT');
+  await sentence(translation, 0).click();
+  await expect(sentence(translation, 0)).toHaveAttribute('aria-pressed', 'true');
+  await expect(sentence(source, 0)).toHaveAttribute('aria-pressed', 'false');
+  await sentence(translation, 2).click({ modifiers: ['Shift'] });
+  for (const index of [0, 1, 2]) await expect(sentence(translation, index)).toHaveAttribute('aria-pressed', 'true');
+  // A drag from an unchecked sentence marks all sentences passed.
+  // The middle of a sentence's first line box: a wrapped sentence's bounding box may centre on a gap.
+  const point = (index: number) => sentence(source, index).evaluate(el => { const r = el.getClientRects()[0]; return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
+  const [first, third] = [await point(0), await point(2)];
+  await page.mouse.move(first.x, first.y); await page.mouse.down();
+  await page.mouse.move(third.x, third.y, { steps: 8 });
+  await expect(sentence(source, 1)).toHaveClass(/is-range-mark/);
+  const done = saved();
+  await page.mouse.up();
+  for (const index of [0, 1, 2]) await expect(sentence(source, index)).toHaveAttribute('aria-pressed', 'true');
+  expect((await done).ok()).toBe(true);
+  await expect(page.getByRole('group', { name: 'Checked sentences', exact: true })).toContainText(/Source 3 of \d+ · Translation 3 of \d+ sentences checked/);
+  await page.getByRole('button', { name: 'Next unchecked', exact: true }).click();
+  await expect(sentence(translation, 3)).toBeFocused();
+  const results = await new AxeBuilder({ page }).include('.checked-sentences-bar').include('.translation-sentences').analyze();
+  expect(results.violations.flatMap(v => v.nodes.map(n => `${v.id} ${n.target.join(' ')}: ${n.failureSummary ?? ''}`))).toEqual([]);
+  // Marking alone does not start the task.
+  const tasks = await (await authenticatedRequest(page, '/api/v1/me/tasks')).json() as { assignment_id: number; status: string }[];
+  expect(tasks.find(t => t.assignment_id === s.assignment_id)?.status).toBe('open');
+  await page.reload();
+  await expect(page.getByRole('checkbox', { name: 'Mark checked sentences', exact: true })).toBeChecked();
+  for (const index of [0, 1, 2]) await expect(sentence(translation, index)).toHaveAttribute('aria-pressed', 'true');
+  await expect(sentence(translation, 3)).toHaveAttribute('aria-pressed', 'false');
+  // Off: the translation is editable again.
+  await page.getByRole('checkbox', { name: 'Mark checked sentences', exact: true }).uncheck();
+  await expect(target(page)).toHaveValue(s.texts.target);
+});

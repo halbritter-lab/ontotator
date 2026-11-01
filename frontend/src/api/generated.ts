@@ -733,6 +733,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/translation-reviews/{assignment_id}/checked-sentences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save Checked Sentences
+         * @description The reviewer's own checked-sentence marks; not part of the review.
+         */
+        put: operations["save_checked_sentences_api_v1_translation_reviews__assignment_id__checked_sentences_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/translation-reviews/{assignment_id}/submit": {
         parameters: {
             query?: never;
@@ -3457,6 +3477,26 @@ export interface components {
             case_id: string;
             /** Variants */
             variants: components["schemas"]["VariantSummary"][];
+        };
+        /**
+         * CheckedSentence
+         * @description One checked sentence: its position and a short hash of its text.
+         */
+        CheckedSentence: {
+            /** Index */
+            index: number;
+            /** Hash */
+            hash: string;
+        };
+        /**
+         * CheckedSentences
+         * @description Checked sentences per side; each side is marked on its own.
+         */
+        CheckedSentences: {
+            /** Source */
+            source?: components["schemas"]["CheckedSentence"][];
+            /** Translation */
+            translation?: components["schemas"]["CheckedSentence"][];
         };
         /** CodeResponse */
         CodeResponse: {
@@ -6840,6 +6880,7 @@ export interface components {
              * @default false
              */
             lead_correction: boolean;
+            checked_sentences?: components["schemas"]["CheckedSentences"];
         };
         /** RevokedAssignmentView */
         RevokedAssignmentView: {
@@ -10196,6 +10237,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DraftResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_checked_sentences_api_v1_translation_reviews__assignment_id__checked_sentences_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assignment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckedSentences"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckedSentences"];
                 };
             };
             /** @description Validation Error */

@@ -1,12 +1,12 @@
 """Assigned translation-review drafts and atomic immutable review records."""
 
 from collections.abc import Callable
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass, field, replace
 from datetime import UTC, datetime
 from typing import Any
 
 from ontospan import TranslationCheck, canonical_text
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, ValidationError
 from sqlalchemy import Connection, RowMapping, func, insert, select, update
 
 from ontotator.assignments.service import (
@@ -50,6 +50,49 @@ from ontotator.storage.tables import (
     TranslationReviewRow,
     UserLanguageRow,
 )
+
+# The reviewer's checked-sentence marks (issue 256) live in the draft's form JSON under
+# this key. They are a working aid only: never part of the review form, the submitted
+# record, exports or audit details, and saving them changes neither the draft revision
+# nor the assignment status.
+CHECKED_SENTENCES_KEY = "checked_sentences"
+MAX_CHECKED_SENTENCES = 5000
+
+
+class CheckedSentence(BaseModel):
+    """One checked sentence: its position and a short hash of its text."""
+
+    model_config = ConfigDict(extra="forbid")
+    index: StrictInt = Field(ge=0, le=1_000_000)
+    hash: str = Field(pattern=r"^[0-9a-f]{8}$")
+
+
+class CheckedSentences(BaseModel):
+    """Checked sentences per side; each side is marked on its own."""
+
+    model_config = ConfigDict(extra="forbid")
+    source: list[CheckedSentence] = Field(
+        default_factory=list, max_length=MAX_CHECKED_SENTENCES
+    )
+    translation: list[CheckedSentence] = Field(
+        default_factory=list, max_length=MAX_CHECKED_SENTENCES
+    )
+
+
+def review_form(form: dict[str, Any]) -> dict[str, Any]:
+    """The draft form without the checked-sentence marks."""
+    return {k: v for k, v in form.items() if k != CHECKED_SENTENCES_KEY}
+
+
+def stored_checked_sentences(form: dict[str, Any] | None) -> CheckedSentences:
+    """The stored marks; marks that do not fit today's rules read as none."""
+    raw = (form or {}).get(CHECKED_SENTENCES_KEY)
+    if raw is None:
+        return CheckedSentences()
+    try:
+        return CheckedSentences.model_validate(raw)
+    except ValidationError:
+        return CheckedSentences()
 
 
 class TranslationReviewRecord(BaseModel):
@@ -141,6 +184,8 @@ class ReviewWorkspace:
     submitted_record: TranslationReviewRecord | None
     # FD1: the lead reviews this version themselves (accepted_corrected only).
     lead_correction: bool = False
+    # The reviewer's own checked-sentence marks (issue 256); empty once submitted.
+    checked_sentences: CheckedSentences = field(default_factory=CheckedSentences)
 
 
 class TranslationReviewService:
@@ -354,8 +399,11 @@ class TranslationReviewService:
                     },
                     row or 0,
                 )
+                marks = CheckedSentences()
             else:
                 draft = self._draft(conn, assignment, pid, variant)
+                marks = stored_checked_sentences(draft.form)
+                draft = replace(draft, form=review_form(draft.form))
             comparisons = translation_review_comparisons(
                 variant, ancestor, variants.values()
             )
@@ -382,6 +430,7 @@ class TranslationReviewService:
                 assignment.status == "submitted" or assignment.held,
                 submitted,
                 assignment.lead_correction,
+                marks,
             )
 
     def save_draft(
@@ -402,6 +451,11 @@ class TranslationReviewService:
                 raise RevisionConflict()
             revision = draft.revision + 1
             now = self._now()
+            # The marks are saved on their own; a draft save keeps the stored ones.
+            stored = draft.form.get(CHECKED_SENTENCES_KEY)
+            form = review_form(form)
+            if stored is not None:
+                form[CHECKED_SENTENCES_KEY] = stored
             conn.execute(
                 update(TranslationReviewDraftRow)
                 .where(TranslationReviewDraftRow.assignment_id == assignment.id)
@@ -425,6 +479,31 @@ class TranslationReviewService:
             )
             return revision
 
+    def save_checked_sentences(
+        self, access: Access, assignment_id: int, marks: CheckedSentences
+    ) -> CheckedSentences:
+        """Replace the reviewer's checked-sentence marks.
+
+        A working aid only: the draft revision, its time stamp and the assignment
+        status stay as they are, so marking alone never starts a task.
+        """
+        with self.db.transaction() as conn:
+            assignment, pid, _ = self._authority(conn, access, assignment_id)
+            self._editable(assignment)
+            variant, _, _, _ = self._context(assignment)
+            draft = self._draft(conn, assignment, pid, variant)
+            conn.execute(
+                update(TranslationReviewDraftRow)
+                .where(TranslationReviewDraftRow.assignment_id == assignment.id)
+                .values(
+                    form={
+                        **draft.form,
+                        CHECKED_SENTENCES_KEY: marks.model_dump(mode="json"),
+                    }
+                )
+            )
+            return marks
+
     def submit(
         self, access: Access, assignment_id: int, *, expected_revision: int
     ) -> TranslationReviewRecord:
@@ -443,7 +522,7 @@ class TranslationReviewService:
                 raise DomainError("QUALIFICATION_REQUIRED")
             machine = self._text(conn, pid, variant)
             try:
-                form = ReviewForm.model_validate(draft.form)
+                form = ReviewForm.model_validate(review_form(draft.form))
             except ValidationError as exc:
                 raise DomainError(
                     "REVIEW_INVALID",

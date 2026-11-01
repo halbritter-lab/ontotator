@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Translation review: **Mark checked sentences** splits source and translation into sentences that the reviewer ticks off one by one, with Shift+click or a drag for a range, a counter per text and **Next unchecked**. A checked translation sentence that is edited later shows as *changed since checked*. The marks are a working aid saved with the draft (`checked_sentences` on the review workspace, `PUT /api/v1/translation-reviews/{assignment_id}/checked-sentences`); saving them does not start the task, and they are not part of the review, the exports or the lead's views (#256).
+
 ### Fixed
 
 - Documents: the *Resolve…* options of a row close when the filter, tab, order or page changes, as *Cancel* does. They no longer open again once the row is back on the page (#238).

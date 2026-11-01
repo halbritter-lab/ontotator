@@ -252,6 +252,8 @@ export type ReanchorResolution = components["schemas"]["ReanchorResolution"];
 export type TranslationReviewDraftRequest = components["schemas"]["DraftRequest"];
 export type TranslationReviewDraftResponse = components["schemas"]["DraftResponse"];
 export type TranslationReviewSubmitRequest = components["schemas"]["SubmitRequest"];
+/** The reviewer's checked-sentence marks (issue 256); a working aid, not part of the review. */
+export type CheckedSentences = components["schemas"]["CheckedSentences"];
 export type CaseFilters = NonNullable<operations["list_cases_api_v1_projects__key__cases_get"]["parameters"]["query"]>;
 /** The logged-in user; `csrf_token` goes back in `X-CSRF-Token` with every write. */
 export type CurrentUser = components["schemas"]["CurrentUser"];
@@ -740,6 +742,11 @@ export class ApiClient {
 
   async saveTranslationReviewDraft(assignmentId: number, body: TranslationReviewDraftRequest): Promise<TranslationReviewDraftResponse> {
     return this.request<TranslationReviewDraftResponse>(`/api/v1/translation-reviews/${assignmentId}/draft`, { method: "PUT", body: JSON.stringify(body) });
+  }
+
+  /** Saves the checked-sentence marks; the draft revision and the task status stay as they are. */
+  async saveCheckedSentences(assignmentId: number, body: CheckedSentences): Promise<CheckedSentences> {
+    return this.request<CheckedSentences>(`/api/v1/translation-reviews/${assignmentId}/checked-sentences`, { method: "PUT", body: JSON.stringify(body) });
   }
 
   async submitTranslationReview(assignmentId: number, expectedRevision: TranslationReviewSubmitRequest["expected_revision"]): Promise<TranslationReviewRecord> {
