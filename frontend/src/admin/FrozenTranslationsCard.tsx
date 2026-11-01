@@ -32,7 +32,7 @@ export function FrozenTranslationsCard({ frozen, projectKey, onRefreshed }: Froz
   const why = "Searches keep the translations of their first use, so results stay comparable. A later upload reaches the project only when a lead uses the newest translations.";
   if (!frozen) {
     return <SettingsCard title="Translations" hint="Not frozen yet." why={why}>
-      <p className="settings-card-text">The first term search or opening the ontology information takes the translation files on the server then.</p>
+      <p className="settings-card-text">The first term search or opening a text in the editor takes the translation files on the server then.</p>
     </SettingsCard>;
   }
   const notIncluded = frozen.not_included ?? [];
