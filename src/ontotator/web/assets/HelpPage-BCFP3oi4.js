@@ -1,4 +1,4 @@
-import{r as i,a as m,j as a,b as h}from"./index-tDZPym7R.js";import{M as f,r as g}from"./index-NkqKaxBu.js";function w(){const[e,t]=i.useState(null);return i.useEffect(()=>{let o=!0;return m.getAbout().then(n=>{o&&t(n)},()=>{}),()=>{o=!1}},[]),e?a.jsxs("p",{className:"help-version",title:e.revision??void 0,children:["Ontotator ",e.version,e.revision&&a.jsxs(a.Fragment,{children:[" · commit ",e.revision.slice(0,7)]})]}):null}const y=`# Ontotator user handbook
+import{r as i,a as m,j as a,b as h}from"./index-CLHygInD.js";import{M as f,r as g}from"./index-ErSiIOA3.js";function w(){const[e,t]=i.useState(null);return i.useEffect(()=>{let o=!0;return m.getAbout().then(n=>{o&&t(n)},()=>{}),()=>{o=!1}},[]),e?a.jsxs("p",{className:"help-version",title:e.revision??void 0,children:["Ontotator ",e.version,e.revision&&a.jsxs(a.Fragment,{children:[" · commit ",e.revision.slice(0,7)]})]}):null}const y=`# Ontotator user handbook
 
 This handbook explains how to work with Ontotator in the browser. It is for everyone who uses the app: annotators, translation reviewers, consolidators, leads and system administrators. It describes the version of Ontotator that you open it from. If you run the server, read the [server operations guide (for server operators)](../operations.md) instead.
 
@@ -1298,7 +1298,7 @@ If you see **No texts are assigned to you yet.**, wait until your lead assigns t
 
 What for: learn the work on invented texts before your first real task.
 
-A practice project is private. Only you see it, your lead does not. It has short, invented letters, no real patients. Nothing you do there counts: it is not in any project list, count or export.
+A practice project is private. Only you see it, your lead does not. It has short, invented letters in German, no real patients. You can start it without German in your Profile. Nothing you do there counts: it is not in any project list, count or export.
 
 You get practice if you are an annotator or a translation reviewer in at least one project.
 
