@@ -131,6 +131,8 @@ Active filters show as chips above the table. Remove one with its ✕, or click 
 
 ### On a narrow screen
 
+Below 1400 px width, long stage states and names wrap onto a second line in their cell. Point at a cell to see its full text.
+
 Below 700 px width, each case is a card with its texts. Click a stage status to see the latest activity and the actions for that stage. Click **Details** to open the full text card.
 
 ## The text card
