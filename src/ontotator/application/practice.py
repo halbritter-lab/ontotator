@@ -218,8 +218,9 @@ class PracticeService:
         )
 
     def _ontology(self) -> tuple[Any, Pin] | None:
-        """The HPO release a new project would take (the newest), if it has
-        every practice term current and below the phenotype root."""
+        """The HPO release for practice: the newest installed one (as a new
+        project would take it) that has every practice term current and below
+        the phenotype root; None when no release has them all."""
         files = [
             item
             for item in self.ontologies.list()
@@ -228,16 +229,14 @@ class PracticeService:
         files.sort(
             key=lambda item: (item.release or "", item.uploaded_at), reverse=True
         )
-        for item in files[:1]:
+        for item in files:
             service = self.ontologies.service(item.sha256)
-            if service is None:
-                return None
-            for term in content.TERMS:
-                if service.validate_term(term).status != "valid":
-                    return None
-                if content.ROOT not in service.all_ancestors_of(term):
-                    return None
-            return item, Pin(item.sha256, (content.ROOT,), "hpo-phenotype")
+            if service is not None and all(
+                service.validate_term(term).status == "valid"
+                and content.ROOT in service.all_ancestors_of(term)
+                for term in content.TERMS
+            ):
+                return item, Pin(item.sha256, (content.ROOT,), "hpo-phenotype")
         return None
 
     def _unavailable(
