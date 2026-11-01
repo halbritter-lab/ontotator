@@ -11,7 +11,7 @@ General, Annotation, Workflow and Ontology have a **Save changes** button at the
 | **Workflow** | [Plan for new imports](#choose-the-plan-for-new-imports), [texts with tool proposals](#choose-how-texts-with-tool-proposals-are-annotated), [annotators per text and consolidation rules](#set-annotators-per-text-and-the-consolidation-rules) |
 | **Guidelines** | [Publish](#publish-the-first-or-a-new-guideline-version), [see who read them](#see-who-has-read-the-guidelines), [republish](#republish-an-earlier-guideline-version), [withdraw](#withdraw-a-guideline-version) |
 | **People** | [Add](#add-a-member), [change roles](#change-a-members-roles), [remove](#remove-a-member) |
-| **Ontology** | [Ontology version and annotation scheme](#choose-the-ontology-version-branches-and-annotation-scheme), [task profile](#task-profiles) and [replacing it](#replace-the-task-profile), [move to a newer release](#move-a-started-project-to-a-newer-release), [translations](#see-which-translations-the-project-uses) |
+| **Ontology** | [Ontology version and annotation scheme](#choose-the-ontology-version-branches-and-annotation-scheme), [task profile](#task-profiles) and [replacing it](#replace-the-task-profile), [move to a newer release](#move-a-started-project-to-a-newer-release), [translations](#see-which-translations-the-project-uses) and [the newest translations](#use-the-newest-translations) |
 
 ## Open project settings
 
@@ -163,8 +163,32 @@ What for: check which translation files term searches use in this project.
 2. Read the card **Translations**.
    - *Not frozen yet.* The first term search or opening the ontology information takes the translation files on the server then.
    - Otherwise the card lists the frozen files with their language, ontology and checksum. *Uploaded later, not used here* names files on the server that the project does not use.
+   - *Translations updated on …* says when and by whom the project last moved to the newest translations.
+   - **Earlier translations** lists, collapsed, the files earlier searches used and until when.
 
-The project froze its translations at the first use of its ontology. A file an administrator uploads after that does not reach the project ([When a translation reaches a project](admin.md#when-a-translation-reaches-a-project)). Changing the ontology version, the branches or the annotation scheme, or replacing the task profile, ends the freeze: the next use takes the files on the server then.
+The project froze its translations at the first use of its ontology. A file an administrator uploads after that does not reach the project by itself ([When a translation reaches a project](admin.md#when-a-translation-reaches-a-project)). To use it, see [Use the newest translations](#use-the-newest-translations). Changing the ontology version, the branches or the annotation scheme, or replacing the task profile, ends the freeze: the next use takes the files on the server then. The ended files stay listed under **Earlier translations**.
+
+## Use the newest translations
+
+What for: let term searches use translation files that were uploaded after the project froze its translations.
+
+Before you start: an administrator must have uploaded the files ([Upload ontology releases and translation files](admin.md#upload-ontology-releases-and-translation-files)). Leads of the project and system administrators can do this.
+
+1. Open **Settings**, tab **Ontology**, card **Translations**. *Uploaded later, not used here* names the new files.
+2. Click **Use the newest translations**. The button is only there when such a file exists.
+3. Read the dialog **Use the newest translations?**. It names each file that is added, or replaced by a newer file of the same name.
+4. Click **Use the newest translations**, or **Cancel**. The card now lists the new files and says *Translations updated on* the date *by* your name.
+
+What changes: the next term search in the project uses the new files. It can find terms by the names in them.
+
+What does not change:
+
+- Findings. They store the term ID, for example the HPO ID, not the translated name.
+- Drafts and submitted work.
+- The record of earlier searches. Each one keeps the translations it ran with; they are listed under **Earlier translations**.
+- Files the project already uses. A file stays even when the server no longer has it.
+
+You can do this at any time, also while work is open or submitted. A change an annotator saves at that very moment may be refused with *Changed elsewhere – reload required*; reloading the case fixes it. If no file is newer, the page says *The project already uses the newest translations.*
 
 ## Set the submission rules
 

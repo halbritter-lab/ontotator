@@ -336,6 +336,9 @@ describe("account status, projects at creation, history and erasure", () => {
     expect(auditDetails({ ...base, details: { user_id: 4, reason: null, note: "" } }, new Map([[4, "Alex Smith"]]))).toBe("User: Alex Smith");
     expect(auditDetails({ ...base, details: { counts: { texts: 3, variants: 0 }, sources: [{ name: "a.csv" }], plan_sha256: "ab" } }))
       .toBe("Counts: Texts: 3, Variants: 0; Sources: (Name: a.csv); Plan sha256: ab");
+    // A move to the newest translations names its files, not the kept conditions (issue 254).
+    expect(auditDetails({ ...base, action: "project.translations_refresh", details: { added: ["hp-es.babelon.tsv"], replaced: [], removed: [], files_before: [{ filename: "hp-de.babelon.tsv" }], superseded_search_conditions: [{ condition_id: "a" }] } }))
+      .toBe("Added: hp-es.babelon.tsv");
   });
 
   it("words audit actors", () => {

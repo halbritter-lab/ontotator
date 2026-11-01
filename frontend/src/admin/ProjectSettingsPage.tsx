@@ -108,6 +108,12 @@ function SettingsEditor({ initial, ontologies, projectKey, onSaved, section = DE
     } catch (failure: unknown) { if (active.current && !(failure instanceof RepinPending)) setError({ section: part, error: failure }); return false; }
     finally { if (active.current) { writing.current = false; setBusy(null); } }
   };
+  /** The Translations card saves on its own; adopt only what it changed (issue 254). */
+  const refreshed = (response: ProjectSettings) => {
+    if (!active.current) return;
+    setModel(current => ({ ...current, frozen_translations: response.frozen_translations }));
+    onSaved?.(response);
+  };
   const ids = model.profile.ontologies.map(item => item.ontology_id);
   const work: Record<Section, () => Promise<ProjectSettings>> = {
     General: () => api.updateProjectSettings(projectKey, { name: general.name, description: general.description.trim() ? general.description : null, languages: general.languages }),
@@ -307,7 +313,7 @@ function SettingsEditor({ initial, ontologies, projectKey, onSaved, section = DE
           <ul aria-label="Current profile layers">{model.profile.layers.map(layer => <li key={layer.layer_id}>{layer.label} ({layer.layer_id})</li>)}</ul>
         </details>
       </SettingsCard>
-        <FrozenTranslationsCard frozen={model.frozen_translations} />
+        <FrozenTranslationsCard frozen={model.frozen_translations} projectKey={projectKey} onRefreshed={refreshed} />
         <form className="settings-card" aria-label="Ontology release" onSubmit={event => submit(event, "Pins")}>
           <fieldset disabled={busy !== null}><legend className="settings-card-title">Move to another release</legend>
             <ReleaseFields ids={ids} ontologies={ontologies} value={pins} onChange={editPins} disabled={busy !== null} />
@@ -330,7 +336,7 @@ function SettingsEditor({ initial, ontologies, projectKey, onSaved, section = DE
           </fieldset>
         </form>
         {repinPanel}
-        <FrozenTranslationsCard frozen={model.frozen_translations} />
+        <FrozenTranslationsCard frozen={model.frozen_translations} projectKey={projectKey} onRefreshed={refreshed} />
         <section className="settings-card" aria-label="Task profile">
           <details className="settings-advanced"><summary className="settings-card-title">Advanced: task profile</summary>
             <ul aria-label="Current profile layers">{model.profile.layers.map(layer => <li key={layer.layer_id}>{layer.label} ({layer.layer_id})</li>)}</ul>

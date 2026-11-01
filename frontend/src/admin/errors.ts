@@ -192,6 +192,8 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   TECHNICAL_REPORT_NOT_FOUND: "This report does not exist.",
   TEXT_EMPTY: "The uploaded text is empty.",
   TEXT_NOT_UTF8: "Save the text as UTF-8 before uploading it.",
+  TRANSLATIONS_CURRENT: "The project already uses the newest translations.",
+  TRANSLATIONS_NOT_FROZEN: "The project has not frozen its translations yet. Its first term search takes the newest files.",
   UNRESOLVED_ADOPTED_COPY: "An adopted annotation is missing its source. Check the imported provenance.",
   UNKNOWN_TERM: "Replace unknown terms in your findings, or reject or replace affected proposals before submitting.",
   UNSUPPORTED_FILE: "This file type is not supported.",
