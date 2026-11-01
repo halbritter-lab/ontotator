@@ -290,6 +290,19 @@ chapter = "admin.md"
 glob = "frontend/src/admin/UsersPage.tsx"
 chapter = "admin.md"
 
+# Technical reports (#259): the report dialog for everyone, the admin page.
+[[map]]
+glob = "frontend/src/reports/TechnicalReportDialog.tsx"
+chapter = "getting-started.md"
+
+[[map]]
+glob = "frontend/src/reports/technicalReport.ts"
+chapter = "getting-started.md"
+
+[[map]]
+glob = "frontend/src/reports/TechnicalReportsPage.tsx"
+chapter = "admin.md"
+
 [[map]]
 glob = "frontend/src/admin/CodeOnceDialog.tsx"
 chapter = "admin.md"

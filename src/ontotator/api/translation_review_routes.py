@@ -9,6 +9,7 @@ from ontotator.api.encoded_routes import EncodedParameterRoute
 from ontotator.api.identity import PrincipalDep
 from ontotator.api.routes import get_access
 from ontotator.application.translation_reviews import (
+    CheckedSentences,
     ReviewWorkspace,
     TranslationReviewRecord,
     TranslationReviewService,
@@ -54,6 +55,19 @@ def save_review(
         revision=_service(request).save_draft(
             get_access(request), assignment_id, **body.model_dump()
         )
+    )
+
+
+@router.put("/translation-reviews/{assignment_id}/checked-sentences")
+def save_checked_sentences(
+    assignment_id: int,
+    body: CheckedSentences,
+    request: Request,
+    principal: PrincipalDep,
+) -> CheckedSentences:
+    """The reviewer's own checked-sentence marks; not part of the review."""
+    return _service(request).save_checked_sentences(
+        get_access(request), assignment_id, body
     )
 
 

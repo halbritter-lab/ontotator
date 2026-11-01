@@ -3,7 +3,7 @@
 A practice project is a project with ``projects.practice`` set and one
 ``practice_projects`` row naming its owner. Real-project queries leave these
 projects out with ``REAL_PROJECT``. Deleting one goes through the database
-function ``delete_practice_project`` (migration 0028), which refuses any
+function ``delete_practice_project`` (migration 0029), which refuses any
 project that is not flagged practice; this module checks the flag first as
 well, so a real project is refused twice before anything is deleted.
 """

@@ -142,7 +142,7 @@ class ProjectRow(Base):
     tool_proposal_mode: Mapped[str] = mapped_column(server_default=text("'proposals'"))
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now())
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-    # A private practice project of one person (issue 266, migration 0028):
+    # A private practice project of one person (issue 266, migration 0029):
     # never listed, counted or exported with real projects.
     practice: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
 
@@ -973,11 +973,12 @@ from ontotator.storage import guideline_tables as _guideline_tables  # noqa: E40
 from ontotator.storage import mode_change_tables as _mode_tables  # noqa: E402,F401
 from ontotator.storage import overview_tables as _overview_tables  # noqa: E402,F401
 from ontotator.storage import plan_tables as _plan_tables  # noqa: E402,F401
+from ontotator.storage import report_tables as _report_tables  # noqa: E402,F401
 from ontotator.storage import workflow_tables as _workflow_tables  # noqa: E402, F401
 
 
 class PracticeProjectRow(Base):
-    """The owner of a practice project (issue 266, migration 0028).
+    """The owner of a practice project (issue 266, migration 0029).
 
     The application only inserts; ``delete_practice_project`` removes it with
     the project.

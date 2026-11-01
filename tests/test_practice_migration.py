@@ -1,4 +1,4 @@
-"""Migration 0028 (issue 266): practice projects, purely additive."""
+"""Migration 0029 (issue 266): practice projects, purely additive."""
 
 from __future__ import annotations
 
@@ -12,8 +12,8 @@ from sqlalchemy import Connection, Engine, create_engine, text
 
 from ontotator.storage.schema import alembic_config, upgrade
 
-REVISION = "0028"
-PREVIOUS = "0027"
+REVISION = "0029"
+PREVIOUS = "0028"
 S = "ontotator"
 TABLES = ("projects", "users", "documents", "assignments", "audit_events")
 
@@ -56,7 +56,7 @@ def _seed(conn: Connection) -> None:
 
 
 def _rows(conn: Connection) -> dict[str, list[Any]]:
-    """Every seeded row, without the columns 0028 adds."""
+    """Every seeded row, without the columns 0029 adds."""
     result = {}
     for table in TABLES:
         rows = _exec(

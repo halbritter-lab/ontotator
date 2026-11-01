@@ -5,6 +5,7 @@
 
 import type { components, operations } from "./generated";
 import { attachmentFilename, type DownloadPayload } from "./download";
+import { lastApiError, recordApiError, type LastApiError } from "./lastError";
 export type { DownloadPayload } from "./download";
 
 export type ProjectDocumentSummary = components["schemas"]["ProjectDocumentSummary"];
@@ -257,6 +258,8 @@ export type ReanchorResolution = components["schemas"]["ReanchorResolution"];
 export type TranslationReviewDraftRequest = components["schemas"]["DraftRequest"];
 export type TranslationReviewDraftResponse = components["schemas"]["DraftResponse"];
 export type TranslationReviewSubmitRequest = components["schemas"]["SubmitRequest"];
+/** The reviewer's checked-sentence marks (issue 256); a working aid, not part of the review. */
+export type CheckedSentences = components["schemas"]["CheckedSentences"];
 export type CaseFilters = NonNullable<operations["list_cases_api_v1_projects__key__cases_get"]["parameters"]["query"]>;
 /** The logged-in user; `csrf_token` goes back in `X-CSRF-Token` with every write. */
 export type CurrentUser = components["schemas"]["CurrentUser"];
@@ -268,6 +271,13 @@ export type About = components["schemas"]["About"];
 export type OwnProfilePatch = Partial<components["schemas"]["ProfilePatch"]>;
 export type PasswordChange = components["schemas"]["PasswordChange"];
 export type AdminUser = components["schemas"]["AdminUser"];
+export type TechnicalReportRequest = components["schemas"]["TechnicalReportRequest"];
+export type TechnicalReportContext = components["schemas"]["TechnicalReportContext"];
+export type TechnicalReportReceipt = components["schemas"]["TechnicalReportReceipt"];
+export type TechnicalReportView = components["schemas"]["TechnicalReportView"];
+export type TechnicalReportStatus = TechnicalReportView["status"];
+export type { LastApiError };
+export { lastApiError };
 export type CreateUserRequest = components["schemas"]["CreateUserRequest"];
 export type CreatedUser = components["schemas"]["CreatedUser"];
 export type AuditEvent = components["schemas"]["AuditEventView"];
@@ -427,6 +437,8 @@ export interface ApiClientOptions {
  * The request never reached the server (offline, DNS, connection reset). Extends TypeError, what `fetch`
  * throws, so `isNetworkError` (editor autosave) keeps recognising it.
  */
+const TECHNICAL_REPORTS = "/api/v1/technical-reports";
+
 export class NetworkError extends TypeError {
   constructor(readonly cause: unknown) { super("Connection lost. Try again."); this.name = "NetworkError"; }
 }
@@ -650,6 +662,24 @@ export class ApiClient {
     return this.request<AuditEvent[]>(`/api/v1/admin/users/${encodeURIComponent(username)}/audit`, { method: "GET" });
   }
 
+  /** Send a technical report to the administrators; the receipt names its reference (TR-12). */
+  async sendTechnicalReport(body: TechnicalReportRequest): Promise<TechnicalReportReceipt> {
+    return this.request<TechnicalReportReceipt>(TECHNICAL_REPORTS, { method: "POST", body: JSON.stringify(body) });
+  }
+
+  async adminListTechnicalReports(status?: TechnicalReportStatus): Promise<TechnicalReportView[]> {
+    const query = status ? `?status=${status}` : "";
+    return this.request<TechnicalReportView[]>(`/api/v1/admin/technical-reports${query}`, { method: "GET" });
+  }
+
+  async adminTechnicalReportSummary(): Promise<components["schemas"]["TechnicalReportSummary"]> {
+    return this.request<components["schemas"]["TechnicalReportSummary"]>("/api/v1/admin/technical-reports/summary", { method: "GET" });
+  }
+
+  async adminSetTechnicalReportStatus(id: number, status: TechnicalReportStatus): Promise<TechnicalReportView> {
+    return this.request<TechnicalReportView>(`/api/v1/admin/technical-reports/${id}/status`, { method: "POST", body: JSON.stringify({ status }) });
+  }
+
   async adminUpdateUser(username: string, change: AdminUserPatch): Promise<AdminUser> {
     return this.request<AdminUser>(`/api/v1/admin/users/${encodeURIComponent(username)}`, { method: "PATCH", body: JSON.stringify(change) });
   }
@@ -785,6 +815,11 @@ export class ApiClient {
     return this.request<TranslationReviewDraftResponse>(`/api/v1/translation-reviews/${assignmentId}/draft`, { method: "PUT", body: JSON.stringify(body) });
   }
 
+  /** Saves the checked-sentence marks; the draft revision and the task status stay as they are. */
+  async saveCheckedSentences(assignmentId: number, body: CheckedSentences): Promise<CheckedSentences> {
+    return this.request<CheckedSentences>(`/api/v1/translation-reviews/${assignmentId}/checked-sentences`, { method: "PUT", body: JSON.stringify(body) });
+  }
+
   async submitTranslationReview(assignmentId: number, expectedRevision: TranslationReviewSubmitRequest["expected_revision"]): Promise<TranslationReviewRecord> {
     return this.request<TranslationReviewRecord>(`/api/v1/translation-reviews/${assignmentId}/submit`, { method: "POST", body: JSON.stringify({ expected_revision: expectedRevision } satisfies TranslationReviewSubmitRequest) });
   }
@@ -836,10 +871,13 @@ export class ApiClient {
     // a late 401 for a request sent before a new login must not end the new session.
     const sent = this.csrfToken;
     let response: Response;
+    // A failed report must not replace the error it reports.
+    const remember = !endpoint.startsWith(TECHNICAL_REPORTS);
     try {
       response = await fetch(url, { ...options, headers, credentials: "same-origin" });
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === "AbortError") throw cause;
+      if (remember) recordApiError(0, "NETWORK_ERROR");
       throw new NetworkError(cause);
     }
 
@@ -860,6 +898,7 @@ export class ApiClient {
       } catch {
         // Response body was not JSON
       }
+      if (remember) recordApiError(response.status, code);
 
       if (response.status === 401) {
         // A failed login or code redemption is no expiry.

@@ -1,6 +1,6 @@
 # Administration
 
-This chapter is for system administrators. You manage user accounts, ontology releases and projects in the app. Back to the [handbook overview](README.md).
+This chapter is for system administrators. You manage user accounts, ontology releases and projects in the app, and read the technical reports users send. Back to the [handbook overview](README.md).
 
 Server set-up, the command line, backups, upgrades and deployment are in the [server operations guide (for server operators)](../operations.md). A lost administrator password is also handled there: see [Lost admin password](../operations.md#lost-admin-password).
 
@@ -25,7 +25,7 @@ What for: find the pages only system administrators see.
 
 1. Log in. Your role line in the header reads **System administrator**.
 2. In the sidebar, open the group **Administration**.
-3. Click **Users**, **Ontologies**, **New project** or **Server settings**.
+3. Click **Users**, **Ontologies**, **Technical reports**, **New project** or **Server settings**.
 
 Other users do not see this group. If they open such a page by its address, they get a short explanation instead.
 
@@ -121,6 +121,21 @@ Before you start: [deactivate the account](#deactivate-or-activate-an-account).
 2. Read what is erased. The pseudonym and all work stay, so results and exports remain complete.
 3. Type the username into the confirmation field.
 4. Click **Anonymise permanently**.
+
+## Handle technical reports
+
+What for: read what users report about error messages, pages that do not load, crashes and the app in general, and keep track of what is handled.
+
+1. In the sidebar, open **Administration** › **Technical reports**. The number after it counts the open reports.
+2. **Show** lists the **Open** reports. Choose **Done** or **All** to see the others.
+3. Read a report. It shows its reference (for example *TR-12*), the user's text, who sent it and when. Below are the details Ontotator added: app version, the task if it was sent from one (its kind, for example *Annotation, from proposals*, the project and the text), screen, browser, window size, the last error the app received and, from the crash message, the error.
+4. Click **Mark as done** when the report is handled. Click **Reopen** to open it again.
+
+Users send reports with **Technical problem…** in the sidebar or **Report a technical problem…** in the editor; see [Report a technical problem](getting-started.md#report-a-technical-problem). Their task is not paused, and project leads do not see these reports. A user can send at most 20 reports per hour.
+
+Reports stay inside Ontotator. Nothing goes out by e-mail or to GitHub. To open an issue, click **Copy report** and paste the text by hand. Remove clinical content and patient details first.
+
+Sending, closing and reopening a report are recorded in the audit trail, with the reference only. Reports are kept like the audit trail. When you [anonymise an account](#anonymise-a-deactivated-account), its reports stay under the pseudonym, and the browser recorded with them is erased.
 
 ## Upload ontology releases and translation files
 

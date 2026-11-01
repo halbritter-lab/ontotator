@@ -97,6 +97,7 @@ NOT_FOUND_CODES = frozenset(
         "EVIDENCE_NOT_FOUND",
         "GUIDELINE_NOT_FOUND",
         "MODE_CHANGE_NOT_FOUND",
+        "TECHNICAL_REPORT_NOT_FOUND",
     }
 )
 
@@ -512,6 +513,7 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
                     "PRACTICE_UNAVAILABLE": 409,
                     "NOT_A_PRACTICE_PROJECT": 409,
                     "PRACTICE_IMPORT_FAILED": 503,
+                    "TECHNICAL_REPORT_LIMIT": 429,
                 }.get(exc.code, 422)
             ),
             content={"code": exc.code, "details": exc.details or str(exc)},
@@ -548,6 +550,11 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
     from ontotator.api.problem_report_routes import router as problem_report_router
 
     app.include_router(problem_report_router)
+    from ontotator.api.technical_report_routes import (
+        router as technical_report_router,
+    )
+
+    app.include_router(technical_report_router)
     from ontotator.api.translation_review_routes import (
         router as translation_review_router,
     )
