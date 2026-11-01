@@ -377,6 +377,24 @@ If the source text was updated, **Source updates to review** appears. Open it, c
 
 ![A translation review: the source on the left, the translation on the right, the failed automatic check above them. On the right, Query is chosen with the category Number or unit and a rationale, above Submit review…](images/annotator-translation-review.png)
 
+### Mark checked sentences
+
+What for: keep track of the sentences you have already checked in a long text.
+
+1. Tick **Mark checked sentences** above the texts. Both texts are now split into sentences. To edit the translation again, untick it. Your choice is remembered in this browser.
+2. Click a sentence to mark it as checked. Click it again to remove the mark. Source and translation are marked separately.
+3. Shift+click a sentence to mark all sentences from the last one you clicked up to this one.
+4. Or press on a sentence and drag across others. Starting on an unmarked sentence marks all of them. Starting on a marked sentence removes the marks.
+5. The head of each text shows how many of its sentences are checked. **Next unchecked** jumps to the first unchecked sentence of the translation.
+
+Checked sentences are green. If you edit a checked sentence later, it turns amber, and the head of the text counts it as *changed*. Read it again, then click it to mark it as checked.
+
+The marks are only for you. They are saved with your review, so they are kept when you reload or the task is paused. They do not change your decision, and the lead and the exports never see them.
+
+With the keyboard: Tab to a sentence, then press Enter or Space to mark it. Shift+Enter marks the range from the last sentence you marked.
+
+On a touch-only device such as a phone or tablet, **Mark checked sentences** is not offered, because a swipe on the text has to scroll.
+
 ## Keyboard shortcuts
 
 What for: work without the mouse. Shortcuts are off while you type in a field or when a dialog is open. Letter keys work in lower and upper case alike. **Keyboard shortcuts (?)** in **More**, or `?`, lists the shortcuts of the current screen, grouped for example under *Finding*, *Decisions* and *Carried findings*. A key that needs something first, such as a selected finding or proposal, is listed with *(not available right now)*. Many buttons also show their key next to the label.
@@ -399,4 +417,4 @@ What for: work without the mouse. Shortcuts are off while you type in a field or
 | `Alt+←` / `Alt+→` | Previous / next text |
 | `Alt+P` | Switch project |
 
-In a translation review: `1` to `4` choose a decision (outside the text), `Ctrl+Enter` submits (with a confirmation), `Alt+M` shows the matching paragraph.
+In a translation review: `1` to `4` choose a decision (outside the text), `Ctrl+Enter` submits (with a confirmation), `Alt+M` shows the matching paragraph. With **Mark checked sentences** on, Enter or Space marks the focused sentence and Shift+Enter marks a range.

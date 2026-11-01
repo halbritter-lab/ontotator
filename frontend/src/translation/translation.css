@@ -63,13 +63,18 @@
 .translation-columns--comparison { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .translation-column { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .translation-column-head { margin-bottom: var(--space-2); }
-/* Every head: the title on the first line (level across the columns), the column's controls on a second line. */
-.translation-texts .translation-column-head { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-1); min-height: 28px; }
+/* The controls of all texts: one line above the column heads. */
+.translation-tools { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); min-height: 32px; margin-bottom: var(--space-2); }
+.translation-tools .form-group { margin: 0; }
+.translation-tools .form-checkbox-row { min-height: 28px; font-size: var(--size-md); line-height: var(--leading-md); }
+.translation-tools-divider { width: 1px; height: 18px; background: var(--border); }
+.translation-tools-end { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-left: auto; }
+/* Every head: one line with the title, what is known about this text and its own action. */
+.translation-texts .translation-column-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); min-height: 32px; }
 /* A flex title drops the space before the language tag: the gap keeps "Source 🇬🇧 en" apart (R-23). */
 .translation-texts .translation-column-head .translation-column-title { min-height: 28px; display: flex; align-items: center; gap: var(--space-2); }
-.translation-texts .translation-column-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); }
+.translation-texts .translation-column-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); margin-left: auto; }
 .translation-texts .translation-column-head .form-group { margin: 0; }
-.translation-texts .translation-column-head .form-checkbox-row { min-height: 28px; font-size: var(--size-md); line-height: var(--leading-md); }
 .translation-texts .translation-column-head .form-group:has(.form-select) { display: flex; align-items: center; gap: var(--space-2); }
 .translation-texts .translation-column-head .form-label { margin: 0; font-size: var(--size-md); font-weight: var(--weight-regular); }
 .translation-texts .translation-column-head .form-select { width: auto; max-width: 14rem; }
@@ -233,3 +238,20 @@
 /* Next task after submit: actions in one wrapping row, the remaining count below. */
 .translation-next-task { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
 .translation-next-task [role="status"] { flex-basis: 100%; }
+
+/* Mark checked sentences (issue 256): every sentence is a toggle; marks are the reviewer's aid only. */
+.sentence-count { margin: 0; color: var(--text-muted); font-size: var(--size-sm); line-height: var(--leading-sm); font-variant-numeric: tabular-nums; }
+.sentence-count strong { color: var(--text); font-weight: var(--weight-strong); }
+.sentence-next { margin-left: auto; }
+.sentence-save-error { display: flex; align-items: center; gap: var(--space-2); flex-basis: 100%; margin: 0; color: var(--text); }
+.translation-sentences { user-select: none; -webkit-user-select: none; }
+/* Touch drags mark sentences instead of scrolling the text; the gaps and the scroll bar still scroll. */
+.review-sentence { border-radius: 2px; cursor: pointer; touch-action: none; text-decoration: underline 2px transparent; text-underline-offset: 4px; }
+.review-sentence:hover { background: var(--surface-sunken); }
+.review-sentence:focus-visible { outline: var(--focus-width) solid var(--focus-ring); outline-offset: 1px; }
+.review-sentence.is-checked { background: var(--success-light); text-decoration-color: var(--success); }
+.review-sentence.is-stale { background: var(--warning-light); text-decoration-color: var(--warning); text-decoration-style: dashed; }
+/* The live drag range: what the sentences become when the pointer is released. */
+.review-sentence.is-range-mark { background: var(--success-light); text-decoration-color: var(--success); text-decoration-style: dotted; }
+.review-sentence.is-range-unmark { background: transparent; text-decoration-color: var(--border-strong); text-decoration-style: dotted; }
+.review-sentence[aria-disabled="true"] { cursor: default; }

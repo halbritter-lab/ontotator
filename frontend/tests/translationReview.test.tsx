@@ -301,7 +301,7 @@ it("offers Couple scrolling beside the editable translation, unchecked by defaul
   setup(); await screen.findByRole("textbox", { name: "Translation (de)" });
   const box = coupleBox()!;
   expect(box.checked).toBe(false); expect(box.disabled).toBe(false);
-  expect(box.closest(".translation-column-head")?.textContent).toContain("Translation (de)");
+  expect(box.closest(".translation-tools")).not.toBeNull();
   expect(translationBox().readOnly).toBe(false);
   expect(screen.queryByText(COUPLING_NOTE)).toBeNull();
   fireEvent.click(box);
@@ -505,7 +505,7 @@ it("Show matching paragraph sits after Show changes and Couple scrolling with Kb
   setup(); await screen.findByRole("textbox", { name: "Translation (de)" });
   const showChanges = screen.getByRole("checkbox", { name: "Show changes" }), button = matchingButton();
   expect(screen.getAllByRole("button", { name: "Show matching paragraph" })).toHaveLength(1);
-  expect(button.closest(".translation-column-head")).toBe(showChanges.closest(".translation-column-head"));
+  expect(button.closest(".translation-tools")).toBe(showChanges.closest(".translation-tools"));
   expect(showChanges.compareDocumentPosition(coupleBox()!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(coupleBox()!.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   // Visibly a button (bordered secondary), not a text link.
@@ -521,7 +521,7 @@ it("the Comparison pane starts closed, opens from the Translation controls and i
   const heads = () => [...document.querySelectorAll<HTMLElement>(".translation-column-head")];
   expect(heads()).toHaveLength(2);
   const compare = screen.getByRole("button", { name: "Compare with First MT de" });
-  expect(compare.closest(".translation-column-controls")).toBe(heads()[1].querySelector(".translation-column-controls"));
+  expect(compare.closest(".translation-tools")).not.toBeNull();
   fireEvent.click(compare);
   expect(heads()).toHaveLength(3);
   for (const head of heads()) expect(head.firstElementChild!.classList.contains("translation-column-title")).toBe(true);
@@ -963,13 +963,12 @@ it("puts the document name, meta and tools in one bar without a back link", asyn
   expect(bar.textContent).toContain("English");
   expect(bar.textContent).not.toContain("Translation review ·");
 });
-it("folds the text toolbar into the column heads", async () => {
+it("keeps the text controls on one line above the texts", async () => {
   setup();
   await screen.findByRole("textbox", { name: "Translation (de)" });
-  expect(screen.getByRole("checkbox", { name: "Show changes" }).closest(".translation-column-head")?.textContent).toContain("Translation (de)");
-  expect(screen.queryByRole("group", { name: "Text view" })).toBeNull();
+  expect(screen.getByRole("checkbox", { name: "Show changes" }).closest(".translation-tools")).toBe(screen.getByRole("group", { name: "Text view" }));
 });
-it("hides Couple scrolling below 700 px without a sentence and offers it in the translation column head at 1440 px", async () => {
+it("hides Couple scrolling below 700 px without a sentence and offers it above the texts at 1440 px", async () => {
   setup(undefined, false, { width: 699, listeners: new Set() });
   await screen.findByRole("textbox", { name: "Translation (de)" });
   expect(screen.queryByRole("checkbox", { name: "Couple scrolling" })).toBeNull();
@@ -978,7 +977,7 @@ it("hides Couple scrolling below 700 px without a sentence and offers it in the 
   setup();
   await screen.findByRole("textbox", { name: "Translation (de)" });
   fireEvent.click(screen.getByRole("checkbox", { name: "Show changes" }));
-  expect(screen.getByRole("checkbox", { name: "Couple scrolling" }).closest(".translation-column-head")?.textContent).toContain("Translation (de)");
+  expect(screen.getByRole("checkbox", { name: "Couple scrolling" }).closest(".translation-tools")).not.toBeNull();
 });
 it("shows the pinned bottom bar with the decision and the only Submit button below 1100 px", async () => {
   setup(undefined, false, { width: 800, listeners: new Set() });

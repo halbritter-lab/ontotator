@@ -2370,6 +2370,59 @@
         }
       }
     },
+    "/api/v1/translation-reviews/{assignment_id}/checked-sentences": {
+      "put": {
+        "tags": [
+          "translation-reviews"
+        ],
+        "summary": "Save Checked Sentences",
+        "description": "The reviewer's own checked-sentence marks; not part of the review.",
+        "operationId": "save_checked_sentences_api_v1_translation_reviews__assignment_id__checked_sentences_put",
+        "parameters": [
+          {
+            "name": "assignment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Assignment Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckedSentences"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckedSentences"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/translation-reviews/{assignment_id}/submit": {
       "post": {
         "tags": [
@@ -10965,6 +11018,53 @@
           "variants"
         ],
         "title": "CaseSummary"
+      },
+      "CheckedSentence": {
+        "properties": {
+          "index": {
+            "type": "integer",
+            "maximum": 1000000.0,
+            "minimum": 0.0,
+            "title": "Index"
+          },
+          "hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}$",
+            "title": "Hash"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "index",
+          "hash"
+        ],
+        "title": "CheckedSentence",
+        "description": "One checked sentence: its position and a short hash of its text."
+      },
+      "CheckedSentences": {
+        "properties": {
+          "source": {
+            "items": {
+              "$ref": "#/components/schemas/CheckedSentence"
+            },
+            "type": "array",
+            "maxItems": 5000,
+            "title": "Source"
+          },
+          "translation": {
+            "items": {
+              "$ref": "#/components/schemas/CheckedSentence"
+            },
+            "type": "array",
+            "maxItems": 5000,
+            "title": "Translation"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "CheckedSentences",
+        "description": "Checked sentences per side; each side is marked on its own."
       },
       "CodeResponse": {
         "properties": {
@@ -20585,6 +20685,9 @@
             "type": "boolean",
             "title": "Lead Correction",
             "default": false
+          },
+          "checked_sentences": {
+            "$ref": "#/components/schemas/CheckedSentences"
           }
         },
         "type": "object",
