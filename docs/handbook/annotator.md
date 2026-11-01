@@ -39,7 +39,7 @@ The toolbar shows the text name, its language and the mode:
 
 Next to the mode, the save status tells you whether your work is stored: **Saved**, **Saving...** or **Unsaved changes**. Work is saved automatically; there is no save button. If it reads **Offline** or shows an error, click **Retry**.
 
-The **More** menu holds **Work rounds**, **Report a text problem…**, the guidelines (for example *Guidelines v2*), **Keyboard shortcuts (?)** and **Help for this screen**.
+The **More** menu holds **Work rounds**, **Report a text problem…**, **Report a technical problem…**, the guidelines (for example *Guidelines v2*), **Keyboard shortcuts (?)** and **Help for this screen**.
 
 If the text was changed elsewhere, a **Revision conflict** notice appears; click **Reload case**. A submitted task is read-only.
 
@@ -306,7 +306,7 @@ What happens to your earlier work:
 
 ## Report a text problem
 
-What for: tell the lead that the text cannot be annotated as it is, for example cut off or the wrong text. For questions about the rules, ask your lead directly instead.
+What for: tell the lead that the text cannot be annotated as it is, for example cut off or the wrong text. For questions about the rules, ask your lead directly instead. For an error message, a crash or something that does not load, use [Report a technical problem](getting-started.md#report-a-technical-problem): it goes to the administrators and does not pause your task.
 
 Before you start: a report pauses your task. You cannot save or submit until the pause is released. Your saved work stays.
 

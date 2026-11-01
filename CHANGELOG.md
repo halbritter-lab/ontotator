@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Report a technical problem…** in the sidebar, in the editor's **More** menu and on the crash screen sends an error message, a page that does not load, a crash or general feedback to the system administrators, not to the project leads, and pauses no task. The user only describes what happened; Ontotator adds the app version, the screen, the browser, the window size, the last refused API request and, from the crash screen, the error message. The dialog shows a reference such as `TR-12`. Administrators read the reports under **Administration** › **Technical reports** (with the number of open reports), mark them done or reopen them, and copy one into an issue by hand: nothing is sent out. Sending, closing and reopening are audited; erasing an account clears the browser of its reports. New endpoints `POST /api/v1/technical-reports` and `/api/v1/admin/technical-reports`; migration 0028 adds the `technical_reports` table only (#259).
+
 ## [0.6.1] - 2026-10-31
 
 ### Fixed

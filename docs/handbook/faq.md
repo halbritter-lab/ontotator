@@ -2,6 +2,8 @@
 
 Short answers to problems people often meet. Each answer links to the chapter with the full steps.
 
+Your problem is not listed? For an error message, a page that does not load or a crash, [report a technical problem](getting-started.md#report-a-technical-problem) to the system administrators. For questions about the texts or the rules, ask your project lead.
+
 ## Logging in
 
 ### I forgot my password
@@ -25,6 +27,14 @@ Your session has ended. Log in again in that window. Your unsaved edits stay in 
 Reload the page in the browser, then repeat the last action. If the message asks you to, log in again ([Log in](getting-started.md#log-in)).
 
 ## Tasks and projects
+
+### I see an error message that is not explained here
+
+Click **Report a technical problem…** in the sidebar, or in the editor under **More**. Describe what you did. Ontotator adds the last error it received. The report goes to the system administrators and does not pause your task. See [Report a technical problem](getting-started.md#report-a-technical-problem).
+
+### The page says "Something went wrong while displaying this text."
+
+The editor could not show the text. Your saved changes are kept on the server. Click **Reload case**. If it happens again, click **Report a technical problem…** on the same screen: the error message is added to the report for you.
 
 ### The page says "The project is busy right now."
 
@@ -56,7 +66,7 @@ A submission cannot be edited. To change your work, open the task, choose **More
 
 ### I cannot open project settings, Ontologies or New project
 
-Project settings are for project leads. **Ontologies**, **Users** and **New project** are for system administrators. The page tells you whom to ask. See [Roles](README.md#roles).
+Project settings are for project leads. **Ontologies**, **Users**, **Technical reports** and **New project** are for system administrators. The page tells you whom to ask. See [Roles](README.md#roles).
 
 ## Annotating
 
@@ -183,6 +193,10 @@ This protects you from locking yourself out. Another system administrator must d
 ### An ontology upload is refused
 
 The file could not be read, is too large, or is an incomplete HPO release. Read the detail below the message and upload a complete release. See [Upload ontology releases and translation files](admin.md#upload-ontology-releases-and-translation-files).
+
+### A user sent a technical report
+
+Open **Administration** › **Technical reports**. Mark it as done when it is handled. Reports are not sent anywhere; copy one into an issue by hand and leave out clinical content. See [Handle technical reports](admin.md#handle-technical-reports).
 
 ### The administrator lost the password
 

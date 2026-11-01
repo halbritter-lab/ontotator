@@ -63,7 +63,22 @@ The header is the same on every page:
 - **Handbook** in the header opens this handbook inside the app. On the Documents, consolidation and translation review screens, **Help** opens the handbook section about that screen; in the editor it is **More** > **Help for this screen**. On the project forms, a link next to the task profile opens the section that explains it. Click a screenshot in the handbook to open it at full size in a new tab.
 - Below the chapter list, the handbook shows the app's version and commit, for example `Ontotator 0.3.0 · commit cc65cea`. Quote it when you report a problem.
 
-The sidebar lists **My tasks**, **Projects** and **Profile**. The number after **My tasks** counts your open tasks, the same tasks as the **To do** tab; it updates as soon as you submit a text. Clicking **My tasks** or **Projects** loads your projects and the count again, so a project you were just added to shows up without reloading the page. Leads also see their project's pages (**Documents**, **Progress**, **Settings**, **Export**). System administrators also see **Administration** with **Users**, **Ontologies** and **New project** (see [Administration](admin.md)). In the editor, the sidebar folds into **Sections**; click it to open it.
+The sidebar lists **My tasks**, **Projects**, **Profile** and **Report a technical problem…** (see [Report a technical problem](#report-a-technical-problem)). The number after **My tasks** counts your open tasks, the same tasks as the **To do** tab; it updates as soon as you submit a text. Clicking **My tasks** or **Projects** loads your projects and the count again, so a project you were just added to shows up without reloading the page. Leads also see their project's pages (**Documents**, **Progress**, **Settings**, **Export**). System administrators also see **Administration** with **Users**, **Ontologies**, **Technical reports** and **New project** (see [Administration](admin.md)). In the editor, the sidebar folds into **Sections**; click it to open it.
+
+## Report a technical problem
+
+What for: tell the system administrators about an error message, a page that does not load, a crash, or give general feedback. For a problem with the text of a task, such as a cut-off or wrong text, use [Report a text problem](annotator.md#report-a-text-problem) instead.
+
+1. Click **Report a technical problem…** in the sidebar. In the editor, open **More** and choose **Report a technical problem…**. If a text cannot be displayed, the message *Something went wrong while displaying this text.* offers **Report a technical problem…** too.
+2. Under **What happened?**, write what you did and what you saw.
+3. Click **Send report**.
+4. The dialog shows a reference, for example *TR-12*. Quote it if you ask an administrator about your report.
+
+The report goes to the system administrators, not to your project lead. Your task is not paused.
+
+Ontotator adds what the administrators need to find the cause: the app version, the screen, your browser, the window size and the last error the app received. From the crash message it also adds the error. Open **Added automatically** to see it before you send.
+
+The report stays inside Ontotator; nothing is sent by e-mail or elsewhere. Do not write patient details beyond what is needed to describe the problem.
 
 ## Switch project
 
