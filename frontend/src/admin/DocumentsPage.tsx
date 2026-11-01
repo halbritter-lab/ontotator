@@ -338,7 +338,8 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
 
   const latestReload = useRef(rows.reload);
   latestReload.current = rows.reload;
-  const refreshAll = () => { rows.reload(); setRevision(value => value + 1); notifyDocumentsChanged(); };
+  /** Reloads the rows, the bar and the navigation counter; resolves once the rows are in. */
+  const refreshAll = (): Promise<void> => { const rowsIn = rows.reload(); setRevision(value => value + 1); notifyDocumentsChanged(); return rowsIn; };
   // After a same-user re-login every load runs again, so no "session ended" banner stays.
   useSessionRestored(refreshAll);
   /** Refetch after an own action; the navigation counter reloads too ("documents-changed"). */
@@ -364,7 +365,8 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       consolidatorRule: page?.adjudicator_not_annotator ?? false,
       onClose: () => setAssignDialog(null),
       // The toast region announces the message; a second live region would say it twice (#47 A-25).
-      onAssigned: message => { setAssignDialog(null); showToast({ message }); refreshAll(); },
+      // Issue 248: the toast follows the refreshed rows, so it never announces work the row does not show yet.
+      onAssigned: message => { setAssignDialog(null); void refreshAll().then(() => showToast({ message })); },
     });
   };
 
@@ -532,7 +534,8 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
         setAssignDialog(null);
         selection.clear(); setLimitNote(null); setAllFiltered(null);
         const rest = [...new Set(skipped)];
-        showToast({
+        // The toast follows the refreshed rows (issue 248).
+        void refreshAll().then(() => showToast({
           message,
           ...(rest.length ? {
             actionLabel: `Select the ${plural(rest.length, "skipped case")}`,
@@ -540,8 +543,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
             // The offer stays until dismissed: the next action often comes first (issue 195).
             persist: true,
           } : {}),
-        });
-        refreshAll();
+        }));
       },
     });
   };

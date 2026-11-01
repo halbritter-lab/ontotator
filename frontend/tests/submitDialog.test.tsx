@@ -511,4 +511,9 @@ describe("submitLabel and summaryText", () => {
     expect(summaryText(2, 1)).toBe("2 findings. 1 thing is still open:");
     expect(summaryText(0, 2)).toBe("0 findings. 2 things are still open:");
   });
+
+  it("names Unresolved proposals among the findings (#248)", () => {
+    expect(summaryText(34, 0, 1)).toBe("34 findings, 1 unresolved, nothing open.");
+    expect(summaryText(3, 1, 2)).toBe("3 findings, 2 unresolved. 1 thing is still open:");
+  });
 });

@@ -255,22 +255,22 @@ test('corrected-text private carry preserves submitted history through a reporte
     await viewSubmittedResult(author.page);
     // A submitted task: "Text problems" opens on the reports, the form second (#49 R-20).
     await moreAction(author.page, /^Text problems/);
-    await author.page.getByRole('dialog', { name: `Problems with Task ${task.id}`, exact: true }).getByRole('button', { name: 'New report', exact: true }).click();
+    await author.page.getByRole('dialog', { name: /^Problems with / }).getByRole('button', { name: 'New report', exact: true }).click();
     const form = author.page.getByRole('dialog', { name: 'New problem report', exact: true });
     await form.getByRole('textbox', { name: /What is the problem\?/ }).fill('Review the corrected clinical context before continuing.');
     await form.getByRole('button', { name: 'Report and pause my task', exact: true }).click();
-    await expect(author.page.getByRole('dialog', { name: `Problems with Task ${task.id}`, exact: true })).toContainText('Reported. Your task is paused until you or a project lead resume it.');
+    await expect(author.page.getByRole('dialog', { name: /^Problems with / })).toContainText('Reported. Your task is paused until you or a project lead resume it.');
     const reportRows = await value<components['schemas']['ProblemReportView'][]>(page, `${root(s)}/problem-reports`);
     const report = reportRows.find(item => item.assignment_id === task.id)!;
     await page.goto(`/#/projects/${encodeURIComponent(s.project)}/problem-reports/${encodeURIComponent(report.report_id)}`);
     await page.getByRole('group', { name: 'Decide on this report', exact: true }).getByRole('button', { name: 'Agree empty restart…', exact: true }).click();
-    const restart = page.getByRole('group', { name: `Agree empty restart of Task ${task.id}`, exact: true });
+    const restart = page.getByRole('group', { name: /^Agree empty restart of the annotation of / });
     await restart.getByLabel(/^I agreed this restart with /).check();
     await restart.getByLabel(/^Reason \(becomes the outcome/).fill('Agreed with the author: start a separate empty annotation round.');
     const restarted = page.waitForResponse(r => r.request().method() === 'POST' && r.url().includes(`/problem-reports/${encodeURIComponent(report.report_id)}`));
     await restart.getByRole('button', { name: 'Restart with empty round', exact: true }).click();
     expect((await restarted).ok()).toBeTruthy();
-    await expect(page.getByText(new RegExp(`^Task ${task.id} restarted with `))).toBeVisible();
+    await expect(page.getByText(/^The annotation of .+ restarted with /)).toBeVisible();
     await author.page.reload();
     await expect(author.page.getByRole('button', { name: 'More actions', exact: true })).toBeVisible();
     await expect(author.page.locator('.sidebar .doc-item')).toHaveCount(0);

@@ -8,7 +8,15 @@ import { textLabel, type PersonRef } from "../app/identity";
 import { formatTime, personLabel } from "../app/submissionLabels";
 import type { StatusTone } from "../ui";
 
-interface TaskIdentity { assignment_id: number; owner_label: string; owner?: PersonRef | null }
+type TaskKind = "annotate" | "review" | "translation_review";
+/** A task as the lead reads it (#248): its kind, text and owner, never its internal number. */
+interface TaskIdentity { assignment_id: number; owner_label: string; owner?: PersonRef | null; case_id: string; language: string; task?: TaskKind | null }
+
+/** The kind of a task inside a sentence; "review" assignments are consolidations. */
+const TASK_NOUNS: Readonly<Record<TaskKind, string>> = { annotate: "annotation", review: "consolidation", translation_review: "translation review" };
+const taskNoun = (t: Pick<TaskIdentity, "task">): string => (t.task ? TASK_NOUNS[t.task] : "task");
+/** "the annotation of …" at the start of a sentence: "The annotation of …". */
+export const upperFirst = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1);
 
 type Ref = PersonRef | null | undefined;
 
@@ -30,9 +38,15 @@ const activeHolds = (r: ProblemReportView): ReportHoldView[] => holdsOf(r).filte
 const byCreatedAt = (a: { created_at: string }, b: { created_at: string }): number => Date.parse(a.created_at) - Date.parse(b.created_at);
 
 /** The reporter's own task: its hold (owner label) when present, else the report's own fields. */
-function reporterTask(r: ProblemReportView): TaskIdentity {
+export function reporterTask(r: ProblemReportView): TaskIdentity {
   const own = holdsOf(r).find(h => h.assignment_id === r.assignment_id);
-  return { assignment_id: r.assignment_id, owner_label: own?.owner_label ?? r.reporter_label, owner: own ? own.owner : r.reporter };
+  return { assignment_id: r.assignment_id, owner_label: own?.owner_label ?? r.reporter_label, owner: own ? own.owner : r.reporter,
+    case_id: r.case_id, language: r.language, task: own?.task ?? r.task ?? null };
+}
+
+/** A task of this report by its assignment: its hold, else the reporter's task, else null. */
+function taskOf(r: ProblemReportView, assignmentId: number): TaskIdentity | null {
+  return holdsOf(r).find(h => h.assignment_id === assignmentId) ?? (assignmentId === r.assignment_id ? reporterTask(r) : null);
 }
 
 /** The reporter as a lead reads them: "Ana Weber (ann-0004)"; other viewers keep the pseudonym. */
@@ -72,20 +86,30 @@ export function reportStateFact(r: ProblemReportView, now?: Date): string {
   return `${text}${by}${at}`;
 }
 
-/** "Task 4, ann-0004, accepted-translation, de"; with a display name (leads) "Task 4, Ana Weber (ann-0004), …". */
-export function taskLabel(t: TaskIdentity & { case_id: string; language: string }): string {
-  return `Task ${t.assignment_id}, ${taskOwnerText(t)}`;
+/** A task picker's label: "ann-0004, accepted-translation de, annotation"; with a display name "Ana Weber (ann-0004), …". */
+export function taskLabel(t: TaskIdentity): string {
+  return `${taskOwnerText(t)}, ${taskNoun(t)}`;
 }
 
-/** The owner and text of a task without its number: "Ana Weber (ann-0004), accepted-translation de". */
-export function taskOwnerText(t: TaskIdentity & { case_id: string; language: string }): string {
+/** The owner and text of a task: "Ana Weber (ann-0004), accepted-translation de". */
+export function taskOwnerText(t: TaskIdentity): string {
   return `${ownerName(t)}, ${textLabel(t)}`;
 }
 
-/** Running-text reference: "Task 4 (ann-0004)"; with a display name "Task 4, Ana Weber (ann-0004)" (never nested parentheses). */
+/** A task without its owner: "the annotation of case-107 de". */
+export function taskName(t: Pick<TaskIdentity, "case_id" | "language" | "task">): string {
+  return `the ${taskNoun(t)} of ${textLabel(t)}`;
+}
+
+/** Running-text reference: "the annotation of case-107 de by ann-0004"; with a display name "… by Ana Weber (ann-0004)". */
 export function taskRef(t: TaskIdentity): string {
-  const name = ownerName(t);
-  return name === t.owner_label ? `Task ${t.assignment_id} (${t.owner_label})` : `Task ${t.assignment_id}, ${name}`;
+  return `${taskName(t)} by ${ownerName(t)}`;
+}
+
+/** `taskRef` of a task by its assignment, "a task" when the report no longer lists it. */
+export function taskRefOf(r: ProblemReportView, assignmentId: number): string {
+  const task = taskOf(r, assignmentId);
+  return task ? taskRef(task) : "a task";
 }
 
 export type TaskFactKind = "paused" | "repaused" | "resumed" | "restarted" | "withdrawn" | "unknown-release";
@@ -167,7 +191,7 @@ function eventSentence(r: ProblemReportView, e: ReportEventView, actor: string):
       const next = e.round_ordinal == null ? null : `Round ${e.round_ordinal}`;
       const prior = e.abandoned_round_ordinal == null ? null : `Round ${e.abandoned_round_ordinal}`;
       const sentence = lead
-        ? `${actor} agreed an empty restart of Task ${r.assignment_id}. ${prior ?? "The previous round"} abandoned and kept; ${next ?? "A new round"} started empty. Report closed.`
+        ? `${actor} agreed an empty restart of ${taskRef(reporterTask(r))}. ${prior ?? "The previous round"} abandoned and kept; ${next ?? "A new round"} started empty. Report closed.`
         : `${actor} restarted your task with an empty ${next ?? "round"}. ${prior ?? "The previous round"} is kept. Report closed.`;
       const item = withReason(sentence, "Outcome");
       const draft = draftOf(e);
@@ -175,7 +199,7 @@ function eventSentence(r: ProblemReportView, e: ReportEventView, actor: string):
     }
     case "withdraw": {
       let resumed = "";
-      if (lead && e.affected?.length) resumed = ` ${joinList(e.affected.map(t => `Task ${t.assignment_id}`))} resumed.`;
+      if (lead && e.affected?.length) resumed = ` ${upperFirst(joinList(e.affected.map(taskRef)))} resumed.`;
       if (!lead && e.own_task) resumed = " Your task resumed.";
       return withReason(`${actor} withdrew the report.${resumed}`);
     }
@@ -193,7 +217,7 @@ export function historyItems(r: ProblemReportView): HistoryItem[] {
     return label === r.reporter_label ? "You" : "The project lead";
   };
   const created: HistoryItem = r.viewer_is_lead
-    ? { key: "created", at: r.created_at ?? "", sentence: `${actorOf(r.reporter_label, r.reporter)} reported the problem. Task ${r.assignment_id} paused.` }
+    ? { key: "created", at: r.created_at ?? "", sentence: `${actorOf(r.reporter_label, r.reporter)} reported the problem. ${upperFirst(taskName(reporterTask(r)))} paused.` }
     : { key: "created", at: r.created_at ?? "", sentence: "You reported the problem. Your task paused." };
   const events = [...(r.events ?? [])].sort(byCreatedAt);
   const items = events.flatMap(e => {
@@ -230,7 +254,7 @@ function stateReason(r: ProblemReportView): string | null {
 export function intentState(r: ProblemReportView): Record<Intent, { label: string; consequence: string; unavailable: string | null }> {
   const active = activeHolds(r);
   const blockedByState = stateReason(r);
-  const paused = joinList(active.map(h => `Task ${h.assignment_id}`));
+  const paused = joinList(active.map(taskRef));
   const stays = active.length === 1 ? "stays paused until you release it" : "stay paused until you release them";
   const otherReportPauses = holdsOf(r).some(h => h.assignment_id === r.assignment_id && (h.other_active_holds?.length ?? 0) > 0);
   const stayedState = r.state === "resolved" ? "The report stays closed." : r.state === "withdrawn" ? "The report stays withdrawn." : "The report stays open.";
@@ -243,7 +267,7 @@ export function intentState(r: ProblemReportView): Record<Intent, { label: strin
     },
     close: {
       label: active.length ? "Close, keep paused…" : "Close report…",
-      consequence: active.length ? `${paused} ${stays}.` : `Records your answer for ${reporterName(r)}.`,
+      consequence: active.length ? `${upperFirst(paused)} ${stays}.` : `Records your answer for ${reporterName(r)}.`,
       unavailable: blockedByState,
     },
     release: {
@@ -259,8 +283,8 @@ export function intentState(r: ProblemReportView): Record<Intent, { label: strin
     },
     restart: {
       label: "Agree empty restart…",
-      consequence: `Task ${r.assignment_id} starts with an empty round; the report closes.`,
-      unavailable: blockedByState ?? (otherReportPauses ? `Task ${r.assignment_id} is also paused by another report. Release that pause first.` : null),
+      consequence: `${upperFirst(taskRef(reporterTask(r)))} starts with an empty round; the report closes.`,
+      unavailable: blockedByState ?? (otherReportPauses ? `${upperFirst(taskRef(reporterTask(r)))} is also paused by another report. Release that pause first.` : null),
     },
     reopen: {
       label: "Reopen report…",
@@ -277,7 +301,7 @@ export function leadOutcome(intent: Intent, before: ProblemReportView, after: Pr
   switch (intent) {
     case "close": {
       if (!afterActive.length) return "Report closed. No task is paused by it any more. The final result did not change.";
-      const tasks = joinList(afterActive.map(h => `Task ${h.assignment_id}`));
+      const tasks = upperFirst(joinList(afterActive.map(taskRef)));
       return afterActive.length === 1
         ? `Report closed. ${tasks} is still paused by this report; release it when work can continue.`
         : `Report closed. ${tasks} are still paused by this report; release them when work can continue.`;
@@ -285,11 +309,11 @@ export function leadOutcome(intent: Intent, before: ProblemReportView, after: Pr
     case "resume_close":
     case "release": {
       const ids = released ?? activeHolds(before).filter(h => !afterActive.some(a => a.hold_id === h.hold_id)).map(h => h.assignment_id);
-      const tasks = ids.map(id => holdsOf(after).find(h => h.assignment_id === id) ?? holdsOf(before).find(h => h.assignment_id === id) ?? { assignment_id: id, owner_label: "" });
-      const refs = joinList(tasks.map(t => (t.owner_label ? taskRef(t) : `Task ${t.assignment_id}`)));
+      const refOf = (id: number): string => { const task = taskOf(after, id) ?? taskOf(before, id); return task ? taskRef(task) : "a task"; };
+      const refs = joinList(ids.map(refOf));
       const elsewhere = ids
         .filter(id => holdsOf(after).some(h => h.assignment_id === id && (h.other_active_holds?.length ?? 0) > 0))
-        .map(id => ` Task ${id} is still paused by another report.`)
+        .map(id => ` ${upperFirst(refOf(id))} is still paused by another report.`)
         .join("");
       if (intent === "resume_close") return `Report closed. Released ${plural(ids.length, "the pause", "the pauses")} on ${refs}. The final result did not change.${elsewhere}`;
       return `Released ${plural(ids.length, "the pause", "the pauses")} on ${refs}. ${stillState}${elsewhere}`;
@@ -305,7 +329,7 @@ export function leadOutcome(intent: Intent, before: ProblemReportView, after: Pr
       const prior = restart ? restart.abandoned_round_ordinal : before.current_round_ordinal;
       const started = next == null ? "an empty round" : `an empty Round ${next}`;
       const kept = prior == null ? "The previous round" : `Round ${prior}`;
-      return `Task ${after.assignment_id} restarted with ${started}. ${kept} is kept in the history. Report closed. The final result did not change.`;
+      return `${upperFirst(taskRef(reporterTask(after)))} restarted with ${started}. ${kept} is kept in the history. Report closed. The final result did not change.`;
     }
     case "reopen":
       return "Report reopened. No task was paused again.";

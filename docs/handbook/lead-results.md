@@ -17,7 +17,7 @@ How to choose:
 What for: choose the final result of a text.
 
 1. On **Documents**, tab **Needs your decision**, click **Accept result…** or **Compare results…** in the row. The row reads **Accept result…** when there is one result to accept or the submissions agree in full, also on notes and modifier text spans, and **Compare results…** when they differ in anything. The card opens at **Finalization**.
-2. With one submission or a submitted consolidation, check it and click **Accept result**. If an annotator left findings **Unresolved**, the card lists them with who wrote each note. Accepting a submission directly keeps the flag and the note in the export; open the submission to check them first.
+2. With one submission or a submitted consolidation, check it and click **Accept result**. For a consolidation, the card says how its findings came about, for example *Consolidated by Carla Diaz · 32 matching, 1 decided by Carla, 2 groups left out*. Left-out groups are not in the result. If an annotator left findings **Unresolved**, the card lists them with who wrote each note. Accepting a submission directly keeps the flag and the note in the export; open the submission to check them first.
 3. If all annotations agree, the card says so. Click **Accept result**. A finding an annotator left **Unresolved** never counts as agreed, so that text goes through the next step instead.
 4. If they differ, the card shows the agreement, for example *Agreement: 5 of 9 findings match, 1 differs in context only*. When matching findings still differ in a note, a text span or a modifier text span, a line below names them, for example *Notes differ on 1 finding: Ataxia*. Findings an annotator left **Unresolved** count as differences and are listed with who wrote each note. **How is this counted?** explains the numbers. Open a submission with **Open submission** to read it in the read-only text view.
 5. Warning: the next action saves at once, without a confirmation. Click **Use as final** in the row of the submission you want. Or [start a consolidation](#start-a-consolidation) instead.
@@ -165,7 +165,7 @@ What for: answer a report and let the work go on.
 
 1. On **Documents**, click **Decide on report…** in the row. Or click **Open report** in the text card.
 2. Read the report: who reported it, the reason and the history.
-3. In the common case, write an optional answer and click the close-and-resume button, for example *Close and resume Task 12*.
+3. In the common case, write an optional answer and click the close-and-resume button, for example *Close and resume the annotation of CASE-1 de by Ana Weber (ann-0004)*. The page names a task by its kind, text and owner, not by a number.
 4. For other cases, open **Other decisions** and choose one:
    - **Close report…** or **Close, keep paused…**: close it with an outcome for the reporter.
    - **Release pause…**: let paused tasks continue.

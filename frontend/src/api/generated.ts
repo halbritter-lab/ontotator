@@ -3555,6 +3555,8 @@ export interface components {
             /** Attached To */
             attached_to?: string | null;
             result?: components["schemas"]["ConsolidationResultView"] | null;
+            /** Rejected By */
+            rejected_by?: string[];
         };
         /**
          * ConsolidationMark
@@ -3667,6 +3669,8 @@ export interface components {
             decided: number;
             /** Added */
             added: number;
+            /** Left Out */
+            left_out?: number;
         };
         /**
          * ConsolidationPersonView

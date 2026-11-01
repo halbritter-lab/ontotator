@@ -79,10 +79,12 @@ def test_origins_tell_matched_decided_and_added_apart(cons):
     panel = cons.env.lead.get(f"{BASE}/document-rows/c1/en/final-panel")
     assert panel.status_code == 200, panel.text
     items = {s["submission_id"]: s for s in panel.json()["submissions"]}
+    # The left-out values_differ group is no finding, but named (#248).
     assert items[sid]["consolidation_origins"] == {
         "matched": 1,
         "decided": 2,
         "added": 1,
+        "left_out": 1,
     }
     assert items[sid]["finding_count"] == 4
     assert all(

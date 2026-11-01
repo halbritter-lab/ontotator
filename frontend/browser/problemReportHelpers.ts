@@ -23,6 +23,19 @@ export interface ProblemReportScenario {
   translation?: { assignment_id: number; draft_text: string; form: Record<string, unknown> };
 }
 
+const TASK_NOUNS: Record<string, string> = { annotate: "annotation", review: "consolidation", translation_review: "translation review" };
+
+/** How a lead's report page names a task in running text: "the annotation of case-1 de by Ana Weber (ann-0004)", no task number. */
+export function leadTaskRef(task: { case_id: string; language: string; task?: string | null }, owner: string): string {
+  return `the ${task.task ? TASK_NOUNS[task.task] : "task"} of ${task.case_id} ${task.language} by ${owner}`;
+}
+
+/** ``leadTaskRef`` at the start of a sentence. */
+export const upperFirst = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1);
+
+/** The decision card's fact term of the reporter's own task. */
+export const REPORTER_TASK = "Task of the reporter";
+
 /** Build a fresh project for problem report scenario ``name`` and return its identities. */
 export async function problemReportScenario(page: Page, name: ProblemReportScenarioName): Promise<ProblemReportScenario> {
   const response = await page.request.post("/__test_problem_reports__", {

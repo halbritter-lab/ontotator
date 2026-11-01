@@ -9,7 +9,7 @@ import { recordDecision } from "../documents/visitState";
 import { LeadConfirm, releasePreselection } from "../problems/LeadConfirms";
 import { LeadDecide } from "../problems/LeadDecide";
 import { finalResultLabel, LeadStatePanel } from "../problems/LeadStatePanel";
-import { intentState, leadOutcome, reportStateBadge, reporterName, taskRef, type Intent } from "../problems/labels";
+import { intentState, leadOutcome, reportStateBadge, reporterName, type Intent } from "../problems/labels";
 import { ReportTimeline } from "../problems/ReportTimeline";
 import { useLeadReport } from "../problems/useLeadReport";
 import { Button, EmptyState, IconChevronLeft, InlineMessage, EmptyValue, StatusBadge } from "../ui";
@@ -149,8 +149,7 @@ export function ProblemReportDetail({ projectKey, reportId, canManage, action: r
     ...(report.submission ? { annotations: refKey({ kind: "submission", id: report.submission.submission_id }) } : {}),
     ...(documents ? { documents } : {}),
   };
-  const reporterTask = taskRef({ assignment_id: report.assignment_id, owner_label: report.reporter_label, owner: report.viewer_is_lead ? report.reporter : null });
-  const eyebrow = ["Problem report", reporterTask, report.task ? TASK_TYPES[report.task] : null, report.round_ordinal != null ? `Round ${report.round_ordinal}` : null].filter(Boolean).join(" · ");
+  const eyebrow = ["Problem report", textLabel(report), reporterName(report), report.task ? TASK_TYPES[report.task] : null, report.round_ordinal != null ? `Round ${report.round_ordinal}` : null].filter(Boolean).join(" · ");
   const badge = reportStateBadge(report);
   const decideId = `${id}-decide`, historyId = `${id}-history`;
   const states = intentState(report);

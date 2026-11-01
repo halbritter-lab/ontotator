@@ -263,7 +263,7 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
   const attached = allGroups.filter(value => value.attached_to && group.annotation_ids.includes(value.attached_to));
 
   const openBody = <>
-    {partial && <p className="cons-partial">{partialText(present, absent)}</p>}
+    {partial && <p className="cons-partial">{partialText(present, absent, group.rejected_by)}</p>}
     {standalone && <p className="cons-partial"><IconWarning className="cons-conflict-mark" /><span className="visually-hidden">Warning: </span>
       {standaloneWarning(present, group.members[0].term_label || group.members[0].term_id)}</p>}
     {table(readOnly)}

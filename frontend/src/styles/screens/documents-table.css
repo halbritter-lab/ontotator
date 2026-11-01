@@ -90,6 +90,11 @@ button.documents-text-name { min-height: 24px; padding: 0; border: 0; background
   .documents-status-cell { max-width: 7.5rem; }
   .documents-waiting-on { max-width: 7rem; }
 }
+/* 900 to 1399 px (issue 248): cut text was unreadable at 1280 px ("2 of 2 sub…"). The narrow status and Waiting on
+   cells wrap at their width instead, so the table gets no wider; the title keeps the full text. */
+@media (min-width: 900px) and (max-width: 1399px) {
+  .documents-status.stage-cell, .documents-waiting-on { overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
+}
 /* The checkbox and Text cells stay at the left edge while the table scrolls sideways, so actions keep their row
    label (#10); opaque backgrounds (the row tints below repeat on them), above the scrolled cells. */
 .documents-table .documents-row > :where(.data-table-select-cell, th[scope="row"]),

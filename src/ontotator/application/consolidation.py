@@ -440,7 +440,8 @@ class ConsolidationReader:
                 else None
             )
             people = _people(conn, access, order, found.authors)
-            from_proposal = _from_tool_proposal(conn, pid, members)
+            decisions = _proposal_decisions(conn, pid, order, found.authors)
+            from_proposal = _from_tool_proposal(conn, pid, members, decisions)
             added = _added(members, content, defaults, found.roles)
             modifier_layer_ids = modifier_layers(profile, Repository._pins(conn, pid))
             consolidator = _people(conn, access, ["self"], {"self": item.annotator_id})[
@@ -463,6 +464,7 @@ class ConsolidationReader:
             "people": people,
             "groups": [
                 _group_view(group, members, content, from_proposal, found.roles)
+                | {"rejected_by": _rejected_by(group, members, decisions)}
                 for group in _groups(order, members)
             ],
             "added": added,
@@ -583,21 +585,33 @@ def _people(
     return people
 
 
-def _from_tool_proposal(
-    conn: Connection, pid: int, members: Mapping[str, RoundMember]
-) -> set[str]:
-    """Input ids whose finding comes from a tool proposal: its source
-    annotation id (any version) is a proposal of the project, or it is the
-    replacement of a decision on a proposal in its source submission (a
-    corrected one). Target snapshots carry ``input-…`` ids, so the source
-    snapshot's id is the one compared."""
-    sids = {
-        m.submission_id
-        for m in members.values()
-        if not m.submission_id.startswith("draft-")
-    }
+@dataclass(frozen=True)
+class _ProposalDecisions:
+    """The review decisions of the round's source submissions."""
+
     # (source submission, replacement annotation id) -> target annotation id
+    corrected: dict[tuple[str, str], str]
+    # Author pseudonym -> annotation ids of the proposals they rejected.
+    rejected: dict[str, set[str]]
+
+    def proposal_ids(self, member: RoundMember) -> set[str]:
+        """The annotation ids a member may come from: its source annotation,
+        and the proposal it corrected."""
+        target = self.corrected.get((member.submission_id, member.source_id))
+        return {member.source_id} | ({target} if target else set())
+
+
+def _proposal_decisions(
+    conn: Connection,
+    pid: int,
+    order: Sequence[str],
+    authors: Mapping[str, str],
+) -> _ProposalDecisions:
+    """Corrected and rejected proposals of the round's source submissions
+    (frozen drafts carry no decisions)."""
+    sids = {sid for sid in order if not sid.startswith("draft-")}
     corrected: dict[tuple[str, str], str] = {}
+    rejected: dict[str, set[str]] = {}
     if sids:
         for row in conn.execute(
             select(SubmissionRow.submission_id, SubmissionRow.payload).where(
@@ -610,6 +624,43 @@ def _from_tool_proposal(
                     corrected[
                         (row.submission_id, decision.replacement.annotation_id)
                     ] = decision.target.annotation_id
+                if decision.outcome == "rejected" and row.submission_id in authors:
+                    rejected.setdefault(authors[row.submission_id], set()).add(
+                        decision.target.annotation_id
+                    )
+    return _ProposalDecisions(corrected=corrected, rejected=rejected)
+
+
+def _rejected_by(
+    group: Group, members: Mapping[str, RoundMember], decisions: _ProposalDecisions
+) -> list[str]:
+    """People with nothing in the group who rejected the proposal one of its
+    members comes from (#248: "rejected the proposal", not "has nothing
+    here")."""
+    inputs = [members[input_id] for input_id in group.members.values()]
+    present = {member.person_id for member in inputs}
+    proposals: set[str] = set()
+    for member in inputs:
+        proposals |= decisions.proposal_ids(member)
+    return sorted(
+        person
+        for person, ids in decisions.rejected.items()
+        if person not in present and ids & proposals
+    )
+
+
+def _from_tool_proposal(
+    conn: Connection,
+    pid: int,
+    members: Mapping[str, RoundMember],
+    decisions: _ProposalDecisions,
+) -> set[str]:
+    """Input ids whose finding comes from a tool proposal: its source
+    annotation id (any version) is a proposal of the project, or it is the
+    replacement of a decision on a proposal in its source submission (a
+    corrected one). Target snapshots carry ``input-…`` ids, so the source
+    snapshot's id is the one compared."""
+    corrected = decisions.corrected
     candidates = {m.source_id for m in members.values()} | set(corrected.values())
     if not candidates:
         return set()
