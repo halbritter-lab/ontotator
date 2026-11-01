@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
 import { api, type AssignmentView, type ProblemReportView } from "../api/client";
 import { ErrorNotice } from "../admin/ErrorNotice";
+import { textLabel } from "../app/identity";
 import { ownPauseActive, ReporterReportCard, type ReporterConfirm } from "../problems/ReporterReportCard";
 import { reportTitle, toolbarEntry } from "../problems/labels";
 import { useTaskReports } from "../problems/useTaskReports";
@@ -13,8 +14,10 @@ import "../problems/problems.css";
  * a new report, resume and withdraw. Mounted by the annotation editor and the translation review screen.
  * On a submitted (read-only) task the entry reads "Text problems" and opens on the reports, the form second.
  */
-export function TaskProblemActions({ assignment, onSaveBeforeReport, onRefresh, readOnly = assignment.status === "submitted", renderEntry }: {
+export function TaskProblemActions({ assignment, textName, onSaveBeforeReport, onRefresh, readOnly = assignment.status === "submitted", renderEntry }: {
   assignment: AssignmentView; onSaveBeforeReport: () => Promise<void>; onRefresh: (assignment: AssignmentView) => void;
+  /** The text's name for the dialog title ("Problems with case-107 de"); else the reports' text, never the task number. */
+  textName?: string;
   /** The editor's read-only state (the task's status can lag behind a submit in the same editor). */
   readOnly?: boolean;
   /** Places the entry as a menu item (the editor's "More" menu) instead of the toolbar button. */
@@ -95,7 +98,7 @@ export function TaskProblemActions({ assignment, onSaveBeforeReport, onRefresh, 
         void reload(true);
       }}
       frame={({ body, footer, initialFocus, onClose }) => <Dialog open title="New problem report" size="md" initialFocus={initialFocus} onClose={onClose} footer={footer}>{body}</Dialog>} />}
-    {open && view === "list" && <Dialog open title={`Problems with Task ${assignment.id}`} size="md" initialFocus={listFocus} onClose={onListClose} footer={<>
+    {open && view === "list" && <Dialog open title={`Problems with ${textName ?? (reports?.[0] ? textLabel(reports[0]) : "this text")}`} size="md" initialFocus={listFocus} onClose={onListClose} footer={<>
       <Button ref={newReport} onClick={() => {
         // Typed confirmation text asks to discard first, like Close and Escape.
         if (confirm?.reason.trim()) { setConfirm({ ...confirm, askDiscard: true }); return; }

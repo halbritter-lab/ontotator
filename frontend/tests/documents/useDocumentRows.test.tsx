@@ -201,3 +201,20 @@ it("loads nothing until enabled (the page records its visit first)", async () =>
   await waitFor(() => expect(result.current.page).not.toBeNull());
   expect(api.listDocumentRows).toHaveBeenCalledTimes(1);
 });
+
+it("reload resolves once the newest rows are shown, also when a newer request superseded it (issue 248)", async () => {
+  vi.mocked(api.listDocumentRows).mockResolvedValueOnce(page([]));
+  const { result } = renderHook(() => useDocumentRows("p", {}));
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  const first = deferred<DocumentRowsPage>(), second = deferred<DocumentRowsPage>();
+  vi.mocked(api.listDocumentRows).mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+  let done = false;
+  act(() => { void result.current.reload().then(() => { done = true; }); });
+  act(() => { void result.current.reload(); });
+  const newer = page([scenarioS0().group]);
+  await act(async () => { first.resolve(page([scenarioS1().group])); });
+  expect(done).toBe(false);
+  await act(async () => { second.resolve(newer); });
+  expect(done).toBe(true);
+  expect(result.current.page).toBe(newer);
+});

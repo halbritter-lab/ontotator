@@ -275,6 +275,20 @@ describe("cells", () => {
     expect(cellsOf("case-106 de")[3].querySelector(".stage-cell-symbol")!.getAttribute("aria-hidden")).toBe("true");
   });
 
+  it("assigned work nobody saved yet reads not started, also in the title (issue 258)", () => {
+    const assigned = stagedRow("case-106", "de", {
+      stages: {
+        review: cell("in_progress", "running", { people: [ana], started: 0, open_tasks: 1 }),
+        annotation: cell("in_progress", "running", { people: [tom], started: 0, open_tasks: 1 }),
+        final: cell("none", "none"),
+      },
+    });
+    renderTable(page([group("case-106", [assigned])]));
+    const status = (index: number) => cellsOf("case-106 de")[index].querySelector<HTMLElement>(".documents-status")!;
+    expect(status(2).getAttribute("title")).toBe("assigned, not started (Ana Weber)");
+    expect(status(3).getAttribute("title")).toBe("assigned, not started · open: Tom Reis");
+  });
+
   it("a running consolidation: Annotation done once all submitted, Finalization running; waiting always has its circle", () => {
     const consolidating = stagedRow("case-106", "de", {
       stages: {

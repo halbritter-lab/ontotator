@@ -253,7 +253,9 @@ def submit(
 def in_progress(
     scenario: Scenario, document_id: str, name: str, task: str = "annotate"
 ) -> dict[str, Any]:
-    """Assign and start round 1 without submitting it."""
+    """Assign and start round 1 (what opening the task does) without saving
+    or submitting anything: the assignment stays ``open``, so its cells read
+    "assigned, not started" (issue 258)."""
     assignment_id = assign(scenario, document_id, name, task)
     started = start_round(scenario, assignment_id, name)
     return {"assignment_id": assignment_id, "round_id": started.round_id}
