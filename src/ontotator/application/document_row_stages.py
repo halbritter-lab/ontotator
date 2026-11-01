@@ -109,6 +109,12 @@ def _open(item: rules.AssignmentFact) -> bool:
     return not item.revoked and (item.status != "submitted" or item.held)
 
 
+def _started(items: Sequence[rules.AssignmentFact]) -> int:
+    """Started (issue 258): the assignment left ``open``, which only its
+    first saved change does; opening the task leaves it open."""
+    return sum(1 for item in items if item.status != "open")
+
+
 def _review_reason(
     ctx: _Context,
     reviews: Sequence[rules.AssignmentFact],
@@ -301,6 +307,8 @@ def stage_facts(
     return StageFacts(
         step=step_facts,
         review_people=_unique([item.user_id for item in reviews]),
+        review_tasks=len(reviews),
+        review_started=_started(reviews),
         review_reason=reason,
         review_reason_text=reason_text,
         review_decided_by=decision.reviewer_id if decision is not None else None,
@@ -310,6 +318,8 @@ def stage_facts(
         newest_version=max((v.version for v in targets), default=1),
         newest_origin=targets[0].origin if targets else None,
         annotators_open=_unique([item.user_id for item in running]),
+        annotate_tasks=len(running),
+        annotate_started=_started(running),
         annotators_waiting=_unique(
             [item.user_id for item in annotations if item.assignment_id in ctx.waiting]
         ),

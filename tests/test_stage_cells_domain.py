@@ -1186,3 +1186,67 @@ def test_source_change_without_a_known_old_source_version() -> None:
         "may_be_outdated",
         "source_changed",
     )
+
+
+def test_review_counts_started_reviews() -> None:
+    # Issue 258: an assigned review nobody saved yet reads "not started".
+    base: dict[str, Any] = dict(
+        translation_statuses=("ready_for_review",),
+        newest_decisions=(None,),
+        open_translation_reviews=1,
+        review_people=(ANA,),
+        accepted_how=None,
+    )
+    cell = cells(facts(**base, review_tasks=1, review_started=0)).review
+    assert (cell.state, cell.tone) == ("in_progress", "running")
+    assert (cell.detail.started, cell.detail.open_tasks) == (0, 1)
+    cell = cells(facts(**base, review_tasks=1, review_started=1)).review
+    assert (cell.detail.started, cell.detail.open_tasks) == (1, 1)
+    # A re-review counts the same way.
+    cell = cells(facts(**base, review_tasks=1, review_reason="correction")).review
+    assert (cell.state, cell.detail.started, cell.detail.open_tasks) == (
+        "re_review",
+        0,
+        1,
+    )
+    # Not counted (no task count): no started count on the cell.
+    cell = cells(facts(**base)).review
+    assert (cell.detail.started, cell.detail.open_tasks) == (None, None)
+
+
+def test_parallel_review_counts_started_per_assignment() -> None:
+    # "1 of 2 started": one reviewer saved, the other has not.
+    cell = cells(
+        facts(
+            parallel_roots=True,
+            translation_statuses=("ready_for_review", "ready_for_review"),
+            newest_decisions=(None, None),
+            open_translation_reviews=2,
+            review_people=(ANA, TOM),
+            review_tasks=2,
+            review_started=1,
+            accepted_how=None,
+        )
+    ).review
+    assert (cell.detail.assigned, cell.detail.total) == (2, 2)
+    assert (cell.detail.started, cell.detail.open_tasks) == (1, 2)
+
+
+def test_annotation_counts_started_annotations() -> None:
+    base: dict[str, Any] = dict(
+        annotation_assignments=1, open_annotations=1, annotators_open=(ANA,)
+    )
+    cell = cells(facts(**base, annotate_tasks=1, annotate_started=0)).annotation
+    assert (cell.state, cell.tone) == ("in_progress", "running")
+    assert (cell.detail.started, cell.detail.open_tasks) == (0, 1)
+    cell = cells(facts(**base, annotate_tasks=1, annotate_started=1)).annotation
+    assert (cell.detail.started, cell.detail.open_tasks) == (1, 1)
+    # Partly assigned: the working people carry the count too.
+    cell = cells(
+        facts(**base, per_text=2, annotate_tasks=1, annotate_started=0)
+    ).annotation
+    assert cell.state == "partly_assigned"
+    assert (cell.detail.started, cell.detail.open_tasks) == (0, 1)
+    # Nobody at work: nothing to count.
+    cell = cells(facts(annotate_tasks=0)).annotation
+    assert (cell.detail.started, cell.detail.open_tasks) == (None, None)

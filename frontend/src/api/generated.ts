@@ -7413,6 +7413,10 @@ export interface components {
             causes?: string[];
             /** Round Ordinal */
             round_ordinal?: number | null;
+            /** Started */
+            started?: number | null;
+            /** Open Tasks */
+            open_tasks?: number | null;
             /** Label Rule */
             label_rule?: ("accept" | "compare") | null;
             /** All Match */
