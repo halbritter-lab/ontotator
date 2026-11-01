@@ -1112,8 +1112,15 @@ class WorkPlanService:
             )
             return {"rows_over_target": over}
 
-    def lookup_case_ids(self, key: str, ids: Sequence[str]) -> dict[str, list[str]]:
-        """Exact match after NFKC and trimming; duplicates and blanks dropped."""
+    def lookup_case_ids(self, key: str, ids: Sequence[str]) -> dict[str, Any]:
+        """Case IDs after NFKC and trimming; duplicates and blanks dropped.
+
+        An exact match wins. Otherwise an ID matches in any case when exactly
+        one case ID of the project folds to it (issue 237). Case IDs are case
+        sensitive, so ``Fr1`` and ``FR1`` can both exist: an ID that folds to
+        several and matches none exactly is ambiguous and never guessed.
+        ``found`` lists the stored case IDs in pasted order.
+        """
         if len(ids) > MAX_CASE_IDS:
             raise DomainError("CASE_IDS_TOO_MANY", {"max": MAX_CASE_IDS})
         wanted = list(
@@ -1125,6 +1132,7 @@ class WorkPlanService:
                 if normalized
             )
         )
+        by_fold: dict[str, list[str]] = {}
         with self.db.transaction() as conn:
             pid = self._lock(conn, key, exclusive=False)["id"]
             known = (
@@ -1141,9 +1149,36 @@ class WorkPlanService:
                 if wanted
                 else set()
             )
+            if any(case_id not in known for case_id in wanted):
+                # NFKC + casefold, which SQL lower() does not reproduce: compare the
+                # project's case IDs here, as the Documents search does.
+                for case_id in conn.execute(
+                    select(DocumentRow.case_id)
+                    .where(DocumentRow.project_id == pid)
+                    .distinct()
+                ).scalars():
+                    by_fold.setdefault(rules.folded_id(case_id), []).append(case_id)
+        found: dict[str, None] = {}
+        unknown: list[str] = []
+        case_insensitive: list[dict[str, str]] = []
+        ambiguous: list[dict[str, Any]] = []
+        for case_id in wanted:
+            if case_id in known:
+                found[case_id] = None
+                continue
+            candidates = sorted(by_fold.get(rules.folded_id(case_id), []))
+            if len(candidates) == 1:
+                found[candidates[0]] = None
+                case_insensitive.append({"id": case_id, "case_id": candidates[0]})
+            elif candidates:
+                ambiguous.append({"id": case_id, "candidates": candidates})
+            else:
+                unknown.append(case_id)
         return {
-            "found": [case_id for case_id in wanted if case_id in known],
-            "unknown": [case_id for case_id in wanted if case_id not in known],
+            "found": list(found),
+            "unknown": unknown,
+            "case_insensitive": case_insensitive,
+            "ambiguous": ambiguous,
         }
 
     # --- discarding a language version (D5 c) ------------------------------ #
