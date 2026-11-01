@@ -1747,9 +1747,19 @@
   white-space: normal;
 }
 
-/* An Edit & Replace copy continues the proposal it replaces. */
+/* An Edit & Replace copy continues the proposal it replaces: indented, on a dashed rule (issue 240). */
 .doc-list-row--copy > .doc-item {
   margin-left: var(--space-3);
+  border-left: 2px dashed var(--border-strong);
+}
+
+.copy-replaces {
+  display: flex;
+  flex-direction: column;
+}
+
+.copy-replaces__changes {
+  font-style: italic;
 }
 
 .doc-meta__note {
@@ -1792,6 +1802,11 @@
 
 .decision-tag--changed {
   color: var(--accent);
+}
+
+.decision-tag--replacing {
+  color: var(--accent);
+  font-weight: var(--weight-regular);
 }
 
 .doc-item--resolved:not(.selected) .decision-tag {
