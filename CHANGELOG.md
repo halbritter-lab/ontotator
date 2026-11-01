@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- From the first click on **Edit & Replace**, the proposal reads **Being replaced** while its copy has no changes, then **Replaced**. The copy is indented under its proposal, reads *replaces this proposal* and shows *No changes yet* or what changed. The proposal's button reads **Open your copy** while the copy exists (#240).
+
+### Fixed
+
+- After **Edit & Replace** there is a visible way back: **Discard copy**, in the copy's details and in the proposal's details (key `0`), removes the copy and selects the open proposal again. A copy without changes goes at once; a changed copy asks first and names the changes. **Done, back to the proposal** removes a copy without changes (#257).
+
 ## [0.6.1] - 2026-10-31
 
 ### Fixed

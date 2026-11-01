@@ -111,12 +111,31 @@ test("the Edit & Replace copy is listed with its proposal, not under Your own fi
   await page.getByRole("button", { name: /Edit & Replace/ }).click();
   const copy = page.locator('.sidebar [data-list-key^="annotation:"]');
   await expect(copy).toContainText("Your copy");
+  await expect(copy).toContainText("No changes yet");
+  await expect(proposal).toContainText("Being replaced");
   await expect(page.getByText("Your own findings (0)", { exact: true })).toBeVisible();
+  // #257: an unchanged copy goes on Discard copy without a question; the open proposal has the focus.
+  await page.getByRole("button", { name: "Discard copy", exact: true }).click();
+  await expect(copy).toHaveCount(0);
+  await expect(proposal).toContainText("Pending");
+  await expect(proposal).toBeFocused();
+  await expect(page.locator("[data-advance-status]")).toHaveText("Copy discarded. The proposal is open again.");
+  await page.getByRole("button", { name: /Edit & Replace/ }).click();
+  await expect(copy).toContainText("Your copy");
   const changed = page.waitForResponse(r => r.url().endsWith("/commands") && r.request().postDataJSON()?.payload?.command === "set_axes");
   await page.locator('[data-axis-field="assertion"] input[type="radio"][value="absent"]').check();
   expect((await changed).ok()).toBeTruthy();
   await page.getByRole("button", { name: "Done, back to the proposal", exact: true }).click();
   await expect(page.locator('.sidebar li:has([data-list-key^="target:"]) + li + li [data-list-key^="annotation:"]')).toBeVisible();
   await expect(page.getByText("1 replaced proposal", { exact: true })).toBeVisible();
+  await expect(copy).toContainText("Assertion: Present → Absent");
   await shot(page, "5-copy-under-proposal");
+  // A changed copy asks first and names the change; Discard copy (key 0) opens the proposal again.
+  await page.keyboard.press("0");
+  const dialog = page.getByRole("dialog", { name: "Discard your copy?" });
+  await expect(dialog).toContainText("Your change is lost: Assertion: Present → Absent. The proposal is open again.");
+  await dialog.getByRole("button", { name: "Discard copy", exact: true }).click();
+  await expect(copy).toHaveCount(0);
+  await expect(proposal).toContainText("Pending");
+  await expect(proposal).toBeFocused();
 });
