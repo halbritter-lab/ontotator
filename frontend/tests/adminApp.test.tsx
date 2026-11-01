@@ -16,6 +16,7 @@ beforeEach(() => {
   vi.spyOn(api, "listProjects").mockResolvedValue([project]);
   vi.spyOn(api, "listMyTasks").mockResolvedValue([]);
   vi.spyOn(api, "adminListUsers").mockResolvedValue([alex]);
+  vi.spyOn(api, "adminTechnicalReportSummary").mockResolvedValue({ open: 0 });
   vi.spyOn(api, "listOntologies").mockResolvedValue(ontologies);
   vi.spyOn(api, "getProjectSettings").mockResolvedValue(settings);
   vi.spyOn(api, "listMembers").mockResolvedValue([]);

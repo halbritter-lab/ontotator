@@ -188,6 +188,33 @@ describe("ReviewActions", () => {
     expect(edit).toHaveBeenCalledWith("exact-copy"); expect(adopt).not.toHaveBeenCalled();
   });
 
+  it("a proposal with a copy reads Being replaced and offers Open your copy and Discard copy, changed or not (#240, #257)", () => {
+    const decide = vi.fn(), discard = vi.fn(), adopt = vi.fn(), edit = vi.fn();
+    const { rerender } = render(<ReviewActions target={sampleTarget} currentDecision={null} draftAnnotations={[]} onDecide={decide}
+      hasCopy onDiscardCopy={discard} onAdoptAndEdit={adopt} onEditReplacement={edit} />);
+    expect(document.querySelector(".review-actions__state")!.textContent).toContain("Being replaced");
+    expect(screen.queryByText("Pending")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Reset decision/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Open your copy/ }));
+    expect(adopt).toHaveBeenCalledTimes(1);
+    const button = screen.getByRole("button", { name: /Discard copy/ });
+    expect(button.querySelector("kbd")!.textContent).toBe("0");
+    fireEvent.click(button);
+    expect(discard).toHaveBeenCalledTimes(1);
+    expect(decide).not.toHaveBeenCalled();
+    // A changed copy: the proposal reads Replaced; Discard copy stays the way back, Reset decision does not show.
+    rerender(<ReviewActions target={sampleTarget} draftAnnotations={[]} onDecide={decide} hasCopy onDiscardCopy={discard}
+      onAdoptAndEdit={adopt} onEditReplacement={edit}
+      currentDecision={{ decision_id: "d", target: { annotation_id: "prop-1", version: "v-prop-1" }, outcome: "changed", reviewer_id: "r",
+        replacement: { annotation_id: "copy", version: "copy-v" } }} />);
+    expect(document.querySelector(".review-actions__state")!.textContent).toContain("Replaced");
+    expect(screen.queryByRole("button", { name: /Reset decision/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Open your copy/ }));
+    expect(edit).toHaveBeenCalledWith("copy");
+    fireEvent.click(screen.getByRole("button", { name: /Discard copy/ }));
+    expect(discard).toHaveBeenCalledTimes(2);
+  });
+
   it("renders 'Reset decision' button when a decision is present and clicking it calls onDecide with outcome null", () => {
     const onDecide = vi.fn();
     const rejectedDecision = {

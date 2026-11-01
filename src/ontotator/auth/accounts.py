@@ -58,6 +58,7 @@ from ontotator.auth.passwords import (
 from ontotator.auth.tokens import revoke_user_sessions, token_digest
 from ontotator.domain.errors import DomainError
 from ontotator.storage.database import Database, advisory_lock_id
+from ontotator.storage.report_tables import TechnicalReportRow
 from ontotator.storage.tables import (
     SCHEMA,
     AnnotationSnapshotRow,
@@ -860,8 +861,9 @@ class AccountService:
         exports and the audit trail still resolve the author. Removed: name,
         e-mail, ORCID, qualification, languages, preferences, the password,
         all codes, the login attempts under the old username, the client
-        addresses of its sessions and its idempotency receipts. The old
-        username is replaced by ``anonymised-<id>`` in the audit trail (actor
+        addresses and browsers of its sessions, the browser recorded in its
+        technical reports and its idempotency receipts. The old username is
+        replaced by ``anonymised-<id>`` in the audit trail (actor
         label, target and ``details.username``; the append-only trigger lets
         this one transaction through) and in job labels.
 
@@ -906,6 +908,12 @@ class AccountService:
                 update(SessionRow)
                 .where(SessionRow.user_id == row.id)
                 .values(client_ip=None, user_agent=None)
+            )
+            # Technical reports stay (the pseudonym); their browser goes too.
+            conn.execute(
+                update(TechnicalReportRow)
+                .where(TechnicalReportRow.reporter_id == row.id)
+                .values(user_agent=None)
             )
             record_audit(
                 conn,
