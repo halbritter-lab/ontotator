@@ -1183,6 +1183,17 @@ def _print_ontology_file(item: OntologyFile) -> None:
     typer.echo(f"{item.sha256}  {item.prefix}  {item.release or '-'}  {item.kind}")
 
 
+def _print_frozen_without(store: OntologyStore, item: OntologyFile) -> None:
+    """Name the projects a translation upload does not reach (#254)."""
+    keys = store.frozen_without().get(item.sha256, [])
+    if keys:
+        typer.echo(
+            f"{item.filename} does not reach {', '.join(keys)}: these projects "
+            "froze their translations at first use.",
+            err=True,
+        )
+
+
 @ontologies_app.command("add")
 def ontologies_add(
     ctx: typer.Context,
@@ -1209,6 +1220,8 @@ def ontologies_add(
     """Store files in the data volume; prints sha256, prefix, release and kind.
 
     Every file is checked first. Adding a stored file again changes nothing.
+    A translation does not reach projects that froze their translations at
+    first use; they are named on stderr.
     The data volume is ONTOTATOR_DATA_DIR (default ./data).
     """
     if sha256 is not None and len(files) != 1:
@@ -1224,7 +1237,10 @@ def ontologies_add(
                         "ONTOLOGY_DIGEST_MISMATCH",
                         f"'{path.name}' has SHA-256 {actual}, expected {sha256}.",
                     )
-            _print_ontology_file(store.add(Actor.cli(), path.name, data))
+            item = store.add(Actor.cli(), path.name, data)
+            _print_ontology_file(item)
+            if item.kind == "translation":
+                _print_frozen_without(store, item)
 
 
 @ontologies_app.command("check-roots")

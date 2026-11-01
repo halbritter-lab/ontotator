@@ -6,7 +6,7 @@ from tempfile import TemporaryFile
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, File, Request, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from starlette.concurrency import run_in_threadpool
 
@@ -29,6 +29,14 @@ class AdminOntology(BaseModel):
     language: str | None
     uploaded_at: datetime
     projects: list[str]
+    # A factory default keeps the field optional in the generated types.
+    frozen_without: list[str] = Field(
+        default_factory=list,
+        description=(
+            "For a translation file: the projects that froze their translations "
+            "at first use without this file, so it does not reach them (#254)."
+        ),
+    )
 
 
 class OntologyUploadResult(BaseModel):
@@ -47,10 +55,15 @@ def _listed(store: OntologyStore) -> list[AdminOntology]:
             .order_by(ProjectRow.project_key)
         ).tuples():
             projects.setdefault(sha, []).append(key)
-        return [
-            AdminOntology(**vars(item), projects=projects.get(item.sha256, []))
-            for item in store.list()
-        ]
+    frozen = store.frozen_without()
+    return [
+        AdminOntology(
+            **vars(item),
+            projects=projects.get(item.sha256, []),
+            frozen_without=frozen.get(item.sha256, []),
+        )
+        for item in store.list()
+    ]
 
 
 @router.get("/")
