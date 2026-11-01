@@ -189,6 +189,11 @@ describe("the practice task frame", () => {
     const steps = screen.getAllByRole("listitem");
     expect(steps.map(step => step.getAttribute("data-done"))).toEqual(["true", "false", "false", "false"]);
     expect(screen.getByRole("status").textContent).toContain("Next: “Ein Status epilepticus trat nicht auf”");
+    const panel = screen.getByRole("group", { name: "Your practice" }) as HTMLDetailsElement;
+    expect(panel.open).toBe(false);
+    expect(panel.querySelector("summary")!.textContent).toContain("Your practice · 1 of 4 · Next:");
+    expect(panel.querySelectorAll("input").length).toBe(0);
+    expect(steps[1].textContent).toContain("not done");
     expect(within(steps[0]).getByRole("link", { name: "Help" }).getAttribute("href")).toBe("#/help/annotator?section=mark-text-and-add-a-finding");
     fireEvent.click(screen.getByRole("button", { name: "Leave practice" }));
     expect(onNavigate).toHaveBeenCalledWith({ name: "tasks", status: "all" });

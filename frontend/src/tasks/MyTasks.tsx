@@ -238,6 +238,9 @@ export function MyTasks({ project, status, projects, onNavigate, username }: MyT
       <Button onClick={() => setRetry(value => value + 1)}>Try again</Button>
     </>}
     {state.kind === "ready" && <>
+      {/* Practice (issue 266): its own group above the real tasks, where the card was. */}
+      <PracticeGroup tasks={practiceTasks} state={practiceState} onChange={practiceChanged} onNavigate={onNavigate}
+        actionLabel={task => taskActionLabels[task.status]} />
       {showFilter && <Select id="project-select" label="Filter my tasks by project" value={project ?? allProjectsValue} onChange={event => selectProject(event.target.value)}>
         <option value={allProjectsValue}>All my tasks</option>
         {[...options].map(([key, name]) => <option key={key} value={key}>{name}</option>)}
@@ -251,8 +254,6 @@ export function MyTasks({ project, status, projects, onNavigate, username }: MyT
           {filtered.length === 0 ? empty : shown.length === 0 ? tabEmpty : table}
         </div>
       </>}
-      <PracticeGroup tasks={practiceTasks} state={practiceState} onChange={practiceChanged} onNavigate={onNavigate}
-        actionLabel={task => taskActionLabels[task.status]} />
     </>}
   </section>;
 }
