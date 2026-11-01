@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-01
+
 ### Added
 
 - **Technical problem…** in the sidebar and **Report a technical problem…** in the editor's **More** menu and on the crash screen send an error message, a page that does not load, a crash or general feedback to the system administrators, not to the project leads, and pauses no task. The user only describes what happened; Ontotator adds the app version, the task with its kind, project and text, the screen, the browser, the window size, the last refused API request and, from the crash screen, the error message. The dialog shows a reference such as `TR-12`. Administrators read the reports under **Administration** › **Technical reports** (with the number of open reports), mark them done or reopen them, and copy one into an issue by hand: nothing is sent out. Sending, closing and reopening are audited; erasing an account clears the browser of its reports. New endpoints `POST /api/v1/technical-reports` and `/api/v1/admin/technical-reports`; migration 0028 adds the `technical_reports` table only (#259).
@@ -201,7 +203,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 First public release.
 
-[Unreleased]: https://github.com/halbritter-lab/ontotator/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/halbritter-lab/ontotator/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/halbritter-lab/ontotator/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/halbritter-lab/ontotator/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/halbritter-lab/ontotator/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/halbritter-lab/ontotator/compare/v0.4.0...v0.5.0
