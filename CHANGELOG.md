@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-01
+
 ### Added
 
 - Practice projects: annotators and translation reviewers can try the work in a private practice project with short, invented texts in German, from the card **New here? Try it out first** on My tasks or from Profile › Practice (**Start practice**, **Continue**, **Reset…**, **Delete…**). It has a task from scratch, one from proposals, a translation review and, for consolidators, a consolidation against two virtual colleagues. Each practice task shows a practice banner and the panel **Your practice**, whose steps tick themselves from the real work. Practice projects are never listed, counted or exported with real projects, admin rights do not reach them, and their audit entries are marked practice. They are deleted after 30 days without activity. Administrators see them on Projects with **Show practice projects** and can delete them; **Server settings** › **Practice projects** switches the offer off. Migration 0028 adds `projects.practice` and `practice_projects` and changes no existing row (`/api/v1/me/practice`, `/api/v1/admin/practice-projects`, `/api/v1/admin/settings/practice`) (#266).
@@ -215,7 +217,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 First public release.
 
-[Unreleased]: https://github.com/halbritter-lab/ontotator/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/halbritter-lab/ontotator/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/halbritter-lab/ontotator/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/halbritter-lab/ontotator/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/halbritter-lab/ontotator/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/halbritter-lab/ontotator/compare/v0.5.0...v0.6.0
