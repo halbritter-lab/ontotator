@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- A lead or a system admin can move a frozen project to the newest translations with **Use the newest translations** in Settings › Ontology, at any time (`POST /api/v1/projects/{key}/translations/refresh`, `ontotator admin projects refresh-translations`). Findings do not change. The earlier search conditions are kept in the `project.translations_refresh` audit entry, so earlier searches stay resolvable, and the card lists them under **Earlier translations** (`updated` and `history` on `frozen_translations`). A change of pins or profile now also keeps the conditions it ends and their captured files, and re-importing a seed package with earlier conditions of the project is accepted (#254).
+
+### Fixed
+
+- A change of pins or profile, such as a move to another ontology release, no longer deletes the project's search conditions and captured translation files. Searches and submitted selections made before the change stay resolvable; the ended conditions go into the `project.update` audit entry. Changes made before this version cannot be recovered (#254).
+
 ## [0.7.0] - 2026-11-01
 
 ### Added
@@ -30,12 +38,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The accept card of a consolidation names the groups left out of the result, for example "32 matching, 1 decided by Carla, 2 groups left out" (`ConsolidationOriginsView.left_out`) (#248).
 - Problem reports name a task by its kind, text and owner instead of the internal task number, for example "Problems with case-107 de" and "Close and resume the annotation of case-107 de by Ana Weber (ann-0004)" (#248).
 - After Assign, the confirmation appears once the refreshed rows are shown, no longer about 1.5 s before the row updates (#248).
-### Added
-
-- A translation file uploaded after a project froze its translations no longer reaches it silently. The upload result and the ontology inventory (**Frozen without**) name the projects that froze their translations without the file (`frozen_without` on the admin ontology list), and `ontotator admin ontologies add` names them on stderr. Settings › Ontology shows the frozen files in the card **Translations**, and the newer server files the project does not use (`frozen_translations` on the project settings). The freeze itself is unchanged (#254).
-- A lead or a system admin can move a frozen project to the newest translations with **Use the newest translations** in Settings › Ontology, at any time (`POST /api/v1/projects/{key}/translations/refresh`, `ontotator admin projects refresh-translations`). Findings do not change. The earlier search conditions are kept in the `project.translations_refresh` audit entry, so earlier searches stay resolvable, and the card lists them under **Earlier translations** (`updated` and `history` on `frozen_translations`). A change of pins or profile now also keeps the conditions it ends and their captured files, and re-importing a seed package with earlier conditions of the project is accepted (#254).
-### Fixed
-
 - Documents: the *Resolve…* options of a row close when the filter, tab, order or page changes, as *Cancel* does. They no longer open again once the row is back on the page (#238).
 - *Select by case IDs…* finds a case ID in another case, as the Documents search does: `fr100907` finds `Fr100907`. An exact match wins. Case IDs stay case sensitive, so when several case IDs fit and none exactly, the dialog lists them and asks for the exact ID instead of guessing (`case_insensitive` and `ambiguous` on the case ID lookup) (#237).
 
