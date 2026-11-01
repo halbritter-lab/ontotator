@@ -8318,6 +8318,14 @@
             },
             "type": "array",
             "title": "Projects"
+          },
+          "frozen_without": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Frozen Without",
+            "description": "For a translation file: the projects that froze their translations at first use without this file, so it does not reach them (#254)."
           }
         },
         "type": "object",
@@ -10607,6 +10615,28 @@
         ],
         "title": "CaseDetail"
       },
+      "CaseIdAmbiguity": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "candidates": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Candidates"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "candidates"
+        ],
+        "title": "CaseIdAmbiguity",
+        "description": "A pasted ID that matches several case IDs in other cases and none exactly."
+      },
       "CaseIdLookup": {
         "properties": {
           "ids": {
@@ -10640,6 +10670,20 @@
             },
             "type": "array",
             "title": "Unknown"
+          },
+          "case_insensitive": {
+            "items": {
+              "$ref": "#/components/schemas/CaseIdMatch"
+            },
+            "type": "array",
+            "title": "Case Insensitive"
+          },
+          "ambiguous": {
+            "items": {
+              "$ref": "#/components/schemas/CaseIdAmbiguity"
+            },
+            "type": "array",
+            "title": "Ambiguous"
           }
         },
         "type": "object",
@@ -10648,6 +10692,25 @@
           "unknown"
         ],
         "title": "CaseIdLookupResult"
+      },
+      "CaseIdMatch": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "case_id"
+        ],
+        "title": "CaseIdMatch",
+        "description": "A pasted ID that matched one stored case ID in another case."
       },
       "CasePlanChoice": {
         "properties": {
@@ -14445,6 +14508,62 @@
           "destination"
         ],
         "title": "FinalWarning"
+      },
+      "FrozenTranslation": {
+        "properties": {
+          "ontology_id": {
+            "type": "string",
+            "title": "Ontology Id"
+          },
+          "filename": {
+            "type": "string",
+            "title": "Filename"
+          },
+          "sha256": {
+            "type": "string",
+            "title": "Sha256"
+          },
+          "languages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Languages"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ontology_id",
+          "filename",
+          "sha256",
+          "languages"
+        ],
+        "title": "FrozenTranslation",
+        "description": "A translation file a project's search conditions hold (#254)."
+      },
+      "FrozenTranslations": {
+        "properties": {
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/FrozenTranslation"
+            },
+            "type": "array",
+            "title": "Files"
+          },
+          "not_included": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Not Included"
+          }
+        },
+        "type": "object",
+        "required": [
+          "files"
+        ],
+        "title": "FrozenTranslations",
+        "description": "The translations frozen at the project's first use of its ontology.\n\nA later upload does not reach the project; ``not_included`` names the\ncurrent server files of its ontologies that it does not use."
       },
       "GuidelineDocument": {
         "properties": {
@@ -18783,6 +18902,16 @@
             "type": "integer",
             "title": "Annotation Policy Revision",
             "default": 1
+          },
+          "frozen_translations": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FrozenTranslations"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,

@@ -10,6 +10,7 @@ import { MembersSection } from "./MembersSection";
 import { SettingsCard, SettingsHint } from "./SettingsCard";
 import { draftPins, PinFields, ProfileUpload, ReleaseFields, serializePins, ANNOTATION_SCHEME_LABELS, TaskProfileHelp, WorkflowFields, workflowOf, type UploadedProfile } from "./projectFields";
 import { RepinReportPanel } from "./RepinReport";
+import { FrozenTranslationsCard } from "./FrozenTranslationsCard";
 import { axisOptionLabel } from "../editor/axisLabels";
 export interface ProjectSettingsPageProps {
   projectKey: string;
@@ -306,6 +307,7 @@ function SettingsEditor({ initial, ontologies, projectKey, onSaved, section = DE
           <ul aria-label="Current profile layers">{model.profile.layers.map(layer => <li key={layer.layer_id}>{layer.label} ({layer.layer_id})</li>)}</ul>
         </details>
       </SettingsCard>
+        <FrozenTranslationsCard frozen={model.frozen_translations} />
         <form className="settings-card" aria-label="Ontology release" onSubmit={event => submit(event, "Pins")}>
           <fieldset disabled={busy !== null}><legend className="settings-card-title">Move to another release</legend>
             <ReleaseFields ids={ids} ontologies={ontologies} value={pins} onChange={editPins} disabled={busy !== null} />
@@ -328,6 +330,7 @@ function SettingsEditor({ initial, ontologies, projectKey, onSaved, section = DE
           </fieldset>
         </form>
         {repinPanel}
+        <FrozenTranslationsCard frozen={model.frozen_translations} />
         <section className="settings-card" aria-label="Task profile">
           <details className="settings-advanced"><summary className="settings-card-title">Advanced: task profile</summary>
             <ul aria-label="Current profile layers">{model.profile.layers.map(layer => <li key={layer.layer_id}>{layer.label} ({layer.layer_id})</li>)}</ul>

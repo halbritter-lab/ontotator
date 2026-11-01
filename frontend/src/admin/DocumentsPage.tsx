@@ -552,6 +552,10 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
 
   // Row actions.
   const [resolveOptions, setResolveOptions] = useState<ResolveOptions | null>(null);
+  // A new view (filter, tab, order, page, case or Show selected) closes the options, as Cancel does (issue 238):
+  // they hold only the row key and would open again once the row is back on the page.
+  const optionsView = JSON.stringify([requestIdentity, showSelected]);
+  useEffect(() => { setResolveOptions(null); }, [optionsView]);
   /** The rendered Resolve options under the row. */
   const panelBox = useRef<HTMLDivElement>(null);
   const openPanel = (row: DocumentRowView, mode: ResolveOptions["mode"]) => {

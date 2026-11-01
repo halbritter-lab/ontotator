@@ -18,6 +18,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Problem reports name a task by its kind, text and owner instead of the internal task number, for example "Problems with case-107 de" and "Close and resume the annotation of case-107 de by Ana Weber (ann-0004)" (#248).
 - Documents between 900 and 1399 px: long stage states and names in the status and Waiting on cells wrap within the cell instead of being cut off ("2 of 2 sub…"); the table gets no wider (#248).
 - After Assign, the confirmation appears once the refreshed rows are shown, no longer about 1.5 s before the row updates (#248).
+### Added
+
+- A translation file uploaded after a project froze its translations no longer reaches it silently. The upload result and the ontology inventory (**Frozen without**) name the projects that froze their translations without the file (`frozen_without` on the admin ontology list), and `ontotator admin ontologies add` names them on stderr. Settings › Ontology shows the frozen files in the card **Translations**, and the newer server files the project does not use (`frozen_translations` on the project settings). The freeze itself is unchanged (#254).
+### Fixed
+
+- Documents: the *Resolve…* options of a row close when the filter, tab, order or page changes, as *Cancel* does. They no longer open again once the row is back on the page (#238).
+- *Select by case IDs…* finds a case ID in another case, as the Documents search does: `fr100907` finds `Fr100907`. An exact match wins. Case IDs stay case sensitive, so when several case IDs fit and none exactly, the dialog lists them and asks for the exact ID instead of guessing (`case_insensitive` and `ambiguous` on the case ID lookup) (#237).
 
 ## [0.6.1] - 2026-10-31
 

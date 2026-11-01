@@ -469,6 +469,24 @@ describe("project settings sections", () => {
     expect(saveIn("General")).toBeDefined();
   });
 
+  it("Ontology shows the frozen translations, read-only (#254)", async () => {
+    const view = renderSettings("ontology");
+    expect(await screen.findByText("Not frozen yet.")).toBeDefined();
+    view.unmount();
+    vi.mocked(api.getProjectSettings).mockResolvedValue({ ...settings, locked: true, frozen_translations: {
+      files: [{ ontology_id: "HP", filename: "hp-de.babelon.tsv", sha256: "c".repeat(64), languages: ["de"] }],
+      not_included: ["hp-es.babelon.tsv"],
+    } });
+    renderSettings("ontology");
+    const list = await screen.findByRole("list", { name: "Frozen translations" });
+    expect(within(list).getByRole("listitem").textContent).toBe(`hp-de.babelon.tsv (de), HP: ${"c".repeat(12)}`);
+    expect(screen.getByText("Uploaded later, not used here: hp-es.babelon.tsv.")).toBeDefined();
+    cleanup();
+    vi.mocked(api.getProjectSettings).mockResolvedValue({ ...settings, frozen_translations: { files: [], not_included: [] } });
+    renderSettings("ontology");
+    expect(await screen.findByText("No translations: searches use the English names only.")).toBeDefined();
+  });
+
   it("Ontology when locked: moves to another release only after its check (#81)", async () => {
     const locked = { ...settings, locked: true };
     vi.mocked(api.getProjectSettings).mockResolvedValue(locked);

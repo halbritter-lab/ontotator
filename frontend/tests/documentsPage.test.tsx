@@ -1642,6 +1642,29 @@ describe("Resolve renders inline under the row (Change 13, F1, F5)", () => {
     await waitFor(() => expect(document.activeElement).toBe(actionButton()));
   });
 
+  it("a filter or page change closes the options; they stay closed when the row is back (issue 238)", async () => {
+    const withRow = page([group("case-1", [rejected()])]);
+    vi.mocked(api.listDocumentRows).mockImplementation(async (_key, query) => structuredClone((query as { q?: string }).q ? page([]) : withRow));
+    const { rerender, onNavigate } = renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Resolve…, case-1 de" }));
+    expect(resolveBox()).not.toBeNull();
+    const at = (query: ProjectDocumentsQuery) => rerender(<DocumentsPage projectKey="p" query={query} canManage currentUser={{ username: "lead", pseudonym: "lead-0002" }} onNavigate={onNavigate} />);
+    at({ q: "other" });
+    await waitFor(() => expect(api.listDocumentRows).toHaveBeenLastCalledWith("p", { q: "other" }));
+    at({});
+    await screen.findByRole("button", { name: "Resolve…, case-1 de" });
+    expect(resolveBox()).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Resolve…, case-1 de" }));
+    expect(resolveBox()).not.toBeNull();
+    at({ page: "2" });
+    await waitFor(() => expect(api.listDocumentRows).toHaveBeenLastCalledWith("p", { page: 2 }));
+    await waitFor(() => expect(resolveBox()).toBeNull());
+    at({});
+    await screen.findByRole("button", { name: "Resolve…, case-1 de" });
+    expect(resolveBox()).toBeNull();
+  });
+
   it("Assign review or accept… renders the same way", async () => {
     const reviewOff = planRow("case-1", "de", stepOf("translation_not_accepted", { document_id: "case-1-de", stage: "annotation" }), {
       plan_row: { review: false, annotate: true, review_applicable: true, discarded: false },

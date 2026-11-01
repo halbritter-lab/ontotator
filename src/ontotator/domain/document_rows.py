@@ -36,6 +36,7 @@ __all__ = [
     "build_chains",
     "bulk_target",
     "category_of",
+    "folded_id",
     "id_matches",
     "missing_final_counts",
     "open_target",
@@ -293,14 +294,15 @@ def bar_counts(rows: Iterable[set[BarCategory]]) -> dict[str, int]:
     return counts
 
 
-def _folded(value: str) -> str:
+def folded_id(value: str) -> str:
+    """An identifier as the search compares it: NFKC, any case."""
     return unicodedata.normalize("NFKC", value).casefold()
 
 
 def id_matches(q: str, identifiers: Iterable[str]) -> bool:
     """``q`` occurs anywhere in one of the identifiers, in any case."""
-    wanted = _folded(q)
-    return any(wanted in _folded(item) for item in identifiers)
+    wanted = folded_id(q)
+    return any(wanted in folded_id(item) for item in identifiers)
 
 
 def split_text_label(q: str) -> tuple[str, str] | None:

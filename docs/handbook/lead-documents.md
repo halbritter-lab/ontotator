@@ -228,6 +228,7 @@ What for: select texts from a list you have elsewhere, for example a spreadsheet
 1. Click **Select by case IDs…**.
 2. Paste the IDs into **Paste case IDs**, one per line or separated by commas.
 3. Check how many were found. Click **Copy unknown IDs** to copy the ones that do not exist.
+   Case IDs are case sensitive, and two cases can differ only in case. An exact ID always wins. An ID in another case, for example `fr100907`, finds `Fr100907` when that is the only case ID that fits; the dialog lists it under *Matched in another case*. When several case IDs fit and none exactly, the dialog selects none of them and says so, for example *fr100907 matches FR100907 and Fr100907; enter the exact ID.*
 4. Optional: to keep the current selection, tick **Add to the current selection instead**.
 5. Click the select button, for example *Select 20*.
 

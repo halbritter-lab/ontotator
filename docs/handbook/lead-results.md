@@ -109,7 +109,7 @@ What for: decide what happens after a reviewer rejected or queried a translation
    - **Assign a new review…**: someone reviews it again.
    - **Correct the translation…**: you correct it yourself ([Correct a translation yourself](#correct-a-translation-yourself)).
    - The discard item, for example *Discard the de translation…*: enter a **Reason** and click **Discard**. Nothing is deleted; the versions are marked as discarded.
-3. Or click **Cancel**.
+3. Or click **Cancel**. Changing a filter, the tab, the order or the page also closes the options; nothing is saved until you choose.
 
 ### Correct a translation yourself
 
