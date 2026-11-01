@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- Opening the same task twice at the same moment, for example from two tabs, no longer answers 500: both opens get the same workspace (#272).
+- A crash on a screen outside the editor, such as My tasks, Documents or Administration, no longer leaves a blank page. The screen reads *Something went wrong while displaying this page.* inside the shell, with **Reload page**, **Go to My tasks** and **Report a technical problem…**, which adds the error message to the report. Opening another screen clears it. The editor keeps its own crash screen with **Reload case** (#273).
+- Translation review: checked-sentence marks are no longer lost with the review open in two tabs, on closing the tab or on **Reload from server**. A save sends the marks it was made from (`base` on `PUT /api/v1/translation-reviews/{assignment_id}/checked-sentences`), so the server applies only that tab's change and answers the stored marks, which the tab then shows. Waiting marks are sent when the tab closes, before leaving the review and before **Reload from server** reads the review again. A save without `base` replaces the marks as before (#284).
+
 ## [0.8.0] - 2026-11-01
 
 ### Added

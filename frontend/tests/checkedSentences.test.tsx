@@ -37,7 +37,7 @@ function setup(changes: Parameters<typeof reviewWorkspace>[0] = {}, marking = tr
   const routeLeaveRef: { current: RouteLeaveGuard | null } = { current: null };
   const leaveGuardRef: { current: ((proceed: () => void) => void) | null } = { current: null };
   render(<TranslationReviewScreen assignmentId={17} username="alice" onNavigate={vi.fn()} routeLeaveRef={routeLeaveRef} leaveGuardRef={leaveGuardRef} />);
-  return { saveDraft, saveMarks };
+  return { saveDraft, saveMarks, routeLeaveRef, workspace };
 }
 const region = (name: string) => screen.getByRole("region", { name });
 const sentences = (name: string) => [...region(name).querySelectorAll<HTMLElement>("[data-sentence]")];
@@ -117,7 +117,8 @@ describe("Mark checked sentences", () => {
     click(sentences("Source (en)")[2]);
     await act(async () => { await vi.advanceTimersByTimeAsync(700); });
     expect(saveMarks).toHaveBeenCalledTimes(1);
-    expect(saveMarks).toHaveBeenLastCalledWith(17, { source: [{ index: 2, hash: sentenceHash("Third source?") }], translation: [] });
+    // With the marks it was made from, so the server applies only this change (issue 284).
+    expect(saveMarks).toHaveBeenLastCalledWith(17, { source: [{ index: 2, hash: sentenceHash("Third source?") }], translation: [] }, { source: [], translation: [] });
     expect(saveDraft).not.toHaveBeenCalled();
   });
 
@@ -210,5 +211,63 @@ describe("Mark checked sentences", () => {
     await screen.findByRole("region", { name: "Source (en)" });
     expect(screen.queryByRole("checkbox", { name: "Mark checked sentences" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Next unchecked" })).toBeNull();
+  });
+});
+
+describe("saving checked sentences (issue 284)", () => {
+  const translation = splitSentences(TRANSLATION, "de");
+  const mark = (index: number) => ({ index, hash: translation[index].hash });
+
+  it("applies only this tab's change and shows the marks of another tab", async () => {
+    const { saveMarks } = setup();
+    await screen.findByRole("button", { name: "Next unchecked" });
+    // Another tab checked the fourth sentence meanwhile: the answer carries it.
+    saveMarks.mockImplementationOnce(async (_id, body) => ({ ...body, translation: [...(body.translation ?? []), mark(3)] }));
+    vi.useFakeTimers();
+    click(sentences("Translation (de)")[0]);
+    await act(async () => { await vi.advanceTimersByTimeAsync(700); });
+    expect(pressed("Translation (de)")).toEqual([true, false, false, true]);
+    click(sentences("Translation (de)")[1]);
+    await act(async () => { await vi.advanceTimersByTimeAsync(700); });
+    expect(saveMarks).toHaveBeenCalledTimes(2);
+    expect(saveMarks.mock.calls[1][2]).toEqual({ source: [], translation: [mark(0), mark(3)] });
+    expect(saveMarks.mock.calls[1][1].translation).toEqual([mark(0), mark(1), mark(3)]);
+  });
+
+  it("sends waiting marks when the tab closes, in a request that outlives the page", async () => {
+    const { saveMarks } = setup();
+    await screen.findByRole("button", { name: "Next unchecked" });
+    vi.useFakeTimers();
+    click(sentences("Translation (de)")[2]);
+    window.dispatchEvent(new Event("beforeunload"));
+    expect(saveMarks).toHaveBeenCalledTimes(1);
+    expect(saveMarks).toHaveBeenLastCalledWith(17, { source: [], translation: [mark(2)] }, { source: [], translation: [] }, { keepalive: true });
+    await act(async () => { await vi.advanceTimersByTimeAsync(700); });
+    expect(saveMarks).toHaveBeenCalledTimes(1);
+  });
+
+  it("Reload from server reads the marks only after the waiting ones are stored", async () => {
+    const { saveMarks } = setup();
+    await screen.findByRole("button", { name: "Next unchecked" });
+    let store!: () => void;
+    saveMarks.mockImplementationOnce((_id, body) => new Promise(resolve => { store = () => resolve(body); }));
+    click(sentences("Translation (de)")[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Reload from server" }));
+    await act(async () => { await Promise.resolve(); });
+    expect(saveMarks).toHaveBeenCalledTimes(1);
+    expect(api.openTranslationReview).toHaveBeenCalledTimes(1);
+    await act(async () => { store(); await Promise.resolve(); });
+    await vi.waitFor(() => expect(api.openTranslationReview).toHaveBeenCalledTimes(2));
+  });
+
+  it("leaving the review sends the waiting marks first", async () => {
+    const { saveMarks, routeLeaveRef } = setup();
+    await screen.findByRole("button", { name: "Next unchecked" });
+    click(sentences("Source (en)")[1]);
+    let allowed: boolean | undefined;
+    await act(async () => { allowed = await routeLeaveRef.current!(); });
+    expect(allowed).toBe(true);
+    expect(saveMarks).toHaveBeenCalledTimes(1);
+    expect(saveMarks.mock.calls[0][1].source).toEqual([{ index: 1, hash: sentenceHash("Second source!") }]);
   });
 });

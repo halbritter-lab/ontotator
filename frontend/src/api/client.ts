@@ -260,6 +260,7 @@ export type TranslationReviewDraftResponse = components["schemas"]["DraftRespons
 export type TranslationReviewSubmitRequest = components["schemas"]["SubmitRequest"];
 /** The reviewer's checked-sentence marks (issue 256); a working aid, not part of the review. */
 export type CheckedSentences = components["schemas"]["CheckedSentences"];
+export type CheckedSentencesSave = components["schemas"]["CheckedSentencesSave"];
 export type CaseFilters = NonNullable<operations["list_cases_api_v1_projects__key__cases_get"]["parameters"]["query"]>;
 /** The logged-in user; `csrf_token` goes back in `X-CSRF-Token` with every write. */
 export type CurrentUser = components["schemas"]["CurrentUser"];
@@ -818,8 +819,15 @@ export class ApiClient {
   }
 
   /** Saves the checked-sentence marks; the draft revision and the task status stay as they are. */
-  async saveCheckedSentences(assignmentId: number, body: CheckedSentences): Promise<CheckedSentences> {
-    return this.request<CheckedSentences>(`/api/v1/translation-reviews/${assignmentId}/checked-sentences`, { method: "PUT", body: JSON.stringify(body) });
+  /**
+   * Stores checked-sentence marks and answers the stored marks. With `base` (the marks the new ones were made
+   * from), only that change is applied, so marks set meanwhile in another tab stay (issue 284). `keepalive` lets
+   * the request outlive a closing tab.
+   */
+  async saveCheckedSentences(assignmentId: number, marks: CheckedSentences, base?: CheckedSentences, options: { keepalive?: boolean } = {}): Promise<CheckedSentences> {
+    const body: CheckedSentencesSave = { source: marks.source, translation: marks.translation, ...(base ? { base } : {}) };
+    return this.request<CheckedSentences>(`/api/v1/translation-reviews/${assignmentId}/checked-sentences`, {
+      method: "PUT", body: JSON.stringify(body), ...(options.keepalive ? { keepalive: true } : {}) });
   }
 
   async submitTranslationReview(assignmentId: number, expectedRevision: TranslationReviewSubmitRequest["expected_revision"]): Promise<TranslationReviewRecord> {

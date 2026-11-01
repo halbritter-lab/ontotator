@@ -824,6 +824,9 @@ export interface paths {
         /**
          * Save Checked Sentences
          * @description The reviewer's own checked-sentence marks; not part of the review.
+         *
+         *     With ``base``, only the change from ``base`` to the sent marks is applied, so
+         *     marks set meanwhile in another tab stay; the answer is the stored marks.
          */
         put: operations["save_checked_sentences_api_v1_translation_reviews__assignment_id__checked_sentences_put"];
         post?: never;
@@ -3774,6 +3777,21 @@ export interface components {
             source?: components["schemas"]["CheckedSentence"][];
             /** Translation */
             translation?: components["schemas"]["CheckedSentence"][];
+        };
+        /**
+         * CheckedSentencesSave
+         * @description New marks, optionally with the marks they were made from (issue 284).
+         *
+         *     With ``base``, the server applies only what changed from ``base`` to the new
+         *     marks to the stored marks, so marks set meanwhile in another tab stay. Without
+         *     ``base``, the new marks replace the stored ones.
+         */
+        CheckedSentencesSave: {
+            /** Source */
+            source?: components["schemas"]["CheckedSentence"][];
+            /** Translation */
+            translation?: components["schemas"]["CheckedSentence"][];
+            base?: components["schemas"]["CheckedSentences"] | null;
         };
         /** CodeResponse */
         CodeResponse: {
@@ -11003,7 +11021,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CheckedSentences"];
+                "application/json": components["schemas"]["CheckedSentencesSave"];
             };
         };
         responses: {

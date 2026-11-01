@@ -4,6 +4,7 @@ import { routeTitle, taskCrumbLabel } from "./app/labels";
 import { CaseViewer } from "./variants/CaseViewer";
 import { Shell } from "./app/Shell";
 import { NotFound } from "./app/NotFound";
+import { ScreenErrorBoundary } from "./app/ErrorBoundary";
 import { TaskEditor } from "./tasks/TaskEditor";
 import { MY_TASKS, parseRoute, routeHref, type NavigateOptions, type Route, type RouteLeaveGuard } from "./app/router";
 import { MyTasks } from "./tasks/MyTasks";
@@ -361,7 +362,8 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
       { label: crumbTask?.identity === taskIdentity && crumbTask.task ? taskCrumbLabel(crumbTask.task) : "Task", title: `Assignment ${route.assignmentId}` },
     ] : undefined}>
     {!!projectError && <><ErrorNotice error={projectError} /><Button onClick={() => setRetry(value => value + 1)}>Retry projects</Button></>}
-    {content}
+    {/* A crash on any screen shows a way back and a report instead of a blank page; another screen resets it. */}
+    <ScreenErrorBoundary resetKey={JSON.stringify(route)} onHome={() => go(MY_TASKS)}>{content}</ScreenErrorBoundary>
     <Toast toast={appToast.toast} onDismiss={appToast.dismiss} />
   </Shell>;
 }
