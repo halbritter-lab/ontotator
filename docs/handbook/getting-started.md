@@ -101,7 +101,7 @@ If you see **No texts are assigned to you yet.**, wait until your lead assigns t
 
 What for: learn the work on invented texts before your first real task.
 
-A practice project is private. Only you see it, your lead does not. It has short, invented letters, no real patients. Nothing you do there counts: it is not in any project list, count or export.
+A practice project is private. Only you see it, your lead does not. It has short, invented letters in German, no real patients. You can start it without German in your Profile. Nothing you do there counts: it is not in any project list, count or export.
 
 You get practice if you are an annotator or a translation reviewer in at least one project.
 

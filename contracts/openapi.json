@@ -18191,6 +18191,10 @@
             "type": "boolean",
             "title": "Card Hidden"
           },
+          "reads_german": {
+            "type": "boolean",
+            "title": "Reads German"
+          },
           "project": {
             "anyOf": [
               {
@@ -18207,7 +18211,8 @@
           "offered",
           "available",
           "show_card",
-          "card_hidden"
+          "card_hidden",
+          "reads_german"
         ],
         "title": "PracticeState",
         "description": "``GET /api/v1/me/practice``."

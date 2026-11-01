@@ -6130,6 +6130,8 @@ export interface components {
             show_card: boolean;
             /** Card Hidden */
             card_hidden: boolean;
+            /** Reads German */
+            reads_german: boolean;
             project?: components["schemas"]["PracticeProject"] | null;
         };
         /**

@@ -133,6 +133,8 @@ class PracticeState(BaseModel):
     # The "New here?" card on My tasks: offered, no project, not hidden.
     show_card: bool
     card_hidden: bool
+    # The practice texts are German; no languages listed counts as not reading it.
+    reads_german: bool
     project: PracticeProject | None = None
 
 
@@ -265,6 +267,7 @@ class PracticeService:
             unavailable_message=_MESSAGES[reason] if reason else None,
             show_card=offered and project is None and not prefs.practice_card_hidden,
             card_hidden=bool(prefs.practice_card_hidden),
+            reads_german="de" in self.accounts.languages_of([user_id])[user_id],
             project=project,
         )
 

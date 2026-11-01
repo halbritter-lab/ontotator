@@ -137,6 +137,16 @@ def test_a_consolidator_also_gets_the_consolidation_task(app: FastAPI) -> None:
     assert not any(name.startswith("practice-colleague") for name in users)
 
 
+def test_practice_says_whether_the_profile_has_german(app: FastAPI) -> None:
+    client = _member(app, "ann", ["annotator"])
+    # No languages listed counts as not reading German.
+    assert client.get("/api/v1/me/practice").json()["reads_german"] is False
+    app.state.accounts.set_languages(Actor(None, "system:test"), "ann", ["en"])
+    assert client.get("/api/v1/me/practice").json()["reads_german"] is False
+    app.state.accounts.set_languages(Actor(None, "system:test"), "ann", ["en", "de"])
+    assert client.get("/api/v1/me/practice").json()["reads_german"] is True
+
+
 def test_practice_is_only_for_annotators(app: FastAPI) -> None:
     lead = _member(app, "lead", ["lead"])
 

@@ -12,7 +12,8 @@ import { formatDay } from "./usePractice";
 import "./practice.css";
 
 export const PRACTICE_CARD_TITLE = "New here? Try it out first";
-export const PRACTICE_CARD_TEXT = "A private practice project with four short, invented texts. Nothing you do there counts, and nobody else sees it.";
+export const PRACTICE_CARD_TEXT = "A private practice project with short, invented texts in German. Nothing you do there counts, and nobody else sees it.";
+export const PRACTICE_GERMAN_HINT = "German is not among the languages in your Profile. You can still try it.";
 const PROFILE_ROUTE: Route = { name: "me" };
 
 const follow = (onNavigate: (route: Route) => void, route: Route) => (event: MouseEvent<HTMLAnchorElement>) => {
@@ -57,6 +58,7 @@ export function PracticeCard({ state, onChange, onNavigate }: {
   return <section className="practice-card" aria-labelledby="practice-card-title">
     <h2 id="practice-card-title">{PRACTICE_CARD_TITLE}</h2>
     <p>{PRACTICE_CARD_TEXT}</p>
+    {!state.reads_german && <p className="practice-hint">{PRACTICE_GERMAN_HINT}</p>}
     {why && state.unavailable_message && <InlineMessage tone="info">{state.unavailable_message}</InlineMessage>}
     {error != null && <ErrorNotice error={error} />}
     <div className="toolbar">

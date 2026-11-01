@@ -20,7 +20,7 @@ const project = (tasks: PracticeTask[], done = 0): NonNullable<PracticeState["pr
   expires_at: "2026-12-01T09:00:00Z", tasks, done, total: tasks.length,
 });
 const state = (change: Partial<PracticeState> = {}): PracticeState => ({
-  offered: true, available: true, show_card: true, card_hidden: false, project: null, ...change,
+  offered: true, available: true, show_card: true, card_hidden: false, reads_german: true, project: null, ...change,
 });
 const summary = (id: number, status: TaskSummary["status"], practice: boolean): TaskSummary => ({
   assignment_id: id, workflow_revision: 0, held: false, report_answered: false, waiting_for_translation_review: false, waiting_for_lead: false,
@@ -74,9 +74,17 @@ describe("My tasks: the New here? card", () => {
     vi.spyOn(api, "startPractice").mockResolvedValue(started);
     render(<PracticeCard state={state()} onChange={onChange} onNavigate={vi.fn()} />);
     expect(screen.getByRole("heading", { name: "New here? Try it out first" })).toBeDefined();
-    expect(screen.getByText(/four short, invented texts/)).toBeDefined();
+    expect(screen.getByText(/short, invented texts in German/)).toBeDefined();
     fireEvent.click(screen.getByRole("button", { name: "Try it out" }));
     await waitFor(() => expect(onChange).toHaveBeenCalledWith(started));
+  });
+
+  it("hints only when German is not in the Profile", () => {
+    const hint = /German is not among the languages in your Profile/;
+    const { rerender } = render(<PracticeCard state={state()} onChange={vi.fn()} onNavigate={vi.fn()} />);
+    expect(screen.queryByText(hint)).toBeNull();
+    rerender(<PracticeCard state={state({ reads_german: false })} onChange={vi.fn()} onNavigate={vi.fn()} />);
+    expect(screen.getByText(hint)).toBeDefined();
   });
 
   it("Not now hides the card for good and says where practice stays", async () => {
