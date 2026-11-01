@@ -24548,6 +24548,11 @@
               }
             ]
           },
+          "practice": {
+            "type": "boolean",
+            "title": "Practice",
+            "default": false
+          },
           "user_agent": {
             "anyOf": [
               {

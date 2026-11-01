@@ -8421,6 +8421,11 @@ export interface components {
             /** Route */
             route: string | null;
             task: components["schemas"]["TechnicalReportTask"] | null;
+            /**
+             * Practice
+             * @default false
+             */
+            practice: boolean;
             /** User Agent */
             user_agent: string | null;
             /** Viewport */

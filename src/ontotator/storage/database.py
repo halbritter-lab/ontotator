@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import hashlib
 import itertools
-from collections.abc import Iterator
+import logging
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from sqlalchemy import Connection, Engine, create_engine, func, select
@@ -17,6 +18,7 @@ from sqlalchemy.exc import TimeoutError as PoolTimeoutError
 
 from ontotator.storage.blobs import BlobStore
 
+logger = logging.getLogger(__name__)
 _numbers = itertools.count()
 
 CONNECT_TIMEOUT_SECONDS = 10
@@ -93,6 +95,7 @@ class _Ambient:
     conn: Connection
     snapshot: bool = False
     failure: BaseException | None = None
+    after_commit: list[Callable[[], None]] = field(default_factory=list)
 
 
 class Database:
@@ -165,8 +168,27 @@ class Database:
             with self._joined(current):
                 yield current.conn
             return
-        with self.engine.begin() as conn, self._ambient(conn, snapshot=False):
+        with (
+            self.engine.begin() as conn,
+            self._ambient(conn, snapshot=False) as ambient,
+        ):
             yield conn
+        # Committed: run what waited for it (file removal), outside any transaction.
+        for callback in ambient.after_commit:
+            try:
+                callback()
+            except Exception:
+                logger.warning("A post-commit step failed.", exc_info=True)
+
+    def after_commit(self, callback: Callable[[], None]) -> None:
+        """Run ``callback`` once the open transaction has committed; at once
+        when none is open. A rolled-back transaction drops it. A failure is
+        logged, never raised: the commit it waited for stands."""
+        current = self._current.get()
+        if current is None:
+            callback()
+            return
+        current.after_commit.append(callback)
 
     def in_transaction(self) -> bool:
         """Whether this context has an open transaction or snapshot."""
@@ -251,12 +273,12 @@ class Database:
             raise
 
     @contextmanager
-    def _ambient(self, conn: Connection, *, snapshot: bool) -> Iterator[None]:
+    def _ambient(self, conn: Connection, *, snapshot: bool) -> Iterator[_Ambient]:
         """Make ``conn`` the open transaction of this context for the outermost scope."""
         ambient = _Ambient(conn, snapshot=snapshot)
         token = self._current.set(ambient)
         try:
-            yield
+            yield ambient
             if ambient.failure is not None:
                 raise TransactionRollbackOnly(
                     "A nested database operation failed inside this "

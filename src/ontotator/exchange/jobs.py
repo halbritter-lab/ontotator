@@ -128,6 +128,14 @@ def unlink_deleted_files(db: Database, digests: Sequence[str]) -> None:
                 db.blobs.delete(digest)
 
 
+def unlink_after_commit(db: Database, digests: Sequence[str]) -> None:
+    """``unlink_deleted_files`` once the open transaction has committed (at
+    once outside one); a rollback keeps the files, as their rows come back."""
+    if digests:
+        found = list(digests)
+        db.after_commit(lambda: unlink_deleted_files(db, found))
+
+
 def operator_access(actor: Actor) -> Access:
     """The rights of the operator on the command line: a system admin's (Q5)."""
     return Access(user_id=0, pseudonym=actor.label, is_system_admin=True)
