@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Documents: the *Resolve…* options of a row close when the filter, tab, order or page changes, as *Cancel* does. They no longer open again once the row is back on the page (#238).
 - *Select by case IDs…* finds a case ID in another case, as the Documents search does: `fr100907` finds `Fr100907`. An exact match wins. Case IDs stay case sensitive, so when several case IDs fit and none exactly, the dialog lists them and asks for the exact ID instead of guessing (`case_insensitive` and `ambiguous` on the case ID lookup) (#237).
+- Documents: an assigned translation review or annotation that nobody has saved yet reads *Assigned, not started* with the person's name, no longer *In progress*. A task starts with its first saved change; opening it does not. With several people or parallel versions the Translation and Annotation cells, the text card and the row's tooltip count them, for example *1 of 2 started* (`started` and `open_tasks` on the stage cell detail) (#258).
 
 ## [0.6.1] - 2026-10-31
 
