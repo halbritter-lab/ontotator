@@ -10945,6 +10945,13 @@
                 "type": "null"
               }
             ]
+          },
+          "rejected_by": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Rejected By"
           }
         },
         "additionalProperties": false,

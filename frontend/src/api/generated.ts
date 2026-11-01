@@ -3526,6 +3526,8 @@ export interface components {
             /** Attached To */
             attached_to?: string | null;
             result?: components["schemas"]["ConsolidationResultView"] | null;
+            /** Rejected By */
+            rejected_by?: string[];
         };
         /**
          * ConsolidationMark

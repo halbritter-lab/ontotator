@@ -20,6 +20,9 @@ describe("consolidation copy", () => {
 
   it("names who marked a partial finding and who has nothing there", () => {
     expect(partialText([LUC, ANA], [TOM])).toBe("Luc Martin, Ana Weber marked this. Tom Reis has nothing here.");
+    // #248: who rejected the proposal is named apart from who has nothing.
+    expect(partialText([LUC], [TOM], [TOM.person_id])).toBe("Luc Martin marked this. Tom Reis rejected the proposal.");
+    expect(partialText([LUC], [ANA, TOM], [TOM.person_id])).toBe("Luc Martin marked this. Tom Reis rejected the proposal. Ana Weber has nothing here.");
   });
 
   it("states a group as fields to decide, agreed or decided", () => {
