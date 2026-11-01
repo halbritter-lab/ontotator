@@ -34,7 +34,11 @@ from ontotator.application.document_row_stages import (
     compared_target,
     eligible_by_target,
 )
-from ontotator.application.document_row_submissions import build_submissions
+from ontotator.application.document_row_submissions import (
+    build_submissions,
+    consolidation_summaries,
+    stored_decisions,
+)
 from ontotator.application.text_changes import (
     editable_findings,
     findings_in_changed_passages,
@@ -569,15 +573,26 @@ def _consolidation_origins(
     conn: Connection, pid: int, listed: Iterable[Mapping[str, Any]]
 ) -> dict[str, dict[str, int]]:
     """How the findings of each listed consolidation came about (#133):
-    matched (taken over automatically), decided or added by the consolidator.
-    Derived from the stored submission; one that does not decode has none."""
-    wanted = [
-        item["submission_id"] for item in listed if item["kind"] == "consolidation"
-    ]
-    return {
-        sid: asdict(origin_counts(finding_origins(sub.snapshots, sub.decisions)))
-        for sid, sub in _payloads(conn, pid, wanted, strict=False).items()
+    matched (taken over automatically), decided or added by the consolidator,
+    plus the groups left out of the result (#248). Derived from the stored
+    submission; one that does not decode has none."""
+    rounds = {
+        item["submission_id"]: item.get("round_id")
+        for item in listed
+        if item["kind"] == "consolidation"
     }
+    origins = {
+        sid: asdict(origin_counts(finding_origins(sub.snapshots, sub.decisions)))
+        for sid, sub in _payloads(conn, pid, rounds, strict=False).items()
+    }
+    with_round = {sid: rid for sid, rid in rounds.items() if rid and sid in origins}
+    decisions = stored_decisions(conn, pid, with_round)
+    summaries = consolidation_summaries(
+        conn, pid, {sid: (rid, decisions.get(sid)) for sid, rid in with_round.items()}
+    )
+    for sid, summary in summaries.items():
+        origins[sid]["left_out"] = summary.left_out
+    return origins
 
 
 def final_panel(

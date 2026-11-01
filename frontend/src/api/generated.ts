@@ -3640,6 +3640,8 @@ export interface components {
             decided: number;
             /** Added */
             added: number;
+            /** Left Out */
+            left_out?: number;
         };
         /**
          * ConsolidationPersonView

@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - The submit dialog names proposals left Unresolved, for example "34 findings, 1 unresolved, nothing open." (#248).
 - Consolidation: a person who rejected the tool proposal a finding comes from is named so, for example "Tom Reis rejected the proposal.", instead of "has nothing here" (`ConsolidationGroupView.rejected_by`) (#248).
+- The accept card of a consolidation names the groups left out of the result, for example "32 matching, 1 decided by Carla, 2 groups left out" (`ConsolidationOriginsView.left_out`) (#248).
 
 ## [0.6.1] - 2026-10-31
 

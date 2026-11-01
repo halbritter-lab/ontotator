@@ -572,6 +572,8 @@ class ConsolidationOriginsView(_View):
     decided: int
     # Findings the consolidator added outside every group.
     added: int
+    # Groups the consolidator left out of the result (not findings, #248).
+    left_out: int = Field(default_factory=int)
 
 
 class FinalPanelSubmissionView(RowSubmissionView):

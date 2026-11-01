@@ -11223,6 +11223,10 @@
           "added": {
             "type": "integer",
             "title": "Added"
+          },
+          "left_out": {
+            "type": "integer",
+            "title": "Left Out"
           }
         },
         "additionalProperties": false,
