@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - Opening the same task twice at the same moment, for example from two tabs, no longer answers 500: both opens get the same workspace (#272).
+- A crash on a screen outside the editor, such as My tasks, Documents or Administration, no longer leaves a blank page. The screen reads *Something went wrong while displaying this page.* inside the shell, with **Reload page**, **Go to My tasks** and **Report a technical problem…**, which adds the error message to the report. Opening another screen clears it. The editor keeps its own crash screen with **Reload case** (#273).
 
 ## [0.8.0] - 2026-11-01
 
