@@ -149,6 +149,9 @@ describe("choose", () => {
     expect(consolidationBreakdown({ ...base, consolidation_origins: { matched: 0, decided: 1, added: 2 } })).toBe("1 decided by Luc, 2 added by Luc");
     expect(consolidationBreakdown({ ...base, is_me: true, consolidation_origins: { matched: 3, decided: 0, added: 1 } })).toBe("3 matching, 1 added by you");
     expect(consolidationBreakdown({ ...base, consolidation_origins: { matched: 0, decided: 0, added: 0 } })).toBeNull();
+    // #248: groups left out of the result are named too.
+    expect(consolidationBreakdown({ ...base, consolidation_origins: { matched: 32, decided: 1, added: 0, left_out: 2 } })).toBe("32 matching, 1 decided by Luc, 2 groups left out");
+    expect(consolidationBreakdown({ ...base, consolidation_origins: { matched: 0, decided: 0, added: 0, left_out: 1 } })).toBe("1 group left out");
     expect(consolidationBreakdown({ ...base, consolidation_origins: null })).toBeNull();
     expect(consolidationBreakdown({ ...base, kind: "annotation", consolidation_origins: { matched: 1, decided: 0, added: 0 } })).toBeNull();
   });

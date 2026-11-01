@@ -9,6 +9,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - Documents: an assigned translation review or annotation that nobody has saved yet reads *Assigned, not started* with the person's name, no longer *In progress*. A task starts with its first saved change; opening it does not. With several people or parallel versions the Translation and Annotation cells, the text card and the row's tooltip count them, for example *1 of 2 started* (`started` and `open_tasks` on the stage cell detail) (#258).
+### Changed
+
+- New project: allowed roots and annotation scheme filled from an uploaded profile say "Loaded from the profile." until you change them (#239).
+
+### Fixed
+
+- The submit dialog names proposals left Unresolved, for example "34 findings, 1 unresolved, nothing open." (#248).
+- Consolidation: a person who rejected the tool proposal a finding comes from is named so, for example "Tom Reis rejected the proposal.", instead of "has nothing here" (`ConsolidationGroupView.rejected_by`) (#248).
+- The accept card of a consolidation names the groups left out of the result, for example "32 matching, 1 decided by Carla, 2 groups left out" (`ConsolidationOriginsView.left_out`) (#248).
+- Problem reports name a task by its kind, text and owner instead of the internal task number, for example "Problems with case-107 de" and "Close and resume the annotation of case-107 de by Ana Weber (ann-0004)" (#248).
+- After Assign, the confirmation appears once the refreshed rows are shown, no longer about 1.5 s before the row updates (#248).
+### Added
+
+- A translation file uploaded after a project froze its translations no longer reaches it silently. The upload result and the ontology inventory (**Frozen without**) name the projects that froze their translations without the file (`frozen_without` on the admin ontology list), and `ontotator admin ontologies add` names them on stderr. Settings › Ontology shows the frozen files in the card **Translations**, and the newer server files the project does not use (`frozen_translations` on the project settings). The freeze itself is unchanged (#254).
+### Fixed
+
+- Documents: the *Resolve…* options of a row close when the filter, tab, order or page changes, as *Cancel* does. They no longer open again once the row is back on the page (#238).
+- *Select by case IDs…* finds a case ID in another case, as the Documents search does: `fr100907` finds `Fr100907`. An exact match wins. Case IDs stay case sensitive, so when several case IDs fit and none exactly, the dialog lists them and asks for the exact ID instead of guessing (`case_insensitive` and `ambiguous` on the case ID lookup) (#237).
 
 ## [0.6.1] - 2026-10-31
 

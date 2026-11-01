@@ -676,6 +676,21 @@ describe("case selection", () => {
     expect(await screen.findByText("1 annotation assigned to Ana Weber", { selector: ".ui-toast-message" })).toBeTruthy();
     await waitFor(() => expect(vi.mocked(api.listDocumentRows).mock.calls.length).toBeGreaterThan(calls));
   });
+
+  it("shows the Assign toast only once the refreshed rows are in (issue 248)", async () => {
+    const before = page([group("case-1", [planRow("case-1", "fr", stepOf("assign_annotation"))])]);
+    mockRows(before);
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Assign annotation…, case-1 fr" }));
+    const pending: ((value: DocumentRowsPage) => void)[] = [];
+    vi.mocked(api.listDocumentRows).mockImplementation(() => new Promise(resolve => { pending.push(resolve); }));
+    act(() => { const props = lastAssign(); if (props.mode === "row") props.onAssigned("1 annotation assigned to Ana Weber"); });
+    await waitFor(() => expect(pending.length).toBeGreaterThan(0));
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
+    expect(screen.queryByText("1 annotation assigned to Ana Weber", { selector: ".ui-toast-message" })).toBeNull();
+    await act(async () => { for (const resolve of pending) resolve(structuredClone(before)); });
+    expect(await screen.findByText("1 annotation assigned to Ana Weber", { selector: ".ui-toast-message" })).toBeTruthy();
+  });
 });
 
 it("hides the Translation column and filter group while the project has no translation (U-4)", async () => {
@@ -1625,6 +1640,29 @@ describe("Resolve renders inline under the row (Change 13, F1, F5)", () => {
     fireEvent.keyDown(document.activeElement!, { key: "Escape" });
     expect(resolveBox()).toBeNull();
     await waitFor(() => expect(document.activeElement).toBe(actionButton()));
+  });
+
+  it("a filter or page change closes the options; they stay closed when the row is back (issue 238)", async () => {
+    const withRow = page([group("case-1", [rejected()])]);
+    vi.mocked(api.listDocumentRows).mockImplementation(async (_key, query) => structuredClone((query as { q?: string }).q ? page([]) : withRow));
+    const { rerender, onNavigate } = renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Resolve…, case-1 de" }));
+    expect(resolveBox()).not.toBeNull();
+    const at = (query: ProjectDocumentsQuery) => rerender(<DocumentsPage projectKey="p" query={query} canManage currentUser={{ username: "lead", pseudonym: "lead-0002" }} onNavigate={onNavigate} />);
+    at({ q: "other" });
+    await waitFor(() => expect(api.listDocumentRows).toHaveBeenLastCalledWith("p", { q: "other" }));
+    at({});
+    await screen.findByRole("button", { name: "Resolve…, case-1 de" });
+    expect(resolveBox()).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Resolve…, case-1 de" }));
+    expect(resolveBox()).not.toBeNull();
+    at({ page: "2" });
+    await waitFor(() => expect(api.listDocumentRows).toHaveBeenLastCalledWith("p", { page: 2 }));
+    await waitFor(() => expect(resolveBox()).toBeNull());
+    at({});
+    await screen.findByRole("button", { name: "Resolve…, case-1 de" });
+    expect(resolveBox()).toBeNull();
   });
 
   it("Assign review or accept… renders the same way", async () => {

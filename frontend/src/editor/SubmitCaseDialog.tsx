@@ -20,9 +20,12 @@ const GROUPS: readonly [OpenItemKind, string][] = [
   ["review-target", "Proposals not decided"],
 ];
 
-/** "1 finding, nothing open." / "2 findings. 1 thing is still open:" */
-export function summaryText(findings: number, open: number): string {
-  const counted = plural(findings, "finding");
+/**
+ * "1 finding, nothing open." / "2 findings. 1 thing is still open:"; with proposals left Unresolved (issue 248):
+ * "34 findings, 1 unresolved, nothing open."
+ */
+export function summaryText(findings: number, open: number, unresolved = 0): string {
+  const counted = plural(findings, "finding") + (unresolved > 0 ? `, ${unresolved} unresolved` : "");
   if (open === 0) return `${counted}, nothing open.`;
   return `${counted}. ${open === 1 ? "1 thing is" : `${open} things are`} still open:`;
 }
@@ -43,6 +46,8 @@ export interface SubmitCaseDialogProps {
   textName: string;
   /** Findings that will be submitted (results in review modes, saved findings otherwise). */
   findingCount: number;
+  /** Of `findingCount`, the proposals submitted as Unresolved (named in the summary, issue 248). */
+  unresolvedCount?: number;
   /** Everything still open, in dialog order (`collectOpenItems`). */
   items: readonly OpenItem[];
   /** Findings with empty or defaulted values (`unconfirmedRows`), shown in their own group. */
@@ -69,7 +74,7 @@ export interface SubmitCaseDialogProps {
 
 /** Final confirmation before a text is submitted: one summary line, then only what is still open, each with its action. */
 export function SubmitCaseDialog({
-  open, textName, findingCount, items: allItems, unconfirmed, requireChosenAxes, confirmUnavailableReason, onConfirmValues,
+  open, textName, findingCount, unresolvedCount = 0, items: allItems, unconfirmed, requireChosenAxes, confirmUnavailableReason, onConfirmValues,
   submitStatus, saving, readOnly, onGoTo, onGoToRow, onConfirm, onCancel,
 }: SubmitCaseDialogProps) {
   const reasonId = useId();
@@ -120,7 +125,7 @@ export function SubmitCaseDialog({
           Cancel
         </Button>
       </>}>
-      <p className="submit-summary">{summaryText(findingCount, openCount)}</p>
+      <p className="submit-summary">{summaryText(findingCount, openCount, unresolvedCount)}</p>
       {/* Always mounted: the values group moves the focus on and announces after its last row is confirmed. */}
       <div className={openCount > 0 ? "submit-open" : undefined}>
         {groups.map(group => <SubmitGroup key={group.kind} heading={group.heading}>

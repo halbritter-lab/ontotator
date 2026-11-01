@@ -47,7 +47,8 @@ async function expectEntry(page: Page, name: string) {
 }
 /** The editor's "Task paused: {reason}" banner. */
 const banner = (page: Page) => page.getByText(/^Task paused: /);
-const reportsDialog = (page: Page, task: number) => page.getByRole("dialog", { name: `Problems with Task ${task}`, exact: true });
+/** The reporter's dialog: named after the text, never the task number. */
+const reportsDialog = (page: Page) => page.getByRole("dialog", { name: /^Problems with / });
 const footer = (dialog: Locator) => dialog.locator(".modal-actions");
 /** The ``<dd>`` of fact ``term`` ("Report" / "Your task") inside ``scope``. */
 const fact = (scope: Locator, term: string) =>
@@ -55,22 +56,21 @@ const fact = (scope: Locator, term: string) =>
 const group = (scope: Locator | Page, title: string) => scope.getByRole("group", { name: title, exact: true });
 
 /** Open the reporter dialog from the toolbar; it loads reports and task on open. */
-async function openReports(page: Page, task: number): Promise<Locator> {
+async function openReports(page: Page): Promise<Locator> {
   await moreAction(page, /^(Report a text problem…|Text problems)/);
-  const dialog = reportsDialog(page, task);
+  const dialog = reportsDialog(page);
   await expect(dialog).toBeVisible();
   return dialog;
 }
 
-async function closeReports(page: Page, task: number) {
-  const dialog = reportsDialog(page, task);
+async function closeReports(page: Page) {
+  const dialog = reportsDialog(page);
   await footer(dialog).getByRole("button", { name: "Close", exact: true }).click();
   await expect(dialog).toBeHidden();
 }
 
 /** File a report as the reporter (no report yet: the dialog opens in the form view). Leaves the list dialog open. */
-async function fileReport(page: Page, s: ProblemReportScenario, text = REPORT_TEXT): Promise<Locator> {
-  const task = s.tasks.reporter;
+async function fileReport(page: Page, text = REPORT_TEXT): Promise<Locator> {
   await moreAction(page, "Report a text problem…");
   const form = page.getByRole("dialog", { name: "New problem report", exact: true });
   await expect(form).toBeVisible();
@@ -78,7 +78,7 @@ async function fileReport(page: Page, s: ProblemReportScenario, text = REPORT_TE
   await expect(field).toBeFocused();
   await field.fill(text);
   await footer(form).getByRole("button", { name: "Report and pause my task", exact: true }).click();
-  const dialog = reportsDialog(page, task);
+  const dialog = reportsDialog(page);
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText("Reported. Your task is paused until you or a project lead resume it.");
   await expect(dialog.getByRole("heading", { name: text, level: 3 })).toBeFocused();
@@ -109,7 +109,8 @@ async function openLeadPage(page: Page, s: ProblemReportScenario) {
 
 const decide = (page: Page) => page.getByRole("group", { name: "Decide on this report", exact: true });
 const reportState = (page: Page) => fact(page.locator(".problem-report-detail"), "Report");
-const taskFact = (page: Page, task: number) => fact(page.locator(".problem-report-detail"), `Task ${task}`);
+/** The decision card's fact of the reporter's task (no task number). */
+const taskFact = (page: Page) => fact(page.locator(".problem-report-detail"), "Task of the reporter");
 const cardTitle = (page: Page, title: string) => page.getByRole("heading", { level: 2, name: title, exact: true });
 
 /** Open intent ``label`` on the lead page, fill its reason and confirm with ``confirm``; waits for the outcome. */
@@ -133,11 +134,11 @@ test("report, resume with a reason, lead sees it and closes, reporter sees Close
   const task = s.tasks.reporter;
   await loginExisting(page, s.users.reporter);
   await openTask(page, task);
-  let dialog = await fileReport(page, s);
+  let dialog = await fileReport(page);
 
   // Resume with "upsi".
   await dialog.getByRole("button", { name: "Resume my task…", exact: true }).click();
-  const resume = group(dialog, `Resume Task ${task}`);
+  const resume = dialog.getByRole("group", { name: /^Resume your task on / });
   await expect(resume).toContainText("The report stays open. A project lead decides on it.");
   await resume.getByRole("textbox", { name: /Why can you continue\?/ }).fill("upsi");
   await resume.getByRole("button", { name: "Resume my task", exact: true }).click();
@@ -146,14 +147,14 @@ test("report, resume with a reason, lead sees it and closes, reporter sees Close
   await expect(fact(dialog, "Report")).toHaveText("Open");
   await expect(dialog.locator(".problem-task-status")).toContainText("Your task: Active");
   await expect(banner(page)).toHaveCount(0);
-  await closeReports(page, task);
+  await closeReports(page);
   await expectEntry(page, "Report a text problem… (1 open)");
 
   const lead = await actor(browser, s.users.lead);
   try {
     await openLeadPage(lead.page, s);
-    await expect(taskFact(lead.page, task)).toContainText(`Resumed by reporter ${leadSees(s, "reporter")}`);
-    await expect(taskFact(lead.page, task)).toContainText('"upsi"');
+    await expect(taskFact(lead.page)).toContainText(`Resumed by reporter ${leadSees(s, "reporter")}`);
+    await expect(taskFact(lead.page)).toContainText('"upsi"');
     await expect(lead.page.getByRole("region", { name: "History", exact: true })).toContainText("upsi");
     await expect(decide(lead.page).getByRole("button", { name: "Close report…", exact: true })).toBeVisible();
     await leadAct(lead.page, /^Close report…$/, "Close report", new RegExp(`Outcome for ${leadSees(s, "reporter").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`),
@@ -165,13 +166,13 @@ test("report, resume with a reason, lead sees it and closes, reporter sees Close
   }
 
   // The reporter sees the lead's close the next time the dialog opens.
-  dialog = await openReports(page, task);
+  dialog = await openReports(page);
   await expect(fact(dialog, "Report")).toContainText("Closed by the project lead");
   await expect(fact(dialog, "Report")).toContainText("Outcome: Fixed in the source text; no change needed.");
   await expect(fact(dialog, "Your task")).toContainText("Resumed by you");
   await expect(dialog.getByRole("button", { name: "Resume my task…" })).toHaveCount(0);
   await expect(dialog.getByRole("button", { name: "Withdraw report…" })).toHaveCount(0);
-  await closeReports(page, task);
+  await closeReports(page);
   await expectEntry(page, "Report a text problem…");
 });
 
@@ -180,7 +181,7 @@ test("withdraw an untouched report, lead reopens it: Open, no withdraw, task sta
   const task = s.tasks.reporter;
   await loginExisting(page, s.users.reporter);
   await openTask(page, task);
-  let dialog = await fileReport(page, s);
+  let dialog = await fileReport(page);
 
   await dialog.getByRole("button", { name: "Withdraw report…", exact: true }).click();
   const withdraw = group(dialog, "Withdraw report");
@@ -194,7 +195,7 @@ test("withdraw an untouched report, lead reopens it: Open, no withdraw, task sta
   await expect(fact(dialog, "Your task")).toContainText("Resumed when you withdrew the report");
   await expect(dialog.locator(".problem-task-status")).toContainText("Your task: Active");
   await expect(banner(page)).toHaveCount(0);
-  await closeReports(page, task);
+  await closeReports(page);
   await expectEntry(page, "Report a text problem…");
 
   const lead = await actor(browser, s.users.lead);
@@ -215,7 +216,7 @@ test("withdraw an untouched report, lead reopens it: Open, no withdraw, task sta
   // Window focus reloads the toolbar; reopening the dialog shows the reopened report.
   await refocus(page);
   await expectEntry(page, "Report a text problem… (1 open)");
-  dialog = await openReports(page, task);
+  dialog = await openReports(page);
   await expect(fact(dialog, "Report")).toHaveText("Open");
   await expect(dialog.getByRole("button", { name: "Withdraw report…" })).toHaveCount(0);
   await expect(dialog.getByRole("button", { name: "Resume my task…" })).toHaveCount(0);
@@ -230,17 +231,17 @@ test("a lead releases the pause in another window: the open dialog and editor up
   const task = s.tasks.reporter;
   await loginExisting(page, s.users.reporter);
   await openTask(page, task);
-  const dialog = await fileReport(page, s);
+  const dialog = await fileReport(page);
 
   const lead = await actor(browser, s.users.lead);
   try {
     await openLeadPage(lead.page, s);
     await decide(lead.page).getByRole("button", { name: "Release pause…", exact: true }).click();
     const release = group(lead.page, "Release pause");
-    await expect(release.getByRole("checkbox", { name: new RegExp(`^Task ${task}\\W`) })).toBeChecked();
+    await expect(release.getByRole("checkbox", { name: new RegExp(`^${esc(leadSees(s, "reporter"))}, `) })).toBeChecked();
     await release.getByRole("textbox", { name: /^Reason/ }).fill("Source checked; continue.");
     await release.getByRole("button", { name: "Release pause", exact: true }).click();
-    await expect(lead.page.locator(".lead-outcome")).toContainText(new RegExp(`Released the pause on Task ${task}\\W+${esc(leadSees(s, "reporter"))}\\. The report is still open\\.`));
+    await expect(lead.page.locator(".lead-outcome")).toContainText(new RegExp(`Released the pause on the \\w+ of .+ by ${esc(leadSees(s, "reporter"))}\\. The report is still open\\.`));
   } finally {
     await lead.close();
   }
@@ -252,7 +253,7 @@ test("a lead releases the pause in another window: the open dialog and editor up
   await expect(fact(dialog, "Your task")).toContainText("Resumed by the project lead");
   await expect(dialog.getByRole("button", { name: "Resume my task…" })).toHaveCount(0);
   await expect(banner(page)).toHaveCount(0);
-  await closeReports(page, task);
+  await closeReports(page);
   await expectEntry(page, "Report a text problem… (1 open)");
 });
 
@@ -263,8 +264,8 @@ test("the lead pauses the same-text task: its owner sees only the lead's reason,
   const leadReason = "Lead check: wait until the German source sentence is confirmed.";
   await loginExisting(page, s.users.reporter);
   await openTask(page, task);
-  await fileReport(page, s);
-  await closeReports(page, task);
+  await fileReport(page);
+  await closeReports(page);
 
   const lead = await actor(browser, s.users.lead);
   try {
@@ -272,12 +273,12 @@ test("the lead pauses the same-text task: its owner sees only the lead's reason,
     await decide(lead.page).getByRole("button", { name: "Pause other tasks…", exact: true }).click();
     const pause = group(lead.page, "Pause other tasks");
     const sameText = pause.getByRole("group", { name: /^Same text: / });
-    const candidate = sameText.getByRole("checkbox", { name: new RegExp(`^Task ${other}\\W`) });
+    const candidate = sameText.getByRole("checkbox", { name: new RegExp(`^${esc(leadSees(s, "same_text"))}, `) });
     await expect(candidate).toBeVisible();
     await candidate.check();
     await pause.getByRole("textbox", { name: /Reason shown to the task owners/ }).fill(leadReason);
     await pause.getByRole("button", { name: "Pause 1 task", exact: true }).click();
-    await expect(lead.page.locator(".lead-outcome")).toContainText(new RegExp(`Paused Task ${other}\\W+${esc(leadSees(s, "same_text"))}\\. Their owners see your reason\\.`));
+    await expect(lead.page.locator(".lead-outcome")).toContainText(new RegExp(`Paused the \\w+ of .+ by ${esc(leadSees(s, "same_text"))}\\. Their owners see your reason\\.`));
   } finally {
     await lead.close();
   }
@@ -301,13 +302,13 @@ test("the lead pauses the same-text task: its owner sees only the lead's reason,
 
   // The reporter: neither the other owner nor the lead's reason, nor the other task.
   await refocus(page);
-  const dialog = await openReports(page, task);
+  const dialog = await openReports(page);
   await expect(fact(dialog, "Your task")).toContainText("Paused since");
   await dialog.locator("summary", { hasText: /^Full report and history/ }).click();
   await expect(dialog.locator(".reporter-report-history")).toContainText("You reported the problem. Your task paused.");
   await expect(dialog).not.toContainText(s.labels.same_text);
   await expect(dialog).not.toContainText(leadReason);
-  await expect(dialog).not.toContainText(`Task ${other}`);
+  await expect(dialog).not.toContainText(`${s.case_ids.a} en`);
   await expect(dialog).toContainText("A project lead has acted on this report. Resume your task with a reason and ask a project lead to close it.");
   await expect(dialog.getByRole("button", { name: "Withdraw report…" })).toHaveCount(0);
 });

@@ -2525,6 +2525,11 @@ export interface components {
             uploaded_at: string;
             /** Projects */
             projects: string[];
+            /**
+             * Frozen Without
+             * @description For a translation file: the projects that froze their translations at first use without this file, so it does not reach them (#254).
+             */
+            frozen_without?: string[];
         };
         /** AdminUser */
         AdminUser: {
@@ -3404,6 +3409,16 @@ export interface components {
             /** Variants */
             variants: components["schemas"]["VariantSummary"][];
         };
+        /**
+         * CaseIdAmbiguity
+         * @description A pasted ID that matches several case IDs in other cases and none exactly.
+         */
+        CaseIdAmbiguity: {
+            /** Id */
+            id: string;
+            /** Candidates */
+            candidates: string[];
+        };
         /** CaseIdLookup */
         CaseIdLookup: {
             /** Ids */
@@ -3415,6 +3430,20 @@ export interface components {
             found: string[];
             /** Unknown */
             unknown: string[];
+            /** Case Insensitive */
+            case_insensitive?: components["schemas"]["CaseIdMatch"][];
+            /** Ambiguous */
+            ambiguous?: components["schemas"]["CaseIdAmbiguity"][];
+        };
+        /**
+         * CaseIdMatch
+         * @description A pasted ID that matched one stored case ID in another case.
+         */
+        CaseIdMatch: {
+            /** Id */
+            id: string;
+            /** Case Id */
+            case_id: string;
         };
         /** CasePlanChoice */
         CasePlanChoice: {
@@ -3526,6 +3555,8 @@ export interface components {
             /** Attached To */
             attached_to?: string | null;
             result?: components["schemas"]["ConsolidationResultView"] | null;
+            /** Rejected By */
+            rejected_by?: string[];
         };
         /**
          * ConsolidationMark
@@ -3638,6 +3669,8 @@ export interface components {
             decided: number;
             /** Added */
             added: number;
+            /** Left Out */
+            left_out?: number;
         };
         /**
          * ConsolidationPersonView
@@ -4619,6 +4652,33 @@ export interface components {
             reason: string;
             /** Destination */
             destination: string;
+        };
+        /**
+         * FrozenTranslation
+         * @description A translation file a project's search conditions hold (#254).
+         */
+        FrozenTranslation: {
+            /** Ontology Id */
+            ontology_id: string;
+            /** Filename */
+            filename: string;
+            /** Sha256 */
+            sha256: string;
+            /** Languages */
+            languages: string[];
+        };
+        /**
+         * FrozenTranslations
+         * @description The translations frozen at the project's first use of its ontology.
+         *
+         *     A later upload does not reach the project; ``not_included`` names the
+         *     current server files of its ontologies that it does not use.
+         */
+        FrozenTranslations: {
+            /** Files */
+            files: components["schemas"]["FrozenTranslation"][];
+            /** Not Included */
+            not_included?: string[];
         };
         /** GuidelineDocument */
         GuidelineDocument: {
@@ -6317,6 +6377,7 @@ export interface components {
              * @default 1
              */
             annotation_policy_revision: number;
+            frozen_translations?: components["schemas"]["FrozenTranslations"] | null;
         };
         /** ProjectSettingsChange */
         ProjectSettingsChange: {

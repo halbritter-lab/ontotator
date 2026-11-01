@@ -228,6 +228,7 @@ What for: select texts from a list you have elsewhere, for example a spreadsheet
 1. Click **Select by case IDs…**.
 2. Paste the IDs into **Paste case IDs**, one per line or separated by commas.
 3. Check how many were found. Click **Copy unknown IDs** to copy the ones that do not exist.
+   Case IDs are case sensitive, and two cases can differ only in case. An exact ID always wins. An ID in another case, for example `fr100907`, finds `Fr100907` when that is the only case ID that fits; the dialog lists it under *Matched in another case*. When several case IDs fit and none exactly, the dialog selects none of them and says so, for example *fr100907 matches FR100907 and Fr100907; enter the exact ID.*
 4. Optional: to keep the current selection, tick **Add to the current selection instead**.
 5. Click the select button, for example *Select 20*.
 
@@ -287,7 +288,7 @@ What happens to a waiting task:
 
 The dialog works through the whole selection, one task and language at a time: translation reviews first, then annotation. After the assign button it stays open on the next step, lists what is already assigned and says what comes next. An annotation that waits for its review is the next step once the review is assigned. To pass a step without assigning it, click **Skip this task**; to go to another step, choose it under **Task**. Click **Close** when you are done, or assign the last step.
 
-The closing message names what is left unassigned, for example *Left unassigned: annotation of case-0102 en*, and offers those cases, for example *Select the 2 skipped cases*. The message stays until you close it.
+The closing message appears once the table shows the new assignments. It names what is left unassigned, for example *Left unassigned: annotation of case-0102 en*, and offers those cases, for example *Select the 2 skipped cases*. The message stays until you close it.
 
 ### Assign work for one text
 

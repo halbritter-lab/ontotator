@@ -219,7 +219,12 @@ def test_lookup_and_discard_routes(case_env):
         f"{BASE}/case-ids/lookup", json={"ids": [f" {CASE} ", "nope", CASE]}
     )
     assert lookup.status_code == 200, lookup.text
-    assert lookup.json() == {"found": [CASE], "unknown": ["nope"]}
+    assert lookup.json() == {
+        "found": [CASE],
+        "unknown": ["nope"],
+        "case_insensitive": [],
+        "ambiguous": [],
+    }
     url = f"{BASE}/variants/{quote(TARGET, safe='')}/discard"
     blank = env.lead.post(url, json={"reason": "", "confirm": True})
     assert blank.status_code == 422, blank.text
