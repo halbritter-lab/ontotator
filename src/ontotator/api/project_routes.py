@@ -32,6 +32,7 @@ from ontotator.projects.service import (
     ProjectSettingsChange,
     RepinRequest,
 )
+from ontotator.storage.practice_store import colleague_ids
 from ontotator.storage.tables import (
     AssignmentRow,
     DocumentRow,
@@ -590,6 +591,8 @@ def member_candidates(
         members = select(ProjectMembershipRow.user_id).where(
             ProjectMembershipRow.project_id == project_id
         )
+        # The practice projects' virtual colleagues (issue 266) are no people.
+        hidden = colleague_ids(conn)
         partial = or_(
             func.strpos(UserRow.username, query) > 0,
             func.strpos(func.lower(UserRow.display_name), query) > 0,
@@ -610,6 +613,7 @@ def member_candidates(
                 UserRow.anonymised_at.is_(None),
                 UserRow.is_system_admin.is_(False),
                 UserRow.id.not_in(members),
+                UserRow.id.not_in(hidden),
                 or_(partial, exact),
             )
             .order_by(case((exact, 0), else_=1), UserRow.username)

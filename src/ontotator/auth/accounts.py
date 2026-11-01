@@ -345,9 +345,17 @@ class AccountService:
         return None if row is None else _user(row)
 
     def list_users(self) -> list[User]:
-        """All users, by username."""
+        """All users, by username; the practice projects' virtual colleagues
+        (issue 266) are no people and left out."""
+        from ontotator.storage.practice_store import colleague_ids
+
         with self.db.transaction() as conn:
-            rows = conn.execute(select(UserRow).order_by(UserRow.username)).all()
+            hidden = colleague_ids(conn)
+            rows = conn.execute(
+                select(UserRow)
+                .where(UserRow.id.not_in(hidden))
+                .order_by(UserRow.username)
+            ).all()
         return [_user(row) for row in rows]
 
     def languages_of(self, user_ids: Iterable[int]) -> dict[int, frozenset[str]]:
@@ -842,6 +850,11 @@ class AccountService:
             conn.execute(
                 update(UserRow).where(UserRow.id == row.id).values({column: value})
             )
+            if column == "active" and not value:
+                # Issue 266: a deactivated account loses its practice project.
+                from ontotator.storage.practice_store import purge_practice_of_user
+
+                purge_practice_of_user(conn, actor, row.id, "account_deactivated")
             self._new_generation(conn, row.id, now, reason=action)
             record_audit(
                 conn,
@@ -881,6 +894,10 @@ class AccountService:
                     "USER_ACTIVE", f"Deactivate '{row.username}' before anonymising."
                 )
             new_name = f"{ANONYMISED_PREFIX}{row.id}"
+            # Issue 266: the practice project goes; its audit entries stay.
+            from ontotator.storage.practice_store import purge_practice_of_user
+
+            purge_practice_of_user(conn, actor, row.id, "account_anonymised")
             conn.execute(
                 update(UserRow)
                 .where(UserRow.id == row.id)

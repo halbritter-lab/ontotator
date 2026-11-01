@@ -25,7 +25,7 @@ What for: find the pages only system administrators see.
 
 1. Log in. Your role line in the header reads **System administrator**.
 2. In the sidebar, open the group **Administration**.
-3. Click **Users**, **Ontologies**, **Technical reports** or **New project**.
+3. Click **Users**, **Ontologies**, **Technical reports**, **New project** or **Server settings**.
 
 Other users do not see this group. If they open such a page by its address, they get a short explanation instead.
 
@@ -198,3 +198,30 @@ What for: as system administrator you can manage every project, also without a p
 1. Click **Projects** in the sidebar, or **All projects** in the project switcher.
 2. In the project's row, click **Open** to go to its documents, or **Settings** to change it.
 3. Work as a lead would; see the [lead overview](lead.md).
+
+## Practice projects
+
+What for: see and remove the private practice projects of annotators and translation reviewers, and switch the offer on or off.
+
+A practice project belongs to one person. It has invented texts only, and nothing done in it counts. Practice projects are never in your project lists, the project switcher, the Users page or the ontology inventory, and your administrator rights do not open them. Their actions go to the audit trail, marked as practice.
+
+To see them:
+
+1. Click **Projects** in the sidebar.
+2. Tick **Show practice projects**. The number in brackets counts them.
+3. Each row shows a **Practice** pill with the project key, the owner, the progress and the date it will be deleted.
+
+To delete one, click **Delete…** in its row, then **Delete practice project**. Only that practice project goes; its audit entries stay. A real project can never be deleted this way.
+
+A practice project is also deleted after 30 days without activity, and when its owner's account is deactivated.
+
+To switch the offer off:
+
+1. Click **Server settings** under **Administration**.
+2. Under **Practice projects**, clear **Offer practice projects to annotators and translation reviewers**.
+3. Click **Save changes**.
+
+Off hides the card on **My tasks** and **Start practice** in the profile. Existing practice projects stay until they are deleted or expire.
+
+A practice project freezes its translations like any project. A translation file uploaded later does not reach a practice project that is already in use, and the upload warning does not name practice projects. The owner gets the new file with **Reset…** in the profile.
+

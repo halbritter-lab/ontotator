@@ -1246,8 +1246,11 @@ class Repository:
         pins: Mapping[str, Pin],
         *,
         on_create: Callable[[Connection, int], None] | None = None,
+        practice: bool = False,
     ) -> None:
         """Create an empty project whose profile ontologies are pinned (P7).
+
+        ``practice``: a practice project (issue 266), flagged from its first row.
 
         Every profile ontology must be pinned to a stored ontology file with
         the profile's sha256 and release, and no other ontology may be pinned;
@@ -1320,6 +1323,7 @@ class Repository:
                     manifest_sha256=canonical_hash(manifest.model_dump()),
                     task_profile=profile.model_dump(mode="json"),
                     task_profile_sha256=profile_hash(profile),
+                    practice=practice,
                 )
                 .returning(ProjectRow.id)
             ).scalar_one()
@@ -1823,9 +1827,10 @@ class Repository:
         with self.db.transaction() as conn:
             stored = (
                 conn.execute(
-                    select(ProjectRow.manifest).order_by(
-                        ProjectRow.created_at.desc(), ProjectRow.id.desc()
-                    )
+                    select(ProjectRow.manifest)
+                    # Practice projects (issue 266) are never listed.
+                    .where(ProjectRow.practice.is_(False))
+                    .order_by(ProjectRow.created_at.desc(), ProjectRow.id.desc())
                 )
                 .scalars()
                 .all()
@@ -1846,7 +1851,10 @@ class Repository:
                     ProjectRow.name,
                     ProjectRow.description,
                     documents.label("document_count"),
-                ).order_by(ProjectRow.created_at.desc(), ProjectRow.id.desc())
+                )
+                # Practice projects (issue 266) are never listed.
+                .where(ProjectRow.practice.is_(False))
+                .order_by(ProjectRow.created_at.desc(), ProjectRow.id.desc())
             ).all()
         return [ProjectInfo(**row._asdict()) for row in rows]
 

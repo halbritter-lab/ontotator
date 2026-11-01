@@ -69,7 +69,7 @@ function useOpenTaskCount(username: string, navigation: unknown): number | null 
     const load = () => {
       const request = ++generation;
       api.listMyTasks().then(tasks => {
-        if (active && request === generation) setCount({ username, value: tasks.filter(task => task.status !== "submitted").length });
+        if (active && request === generation) setCount({ username, value: tasks.filter(task => task.status !== "submitted" && !task.practice).length });
       }, () => { /* The nav keeps its plain label; My tasks itself reports errors. */ });
     };
     load();
@@ -155,6 +155,7 @@ export function Shell({ user, projects, route, onNavigate, onLogout, breadcrumb,
           ? link({ name: "adminReports" }, `Technical reports (${openReports})`, `Technical reports, ${openReports} open`)
           : link({ name: "adminReports" }, "Technical reports")}
         {link({ name: "projectNew" }, "New project")}
+        {link({ name: "adminSettings" }, "Server settings")}
       </ul>
     </section>}
     {current?.can_manage && <section className="shell-nav-group" aria-label="Current project sections">

@@ -92,6 +92,8 @@ class Preferences(BaseModel):
     # Annotator id -> translation languages that annotator searches in. No
     # entry means the annotator never chose: all loaded languages are searched.
     search_languages_by_annotator: dict[str, list[str]] = Field(default_factory=dict)
+    # Issue 266: the user hid the "New here?" practice card on My tasks.
+    practice_card_hidden: bool | None = None
 
     validate_annotator = field_validator("last_annotator_id")(_check_annotator)
 
@@ -107,6 +109,7 @@ class PreferencesUpdate(BaseModel):
     # Merged per annotator: the given annotators' selections are replaced, the
     # others are kept.
     search_languages_by_annotator: dict[str, list[str]] | None = None
+    practice_card_hidden: bool | None = None
 
     validate_annotator = field_validator("last_annotator_id")(_check_annotator)
     validate_search_languages = field_validator("search_languages_by_annotator")(

@@ -34,6 +34,8 @@ from ontotator.api.health import router as health_router
 from ontotator.api.job_routes import router as job_router
 from ontotator.api.me_routes import router as me_router
 from ontotator.api.ontology_routes import router as ontology_router
+from ontotator.api.practice_routes import router as practice_router
+from ontotator.api.practice_routes import sweep as practice_sweep
 from ontotator.api.project_routes import router as project_router
 from ontotator.api.routes import router
 from ontotator.api.security import (
@@ -135,6 +137,11 @@ async def _runtime_lease(app: FastAPI) -> AsyncIterator[None]:
     worker = Worker(app.state.worker_jobs, f"{socket.gethostname()}:{os.getpid()}")
     app.state.job_worker = worker
     worker.start()
+    # Issue 266: practice projects without activity for 30 days go at start.
+    try:
+        await run_in_threadpool(practice_sweep, app)
+    except Exception:
+        logger.warning("The practice project sweep failed.", exc_info=True)
     try:
         yield
     finally:
@@ -505,6 +512,9 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
                     "GUIDELINE_UNCHANGED": 409,
                     "GUIDELINE_VERSION_CONFLICT": 409,
                     "GUIDELINE_ALREADY_WITHDRAWN": 409,
+                    "PRACTICE_UNAVAILABLE": 409,
+                    "NOT_A_PRACTICE_PROJECT": 409,
+                    "PRACTICE_IMPORT_FAILED": 503,
                     "TECHNICAL_REPORT_LIMIT": 429,
                 }.get(exc.code, 422)
             ),
@@ -574,6 +584,7 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
     app.include_router(job_router)
     app.include_router(upload_router)
     app.include_router(me_router)
+    app.include_router(practice_router)
     app.include_router(about_router)
     app.include_router(auth_router)
     if config is not None and config.demo_logins:

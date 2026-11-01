@@ -26,7 +26,7 @@ def _from_stored(data: object) -> Preferences:
 
     Keys an earlier version stored are ignored, and dropped by the next update.
     """
-    prefs = Preferences()
+    prefs = Preferences(practice_card_hidden=False)
     if not isinstance(data, dict):
         return prefs
     with contextlib.suppress(ValidationError):
@@ -43,6 +43,7 @@ def _from_stored(data: object) -> Preferences:
         for project_key, mode in modes.items():
             if isinstance(project_key, str) and mode in _MODES:
                 prefs.mode_by_package[project_key] = mode
+    prefs.practice_card_hidden = data.get("practice_card_hidden") is True
     selections = data.get("search_languages_by_annotator")
     if isinstance(selections, dict):
         for annotator_id, languages in selections.items():
@@ -94,6 +95,8 @@ class UserPreferencesStore:
                 prefs.last_annotator_id = change.last_annotator_id
             if change.mode_by_package:
                 prefs.mode_by_package.update(change.mode_by_package)
+            if change.practice_card_hidden is not None:
+                prefs.practice_card_hidden = change.practice_card_hidden
             if change.search_languages_by_annotator:
                 prefs.search_languages_by_annotator.update(
                     change.search_languages_by_annotator

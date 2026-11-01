@@ -447,6 +447,7 @@ class OntologyStore:
                     ProjectOntologyRow.allowed_roots,
                 )
                 .join(ProjectRow, ProjectRow.id == ProjectOntologyRow.project_id)
+                .where(ProjectRow.practice.is_(False))
                 .order_by(ProjectRow.project_key, ProjectOntologyRow.ontology_id)
             ).all()
         found = []

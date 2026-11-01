@@ -106,7 +106,7 @@ The search compares your words with term names and synonyms; it does not underst
 
 ### I cannot submit my review: "Your qualification is required to submit."
 
-Add your qualification (for example "physician, native German speaker") in your profile, then submit again. Use the link **Add your qualification in your profile**. See [Edit your profile](getting-started.md#edit-your-profile).
+Add your qualification (for example "physician, native German speaker") in your profile, then submit again. Use the link **Add your qualification in your profile**; after saving, **Back to the task** returns you to the review. See [Edit your profile](getting-started.md#edit-your-profile).
 
 ### What does "automatic check failed" mean?
 

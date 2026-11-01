@@ -43,19 +43,28 @@ def current_access(
         )
         .scalar_subquery()
     )
+    practice = (
+        select(ProjectRow.practice).where(ProjectRow.id == project_id).scalar_subquery()
+    )
     user = conn.execute(
         select(
             UserRow.active,
             UserRow.is_system_admin,
             UserRow.pseudonym,
             roles_of.label("roles"),
+            practice.label("practice"),
         ).where(UserRow.id == access.user_id)
     ).one_or_none()
     if user is None or not user.active:
         return Access(access.user_id, access.pseudonym, False)
     roles = frozenset(cast(Role, role) for role in user.roles or ())
     return Access(
-        access.user_id, user.pseudonym, user.is_system_admin, {project_key: roles}
+        access.user_id,
+        user.pseudonym,
+        user.is_system_admin,
+        {project_key: roles},
+        # Issue 266: admin rights do not reach a practice project.
+        frozenset({project_key}) if user.practice else frozenset(),
     )
 
 
@@ -324,15 +333,16 @@ def project_document_filters(
     if user is None or not user["active"]:
         return {}
     rows = conn.execute(
-        select(
-            ProjectRow.id, ProjectRow.project_key, ProjectMembershipRow.role
-        ).outerjoin(
+        select(ProjectRow.id, ProjectRow.project_key, ProjectMembershipRow.role)
+        .outerjoin(
             ProjectMembershipRow,
             and_(
                 ProjectMembershipRow.project_id == ProjectRow.id,
                 ProjectMembershipRow.user_id == access.user_id,
             ),
         )
+        # Practice projects (issue 266) are never among the listed projects.
+        .where(ProjectRow.practice.is_(False))
     ).all()
     roles: dict[str, set[Role]] = {}
     projects = {}

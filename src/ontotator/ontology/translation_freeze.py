@@ -162,6 +162,7 @@ def projects_without(conn: Connection, prefixes: Mapping[str, str]) -> ProjectsB
         conn.execute(
             select(ProjectRow.project_key, ProjectSearchConditionsRow.conditions)
             .join(ProjectRow, ProjectRow.id == ProjectSearchConditionsRow.project_id)
+            .where(ProjectRow.practice.is_(False))
             .order_by(ProjectRow.project_key)
         )
         .tuples()

@@ -620,7 +620,10 @@ class ProjectService:
         profile: TaskProfile,
         pins: Mapping[str, Pin],
         languages: list[str],
+        practice: bool = False,
     ) -> ProjectSettings:
+        """``practice``: a practice project (issue 266); its creator, a process,
+        is no member."""
         if re.fullmatch(r"[a-z0-9][a-z0-9-]{1,62}", key) is None:
             raise DomainError(
                 "PROJECT_KEY_INVALID",
@@ -663,7 +666,13 @@ class ProjectService:
 
         with self.db.transaction():
             self.repo.create_project(
-                key, name, description, profile, pins, on_create=created
+                key,
+                name,
+                description,
+                profile,
+                pins,
+                on_create=created,
+                practice=practice,
             )
             return self.settings(key)
 
