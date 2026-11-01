@@ -320,7 +320,7 @@ export function RowStageCell({ row, stage }: { row: DocumentRowView; stage: Stag
   // Annotators named in the cell have not submitted yet; "(Ben)" after "1 of 2 submitted" read like Ben had.
   const suffix = !who ? "" : stage === "annotation" ? ` · open: ${who}` : ` (${who})`;
   const full = state + suffix;
-  // Below 1400 px (issue 248) a shorter state where the full one would be cut.
+  // Below 1600 px (issues 248, 279) a shorter state where the full one would be cut.
   const narrow = narrowStageState(state);
   const className = ["documents-status", "stage-cell", `stage-cell--${tone}`, !isActiveRow(row) && "stage-cell--muted"].filter(Boolean).join(" ");
   return <span className="documents-status-cell">
