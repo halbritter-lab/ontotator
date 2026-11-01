@@ -82,7 +82,8 @@ export function submissionName(submission: Pick<FinalPanelSubmissionView, "kind"
 
 /**
  * How a consolidation came about (#133): "6 matching, 2 decided by Carla", plus "1 added by Carla" for findings
- * added outside the groups; null for other submissions and a consolidation without findings.
+ * added outside the groups and "2 groups left out" for groups not in the result (#248); null for other submissions
+ * and a consolidation without findings or left-out groups.
  */
 export function consolidationBreakdown(submission: Pick<FinalPanelSubmissionView, "kind" | "author" | "author_label" | "is_me" | "consolidation_origins">): string | null {
   const origins = submission.kind === "consolidation" ? submission.consolidation_origins : null;
@@ -92,6 +93,7 @@ export function consolidationBreakdown(submission: Pick<FinalPanelSubmissionView
     origins.matched > 0 ? `${origins.matched} matching` : null,
     origins.decided > 0 ? `${origins.decided} decided by ${who}` : null,
     origins.added > 0 ? `${origins.added} added by ${who}` : null,
+    (origins.left_out ?? 0) > 0 ? `${plural(origins.left_out ?? 0, "group")} left out` : null,
   ].filter((part): part is string => part !== null);
   return parts.length ? parts.join(", ") : null;
 }

@@ -101,6 +101,9 @@ class ConsolidationGroupView(_View):
     attached_to: str | None = None
     # The finding the decision kept (R-2); None while open or left out.
     result: ConsolidationResultView | None = None
+    # People with nothing in the group who rejected the tool proposal it comes
+    # from (pseudonyms, as ``people``), #248.
+    rejected_by: list[str] = Field(default_factory=list)
 
 
 class ConsolidationView(_View):

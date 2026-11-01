@@ -40,13 +40,13 @@ describe("B1 task dialogs: Close in the footer", () => {
 describe("B2 task problem reports: footer actions", () => {
   it("puts New report then Close in the problem dialog footer", async () => {
     const report = { report_id: "r1", assignment_id: 7, reason: "Broken text", state: "open", revision: 1, created_at: "2026-10-19T01:12:00Z",
-      events: [], holds: [], held_assignment_ids: [], withdrawable: false, viewer_label: "ann", viewer_is_lead: false, reporter_label: "ann" } as unknown as ProblemReportView;
+      events: [], holds: [], held_assignment_ids: [], withdrawable: false, viewer_label: "ann", viewer_is_lead: false, reporter_label: "ann", case_id: "case-7", language: "de" } as unknown as ProblemReportView;
     vi.spyOn(api, "listTaskProblemReports").mockResolvedValue([report]);
     vi.spyOn(api, "getAssignmentMetadata").mockReturnValue(never());
     render(<TaskProblemActions assignment={assignment} onSaveBeforeReport={vi.fn()} onRefresh={vi.fn()} />);
     await screen.findByRole("button", { name: /^Report a text problem.*1 open report$/ });
     fireEvent.click(screen.getByRole("button", { name: /^Report a text problem/ }));
-    const dialog = screen.getByRole("dialog", { name: "Problems with Task 7" });
+    const dialog = screen.getByRole("dialog", { name: "Problems with case-7 de" });
     const create = footer(dialog).getByRole("button", { name: "New report" });
     const close = footer(dialog).getByRole("button", { name: "Close" });
     notInBody(create); notInBody(close);

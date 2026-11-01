@@ -13,7 +13,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, request as playwrightRequest, test, type APIRequestContext, type Locator, type Page } from "@playwright/test";
 import type { components } from "../src/api/generated";
 import { loginExisting, TEST_PASSWORD } from "./helpers";
-import { problemReportScenario, type ProblemReportScenario } from "./problemReportHelpers";
+import { leadTaskRef, problemReportScenario, upperFirst, type ProblemReportScenario } from "./problemReportHelpers";
 
 type Assignment = components["schemas"]["AssignmentView"];
 type ProblemReport = components["schemas"]["ProblemReportView"];
@@ -83,7 +83,12 @@ const confirmBox = (page: Page, title: string) => page.getByRole("group", { name
 /** The editor's "More actions" button: its menu holds the text-problem item; focus returns here. */
 const entry = (page: Page) => page.getByRole("button", { name: "More actions", exact: true });
 const problemItem = (page: Page, name: string) => page.getByRole("menuitem", { name, exact: true });
-const reportsDialog = (page: Page, task: number) => page.getByRole("dialog", { name: `Problems with Task ${task}`, exact: true });
+/** The reporter's dialog, named after the text, never the task number. */
+const reportsDialog = (page: Page) => page.getByRole("dialog", { name: /^Problems with / });
+/** The reporter as the lead reads them, and the lead's name of the reporter's task. */
+const asLeadSees = (s: ProblemReportScenario) => `${s.users.reporter} (${s.labels.reporter})`;
+const reporterTaskRef = (s: ProblemReportScenario, report: ProblemReport) => leadTaskRef(report, asLeadSees(s));
+const escaped = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** Press Tab until ``target`` has focus (at most ``limit`` times); returns the visited stops. */
 async function tabTo(page: Page, target: Locator, limit = 40): Promise<void> {
@@ -105,8 +110,8 @@ async function axeViolations(page: Page, include: string): Promise<string[]> {
 }
 
 test("keyboard only: Tab reaches the intents in order; Enter, Space, Escape and Cancel open and close them; focus returns to the trigger", async ({ page }) => {
-  const { s } = await leadOnReport(page);
-  const task = s.tasks.reporter;
+  const { s, report } = await leadOnReport(page);
+  const ref = reporterTaskRef(s, report);
 
   const close = intent(page, "Close, keep paused…");
   const release = intent(page, "Release pause…");
@@ -147,14 +152,14 @@ test("keyboard only: Tab reaches the intents in order; Enter, Space, Escape and 
   await page.keyboard.press("Space");
   const releaseBox = confirmBox(page, "Release pause");
   await expect(releaseBox.getByRole("heading", { name: "Release pause" })).toBeFocused();
-  await expect(releaseBox.getByRole("checkbox", { name: new RegExp(`^Task ${task}\\W`) })).toBeChecked();
+  await expect(releaseBox.getByRole("checkbox", { name: new RegExp(`^${escaped(asLeadSees(s))}, `) })).toBeChecked();
   await tabTo(page, releaseBox.getByRole("button", { name: "Cancel", exact: true }), 10);
   await page.keyboard.press("Enter");
   await expect(releaseBox).toHaveCount(0);
   await expect(release).toBeFocused();
 
   // Pause other tasks and Agree empty restart: Enter opens, Escape returns.
-  for (const [button, title] of [[pause, "Pause other tasks"], [restart, `Agree empty restart of Task ${task}`]] as const) {
+  for (const [button, title] of [[pause, "Pause other tasks"], [restart, `Agree empty restart of ${ref}`]] as const) {
     await page.keyboard.press("Tab");
     await expect(button).toBeFocused();
     await page.keyboard.press("Enter");
@@ -177,7 +182,7 @@ test("keyboard only: Tab reaches the intents in order; Enter, Space, Escape and 
   await tabTo(page, closeBox.getByRole("button", { name: "Close report", exact: true }), 5);
   await page.keyboard.press("Enter");
   const outcome = page.locator(".lead-outcome");
-  await expect(outcome).toContainText(`Report closed. Task ${task} is still paused by this report; release it when work can continue.`);
+  await expect(outcome).toContainText(`Report closed. ${upperFirst(ref)} is still paused by this report; release it when work can continue.`);
   await expect(outcome).toBeFocused();
 
   // Now Reopen is available: Tab reaches it, Enter opens, Escape returns.
@@ -192,7 +197,7 @@ test("keyboard only: Tab reaches the intents in order; Enter, Space, Escape and 
 
 test("lead page at 320 CSS px: no horizontal scroll; Decide buttons stacked full width, each followed by its consequence", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 800 });
-  const { s } = await leadOnReport(page);
+  const { s, report } = await leadOnReport(page);
   const scrollWidth = () => page.evaluate(() => document.documentElement.scrollWidth);
 
   expect(await scrollWidth(), "page").toBeLessThanOrEqual(320);
@@ -213,7 +218,7 @@ test("lead page at 320 CSS px: no horizontal scroll; Decide buttons stacked full
   expect(layout.map(item => item.label)).toEqual(["Close, keep paused…", "Release pause…", "Pause other tasks…", "Agree empty restart…"]);
   const primary = (await decide(page).locator(".btn-primary").boundingBox())!;
   expect(primary.x + primary.width, "primary").toBeLessThanOrEqual(320);
-  await expect(decide(page).locator(".btn-primary")).toHaveText(`Close and resume Task ${s.tasks.reporter}`);
+  await expect(decide(page).locator(".btn-primary")).toHaveText(`Close and resume ${reporterTaskRef(s, report)}`);
   for (const [index, item] of layout.entries()) {
     expect(item.right, item.label).toBeLessThanOrEqual(320);
     expect(item.height, item.label).toBeGreaterThanOrEqual(24);
@@ -261,7 +266,7 @@ test("reporter dialog at 390 x 844: a full-height sheet, the footer Close stays 
   // The menu item carries its text and the badge at this width.
   await entry(page).click();
   await problemItem(page, "Report a text problem… (Paused, 6 open)").click();
-  const dialog = reportsDialog(page, task);
+  const dialog = reportsDialog(page);
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole("article")).toHaveCount(6);
   await expect(dialog).toHaveClass(/ui-dialog--md/);
@@ -330,15 +335,15 @@ test("axe: reporter dialog (list and new report views) and lead page (default an
   await entry(page).click();
   // The menu item has no icon (the old badge's decorative svg check is gone).
   await problemItem(page, "Report a text problem… (Paused, 1 open)").click();
-  const dialog = reportsDialog(page, task);
+  const dialog = reportsDialog(page);
   await expect(dialog.getByRole("heading", { name: REPORT_TEXT, level: 3 })).toBeFocused();
   await expect(dialog.getByRole("article", { name: REPORT_TEXT })).toBeVisible();
   expect(await axeViolations(page, '[role="dialog"]'), "reporter dialog list").toEqual([]);
 
   await dialog.getByRole("button", { name: "Resume my task…", exact: true }).click();
-  await expect(dialog.getByRole("group", { name: `Resume Task ${task}`, exact: true })).toBeVisible();
+  await expect(dialog.getByRole("group", { name: /^Resume your task on / })).toBeVisible();
   expect(await axeViolations(page, '[role="dialog"]'), "reporter dialog with resume open").toEqual([]);
-  await dialog.getByRole("group", { name: `Resume Task ${task}`, exact: true }).getByRole("button", { name: "Cancel", exact: true }).click();
+  await dialog.getByRole("group", { name: /^Resume your task on / }).getByRole("button", { name: "Cancel", exact: true }).click();
 
   await dialog.locator(".modal-actions").getByRole("button", { name: "New report", exact: true }).click();
   const form = page.getByRole("dialog", { name: "New problem report", exact: true });
@@ -360,7 +365,7 @@ test("axe: reporter dialog (list and new report views) and lead page (default an
     await expect(lead.getByRole("heading", { level: 1 })).toHaveCount(1);
     expect(await axeViolations(lead, "main"), "lead page").toEqual([]);
 
-    for (const [name, title] of [["Release pause…", "Release pause"], ["Pause other tasks…", "Pause other tasks"], ["Agree empty restart…", `Agree empty restart of Task ${task}`]] as const) {
+    for (const [name, title] of [["Release pause…", "Release pause"], ["Pause other tasks…", "Pause other tasks"], ["Agree empty restart…", `Agree empty restart of ${reporterTaskRef(s, report)}`]] as const) {
       await intent(lead, name).click();
       await expect(confirmBox(lead, title).getByRole("heading", { name: title })).toBeFocused();
       expect(await axeViolations(lead, "main"), `lead page, ${title} open`).toEqual([]);

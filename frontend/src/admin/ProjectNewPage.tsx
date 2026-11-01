@@ -5,7 +5,7 @@ import { Button, InlineMessage, Select, Textarea, TextInput } from "../ui";
 import { ErrorNotice } from "./ErrorNotice";
 import { fieldError } from "./errors";
 import { LanguagesField } from "./LanguagesField";
-import { PinFields, preselectOnlyVersions, ProfileUpload, profilePin, serializePins, TaskProfileHelp, type PinDraft, type UploadedProfile } from "./projectFields";
+import { loadedPinFields, PinFields, preselectOnlyVersions, ProfileUpload, profilePin, serializePins, TaskProfileHelp, type PinDraft, type UploadedProfile } from "./projectFields";
 
 export function ProjectNewPage({ onNavigate }: { onNavigate: (route: Route) => void }): JSX.Element {
   const [metadata, setMetadata] = useState<{ templates: TemplateInfo[]; ontologies: OntologyInfo[] } | null>(null);
@@ -69,7 +69,8 @@ export function ProjectNewPage({ onNavigate }: { onNavigate: (route: Route) => v
         {source === "template" ? <Select id="new-project-template" label="Built-in template" required value={template} onChange={event => setTemplate(event.target.value)}>
           <option value="">Choose a template</option>{metadata.templates.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
         </Select> : <ProfileUpload onChange={next => { setUploaded(next); setPins({}); }} disabled={busy} />}
-        <PinFields ids={ids} ontologies={metadata.ontologies} value={shownPins} onChange={setPins} disabled={busy} />
+        <PinFields ids={ids} ontologies={metadata.ontologies} value={shownPins} onChange={setPins} disabled={busy}
+          loaded={source === "upload" && uploaded ? loadedPinFields(uploaded.profile) : undefined} />
         <Button ref={createButton} type="submit" variant="primary" loading={busy} disabled={source === "upload" && uploaded === null}>Create project</Button>
       </fieldset>
       {error !== undefined && !keyError && <ErrorNotice error={error} />}
