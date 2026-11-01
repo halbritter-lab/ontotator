@@ -711,11 +711,60 @@ def test_case_id_lookup_normalises_and_reports_unknown(env):
     result = service(env).lookup_case_ids(
         "proj", [" c1\n", "c1", FULLWIDTH_C2, "x9", " "]
     )
-    assert result == {"found": ["c1", "c2"], "unknown": ["x9"]}
+    assert result == {
+        "found": ["c1", "c2"],
+        "unknown": ["x9"],
+        "case_insensitive": [],
+        "ambiguous": [],
+    }
     error = refused(
         lambda: service(env).lookup_case_ids("proj", [f"x{i}" for i in range(5001)])
     )
     assert error.code == "CASE_IDS_TOO_MANY"
+    # Every key is in the response; nothing matched in another case.
+    assert service(env).lookup_case_ids("proj", ["C1"]) == {
+        "found": ["c1"],
+        "unknown": [],
+        "case_insensitive": [{"id": "C1", "case_id": "c1"}],
+        "ambiguous": [],
+    }
+
+
+def test_case_id_lookup_ignores_case_only_when_unique(env, tmp_path):
+    """Issue 237: case IDs are case sensitive, so an import can store IDs that
+    differ only in case. An exact match wins; one match in another case is
+    used; several are reported as ambiguous and never guessed."""
+    from t1_builders import bundle, native_unit
+    from t1_fixtures import TEXT, run_import
+
+    units = [
+        native_unit(f"{case}-en", "en", f"{TEXT} {case}", case_id=case)
+        for case in ("Fr100907", "FR100907", "Ab5")
+    ]
+    (tmp_path / "more").mkdir()
+    imported = run_import(env.db, bundle(tmp_path / "more", units))
+    assert imported.status == "succeeded", imported.error
+    result = service(env).lookup_case_ids(
+        "proj", ["fr100907", "FR100907", "ab5", "AB5", "c1", "x9"]
+    )
+    assert result == {
+        "found": ["FR100907", "Ab5", "c1"],
+        "unknown": ["x9"],
+        "case_insensitive": [
+            {"id": "ab5", "case_id": "Ab5"},
+            {"id": "AB5", "case_id": "Ab5"},
+        ],
+        "ambiguous": [{"id": "fr100907", "candidates": ["FR100907", "Fr100907"]}],
+    }
+
+    lead = env.lead.post(f"{BASE}/case-ids/lookup", json={"ids": ["fR100907 "]})
+    assert lead.status_code == 200, lead.text
+    assert lead.json() == {
+        "found": [],
+        "unknown": [],
+        "case_insensitive": [],
+        "ambiguous": [{"id": "fR100907", "candidates": ["FR100907", "Fr100907"]}],
+    }
 
 
 def test_discard_sets_flags_off_and_never_deletes(env):

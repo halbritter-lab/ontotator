@@ -3404,6 +3404,16 @@ export interface components {
             /** Variants */
             variants: components["schemas"]["VariantSummary"][];
         };
+        /**
+         * CaseIdAmbiguity
+         * @description A pasted ID that matches several case IDs in other cases and none exactly.
+         */
+        CaseIdAmbiguity: {
+            /** Id */
+            id: string;
+            /** Candidates */
+            candidates: string[];
+        };
         /** CaseIdLookup */
         CaseIdLookup: {
             /** Ids */
@@ -3415,6 +3425,20 @@ export interface components {
             found: string[];
             /** Unknown */
             unknown: string[];
+            /** Case Insensitive */
+            case_insensitive?: components["schemas"]["CaseIdMatch"][];
+            /** Ambiguous */
+            ambiguous?: components["schemas"]["CaseIdAmbiguity"][];
+        };
+        /**
+         * CaseIdMatch
+         * @description A pasted ID that matched one stored case ID in another case.
+         */
+        CaseIdMatch: {
+            /** Id */
+            id: string;
+            /** Case Id */
+            case_id: string;
         };
         /** CasePlanChoice */
         CasePlanChoice: {
