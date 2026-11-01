@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 import type { DocumentRowView, StageCellView } from "../../src/api/client";
-import { STAGE_TITLES, stageText, versionMarkerText, waitingOnText, type StageName } from "../../src/documents/stageLabels";
+import { narrowStageState, STAGE_TITLES, stageText, submittedOf, versionMarkerText, waitingOnText, type StageName } from "../../src/documents/stageLabels";
 import { notInPlanRow, row, stepOf } from "./fixtures";
 import { ana, cell, luc, tom } from "./tableFixtures";
 
@@ -99,6 +99,57 @@ describe("Annotation cell", () => {
   it("submitted", () => {
     expect(text("annotation", cell("submitted", "done", { people: [ana, tom], submitted: 2, total: 2 }))).toEqual(["✓ 2 of 2 submitted", "Ana Weber, Tom Reis"]);
     expect(text("annotation", cell("submitted", "done", { people: [ana], findings: 3, version: 1 }))).toEqual(["✓ submitted", "Ana Weber, 3 findings"]);
+  });
+  it("counts everyone holding the text when the limit was lowered later, never 2 of 1 (issue 248)", () => {
+    expect(text("annotation", cell("in_progress", "running", { people: [tom], submitted: 2, total: 1, started: 0, open_tasks: 1 }))[0]).toBe("◐ 2 of 3 submitted");
+    expect(text("annotation", cell("in_progress", "running", { people: [tom], submitted: 2, total: 1 }))[0]).toBe("◐ 2 of 3 submitted");
+    expect(text("annotation", cell("submitted", "done", { submitted: 2, total: 1 }))[0]).toBe("✓ 2 of 2 submitted");
+    expect(submittedOf(1, 2, 1)).toBe("1 of 2 submitted");
+  });
+});
+
+describe("narrow table states (issue 248)", () => {
+  // Every state a stage cell of the table can show (cardModel's states and the stage cell labels it falls back to).
+  const states: Record<string, string | null> = {
+    "assigned, not started": "not started",
+    "after translation review": "after review",
+    "waiting for review (Ana Weber, Tom Reis)": "after review",
+    "in review": null,
+    "in review, 1 of 2 started": "in review",
+    "1 of 2 submitted": "1/2 submitted",
+    "1 of 1 submitted, not started": "1/1 submitted",
+    "0 of 2 submitted, 1 of 2 started": "0/2 submitted",
+    "1 annotator · max 2": "1 · max 2",
+    "2 annotators · max 5": "2 · max 5",
+    "2 · full": null,
+    "not reviewed, optional": "not reviewed",
+    "Final is on old text": "on old text",
+    "In progress on old text": "on old text",
+    "Submitted on v1": "v1 submitted",
+    "Submitted on old text": "on old text",
+    "Finishing on v2": "finishing v2",
+    "ready to compare": "to compare",
+    "ready to accept": null,
+    "consolidating (3 of 5 groups open)": "consolidating",
+    "consolidating": null,
+    "can be accepted": null,
+    "accepted 18 Oct": null,
+    "may be outdated": null,
+    "source text": null,
+    "Unassigned": null,
+    "not in plan": null,
+    "Check failed": null,
+    "Source changed": null,
+    "Your choice": null,
+    "waiting": null,
+  };
+  it.each(Object.entries(states))("%s", (state, short) => expect(narrowStageState(state)).toBe(short));
+  it("a state stays only when it fits the narrow cell (15 characters); short forms have at most 13", () => {
+    for (const state of Object.keys(states)) {
+      const shown = narrowStageState(state) ?? state;
+      expect(shown.length, state).toBeLessThanOrEqual(15);
+      if (narrowStageState(state)) expect(shown.length, state).toBeLessThanOrEqual(13);
+    }
   });
 });
 
