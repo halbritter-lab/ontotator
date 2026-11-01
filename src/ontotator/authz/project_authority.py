@@ -2,7 +2,7 @@
 
 from typing import cast
 
-from sqlalchemy import Connection, select
+from sqlalchemy import Connection, and_, select
 
 from ontotator.auth.audit import Actor
 from ontotator.auth.authority import lock_user_authority
@@ -30,18 +30,20 @@ def require_project_management(
     user = lock_user_authority(conn, actor.user_id, target_user_id=target_user_id)
     if not user["active"]:
         raise NotAuthenticated()
-    roles = frozenset(
-        cast(Role, role)
-        for role in conn.execute(
-            select(ProjectMembershipRow.role).where(
-                ProjectMembershipRow.project_id == project_id,
+    # One statement: this guard runs inside every bounded management path.
+    rows = conn.execute(
+        select(ProjectRow.practice, ProjectMembershipRow.role)
+        .outerjoin(
+            ProjectMembershipRow,
+            and_(
+                ProjectMembershipRow.project_id == ProjectRow.id,
                 ProjectMembershipRow.user_id == actor.user_id,
-            )
-        ).scalars()
-    )
-    practice = conn.execute(
-        select(ProjectRow.practice).where(ProjectRow.id == project_id)
-    ).scalar_one_or_none()
+            ),
+        )
+        .where(ProjectRow.id == project_id)
+    ).all()
+    roles = frozenset(cast(Role, row.role) for row in rows if row.role is not None)
+    practice = any(row.practice for row in rows)
     access = Access(
         user_id=actor.user_id,
         pseudonym=user["pseudonym"],
