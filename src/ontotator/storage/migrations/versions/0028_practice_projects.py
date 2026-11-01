@@ -13,8 +13,9 @@ events, detached from the project and marked ``practice``. The append-only
 trigger function lets a row DELETE through only inside that function: while
 ``ontotator.practice_purge`` names the project being deleted, and only for a
 row of that project, and only while the project is still flagged practice.
-UPDATE and TRUNCATE stay forbidden. Rows of real projects can never be
-deleted this way.
+UPDATE and TRUNCATE stay forbidden. ``projects.practice`` is fixed at
+insert by a trigger, without any bypass, and a ``practice_projects`` row must
+name a practice project: rows of real projects can never be deleted this way.
 """
 
 import sqlalchemy as sa
@@ -130,6 +131,38 @@ $$
 """
 
 
+# projects.practice is fixed when the row is inserted: no role (app or owner)
+# can turn a real project into a practice project, or back, so the purge can
+# never reach a real project's history. There is no bypass.
+_FORBID_PRACTICE_CHANGE = f"""
+CREATE FUNCTION {SCHEMA}.forbid_practice_change() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.practice IS DISTINCT FROM OLD.practice THEN
+    RAISE EXCEPTION 'ontotator: projects.practice cannot change after insert'
+      USING ERRCODE = '42501';
+  END IF;
+  RETURN NEW;
+END
+$$
+"""
+
+# A practice_projects row may only name a practice project.
+_REQUIRE_PRACTICE_PROJECT = f"""
+CREATE FUNCTION {SCHEMA}.require_practice_project() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM {SCHEMA}.projects p
+                 WHERE p.id = NEW.project_id AND p.practice) THEN
+    RAISE EXCEPTION 'ontotator: project % is not a practice project', NEW.project_id
+      USING ERRCODE = '42501';
+  END IF;
+  RETURN NEW;
+END
+$$
+"""
+
+
 def upgrade() -> None:
     op.add_column(
         "projects",
@@ -167,6 +200,17 @@ def upgrade() -> None:
     op.execute(f"GRANT SELECT, INSERT ON {SCHEMA}.practice_projects TO {APP_ROLE}")
     op.execute(_FORBID_WITH_PRACTICE)
     op.execute(_DELETE_PRACTICE)
+    op.execute(_FORBID_PRACTICE_CHANGE)
+    op.execute(
+        f"CREATE TRIGGER projects_practice_fixed BEFORE UPDATE ON {SCHEMA}.projects"
+        f" FOR EACH ROW EXECUTE FUNCTION {SCHEMA}.forbid_practice_change()"
+    )
+    op.execute(_REQUIRE_PRACTICE_PROJECT)
+    op.execute(
+        f"CREATE TRIGGER practice_projects_practice_only"
+        f" BEFORE INSERT OR UPDATE ON {SCHEMA}.practice_projects"
+        f" FOR EACH ROW EXECUTE FUNCTION {SCHEMA}.require_practice_project()"
+    )
     op.execute(
         f"REVOKE ALL ON FUNCTION {SCHEMA}.delete_practice_project(bigint) FROM PUBLIC"
     )
@@ -188,6 +232,9 @@ def downgrade() -> None:
             f"{left} practice projects exist; delete them before downgrading."
         )
     op.execute(f"DROP FUNCTION {SCHEMA}.delete_practice_project(bigint)")
+    op.execute(f"DROP TRIGGER projects_practice_fixed ON {SCHEMA}.projects")
+    op.execute(f"DROP FUNCTION {SCHEMA}.forbid_practice_change()")
     op.execute(_FORBID_ORIGINAL)
     op.drop_table("practice_projects", schema=SCHEMA)
+    op.execute(f"DROP FUNCTION {SCHEMA}.require_practice_project()")
     op.drop_column("projects", "practice", schema=SCHEMA)

@@ -180,3 +180,43 @@ def test_downgrade_refuses_while_practice_projects_exist(migrated):
         engine.begin() as conn,
     ):
         command.downgrade(alembic_config(conn), PREVIOUS)
+
+
+def test_the_practice_flag_cannot_change_after_insert(migrated):
+    engine, _ = migrated
+    # As the schema owner: no bypass for anybody.
+    with pytest.raises(Exception, match="cannot change"), engine.begin() as conn:
+        _exec(
+            conn,
+            f"UPDATE {S}.projects SET practice = true WHERE project_key = 'ward-7'",
+        )
+    with engine.begin() as conn:
+        _exec(
+            conn,
+            f"INSERT INTO {S}.projects (project_key, name, manifest, manifest_sha256,"
+            " task_profile, task_profile_sha256, practice)"
+            " VALUES ('practice-1-bb', 'P', '{}', 'm', '{}', 't', true)",
+        )
+        # Other columns of either kind of project still change.
+        _exec(conn, f"UPDATE {S}.projects SET name = name || '!'")
+    with pytest.raises(Exception, match="cannot change"), engine.begin() as conn:
+        _exec(
+            conn,
+            f"UPDATE {S}.projects SET practice = false WHERE project_key = 'practice-1-bb'",
+        )
+
+
+def test_a_practice_row_must_name_a_practice_project(migrated):
+    engine, before = migrated
+    with (
+        pytest.raises(Exception, match="not a practice project"),
+        engine.begin() as conn,
+    ):
+        _exec(
+            conn,
+            f"INSERT INTO {S}.practice_projects (project_id, user_id)"
+            f" SELECT p.id, u.id FROM {S}.projects p, {S}.users u"
+            " WHERE p.project_key = 'ward-7'",
+        )
+    with engine.begin() as conn:
+        assert _rows(conn) == before

@@ -436,3 +436,24 @@ def test_the_steps_facts_follow_the_real_draft(app: FastAPI) -> None:
     assert [(f["term_id"], f["replacement"]) for f in facts["findings"]] == [
         (content.AREFLEXIA, False)
     ]
+
+
+def test_the_app_role_cannot_turn_a_real_project_into_practice(
+    app: FastAPI, tmp_path: Path
+) -> None:
+    run_import(app.state.repo.db, bundle(tmp_path / "b.zip", [unit()]), REAL)
+    real = _pid(app, REAL)
+    before = _project_rows(app, real)
+
+    db = app.state.repo.db
+    with pytest.raises(DBAPIError, match="cannot change"), db.transaction() as conn:
+        conn.execute(
+            text(f"UPDATE {S}.projects SET practice = true WHERE id = :p"),
+            {"p": real},
+        )
+    with (
+        pytest.raises(DBAPIError, match="not a practice project"),
+        db.transaction() as conn,
+    ):
+        conn.execute(text(f"SELECT {S}.delete_practice_project(:p)"), {"p": real})
+    assert _project_rows(app, real) == before
