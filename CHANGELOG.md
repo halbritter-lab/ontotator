@@ -15,7 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - Documents below 1400 px: the stage cells keep one line per text without cutting the state. They leave out the names that **Waiting on** already shows and read *not started* or *after review*; **Waiting on** shows one name and *+n*. The tooltip and screen readers keep the full text (#248).
-- Documents below 1400 px: every stage state that would be cut has a short form, for example *1/2 submitted*, *to compare* or *on old text*, and the **Text** cell keeps *source*, the version marker and **NEW** on the same line at every table width. The Annotation count no longer reads *2 of 1 submitted* when more people hold a text than *annotators per text* allows after the limit was lowered; it counts them all (#248).
+- Documents below 1400 px: every stage state that would be cut has a short form, for example *1/2 submitted*, *to compare* or *on old text*, and the **Text** cell keeps *source*, the version marker and **NEW** on the same line, cutting a long case ID instead. The Annotation count no longer reads *2 of 1 submitted* when more people hold a text than *annotators per text* allows after the limit was lowered; it counts them all (#248).
 - A change of pins or profile, such as a move to another ontology release, no longer deletes the project's search conditions and captured translation files. Searches and submitted selections made before the change stay resolvable; the ended conditions go into the `project.update` audit entry. Changes made before this version cannot be recovered (#254).
 
 ## [0.7.0] - 2026-11-01

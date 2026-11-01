@@ -61,9 +61,6 @@
 button.documents-more { background: transparent; font-family: inherit; cursor: pointer; }
 button.documents-more:hover { border-color: var(--text-muted); color: var(--text); }
 .documents-row-header { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); font-weight: var(--weight-regular); }
-/* In the table the Text cell keeps one line (issue 248): "source", the version marker and NEW stay after the name
-   instead of wrapping below it; the cards below 700 px still wrap. */
-.documents-table .documents-row-header { flex-wrap: nowrap; }
 .documents-language { display: inline-flex; align-items: center; gap: var(--space-1); font-weight: var(--weight-strong); }
 /* Row header name: a focus target of deep links and "Next decision"; in the table a button in plain
    text style (not a link) that opens the text card. */
@@ -92,6 +89,10 @@ button.documents-text-name { min-height: 24px; padding: 0; border: 0; background
 @media (max-width: 1399px) {
   .documents-status-cell { max-width: 7.5rem; column-gap: var(--space-1); }
   .documents-waiting-on { max-width: 7rem; }
+  /* Issue 248: the Text cell keeps one line too ("source", the version marker and NEW stay after the name; the
+     cards below 700 px still wrap). It makes room by cutting a long case ID (full ID in its title and the name). */
+  .documents-table .documents-row-header { flex-wrap: nowrap; column-gap: var(--space-2); }
+  .documents-table .documents-row-case .documents-id { display: inline-block; max-width: 5rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
   /* Issue 248: one line per text stays; the narrow cells drop what Waiting on already says. The grey "who" of a
      stage cell goes (it stays in the title), and Waiting on shows one name and "+n" for the others. */
   .documents-status-who { display: none; }

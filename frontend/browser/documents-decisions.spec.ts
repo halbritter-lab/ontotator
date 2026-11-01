@@ -405,7 +405,8 @@ test("S14 waiting: an open translation review and open work after an early selec
   await expect(rowCell(de, "next")).toHaveText("");
   // en: Round 1 of ann-0002 is still open after the early selection; it waits on ann-0002.
   const en = textRow(page, caseId, "en");
-  await expect(rowCell(en, "annotation")).toContainText("1 of 1 submitted, not started");
+  // ann-0001 submitted, ann-0002 still holds the text: both count, also past "annotators per text" (issue 248).
+  await expect(rowCell(en, "annotation")).toContainText("1 of 2 submitted, not started");
   await expect(rowCell(en, "waiting")).toContainText(labels["ann-0002"]);
   await expect(rowCell(en, "next")).toHaveText("");
   const area = await openCardHistory(page, caseId, "en");

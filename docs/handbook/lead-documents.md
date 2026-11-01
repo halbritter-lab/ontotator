@@ -137,6 +137,7 @@ Below 1400 px width each text keeps one line in the table, and the table scrolls
 
 - The stage columns show a shorter state and leave out the names, which **Waiting on** already shows. For example *assigned, not started (Ana Weber)* reads *not started*, *1 of 2 submitted* reads *1/2 submitted*, *ready to compare* reads *to compare* and *Final is on old text* reads *on old text*.
 - **Waiting on** shows one name and *+n* for the others.
+- **Text** keeps *source*, the version marker and **NEW** on the line and cuts a long case ID with *…*.
 - Point at a cell to see the full state with the names in its tooltip. Screen readers read the full state.
 
 Below 700 px width, each case is a card with its texts. Click a stage status to see the latest activity and the actions for that stage. Click **Details** to open the full text card.
