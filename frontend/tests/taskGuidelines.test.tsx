@@ -236,7 +236,7 @@ describe("task guidelines in the task screens", () => {
     await screen.findByRole("heading", { level: 1 });
     fireEvent.click(await screen.findByRole("button", { name: "More actions" }));
     await waitFor(() => expect(screen.getAllByRole("menuitem").map(item => item.textContent))
-      .toEqual(["Work rounds", "Report a text problem…", "Guidelines v3", "Help for this screen", "Keyboard shortcuts (?)"]));
+      .toEqual(["Work rounds", "Report a text problem…", "Report a technical problem…", "Guidelines v3", "Help for this screen", "Keyboard shortcuts (?)"]));
     expect(screen.queryByRole("button", { name: /^Guidelines v3, open the project guidelines/ })).toBeNull();
     fireEvent.click(screen.getByRole("menuitem", { name: "Guidelines v3" }));
     expect(await screen.findByRole("heading", { level: 2, name: "Guidelines v3" })).toBeDefined();

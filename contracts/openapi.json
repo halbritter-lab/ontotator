@@ -2078,6 +2078,204 @@
         }
       }
     },
+    "/api/v1/technical-reports": {
+      "post": {
+        "tags": [
+          "technical-reports"
+        ],
+        "summary": "Create Report",
+        "description": "Send a technical report to the administrators; no task is paused.",
+        "operationId": "create_report_api_v1_technical_reports_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TechnicalReportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TechnicalReportReceipt"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/technical-reports": {
+      "get": {
+        "tags": [
+          "technical-reports"
+        ],
+        "summary": "List Reports",
+        "description": "Reports newest first, optionally only open or done ones.",
+        "operationId": "list_reports_api_v1_admin_technical_reports_get",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "open",
+                    "done"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 200,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TechnicalReportView"
+                  },
+                  "title": "Response List Reports Api V1 Admin Technical Reports Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/technical-reports/summary": {
+      "get": {
+        "tags": [
+          "technical-reports"
+        ],
+        "summary": "Report Summary",
+        "description": "The number of open reports (the navigation badge).",
+        "operationId": "report_summary_api_v1_admin_technical_reports_summary_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TechnicalReportSummary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/technical-reports/{report_id}/status": {
+      "post": {
+        "tags": [
+          "technical-reports"
+        ],
+        "summary": "Set Report Status",
+        "description": "Mark a report done, or open it again.",
+        "operationId": "set_report_status_api_v1_admin_technical_reports__report_id__status_post",
+        "parameters": [
+          {
+            "name": "report_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Report Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TechnicalReportStatusRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TechnicalReportView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/translation-reviews/{assignment_id}": {
       "get": {
         "tags": [
@@ -15527,6 +15725,42 @@
         ],
         "title": "LanguagePreviewView"
       },
+      "LastApiError": {
+        "properties": {
+          "status": {
+            "type": "integer",
+            "maximum": 599.0,
+            "minimum": 0.0,
+            "title": "Status"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[A-Z0-9_]+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "status",
+          "at"
+        ],
+        "title": "LastApiError",
+        "description": "The last refused API request this browser tab saw (in memory only)."
+      },
       "LayerDefinition": {
         "properties": {
           "layer_id": {
@@ -23176,6 +23410,398 @@
           "updated_at"
         ],
         "title": "TaskSummary"
+      },
+      "TechnicalReportContext": {
+        "properties": {
+          "route": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Route"
+          },
+          "viewport": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 32,
+                "pattern": "^[0-9]{1,5}x[0-9]{1,5}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Viewport"
+          },
+          "last_api_error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LastApiError"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "crash_message": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crash Message"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "TechnicalReportContext"
+      },
+      "TechnicalReportReceipt": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "reference": {
+            "type": "string",
+            "title": "Reference"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "reference",
+          "created_at"
+        ],
+        "title": "TechnicalReportReceipt",
+        "description": "What the reporter sees after sending: the reference to quote."
+      },
+      "TechnicalReportRequest": {
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Request Id"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Description"
+          },
+          "context": {
+            "$ref": "#/components/schemas/TechnicalReportContext"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "request_id",
+          "description"
+        ],
+        "title": "TechnicalReportRequest"
+      },
+      "TechnicalReportStatusRequest": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "done"
+            ],
+            "title": "Status"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "TechnicalReportStatusRequest"
+      },
+      "TechnicalReportSummary": {
+        "properties": {
+          "open": {
+            "type": "integer",
+            "title": "Open"
+          }
+        },
+        "type": "object",
+        "required": [
+          "open"
+        ],
+        "title": "TechnicalReportSummary"
+      },
+      "TechnicalReportTask": {
+        "properties": {
+          "task": {
+            "type": "string",
+            "enum": [
+              "annotate",
+              "review",
+              "translation_review"
+            ],
+            "title": "Task"
+          },
+          "annotation_mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "proposals",
+                  "scratch"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annotation Mode"
+          },
+          "project_key": {
+            "type": "string",
+            "title": "Project Key"
+          },
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "external_id": {
+            "type": "string",
+            "title": "External Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "origin": {
+            "type": "string",
+            "title": "Origin"
+          }
+        },
+        "type": "object",
+        "required": [
+          "task",
+          "annotation_mode",
+          "project_key",
+          "document_id",
+          "case_id",
+          "external_id",
+          "language",
+          "version",
+          "origin"
+        ],
+        "title": "TechnicalReportTask",
+        "description": "The reporter's own task a report was sent from, as stored today."
+      },
+      "TechnicalReportView": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "reference": {
+            "type": "string",
+            "title": "Reference"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "done"
+            ],
+            "title": "Status"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "reporter": {
+            "$ref": "#/components/schemas/PersonRefView"
+          },
+          "reporter_username": {
+            "type": "string",
+            "title": "Reporter Username"
+          },
+          "app_version": {
+            "type": "string",
+            "title": "App Version"
+          },
+          "app_revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "App Revision"
+          },
+          "route": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Route"
+          },
+          "task": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TechnicalReportTask"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "user_agent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Agent"
+          },
+          "viewport": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Viewport"
+          },
+          "last_error_status": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error Status"
+          },
+          "last_error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error Code"
+          },
+          "last_error_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error At"
+          },
+          "crash_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crash Message"
+          },
+          "closed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed At"
+          },
+          "closed_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed By"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "reference",
+          "status",
+          "description",
+          "created_at",
+          "reporter",
+          "reporter_username",
+          "app_version",
+          "app_revision",
+          "route",
+          "task",
+          "user_agent",
+          "viewport",
+          "last_error_status",
+          "last_error_code",
+          "last_error_at",
+          "crash_message",
+          "closed_at",
+          "closed_by"
+        ],
+        "title": "TechnicalReportView",
+        "description": "One report as administrators read it."
       },
       "TemplateInfo": {
         "properties": {

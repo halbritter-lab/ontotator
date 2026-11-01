@@ -13,6 +13,7 @@ import { ProfilePage } from "./me/ProfilePage";
 import { ErrorNotice } from "./admin/ErrorNotice";
 import { UsersPage } from "./admin/UsersPage";
 import { OntologiesPage } from "./admin/OntologiesPage";
+import { TechnicalReportsPage } from "./reports/TechnicalReportsPage";
 import { ProjectNewPage } from "./admin/ProjectNewPage";
 import { ProjectSettingsPage } from "./admin/ProjectSettingsPage";
 import { DocumentsPage } from "./admin/DocumentsPage";
@@ -308,6 +309,8 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
     case "adminUsers": content = <UsersPage currentUser={user} routeLeaveRef={routeLeaveRef} />; break;
     case "adminOntologies": content = user.is_system_admin ? <OntologiesPage onNavigate={go} />
       : notice("Ontologies", "Only system administrators can upload and manage ontology files. Ask an administrator if a project needs another version."); break;
+    case "adminReports": content = user.is_system_admin ? <TechnicalReportsPage />
+      : notice("Technical reports", "Only system administrators can read technical reports. Your own reports reach them; quote the reference you got when you sent one."); break;
     case "projectNew": content = user.is_system_admin ? <ProjectNewPage onNavigate={next => { setRetry(value => value + 1); go(next); }} />
       : notice("New project", "Only system administrators can create projects. Ask an administrator to create one and make you its lead."); break;
     case "projectSettings": content = projectGate(route.key, "Project settings") ?? <ProjectSettingsPage projectKey={route.key} currentUser={user} section={route.section}
