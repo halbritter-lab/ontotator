@@ -142,6 +142,9 @@ class ProjectRow(Base):
     tool_proposal_mode: Mapped[str] = mapped_column(server_default=text("'proposals'"))
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now())
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    # A private practice project of one person (issue 266, migration 0028):
+    # never listed, counted or exported with real projects.
+    practice: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
 
 
 class StoredFileRow(Base):
@@ -971,3 +974,23 @@ from ontotator.storage import mode_change_tables as _mode_tables  # noqa: E402,F
 from ontotator.storage import overview_tables as _overview_tables  # noqa: E402,F401
 from ontotator.storage import plan_tables as _plan_tables  # noqa: E402,F401
 from ontotator.storage import workflow_tables as _workflow_tables  # noqa: E402, F401
+
+
+class PracticeProjectRow(Base):
+    """The owner of a practice project (issue 266, migration 0028).
+
+    The application only inserts; ``delete_practice_project`` removes it with
+    the project.
+    """
+
+    __tablename__ = "practice_projects"
+
+    project_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey(ProjectRow.id), primary_key=True
+    )
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey(UserRow.id), unique=True
+    )
+    # Whether the project has the consolidation task (owner consolidates).
+    consolidation: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
