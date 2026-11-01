@@ -26,7 +26,7 @@ def _from_stored(data: object) -> Preferences:
 
     Keys an earlier version stored are ignored, and dropped by the next update.
     """
-    prefs = Preferences()
+    prefs = Preferences(practice_card_hidden=False)
     if not isinstance(data, dict):
         return prefs
     with contextlib.suppress(ValidationError):
