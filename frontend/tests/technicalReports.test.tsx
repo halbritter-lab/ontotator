@@ -15,7 +15,7 @@ const jsonResponse = (status: number, body: unknown) => new Response(JSON.string
 const report = (extra: Partial<TechnicalReportView> = {}): TechnicalReportView => ({
   id: 12, reference: "TR-12", status: "open", description: "The page stays blank.", created_at: "2026-11-01T10:00:00Z",
   reporter: { pseudonym: "ann-0004", display_name: "Ann", is_me: false }, reporter_username: "ann",
-  app_version: "0.6.1", app_revision: "cc65cea5558f85384f92c6bfb07a15f5a3fabe2b", route: "#/projects/p/documents",
+  app_version: "0.6.1", app_revision: "cc65cea5558f85384f92c6bfb07a15f5a3fabe2b", route: "#/projects/p/documents", task: null,
   user_agent: "TestBrowser/1.0", viewport: "1280x800", last_error_status: 500, last_error_code: "PROJECT_BUSY",
   last_error_at: "2026-11-01T09:59:00Z", crash_message: null, closed_at: null, closed_by: null, ...extra,
 });
@@ -62,7 +62,7 @@ describe("Report a technical problem", () => {
     expect(send).not.toHaveBeenCalled();
     await input.type(screen.getByLabelText("What happened?"), "  The list does not load. ");
     await input.click(screen.getByRole("button", { name: "Send report" }));
-    expect(await screen.findByText("Sent to the administrators. Reference: TR-12")).toBeDefined();
+    expect(await screen.findByText("Sent to the administrators. Reference: TR-12.")).toBeDefined();
     const body = send.mock.calls[0][0];
     expect(body.description).toBe("The list does not load.");
     expect(body.context?.route).toBe("#/projects/p/documents");
@@ -100,6 +100,21 @@ describe("Report a technical problem", () => {
   });
 });
 
+describe("closing the report dialog", () => {
+  it("keeps typed text on Esc; Cancel still closes", async () => {
+    const close = vi.fn();
+    render(<TechnicalReportDialog onClose={close} />);
+    const input = userEvent.setup();
+    await input.keyboard("{Escape}");
+    expect(close).toHaveBeenCalledTimes(1);
+    await input.type(screen.getByLabelText("What happened?"), "Half a sentence");
+    await input.keyboard("{Escape}");
+    expect(close).toHaveBeenCalledTimes(1);
+    await input.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(close).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe("navigation", () => {
   const user: CurrentUser = { username: "root", display_name: "Root", pseudonym: "adm-1", is_system_admin: true, csrf_token: "t" };
 
@@ -108,7 +123,9 @@ describe("navigation", () => {
     vi.spyOn(api, "adminTechnicalReportSummary").mockResolvedValue({ open: 2 });
     render(<Shell user={user} projects={[]} route={{ name: "tasks" }} onNavigate={vi.fn()} onLogout={vi.fn()}>Page</Shell>);
     expect(await screen.findByRole("link", { name: "Technical reports, 2 open" })).toBeDefined();
-    await userEvent.setup().click(screen.getByRole("button", { name: "Report a technical problem…" }));
+    const entry = screen.getByRole("button", { name: "Report a technical problem…" });
+    expect(entry.textContent).toBe("Technical problem…");
+    await userEvent.setup().click(entry);
     expect(screen.getByRole("dialog", { name: "Report a technical problem" })).toBeDefined();
   });
 
@@ -150,6 +167,16 @@ describe("Technical reports page", () => {
     const card = await screen.findByRole("article", { name: "TR-12 · Done" });
     await input.click(within(card).getByRole("button", { name: "Reopen" }));
     expect(set).toHaveBeenCalledWith(12, "open");
+  });
+
+  it("names the kind of task, its project and text", () => {
+    const task = { task: "annotate", annotation_mode: "proposals", project_key: "neuro", document_id: "d1", case_id: "case-7", external_id: "e1", language: "de", version: 2, origin: "correction" } as const;
+    const rows = (extra: Partial<NonNullable<TechnicalReportView["task"]>>) => reportFacts(report({ task: { ...task, ...extra } }));
+    expect(rows({}).slice(1, 6).map(([label]) => label)).toEqual(["By", "Task", "Project", "Text", "App version"]);
+    expect(Object.fromEntries(rows({}))).toMatchObject({ Task: "Annotation, from proposals", Project: "neuro", Text: "case-7 de v2 corrected" });
+    expect(Object.fromEntries(rows({ task: "translation_review", annotation_mode: null })).Task).toBe("Translation review");
+    expect(Object.fromEntries(rows({ task: "review", annotation_mode: null })).Task).toBe("Consolidation");
+    expect(reportFacts(report()).map(([label]) => label)).not.toContain("Task");
   });
 
   it("copies a report as plain text for an issue", () => {

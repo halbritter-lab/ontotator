@@ -9,7 +9,7 @@ import { useDocumentsSummary } from "../documents/useDocumentsSummary";
 import { TASKS_CHANGED } from "../tasks/tasksEvents";
 import { TechnicalReportHost } from "../reports/TechnicalReportDialog";
 import { TECHNICAL_REPORTS_CHANGED } from "../reports/TechnicalReportsPage";
-import { openTechnicalReport, REPORT_ENTRY_LABEL } from "../reports/technicalReport";
+import { openTechnicalReport, REPORT_ENTRY_LABEL, REPORT_NAV_LABEL } from "../reports/technicalReport";
 
 export interface ShellProps {
   user: CurrentUser;
@@ -144,7 +144,7 @@ export function Shell({ user, projects, route, onNavigate, onLogout, breadcrumb,
       {link(MY_TASKS, openTasks === null ? "My tasks" : `My tasks (${openTasks})`)}
       {projects.length > 0 && link({ name: "projects" }, "Projects")}
       {link({ name: "me" }, "Profile")}
-      <li><button type="button" className="shell-nav-link" onClick={openTechnicalReport}>{REPORT_ENTRY_LABEL}</button></li>
+      <li><button type="button" className="shell-nav-link" aria-label={REPORT_ENTRY_LABEL} onClick={openTechnicalReport}>{REPORT_NAV_LABEL}</button></li>
     </ul>
     {user.is_system_admin && <section className="shell-nav-group" aria-label="Administration">
       <h2>Administration</h2>

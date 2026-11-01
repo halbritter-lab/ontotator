@@ -1,5 +1,7 @@
 /* Technical reports (#259): the admin list and the report dialog. Tokens from styles/tokens.css only. */
 
+.toolbar.technical-report-filters { align-items: end; }
+
 .technical-report-list {
   list-style: none;
   margin: var(--space-4) 0 0;

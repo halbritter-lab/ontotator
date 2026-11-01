@@ -7972,6 +7972,33 @@ export interface components {
             open: number;
         };
         /**
+         * TechnicalReportTask
+         * @description The reporter's own task a report was sent from, as stored today.
+         */
+        TechnicalReportTask: {
+            /**
+             * Task
+             * @enum {string}
+             */
+            task: "annotate" | "review" | "translation_review";
+            /** Annotation Mode */
+            annotation_mode: ("proposals" | "scratch") | null;
+            /** Project Key */
+            project_key: string;
+            /** Document Id */
+            document_id: string;
+            /** Case Id */
+            case_id: string;
+            /** External Id */
+            external_id: string;
+            /** Language */
+            language: string;
+            /** Version */
+            version: number;
+            /** Origin */
+            origin: string;
+        };
+        /**
          * TechnicalReportView
          * @description One report as administrators read it.
          */
@@ -8001,6 +8028,7 @@ export interface components {
             app_revision: string | null;
             /** Route */
             route: string | null;
+            task: components["schemas"]["TechnicalReportTask"] | null;
             /** User Agent */
             user_agent: string | null;
             /** Viewport */

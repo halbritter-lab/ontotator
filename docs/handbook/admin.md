@@ -128,10 +128,10 @@ What for: read what users report about error messages, pages that do not load, c
 
 1. In the sidebar, open **Administration** › **Technical reports**. The number after it counts the open reports.
 2. **Show** lists the **Open** reports. Choose **Done** or **All** to see the others.
-3. Read a report. It shows its reference (for example *TR-12*), the user's text, who sent it and when. Below are the details Ontotator added: app version, screen, browser, window size, the last error the app received and, from the crash message, the error.
+3. Read a report. It shows its reference (for example *TR-12*), the user's text, who sent it and when. Below are the details Ontotator added: app version, the task if it was sent from one (its kind, for example *Annotation, from proposals*, the project and the text), screen, browser, window size, the last error the app received and, from the crash message, the error.
 4. Click **Mark as done** when the report is handled. Click **Reopen** to open it again.
 
-Users send reports with **Report a technical problem…**; see [Report a technical problem](getting-started.md#report-a-technical-problem). Their task is not paused, and project leads do not see these reports. A user can send at most 20 reports per hour.
+Users send reports with **Technical problem…** in the sidebar or **Report a technical problem…** in the editor; see [Report a technical problem](getting-started.md#report-a-technical-problem). Their task is not paused, and project leads do not see these reports. A user can send at most 20 reports per hour.
 
 Reports stay inside Ontotator. Nothing goes out by e-mail or to GitHub. To open an issue, click **Copy report** and paste the text by hand. Remove clinical content and patient details first.
 

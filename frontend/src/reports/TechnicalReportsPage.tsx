@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { api, type TechnicalReportStatus, type TechnicalReportView } from "../api/client";
 import { ErrorNotice } from "../admin/ErrorNotice";
-import { formatDateTime } from "../app/labels";
-import { personLabel } from "../app/identity";
+import { formatDateTime, taskLabels } from "../app/labels";
+import { personLabel, taskText } from "../app/identity";
+import { annotationTaskName } from "../editor/modes";
 import { Button, EmptyState, InlineMessage, Select, Toolbar } from "../ui";
 import "./reports.css";
 
@@ -17,9 +18,15 @@ const STATUS_LABEL: Record<TechnicalReportStatus, string> = { open: "Open", done
 
 /** The context rows of a report, in the order an administrator reads them. */
 export function reportFacts(report: TechnicalReportView): [string, string][] {
+  const task = report.task;
   const facts: [string, string][] = [
     ["Sent", formatDateTime(report.created_at)],
     ["By", `${personLabel(report.reporter)}, ${report.reporter_username}`],
+    ...(task ? [
+      ["Task", task.task === "annotate" ? annotationTaskName(task.annotation_mode) : taskLabels[task.task]],
+      ["Project", task.project_key],
+      ["Text", taskText(task)],
+    ] satisfies [string, string][] : []),
     ["App version", report.app_revision ? `${report.app_version} (commit ${report.app_revision.slice(0, 7)})` : report.app_version],
   ];
   if (report.route) facts.push(["Screen", report.route]);
@@ -40,7 +47,7 @@ export function reportText(report: TechnicalReportView): string {
     ...reportFacts(report).map(([label, value]) => `${label}: ${value}`)].join("\n");
 }
 
-/** Administration › Technical reports: what users reported, open or done (#259). */
+/** Administration › Technical reports: what users reported, open or done. */
 export function TechnicalReportsPage(): JSX.Element {
   const [filter, setFilter] = useState<Filter>("open");
   const [reports, setReports] = useState<TechnicalReportView[] | null>(null);
@@ -94,7 +101,7 @@ export function TechnicalReportsPage(): JSX.Element {
     <section className="detail-section">
       <h1>Technical reports</h1>
       <p>Users report errors, screens that do not load, crashes and general feedback here. Reports stay inside Ontotator. To open an issue, copy a report by hand and leave out clinical content.</p>
-      <Toolbar label="Report filters">
+      <Toolbar label="Report filters" className="technical-report-filters">
         <Select id="technical-report-filter" label="Show" value={filter} onChange={event => { setNotice(null); setFilter(event.target.value as Filter); }}>
           {FILTERS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
         </Select>

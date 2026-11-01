@@ -30,7 +30,7 @@ Reload the page in the browser, then repeat the last action. If the message asks
 
 ### I see an error message that is not explained here
 
-Click **Report a technical problem…** in the sidebar, or in the editor under **More**. Describe what you did. Ontotator adds the last error it received. The report goes to the system administrators and does not pause your task. See [Report a technical problem](getting-started.md#report-a-technical-problem).
+Click **Technical problem…** in the sidebar, or **Report a technical problem…** in the editor under **More**. Describe what you did. Ontotator adds the last error it received. The report goes to the system administrators and does not pause your task. See [Report a technical problem](getting-started.md#report-a-technical-problem).
 
 ### The page says "Something went wrong while displaying this text."
 

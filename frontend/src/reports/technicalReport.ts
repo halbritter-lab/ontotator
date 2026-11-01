@@ -7,6 +7,8 @@ const MAX_CRASH_MESSAGE = 2000;
 
 /** The entry's label in the editor's More menu, the navigation and the crash screen. */
 export const REPORT_ENTRY_LABEL = "Report a technical problem…";
+/** The same entry in the narrow navigation, on one line. */
+export const REPORT_NAV_LABEL = "Technical problem…";
 
 /**
  * What the app adds to a report: the screen's address without its query (filters may hold searched text),

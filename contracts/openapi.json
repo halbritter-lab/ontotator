@@ -23547,6 +23547,76 @@
         ],
         "title": "TechnicalReportSummary"
       },
+      "TechnicalReportTask": {
+        "properties": {
+          "task": {
+            "type": "string",
+            "enum": [
+              "annotate",
+              "review",
+              "translation_review"
+            ],
+            "title": "Task"
+          },
+          "annotation_mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "proposals",
+                  "scratch"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annotation Mode"
+          },
+          "project_key": {
+            "type": "string",
+            "title": "Project Key"
+          },
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "external_id": {
+            "type": "string",
+            "title": "External Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "origin": {
+            "type": "string",
+            "title": "Origin"
+          }
+        },
+        "type": "object",
+        "required": [
+          "task",
+          "annotation_mode",
+          "project_key",
+          "document_id",
+          "case_id",
+          "external_id",
+          "language",
+          "version",
+          "origin"
+        ],
+        "title": "TechnicalReportTask",
+        "description": "The reporter's own task a report was sent from, as stored today."
+      },
       "TechnicalReportView": {
         "properties": {
           "id": {
@@ -23606,6 +23676,16 @@
               }
             ],
             "title": "Route"
+          },
+          "task": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TechnicalReportTask"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "user_agent": {
             "anyOf": [
@@ -23710,6 +23790,7 @@
           "app_version",
           "app_revision",
           "route",
+          "task",
           "user_agent",
           "viewport",
           "last_error_status",

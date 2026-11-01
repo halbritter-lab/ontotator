@@ -26,7 +26,7 @@ from ontotator.auth.authority import lock_user_authority
 from ontotator.domain.errors import AccessDenied, DomainError
 from ontotator.storage.database import Database
 from ontotator.storage.report_tables import TechnicalReportRow
-from ontotator.storage.tables import UserRow
+from ontotator.storage.tables import AssignmentRow, DocumentRow, ProjectRow, UserRow
 
 TechnicalReportStatus = Literal["open", "done"]
 
@@ -43,6 +43,8 @@ REFERENCE_PREFIX = "TR-"
 
 _CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\ud800-\udfff]")
 _LINE_CONTROL = re.compile(r"[\x00-\x1f\x7f\ud800-\udfff]")
+# The task screen's address; 18 digits stay inside a BIGINT.
+_TASK_ROUTE = re.compile(r"#/tasks/(\d{1,18})")
 
 
 def reference(report_id: int) -> str:
@@ -90,6 +92,20 @@ class TechnicalReportReceipt(BaseModel):
     created_at: datetime
 
 
+class TechnicalReportTask(BaseModel):
+    """The reporter's own task a report was sent from, as stored today."""
+
+    task: Literal["annotate", "review", "translation_review"]
+    annotation_mode: Literal["proposals", "scratch"] | None
+    project_key: str
+    document_id: str
+    case_id: str
+    external_id: str
+    language: str
+    version: int
+    origin: str
+
+
 class TechnicalReportView(BaseModel):
     """One report as administrators read it."""
 
@@ -103,6 +119,7 @@ class TechnicalReportView(BaseModel):
     app_version: str
     app_revision: str | None
     route: str | None
+    task: TechnicalReportTask | None
     user_agent: str | None
     viewport: str | None
     last_error_status: int | None
@@ -115,6 +132,11 @@ class TechnicalReportView(BaseModel):
 
 class TechnicalReportSummary(BaseModel):
     open: int
+
+
+def _assignment_id(route: str | None) -> int | None:
+    match = _TASK_ROUTE.fullmatch(route or "")
+    return int(match[1]) if match else None
 
 
 def _not_found() -> DomainError:
@@ -222,6 +244,41 @@ class TechnicalReportService:
             )
 
     @staticmethod
+    def _tasks(
+        conn: Connection, rows: list[RowMapping]
+    ) -> dict[tuple[int, int], TechnicalReportTask]:
+        """Tasks named by the reports' addresses, by (assignment, owner)."""
+        ids = {_assignment_id(row["route"]) for row in rows} - {None}
+        if not ids:
+            return {}
+        found = conn.execute(
+            select(
+                AssignmentRow.id,
+                AssignmentRow.user_id,
+                AssignmentRow.task,
+                AssignmentRow.annotation_mode,
+                AssignmentRow.document_id,
+                ProjectRow.project_key,
+                DocumentRow.case_id,
+                DocumentRow.external_id,
+                DocumentRow.language,
+                DocumentRow.version,
+                DocumentRow.origin,
+            )
+            .join(ProjectRow, ProjectRow.id == AssignmentRow.project_id)
+            .join(
+                DocumentRow,
+                (DocumentRow.project_id == AssignmentRow.project_id)
+                & (DocumentRow.document_id == AssignmentRow.document_id),
+            )
+            .where(AssignmentRow.id.in_(ids))
+        ).mappings()
+        return {
+            (row["id"], row["user_id"]): TechnicalReportTask.model_validate(dict(row))
+            for row in found
+        }
+
+    @staticmethod
     def _views(conn: Connection, rows: list[RowMapping]) -> list[TechnicalReportView]:
         user_ids = {row["reporter_id"] for row in rows} | {
             row["closed_by"] for row in rows if row["closed_by"] is not None
@@ -237,6 +294,7 @@ class TechnicalReportService:
                 ).where(UserRow.id.in_(user_ids))
             )
         }
+        tasks = TechnicalReportService._tasks(conn, rows)
         views = []
         for row in rows:
             reporter = users[row["reporter_id"]]
@@ -256,6 +314,10 @@ class TechnicalReportService:
                     app_version=row["app_version"],
                     app_revision=row["app_revision"],
                     route=row["route"],
+                    # The address comes from the client: only the reporter's own task.
+                    task=tasks.get(
+                        (_assignment_id(row["route"]) or 0, row["reporter_id"])
+                    ),
                     user_agent=row["user_agent"],
                     viewport=row["viewport"],
                     last_error_status=row["last_error_status"],

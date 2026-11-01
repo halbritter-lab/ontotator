@@ -6,7 +6,9 @@ import pytest
 from auth_harness import logged_in
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import func, insert, select
+from t1_builders import bundle, native_unit
+from t1_fixtures import create_project, run_import
 from test_auth_api import _app
 
 from ontotator.application.technical_reports import (
@@ -16,7 +18,12 @@ from ontotator.application.technical_reports import (
 from ontotator.auth.audit import Actor
 from ontotator.domain.errors import AccessDenied
 from ontotator.storage.report_tables import TechnicalReportRow
-from ontotator.storage.tables import AuditEventRow
+from ontotator.storage.tables import (
+    AssignmentRow,
+    AuditEventRow,
+    ProjectRow,
+    UserRow,
+)
 
 URL = "/api/v1/technical-reports"
 ADMIN = "/api/v1/admin/technical-reports"
@@ -222,6 +229,84 @@ def test_an_admin_lists_closes_and_reopens_a_report(app):
         "technical_report.close",
         "technical_report.reopen",
     ]
+
+
+@pytest.fixture
+def text(app: FastAPI, tmp_path: Path) -> str:
+    db = app.state.repo.db
+    create_project(db)
+    result = run_import(
+        db, bundle(tmp_path, [native_unit("note", "en", "A text", case_id="c1")])
+    )
+    assert result.status == "succeeded", result.error
+    return "note"
+
+
+def _assignment(
+    app: FastAPI, username: str, document_id: str, task: str, **values: object
+) -> int:
+    with app.state.repo.db.transaction() as conn:
+        return conn.execute(
+            insert(AssignmentRow)
+            .values(
+                project_id=select(ProjectRow.id).scalar_subquery(),
+                document_id=document_id,
+                user_id=select(UserRow.id)
+                .where(UserRow.username == username)
+                .scalar_subquery(),
+                task=task,
+                **values,
+            )
+            .returning(AssignmentRow.id)
+        ).scalar_one()
+
+
+def _reported_task(app: FastAPI, client: TestClient, route: str) -> object:
+    assert client.post(URL, json=_body(route=route)).status_code == 200
+    admin = logged_in(app, "root", system_admin=True)
+    return admin.get(ADMIN).json()[0]["task"]
+
+
+@pytest.mark.parametrize(
+    ("task", "values"),
+    [
+        ("annotate", {"annotation_mode": "proposals"}),
+        ("annotate", {"annotation_mode": "scratch", "revoked_at": func.now()}),
+        ("translation_review", {}),
+        ("review", {}),
+    ],
+)
+def test_a_report_names_the_reporters_own_task(app, text, task, values):
+    alice = logged_in(app, "alice")
+    assignment = _assignment(app, "alice", text, task, **values)
+    assert _reported_task(app, alice, f"#/tasks/{assignment}") == {
+        "task": task,
+        "annotation_mode": values.get("annotation_mode"),
+        "project_key": "proj",
+        "document_id": text,
+        "case_id": "c1",
+        "external_id": "note",
+        "language": "en",
+        "version": 1,
+        "origin": "native",
+    }
+
+
+def test_a_report_never_names_a_task_of_someone_else(app, text):
+    alice = logged_in(app, "alice")
+    logged_in(app, "bob")
+    foreign = _assignment(app, "bob", text, "annotate", annotation_mode="scratch")
+    assert _reported_task(app, alice, f"#/tasks/{foreign}") is None
+
+
+@pytest.mark.parametrize(
+    "route",
+    ["#/tasks/999999", "#/tasks/1/more", "#/tasks/", "#/projects/p/documents"],
+)
+def test_other_addresses_name_no_task(app, text, route):
+    alice = logged_in(app, "alice")
+    _assignment(app, "alice", text, "annotate", annotation_mode="scratch")
+    assert _reported_task(app, alice, route) is None
 
 
 def test_an_unknown_report_is_not_found(app):

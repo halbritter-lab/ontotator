@@ -66,9 +66,10 @@ export function TechnicalReportDialog({ crashMessage, onClose }: { crashMessage?
       <Button onClick={onClose} disabled={busy}>Cancel</Button>
     </>;
   return <Dialog open title="Report a technical problem" size="md" initialFocus={receipt ? close : textarea}
-    onClose={busy ? undefined : onClose} footer={footer}>
+    // With text typed only Cancel closes: Esc must not drop what the user wrote.
+    onClose={busy || (!receipt && description.trim()) ? undefined : onClose} footer={footer}>
     {receipt ? <InlineMessage tone="success">
-      <span className="technical-report-receipt">{`Sent to the administrators. Reference: ${receipt.reference}`}</span>
+      <span className="technical-report-receipt">{`Sent to the administrators. Reference: ${receipt.reference}.`}</span>
       {" "}Quote it if you contact an administrator.
     </InlineMessage> : <>
       <p>For an error message, something that does not load, a crash or general feedback. It goes to the system administrators. Your task is not paused. For a problem with the text itself, use <strong>Report a text problem…</strong> instead.</p>
