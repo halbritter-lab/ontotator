@@ -3,7 +3,7 @@ import { api, type PracticeState } from "../api/client";
 import { ErrorNotice } from "../admin/ErrorNotice";
 import { MY_TASKS, type Route } from "../app/router";
 import { Button, Checkbox, ConfirmDialog, InlineMessage } from "../ui";
-import { PRACTICE_CARD_TEXT, PRACTICE_GERMAN_HINT, PracticePill } from "./PracticeOnMyTasks";
+import { PRACTICE_CARD_TEXT, PRACTICE_GERMAN_HINT } from "./PracticeOnMyTasks";
 import { tasksDone } from "./practiceSteps";
 import { formatDay, usePractice } from "./usePractice";
 import "./practice.css";
@@ -36,7 +36,7 @@ export function PracticeSection({ onNavigate }: { onNavigate?: (route: Route) =>
     <p>{PRACTICE_CARD_TEXT}</p>
     {!state.reads_german && <p className="practice-hint">{PRACTICE_GERMAN_HINT}</p>}
     {project ? <>
-      <p><PracticePill /> <strong>{project.name}</strong></p>
+      <p><strong>{project.name}</strong></p>
       <dl>
         <dt>Progress</dt><dd>{tasksDone(project.done, project.total)}</dd>
         <dt>Deleted on</dt><dd>{formatDay(project.expires_at)}<div className="field-hint">After 30 days without activity. Any change in practice moves the date.</div></dd>

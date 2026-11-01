@@ -165,6 +165,9 @@ describe("Profile › Practice", () => {
     expect(await screen.findByRole("heading", { name: "Practice" })).toBeDefined();
     expect(screen.getByText("1 of 4 tasks done")).toBeDefined();
     expect(screen.getByText("1 Dec 2026")).toBeDefined();
+    // The name already says Practice: no pill next to it.
+    expect(screen.getByText("Practice · Ann")).toBeDefined();
+    expect(document.querySelector(".practice-pill")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     expect(onNavigate).toHaveBeenCalledWith({ name: "tasks", status: "all" });
     const reset = vi.spyOn(api, "resetPractice").mockResolvedValue(state({ project: project([practiceTask(5, "scratch")]) }));
@@ -242,6 +245,9 @@ describe("Projects page: practice projects for administrators", () => {
     fireEvent.click(filter);
     const listed = screen.getByTestId("practice-project-row");
     expect(within(listed).getByText("Practice")).toBeDefined();
+    // The pill says Practice once; the name "Practice · Ann" would repeat it and the owner.
+    expect(within(listed).queryByText("Practice · Ann")).toBeNull();
+    expect(within(listed).getByText("Ann")).toBeDefined();
     expect(within(listed).getByText("1 of 3 tasks done")).toBeDefined();
     fireEvent.click(within(listed).getByRole("button", { name: "Delete…" }));
     fireEvent.click(await screen.findByRole("button", { name: "Delete practice project" }));

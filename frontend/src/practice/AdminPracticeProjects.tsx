@@ -32,7 +32,8 @@ export function AdminPracticeProjects(): JSX.Element | null {
   };
   const columns: Column<AdminPracticeProject>[] = [
     { id: "project", header: "Project", rowHeader: true, cell: item => <>
-      <PracticePill /> <span className="projects-page__name">{item.name}</span>
+      {/* The name repeats "Practice" and the owner: the pill and the Owner column say both once. */}
+      <PracticePill />
       <span className="cell-secondary">{item.project_key}</span>
     </> },
     { id: "owner", header: "Owner", cell: item => <>{item.owner_display_name}<span className="cell-secondary">{item.owner_username}</span></> },

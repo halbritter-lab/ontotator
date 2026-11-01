@@ -209,7 +209,7 @@ To see them:
 
 1. Click **Projects** in the sidebar.
 2. Tick **Show practice projects**. The number in brackets counts them.
-3. Each row shows a **Practice** pill, the owner, the progress and the date it will be deleted.
+3. Each row shows a **Practice** pill with the project key, the owner, the progress and the date it will be deleted.
 
 To delete one, click **Delete…** in its row, then **Delete practice project**. Only that practice project goes; its audit entries stay. A real project can never be deleted this way.
 
