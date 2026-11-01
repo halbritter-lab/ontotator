@@ -8,6 +8,7 @@ import { PracticeSection } from "../src/practice/PracticeSection";
 import { AdminPracticeProjects } from "../src/practice/AdminPracticeProjects";
 import { PRACTICE_STEPS, PRACTICE_TERMS, practiceProgress } from "../src/practice/practiceSteps";
 import { MyTasks } from "../src/tasks/MyTasks";
+import { SummaryDialog } from "../src/consolidation/SummaryDialog";
 import { guidelineListing } from "./projectFixtures";
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
@@ -114,6 +115,14 @@ describe("My tasks: the New here? card", () => {
   });
 });
 
+it("a practice consolidation does not promise a lead", () => {
+  const dialog = (practice: boolean) => <SummaryDialog open practice={practice} summary="3 groups" busy={false} warning={null} error={null} onSubmit={vi.fn()} onClose={vi.fn()} />;
+  const { rerender } = render(dialog(false));
+  expect(screen.getByText("The lead then accepts the result.")).toBeDefined();
+  rerender(dialog(true));
+  expect(screen.queryByText("The lead then accepts the result.")).toBeNull();
+});
+
 describe("My tasks: the Practice group", () => {
   beforeEach(() => { vi.spyOn(api, "listGuidelines").mockResolvedValue(guidelineListing([])); });
 
@@ -123,7 +132,8 @@ describe("My tasks: the Practice group", () => {
     render(<MyTasks projects={[]} onNavigate={vi.fn()} />);
     expect(await screen.findAllByTestId("task-row")).toHaveLength(1);
     const group = await screen.findByTestId("practice-group");
-    expect(within(group).getAllByText("Practice").length).toBeGreaterThan(0);
+    // The pill names the group; no second "Practice" beside it.
+    expect(within(group).getAllByText("Practice")).toHaveLength(1);
     expect(within(group).getAllByTestId("practice-task-row")).toHaveLength(2);
     expect(within(group).getByText(/1 of 2 tasks done/)).toBeDefined();
     expect(within(group).getByText("Annotate from scratch")).toBeDefined();
@@ -192,7 +202,7 @@ describe("the practice task frame", () => {
       findings: [{ term_id: PRACTICE_TERMS.seizure, assertion: "present", defaulted: ["temporality"], replacement: false }],
     })]) }));
     render(<PracticeFrame assignmentId={9} onNavigate={onNavigate}><p>editor</p></PracticeFrame>);
-    expect(await screen.findByText("Practice: nothing here counts. Invented texts only.")).toBeDefined();
+    expect(await screen.findByText("Nothing here counts. Invented texts only.")).toBeDefined();
     expect(screen.getByText("editor")).toBeDefined();
     const steps = screen.getAllByRole("listitem");
     expect(steps.map(step => step.getAttribute("data-done"))).toEqual(["true", "false", "false", "false"]);

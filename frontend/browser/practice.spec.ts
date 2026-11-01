@@ -27,7 +27,7 @@ test("Try it out builds a private practice project and opens a practice task", a
   expect(projects.some(project => project.project_key.startsWith("practice-"))).toBe(false);
 
   await group.getByTestId("practice-task-row").filter({ hasText: "Annotate from scratch" }).getByRole("link").click();
-  await expect(page.getByTestId("practice-banner")).toContainText("Practice: nothing here counts. Invented texts only.");
+  await expect(page.getByTestId("practice-banner")).toContainText("Nothing here counts. Invented texts only.");
   const banner = page.getByTestId("practice-banner");
   await expect(banner.getByRole("button", { name: "Leave practice" })).toBeInViewport({ ratio: 1 });
   // The panel starts folded to one line with the next step; the steps open on click.

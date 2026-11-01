@@ -10,6 +10,8 @@ export interface SummaryDialogProps {
   open: boolean;
   /** The consolidator leads the project and accepts the result themselves (issue 143). */
   lead?: boolean;
+  /** A practice task (issue 266): nobody accepts the result. */
+  practice?: boolean;
   summary: string;
   /** R-3: terms the result holds more than once ("More than one finding with the same term: Fatigue."). */
   duplicates?: string | null;
@@ -32,14 +34,14 @@ export function warningLines(warning: AxisWarning): string[] {
   ].filter((line): line is string => line !== null);
 }
 
-export function SummaryDialog({ open, lead = false, summary, duplicates, busy, warning, error, onSubmit, onClose }: SummaryDialogProps): JSX.Element {
+export function SummaryDialog({ open, lead = false, practice = false, summary, duplicates, busy, warning, error, onSubmit, onClose }: SummaryDialogProps): JSX.Element {
   const lines = warning ? warningLines(warning) : [];
   return <Dialog open={open} title="Submit consolidation?" onClose={busy ? undefined : onClose} footer={<>
     <Button onClick={() => { if (!busy) onClose(); }} aria-disabled={busy || undefined}>Back</Button>
     <Button variant="primary" loading={busy} onClick={() => onSubmit(!!warning)}>
       {warning ? `Submit with ${lines.length} ${lines.length === 1 ? "warning" : "warnings"}` : "Submit"}</Button>
   </>}>
-    <p>{nextStepText(lead)}</p>
+    {!practice && <p>{nextStepText(lead)}</p>}
     <p className="cons-summary">{summary}</p>
     {duplicates && <InlineMessage tone="warning">{duplicates}</InlineMessage>}
     {warning && <InlineMessage tone="warning" title="Check before you submit">

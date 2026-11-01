@@ -6,6 +6,7 @@ import { LanguagesField } from "../admin/LanguagesField";
 import { Button, Checkbox, Dialog, InlineMessage, TextInput } from "../ui";
 import type { Route, RouteLeaveGuard } from "../app/router";
 import { PracticeSection } from "../practice/PracticeSection";
+import { RouteLink } from "../documents/RowCells";
 
 /** The future app controller can refresh displayed identity from the saved response. */
 export interface ProfilePageProps {
@@ -14,6 +15,8 @@ export interface ProfilePageProps {
   leaveGuardRef?: MutableRefObject<((proceed: () => void) => void) | null>;
   /** Profile › Practice: "Continue" opens My tasks. */
   onNavigate?: (route: Route) => void;
+  /** The task the user came from: shows "Back to the task". */
+  backToTask?: number;
 }
 
 function profileChanges(baseline: Profile, draft: Profile): OwnProfilePatch {
@@ -45,7 +48,7 @@ function passwordProblem(username: string, next: string, repeat: string): string
   if (folded === stripForComparison(username.normalize("NFC")).toLowerCase()) return "The password must differ from the username.";
 }
 
-export function ProfilePage({ onSaved, routeLeaveRef, leaveGuardRef, onNavigate }: ProfilePageProps): JSX.Element {
+export function ProfilePage({ backToTask, onSaved, routeLeaveRef, leaveGuardRef, onNavigate }: ProfilePageProps): JSX.Element {
   const [searchDirty, setSearchDirty] = useState(false);
   const [model, setModel] = useState<{ baseline: Profile; draft: Profile } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -167,6 +170,7 @@ export function ProfilePage({ onSaved, routeLeaveRef, leaveGuardRef, onNavigate 
   const draft = model.draft;
   return <div className="density-compact">
     <section className="detail-section">
+      {backToTask !== undefined && <RouteLink route={{ name: "task", assignmentId: backToTask }} onNavigate={onNavigate}>Back to the task</RouteLink>}
       <h1>Profile</h1>
       <dl>
         <dt>Username</dt><dd>{model.baseline.username}</dd>

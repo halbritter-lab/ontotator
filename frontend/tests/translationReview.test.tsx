@@ -271,7 +271,7 @@ it("refreshes current qualification after server refusal while preserving edited
   await edited(); await clock();
   await confirmSubmit();
   expect(profile).toHaveBeenCalledTimes(1);
-  expect(screen.getByRole("link", { name: "Add your qualification in your profile" }).getAttribute("href")).toBe("#/me");
+  expect(screen.getByRole("link", { name: "Add your qualification in your profile" }).getAttribute("href")).toMatch(/^#\/me\?task=\d+$/);
   expect(submitButton().getAttribute("aria-disabled")).toBe("true");
   expect((screen.getByRole("textbox", { name: "Translation (de)" }) as HTMLTextAreaElement).value).toBe("Changed 😀\nraw");
 });

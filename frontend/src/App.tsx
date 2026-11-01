@@ -345,7 +345,7 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
     case "projectConsolidation": content = <ConsolidationScreen key={JSON.stringify([user.username, route.key, route.roundId])} projectKey={route.key}
       roundId={route.roundId} group={route.group} onNavigate={go} readOnly headerActions={<HelpLink screen="consolidationReadOnly" />}
       back={{ name: "projectDocuments", key: route.key, ...(route.documents ?? {}) }} />; break;
-    case "me": content = <ProfilePage onSaved={setSavedIdentity} routeLeaveRef={routeLeaveRef} leaveGuardRef={logoutGuardRef} onNavigate={go} />; break;
+    case "me": content = <ProfilePage backToTask={route.task} onSaved={setSavedIdentity} routeLeaveRef={routeLeaveRef} leaveGuardRef={logoutGuardRef} onNavigate={go} />; break;
     case "adminSettings": content = user.is_system_admin ? <SettingsPage />
       : notice("Server settings", "Only system administrators can change server settings."); break;
     case "help": content = <Suspense fallback={<InlineMessage tone="info">Loading the handbook…</InlineMessage>}>

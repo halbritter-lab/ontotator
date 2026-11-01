@@ -102,7 +102,7 @@ export function PracticeGroup({ tasks, state, actionLabel, onChange, onNavigate 
   ];
   return <details className="practice-group" open={!complete} data-testid="practice-group">
     <summary>
-      <PracticePill /> <span className="practice-group__title">{complete ? "Practice complete" : "Practice"}</span>
+      {complete ? <span className="practice-group__title">Practice complete</span> : <PracticePill />}
       <span className="cell-secondary">{tasksDone(done, tasks.length)}{project ? `, deleted on ${formatDay(project.expires_at)} without activity` : ""}</span>
     </summary>
     {error != null && <ErrorNotice error={error} />}

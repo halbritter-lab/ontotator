@@ -7,7 +7,7 @@ import { practiceProgress } from "./practiceSteps";
 import { usePractice } from "./usePractice";
 import "./practice.css";
 
-export const PRACTICE_BANNER = "Practice: nothing here counts. Invented texts only.";
+export const PRACTICE_BANNER = "Nothing here counts. Invented texts only.";
 // The steps tick themselves after the editor saved: the state is read again this often while visible.
 const POLL_MS = 4000;
 

@@ -95,6 +95,9 @@ describe("hash route parsing and links", () => {
   it("reads the root project filter without leaking it to unrelated routes", () => {
     expect(parseRoute("#/?project=study%2Fa+b%25")).toEqual({ name: "tasks", project: "study/a b%" });
     expect(parseRoute("#/me?project=study")).toEqual({ name: "me" });
+    expect(parseRoute("#/me?task=7")).toEqual({ name: "me", task: 7 });
+    expect(parseRoute("#/me?task=x")).toEqual({ name: "me" });
+    expect(routeHref({ name: "me", task: 7 })).toBe("#/me?task=7");
     expect(parseRoute("#/projects/a/documents?project=other&language=de&status=reopened&q=prefix+%25&select=doc%2F1"))
       .toEqual({ name: "projectDocuments", key: "a", language: "de", status: "reopened", q: "prefix %", select: "doc/1" });
   });
