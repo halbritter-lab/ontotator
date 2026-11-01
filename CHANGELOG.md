@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- New project: allowed roots and annotation scheme filled from an uploaded profile say "Loaded from the profile." until you change them (#239).
+
 ### Fixed
 
 - The submit dialog names proposals left Unresolved, for example "34 findings, 1 unresolved, nothing open." (#248).

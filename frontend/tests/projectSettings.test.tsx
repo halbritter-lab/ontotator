@@ -120,12 +120,28 @@ describe("project creation", () => {
     expect(hintOf("Allowed roots for HP")).not.toContain("Whole ontology: every term");
   });
 
+  it("marks branches and scheme loaded from the profile until they are changed (#239)", async () => {
+    render(<ProjectNewPage onNavigate={vi.fn()} />);
+    fireEvent.change(await screen.findByLabelText("Profile source"), { target: { value: "upload" } });
+    await upload({ allowed_roots: ["HP:1"], t1_profile: "generic" });
+    expect(hintOf("Allowed roots for HP")).toMatch(/^Loaded from the profile\. /);
+    expect(hintOf("Annotation scheme for HP")).toMatch(/^Loaded from the profile\. /);
+    fireEvent.change(screen.getByLabelText("Allowed roots for HP"), { target: { value: "HP:1, HP:3" } });
+    expect(hintOf("Allowed roots for HP")).not.toContain("Loaded from the profile.");
+    expect(hintOf("Annotation scheme for HP")).toContain("Loaded from the profile.");
+    fireEvent.change(screen.getByLabelText("Annotation scheme for HP"), { target: { value: "hpo-phenotype" } });
+    expect(hintOf("Annotation scheme for HP")).not.toContain("Loaded from the profile.");
+  });
+
   it("keeps today's defaults for a profile that sets nothing (#208)", async () => {
     render(<ProjectNewPage onNavigate={vi.fn()} />);
     fireEvent.change(await screen.findByLabelText("Profile source"), { target: { value: "upload" } });
     await upload({});
     expect(fieldValue("Allowed roots for HP")).toBe("");
     expect(fieldValue("Annotation scheme for HP")).toBe("hpo-phenotype");
+    // Nothing came from the file: no note (#239).
+    expect(hintOf("Allowed roots for HP")).not.toContain("Loaded from the profile.");
+    expect(hintOf("Annotation scheme for HP")).not.toContain("Loaded from the profile.");
   });
 
   it("does not break on a wrong branches value; the server refuses the file (#208)", async () => {
