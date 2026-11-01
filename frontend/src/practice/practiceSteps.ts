@@ -50,9 +50,10 @@ export const PRACTICE_STEPS: Readonly<Record<PracticeTask["kind"], readonly Prac
     { id: "default", label: "Confirm a prefilled value", hint: "“Muskelhypotonie”: one value is tagged Defaulted. Check it, then click Confirm.",
       help: { chapter: ANNOTATOR, section: "review-tool-proposals" },
       done: task => decided(task, PRACTICE_TERMS.hypotonia, outcome => outcome === "confirmed") },
-    // TODO(issue 266): once "Discard copy" is on main, extend this step to "…, then discard the copy".
+    // Discard copy (issue 265) removes the copy and its decision, so the final state cannot show it was used:
+    // the step ticks on the correction that stays, and the hint points to Discard copy as the way back.
     { id: "replace", label: "Correct a proposal with Edit & Replace",
-      hint: "“Innenohrschwerhörigkeit” is sensorineural. Click Edit & Replace and choose Sensorineural hearing impairment in your copy.",
+      hint: "“Innenohrschwerhörigkeit” is sensorineural. Click Edit & Replace and choose Sensorineural hearing impairment in your copy. Discard copy takes a copy back and opens the proposal again.",
       help: { chapter: ANNOTATOR, section: "review-tool-proposals" },
       done: task => decided(task, PRACTICE_TERMS.hearingImpairment, outcome => outcome === "changed") },
     { id: "missed", label: "Add a finding the tool missed", hint: "“Die Muskeleigenreflexe fehlen” has no proposal: mark it and add Areflexia.",

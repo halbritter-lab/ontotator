@@ -108,7 +108,7 @@ You get practice if you are an annotator or a translation reviewer in at least o
 1. In **My tasks**, the card **New here? Try it out first** appears. Click **Try it out**.
 2. Your practice tasks appear in their own group **Practice**, below your real tasks:
    - **Annotate from scratch**: mark findings yourself.
-   - **Annotate from proposals**: check a tool's proposals. One is right, one has a prefilled value, one needs **Edit & Replace**, and the tool missed one finding.
+   - **Annotate from proposals**: check a tool's proposals. One is right, one has a prefilled value, one needs **Edit & Replace**, and the tool missed one finding. **Discard copy** takes a copy back if you change your mind.
    - **Translation review**: the German translation has one error. Find and correct it.
    - **Consolidation**, if you are also a consolidator: two virtual colleagues disagree. Decide.
 3. Open a task with **Start**. Above the task you see **Practice: nothing here counts. Invented texts only.**
