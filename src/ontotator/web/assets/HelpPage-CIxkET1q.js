@@ -1,4 +1,4 @@
-import{r as i,a as m,j as a,b as h}from"./index-DIgQ2xBu.js";import{M as f,r as g}from"./index-BdmqMnHr.js";function w(){const[e,t]=i.useState(null);return i.useEffect(()=>{let o=!0;return m.getAbout().then(n=>{o&&t(n)},()=>{}),()=>{o=!1}},[]),e?a.jsxs("p",{className:"help-version",title:e.revision??void 0,children:["Ontotator ",e.version,e.revision&&a.jsxs(a.Fragment,{children:[" · commit ",e.revision.slice(0,7)]})]}):null}const y=`# Ontotator user handbook
+import{r as i,a as m,j as a,b as h}from"./index-tDZPym7R.js";import{M as f,r as g}from"./index-NkqKaxBu.js";function w(){const[e,t]=i.useState(null);return i.useEffect(()=>{let o=!0;return m.getAbout().then(n=>{o&&t(n)},()=>{}),()=>{o=!1}},[]),e?a.jsxs("p",{className:"help-version",title:e.revision??void 0,children:["Ontotator ",e.version,e.revision&&a.jsxs(a.Fragment,{children:[" · commit ",e.revision.slice(0,7)]})]}):null}const y=`# Ontotator user handbook
 
 This handbook explains how to work with Ontotator in the browser. It is for everyone who uses the app: annotators, translation reviewers, consolidators, leads and system administrators. It describes the version of Ontotator that you open it from. If you run the server, read the [server operations guide (for server operators)](../operations.md) instead.
 
@@ -1305,7 +1305,7 @@ You get practice if you are an annotator or a translation reviewer in at least o
 1. In **My tasks**, the card **New here? Try it out first** appears. Click **Try it out**.
 2. Your practice tasks appear in their own group **Practice**, below your real tasks:
    - **Annotate from scratch**: mark findings yourself.
-   - **Annotate from proposals**: check a tool's proposals. One is right, one has a prefilled value, one needs **Edit & Replace**, and the tool missed one finding.
+   - **Annotate from proposals**: check a tool's proposals. One is right, one has a prefilled value, one needs **Edit & Replace**, and the tool missed one finding. **Discard copy** takes a copy back if you change your mind.
    - **Translation review**: the German translation has one error. Find and correct it.
    - **Consolidation**, if you are also a consolidator: two virtual colleagues disagree. Decide.
 3. Open a task with **Start**. Above the task you see **Practice: nothing here counts. Invented texts only.**
