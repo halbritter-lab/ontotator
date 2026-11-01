@@ -139,9 +139,12 @@ describe("Waiting on", () => {
       text: "Ana Weber, Tom Reis +1",
       title: "Ana Weber (ann-0003), Tom Reis (ann-0004), Luc Martin (ann-0005)",
       you: false,
+      narrow: "Ana Weber +2",
     });
     const two = row({ case_id: "c", language: "de", next_step: stepOf("annotation_in_progress", { owner: { kind: "people", person: null, count: 2, people: [ana, tom] } }) });
     expect(waitingOnText(two).text).toBe("Ana Weber, Tom Reis");
+    // Issue 248: below 1400 px the cell shows one name and "+n".
+    expect(waitingOnText(two).narrow).toBe("Ana Weber +1");
   });
 });
 

@@ -253,7 +253,7 @@ export const WAITING_ON_NAMES = 2;
  * Waiting on (spec "Waiting on", VD8): "You", one person in identity format, up to two names and
  * "+n", or "—". `title` holds the full list in identity format.
  */
-export function waitingOnText(row: Pick<DocumentRowView, "in_plan" | "plan_row" | "next_step">): { text: string; title: string; you: boolean } {
+export function waitingOnText(row: Pick<DocumentRowView, "in_plan" | "plan_row" | "next_step">): { text: string; title: string; you: boolean; narrow?: string } {
   const none = { text: "—", title: "", you: false };
   if (isUndecided(row)) return { text: "You", title: "You", you: true };
   const step = row.in_plan ? row.next_step : null;
@@ -273,7 +273,9 @@ export function waitingOnText(row: Pick<DocumentRowView, "in_plan" | "plan_row" 
   if (people.length === 1) return { text: shortName(people[0]), title, you: false };
   const shown = people.slice(0, WAITING_ON_NAMES).map(shortName).join(", ");
   const rest = people.length - WAITING_ON_NAMES;
-  return { text: rest > 0 ? `${shown} +${rest}` : shown, title, you: false };
+  // Narrow tables (issue 248) show one name and "+n", so the cell is not cut mid-name.
+  const narrow = `${shortName(people[0])} +${people.length - 1}`;
+  return { text: rest > 0 ? `${shown} +${rest}` : shown, title, you: false, narrow };
 }
 
 /** "v2 corrected", "v2" or "2 translations"; null without a marker. */

@@ -306,6 +306,12 @@ function rowStageGlyph(row: DocumentRowView, stage: StageName, state: string): {
   return { symbol: stageText(stage, cell, row).symbol, tone: cell.tone };
 }
 
+/** Shorter words for a narrow table (issue 248), so a cell stays one line without cutting the state. */
+const NARROW_STATE: Record<string, string> = {
+  "assigned, not started": "not started",
+  "after translation review": "after review",
+};
+
 /**
  * One stage cell of the row on one line: glyph, the card's short state and a short "who" in grey, cut with an
  * ellipsis; `title` holds the full text. Rows outside the plan are muted (VD1). The Annotation cell adds the robot icon.
@@ -324,7 +330,10 @@ export function RowStageCell({ row, stage }: { row: DocumentRowView; stage: Stag
   return <span className="documents-status-cell">
     <span className={className} title={full}>
       {symbol && <><StageSymbol symbol={symbol} />{" "}</>}
-      {state}{suffix && <span className="documents-status-who">{suffix}</span>}
+      {NARROW_STATE[state] ? <span className="stage-state-wide">{state}</span> : state}
+      {suffix && <span className="documents-status-who">{suffix}</span>}
+      {/* After the full text, so the cell's text still reads "assigned, not started (Ana Weber)". */}
+      {NARROW_STATE[state] && <span className="stage-state-narrow" aria-hidden="true">{NARROW_STATE[state]}</span>}
     </span>
     {stage === "annotation" && <ProposalsIcon row={row} />}
   </span>;
@@ -332,8 +341,11 @@ export function RowStageCell({ row, stage }: { row: DocumentRowView; stage: Stag
 
 /** Waiting on: "You" (strong), a person, up to two names and "+n" with the full list (VD8), or "—". */
 export function WaitingOnCell({ row }: { row: DocumentRowView }): JSX.Element {
-  const { text, title, you } = waitingOnText(row);
+  const { text, title, you, narrow } = waitingOnText(row);
   if (you) return <strong className="documents-waiting-on">{text}</strong>;
   if (!title || title === text) return <span className="documents-waiting-on">{text}</span>;
-  return <span className="documents-waiting-on" title={title}><span aria-hidden="true">{text}</span><span className="visually-hidden">{title}</span></span>;
+  const shown = narrow
+    ? <><span aria-hidden="true" className="waiting-wide">{text}</span><span aria-hidden="true" className="waiting-narrow">{narrow}</span></>
+    : <span aria-hidden="true">{text}</span>;
+  return <span className="documents-waiting-on" title={title}>{shown}<span className="visually-hidden">{title}</span></span>;
 }
