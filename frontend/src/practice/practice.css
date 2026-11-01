@@ -31,8 +31,9 @@
 .practice-frame__task > div:first-child:not(.task-loading) { flex: 1; min-height: 0; }
 .practice-frame__task > .not-found { padding: var(--space-5) var(--space-6); flex: 0 0 auto; }
 @media (max-width: 700px) {
-  .shell-main.density-reading > .practice-frame { flex: none; }
-  .practice-frame__task { flex: none; }
+  /* Only the editor scrolls with the page here; a translation review keeps its own scroller and pinned bar. */
+  .shell-main.density-reading > .practice-frame:has(.case-screen:not(.case-comparing)) { flex: none; }
+  .practice-frame:has(.case-screen:not(.case-comparing)) > .practice-frame__task { flex: none; }
   .practice-frame__task > .case-screen:not(.case-comparing) { flex: none; height: auto; }
 }
 .practice-section dl { margin-block: var(--space-2); }
