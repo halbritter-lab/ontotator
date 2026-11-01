@@ -56,7 +56,7 @@ it("shows the qualification message with a profile link", async () => {
   const link = await within(panel()).findByRole("link", { name: "Add your qualification in your profile" });
   expect(within(panel()).getByText("A translation review records your qualification. Your profile has none yet.")).toBeTruthy();
   fireEvent.click(link);
-  expect(props.onNavigate).toHaveBeenCalledWith({ name: "me" });
+  expect(props.onNavigate).toHaveBeenCalledWith({ name: "me", documents: "p" });
   expect(within(panel()).queryByRole("checkbox")).toBeNull();
 });
 
