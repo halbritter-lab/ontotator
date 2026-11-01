@@ -161,7 +161,8 @@ What for: check which translation files term searches use in this project.
 
 1. Open **Settings**, tab **Ontology**.
 2. Read the card **Translations**.
-   - *Not frozen yet.* The first term search or opening the ontology information takes the translation files on the server then.
+   - *Not frozen yet.* The first term search or opening a text in the editor takes the translation files on the server then.
+   - *No translations: searches use the English names only.* The project froze when no translation file was on the server.
    - Otherwise the card lists the frozen files with their language, ontology and checksum. *Uploaded later, not used here* names files on the server that the project does not use.
 
 The project froze its translations at the first use of its ontology. A file an administrator uploads after that does not reach the project ([When a translation reaches a project](admin.md#when-a-translation-reaches-a-project)). Changing the ontology version, the branches or the annotation scheme, or replacing the task profile, ends the freeze: the next use takes the files on the server then.

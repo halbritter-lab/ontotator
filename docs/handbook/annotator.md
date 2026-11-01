@@ -214,7 +214,7 @@ Tools make mistakes. Check every proposal as if you had marked it yourself: the 
 5. After each decision, the next open proposal is selected. Press `k` right after a decision to go back to it.
 6. When all proposals are decided, read the whole text again and add findings the tool missed: mark text that has no proposal, choose the term in **New finding** and set the values, as in [Mark text and add a finding](#mark-text-and-add-a-finding). Your additions appear under **Your own findings**, next to the proposals.
 
-To undo a decision, click **Reset decision (open)** or press `0`.
+To undo a decision without a copy, click **Reset decision (open)** or press `0`.
 
 To drop your copy, click **Discard copy**, in the copy's details or in the proposal's details, or press `0` on the proposal. The copy is removed and the proposal is open (**Pending**) and selected again. A copy without changes goes at once. A changed copy asks first and names the changes you lose; click **Discard copy** to confirm or **Keep editing** to keep it.
 
@@ -364,7 +364,7 @@ Steps:
 1. Open the task. The **Source** is on the left, the **Translation** on the right.
 2. Read the automatic checks band at the top. Click **Details** to see which checks failed and why.
 3. Type your corrections directly in the translation column. Your edits are saved as you type, and the decision switches to **Accepted with corrections**. Use **Show changes** to see your edits and **Couple scrolling** to scroll both columns together. **Show matching paragraph** (`Alt+M`) jumps to the paired paragraph.
-4. Optional: to compare with another text, click the button that starts with **Compare with**, for example *Compare with … de*. With several texts to compare, it opens a menu **Compare with…**.
+4. Optional: to compare with another text, click **Compare** above the texts. With several texts to compare, it opens a menu.
 5. Under **Your review**, choose a **Decision** (or press `1` to `4`).
 6. Fill in what the decision needs:
    - **Query** and **Rejected** always count as a clinically relevant change: choose at least one category and write a **Rationale**. Put your question for the lead in the rationale.
@@ -381,7 +381,7 @@ If the source text was updated, **Source updates to review** appears. Open it, c
 
 What for: keep track of the sentences you have already checked in a long text.
 
-1. Tick **Mark checked sentences** above the texts. Both texts are now split into sentences. To edit the translation again, untick it. Your choice is remembered in this browser.
+1. Tick **Mark checked sentences** above the texts. Both texts are now split into sentences. To edit the translation again, untick it. **Show changes** is off while you mark. Your choice is remembered in this browser.
 2. Click a sentence to mark it as checked. Click it again to remove the mark. Source and translation are marked separately.
 3. Shift+click a sentence to mark all sentences from the last one you clicked up to this one.
 4. Or press on a sentence and drag across others. Starting on an unmarked sentence marks all of them. Starting on a marked sentence removes the marks.
@@ -393,7 +393,7 @@ The marks are only for you. They are saved with your review, so they are kept wh
 
 With the keyboard: Tab to a sentence, then press Enter or Space to mark it. Shift+Enter marks the range from the last sentence you marked.
 
-On a touch-only device such as a phone or tablet, **Mark checked sentences** is not offered, because a swipe on the text has to scroll.
+On a touch-only device such as a phone or tablet, **Mark checked sentences** is not offered, because a swipe on the text has to scroll. A review you can only read does not offer it either.
 
 ## Keyboard shortcuts
 

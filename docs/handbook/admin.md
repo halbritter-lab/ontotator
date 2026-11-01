@@ -151,7 +151,7 @@ Each file is stored on its own. If one file fails, earlier files may already be 
 
 ### When a translation reaches a project
 
-A project freezes its translations at the first use of its ontology, such as a term search or opening its ontology information. A bundle import does not freeze them. The freeze records what each search ran with, so results stay comparable.
+A project freezes its translations at the first use of its ontology, such as a term search or opening a text in the editor. A bundle import does not freeze them. The freeze records what each search ran with, so results stay comparable.
 
 A translation file uploaded after that does not reach the project. The project keeps searching with the files it froze. So upload translation files before anyone works in a project. The lead sees the frozen files in the project settings, see [See which translations the project uses](lead-settings.md#see-which-translations-the-project-uses).
 
