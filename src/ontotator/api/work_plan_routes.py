@@ -228,9 +228,26 @@ class CaseIdLookup(BaseModel):
     ids: list[str] = Field(max_length=5000)
 
 
+class CaseIdMatch(BaseModel):
+    """A pasted ID that matched one stored case ID in another case."""
+
+    id: str
+    case_id: str
+
+
+class CaseIdAmbiguity(BaseModel):
+    """A pasted ID that matches several case IDs in other cases and none exactly."""
+
+    id: str
+    candidates: list[str]
+
+
 class CaseIdLookupResult(BaseModel):
+    # Stored case IDs in pasted order: exact matches and unique matches in any case.
     found: list[str]
     unknown: list[str]
+    case_insensitive: list[CaseIdMatch] = Field(default_factory=list)
+    ambiguous: list[CaseIdAmbiguity] = Field(default_factory=list)
 
 
 class DiscardRequest(BaseModel):
@@ -311,7 +328,7 @@ def patch_work_plan(
 @router.post("/case-ids/lookup", response_model=CaseIdLookupResult)
 def lookup_case_ids(
     key: str, body: CaseIdLookup, principal: PrincipalDep, request: Request
-) -> dict[str, list[str]]:
+) -> dict[str, Any]:
     return _service(request, key, principal).lookup_case_ids(key, body.ids)
 
 

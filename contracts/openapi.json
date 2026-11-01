@@ -10607,6 +10607,28 @@
         ],
         "title": "CaseDetail"
       },
+      "CaseIdAmbiguity": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "candidates": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Candidates"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "candidates"
+        ],
+        "title": "CaseIdAmbiguity",
+        "description": "A pasted ID that matches several case IDs in other cases and none exactly."
+      },
       "CaseIdLookup": {
         "properties": {
           "ids": {
@@ -10640,6 +10662,20 @@
             },
             "type": "array",
             "title": "Unknown"
+          },
+          "case_insensitive": {
+            "items": {
+              "$ref": "#/components/schemas/CaseIdMatch"
+            },
+            "type": "array",
+            "title": "Case Insensitive"
+          },
+          "ambiguous": {
+            "items": {
+              "$ref": "#/components/schemas/CaseIdAmbiguity"
+            },
+            "type": "array",
+            "title": "Ambiguous"
           }
         },
         "type": "object",
@@ -10648,6 +10684,25 @@
           "unknown"
         ],
         "title": "CaseIdLookupResult"
+      },
+      "CaseIdMatch": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "case_id"
+        ],
+        "title": "CaseIdMatch",
+        "description": "A pasted ID that matched one stored case ID in another case."
       },
       "CasePlanChoice": {
         "properties": {
