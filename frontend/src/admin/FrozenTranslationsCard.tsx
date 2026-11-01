@@ -4,7 +4,7 @@ import { SettingsCard } from "./SettingsCard";
 type Frozen = NonNullable<ProjectSettings["frozen_translations"]>;
 
 /**
- * Settings › Ontology: the translations the project froze at the first use of its ontology (#254).
+ * Settings › Ontology: the translations the project froze at the first use of its ontology (issue 254).
  * Read-only: a later upload does not reach the project, and nothing here changes that.
  */
 export function FrozenTranslationsCard({ frozen }: { frozen: Frozen | null | undefined }): JSX.Element {

@@ -8,7 +8,7 @@ import { formatDateTime } from "../app/labels";
 /** "A", "A and B", "A, B and C". */
 const listNames = (names: string[]) => names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 
-/** One notice per uploaded translation that does not reach every project (#254). */
+/** One notice per uploaded translation that does not reach every project (issue 254). */
 const frozenNotices = (outcomes: OntologyUploadResult[]) => outcomes.filter((result, index) =>
   result.ontology.kind === "translation" && (result.ontology.frozen_without?.length ?? 0) > 0
   && outcomes.findIndex(other => other.ontology.sha256 === result.ontology.sha256) === index);
@@ -83,7 +83,7 @@ export function OntologiesPage({ onNavigate }: OntologiesPageProps): JSX.Element
     }
   };
 
-  // The Ontology tab holds the pins (issue 168) and the frozen translations (#254).
+  // The Ontology tab holds the pins (issue 168) and the frozen translations (issue 254).
   const projectLinks = (keys: string[]) => <ul className="pinned-projects">{keys.map(key => {
     const route: Route = { name: "projectSettings", key, section: "ontology" };
     return <li key={key}><a href={routeHref(route)} onClick={event => {
@@ -100,7 +100,7 @@ export function OntologiesPage({ onNavigate }: OntologiesPageProps): JSX.Element
     { id: "sha", header: "SHA-256", cell: item => <><code title={item.sha256}>{item.sha256.slice(0, 12)}</code>{" "}<Button size="sm" aria-label={`Copy SHA-256 for ${item.filename}`} disabled={copying !== null} onClick={() => { void copy(item); }}>Copy</Button></> },
     { id: "uploaded", header: "Uploaded at", cell: item => <time dateTime={item.uploaded_at}>{formatDateTime(item.uploaded_at)}</time> },
     { id: "projects", header: "Pinned by", cell: item => item.projects.length ? projectLinks(item.projects) : "Not pinned" },
-    // Projects whose translations froze at first use without this file (#254).
+    // Projects whose translations froze at first use without this file (issue 254).
     { id: "frozen", header: "Frozen without", cell: item => item.frozen_without?.length ? projectLinks(item.frozen_without) : <EmptyValue /> },
   ];
   const outcomeLabels: Record<OntologyUploadResult["status"], string> = { added: "Added", already_present: "Already present" };
