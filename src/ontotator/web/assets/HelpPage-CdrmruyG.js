@@ -1,4 +1,4 @@
-import{r,a as m,j as a,b as h}from"./index-oWkcXpcx.js";import{M as f,r as g}from"./index-DYKVpMf5.js";function w(){const[e,t]=r.useState(null);return r.useEffect(()=>{let o=!0;return m.getAbout().then(n=>{o&&t(n)},()=>{}),()=>{o=!1}},[]),e?a.jsxs("p",{className:"help-version",title:e.revision??void 0,children:["Ontotator ",e.version,e.revision&&a.jsxs(a.Fragment,{children:[" · commit ",e.revision.slice(0,7)]})]}):null}const y=`# Ontotator user handbook
+import{r,a as m,j as a,b as h}from"./index-Dr3_dfhZ.js";import{M as f,r as g}from"./index-Bya19x4C.js";function w(){const[e,t]=r.useState(null);return r.useEffect(()=>{let o=!0;return m.getAbout().then(n=>{o&&t(n)},()=>{}),()=>{o=!1}},[]),e?a.jsxs("p",{className:"help-version",title:e.revision??void 0,children:["Ontotator ",e.version,e.revision&&a.jsxs(a.Fragment,{children:[" · commit ",e.revision.slice(0,7)]})]}):null}const y=`# Ontotator user handbook
 
 This handbook explains how to work with Ontotator in the browser. It is for everyone who uses the app: annotators, translation reviewers, consolidators, leads and system administrators. It describes the version of Ontotator that you open it from. If you run the server, read the [server operations guide (for server operators)](../operations.md) instead.
 
@@ -1464,8 +1464,6 @@ Active filters show as chips above the table. Remove one with its ✕, or click 
 - Below the table, click **Next** or **Previous** to see more rows.
 
 ### On a narrow screen
-
-Below 1400 px width, long stage states and names wrap onto a second line in their cell. Point at a cell to see its full text.
 
 Below 700 px width, each case is a card with its texts. Click a stage status to see the latest activity and the actions for that stage. Click **Details** to open the full text card.
 
