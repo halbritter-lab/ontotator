@@ -184,6 +184,59 @@ def test_consolidation_decisions_name_their_terms(app: FastAPI) -> None:
     }
 
 
+def test_keep_and_choose_tick_the_consolidation_steps(app: FastAPI) -> None:
+    # Keep was the reported failure: the steps must tick for it, not only for leave_out.
+    client = _member(app, "cons", ["annotator", "adjudicator"])
+    project = client.post("/api/v1/me/practice").json()["project"]
+    task = next(t for t in project["tasks"] if t["kind"] == "consolidation")
+    opened = client.post(f"/api/v1/assignments/{task['assignment_id']}/open").json()
+    workspace, revision = opened["workspace_id"], opened["view"]["draft"]["revision"]
+    round_id = next(
+        t["active_round_id"]
+        for t in client.get("/api/v1/me/tasks").json()
+        if t["assignment_id"] == task["assignment_id"]
+    )
+    view = client.get(f"/api/v1/rounds/{round_id}/consolidation").json()
+    groups = [group for group in view["groups"] if group["state"] == "open"]
+
+    for group in groups:
+        members = group["members"]
+        payload: dict[str, Any] = {"input_ids": [m["input_id"] for m in members]}
+        if len(members) == 1:
+            # Only one colleague marked it: Keep.
+            payload["action"] = "keep"
+        else:
+            # The colleagues differ: choose the first member's finding.
+            first = members[0]
+            payload["action"] = "choose"
+            payload["choice"] = {
+                "term_id": first["term_id"],
+                "span_from_input_id": first["input_id"],
+                "axes": {
+                    axis: first["axes"].get(axis) for axis in group["differing_axes"]
+                },
+            }
+        response = client.post(
+            f"/api/v1/workspaces/{workspace}/consolidation-groups/resolve",
+            json={
+                "mutation_id": f"resolve-{group['group_id']}",
+                "expected_revision": revision,
+                "payload": payload,
+            },
+        )
+        assert response.status_code == 200, response.text
+        revision = response.json()["revision"]
+
+    facts = next(
+        t
+        for t in client.get("/api/v1/me/practice").json()["project"]["tasks"]
+        if t["kind"] == "consolidation"
+    )
+    actions = {(d["term_id"], d["action"]) for d in facts["decisions"]}
+    assert (content.AREFLEXIA, "keep") in actions
+    assert (content.HYPOTONIA, "choose") in actions
+
+
 def test_an_unchanged_copy_is_not_an_own_finding(app: FastAPI) -> None:
     client = _member(app, "ann", ["annotator"])
     project = client.post("/api/v1/me/practice").json()["project"]
@@ -229,6 +282,8 @@ def test_practice_says_whether_the_profile_has_german(app: FastAPI) -> None:
     assert client.get("/api/v1/me/practice").json()["reads_german"] is True
     # Languages are free codes: the three-letter forms of German count too.
     app.state.accounts.set_languages(Actor(None, "system:test"), "ann", ["deu"])
+    assert client.get("/api/v1/me/practice").json()["reads_german"] is True
+    app.state.accounts.set_languages(Actor(None, "system:test"), "ann", ["ger"])
     assert client.get("/api/v1/me/practice").json()["reads_german"] is True
 
 

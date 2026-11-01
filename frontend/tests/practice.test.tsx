@@ -59,6 +59,18 @@ describe("practice steps", () => {
     expect(worked.next?.id).toBe("default");
   });
 
+  it("ticks the consolidation steps after Keep and Choose, never after an automatic keep", () => {
+    const auto = practiceProgress(practiceTask(4, "consolidation", { decisions: [
+      { term_id: PRACTICE_TERMS.areflexia, outcome: "changed", action: "auto" },
+    ] }));
+    expect(auto.steps.map(item => item.done)).toEqual([false, false, false]);
+    const kept = practiceProgress(practiceTask(4, "consolidation", { decisions: [
+      { term_id: PRACTICE_TERMS.hypotonia, outcome: "changed", action: "choose" },
+      { term_id: PRACTICE_TERMS.areflexia, outcome: "changed", action: "keep" },
+    ] }));
+    expect(kept.steps.map(item => [item.step.id, item.done])).toEqual([["differ", true], ["partial", true], ["submit", false]]);
+  });
+
   it("ticks the translation review from the saved text and decision", () => {
     const { steps, next } = practiceProgress(practiceTask(3, "translation_review", {
       translation_text: "… eine leichte Hypotonie der Arme …", translation_decision: "corrected", status: "submitted",
