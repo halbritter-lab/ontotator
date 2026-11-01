@@ -75,6 +75,40 @@ export function startedPart(detail: StageCellView["detail"]): string | null {
   return state === "none" ? "not started" : `${detail.started ?? 0} of ${detail.open_tasks ?? 0} started`;
 }
 
+/**
+ * "2 of 3 submitted": out of "annotators per text", or out of everyone holding the text when more do (the limit was
+ * lowered after they were assigned). The server counts that total on the version with the fewest submissions, as
+ * `submitted` (issue 283); the guard keeps it from ever reading "2 of 1 submitted".
+ */
+export function submittedOf(submitted: number, total: number): string {
+  return `${submitted} of ${Math.max(total, submitted)} submitted`;
+}
+
+/**
+ * Shorter words for a stage cell of the narrow table (below 1600 px, issues 248 and 279), so the cell keeps one line without
+ * cutting the state; the title and screen readers keep the full state. Only states longer than the narrow cell
+ * have one.
+ */
+const NARROW_STATES: readonly (readonly [RegExp, string])[] = [
+  [/^assigned, not started$/, "not started"],
+  [/^(?:after translation review|waiting for review \(.*\))$/, "after review"],
+  [/^in review, .+$/, "in review"],
+  [/^(\d+) of (\d+) submitted(?:, .+)?$/, "$1/$2 submitted"],
+  [/^(\d+) annotators? · max (\d+)$/, "$1 · max $2"],
+  [/^not reviewed, optional$/, "not reviewed"],
+  [/^(?:Final is|In progress|Submitted|Finishing) on old text$/, "on old text"],
+  [/^Submitted on (v\d+)$/, "$1 submitted"],
+  [/^Finishing on (v\d+)$/, "finishing $1"],
+  [/^ready to compare$/, "to compare"],
+  [/^consolidating \(.+\)$/, "consolidating"],
+];
+
+/** The narrow table's short state (`NARROW_STATES`); null when the state fits as it is. */
+export function narrowStageState(state: string): string | null {
+  for (const [pattern, short] of NARROW_STATES) if (pattern.test(state)) return state.replace(pattern, short);
+  return null;
+}
+
 /** The short form of a person in a cell: the display name, else the pseudonym. */
 export function shortName(person: PersonRefView): string {
   return person.display_name?.trim() || person.pseudonym;
@@ -173,7 +207,7 @@ function annotationText(cell: StageCellView): StageText {
     }
     case "in_progress": {
       if (detail.total != null && detail.submitted != null) {
-        return { symbol: "◐", word: `${detail.submitted} of ${detail.total} submitted`, detail: join(people && `waiting: ${people}`, startedPart(detail), waiting) };
+        return { symbol: "◐", word: submittedOf(detail.submitted, detail.total), detail: join(people && `waiting: ${people}`, startedPart(detail), waiting) };
       }
       const change = detail.note === "may_change" ? join(version(detail.version), "may change") : null;
       const started = startedOf(detail);
@@ -189,7 +223,7 @@ function annotationText(cell: StageCellView): StageText {
     case "finishing_on_old":
       return { symbol: "◐", word: `Finishing on ${version(detail.from_version) ?? "old text"}`, detail: join(people, `carried to ${version(detail.version) ?? "the new text"} on submit`) };
     case "submitted": {
-      const word = detail.total != null && detail.submitted != null ? `${detail.submitted} of ${detail.total} submitted` : "submitted";
+      const word = detail.total != null && detail.submitted != null ? submittedOf(detail.submitted, detail.total) : "submitted";
       return { symbol: "✓", word, detail: join(people, detail.findings != null ? plural(detail.findings, "finding") : null, waiting) };
     }
     default: return fallback(cell);

@@ -531,3 +531,28 @@ def test_cells_count_started_assignments(env):
     # Nothing counted where no open work is named.
     final = rows(env)[("c1", "en")]["stages"]["final"]
     assert (final["detail"]["started"], final["detail"]["open_tasks"]) == (None, None)
+
+
+def test_parallel_roots_count_submitted_of_one_root(env, tmp_path):
+    """Issue 283: limit 2, two parallel versions with 1 submitted and 1 open
+    each read "1 of 2 submitted" (the open tasks of both versions do not add
+    to one version's total)."""
+    second_root(env, tmp_path)
+    with env.db.transaction() as conn:
+        conn.execute(
+            update(ProjectRow)
+            .where(ProjectRow.project_key == "proj")
+            .values(annotations_per_text=2)
+        )
+    plan(env, c1_fr=BOTH)
+    roots = (doc("c1", "fr"), SECOND)
+    for document_id in roots:
+        finish(env, assign(env, document_id, "ana", "translation_review"))
+        reviewed(env, document_id, "accepted_unchanged")
+    for document_id in roots:
+        submit(env, assign(env, document_id, "anno", "annotate"), f"s-{document_id}")
+        assign(env, document_id, "anno2", "annotate")
+    annotation = rows(env)[("c1", "fr")]["stages"]["annotation"]
+    assert annotation["state"] == "in_progress"
+    detail = annotation["detail"]
+    assert (detail["submitted"], detail["total"], detail["open_tasks"]) == (1, 2, 2)

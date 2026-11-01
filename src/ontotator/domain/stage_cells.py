@@ -160,6 +160,10 @@ class StageFacts:
     annotate_tasks: int | None = None  # their assignments
     annotate_started: int = 0  # of ``annotate_tasks``: no longer status open
     annotators_submitted: tuple[int, ...] = ()  # authors of ``submissions``
+    # Issue 283: ``submissions`` plus the running annotate tasks on the same
+    # target (the one with the fewest submissions): more than ``per_text``
+    # when the limit was lowered after people were assigned.
+    annotators_holding: int = 0
     round_ordinal: int | None = None  # the one open round, if exactly one
     findings: int | None = None  # finding_count when exactly one submission
     consolidators: tuple[int, ...] = ()
@@ -196,7 +200,8 @@ class CellDetail:
     versions ("1 of 2 versions in review": versions in review, or accepted
     versions, of ``total`` roots); in Annotation and Final the counts are the
     minimum over the row's target versions ("1 of 2 assigned", "1 of 2
-    submitted"). ``reason`` is free text only (Review re_review: "Dosis
+    submitted"). The Annotation ``total`` of ``submitted`` is "annotators per
+    text", or the people holding that target when more do (issue 283). ``reason`` is free text only (Review re_review: "Dosis
     prüfen"); codes go to ``note``, Final ``confirm`` cause codes to
     ``causes``. ``started`` of ``open_tasks``: how many of the open
     assignments the cell names have started (``StageFacts``, issue 258);
@@ -501,6 +506,9 @@ def _annotation(facts: StageFacts, codes: frozenset[str]) -> StageCell:
             note="carried_on_submit",
         )
     submitted = facts.submissions
+    # "n of m submitted": out of the limit, or out of everyone holding the
+    # target when more do (issue 283; never "2 of 1 submitted").
+    total = max(per_text, submitted, facts.annotators_holding)
     if facts.consolidators:
         # Counts of the newest version, as "submitted"; without them the client
         # would count annotate work of every version (v1 + v2 read "3 of 3").
@@ -523,7 +531,7 @@ def _annotation(facts: StageFacts, codes: frozenset[str]) -> StageCell:
             "running",
             people=facts.annotators_open,
             submitted=submitted if many else None,
-            total=per_text if many else None,
+            total=total if many else None,
             round_ordinal=facts.round_ordinal,
             **note,
             **started,
@@ -536,7 +544,7 @@ def _annotation(facts: StageFacts, codes: frozenset[str]) -> StageCell:
             "done",
             people=facts.annotators_submitted or _people(old),
             submitted=submitted if counted else None,
-            total=per_text if counted else None,
+            total=total if counted else None,
             findings=facts.findings,
             version=old[0].from_version if on_old else newest,
             **waiting_note,

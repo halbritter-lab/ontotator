@@ -64,6 +64,13 @@ describe("Annotation", () => {
     expect(annotationState(cardRow({ annotation: cell("in_progress", "running", { submitted: 1, total: 2, started: 0, open_tasks: 1 }) })))
       .toEqual({ state: "1 of 2 submitted, not started", tone: "now" });
   });
+  it("never reads 2 of 1 when the limit was lowered later (issue 248); parallel open tasks do not raise the total (issue 283)", () => {
+    expect(annotationState(cardRow({ annotation: cell("in_progress", "running", { people: [ana], submitted: 2, total: 3, started: 0, open_tasks: 1 }) })))
+      .toEqual({ state: "2 of 3 submitted, not started", tone: "now" });
+    expect(annotationState(cardRow({ annotation: cell("in_progress", "running", { people: [ana], submitted: 1, total: 2, started: 0, open_tasks: 2 }) })))
+      .toEqual({ state: "1 of 2 submitted, not started", tone: "now" });
+    expect(annotationState(cardRow({ annotation: cell("submitted", "done", { submitted: 2, total: 1 }) }))).toEqual({ state: "2 of 2 submitted", tone: "done" });
+  });
   it("without server counts counts the annotate work items, never 0 of 0", () => {
     const work = [annotateItem({ assignment_id: 1, status: "submitted" }), annotateItem({ assignment_id: 2, status: "submitted" })];
     expect(annotationState(cardRow({ annotation: cell("submitted", "done") }, { work }))).toEqual({ state: "2 of 2 submitted", tone: "done" });

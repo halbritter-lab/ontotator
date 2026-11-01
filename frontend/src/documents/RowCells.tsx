@@ -20,7 +20,7 @@ import {
   versionName,
   versionText,
 } from "./labels";
-import { isActiveRow, shortName, stageText, versionMarkerText, waitingOnText, type StageName } from "./stageLabels";
+import { isActiveRow, narrowStageState, shortName, stageText, versionMarkerText, waitingOnText, type StageName } from "./stageLabels";
 import { annotationState, finalizationState, reviewWord, translationState } from "./textCard/cardModel";
 import { LanguageFlag } from "../ui/LanguageTag";
 import { StageSymbol, type StageTone } from "../ui/StageCell";
@@ -306,12 +306,6 @@ function rowStageGlyph(row: DocumentRowView, stage: StageName, state: string): {
   return { symbol: stageText(stage, cell, row).symbol, tone: cell.tone };
 }
 
-/** Shorter words for a narrow table (issue 248), so a cell stays one line without cutting the state. */
-const NARROW_STATE: Record<string, string> = {
-  "assigned, not started": "not started",
-  "after translation review": "after review",
-};
-
 /**
  * One stage cell of the row on one line: glyph, the card's short state and a short "who" in grey, cut with an
  * ellipsis; `title` holds the full text. Rows outside the plan are muted (VD1). The Annotation cell adds the robot icon.
@@ -326,14 +320,16 @@ export function RowStageCell({ row, stage }: { row: DocumentRowView; stage: Stag
   // Annotators named in the cell have not submitted yet; "(Ben)" after "1 of 2 submitted" read like Ben had.
   const suffix = !who ? "" : stage === "annotation" ? ` · open: ${who}` : ` (${who})`;
   const full = state + suffix;
+  // Below 1600 px (issues 248, 279) a shorter state where the full one would be cut.
+  const narrow = narrowStageState(state);
   const className = ["documents-status", "stage-cell", `stage-cell--${tone}`, !isActiveRow(row) && "stage-cell--muted"].filter(Boolean).join(" ");
   return <span className="documents-status-cell">
     <span className={className} title={full}>
       {symbol && <><StageSymbol symbol={symbol} />{" "}</>}
-      {NARROW_STATE[state] ? <span className="stage-state-wide">{state}</span> : state}
+      {narrow ? <span className="stage-state-wide">{state}</span> : state}
       {suffix && <span className="documents-status-who">{suffix}</span>}
       {/* After the full text, so the cell's text still reads "assigned, not started (Ana Weber)". */}
-      {NARROW_STATE[state] && <span className="stage-state-narrow" aria-hidden="true">{NARROW_STATE[state]}</span>}
+      {narrow && <span className="stage-state-narrow" aria-hidden="true">{narrow}</span>}
     </span>
     {stage === "annotation" && <ProposalsIcon row={row} />}
   </span>;

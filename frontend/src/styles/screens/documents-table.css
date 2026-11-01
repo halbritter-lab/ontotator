@@ -84,11 +84,16 @@ button.documents-text-name { min-height: 24px; padding: 0; border: 0; background
 /* `display: block` overrides the stacked .stage-cell column (icon, label, who on one line). */
 .documents-status.stage-cell { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .documents-status-who { color: var(--text-muted); }
-/* Below 1400 px (#10): the status and Waiting on cells cut earlier (ellipsis, full text in title); Last activity
-   stays and the table scrolls sideways with the Text column pinned (#8). */
-@media (max-width: 1399px) {
-  .documents-status-cell { max-width: 7.5rem; }
+/* Below 1600 px (#10, issue 279): the status and Waiting on cells cut earlier (ellipsis, full text in title); Last
+   activity stays and the table scrolls sideways with the Text column pinned (#8). With the wide cells and a wrapping
+   Text cell the table was wider than the page at 1400 and 1440 px, so the narrow table covers them. */
+@media (max-width: 1599px) {
+  .documents-status-cell { max-width: 7.5rem; column-gap: var(--space-1); }
   .documents-waiting-on { max-width: 7rem; }
+  /* Issue 248: the Text cell keeps one line too ("source", the version marker and NEW stay after the name; the
+     cards below 700 px still wrap). It makes room by cutting a long case ID (full ID in its title and the name). */
+  .documents-table .documents-row-header { flex-wrap: nowrap; column-gap: var(--space-2); }
+  .documents-table .documents-row-case .documents-id { display: inline-block; max-width: 5rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
   /* Issue 248: one line per text stays; the narrow cells drop what Waiting on already says. The grey "who" of a
      stage cell goes (it stays in the title), and Waiting on shows one name and "+n" for the others. */
   .documents-status-who { display: none; }
@@ -96,7 +101,7 @@ button.documents-text-name { min-height: 24px; padding: 0; border: 0; background
   /* The full state stays for screen readers; the short one is aria-hidden. */
   .stage-state-wide { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
-@media (min-width: 1400px) { .documents-waiting-on .waiting-narrow, .stage-state-narrow { display: none; } }
+@media (min-width: 1600px) { .documents-waiting-on .waiting-narrow, .stage-state-narrow { display: none; } }
 /* The checkbox and Text cells stay at the left edge while the table scrolls sideways, so actions keep their row
    label (#10); opaque backgrounds (the row tints below repeat on them), above the scrolled cells. */
 .documents-table .documents-row > :where(.data-table-select-cell, th[scope="row"]),
