@@ -314,7 +314,7 @@ Before you start: a report pauses your task. You cannot save or submit until the
 2. Describe the problem under **What is the problem?**. Only you and project leads can read it.
 3. Click **Report and pause my task**.
 
-The menu item reads **Text problems** when there is something to see, for example your earlier reports. The dialog lists **Your reports** and offers **New report**.
+The menu item reads **Text problems** when there is something to see, for example your earlier reports. The dialog is named after the text, for example *Problems with CASE-1 de*. It lists **Your reports** and offers **New report**.
 
 ## Resume a paused task or withdraw a report
 

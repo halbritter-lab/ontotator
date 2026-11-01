@@ -143,7 +143,7 @@ describe("reporter dialog", () => {
     setup({ reports: [report({ holds: [hold({ active: false, release_action: "resume", released_by_label: "ann-0004", released_at: T1 })] })] });
     await screen.findByRole("button", { name: /1 open report/ });
     fireEvent.click(entry());
-    const dialog = screen.getByRole("dialog", { name: "Problems with Task 4" });
+    const dialog = screen.getByRole("dialog", { name: "Problems with accepted-translation de" });
     const buttons = within(dialog.querySelector<HTMLElement>(":scope > .modal-actions")!).getAllByRole("button").map(b => b.textContent);
     expect(buttons).toEqual(["New report", "Close"]);
     await waitFor(() => expect(document.activeElement).toBe(footer().getByRole("button", { name: "New report" })));
@@ -207,7 +207,7 @@ describe("reporter dialog", () => {
     fireEvent.keyDown(screen.getByRole("textbox", { name: /What is the problem\?/ }), { key: "Escape" });
     expect(screen.getByText("Discard this report? Your text will be lost.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Discard" }));
-    expect(screen.getByRole("dialog", { name: "Problems with Task 4" })).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: "Problems with accepted-translation de" })).toBeTruthy();
   });
 
   it("returns to the list with a success message and the new report focused", async () => {
@@ -221,7 +221,7 @@ describe("reporter dialog", () => {
     fireEvent.change(screen.getByRole("textbox", { name: /What is the problem\?/ }), { target: { value: "Glossary term missing" } });
     fireEvent.click(footer().getByRole("button", { name: "Report and pause my task" }));
     expect(await screen.findByText("Reported. Your task is paused until you or a project lead resume it.")).toBeTruthy();
-    expect(screen.getByRole("dialog", { name: "Problems with Task 4" })).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: "Problems with accepted-translation de" })).toBeTruthy();
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Glossary term missing" })));
     await waitFor(() => expect(onRefresh).toHaveBeenCalledWith(expect.objectContaining({ held: true })));
   });
@@ -240,7 +240,7 @@ describe("reporter dialog", () => {
     fireEvent.click(footer().getByRole("button", { name: "Report and pause my task" }));
     expect(await screen.findByText("Reported. Your task is paused until you or a project lead resume it.")).toBeTruthy();
     fireEvent.click(await screen.findByRole("button", { name: "Resume my task…" }));
-    const group = screen.getByRole("group", { name: "Resume Task 4" });
+    const group = screen.getByRole("group", { name: "Resume your task on accepted-translation de" });
     fireEvent.change(within(group).getByRole("textbox", { name: /Why can you continue\?/ }), { target: { value: "Fine now" } });
     fireEvent.click(within(group).getByRole("button", { name: "Resume my task" }));
     expect(await screen.findByText("Resumed. The report stays open.")).toBeTruthy();
@@ -274,7 +274,7 @@ describe("reporter dialog", () => {
     await screen.findByRole("button", { name: /Task paused/ });
     fireEvent.click(entry());
     fireEvent.click(await screen.findByRole("button", { name: "Resume my task…" }));
-    const group = screen.getByRole("group", { name: "Resume Task 4" });
+    const group = screen.getByRole("group", { name: "Resume your task on accepted-translation de" });
     expect(within(group).getByText("The report stays open. A project lead decides on it.")).toBeTruthy();
     expect(within(group).getByText("Your task stays paused by a project lead: Wait for the glossary.")).toBeTruthy();
     expect(within(group).getByRole("textbox", { name: /Why can you continue\?/ }).getAttribute("rows")).toBe("3");
@@ -296,7 +296,7 @@ describe("reporter dialog", () => {
     await screen.findByRole("button", { name: /Task paused/ });
     fireEvent.click(entry());
     fireEvent.click(await screen.findByRole("button", { name: "Resume my task…" }));
-    const group = screen.getByRole("group", { name: "Resume Task 4" });
+    const group = screen.getByRole("group", { name: "Resume your task on accepted-translation de" });
     expect(within(group).queryByText(/stays paused by a project lead/)).toBeNull();
     fireEvent.change(within(group).getByRole("textbox", { name: /Why can you continue\?/ }), { target: { value: "Fine now" } });
     fireEvent.click(within(group).getByRole("button", { name: "Resume my task" }));
@@ -333,7 +333,7 @@ describe("reporter dialog", () => {
     await screen.findByRole("button", { name: /Task paused/ });
     fireEvent.click(entry());
     fireEvent.click(await screen.findByRole("button", { name: "Resume my task…" }));
-    const group = screen.getByRole("group", { name: "Resume Task 4" });
+    const group = screen.getByRole("group", { name: "Resume your task on accepted-translation de" });
     fireEvent.change(within(group).getByRole("textbox", { name: /Why can you continue\?/ }), { target: { value: "Go" } });
     const before = list.mock.calls.length;
     fireEvent.click(within(group).getByRole("button", { name: "Resume my task" }));
@@ -357,7 +357,7 @@ describe("reporter confirm discard rule", () => {
     await screen.findByRole("button", { name: /Task paused/ });
     fireEvent.click(entry());
     fireEvent.click(await screen.findByRole("button", { name: "Resume my task…" }));
-    const group = screen.getByRole("group", { name: "Resume Task 4" });
+    const group = screen.getByRole("group", { name: "Resume your task on accepted-translation de" });
     const textarea = within(group).getByRole("textbox", { name: /Why can you continue\?/ });
     fireEvent.change(textarea, { target: { value: text } });
     return { group, textarea };
@@ -367,7 +367,7 @@ describe("reporter confirm discard rule", () => {
   it("asks before the footer Close drops typed confirmation text", async () => {
     const { textarea } = await openResumeWithText("Clarified");
     fireEvent.click(footer().getByRole("button", { name: "Close" }));
-    expect(screen.getByRole("dialog", { name: "Problems with Task 4" })).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: "Problems with accepted-translation de" })).toBeTruthy();
     expect(discardQuestion()).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Keep writing" }));
     expect((textarea as HTMLTextAreaElement).value).toBe("Clarified");
@@ -377,11 +377,11 @@ describe("reporter confirm discard rule", () => {
   it("asks before New report drops typed confirmation text", async () => {
     const { textarea } = await openResumeWithText("Clarified");
     fireEvent.click(footer().getByRole("button", { name: "New report" }));
-    expect(screen.getByRole("dialog", { name: "Problems with Task 4" })).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: "Problems with accepted-translation de" })).toBeTruthy();
     expect(discardQuestion()).toBeTruthy();
     expect((textarea as HTMLTextAreaElement).value).toBe("Clarified");
     fireEvent.click(screen.getByRole("button", { name: "Discard" }));
-    expect(screen.queryByRole("group", { name: "Resume Task 4" })).toBeNull();
+    expect(screen.queryByRole("group", { name: "Resume your task on accepted-translation de" })).toBeNull();
     fireEvent.click(footer().getByRole("button", { name: "New report" }));
     expect(screen.getByRole("dialog", { name: "New problem report" })).toBeTruthy();
   });
@@ -389,15 +389,15 @@ describe("reporter confirm discard rule", () => {
   it("asks on Escape in the confirm textarea but discards on the explicit Cancel", async () => {
     const { group, textarea } = await openResumeWithText("Clarified");
     fireEvent.keyDown(textarea, { key: "Escape" });
-    expect(screen.getByRole("dialog", { name: "Problems with Task 4" })).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: "Problems with accepted-translation de" })).toBeTruthy();
     expect(discardQuestion()).toBeTruthy();
     expect((textarea as HTMLTextAreaElement).value).toBe("Clarified");
     fireEvent.click(screen.getByRole("button", { name: "Keep writing" }));
     expect(discardQuestion()).toBeNull();
     fireEvent.click(within(group).getByRole("button", { name: "Cancel" }));
     expect(discardQuestion()).toBeNull();
-    expect(screen.queryByRole("group", { name: "Resume Task 4" })).toBeNull();
-    expect(screen.getByRole("dialog", { name: "Problems with Task 4" })).toBeTruthy();
+    expect(screen.queryByRole("group", { name: "Resume your task on accepted-translation de" })).toBeNull();
+    expect(screen.getByRole("dialog", { name: "Problems with accepted-translation de" })).toBeTruthy();
   });
 });
 
@@ -407,10 +407,22 @@ describe("read-only task and lead answers (#49 R-20, R-26)", () => {
     await waitFor(() => expect(api.listTaskProblemReports).toHaveBeenCalled());
     await act(async () => undefined);
     fireEvent.click(screen.getByRole("button", { name: /^Text problems/ }));
-    const dialog = await screen.findByRole("dialog", { name: "Problems with Task 4" });
+    // No report and no text name given: the title names no task number (issue 248).
+    const dialog = await screen.findByRole("dialog", { name: "Problems with this text" });
     expect(within(dialog).getByText("You have not reported a problem with this text.")).toBeTruthy();
     fireEvent.click(footer().getByRole("button", { name: "New report" }));
     expect(screen.getByRole("dialog", { name: "New problem report" })).toBeTruthy();
+  });
+
+  it("names the dialog after the given text, not the task number (issue 248)", async () => {
+    vi.spyOn(api, "listTaskProblemReports").mockResolvedValue([]);
+    vi.spyOn(api, "getAssignmentMetadata").mockResolvedValue(task({ status: "submitted" }));
+    render(<TaskProblemActions assignment={task({ status: "submitted" })} textName="case-107 de" onSaveBeforeReport={vi.fn()} onRefresh={vi.fn()} />);
+    await waitFor(() => expect(api.listTaskProblemReports).toHaveBeenCalled());
+    await act(async () => undefined);
+    fireEvent.click(screen.getByRole("button", { name: /^Text problems/ }));
+    expect(await screen.findByRole("dialog", { name: "Problems with case-107 de" })).toBeTruthy();
+    expect(screen.queryByText(/Task 4/)).toBeNull();
   });
 
   it("marks an answered report seen once the reporter has it in front of them", async () => {

@@ -27,8 +27,9 @@ describe("problem report labels", () => {
     expect(reportStateFact(report({ state: "resolved", viewer_is_lead: true, viewer_label: "lead-0002", state_changed_by_label: "lead-0002", state_changed_at: null }), now)).toBe("Closed by lead-0002 (you)");
   });
   it("task_label", () => {
-    expect(taskLabel(hold())).toBe("Task 4, ann-0004, accepted-translation de");
-    expect(taskRef(hold())).toBe("Task 4 (ann-0004)");
+    expect(taskLabel(hold())).toBe("ann-0004, accepted-translation de, annotation");
+    expect(taskRef(hold())).toBe("the annotation of accepted-translation de by ann-0004");
+    expect(taskRef(hold({ task: "review" }))).toBe("the consolidation of accepted-translation de by ann-0004");
   });
   it("your_task_fact_for_each_release_path", () => {
     expect(yourTaskFact(report()).text).toBe("Paused since");
@@ -43,9 +44,9 @@ describe("problem report labels", () => {
   it("history_creation_first_and_view_dependent_sentences", () => {
     const lead = report({ viewer_is_lead: true, viewer_label: "lead-0002", events: [event(), event({ event_id: "e2", action: "extend_hold", actor_label: "lead-0002", own_task: false, reason: "Wait", affected: [{ assignment_id: 7, owner_label: "ann-0005", case_id: "c", language: "de", task: "annotate" }] })] });
     expect(historyItems(lead).map(i => i.sentence)).toEqual([
-      "ann-0004 reported the problem. Task 4 paused.",
-      "ann-0004 resumed Task 4 (ann-0004).",
-      "lead-0002 (you) paused Task 7 (ann-0005). Reason shown to their owners:",
+      "ann-0004 reported the problem. The annotation of accepted-translation de paused.",
+      "ann-0004 resumed the annotation of accepted-translation de by ann-0004.",
+      "lead-0002 (you) paused the annotation of c de by ann-0005. Reason shown to their owners:",
     ]);
     const mine = report({ events: [event(), event({ event_id: "e3", action: "resolve", actor_label: "lead-0002", own_task: false, reason: "Fixed" })] });
     const items = historyItems(mine);
@@ -59,14 +60,14 @@ describe("problem report labels", () => {
   it("history_lead_sentences_for_release_restart_withdraw_and_reopen", () => {
     const other = { assignment_id: 7, owner_label: "ann-0005", case_id: "c", language: "de", task: "annotate" as const };
     const lead = (events: Parameters<typeof event>[0][]) => historyItems(report({ viewer_is_lead: true, viewer_label: "lead-0003", events: events.map(e => event(e)) })).at(-1)?.sentence;
-    expect(lead([{ actor_label: "lead-0002", own_task: false, affected: [other] }])).toBe("lead-0002 released the pause on Task 7 (ann-0005).");
+    expect(lead([{ actor_label: "lead-0002", own_task: false, affected: [other] }])).toBe("lead-0002 released the pause on the annotation of c de by ann-0005.");
     expect(lead([{ action: "extend_hold", actor_label: "lead-0002", own_task: false, affected: [other, { ...other, assignment_id: 9, owner_label: "ann-0006" }] }]))
-      .toBe("lead-0002 paused Task 7 (ann-0005) and Task 9 (ann-0006). Reason shown to their owners:");
+      .toBe("lead-0002 paused the annotation of c de by ann-0005 and the annotation of c de by ann-0006. Reason shown to their owners:");
     expect(lead([{ action: "restart", actor_label: "lead-0002", round_ordinal: 3, abandoned_round_ordinal: 2 }]))
-      .toBe("lead-0002 agreed an empty restart of Task 4. Round 2 abandoned and kept; Round 3 started empty. Report closed.");
+      .toBe("lead-0002 agreed an empty restart of the annotation of accepted-translation de by ann-0004. Round 2 abandoned and kept; Round 3 started empty. Report closed.");
     expect(lead([{ action: "restart", actor_label: "lead-0002", round_ordinal: 3 }]))
-      .toBe("lead-0002 agreed an empty restart of Task 4. The previous round abandoned and kept; Round 3 started empty. Report closed.");
-    expect(lead([{ action: "withdraw", affected: [{ ...other, assignment_id: 4, owner_label: "ann-0004" }] }])).toBe("ann-0004 withdrew the report. Task 4 resumed.");
+      .toBe("lead-0002 agreed an empty restart of the annotation of accepted-translation de by ann-0004. The previous round abandoned and kept; Round 3 started empty. Report closed.");
+    expect(lead([{ action: "withdraw", affected: [{ ...other, assignment_id: 4, owner_label: "ann-0004" }] }])).toBe("ann-0004 withdrew the report. The annotation of c de by ann-0004 resumed.");
     expect(lead([{ action: "reopen", actor_label: "lead-0002" }])).toBe("lead-0002 reopened the report.");
     const reporter = historyItems(report({ events: [event({ action: "restart", actor_label: "lead-0002", round_ordinal: 3, abandoned_translation_draft: { text: "Draft", form: { a: 1 } } })] })).at(-1);
     expect(reporter).toMatchObject({ sentence: "The project lead restarted your task with an empty Round 3. The previous round is kept. Report closed.", draft: { text: "Draft", form: { a: 1 } } });
@@ -82,11 +83,11 @@ describe("problem report labels", () => {
   });
   it("intent_availability", () => {
     const open = intentState(report({ viewer_is_lead: true }));
-    expect(open.resume_close.label).toBe("Close and resume Task 4");
+    expect(open.resume_close.label).toBe("Close and resume the annotation of accepted-translation de by ann-0004");
     expect(open.close.label).toBe("Close, keep paused…");
-    expect(open.close.consequence).toBe("Task 4 stays paused until you release it.");
+    expect(open.close.consequence).toBe("The annotation of accepted-translation de by ann-0004 stays paused until you release it.");
     expect(open.release.label).toBe("Release pause…");
-    expect(intentState(report({ viewer_is_lead: true, state: "resolved" })).release).toEqual({ label: "Release pause on Task 4…", consequence: "Lets Task 4 continue. The report stays closed.", unavailable: null });
+    expect(intentState(report({ viewer_is_lead: true, state: "resolved" })).release).toEqual({ label: "Release pause on the annotation of accepted-translation de by ann-0004…", consequence: "Lets the annotation of accepted-translation de by ann-0004 continue. The report stays closed.", unavailable: null });
     expect(open.reopen.unavailable).toBe("The report is open.");
     const closed = intentState(report({ viewer_is_lead: true, state: "resolved", holds: [hold({ active: false })] }));
     expect(closed.close.label).toBe("Close report…");
@@ -96,22 +97,22 @@ describe("problem report labels", () => {
     expect(closed.reopen).toEqual({ label: "Reopen report…", consequence: "Makes it open again; nothing is paused again.", unavailable: null });
     expect(intentState(report({ state: "withdrawn" })).restart.unavailable).toBe("The report is withdrawn.");
     const blocked = intentState(report({ viewer_is_lead: true, holds: [hold({ other_active_holds: [{ report_id: "r2" }] })] }));
-    expect(blocked.restart.unavailable).toBe("Task 4 is also paused by another report. Release that pause first.");
+    expect(blocked.restart.unavailable).toBe("The annotation of accepted-translation de by ann-0004 is also paused by another report. Release that pause first.");
   });
   it("summary_and_outcomes", () => {
     const before = report({ viewer_is_lead: true });
     const after = report({ viewer_is_lead: true, state: "resolved" });
-    expect(leadOutcome("close", before, after)).toBe("Report closed. Task 4 is still paused by this report; release it when work can continue.");
+    expect(leadOutcome("close", before, after)).toBe("Report closed. The annotation of accepted-translation de by ann-0004 is still paused by this report; release it when work can continue.");
     expect(leadOutcome("close", before, report({ state: "resolved", holds: [hold({ active: false })] }))).toBe("Report closed. No task is paused by it any more. The final result did not change.");
     expect(leadOutcome("reopen", after, before)).toBe("Report reopened. No task was paused again.");
     const released = report({ viewer_is_lead: true, holds: [hold({ active: false, release_action: "resume" })] });
-    expect(leadOutcome("release", before, released, [4])).toBe("Released the pause on Task 4 (ann-0004). The report is still open.");
+    expect(leadOutcome("release", before, released, [4])).toBe("Released the pause on the annotation of accepted-translation de by ann-0004. The report is still open.");
     const stillHeld = report({ viewer_is_lead: true, holds: [hold({ active: false, release_action: "resume", other_active_holds: [{ report_id: "r2" }] })] });
-    expect(leadOutcome("release", before, stillHeld)).toBe("Released the pause on Task 4 (ann-0004). The report is still open. Task 4 is still paused by another report.");
+    expect(leadOutcome("release", before, stillHeld)).toBe("Released the pause on the annotation of accepted-translation de by ann-0004. The report is still open. The annotation of accepted-translation de by ann-0004 is still paused by another report.");
     const restarted = report({ viewer_is_lead: true, state: "resolved", events: [event({ action: "restart", actor_label: "lead-0002", round_ordinal: 3, abandoned_round_ordinal: 2 })] });
-    expect(leadOutcome("restart", before, restarted)).toBe("Task 4 restarted with an empty Round 3. Round 2 is kept in the history. Report closed. The final result did not change.");
+    expect(leadOutcome("restart", before, restarted)).toBe("The annotation of accepted-translation de by ann-0004 restarted with an empty Round 3. Round 2 is kept in the history. Report closed. The final result did not change.");
     const paused = report({ viewer_is_lead: true, holds: [hold(), hold({ hold_id: "h7", assignment_id: 7, owner_label: "ann-0005" })] });
-    expect(leadOutcome("pause", before, paused)).toBe("Paused Task 7 (ann-0005). Their owners see your reason. The report is still open.");
+    expect(leadOutcome("pause", before, paused)).toBe("Paused the annotation of accepted-translation de by ann-0005. Their owners see your reason. The report is still open.");
   });
   it("conflict_reasons", () => {
     expect(conflictReasonText({ reason: "REPORT_LEAD_ACTED" })).toMatch(/project lead/);

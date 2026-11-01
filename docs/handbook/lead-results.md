@@ -165,7 +165,7 @@ What for: answer a report and let the work go on.
 
 1. On **Documents**, click **Decide on report…** in the row. Or click **Open report** in the text card.
 2. Read the report: who reported it, the reason and the history.
-3. In the common case, write an optional answer and click the close-and-resume button, for example *Close and resume Task 12*.
+3. In the common case, write an optional answer and click the close-and-resume button, for example *Close and resume the annotation of CASE-1 de by Ana Weber (ann-0004)*. The page names a task by its kind, text and owner, not by a number.
 4. For other cases, open **Other decisions** and choose one:
    - **Close report…** or **Close, keep paused…**: close it with an outcome for the reporter.
    - **Release pause…**: let paused tasks continue.

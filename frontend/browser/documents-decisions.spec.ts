@@ -357,7 +357,6 @@ test("S13 session ends during a decision: nothing is saved and the decision stay
 test("S12 Resume task opens the report with the pause preselected; releasing it and going back shows Resolved", async ({ page }) => {
   const { s, labels } = await prepare(page, "S12");
   const caseId = "case-0512";
-  const assignments = s.assignments as Record<string, number>;
   await openDocuments(page, s, "?decision=report-or-pause");
   await expect(textRow(page, caseId, "de")).toBeVisible();
   await expect(textRow(page, caseId, "en")).toBeVisible();
@@ -380,7 +379,7 @@ test("S12 Resume task opens the report with the pause preselected; releasing it 
   await expect(page.getByText(/^Problem report · /)).toBeVisible();
   const release = page.getByRole("group", { name: "Release pause", exact: true });
   await expect(release).toBeVisible();
-  await expect(release.getByRole("checkbox", { name: new RegExp(`^Task ${assignments.de}${SEP}`) })).toBeChecked();
+  await expect(release.getByRole("checkbox", { name: new RegExp(`, ${esc(caseId)} de, annotation$`) })).toBeChecked();
   await release.getByRole("textbox", { name: /Reason/ }).fill("The question is answered; continue the annotation.");
   await release.getByRole("button", { name: "Release pause", exact: true }).click();
   await expect(page.getByText(/^Released the pause on /)).toBeVisible();

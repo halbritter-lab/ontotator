@@ -4,6 +4,7 @@ import { ErrorNotice } from "../admin/ErrorNotice";
 import { NotFound } from "../app/NotFound";
 import { routeHref, type Route } from "../app/router";
 import { Time } from "../app/Time";
+import { textLabel } from "../app/identity";
 import { InlineMessage } from "../ui";
 import { reportStateFact, reportTitle } from "./labels";
 import { ReportTimeline } from "./ReportTimeline";
@@ -33,7 +34,7 @@ export function ReporterReportPage({ reportId, onNavigate }: { reportId: string;
     <a className="btn btn-secondary btn-sm" href={routeHref(task)} onClick={event => {
       if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       event.preventDefault(); onNavigate(task);
-    }}>{`Open Task ${report.assignment_id}`}</a>
+    }}>{`Open your task on ${textLabel(report)}`}</a>
     <h1>{reportTitle(report.reason)}</h1>
     {report.created_at && <p className="reporter-report-meta">Reported <Time iso={report.created_at} /></p>}
     <p>{reportStateFact(report)}{report.state === "resolved" && report.resolution && <><br />Outcome: {report.resolution}</>}</p>

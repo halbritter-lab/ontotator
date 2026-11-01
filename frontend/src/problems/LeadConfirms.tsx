@@ -3,7 +3,7 @@ import { api, ApiError, type PauseCandidate, type ProblemActionRequest, type Pro
 import { personLabel } from "../app/submissionLabels";
 import { Time } from "../app/Time";
 import { Button, Checkbox, InlineConfirm, InlineMessage, Textarea, TextInput, type InlineConfirmOutcome } from "../ui";
-import { historyItems, intentState, reporterName, taskLabel, type Intent } from "./labels";
+import { historyItems, intentState, reporterName, reporterTask, taskLabel, taskRef, taskRefOf, upperFirst, type Intent } from "./labels";
 import type { ReportLink } from "./LeadStatePanel";
 import type { LeadReportState } from "./useLeadReport";
 
@@ -128,10 +128,10 @@ export function LeadConfirm({ intent, report, finalText, preselect = [], lead, r
         if (!alive.current) return;
         const otherOf = (view: ProblemReportView | null) => (view?.holds ?? []).find(h => h.assignment_id === task && (h.other_active_holds?.length ?? 0) > 0)?.other_active_holds?.[0];
         const other = otherOf(fresh) ?? otherOf(report);
-        setNotice(<>Task {task} is also paused by another report. Nothing changed. Release that pause first.{other && <> {reportLink(other.report_id, "Open report")}</>}</>);
+        setNotice(<>{upperFirst(taskRefOf(fresh ?? report, task))} is also paused by another report. Nothing changed. Release that pause first.{other && <> {reportLink(other.report_id, "Open report")}</>}</>);
       } else if (code === "ASSIGNMENT_NOT_FOUND") {
         const task = detailNumber(failure, "assignment_id") ?? chosen[0];
-        setNotice(`Task ${task} is no longer available (revoked or moved). Nothing changed.`);
+        setNotice(`${upperFirst(taskRefOf(report, task))} is no longer available (revoked or moved). Nothing changed.`);
         if (intent === "pause") { setSelected([]); lead.loadCandidates(true); }
         else void lead.reload();
       } else if (code === "RESTART_AGREEMENT_REQUIRED") {
@@ -185,10 +185,10 @@ export function LeadConfirm({ intent, report, finalText, preselect = [], lead, r
   switch (intent) {
     case "close": {
       title = "Close report";
-      const paused = activeHolds.map(h => `Task ${h.assignment_id}`);
+      const paused = activeHolds.map(taskRef);
       message = !paused.length ? "No task is paused by this report."
-        : paused.length === 1 ? `${paused[0]} stays paused. Release it separately with Release pause.`
-        : `${paused.slice(0, -1).join(", ")} and ${paused[paused.length - 1]} stay paused. Release them separately with Release pause.`;
+        : paused.length === 1 ? `${upperFirst(paused[0]!)} stays paused. Release it separately with Release pause.`
+        : `${upperFirst(paused.slice(0, -1).join(", "))} and ${paused[paused.length - 1]} stay paused. Release them separately with Release pause.`;
       confirmLabel = "Close report";
       body = reasonField(`Outcome for ${reporter}`, 4, `${reporter} sees this in the report.`);
       break;
@@ -249,7 +249,7 @@ export function LeadConfirm({ intent, report, finalText, preselect = [], lead, r
       break;
     }
     case "restart": {
-      title = `Agree empty restart of Task ${report.assignment_id}`;
+      title = `Agree empty restart of ${taskRef(reporterTask(report))}`;
       const current = report.current_round_ordinal;
       tone = "danger";
       confirmLabel = "Restart with empty round";
@@ -258,7 +258,7 @@ export function LeadConfirm({ intent, report, finalText, preselect = [], lead, r
         <li>{report.task === "translation_review"
           ? "The current translation draft is kept in the report history; the text and form start fresh."
           : "The new round has no earlier or machine findings."}</li>
-        <li>This report closes; its pause on Task {report.assignment_id} is released.</li>
+        <li>This report closes; its pause on {taskRef(reporterTask(report))} is released.</li>
         <li>Final result stays: {finalText}.</li>
       </ul>;
       body = <>
