@@ -82,7 +82,7 @@ test("Assigned to shows a person's open and submitted work, survives a reload an
   await expect(textRow(page, "FR300200", "en")).toHaveCount(0); // revoked
   await expect(rowCell(textRow(page, "FR100994", "en"), "annotation")).toContainText("1 of 1 submitted");
   await expect(rowCell(textRow(page, "FR100994", "fr"), "translation")).toContainText("accepted");
-  await expect(rowCell(textRow(page, "FR200100", "en"), "annotation")).toContainText("0 of 1 submitted");
+  await expect(rowCell(textRow(page, "FR200100", "en"), "annotation")).toContainText("assigned, not started");
   await shot(page, "05-chip-and-rows");
 
   await page.reload();
