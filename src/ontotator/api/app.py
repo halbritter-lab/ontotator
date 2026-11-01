@@ -509,6 +509,9 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
                     "GUIDELINE_UNCHANGED": 409,
                     "GUIDELINE_VERSION_CONFLICT": 409,
                     "GUIDELINE_ALREADY_WITHDRAWN": 409,
+                    "PRACTICE_UNAVAILABLE": 409,
+                    "NOT_A_PRACTICE_PROJECT": 409,
+                    "PRACTICE_IMPORT_FAILED": 503,
                 }.get(exc.code, 422)
             ),
             content={"code": exc.code, "details": exc.details or str(exc)},

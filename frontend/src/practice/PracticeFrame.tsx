@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { PracticeTask } from "../api/client";
 import { MY_TASKS, routeHref, type Route } from "../app/router";
 import { Button, IconCheck } from "../ui";
@@ -36,8 +36,11 @@ export function PracticeFrame({ assignmentId, onNavigate, children }: {
   onNavigate: (route: Route) => void;
   children: ReactNode;
 }): JSX.Element {
-  const { load } = usePractice(POLL_MS);
+  // Only a practice task polls; any other task reads the practice state once.
+  const [polling, setPolling] = useState(false);
+  const { load } = usePractice(polling ? POLL_MS : undefined);
   const task = load.kind === "ready" ? load.state.project?.tasks.find(item => item.assignment_id === assignmentId) : undefined;
+  if (!!task !== polling) setPolling(!!task);
   if (!task) return <>{children}</>;
   return <>
     <div className="practice-banner" role="note" data-testid="practice-banner">

@@ -145,7 +145,7 @@ def test_practice_is_only_for_annotators(app: FastAPI) -> None:
     assert state["show_card"] is False and state["available"] is False
     assert state["unavailable_reason"] == "not_eligible"
     refused = lead.post("/api/v1/me/practice")
-    assert refused.status_code >= 400
+    assert refused.status_code == 409
     assert refused.json()["code"] == "PRACTICE_UNAVAILABLE"
 
 
@@ -162,7 +162,7 @@ def test_without_a_suitable_ontology_practice_explains_why(
     assert state["unavailable_reason"] == "no_ontology"
     assert "HPO release" in state["unavailable_message"]
     refused = client.post("/api/v1/me/practice")
-    assert refused.status_code >= 400
+    assert refused.status_code == 409
     assert refused.json()["details"]["reason"] == "no_ontology"
 
 
@@ -311,7 +311,7 @@ def test_delete_refuses_a_real_project(app: FastAPI) -> None:
 
     refused = admin.delete(f"/api/v1/admin/practice-projects/{REAL}")
 
-    assert refused.status_code >= 400
+    assert refused.status_code == 409
     assert refused.json()["code"] == "NOT_A_PRACTICE_PROJECT"
     with pytest.raises(DomainError) as caught, app.state.repo.db.transaction() as conn:
         practice_store.purge_practice_project(conn, Actor.cli(), REAL, reason="test")

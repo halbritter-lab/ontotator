@@ -25,12 +25,15 @@ export function usePractice(pollMs?: number): { load: PracticeLoad; reload: () =
     reload();
     const visible = () => { if (document.visibilityState === "visible") reload(); };
     document.addEventListener("visibilitychange", visible);
-    const timer = pollMs ? window.setInterval(() => { if (document.visibilityState === "visible") reload(); }, pollMs) : undefined;
     return () => {
       alive.current = false;
       document.removeEventListener("visibilitychange", visible);
-      if (timer !== undefined) window.clearInterval(timer);
     };
+  }, [reload]);
+  useEffect(() => {
+    if (!pollMs) return;
+    const timer = window.setInterval(() => { if (document.visibilityState === "visible") reload(); }, pollMs);
+    return () => window.clearInterval(timer);
   }, [reload, pollMs]);
   return { load, reload, set };
 }
