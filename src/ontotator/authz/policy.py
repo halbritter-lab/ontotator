@@ -62,6 +62,9 @@ class Access:
     pseudonym: str
     is_system_admin: bool
     roles: Mapping[str, frozenset[Role]] = field(default_factory=dict)
+    # Keys of practice projects (issue 266): private to their owner, so the
+    # system admin's rights do not reach them; only the roles there count.
+    practice: frozenset[str] = frozenset()
 
     def roles_in(self, project_key: str) -> frozenset[Role]:
         return self.roles.get(project_key, frozenset())
@@ -138,7 +141,11 @@ def can(access: Access, action: Action, project_key: str | None = None) -> bool:
     """Whether ``access`` may take ``action`` (in ``project_key``)."""
     if action in SYSTEM_ACTIONS:
         return access.is_system_admin
-    if access.is_system_admin and action in ADMIN_PROJECT_ACTIONS:
+    if (
+        access.is_system_admin
+        and action in ADMIN_PROJECT_ACTIONS
+        and (project_key is None or project_key not in access.practice)
+    ):
         return True
     if project_key is None:
         return False

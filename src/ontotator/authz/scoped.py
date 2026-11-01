@@ -419,6 +419,7 @@ class ScopedRepository(Repository):
         pins: Mapping[str, Pin],
         *,
         on_create: Callable[[Connection, int], None] | None = None,
+        practice: bool = False,
     ) -> None:
         """Create a project (system admins only), audited as ``project.create``.
 
@@ -459,7 +460,9 @@ class ScopedRepository(Repository):
             if on_create is not None:
                 on_create(conn, project_id)
 
-        super().create_project(key, name, description, profile, pins, on_create=created)
+        super().create_project(
+            key, name, description, profile, pins, on_create=created, practice=practice
+        )
 
     def project_pins(self, project_key: str) -> dict[str, Pin]:
         self._visible(project_key)

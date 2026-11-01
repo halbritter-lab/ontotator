@@ -54,8 +54,17 @@ def record_audit(
 
     ``at`` defaults to the database clock; services pass their own clock, so
     the trail and the change carry the same time. A ``user`` target also
-    records the account's id, resolved from the username at this moment.
+    records the account's id, resolved from the username at this moment. An
+    event in a practice project (issue 266) is marked ``details.practice``.
     """
+    details = dict(details or {})
+    if (
+        project_id is not None
+        and conn.execute(
+            select(ProjectRow.practice).where(ProjectRow.id == project_id)
+        ).scalar_one_or_none()
+    ):
+        details["practice"] = True
     values: dict[str, Any] = {
         "actor_user_id": actor.user_id,
         "actor_label": actor.label,
@@ -63,7 +72,7 @@ def record_audit(
         "target_type": target_type,
         "target_id": str(target_id),
         "project_id": project_id,
-        "details": details or {},
+        "details": details,
     }
     if target_type == "user":
         values["target_user_id"] = (

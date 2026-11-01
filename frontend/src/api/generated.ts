@@ -1993,6 +1993,142 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/practice": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Practice
+         * @description The user's practice project with its tasks, and whether practice is
+         *     offered (the "New here?" card on My tasks).
+         */
+        get: operations["get_practice_api_v1_me_practice_get"];
+        put?: never;
+        /**
+         * Start Practice
+         * @description Create the user's practice project (or keep the one they have).
+         *
+         *     Refused with ``PRACTICE_UNAVAILABLE`` (and the reason) when practice is
+         *     switched off, the user has no Annotator role, or no suitable HPO release
+         *     is installed.
+         */
+        post: operations["start_practice_api_v1_me_practice_post"];
+        /**
+         * Delete Practice
+         * @description Delete the user's practice project; only its own rows go.
+         */
+        delete: operations["delete_practice_api_v1_me_practice_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/practice/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset Practice
+         * @description Delete the practice project and create a fresh one.
+         */
+        post: operations["reset_practice_api_v1_me_practice_reset_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/practice/card": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Practice Card
+         * @description Show or hide the "New here?" card on My tasks (stored per user).
+         */
+        put: operations["set_practice_card_api_v1_me_practice_card_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/practice-projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Practice Projects
+         * @description Every practice project, newest first (the Projects page filter).
+         */
+        get: operations["list_practice_projects_api_v1_admin_practice_projects_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/practice-projects/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Practice Project
+         * @description Delete one practice project; any other project is refused with
+         *     ``NOT_A_PRACTICE_PROJECT``.
+         */
+        delete: operations["delete_practice_project_api_v1_admin_practice_projects__key__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/settings/practice": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Practice Settings */
+        get: operations["get_practice_settings_api_v1_admin_settings_practice_get"];
+        /**
+         * Set Practice Settings
+         * @description Switch the offer on or off; existing practice projects stay until
+         *     they are deleted or expire.
+         */
+        put: operations["set_practice_settings_api_v1_admin_settings_practice_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/about": {
         parameters: {
             query?: never;
@@ -2530,6 +2666,36 @@ export interface components {
              * @description For a translation file: the projects that froze their translations at first use without this file, so it does not reach them (#254).
              */
             frozen_without?: string[];
+        };
+        /** AdminPracticeProject */
+        AdminPracticeProject: {
+            /** Project Key */
+            project_key: string;
+            /** Name */
+            name: string;
+            /** Owner Username */
+            owner_username: string;
+            /** Owner Display Name */
+            owner_display_name: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Last Activity At
+             * Format: date-time
+             */
+            last_activity_at: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Done */
+            done: number;
+            /** Total */
+            total: number;
         };
         /** AdminUser */
         AdminUser: {
@@ -5878,6 +6044,127 @@ export interface components {
              */
             marked_in_package: boolean;
         };
+        /** PracticeCard */
+        PracticeCard: {
+            /** Show */
+            show: boolean;
+        };
+        /**
+         * PracticeDecision
+         * @description A decision on a proposal or on a colleague's finding.
+         */
+        PracticeDecision: {
+            /** Term Id */
+            term_id?: string | null;
+            /** Outcome */
+            outcome: string;
+            /** Replacement Term Id */
+            replacement_term_id?: string | null;
+            /** Action */
+            action?: string | null;
+        };
+        /** PracticeFinding */
+        PracticeFinding: {
+            /** Term Id */
+            term_id: string;
+            /** Assertion */
+            assertion?: string | null;
+            /**
+             * Defaulted
+             * @default []
+             */
+            defaulted: string[];
+            /**
+             * Replacement
+             * @default false
+             */
+            replacement: boolean;
+        };
+        /** PracticeProject */
+        PracticeProject: {
+            /** Project Key */
+            project_key: string;
+            /** Name */
+            name: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Last Activity At
+             * Format: date-time
+             */
+            last_activity_at: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Tasks */
+            tasks: components["schemas"]["PracticeTask"][];
+            /** Done */
+            done: number;
+            /** Total */
+            total: number;
+        };
+        /** PracticeSettings */
+        PracticeSettings: {
+            /** Offer */
+            offer: boolean;
+        };
+        /**
+         * PracticeState
+         * @description ``GET /api/v1/me/practice``.
+         */
+        PracticeState: {
+            /** Offered */
+            offered: boolean;
+            /** Available */
+            available: boolean;
+            /** Unavailable Reason */
+            unavailable_reason?: ("offer_off" | "not_eligible" | "no_ontology") | null;
+            /** Unavailable Message */
+            unavailable_message?: string | null;
+            /** Show Card */
+            show_card: boolean;
+            /** Card Hidden */
+            card_hidden: boolean;
+            project?: components["schemas"]["PracticeProject"] | null;
+        };
+        /**
+         * PracticeTask
+         * @description One practice task and the facts its steps are ticked from.
+         */
+        PracticeTask: {
+            /** Assignment Id */
+            assignment_id: number;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "scratch" | "proposals" | "translation_review" | "consolidation";
+            /** Status */
+            status: string;
+            /** Case Id */
+            case_id: string;
+            /** Language */
+            language: string;
+            /**
+             * Findings
+             * @default []
+             */
+            findings: components["schemas"]["PracticeFinding"][];
+            /**
+             * Decisions
+             * @default []
+             */
+            decisions: components["schemas"]["PracticeDecision"][];
+            /** Translation Text */
+            translation_text?: string | null;
+            /** Translation Decision */
+            translation_decision?: string | null;
+        };
         /**
          * Preferences
          * @description A user's preferences returned by ``GET /api/v1/preferences``.
@@ -5894,6 +6181,8 @@ export interface components {
             search_languages_by_annotator?: {
                 [key: string]: string[];
             };
+            /** Practice Card Hidden */
+            practice_card_hidden?: boolean | null;
         };
         /**
          * PreferencesUpdate
@@ -5911,6 +6200,8 @@ export interface components {
             search_languages_by_annotator?: {
                 [key: string]: string[];
             } | null;
+            /** Practice Card Hidden */
+            practice_card_hidden?: boolean | null;
         };
         /** ProblemActionRequest */
         ProblemActionRequest: {
@@ -7829,6 +8120,8 @@ export interface components {
              * @default false
              */
             waiting_for_lead: boolean;
+            /** Practice */
+            practice?: boolean | null;
         };
         /** TemplateInfo */
         TemplateInfo: {
@@ -12820,6 +13113,221 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_practice_api_v1_me_practice_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PracticeState"];
+                };
+            };
+        };
+    };
+    start_practice_api_v1_me_practice_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PracticeState"];
+                };
+            };
+        };
+    };
+    delete_practice_api_v1_me_practice_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PracticeState"];
+                };
+            };
+        };
+    };
+    reset_practice_api_v1_me_practice_reset_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PracticeState"];
+                };
+            };
+        };
+    };
+    set_practice_card_api_v1_me_practice_card_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PracticeCard"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PracticeState"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_practice_projects_api_v1_admin_practice_projects_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminPracticeProject"][];
+                };
+            };
+        };
+    };
+    delete_practice_project_api_v1_admin_practice_projects__key__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_practice_settings_api_v1_admin_settings_practice_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PracticeSettings"];
+                };
+            };
+        };
+    };
+    set_practice_settings_api_v1_admin_settings_practice_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PracticeSettings"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PracticeSettings"];
+                };
             };
             /** @description Validation Error */
             422: {

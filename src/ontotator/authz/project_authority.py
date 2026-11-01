@@ -8,7 +8,7 @@ from ontotator.auth.audit import Actor
 from ontotator.auth.authority import lock_user_authority
 from ontotator.authz.policy import Access, Action, Role, can
 from ontotator.domain.errors import AccessDenied, DomainError, NotAuthenticated
-from ontotator.storage.tables import ProjectMembershipRow
+from ontotator.storage.tables import ProjectMembershipRow, ProjectRow
 
 
 def require_project_management(
@@ -39,11 +39,16 @@ def require_project_management(
             )
         ).scalars()
     )
+    practice = conn.execute(
+        select(ProjectRow.practice).where(ProjectRow.id == project_id)
+    ).scalar_one_or_none()
     access = Access(
         user_id=actor.user_id,
         pseudonym=user["pseudonym"],
         is_system_admin=user["is_system_admin"],
         roles={key: roles},
+        # Issue 266: admin rights do not reach a practice project.
+        practice=frozenset({key}) if practice else frozenset(),
     )
     if not can(access, Action.VIEW_PROJECT, key):
         raise DomainError("PROJECT_NOT_FOUND", f"There is no project '{key}'.")
