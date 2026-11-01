@@ -1,4 +1,4 @@
-import{r as i,a as m,j as a,b as h}from"./index-5JBkP7y-.js";import{M as f,r as g}from"./index-BABeTFCa.js";function w(){const[e,t]=i.useState(null);return i.useEffect(()=>{let o=!0;return m.getAbout().then(n=>{o&&t(n)},()=>{}),()=>{o=!1}},[]),e?a.jsxs("p",{className:"help-version",title:e.revision??void 0,children:["Ontotator ",e.version,e.revision&&a.jsxs(a.Fragment,{children:[" · commit ",e.revision.slice(0,7)]})]}):null}const y=`# Ontotator user handbook
+import{r as i,a as m,j as a,b as h}from"./index-C2RyWPDP.js";import{M as f,r as g}from"./index-DfqlDsCC.js";function w(){const[e,t]=i.useState(null);return i.useEffect(()=>{let o=!0;return m.getAbout().then(n=>{o&&t(n)},()=>{}),()=>{o=!1}},[]),e?a.jsxs("p",{className:"help-version",title:e.revision??void 0,children:["Ontotator ",e.version,e.revision&&a.jsxs(a.Fragment,{children:[" · commit ",e.revision.slice(0,7)]})]}):null}const y=`# Ontotator user handbook
 
 This handbook explains how to work with Ontotator in the browser. It is for everyone who uses the app: annotators, translation reviewers, consolidators, leads and system administrators. It describes the version of Ontotator that you open it from. If you run the server, read the [server operations guide (for server operators)](../operations.md) instead.
 
@@ -1052,7 +1052,7 @@ The search compares your words with term names and synonyms; it does not underst
 
 ### I cannot submit my review: "Your qualification is required to submit."
 
-Add your qualification (for example "physician, native German speaker") in your profile, then submit again. Use the link **Add your qualification in your profile**. See [Edit your profile](getting-started.md#edit-your-profile).
+Add your qualification (for example "physician, native German speaker") in your profile, then submit again. Use the link **Add your qualification in your profile**; after saving, **Back to the task** returns you to the review. See [Edit your profile](getting-started.md#edit-your-profile).
 
 ### What does "automatic check failed" mean?
 
@@ -1365,12 +1365,12 @@ A practice project is private. Only you see it, your lead does not. It has short
 You get practice if you are an annotator or a translation reviewer in at least one project.
 
 1. In **My tasks**, the card **New here? Try it out first** appears. Click **Try it out**.
-2. Your practice tasks appear in their own group **Practice**, below your real tasks:
+2. Your practice tasks appear in their own group, marked **Practice**, above your real tasks:
    - **Annotate from scratch**: mark findings yourself.
    - **Annotate from proposals**: check a tool's proposals. One is right, one has a prefilled value, one needs **Edit & Replace**, and the tool missed one finding. **Discard copy** takes a copy back if you change your mind.
    - **Translation review**: the German translation has one error. Find and correct it.
-   - **Consolidation**, if you are also a consolidator: two virtual colleagues disagree. Decide.
-3. Open a task with **Start**. Above the task you see **Practice: nothing here counts. Invented texts only.**
+   - **Consolidation**, if you are also a consolidator: two virtual colleagues disagree. Decide. Nobody accepts the result afterwards.
+3. Open a task with **Start**. Above the task you see **Nothing here counts. Invented texts only.**
 4. The panel **Your practice** lists the steps of the task. A step ticks itself when you have really done it. **Next:** says what to do now. Each step has a **Help** link to its handbook section.
 5. To stop, click **Leave practice**. You return to **My tasks**.
 
