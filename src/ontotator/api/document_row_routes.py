@@ -235,6 +235,12 @@ class StageCellDetailView(_View):
     compared: int | None = None
     causes: list[str] = Field(default_factory=list)  # Final confirm cause codes
     round_ordinal: int | None = None
+    # Issue 258: of the ``open_tasks`` open assignments the cell names (Review
+    # in_progress / re_review, Annotation in_progress / unassigned /
+    # partly_assigned), ``started`` left the status open with their first
+    # saved change; 0 reads "Assigned, not started". None where not counted.
+    started: int | None = None
+    open_tasks: int | None = None
     # Final ``choose``: the final-result panel's label rule (VD16); None in
     # every other state.
     label_rule: Literal["accept", "compare"] | None = None
@@ -572,6 +578,8 @@ class ConsolidationOriginsView(_View):
     decided: int
     # Findings the consolidator added outside every group.
     added: int
+    # Groups the consolidator left out of the result (not findings, #248).
+    left_out: int = Field(default_factory=int)
 
 
 class FinalPanelSubmissionView(RowSubmissionView):

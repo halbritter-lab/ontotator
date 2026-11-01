@@ -33,6 +33,11 @@ from ontotator.domain.documents import OntologyRef
 from ontotator.domain.errors import DomainError
 from ontotator.ontology.registry import OntologyRegistry
 from ontotator.ontology.service import OntologyService
+from ontotator.ontology.translation_freeze import (
+    ProjectsBySha,
+    ontology_prefixes,
+    projects_without,
+)
 from ontotator.ontology.translations import parse_translation_name
 from ontotator.storage.database import Database
 from ontotator.storage.tables import (
@@ -469,6 +474,19 @@ class OntologyStore:
                 )
             )
             return [_file(row) for row in rows]
+
+    def loaded_prefixes(self) -> dict[str, str]:
+        """Dominant prefix by SHA-256 of the ontologies this worker has loaded."""
+        return {
+            sha: (service.ontology.dominant_prefix or "").lower()
+            for sha, service in self.registry.services()
+        }
+
+    def frozen_without(self) -> ProjectsBySha:
+        """Translation SHA-256 -> projects whose frozen translations lack it (#254)."""
+        loaded = self.loaded_prefixes()
+        with self.db.transaction() as conn:
+            return projects_without(conn, ontology_prefixes(conn, loaded))
 
     def pinned_shas(self) -> set[str]:
         """The files any project pins."""

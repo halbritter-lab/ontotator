@@ -116,7 +116,7 @@ test("step 2: the lead assigns the review to Ana (3 clicks)", async () => {
   await clicks.count(dialog.getByRole("button", { name: "Assign 1", exact: true }));
   await expect(dialog).toHaveCount(0);
 
-  await expectStage(cell("translation"), { state: `in review (${ANA})`, who: "" });
+  await expectStage(cell("translation"), { state: `assigned, not started (${ANA})`, who: "" });
   await expectWaiting(de(), [ANA]);
   await expect(documentsTab(page, "To assign", 0)).toBeVisible();
   await expectCounterEqualsTab(page);
@@ -145,7 +145,8 @@ test("step 4: the lead assigns the annotation to Tom and Luc", async () => {
   await clicks.count(dialog.getByRole("button", { name: "Assign 2 people", exact: true }));
   await expect(dialog).toHaveCount(0);
 
-  await expectStage(cell("annotation"), { state: "0 of 2 submitted", who: either(TOM, LUC) });
+  // Nobody has saved anything yet (issue 258).
+  await expectStage(cell("annotation"), { state: "assigned, not started", who: either(TOM, LUC) });
   await expectWaiting(de(), [TOM, LUC]);
   await expectCounterEqualsTab(page);
   record(4);
@@ -252,7 +253,8 @@ test("step 8: Carry to v2… → Tom (author, preselected) → Assign", async ()
   await clicks.count(dialog.getByRole("button", { name: "Assign", exact: true }));
   await expect(dialog).toHaveCount(0);
 
-  await expectStage(cell("annotation"), { state: "0 of 2 submitted", who: either(TOM, LUC) });
+  // Issue 258: Luc's moved draft has started; Tom has not saved on v2 yet.
+  await expectStage(cell("annotation"), { state: "0 of 2 submitted, 1 of 2 started", who: either(TOM, LUC) });
   // Spec step 8: Finalization waits for the annotation (state none or "after annotation" both read "waiting").
   await expectStage(cell("finalization"), WAITING);
   await expect(documentsTab(page, "Needs your decision", 0)).toBeVisible();

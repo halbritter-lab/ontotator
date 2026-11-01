@@ -2,7 +2,7 @@ import type { FinalSelectionSummary, ProblemReportView, ReportHoldView } from ".
 import { personLabel, submissionLabel } from "../app/submissionLabels";
 import { Time } from "../app/Time";
 import { StatusBadge } from "../ui";
-import { reportStateFact, taskOwnerText } from "./labels";
+import { reportStateFact, taskLabel } from "./labels";
 import "./problems.css";
 
 /** "Annotation, Round 2, Ana Weber (ann-0004), 18 Oct, 10:00" (leads; else the pseudonym): the row's final result without language. */
@@ -56,10 +56,10 @@ export function LeadStatePanel({ report, final, reportLink }: {
     <dl className="report-facts lead-state">
       {report.state !== "open" && <div><dt>Report</dt><dd>{reportStateFact(report)}</dd></div>}
       {holds.map(hold => <div key={hold.hold_id}>
-        <dt>Task {hold.assignment_id}</dt>
+        <dt>{hold.assignment_id === report.assignment_id ? "Task of the reporter" : "Other task"}</dt>
         <dd>
           {hold.active ? <><StatusBadge tone="warning">Paused</StatusBadge> since <Time iso={hold.created_at} /></> : <ReleasedHold report={report} hold={hold} />}
-          {hold.assignment_id !== report.assignment_id && <span className="lead-fact-note"> · {taskOwnerText(hold)}</span>}
+          {hold.assignment_id !== report.assignment_id && <span className="lead-fact-note"> · {taskLabel(hold)}</span>}
           {(hold.other_active_holds ?? []).map(other => <p key={other.report_id} className="lead-other-pause">
             Also paused by another report {reportLink(other.report_id, "Open report")}
           </p>)}

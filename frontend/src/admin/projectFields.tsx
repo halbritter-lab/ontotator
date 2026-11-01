@@ -19,6 +19,19 @@ export const profilePin = (ontology: TaskProfile["ontologies"][number]): PinDraf
   // The file is unchecked until the server reads it: a wrong shape must not break the form.
   return { ...start, t1_profile: ontology.t1_profile ?? start.t1_profile, rootsText: Array.isArray(ontology.allowed_roots) ? ontology.allowed_roots.join(", ") : "" };
 };
+/** The branches and scheme an uploaded profile sets per ontology; a field the file leaves unset is absent. */
+export type LoadedPinFields = Record<string, Partial<Pick<PinDraft, "rootsText" | "t1_profile">>>;
+export const loadedPinFields = (profile: TaskProfile): LoadedPinFields => Object.fromEntries((profile.ontologies ?? []).map(ontology => {
+  const pin = profilePin(ontology);
+  return [ontology.ontology_id, {
+    ...(Array.isArray(ontology.allowed_roots) ? { rootsText: pin.rootsText } : {}),
+    ...(ontology.t1_profile ? { t1_profile: pin.t1_profile } : {}),
+  }];
+}));
+/** The note on a field that still shows the value of the uploaded profile (issue 239). */
+export const LOADED_FROM_PROFILE = "Loaded from the profile.";
+const withLoadedNote = (loaded: boolean, hint: string): string => (loaded ? `${LOADED_FROM_PROFILE} ${hint}` : hint);
+
 export const serializePins =(ids: string[], pins: Record<string, PinDraft>): ProjectPin[] => ids.map(id => {
   const pin = pins[id] ?? emptyPin(id);
   return { ontology_id: id, sha256: pin.sha256, allowed_roots: pin.rootsText.split(",").map(root => root.trim()).filter(Boolean), t1_profile: pin.t1_profile };
@@ -64,18 +77,23 @@ const SCHEME_HINT = "HPO phenotype: fixed qualifiers with closed value lists and
  * One fieldset per ontology: the file (version), the allowed roots and the annotation scheme. `plain` (Settings, D8 B): the
  * version stays visible, roots and checks go under "Advanced" with plain labels.
  */
-export function PinFields({ ids, ontologies, value, onChange, disabled, plain = false }: {
+export function PinFields({ ids, ontologies, value, onChange, disabled, plain = false, loaded }: {
   ids: string[]; ontologies: OntologyInfo[]; value: Record<string, PinDraft>; onChange: (value: Record<string, PinDraft>) => void; disabled?: boolean; plain?: boolean;
+  /** Values of an uploaded profile: a field still showing its value says "Loaded from the profile." (issue 239). */
+  loaded?: LoadedPinFields;
 }): JSX.Element {
   const prefix = useId();
   return <>{ids.map((id, index) => {
     const pin = value[id] ?? emptyPin(id);
     const choices = versionChoices(id, ontologies);
     const change = (patch: Partial<PinDraft>) => onChange({ ...value, [id]: { ...pin, ...patch } });
+    const fromProfile = loaded?.[id];
+    const rootsLoaded = fromProfile?.rootsText !== undefined && fromProfile.rootsText === pin.rootsText;
+    const schemeLoaded = fromProfile?.t1_profile !== undefined && fromProfile.t1_profile === pin.t1_profile;
     const roots = <TextInput id={`${prefix}-${index}-roots`} label={plain ? `Limit ${id} terms to these branches` : `Allowed roots for ${id}`}
-      hint={plain ? "Term codes separated by commas, for example HP:0000118. Empty: every term." : pin.rootsText.trim() ? "Comma-separated CURIEs; leave empty for the whole ontology." : "Whole ontology: every term is allowed. Add comma-separated CURIEs to limit it."}
+      hint={withLoadedNote(rootsLoaded, plain ? "Term codes separated by commas, for example HP:0000118. Empty: every term." : pin.rootsText.trim() ? "Comma-separated CURIEs; leave empty for the whole ontology." : "Whole ontology: every term is allowed. Add comma-separated CURIEs to limit it.")}
       value={pin.rootsText} onChange={event => change({ rootsText: event.target.value })} />;
-    const checks = <Select id={`${prefix}-${index}-t1`} label={`Annotation scheme for ${id}`} hint={SCHEME_HINT} value={pin.t1_profile} onChange={event => change({ t1_profile: event.target.value as ProjectPin["t1_profile"] })}>
+    const checks = <Select id={`${prefix}-${index}-t1`} label={`Annotation scheme for ${id}`} hint={withLoadedNote(schemeLoaded, SCHEME_HINT)} value={pin.t1_profile} onChange={event => change({ t1_profile: event.target.value as ProjectPin["t1_profile"] })}>
       {(Object.keys(ANNOTATION_SCHEME_LABELS) as ProjectPin["t1_profile"][]).map(option => <option key={option} value={option}>{ANNOTATION_SCHEME_LABELS[option]}</option>)}
     </Select>;
     return <fieldset key={id} disabled={disabled}><legend>{id}</legend>

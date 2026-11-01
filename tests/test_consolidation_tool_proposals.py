@@ -180,3 +180,44 @@ def test_work_from_scratch_is_not_marked(tmp_path):
     groups = view(build_round(tmp_path))["groups"]
     flags = [m["from_tool_proposal"] for g in groups for m in g["members"]]
     assert flags and not any(flags)
+    assert all(g["rejected_by"] == [] for g in groups)
+
+
+def test_a_rejected_proposal_names_who_rejected_it(tmp_path):
+    """#248: Anne rejects the first proposal, Arne confirms every proposal.
+    The group of Arne's finding alone names Anne in ``rejected_by``; the
+    groups both marked name nobody."""
+    env = proposal_env(tmp_path)
+    anne = Workspace(env, "anno")
+    first, *rest = anne.targets
+    anne.decide(first, "rejected")
+    for target in rest:
+        anne.decide(target, "confirmed")
+    arne = Workspace(env, "anno2")
+    for target in arne.targets:
+        arne.decide(target, "confirmed")
+    sources = [anne.submit(), arne.submit()]
+    started = env.lead.post(
+        f"{BASE}/consolidations",
+        json={
+            "document_id": env.c1,
+            "reviewer": "leader",
+            "source_submission_ids": sources,
+            "reason": None,
+            "confirm_language": True,
+            "request_id": "start-rejected-proposal",
+            "expected_workflow_revision": None,
+        },
+    )
+    assert started.status_code == 200, started.text
+    round_id = started.json()["round"]["round_id"]
+    read = env.lead.get(f"/api/v1/rounds/{round_id}/consolidation")
+    assert read.status_code == 200, read.text
+    accounts = env.app.state.accounts
+    anne_id = accounts.get_by_username("anno").pseudonym
+    arne_id = accounts.get_by_username("anno2").pseudonym
+    groups = read.json()["groups"]
+    alone = [g for g in groups if {m["person_id"] for m in g["members"]} == {arne_id}]
+    assert len(alone) == 1
+    assert alone[0]["rejected_by"] == [anne_id]
+    assert all(g["rejected_by"] == [] for g in groups if g is not alone[0])

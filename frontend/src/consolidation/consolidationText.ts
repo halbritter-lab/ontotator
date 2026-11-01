@@ -43,10 +43,19 @@ export function groupStatus(group: Pick<ConsolidationGroupView, "state" | "attac
   }
 }
 
-/** "Luc Martin, Ana Weber marked this. Tom Reis has nothing here." */
-export function partialText(present: readonly ConsolidationPersonView[], absent: readonly ConsolidationPersonView[]): string {
-  const missing = absent.length === 1 ? "has nothing here" : "have nothing here";
-  return `${namesOf(present)} marked this. ${namesOf(absent)} ${missing}.`;
+/**
+ * "Luc Martin, Ana Weber marked this. Tom Reis has nothing here." People who rejected the tool proposal the
+ * finding comes from (`rejectedBy`, person ids) are named apart (#248): "Luc Martin marked this. Tom Reis rejected the proposal."
+ */
+export function partialText(present: readonly ConsolidationPersonView[], absent: readonly ConsolidationPersonView[],
+  rejectedBy: readonly string[] = []): string {
+  const rejected = absent.filter(person => rejectedBy.includes(person.person_id));
+  const nothing = absent.filter(person => !rejectedBy.includes(person.person_id));
+  return [
+    `${namesOf(present)} marked this.`,
+    ...(rejected.length ? [`${namesOf(rejected)} rejected the proposal.`] : []),
+    ...(nothing.length ? [`${namesOf(nothing)} ${nothing.length === 1 ? "has" : "have"} nothing here.`] : []),
+  ].join(" ");
 }
 
 /** "Keep Luc Martin's finding" for one person, "Keep the finding" for several. */

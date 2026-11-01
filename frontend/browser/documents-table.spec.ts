@@ -118,7 +118,7 @@ test("S0 synthetic-accepted: the final is on old text after v2 corrected it; en 
   const scroller = page.locator(".documents-page .data-table-scroll");
   expect(await scroller.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(0);
   await expect(rowCell(de, "finalization")).toContainText("Final is on old text");
-  await expect(rowCell(de, "annotation")).toContainText(new RegExp(`\\d+ of \\d+ submitted · open: ${ann}`));
+  await expect(rowCell(de, "annotation")).toContainText(new RegExp(`\\d+ of \\d+ submitted, not started · open: ${ann}`));
   await expect(rowCell(de, "waiting")).toHaveText("You");
   await expect(rowCell(de, "next").getByRole("button").first()).toHaveAccessibleName(textNamePattern("Review changes…, ", caseId, "de"));
 
@@ -230,7 +230,7 @@ test("S3 case-0211: final on v1 Round 2, corrections v2 and v3, waiting for the 
 
   const de = textRow(page, caseId, "de");
   await expect(de.getByRole("rowheader")).toContainText("v3 corrected");
-  await expect(rowCell(de, "translation")).toContainText(`in review (${names.reviewer})`);
+  await expect(rowCell(de, "translation")).toContainText(`assigned, not started (${names.reviewer})`);
   await expect(rowCell(de, "finalization")).toContainText("Final is on old text");
   await expect(documentsTab(page, "Needs your decision", 1)).toBeVisible();
 
@@ -256,7 +256,7 @@ test("S4 case-0305 fr: two independent translations, each annotated in its own r
   await expect(rowBox(page, caseId, "fr")).toBeVisible();
   const fr = textRow(page, caseId, "fr");
   await expect(fr.getByRole("rowheader")).toContainText("2 translations");
-  await expect(rowCell(fr, "annotation")).toContainText(new RegExp(`submitted · open: ${esc(names["ann-0001"])}, ${esc(names["ann-0002"])}`));
+  await expect(rowCell(fr, "annotation")).toContainText(new RegExp(`assigned, not started · open: ${esc(names["ann-0001"])}, ${esc(names["ann-0002"])}`));
   await expect(rowCell(fr, "finalization")).toContainText("waiting");
 
   const card = await openCardHistory(page, caseId, "fr");

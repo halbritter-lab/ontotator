@@ -112,3 +112,33 @@ it("shows an error when the texts of the found cases cannot be loaded", async ()
   await waitFor(() => expect(onSelect).toHaveBeenCalledWith(keysOf(["case-0001"]), "replace"));
   expect(within(dialog).queryByText(/offline/)).toBeNull();
 });
+
+it("matches another case only when one case ID fits and lists ambiguous IDs (issue 237)", async () => {
+  vi.mocked(api.lookupCaseIds).mockResolvedValue({
+    found: ["Ab5"],
+    unknown: ["x9"],
+    case_insensitive: [{ id: "ab5", case_id: "Ab5" }, { id: "AB5", case_id: "Ab5" }],
+    ambiguous: [{ id: "fr100907", candidates: ["FR100907", "Fr100907"] }],
+  });
+  const { dialog, paste, onSelect } = renderDialog();
+  paste("fr100907 ab5 AB5 x9");
+  expect(await within(dialog).findByText("1 found, 1 unknown, 1 ambiguous")).toBeTruthy();
+  expect(within(dialog).getByText("fr100907 matches FR100907 and Fr100907; enter the exact ID.")).toBeTruthy();
+  expect(within(dialog).getByText("Matched in another case: ab5 as Ab5, AB5 as Ab5")).toBeTruthy();
+  fireEvent.click(within(dialog).getByRole("button", { name: "Select 1" }));
+  await waitFor(() => expect(onSelect).toHaveBeenCalledWith(keysOf(["Ab5"]), "replace"));
+  expect(api.documentRowKeys).toHaveBeenCalledWith("p", { case_ids: ["Ab5"] });
+});
+
+it("keeps Select unavailable with a reason when every match is ambiguous", async () => {
+  vi.mocked(api.lookupCaseIds).mockResolvedValue({ found: [], unknown: [], ambiguous: [{ id: "fr1", candidates: ["FR1", "Fr1", "fR1"] }] });
+  const { dialog, paste, onSelect } = renderDialog();
+  paste("fr1");
+  expect(await within(dialog).findByText("0 found, 0 unknown, 1 ambiguous")).toBeTruthy();
+  expect(within(dialog).getByText("fr1 matches FR1, Fr1 and fR1; enter the exact ID.")).toBeTruthy();
+  const select = within(dialog).getByRole("button", { name: "Select 0" });
+  expect(select.getAttribute("aria-disabled")).toBe("true");
+  expect(document.getElementById(select.getAttribute("aria-describedby")!)?.textContent).toBe("Enter the exact case IDs listed as ambiguous.");
+  fireEvent.click(select);
+  expect(onSelect).not.toHaveBeenCalled();
+});

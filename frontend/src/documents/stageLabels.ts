@@ -53,6 +53,28 @@ const BLOCKED_TEXT: Readonly<Record<string, string>> = {
 const RE_REVIEW_TEXT: Readonly<Record<string, string>> = { correction: "correction", new_review: "new review", source_changed: "source changed" };
 const ACCEPTED_TEXT: Readonly<Record<string, string>> = { unchanged: "unchanged", in_package: "in package", outside: "outside Ontotator" };
 
+/**
+ * Issue 258: how far the open tasks a cell names have got. A task starts with the person's first saved change;
+ * opening it does not. "all" also without a count (an older server), so the cell reads as before.
+ */
+export type Started = "all" | "none" | "some";
+export function startedOf(detail: StageCellView["detail"]): Started {
+  const started = detail.started;
+  const tasks = detail.open_tasks;
+  if (started == null || tasks == null || tasks <= 0 || started >= tasks) return "all";
+  return started <= 0 ? "none" : "some";
+}
+
+/** "Assigned, not started" (cell word) for an assigned task nobody has saved yet. */
+export const NOT_STARTED = "Assigned, not started";
+
+/** "not started" / "1 of 2 started" after another part of a line; null when every task has started. */
+export function startedPart(detail: StageCellView["detail"]): string | null {
+  const state = startedOf(detail);
+  if (state === "all") return null;
+  return state === "none" ? "not started" : `${detail.started ?? 0} of ${detail.open_tasks ?? 0} started`;
+}
+
 /** The short form of a person in a cell: the display name, else the pseudonym. */
 export function shortName(person: PersonRefView): string {
   return person.display_name?.trim() || person.pseudonym;
@@ -87,12 +109,17 @@ function reviewText(cell: StageCellView, context: StageContext): StageText {
       return { symbol: "○", word: "Unassigned", detail: [version(detail.version), detail.note === "machine_translation" ? "machine translation" : null].filter(Boolean).join(" ") };
     case "check_failed": return { symbol: "⚠", word: "Check failed", detail: "unassigned" };
     case "in_progress": {
-      const word = detail.total != null && detail.total > 1 ? `${detail.assigned ?? 0} of ${detail.total} versions in review` : "In progress";
-      return { symbol: "◐", word, detail: people };
+      if (detail.total != null && detail.total > 1) {
+        return { symbol: "◐", word: `${detail.assigned ?? 0} of ${detail.total} versions in review`, detail: join(people, startedPart(detail)) };
+      }
+      const started = startedOf(detail);
+      if (started === "none") return { symbol: "○", word: NOT_STARTED, detail: people };
+      return { symbol: "◐", word: started === "some" ? startedPart(detail) ?? "In progress" : "In progress", detail: people };
     }
     case "re_review": {
       const reason = detail.reason ? `reason: ${quoted(detail.reason)}` : detail.note ? RE_REVIEW_TEXT[detail.note] : null;
-      return { symbol: "◐", word: "Re-review in progress", detail: join(people, reason) };
+      if (startedOf(detail) === "none") return { symbol: "○", word: "Re-review assigned, not started", detail: join(people, reason) };
+      return { symbol: "◐", word: "Re-review in progress", detail: join(people, startedPart(detail), reason) };
     }
     case "paused": return pausedText(cell);
     case "rejected": return { symbol: "✕", word: "Rejected", detail: join(people, detail.at && timeText(detail.at)) };
@@ -139,14 +166,19 @@ function annotationText(cell: StageCellView): StageText {
     // A person named here holds a task that opens once the review is accepted (issue 213).
     case "after_review": return { symbol: "○", word: people ? "Waiting for review" : "after review", detail: join(people, waiting) };
     case "blocked": return { symbol: "○", word: "blocked", detail: join(detail.note && BLOCKED_TEXT[detail.note], people && `${people} waiting`) };
-    case "unassigned": return { symbol: "○", word: counted("Unassigned"), detail: join(people && `${people} working`, waiting) };
-    case "partly_assigned": return { symbol: "○", word: counted("Unassigned"), detail: join(people && `${people} working`, waiting) };
+    case "unassigned":
+    case "partly_assigned": {
+      const working = !people ? null : startedOf(detail) === "none" ? `${people} assigned, not started` : join(`${people} working`, startedPart(detail));
+      return { symbol: "○", word: counted("Unassigned"), detail: join(working, waiting) };
+    }
     case "in_progress": {
       if (detail.total != null && detail.submitted != null) {
-        return { symbol: "◐", word: `${detail.submitted} of ${detail.total} submitted`, detail: join(people && `waiting: ${people}`, waiting) };
+        return { symbol: "◐", word: `${detail.submitted} of ${detail.total} submitted`, detail: join(people && `waiting: ${people}`, startedPart(detail), waiting) };
       }
       const change = detail.note === "may_change" ? join(version(detail.version), "may change") : null;
-      return { symbol: "◐", word: "In progress", detail: join(people, detail.round_ordinal != null ? `Round ${detail.round_ordinal}` : null, change, waiting) };
+      const started = startedOf(detail);
+      const word = started === "none" ? NOT_STARTED : started === "some" ? startedPart(detail) ?? "In progress" : "In progress";
+      return { symbol: started === "none" ? "○" : "◐", word, detail: join(people, detail.round_ordinal != null ? `Round ${detail.round_ordinal}` : null, change, waiting) };
     }
     case "paused": return pausedText(cell);
     case "consolidating": return { symbol: "◐", word: "Consolidating", detail: people };

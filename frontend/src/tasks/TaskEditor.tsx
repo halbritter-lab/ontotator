@@ -165,6 +165,7 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
   }
   if (!workspace) return <NotFound title={TASK_UNAVAILABLE} reason={TASK_UNAVAILABLE_REASON} onNavigate={onNavigate} />;
   const assignment = workspace.assignment;
+  const listed = tasks.find(task => task.assignment_id === assignment.id);
   // An active consolidation round opens the consolidation view (acceptance fixes WP-E); "Edit in editor…" adds view=editor.
   if (roundInfo?.kind === "consolidation" && roundInfo.active && view !== "editor") {
     // The task's guidelines and "Report a text problem" stay at hand: the consolidator decides guideline questions.
@@ -173,7 +174,7 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
         onNavigate={onNavigate} workspaceView={workspace.read_only ? null : workspace.view} notice={guidelines.notice}
         headerActions={<>{guidelines.button}<HelpLink screen="consolidation" />
           {/* Group commands save at once: nothing to save before a report. */}
-          <TaskProblemActions assignment={assignment} readOnly={workspace.read_only} onSaveBeforeReport={async () => undefined} onRefresh={value => {
+          <TaskProblemActions assignment={assignment} textName={listed ? taskText(listed) : undefined} readOnly={workspace.read_only} onSaveBeforeReport={async () => undefined} onRefresh={value => {
             setWorkspace(current => current ? { ...current, assignment: value } : current); void loadTasks();
           }} /></>} />
       {guidelines.drawer}
@@ -200,7 +201,7 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
   return <TaskGuidelines assignment={assignment} place="more" readOnly={workspace.read_only || assignment.held}>{guidelines => <>{submittedElsewhere && <InlineMessage tone="info">Another session submitted this task. Your editor has been reloaded read-only.</InlineMessage>}
     {!!taskError && <><ErrorNotice error={taskError} /><Button onClick={() => { void loadTasks(); }}>Retry task list</Button></>}
     {/* "Report a text problem" sits in the header's "More" menu; its dialogs stay mounted here. */}
-    <TaskProblemActions assignment={assignment} readOnly={workspace.read_only} onSaveBeforeReport={async () => { await saveBeforeReportRef.current?.(); }} onRefresh={value => {
+    <TaskProblemActions assignment={assignment} textName={taskText(current)} readOnly={workspace.read_only} onSaveBeforeReport={async () => { await saveBeforeReportRef.current?.(); }} onRefresh={value => {
       setWorkspace(current => current ? { ...current, assignment: value } : current); void loadTasks();
     }} renderEntry={problemItem => <>
     <CaseErrorBoundary key={`${workspace.workspace_id}:${revision}`} onBackToDashboard={back} backLabel="Back to my tasks" onReload={() => { void load(); }}>

@@ -54,8 +54,8 @@ describe("ReportTimeline", () => {
     ] });
     const { container } = render(<ReportTimeline report={lead} />);
     const items = [...container.querySelectorAll("li")].map(li => li.textContent);
-    expect(items[0]).toContain("Ana Weber (ann-0004) reported the problem. Task 4 paused.");
-    expect(items[1]).toContain("Lea Lang (lead-0002, you) released the pause on Task 7 (ann-0005).");
+    expect(items[0]).toContain("Ana Weber (ann-0004) reported the problem. The annotation of accepted-translation de paused.");
+    expect(items[1]).toContain("Lea Lang (lead-0002, you) released the pause on the annotation of c de by ann-0005.");
     expect(items[2]).toContain("Max Mohr (lead-0003) closed the report.");
     cleanup();
     // Reporters see the role, never the lead's name or pseudonym (D1).

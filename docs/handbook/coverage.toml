@@ -247,6 +247,10 @@ glob = "frontend/src/admin/GuidelinesSection.tsx"
 chapter = "lead-settings.md"
 
 [[map]]
+glob = "frontend/src/admin/FrozenTranslationsCard.tsx"
+chapter = "lead-settings.md"
+
+[[map]]
 glob = "frontend/src/admin/RepinReport.tsx"
 chapter = "lead-settings.md"
 

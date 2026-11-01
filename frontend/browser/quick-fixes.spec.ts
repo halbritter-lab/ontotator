@@ -144,7 +144,7 @@ test('Q1 (B2): the problem dialog keeps New report and Close in a fixed footer',
   const form = page.getByRole('dialog', { name: 'New problem report', exact: true });
   await form.getByRole('textbox', { name: /What is the problem\?/ }).fill('The German text misses a sentence.');
   await form.locator('.modal-actions').getByRole('button', { name: 'Report and pause my task', exact: true }).click();
-  const reports = page.getByRole('dialog', { name: `Problems with Task ${task}`, exact: true });
+  const reports = page.getByRole('dialog', { name: /^Problems with / });
   await expect(reports).toBeVisible();
   await reports.locator('.modal-actions').getByRole('button', { name: 'Close', exact: true }).click();
   await expect(reports).toBeHidden();

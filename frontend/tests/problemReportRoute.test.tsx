@@ -109,8 +109,8 @@ it('preselects the pause release of the paused task with action=resume and submi
   mockReport(); const apply = vi.spyOn(api, 'actOnProblemReport').mockResolvedValue(released);
   render(<ProblemReportDetail projectKey="p/key" reportId="report-1" canManage action="resume" onNavigate={vi.fn()} />);
   const box = within(await screen.findByRole('group', { name: 'Release pause' }));
-  expect(box.getByRole('checkbox', { name: /Task 1/ })).toHaveProperty('checked', true);
-  expect(box.queryByRole('checkbox', { name: /Task 2/ })).toBeNull();
+  expect(box.getByRole('checkbox', { name: /^Reporter,/ })).toHaveProperty('checked', true);
+  expect(box.queryByRole('checkbox', { name: /^Reviewer,/ })).toBeNull();
   expect(apply).not.toHaveBeenCalled();
   confirmWith('Release pause', null, 'Clarified', 'Release pause');
   await waitFor(() => expect(apply).toHaveBeenCalledWith('report-1', expect.objectContaining({ action: 'resume', assignment_ids: [1] })));
@@ -150,9 +150,9 @@ it('records no decision without the documents query, for other actions, or when 
   render(<ProblemReportDetail projectKey="p/key" reportId="report-1" canManage documents={documents} onNavigate={vi.fn()} />);
   await loaded();
   fireEvent.click(intent('Pause other tasks…'));
-  fireEvent.click(await within(screen.getByRole('group', { name: 'Pause other tasks' })).findByRole('checkbox', { name: /Task 2/ }));
+  fireEvent.click(await within(screen.getByRole('group', { name: 'Pause other tasks' })).findByRole('checkbox', { name: /^Reviewer,/ }));
   confirmWith('Pause other tasks', null, 'Same conflict', 'Pause 1 task');
-  await screen.findByText(/Paused Task 2/);
+  await screen.findByText(/Paused the annotation of case 7 en by Reviewer\./);
   expect(decided()).toEqual([]);
 
   apply.mockRejectedValue(new Error('Conflict'));
