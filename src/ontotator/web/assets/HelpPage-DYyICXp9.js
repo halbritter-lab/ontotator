@@ -1,4 +1,4 @@
-import{r as i,a as m,j as a,b as h}from"./index-EKbOHZQs.js";import{M as f,r as g}from"./index-UeTqEqiX.js";function w(){const[e,t]=i.useState(null);return i.useEffect(()=>{let o=!0;return m.getAbout().then(n=>{o&&t(n)},()=>{}),()=>{o=!1}},[]),e?a.jsxs("p",{className:"help-version",title:e.revision??void 0,children:["Ontotator ",e.version,e.revision&&a.jsxs(a.Fragment,{children:[" · commit ",e.revision.slice(0,7)]})]}):null}const y=`# Ontotator user handbook
+import{r as i,a as m,j as a,b as h}from"./index-CUcjWHXR.js";import{M as f,r as g}from"./index-DEQ2vq77.js";function w(){const[e,t]=i.useState(null);return i.useEffect(()=>{let o=!0;return m.getAbout().then(n=>{o&&t(n)},()=>{}),()=>{o=!1}},[]),e?a.jsxs("p",{className:"help-version",title:e.revision??void 0,children:["Ontotator ",e.version,e.revision&&a.jsxs(a.Fragment,{children:[" · commit ",e.revision.slice(0,7)]})]}):null}const y=`# Ontotator user handbook
 
 This handbook explains how to work with Ontotator in the browser. It is for everyone who uses the app: annotators, translation reviewers, consolidators, leads and system administrators. It describes the version of Ontotator that you open it from. If you run the server, read the [server operations guide (for server operators)](../operations.md) instead.
 
@@ -326,7 +326,7 @@ To see them:
 
 1. Click **Projects** in the sidebar.
 2. Tick **Show practice projects**. The number in brackets counts them.
-3. Each row shows a **Practice** pill, the owner, the progress and the date it will be deleted.
+3. Each row shows a **Practice** pill with the project key, the owner, the progress and the date it will be deleted.
 
 To delete one, click **Delete…** in its row, then **Delete practice project**. Only that practice project goes; its audit entries stay. A real project can never be deleted this way.
 
@@ -339,6 +339,8 @@ To switch the offer off:
 3. Click **Save changes**.
 
 Off hides the card on **My tasks** and **Start practice** in the profile. Existing practice projects stay until they are deleted or expire.
+
+A practice project freezes its translations like any project. A translation file uploaded later does not reach a practice project that is already in use, and the upload warning does not name practice projects. The owner gets the new file with **Reset…** in the profile.
 
 `,b=`# Annotator reference
 
@@ -1446,6 +1448,8 @@ What for: start, continue or remove your practice project at any time.
 
 A practice project is deleted after 30 days without activity. Every change in it moves the date. Deleting it removes only the practice project, never real work.
 
+A practice project keeps the translations it started with. If your administrator uploads a newer translation file, **Reset…** makes a fresh practice project that uses it.
+
 ## Set your search preferences
 
 What for: search ontology terms in your own languages too.
@@ -1932,7 +1936,7 @@ What for: decide what happens after a reviewer rejected or queried a translation
 What for: fix a queried or rejected translation without assigning another review.
 
 1. In the row, click **Resolve…**, then **Correct the translation…** (or **Continue your correction**).
-2. Read the panel: you review the version yourself, and your corrected text becomes the next text version and counts as accepted. If your profile lists languages but not this one, tick *Correct despite missing de in your profile*.
+2. Read the panel: you review the version yourself, and your corrected text becomes the next text version and counts as accepted. If your profile lists languages but not this one, tick *Correct despite missing de in your profile*. Without a qualification in your profile, the panel links to **Add your qualification in your profile**; after saving, **Back to Documents** returns you to the texts.
 3. Click **Open translation review**. The screen says **You are correcting this translation as project lead.**
 4. Correct the translation as described in [Review a translation](annotator.md#review-a-translation). Only **Accepted with corrections** is offered.
 5. Submit with **Submit review…** (or \`Ctrl+Enter\`), then click **Back to Documents**.
