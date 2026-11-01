@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The accept card of a consolidation names the groups left out of the result, for example "32 matching, 1 decided by Carla, 2 groups left out" (`ConsolidationOriginsView.left_out`) (#248).
 - Problem reports name a task by its kind, text and owner instead of the internal task number, for example "Problems with case-107 de" and "Close and resume the annotation of case-107 de by Ana Weber (ann-0004)" (#248).
 - Documents between 900 and 1399 px: long stage states and names in the status and Waiting on cells wrap within the cell instead of being cut off ("2 of 2 sub…"); the table gets no wider (#248).
+- After Assign, the confirmation appears once the refreshed rows are shown, no longer about 1.5 s before the row updates (#248).
 
 ## [0.6.1] - 2026-10-31
 

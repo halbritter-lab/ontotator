@@ -676,6 +676,21 @@ describe("case selection", () => {
     expect(await screen.findByText("1 annotation assigned to Ana Weber", { selector: ".ui-toast-message" })).toBeTruthy();
     await waitFor(() => expect(vi.mocked(api.listDocumentRows).mock.calls.length).toBeGreaterThan(calls));
   });
+
+  it("shows the Assign toast only once the refreshed rows are in (issue 248)", async () => {
+    const before = page([group("case-1", [planRow("case-1", "fr", stepOf("assign_annotation"))])]);
+    mockRows(before);
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Assign annotation…, case-1 fr" }));
+    const pending: ((value: DocumentRowsPage) => void)[] = [];
+    vi.mocked(api.listDocumentRows).mockImplementation(() => new Promise(resolve => { pending.push(resolve); }));
+    act(() => { const props = lastAssign(); if (props.mode === "row") props.onAssigned("1 annotation assigned to Ana Weber"); });
+    await waitFor(() => expect(pending.length).toBeGreaterThan(0));
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
+    expect(screen.queryByText("1 annotation assigned to Ana Weber", { selector: ".ui-toast-message" })).toBeNull();
+    await act(async () => { for (const resolve of pending) resolve(structuredClone(before)); });
+    expect(await screen.findByText("1 annotation assigned to Ana Weber", { selector: ".ui-toast-message" })).toBeTruthy();
+  });
 });
 
 it("hides the Translation column and filter group while the project has no translation (U-4)", async () => {
