@@ -337,3 +337,16 @@ chapter = "first-task.md"
 [[map]]
 glob = "frontend/src/app/CaseScreen.tsx"
 chapter = "first-task.md"
+
+# Practice projects (issue 266).
+[[map]]
+glob = "frontend/src/practice/**"
+chapter = "getting-started.md"
+
+[[map]]
+glob = "frontend/src/practice/AdminPracticeProjects.tsx"
+chapter = "admin.md"
+
+[[map]]
+glob = "frontend/src/admin/SettingsPage.tsx"
+chapter = "admin.md"

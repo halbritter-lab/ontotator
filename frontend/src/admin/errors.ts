@@ -137,6 +137,7 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   MODE_NOT_ALLOWED: "Your project roles do not allow this working mode.",
   NOT_AN_ACTIVE_ADMIN: "This operation needs an active system administrator.",
   NOT_A_MEMBER: "This user is not a member of the project.",
+  NOT_A_PRACTICE_PROJECT: "Only practice projects can be deleted here. Real projects are never deleted.",
   OBSOLETE_TERM: "Replace obsolete terms in your findings, or reject or replace affected proposals before submitting.",
   ORCID_INVALID: "The ORCID format or checksum is invalid.",
   ONTOLOGY_NOT_FOUND: "The required ontology is unavailable. Ask an administrator to check the project pins.",
@@ -146,6 +147,8 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   PER_DOCUMENT_INVALID: "Choose at least one assignee per document.",
   PIN_MISMATCH: "The ontology, release, branches or annotation scheme do not match this project's ontology settings.",
   PIN_MISSING: "Add the required ontology pin before continuing.",
+  PRACTICE_IMPORT_FAILED: "The practice texts could not be loaded. Try again in a moment.",
+  PRACTICE_UNAVAILABLE: "Practice is not available on this server right now.",
   PROFILE_NOT_T1: "This project profile cannot be represented in the exchange format.",
   PROFILE_REQUIRED: "Choose a template or provide a task profile.",
   PROJECT_EXISTS: "A project with this key already exists. Choose another key.",
@@ -254,6 +257,9 @@ export function errorMessage(error: unknown): string {
       ? "Annotation from proposals is not carried to a new version. Assign the new version; it is annotated from its own proposals."
       : "Annotation from proposals stays on its version. Remove the assignment and assign the new version; its draft is discarded.";
   }
+  // Practice (issue 266): the server says why it is not available.
+  if (error instanceof ApiError && error.code === "PRACTICE_UNAVAILABLE" && typeof error.details === "object" && error.details !== null
+    && typeof error.details.message === "string" && error.details.message.trim()) return error.details.message;
   const guideline = guidelineMessage(error);
   if (guideline) return guideline;
   // ORCID's checksum/format explanation is already specific and user-facing.

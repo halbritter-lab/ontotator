@@ -10,6 +10,8 @@ import { MyTasks } from "./tasks/MyTasks";
 import { landingProject, rememberProject } from "./app/lastProject";
 import { useSessionRestored } from "./app/useSessionRestored";
 import { ProfilePage } from "./me/ProfilePage";
+import { PracticeFrame } from "./practice/PracticeFrame";
+import { SettingsPage } from "./admin/SettingsPage";
 import { ErrorNotice } from "./admin/ErrorNotice";
 import { UsersPage } from "./admin/UsersPage";
 import { OntologiesPage } from "./admin/OntologiesPage";
@@ -300,11 +302,13 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
     case "tasks": content = landing || landingSummary ? <InlineMessage tone="info">Loading your projects…</InlineMessage>
       : <MyTasks project={route.project} status={route.status} projects={projects} onNavigate={go} username={baseUser?.username} />; break;
     // The view is part of the key: switching between the consolidation view and the editor reopens the task fresh.
-    case "task": content = <TaskEditor key={JSON.stringify([user.username, route.assignmentId, route.view ?? null])} assignmentId={route.assignmentId} view={route.view}
+    // A practice task (issue 266) gets the practice banner and "Your practice" above the task.
+    case "task": content = <PracticeFrame key={`practice:${route.assignmentId}`} assignmentId={route.assignmentId} onNavigate={go}>
+      <TaskEditor key={JSON.stringify([user.username, route.assignmentId, route.view ?? null])} assignmentId={route.assignmentId} view={route.view}
       user={user} onNavigate={go} routeLeaveRef={routeLeaveRef} leaveGuardRef={logoutGuardRef} showToast={appToast.show}
-      onProjectContext={key => setTaskProject({ identity: taskIdentity, key })} />; break;
+      onProjectContext={key => setTaskProject({ identity: taskIdentity, key })} /></PracticeFrame>; break;
     case "projects": content = projectError ? <></> : projectContext?.identity !== projectIdentity ? <InlineMessage tone="info">Loading your projects…</InlineMessage>
-      : <ProjectsPage projects={projects} currentKey={landingProject(user.username, projects)} onNavigate={go} />; break;
+      : <ProjectsPage projects={projects} currentKey={landingProject(user.username, projects)} onNavigate={go} isAdmin={user.is_system_admin} />; break;
     case "adminUsers": content = <UsersPage currentUser={user} routeLeaveRef={routeLeaveRef} />; break;
     case "adminOntologies": content = user.is_system_admin ? <OntologiesPage onNavigate={go} />
       : notice("Ontologies", "Only system administrators can upload and manage ontology files. Ask an administrator if a project needs another version."); break;
@@ -338,7 +342,9 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
     case "projectConsolidation": content = <ConsolidationScreen key={JSON.stringify([user.username, route.key, route.roundId])} projectKey={route.key}
       roundId={route.roundId} group={route.group} onNavigate={go} readOnly headerActions={<HelpLink screen="consolidationReadOnly" />}
       back={{ name: "projectDocuments", key: route.key, ...(route.documents ?? {}) }} />; break;
-    case "me": content = <ProfilePage onSaved={setSavedIdentity} routeLeaveRef={routeLeaveRef} leaveGuardRef={logoutGuardRef} />; break;
+    case "me": content = <ProfilePage onSaved={setSavedIdentity} routeLeaveRef={routeLeaveRef} leaveGuardRef={logoutGuardRef} onNavigate={go} />; break;
+    case "adminSettings": content = user.is_system_admin ? <SettingsPage />
+      : notice("Server settings", "Only system administrators can change server settings."); break;
     case "help": content = <Suspense fallback={<InlineMessage tone="info">Loading the handbook…</InlineMessage>}>
       <HelpPage chapter={route.chapter} section={route.section} /></Suspense>; break;
     case "notFound": content = <NotFound onNavigate={go} />; break;

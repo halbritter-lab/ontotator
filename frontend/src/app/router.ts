@@ -123,6 +123,8 @@ export type Route =
   | { name: "me" }
   | { name: "adminUsers" }
   | { name: "adminOntologies" }
+  /** Server-wide settings (today: Practice projects). */
+  | { name: "adminSettings" }
   | { name: "projectNew" }
   /** Every project of the user (F8); the landing of a lead when no last-used project is accessible. */
   | { name: "projects" }
@@ -166,6 +168,7 @@ export function parseRoute(hash: string): Route {
       case "#/me": return { name: "me" };
       case "#/admin/users": return { name: "adminUsers" };
       case "#/admin/ontologies": return { name: "adminOntologies" };
+      case "#/admin/settings": return { name: "adminSettings" };
       case "#/projects": return { name: "projects" };
       case "#/projects/new": return { name: "projectNew" };
     }
@@ -259,6 +262,7 @@ export function routeHref(route: Route): string {
     case "me": return "#/me";
     case "adminUsers": return "#/admin/users";
     case "adminOntologies": return "#/admin/ontologies";
+    case "adminSettings": return "#/admin/settings";
     case "projectNew": return "#/projects/new";
     case "projects": return "#/projects";
     case "projectSettings": return `#/projects/${encodeURIComponent(route.key)}/settings${route.section && route.section !== DEFAULT_SETTINGS_SECTION ? `/${route.section}` : ""}`;

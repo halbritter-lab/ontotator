@@ -63,7 +63,7 @@ The header is the same on every page:
 - **Handbook** in the header opens this handbook inside the app. On the Documents, consolidation and translation review screens, **Help** opens the handbook section about that screen; in the editor it is **More** > **Help for this screen**. On the project forms, a link next to the task profile opens the section that explains it. Click a screenshot in the handbook to open it at full size in a new tab.
 - Below the chapter list, the handbook shows the app's version and commit, for example `Ontotator 0.3.0 · commit cc65cea`. Quote it when you report a problem.
 
-The sidebar lists **My tasks**, **Projects** and **Profile**. The number after **My tasks** counts your open tasks, the same tasks as the **To do** tab; it updates as soon as you submit a text. Clicking **My tasks** or **Projects** loads your projects and the count again, so a project you were just added to shows up without reloading the page. Leads also see their project's pages (**Documents**, **Progress**, **Settings**, **Export**). System administrators also see **Administration** with **Users**, **Ontologies** and **New project** (see [Administration](admin.md)). In the editor, the sidebar folds into **Sections**; click it to open it.
+The sidebar lists **My tasks**, **Projects** and **Profile**. The number after **My tasks** counts your open tasks, the same tasks as the **To do** tab; it updates as soon as you submit a text. Clicking **My tasks** or **Projects** loads your projects and the count again, so a project you were just added to shows up without reloading the page. Leads also see their project's pages (**Documents**, **Progress**, **Settings**, **Export**). System administrators also see **Administration** with **Users**, **Ontologies**, **New project** and **Server settings** (see [Administration](admin.md)). In the editor, the sidebar folds into **Sections**; click it to open it.
 
 ## Switch project
 
@@ -96,6 +96,30 @@ Each row is one task. The **Task** column says what to do, for example **Annotat
 If the project has guidelines, a link such as *Project guidelines v2* appears above the table. Read them before you start: they say what to mark and how.
 
 If you see **No texts are assigned to you yet.**, wait until your lead assigns texts to you.
+
+## Try it out in a practice project
+
+What for: learn the work on invented texts before your first real task.
+
+A practice project is private. Only you see it, your lead does not. It has short, invented letters, no real patients. Nothing you do there counts: it is not in any project list, count or export.
+
+You get practice if you are an annotator or a translation reviewer in at least one project.
+
+1. In **My tasks**, the card **New here? Try it out first** appears. Click **Try it out**.
+2. Your practice tasks appear in their own group **Practice**, below your real tasks:
+   - **Annotate from scratch**: mark findings yourself.
+   - **Annotate from proposals**: check a tool's proposals. One is right, one has a prefilled value, one needs **Edit & Replace**, and the tool missed one finding.
+   - **Translation review**: the German translation has one error. Find and correct it.
+   - **Consolidation**, if you are also a consolidator: two virtual colleagues disagree. Decide.
+3. Open a task with **Start**. Above the task you see **Practice: nothing here counts. Invented texts only.**
+4. The panel **Your practice** lists the steps of the task. A step ticks itself when you have really done it. **Next:** says what to do now. Each step has a **Help** link to its handbook section.
+5. To stop, click **Leave practice**. You return to **My tasks**.
+
+When all practice tasks are done, the group folds to **Practice complete**. Click **Delete** to remove the practice project.
+
+Click **Not now** to hide the card for good. Practice stays in your [profile](#practice-in-your-profile).
+
+If practice is not available, **Try it out** says why. For example, the server may have no suitable HPO release yet; ask your administrator.
 
 ## Open a task
 
@@ -141,6 +165,21 @@ What for: keep your name, languages and qualification up to date.
 Your **Username** and **Pseudonym** cannot be changed. Exports show your pseudonym, not your name, unless you tick the box in step 3.
 
 Fill in **Qualification** if you do translation reviews: you cannot submit a translation review without it.
+
+## Practice in your profile
+
+What for: start, continue or remove your practice project at any time.
+
+1. Click **Profile** in the sidebar.
+2. Go to **Practice**.
+3. Without a practice project, click **Start practice**.
+4. With a practice project, you see the progress, for example *1 of 4 tasks done*, and the date it will be deleted:
+   - **Continue** opens **My tasks** with your practice tasks.
+   - **Reset…** deletes the practice project and makes a fresh one with the same texts.
+   - **Delete…** deletes the practice project.
+5. Tick or clear **Show the card New here? on My tasks**.
+
+A practice project is deleted after 30 days without activity. Every change in it moves the date. Deleting it removes only the practice project, never real work.
 
 ## Set your search preferences
 

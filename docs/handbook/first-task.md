@@ -4,6 +4,8 @@ This chapter takes you through one annotation task, from your first login to a s
 
 Before you start: you need the address of your Ontotator server, your username and a setup code from your administrator, and a lead must have assigned a text to you.
 
+Want to try first? A private practice project with invented texts lets you do every step without it counting; see [Try it out in a practice project](getting-started.md#try-it-out-in-a-practice-project).
+
 ## 1. Log in
 
 1. Open the address of your Ontotator server.
