@@ -317,7 +317,20 @@ class OntologyRegistry:
             self.translation_sync()
         with repo.db.transaction() as conn:
             structure = project_state(conn, project_key)[0]
-        profile = repo.get_task_profile(project_key)
+        conditions, resources = self.capture_current(repo.get_task_profile(project_key))
+        return repo.capture_search_conditions(
+            project_key, conditions, resources, expected_structure=structure
+        )
+
+    def capture_current(
+        self, profile: TaskProfile
+    ) -> tuple[list[SearchCondition], dict[str, bytes]]:
+        """The conditions a first use of ``profile`` would capture now.
+
+        One condition per ontology of the profile, with the translation files
+        loaded now, and the bytes of those files by their resource path.
+        Nothing is stored.
+        """
         resources: dict[str, bytes] = {}
         # Capture immutable loaded content while an upload cannot swap services.
         # Release the change lock before acquiring a database write transaction.
@@ -337,9 +350,7 @@ class OntologyRegistry:
                         for item in service.translations
                     }
                 )
-        return repo.capture_search_conditions(
-            project_key, conditions, resources, expected_structure=structure
-        )
+        return conditions, resources
 
     def for_package_layer(
         self, repo: Repository, project_key: str, layer_id: str

@@ -8,7 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- A lead or a system admin can move a frozen project to the newest translations with **Use the newest translations** in Settings › Ontology, at any time (`POST /api/v1/projects/{key}/translations/refresh`, `ontotator admin projects refresh-translations`). Findings do not change. The earlier search conditions are kept in the `project.translations_refresh` audit entry, so earlier searches stay resolvable, and the card lists them under **Earlier translations** (`updated` and `history` on `frozen_translations`). A change of pins or profile now also keeps the conditions it ends and their captured files, and re-importing a seed package with earlier conditions of the project is accepted (#254).
 - Translation review: **Mark checked sentences** splits source and translation into sentences that the reviewer ticks off one by one, with Shift+click or a drag for a range, a counter in the head of each text and **Next unchecked**. A checked translation sentence that is edited later shows as *changed*. All text controls of the review now share one line above the texts, and **Compare** names the version in its tooltip. The mode is not offered on touch-only devices. The marks are a working aid saved with the draft (`checked_sentences` on the review workspace, `PUT /api/v1/translation-reviews/{assignment_id}/checked-sentences`); saving them does not start the task, and they are not part of the review, the exports or the lead's views (#256).
+
+### Fixed
+
+- A change of pins or profile, such as a move to another ontology release, no longer deletes the project's search conditions and captured translation files. Searches and submitted selections made before the change stay resolvable; the ended conditions go into the `project.update` audit entry. Changes made before this version cannot be recovered (#254).
 
 ## [0.7.0] - 2026-11-01
 

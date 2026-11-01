@@ -39,6 +39,7 @@ const auditActions: Readonly<Record<string, string>> = {
   "project.create": "Project created",
   "project.update": "Project settings changed",
   "project.repin": "Ontology release changed",
+  "project.translations_refresh": "Newest translations used",
   "project.import": "Texts imported",
   "project.edit_log_export": "Edit log exported",
   "project.export": "Export created",
@@ -101,6 +102,8 @@ export function auditDetails(event: AuditEvent, userNames?: ReadonlyMap<number, 
   if (typeof details.active === "boolean") return details.active ? "Activated" : "Deactivated";
   if (typeof details.is_system_admin === "boolean") return details.is_system_admin ? "Granted" : "Withdrawn";
   if (Array.isArray(details.fields)) return details.fields.map(field => humanize(String(field))).join(", ");
+  // A move to the newest translations: the files, not the kept conditions (issue 254).
+  if (event.action === "project.translations_refresh") return auditEntries({ added: details.added, replaced: details.replaced, removed: details.removed }).join("; ");
   if (typeof details.purpose === "string" && Object.keys(details).length === 1) return `${humanize(details.purpose)} code`;
   return auditEntries(details, userNames).join("; ");
 }

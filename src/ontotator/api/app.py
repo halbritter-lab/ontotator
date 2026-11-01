@@ -485,6 +485,8 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
                     "PROJECT_EXISTS": 409,
                     "PROJECT_IN_USE": 409,
                     "REPIN_REPORT_STALE": 409,
+                    "TRANSLATIONS_CURRENT": 409,
+                    "TRANSLATIONS_NOT_FROZEN": 409,
                     "LAST_LEAD": 409,
                     "MEMBER_HAS_ASSIGNMENTS": 409,
                     "WORK_PLAN_CONFIRMATION_REQUIRED": 409,
