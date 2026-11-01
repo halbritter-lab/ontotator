@@ -6,13 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-## [0.7.0] - 2026-11-01
-
 ### Added
 
 - Translation review: **Mark checked sentences** splits source and translation into sentences that the reviewer ticks off one by one, with Shift+click or a drag for a range, a counter in the head of each text and **Next unchecked**. A checked translation sentence that is edited later shows as *changed*. All text controls of the review now share one line above the texts, and **Compare** names the version in its tooltip. The mode is not offered on touch-only devices. The marks are a working aid saved with the draft (`checked_sentences` on the review workspace, `PUT /api/v1/translation-reviews/{assignment_id}/checked-sentences`); saving them does not start the task, and they are not part of the review, the exports or the lead's views (#256).
 
-### Fixed
+## [0.7.0] - 2026-11-01
+
+### Added
+
 - **Technical problem…** in the sidebar and **Report a technical problem…** in the editor's **More** menu and on the crash screen send an error message, a page that does not load, a crash or general feedback to the system administrators, not to the project leads, and pauses no task. The user only describes what happened; Ontotator adds the app version, the task with its kind, project and text, the screen, the browser, the window size, the last refused API request and, from the crash screen, the error message. The dialog shows a reference such as `TR-12`. Administrators read the reports under **Administration** › **Technical reports** (with the number of open reports), mark them done or reopen them, and copy one into an issue by hand: nothing is sent out. Sending, closing and reopening are audited; erasing an account clears the browser of its reports. New endpoints `POST /api/v1/technical-reports` and `/api/v1/admin/technical-reports`; migration 0028 adds the `technical_reports` table only (#259).
 - A translation file uploaded after a project froze its translations no longer reaches it silently. The upload result and the ontology inventory (**Frozen without**) name the projects that froze their translations without the file (`frozen_without` on the admin ontology list), and `ontotator admin ontologies add` names them on stderr. Settings › Ontology shows the frozen files in the card **Translations**, and the newer server files the project does not use (`frozen_translations` on the project settings). The freeze itself is unchanged (#254).
 
