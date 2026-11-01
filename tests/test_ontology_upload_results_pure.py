@@ -126,6 +126,8 @@ def test_existing_old_post_keeps_deduplicated_inventory_response(upload_client):
         "language",
         "uploaded_at",
         "projects",
+        # Added for #254; the earlier fields are unchanged.
+        "frozen_without",
     }
     assert response.json()[0]["filename"] == "first.json"
 
