@@ -25,6 +25,8 @@ it("keeps proposal inspection useful but prevents notes, decisions and replaceme
   response.view.draft.annotations = [{ ...proposal, annotation: { ...proposal.annotation, annotation_id: "own", term_id: "HP:1" } }];
   const command = vi.spyOn(api, "applyCommand"), decide = vi.spyOn(api, "recordDecision");
   render(<CaseScreen view={response.view} workspaceId="ws" onClose={vi.fn()} readOnly />);
+  // A consolidation has no self-service work round: the lead reopens it.
+  expect(screen.getByText("Read-only. The project lead can reopen it for changes.")).toBeDefined();
   fireEvent.click(Array.from(document.querySelectorAll(".sidebar .doc-item")).find(node => node.textContent?.includes("HP:2"))!);
   // Read-only: no decision buttons and no empty reviewer note (#48 N-18).
   expect(screen.queryByRole("textbox", { name: "Reviewer note" })).toBeNull();
@@ -60,8 +62,12 @@ it("closes an unfinished new-annotation form when the mounted workspace becomes 
 it("keeps a submitted workspace readable while disabling submission and new findings", async () => {
   const command = vi.spyOn(api, "applyCommand");
   const submit = vi.spyOn(api, "submitWorkspace");
-  render(<CaseScreen view={view()} workspaceId="ws" onClose={vi.fn()} readOnly />);
+  const mounted = render(<CaseScreen view={view()} workspaceId="ws" onClose={vi.fn()} readOnly />);
+  // The annotator reopens an independent submission herself; a paused task waits for the lead.
+  expect(screen.getByText("Read-only. To change it, use More › Work rounds.")).toBeDefined();
+  mounted.rerender(<CaseScreen view={view()} workspaceId="ws" onClose={vi.fn()} readOnly held />);
   expect(screen.getByText("Read-only. The project lead can reopen it for changes.")).toBeDefined();
+  mounted.rerender(<CaseScreen view={view()} workspaceId="ws" onClose={vi.fn()} readOnly />);
   expect(document.querySelector("[role=status].case-status")!.textContent).toMatch(/^Submitted/);
   // Narrow headers hide the note visually; the lock (CSS-shown below 1024 px) keeps "Read-only" in sight.
   expect(document.querySelector(".case-status .case-status__lock[title='Read-only'] svg")).not.toBeNull();

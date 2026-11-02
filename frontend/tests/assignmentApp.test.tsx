@@ -194,7 +194,7 @@ it("reloads a task read-only after another session submitted it, with a visible 
   render(<App user={testUser("alice")} />);
   await editFinding();
   await screen.findByText(/Another session submitted this task/);
-  await screen.findByText("Read-only. The project lead can reopen it for changes.");
+  await screen.findByText("Read-only. To change it, use More › Work rounds.");
   expect(open).toHaveBeenCalledTimes(2);
   expect(screen.queryByRole("button", { name: /Add finding without a text span/ })).toBeNull();
   expect(command).toHaveBeenCalledTimes(1);
