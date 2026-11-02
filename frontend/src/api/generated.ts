@@ -1785,7 +1785,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Settings */
+        /**
+         * Settings
+         * @description Any member. Who changed the translations (``frozen_translations``
+         *     ``updated.by`` and ``history[].by``) only for leads (``MANAGE_ASSIGNMENTS``),
+         *     as in ``/members`` (#281).
+         */
         get: operations["settings_api_v1_projects__key__settings_get"];
         put?: never;
         post?: never;
@@ -4695,7 +4700,8 @@ export interface components {
          *     ``reason`` is what ended them: a move to the newest translations
          *     (``refresh``) or a change of the ontology version or task profile
          *     (``ontology``). Searches that ran with them keep their
-         *     ``search_condition_id``, one of ``condition_ids``.
+         *     ``search_condition_id``, one of ``condition_ids``. ``by`` and
+         *     ``by_command_line`` as in ``TranslationsUpdate``.
          */
         EarlierTranslations: {
             /**
@@ -4703,8 +4709,12 @@ export interface components {
              * Format: date-time
              */
             until: string;
-            /** By */
-            by: string;
+            by?: components["schemas"]["PersonRefView"] | null;
+            /**
+             * By Command Line
+             * @default false
+             */
+            by_command_line: boolean;
             /**
              * Reason
              * @enum {string}
@@ -8758,6 +8768,9 @@ export interface components {
         /**
          * TranslationsUpdate
          * @description When and by whom the project moved to the newest translations.
+         *
+         *     Who made the change is shown to leads only (D1, #281): other members get
+         *     neither ``by`` nor ``by_command_line``.
          */
         TranslationsUpdate: {
             /**
@@ -8765,8 +8778,12 @@ export interface components {
              * Format: date-time
              */
             at: string;
-            /** By */
-            by: string;
+            by?: components["schemas"]["PersonRefView"] | null;
+            /**
+             * By Command Line
+             * @default false
+             */
+            by_command_line: boolean;
         };
         /**
          * TreeLevel

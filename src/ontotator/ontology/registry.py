@@ -238,9 +238,14 @@ class OntologyRegistry:
         profile: TaskProfile,
         resources: dict[str, bytes],
         conditions: list[SearchCondition] | None = None,
+        earlier: Iterable[SearchCondition] = (),
     ) -> list[OntologyService]:
-        """Parse all resources before package commit; publish services only afterward."""
-        validate_resources(conditions, profile, resources)
+        """Parse all resources before package commit; publish services only afterward.
+
+        ``earlier``: the package's ended conditions (#282); only their files
+        are checked, nothing searches with them.
+        """
+        validate_resources(conditions, profile, resources, earlier=earlier)
         prepared = []
         for ont in profile.ontologies:
             if ont.resource_path and ont.resource_path in resources:
