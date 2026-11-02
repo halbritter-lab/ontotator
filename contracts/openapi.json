@@ -2376,7 +2376,7 @@
           "translation-reviews"
         ],
         "summary": "Save Checked Sentences",
-        "description": "The reviewer's own checked-sentence marks; not part of the review.",
+        "description": "The reviewer's own checked-sentence marks; not part of the review.\n\nWith ``base``, only the change from ``base`` to the sent marks is applied, so\nmarks set meanwhile in another tab stay; the answer is the stored marks.",
         "operationId": "save_checked_sentences_api_v1_translation_reviews__assignment_id__checked_sentences_put",
         "parameters": [
           {
@@ -2394,7 +2394,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CheckedSentences"
+                "$ref": "#/components/schemas/CheckedSentencesSave"
               }
             }
           }
@@ -11413,6 +11413,40 @@
         "type": "object",
         "title": "CheckedSentences",
         "description": "Checked sentences per side; each side is marked on its own."
+      },
+      "CheckedSentencesSave": {
+        "properties": {
+          "source": {
+            "items": {
+              "$ref": "#/components/schemas/CheckedSentence"
+            },
+            "type": "array",
+            "maxItems": 5000,
+            "title": "Source"
+          },
+          "translation": {
+            "items": {
+              "$ref": "#/components/schemas/CheckedSentence"
+            },
+            "type": "array",
+            "maxItems": 5000,
+            "title": "Translation"
+          },
+          "base": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CheckedSentences"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "CheckedSentencesSave",
+        "description": "New marks, optionally with the marks they were made from (issue 284).\n\nWith ``base``, the server applies only what changed from ``base`` to the new\nmarks to the stored marks, so marks set meanwhile in another tab stay. Without\n``base``, the new marks replace the stored ones."
       },
       "CodeResponse": {
         "properties": {
