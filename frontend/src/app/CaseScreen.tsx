@@ -349,6 +349,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const pendingReanchorItems = isReviewLike(view.key.mode) ? view.pending_reanchor_items ?? [] : [];
   const unresolvedReanchorCount = pendingReanchorItems.filter(item =>
     !currentReanchorResolution(item, draft.reanchor_resolutions ?? [], draft.annotations ?? [])).length;
+  // Only an independent annotation can carry its own submission forward (More › Work rounds); paused tasks wait for the lead.
+  const readOnlyNote = view.key.mode === "independent" && !held ? "Read-only. To change it, use More › Work rounds." : "Read-only. The project lead can reopen it for changes.";
   const carriedInputs = isCarryKind(roundKind) || (view.key.mode === "independent" && roundInputs.length) ? roundInputs : NO_ROUND_INPUTS;
   const [originalRoundInput, setOriginalRoundInput] = useState<import("../api/client").RoundInputView | null>(null);
 
@@ -3537,10 +3539,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         <div className="app-actions">
           {/* Submitted: the status sits where the submit button stands, so the text sheet does not move (#25). */}
           {serverReadOnly || submittedAt ? <span role="status" className="case-status">
-            <StatusBadge status="submitted" title={serverReadOnly ? "Read-only. The project lead can reopen it for changes." : undefined}>Submitted{submittedAt && <> <time dateTime={submittedAt} title={fullTimestamp(submittedAt)}>{formatTime(submittedAt)}</time></>}</StatusBadge>
+            <StatusBadge status="submitted" title={serverReadOnly ? readOnlyNote : undefined}>Submitted{submittedAt && <> <time dateTime={submittedAt} title={fullTimestamp(submittedAt)}>{formatTime(submittedAt)}</time></>}</StatusBadge>
             {/* Below 1024 px the note is visually hidden (still read out): the lock keeps "Read-only" visible. */}
             {serverReadOnly && <span className="case-status__lock" title="Read-only" aria-hidden="true"><IconLock /></span>}
-            {serverReadOnly && <span className="case-status__note">Read-only. The project lead can reopen it for changes.</span>}
+            {serverReadOnly && <span className="case-status__note">{readOnlyNote}</span>}
           </span> : <span
             role="status"
             title={`Revision ${draft.revision}`}

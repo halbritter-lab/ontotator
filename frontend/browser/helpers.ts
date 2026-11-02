@@ -128,10 +128,14 @@ export async function expectSubmitted(page: Page) {
   await expect(page.locator(".ui-toast").getByText(/ submitted\.$/)).toBeVisible();
 }
 
+/** Read-only note of a submitted independent annotation; proposal checks, consolidations and paused tasks keep LEAD_REOPEN_NOTE. */
+export const SELF_REOPEN_NOTE = "Read-only. To change it, use More › Work rounds.";
+export const LEAD_REOPEN_NOTE = "Read-only. The project lead can reopen it for changes.";
+
 /** The toast's "View result": back to the submitted task, read-only. */
-export async function viewSubmittedResult(page: Page) {
+export async function viewSubmittedResult(page: Page, note = SELF_REOPEN_NOTE) {
   await page.locator(".ui-toast").getByRole("button", { name: "View result", exact: true }).click();
-  await expect(page.getByText("Read-only. The project lead can reopen it for changes.")).toBeVisible();
+  await expect(page.getByText(note)).toBeVisible();
 }
 
 /** Chooses ``name`` in the editor header's "More" menu (S5: the rarer task actions live there). */
