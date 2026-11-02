@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-11-02
+
 ### Fixed
 
 - Documents below 1600 px: every stage state that would be cut has a short form, for example *1/2 submitted*, *to compare* or *on old text*, and the **Text** cell keeps *source*, the version marker and **NEW** on the same line, cutting a long case ID instead. The narrow table now starts at 1600 px instead of 1400 px, so the table fits the page at 1280, 1400 and 1440 px without sideways scrolling (#248, #279). The Annotation count no longer reads *2 of 1 submitted* when more people hold a text than *annotators per text* allows after the limit was lowered; it counts them all. With parallel translations it counts the people of one version, not the open tasks of all versions, so it reads *1 of 2 submitted*, not *1 of 3* (#248, #283).
@@ -231,7 +233,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 First public release.
 
-[Unreleased]: https://github.com/halbritter-lab/ontotator/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/halbritter-lab/ontotator/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/halbritter-lab/ontotator/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/halbritter-lab/ontotator/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/halbritter-lab/ontotator/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/halbritter-lab/ontotator/compare/v0.6.0...v0.6.1
