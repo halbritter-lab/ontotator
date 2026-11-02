@@ -264,7 +264,9 @@ describe("cells", () => {
       expect(status).not.toBeNull();
       expect(status.querySelector("button, br, p, div")).toBeNull();
       // The glyph is text (✓) or an SVG circle (no text); either way one space follows it.
-      const visible = (status.textContent ?? "").replace(/^\S*\s/, "");
+      // The narrow table's short state (aria-hidden, after the full one) is not part of it.
+      const narrow = status.querySelector(".stage-state-narrow")?.textContent ?? "";
+      const visible = (status.textContent ?? "").replace(/^\S*\s/, "").slice(0, narrow ? -narrow.length : undefined);
       expect(status.getAttribute("title")).toBe(visible);
     }
     // The card's short states (cardModel), the "who" in grey.
@@ -287,6 +289,25 @@ describe("cells", () => {
     const status = (index: number) => cellsOf("case-106 de")[index].querySelector<HTMLElement>(".documents-status")!;
     expect(status(2).getAttribute("title")).toBe("assigned, not started (Ana Weber)");
     expect(status(3).getAttribute("title")).toBe("assigned, not started · open: Tom Reis");
+  });
+
+  it("a narrow table shows a short state, aria-hidden; the full state stays in the title and for screen readers (issue 248)", () => {
+    const old = stagedRow("case-106", "de", {
+      stages: {
+        review: cell("accepted", "done", { note: "unchanged" }),
+        annotation: cell("submitted", "done", { people: [tom], submitted: 1, total: 1 }),
+        final: cell("old_text", "decision", { people: [tom], version: 1 }),
+      },
+    });
+    renderTable(page([group("case-106", [old])]));
+    const final = cellsOf("case-106 de")[4].querySelector<HTMLElement>(".documents-status")!;
+    expect(final.getAttribute("title")).toBe("Final is on old text");
+    expect(final.querySelector(".stage-state-wide")!.textContent).toBe("Final is on old text");
+    const short = final.querySelector(".stage-state-narrow")!;
+    expect(short.textContent).toBe("on old text");
+    expect(short.getAttribute("aria-hidden")).toBe("true");
+    // A state that fits has no short form.
+    expect(cellsOf("case-106 de")[2].querySelector(".stage-state-narrow")).toBeNull();
   });
 
   it("a running consolidation: Annotation done once all submitted, Finalization running; waiting always has its circle", () => {

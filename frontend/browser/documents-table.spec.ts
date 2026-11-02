@@ -113,10 +113,14 @@ test("S0 synthetic-accepted: the final is on old text after v2 corrected it; en 
   const de = textRow(page, caseId, "de");
   expect(await hasDecisionEdge(de)).toBe(true);
   await expect(de.getByRole("rowheader")).toContainText("v2 corrected");
-  // The version marker does not push the table past the page at 1280 px.
-  await page.setViewportSize({ width: 1280, height: 800 });
+  // The version marker does not push the table past the page, and every text keeps one 40 px line (issue 279).
   const scroller = page.locator(".documents-page .data-table-scroll");
-  expect(await scroller.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(0);
+  for (const width of [1440, 1400, 1280]) {
+    await page.setViewportSize({ width, height: 800 });
+    expect(await scroller.evaluate(element => element.scrollWidth - element.clientWidth), `${width} px`).toBeLessThanOrEqual(0);
+    const heights = await documentsTable(page).locator(".documents-row").evaluateAll(rows => rows.map(row => Math.round(row.getBoundingClientRect().height)));
+    expect(Math.max(...heights), `${width} px row height`).toBeLessThanOrEqual(41);
+  }
   await expect(rowCell(de, "finalization")).toContainText("Final is on old text");
   await expect(rowCell(de, "annotation")).toContainText(new RegExp(`\\d+ of \\d+ submitted, not started · open: ${ann}`));
   await expect(rowCell(de, "waiting")).toHaveText("You");
