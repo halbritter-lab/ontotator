@@ -260,6 +260,17 @@ def stage_facts(
     ]
     submitted = [item for items in submitted_by_target for item in items]
     submissions = min((len(items) for items in submitted_by_target), default=0)
+    # Issue 283: the "n of m submitted" total of the target(s) with the fewest
+    # submissions, not the open tasks summed over parallel versions.
+    holding = max(
+        (
+            len(items)
+            + sum(1 for item in running if item.document_id == target.document_id)
+            for target, items in zip(targets, submitted_by_target, strict=True)
+            if len(items) == submissions
+        ),
+        default=0,
+    )
     rounds = {
         ctx.ordinals.get(item.active_round_id)
         for item in running
@@ -324,6 +335,7 @@ def stage_facts(
             [item.user_id for item in annotations if item.assignment_id in ctx.waiting]
         ),
         annotators_submitted=_unique([item.user_id for item in submitted]),
+        annotators_holding=holding,
         round_ordinal=next(iter(rounds)) if len(rounds) == 1 else None,
         findings=(
             facts.findings.get(submitted[0].assignment_id)
