@@ -88,8 +88,14 @@ button.documents-text-name { min-height: 24px; padding: 0; border: 0; background
    activity stays and the table scrolls sideways with the Text column pinned (#8). With the wide cells and a wrapping
    Text cell the table was wider than the page at 1400 and 1440 px, so the narrow table covers them. */
 @media (max-width: 1599px) {
-  .documents-status-cell { max-width: 7.5rem; column-gap: var(--space-1); }
+  /* The cap is on the state, not the cell: the robot icon after it must not cut the short state ("2/2 submitted"). */
+  .documents-status-cell { max-width: none; column-gap: var(--space-1); }
+  .documents-status.stage-cell { max-width: 7.5rem; }
   .documents-waiting-on { max-width: 7rem; }
+  /* One name cut with an ellipsis, "+n" always visible. */
+  .documents-waiting-on .waiting-narrow { display: flex; column-gap: 0.25em; }
+  .waiting-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .waiting-more { flex: none; }
   /* Issue 248: the Text cell keeps one line too ("source", the version marker and NEW stay after the name; the
      cards below 700 px still wrap). It makes room by cutting a long case ID (full ID in its title and the name). */
   .documents-table .documents-row-header { flex-wrap: nowrap; column-gap: var(--space-2); }
@@ -113,7 +119,7 @@ button.documents-text-name { min-height: 24px; padding: 0; border: 0; background
 /* Below 900 px: narrower status cells and cell padding so the one-line row fits 768 px (after the base rules, which would win otherwise). */
 @media (max-width: 899px) {
   /* The flat list's Text cell carries the case ID: the status cells give up the room (ellipsis, full text in title). */
-  .documents-status-cell { max-width: 6.5rem; }
+  .documents-status.stage-cell { max-width: 6.5rem; }
   .documents-row-header { column-gap: var(--space-1); }
   .documents-row-case { margin-inline-end: var(--space-1); }
   .documents-table { --cell-pad-x: var(--space-2); }
