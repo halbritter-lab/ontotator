@@ -36,6 +36,10 @@ Click **Technical problem…** in the sidebar, or **Report a technical problem�
 
 The editor could not show the text. Your saved changes are kept on the server. Click **Reload case**. If it happens again, click **Report a technical problem…** on the same screen: the error message is added to the report for you.
 
+### The page says "Something went wrong while displaying this page."
+
+A screen outside the editor, such as My tasks, Documents or a page under Administration, could not be shown. Work that was already saved is kept on the server, and the sidebar still works: open another page there, click **Go to My tasks**, or click **Reload page**. If it happens again, click **Report a technical problem…** on the same screen: the error message is added to the report for you.
+
 ### The page says "The project is busy right now."
 
 Another operation, often a running import, is holding the project. What you just did was not applied, so nothing needs undoing. Wait a moment and click **Retry**, or repeat the action. In the editor the save status says **Project busy – changes not saved**, and your unsaved edits stay on the page until the save goes through.

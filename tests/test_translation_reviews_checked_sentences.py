@@ -173,3 +173,56 @@ def test_marks_never_reach_the_review_result_exports_or_audit(exported_env):
     with pytest.raises(DomainError) as refused:
         _mark(env)
     assert refused.value.code == "ASSIGNMENT_SUBMITTED"
+
+
+def test_two_tabs_keep_each_others_marks(review_env):
+    """Issue 284: each tab sends the marks it started from; only its change applies."""
+    env = review_env
+    client = logged_in(env.app, "alice", assignments=[])
+    url = f"/api/v1/translation-reviews/{env.ids['alice']}"
+    opened = client.get(url).json()["checked_sentences"]
+    one = {"index": 0, "hash": "0a1b2c3d"}
+    two = {"index": 1, "hash": "12345678"}
+    # Tab A marks sentence 0; tab B, opened before, marks sentence 1.
+    tab_a = {"source": [], "translation": [one], "base": opened}
+    assert client.put(url + "/checked-sentences", json=tab_a).json() == {
+        "source": [],
+        "translation": [one],
+    }
+    tab_b = {"source": [], "translation": [two], "base": opened}
+    both = {"source": [], "translation": [one, two]}
+    assert client.put(url + "/checked-sentences", json=tab_b).json() == both
+    # Tab A, which still shows only its own mark, unmarks it: tab B's mark stays.
+    tab_a = {"source": [], "translation": [], "base": {"translation": [one]}}
+    assert client.put(url + "/checked-sentences", json=tab_a).json() == {
+        "source": [],
+        "translation": [two],
+    }
+    # Tab B, which took over both marks from its answer, unmarks its sentence.
+    tab_b = {"source": [], "translation": [one], "base": both}
+    assert client.put(url + "/checked-sentences", json=tab_b).json() == {
+        "source": [],
+        "translation": [],
+    }
+    assert client.get(url).json()["checked_sentences"]["translation"] == []
+    # The base is never stored with the marks.
+    assert "base" not in _draft_row(env)["form"][CHECKED_SENTENCES_KEY]
+
+
+def test_without_a_base_the_marks_replace_the_stored_ones(review_env):
+    env = review_env
+    env.service.open(env.accesses["alice"], env.ids["alice"])
+    _mark(env)
+    only = {"source": [], "translation": [{"index": 3, "hash": "aaaaaaaa"}]}
+    assert _mark(env, only).model_dump() == only
+    merged = env.service.save_checked_sentences(
+        env.accesses["alice"],
+        env.ids["alice"],
+        CheckedSentences.model_validate(MARKS),
+        base=CheckedSentences(),
+    )
+    # Everything from the empty base is new: added to the stored mark.
+    assert merged.model_dump() == {
+        "source": MARKS["source"],
+        "translation": [{"index": 1, "hash": "12345678"}, only["translation"][0]],
+    }

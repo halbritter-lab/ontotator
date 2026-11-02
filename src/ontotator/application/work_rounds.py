@@ -193,11 +193,16 @@ class WorkRoundService:
                 or key.document_id != assignment["document_id"]
             ):
                 raise AccessDenied("NOT_ALLOWED")
+            # One round binds every alias of its key: a concurrent open of the
+            # same task that bound it first while this one waited for the
+            # assignment lock leaves one row per alias (issue 272).
             found = conn.execute(
-                select(RoundWorkspaceBindingRow.round_id).where(
+                select(RoundWorkspaceBindingRow.round_id)
+                .where(
                     RoundWorkspaceBindingRow.project_id == pid,
                     RoundWorkspaceBindingRow.workspace_key.in_(_workspace_aliases(key)),
                 )
+                .distinct()
             ).scalar_one_or_none()
             if found:
                 return self.repo.get_work_round(project, found)
