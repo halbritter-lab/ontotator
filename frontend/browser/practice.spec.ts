@@ -21,6 +21,16 @@ test("Try it out builds a private practice project and opens a practice task", a
   // The learner holds every role in the fixture project, so the consolidation task is there too.
   await expect(group.getByTestId("practice-task-row")).toHaveCount(4);
   await expect(group).toContainText("0 of 4 tasks done");
+  // Issue 287: at phone width every Start keeps clear of the group's right edge, without a sideways scroll.
+  await page.setViewportSize({ width: 390, height: 844 });
+  const groupBox = (await group.boundingBox())!;
+  for (const link of await group.getByTestId("practice-task-row").getByRole("link").all()) {
+    const box = (await link.boundingBox())!;
+    expect(box.x + box.width).toBeLessThanOrEqual(groupBox.x + groupBox.width - 8);
+  }
+  expect(await group.locator(".data-table-scroll").evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await page.setViewportSize({ width: 1280, height: 720 });
   // Practice tasks are never among the real tasks.
   await expect(page.getByTestId("task-row").filter({ hasText: "PRACTICE-" })).toHaveCount(0);
   const projects = await (await page.request.get("/api/v1/projects")).json() as { project_key: string }[];

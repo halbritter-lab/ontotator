@@ -97,7 +97,7 @@ def test_an_annotator_starts_a_practice_project_with_three_tasks(app: FastAPI) -
     assert started.status_code == 200, started.text
     project = started.json()["project"]
     assert project["project_key"].startswith("practice-")
-    assert project["name"] == "Practice · ann"
+    assert project["name"] == "Practice project"
     assert [task["kind"] for task in project["tasks"]] == [
         "scratch",
         "proposals",
@@ -607,3 +607,219 @@ def test_the_app_role_cannot_turn_a_real_project_into_practice(
     ):
         conn.execute(text(f"SELECT {S}.delete_practice_project(:p)"), {"p": real})
     assert _project_rows(app, real) == before
+
+
+# --- issue 280: no personal name in the audit trail -------------------------
+
+
+def _audit_text(app: FastAPI) -> str:
+    """Everything the audit trail holds, as one string."""
+    with app.state.repo.db.transaction() as conn:
+        rows = conn.execute(
+            select(
+                AuditEventRow.actor_label,
+                AuditEventRow.target_id,
+                AuditEventRow.details,
+            )
+        ).all()
+    return repr([tuple(row) for row in rows])
+
+
+def test_anonymising_a_practice_user_leaves_no_display_name_in_the_audit(
+    app: FastAPI,
+) -> None:
+    _member(app, "ann", ["annotator", "adjudicator"])
+    app.state.accounts.update_profile(Actor.cli(), "ann", display_name="Ann Zebrafinch")
+    client = logged_in(app, "ann")
+    project = client.post("/api/v1/me/practice").json()["project"]
+    assert "Zebrafinch" not in project["name"]
+
+    app.state.accounts.set_active(Actor.cli(), "ann", False)
+    app.state.accounts.anonymise(Actor.cli(), "ann")
+
+    assert "Zebrafinch" not in _audit_text(app)
+
+
+# --- issue 286: cleanup and failure edge cases ------------------------------
+
+
+def _practice_keys(app: FastAPI) -> set[str]:
+    with app.state.repo.db.transaction() as conn:
+        return set(practice_store.practice_keys(conn))
+
+
+def _files(app: FastAPI, key: str) -> list[Path]:
+    """The stored practice bundle of the project's import job."""
+    from ontotator.storage.tables import JobRow
+
+    db = app.state.repo.db
+    with db.transaction() as conn:
+        digests = conn.execute(
+            select(JobRow.payload["blob_sha256"].as_string()).where(
+                JobRow.project_id == _pid(app, key)
+            )
+        ).scalars()
+        paths = [db.blobs.path(digest) for digest in digests if digest]
+    assert paths and all(path.exists() for path in paths)
+    return paths
+
+
+def test_deactivating_through_the_admin_api_removes_the_practice_files(
+    app: FastAPI,
+) -> None:
+    client = _member(app, "ann", ["annotator"])
+    key = client.post("/api/v1/me/practice").json()["project"]["project_key"]
+    files = _files(app, key)
+    admin = logged_in(app, "root", system_admin=True)
+
+    changed = admin.patch("/api/v1/admin/users/ann", json={"active": False})
+
+    assert changed.status_code == 200, changed.text
+    assert _practice_keys(app) == set()
+    assert not any(path.exists() for path in files)
+
+
+def test_anonymising_removes_the_practice_files(app: FastAPI) -> None:
+    client = _member(app, "ann", ["annotator"])
+    key = client.post("/api/v1/me/practice").json()["project"]["project_key"]
+    files = _files(app, key)
+    with app.state.repo.db.transaction() as conn:
+        # Deactivated without the purge, so the anonymisation deletes it.
+        conn.execute(
+            text(f"UPDATE {S}.users SET active = false WHERE username = 'ann'")
+        )
+
+    app.state.accounts.anonymise(Actor.cli(), "ann")
+
+    assert _practice_keys(app) == set()
+    assert not any(path.exists() for path in files)
+
+
+def test_a_removal_inside_a_transaction_unlinks_after_the_commit(
+    app: FastAPI,
+) -> None:
+    client = _member(app, "ann", ["annotator"])
+    key = client.post("/api/v1/me/practice").json()["project"]["project_key"]
+    files = _files(app, key)
+    service = _service(app)
+    db = app.state.repo.db
+
+    with pytest.raises(RuntimeError, match="rolled back"), db.transaction():
+        service._remove(key, Actor.cli(), "test")
+        raise RuntimeError("rolled back")
+    assert _practice_keys(app) == {key}
+    assert all(path.exists() for path in files)
+
+    with db.transaction():
+        service._remove(key, Actor.cli(), "test")
+        assert all(path.exists() for path in files)
+    assert _practice_keys(app) == set()
+    assert not any(path.exists() for path in files)
+
+
+def test_a_second_tab_gets_the_project_the_first_one_built(
+    app: FastAPI, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = _member(app, "ann", ["annotator"])
+    user_id = app.state.accounts.get_by_username("ann").id
+    service, other = _service(app), _service(app)
+    real = PracticeService._require_available
+    built: list[Any] = []
+
+    def racing(self: PracticeService, uid: int) -> Any:
+        found = real(self, uid)
+        if self is service and not built:
+            # The other tab passed the same check and builds first.
+            built.append(other.start(uid).project)
+        return found
+
+    monkeypatch.setattr(PracticeService, "_require_available", racing)
+
+    state = service.start(user_id)
+
+    assert built[0] is not None and state.project is not None
+    assert state.project.project_key == built[0].project_key
+    assert _practice_keys(app) == {state.project.project_key}
+    assert client.get("/api/v1/me/practice").json()["project"]["total"] == 3
+
+
+def test_a_crash_inside_the_creation_leaves_no_practice_project(
+    app: FastAPI, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import ontotator.application.practice as practice_module
+
+    client = _member(app, "ann", ["annotator"])
+    # The cleanup after a failure never runs, as after a crash.
+    monkeypatch.setattr(PracticeService, "_remove", lambda *args: None)
+
+    def crash(*args: Any, **kw: Any) -> None:
+        raise RuntimeError("crash")
+
+    # Fails after the project and its owner row were written.
+    monkeypatch.setattr(practice_module, "record_audit", crash)
+    with pytest.raises(RuntimeError, match="crash"):
+        _service(app).start(app.state.accounts.get_by_username("ann").id)
+
+    assert _practice_keys(app) == set()
+    assert client.get("/api/v1/me/practice").json()["available"] is True
+
+
+def test_the_sweep_removes_a_practice_project_without_its_owner_row(
+    app: FastAPI,
+) -> None:
+    from ontotator.domain.profile_templates import hpo_phenotype
+    from ontotator.projects.service import ProjectService
+
+    service = _service(app)
+    chosen = service._ontology()
+    assert chosen is not None
+    # What a crash between the two steps left behind before issue 286.
+    ProjectService(app.state.repo.db, app.state.ontology_store).create(
+        Actor.cli(),
+        key="practice-9-orphan",
+        name="Practice project",
+        description=None,
+        profile=hpo_phenotype(chosen[0]),
+        pins={"HP": chosen[1]},
+        languages=content.LANGUAGES,
+        practice=True,
+    )
+    assert _practice_keys(app) == {"practice-9-orphan"}
+
+    assert service.expire() == ["practice-9-orphan"]
+    assert _practice_keys(app) == set()
+
+
+def test_reset_keeps_the_project_when_no_new_one_can_start(app: FastAPI) -> None:
+    client = _member(app, "ann", ["annotator"])
+    key = client.post("/api/v1/me/practice").json()["project"]["project_key"]
+    admin = logged_in(app, "root", system_admin=True)
+    switched = admin.put("/api/v1/admin/settings/practice", json={"offer": False})
+    assert switched.status_code == 200
+
+    refused = client.post("/api/v1/me/practice/reset")
+
+    assert refused.status_code == 409
+    assert refused.json()["details"]["reason"] == "offer_off"
+    assert _practice_keys(app) == {key}
+
+
+def test_a_technical_report_from_a_practice_task_names_no_project(
+    app: FastAPI,
+) -> None:
+    client = _member(app, "ann", ["annotator"])
+    task = client.post("/api/v1/me/practice").json()["project"]["tasks"][0]
+    sent = client.post(
+        "/api/v1/technical-reports",
+        json={
+            "request_id": "r1",
+            "description": "The practice text does not load.",
+            "context": {"route": f"#/tasks/{task['assignment_id']}"},
+        },
+    )
+    assert sent.status_code == 200, sent.text
+    admin = logged_in(app, "root", system_admin=True)
+
+    report = admin.get("/api/v1/admin/technical-reports").json()[0]
+
+    assert report["task"] is None and report["practice"] is True

@@ -79,6 +79,36 @@ class CheckedSentences(BaseModel):
     )
 
 
+class CheckedSentencesSave(CheckedSentences):
+    """New marks, optionally with the marks they were made from (issue 284).
+
+    With ``base``, the server applies only what changed from ``base`` to the new
+    marks to the stored marks, so marks set meanwhile in another tab stay. Without
+    ``base``, the new marks replace the stored ones.
+    """
+
+    base: CheckedSentences | None = None
+
+
+def merged_checked_sentences(
+    stored: CheckedSentences, base: CheckedSentences, marks: CheckedSentences
+) -> CheckedSentences:
+    """Stored marks with the change from ``base`` to ``marks`` applied, per side."""
+
+    def keys(value: CheckedSentences, side: str) -> set[tuple[int, str]]:
+        return {(mark.index, mark.hash) for mark in getattr(value, side)}
+
+    sides: dict[str, list[CheckedSentence]] = {}
+    for side in ("source", "translation"):
+        before, after = keys(base, side), keys(marks, side)
+        result = (keys(stored, side) - (before - after)) | (after - before)
+        sides[side] = [
+            CheckedSentence(index=index, hash=hash_)
+            for index, hash_ in sorted(result)[:MAX_CHECKED_SENTENCES]
+        ]
+    return CheckedSentences(**sides)
+
+
 def review_form(form: dict[str, Any]) -> dict[str, Any]:
     """The draft form without the checked-sentence marks."""
     return {k: v for k, v in form.items() if k != CHECKED_SENTENCES_KEY}
@@ -480,18 +510,32 @@ class TranslationReviewService:
             return revision
 
     def save_checked_sentences(
-        self, access: Access, assignment_id: int, marks: CheckedSentences
+        self,
+        access: Access,
+        assignment_id: int,
+        marks: CheckedSentences,
+        *,
+        base: CheckedSentences | None = None,
     ) -> CheckedSentences:
-        """Replace the reviewer's checked-sentence marks.
+        """Store the reviewer's checked-sentence marks and return the stored marks.
 
-        A working aid only: the draft revision, its time stamp and the assignment
-        status stay as they are, so marking alone never starts a task.
+        With ``base`` (the marks the client changed), only that change is applied
+        to the stored marks, so two tabs never remove each other's marks (issue
+        284); without it, ``marks`` replace them. A working aid only: the draft
+        revision, its time stamp and the assignment status stay as they are, so
+        marking alone never starts a task.
         """
         with self.db.transaction() as conn:
             assignment, pid, _ = self._authority(conn, access, assignment_id)
             self._editable(assignment)
             variant, _, _, _ = self._context(assignment)
+            # Locks the draft row: concurrent saves apply one after the other.
             draft = self._draft(conn, assignment, pid, variant)
+            marks = CheckedSentences(source=marks.source, translation=marks.translation)
+            if base is not None:
+                marks = merged_checked_sentences(
+                    stored_checked_sentences(draft.form), base, marks
+                )
             conn.execute(
                 update(TranslationReviewDraftRow)
                 .where(TranslationReviewDraftRow.assignment_id == assignment.id)

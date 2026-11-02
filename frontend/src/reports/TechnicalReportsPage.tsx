@@ -27,6 +27,8 @@ export function reportFacts(report: TechnicalReportView): [string, string][] {
       ["Project", task.project_key],
       ["Text", taskText(task)],
     ] satisfies [string, string][] : []),
+    // A practice project is private: no project or text, and only the reporter opens the address.
+    ...(report.practice ? [["Task", "A practice task (invented text; only the reporter can open it)"]] satisfies [string, string][] : []),
     ["App version", report.app_revision ? `${report.app_version} (commit ${report.app_revision.slice(0, 7)})` : report.app_version],
   ];
   if (report.route) facts.push(["Screen", report.route]);

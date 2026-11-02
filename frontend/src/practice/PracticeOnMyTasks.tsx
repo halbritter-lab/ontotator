@@ -93,7 +93,11 @@ export function PracticeGroup({ tasks, state, actionLabel, onChange, onNavigate 
   };
   const columns: Column<TaskSummary>[] = [
     { id: "text", header: "Text", cell: task => <LanguageText text={taskText(task)} code={task.language} /> },
-    { id: "task", header: "Task", cell: task => { const kind = kinds.get(task.assignment_id); return kind ? PRACTICE_TASK_NAMES[kind] : task.task; } },
+    // On a phone the Status column folds into the Task cell (practice.css), so Start keeps clear of the edge.
+    { id: "task", header: "Task", cell: task => { const kind = kinds.get(task.assignment_id); return <>
+      {kind ? PRACTICE_TASK_NAMES[kind] : task.task}
+      <span className="practice-task-status"><StatusBadge status={task.status}>{assignmentStatusLabels[task.status]}</StatusBadge></span>
+    </>; } },
     { id: "status", header: "Status", cell: task => <StatusBadge status={task.status}>{assignmentStatusLabels[task.status]}</StatusBadge> },
     { id: "open", header: "Action", cell: task => {
       const route: Route = { name: "task", assignmentId: task.assignment_id };

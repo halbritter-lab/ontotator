@@ -15,7 +15,7 @@ const jsonResponse = (status: number, body: unknown) => new Response(JSON.string
 const report = (extra: Partial<TechnicalReportView> = {}): TechnicalReportView => ({
   id: 12, reference: "TR-12", status: "open", description: "The page stays blank.", created_at: "2026-11-01T10:00:00Z",
   reporter: { pseudonym: "ann-0004", display_name: "Ann", is_me: false }, reporter_username: "ann",
-  app_version: "0.6.1", app_revision: "cc65cea5558f85384f92c6bfb07a15f5a3fabe2b", route: "#/projects/p/documents", task: null,
+  app_version: "0.6.1", app_revision: "cc65cea5558f85384f92c6bfb07a15f5a3fabe2b", route: "#/projects/p/documents", task: null, practice: false,
   user_agent: "TestBrowser/1.0", viewport: "1280x800", last_error_status: 500, last_error_code: "PROJECT_BUSY",
   last_error_at: "2026-11-01T09:59:00Z", crash_message: null, closed_at: null, closed_by: null, ...extra,
 });
@@ -177,6 +177,14 @@ describe("Technical reports page", () => {
     expect(Object.fromEntries(rows({ task: "translation_review", annotation_mode: null })).Task).toBe("Translation review");
     expect(Object.fromEntries(rows({ task: "review", annotation_mode: null })).Task).toBe("Consolidation");
     expect(reportFacts(report()).map(([label]) => label)).not.toContain("Task");
+  });
+
+  it("marks a report from a practice task without naming its project or text", () => {
+    const facts = reportFacts(report({ route: "#/tasks/41", practice: true }));
+    const labels = facts.map(([label]) => label);
+    expect(labels).not.toContain("Project");
+    expect(labels).not.toContain("Text");
+    expect(Object.fromEntries(facts).Task).toMatch(/^A practice task/);
   });
 
   it("copies a report as plain text for an issue", () => {

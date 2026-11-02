@@ -852,9 +852,13 @@ class AccountService:
             )
             if column == "active" and not value:
                 # Issue 266: a deactivated account loses its practice project.
+                from ontotator.exchange.jobs import unlink_after_commit
                 from ontotator.storage.practice_store import purge_practice_of_user
 
-                purge_practice_of_user(conn, actor, row.id, "account_deactivated")
+                unlink_after_commit(
+                    self.db,
+                    purge_practice_of_user(conn, actor, row.id, "account_deactivated"),
+                )
             self._new_generation(conn, row.id, now, reason=action)
             record_audit(
                 conn,
@@ -895,9 +899,13 @@ class AccountService:
                 )
             new_name = f"{ANONYMISED_PREFIX}{row.id}"
             # Issue 266: the practice project goes; its audit entries stay.
+            from ontotator.exchange.jobs import unlink_after_commit
             from ontotator.storage.practice_store import purge_practice_of_user
 
-            purge_practice_of_user(conn, actor, row.id, "account_anonymised")
+            unlink_after_commit(
+                self.db,
+                purge_practice_of_user(conn, actor, row.id, "account_anonymised"),
+            )
             conn.execute(
                 update(UserRow)
                 .where(UserRow.id == row.id)

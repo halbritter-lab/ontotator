@@ -824,6 +824,9 @@ export interface paths {
         /**
          * Save Checked Sentences
          * @description The reviewer's own checked-sentence marks; not part of the review.
+         *
+         *     With ``base``, only the change from ``base`` to the sent marks is applied, so
+         *     marks set meanwhile in another tab stay; the answer is the stored marks.
          */
         put: operations["save_checked_sentences_api_v1_translation_reviews__assignment_id__checked_sentences_put"];
         post?: never;
@@ -1782,7 +1785,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Settings */
+        /**
+         * Settings
+         * @description Any member. Who changed the translations (``frozen_translations``
+         *     ``updated.by`` and ``history[].by``) only for leads (``MANAGE_ASSIGNMENTS``),
+         *     as in ``/members`` (#281).
+         */
         get: operations["settings_api_v1_projects__key__settings_get"];
         put?: never;
         post?: never;
@@ -3775,6 +3783,21 @@ export interface components {
             /** Translation */
             translation?: components["schemas"]["CheckedSentence"][];
         };
+        /**
+         * CheckedSentencesSave
+         * @description New marks, optionally with the marks they were made from (issue 284).
+         *
+         *     With ``base``, the server applies only what changed from ``base`` to the new
+         *     marks to the stored marks, so marks set meanwhile in another tab stay. Without
+         *     ``base``, the new marks replace the stored ones.
+         */
+        CheckedSentencesSave: {
+            /** Source */
+            source?: components["schemas"]["CheckedSentence"][];
+            /** Translation */
+            translation?: components["schemas"]["CheckedSentence"][];
+            base?: components["schemas"]["CheckedSentences"] | null;
+        };
         /** CodeResponse */
         CodeResponse: {
             /** Code */
@@ -4677,7 +4700,8 @@ export interface components {
          *     ``reason`` is what ended them: a move to the newest translations
          *     (``refresh``) or a change of the ontology version or task profile
          *     (``ontology``). Searches that ran with them keep their
-         *     ``search_condition_id``, one of ``condition_ids``.
+         *     ``search_condition_id``, one of ``condition_ids``. ``by`` and
+         *     ``by_command_line`` as in ``TranslationsUpdate``.
          */
         EarlierTranslations: {
             /**
@@ -4685,8 +4709,12 @@ export interface components {
              * Format: date-time
              */
             until: string;
-            /** By */
-            by: string;
+            by?: components["schemas"]["PersonRefView"] | null;
+            /**
+             * By Command Line
+             * @default false
+             */
+            by_command_line: boolean;
             /**
              * Reason
              * @enum {string}
@@ -8421,6 +8449,11 @@ export interface components {
             /** Route */
             route: string | null;
             task: components["schemas"]["TechnicalReportTask"] | null;
+            /**
+             * Practice
+             * @default false
+             */
+            practice: boolean;
             /** User Agent */
             user_agent: string | null;
             /** Viewport */
@@ -8740,6 +8773,9 @@ export interface components {
         /**
          * TranslationsUpdate
          * @description When and by whom the project moved to the newest translations.
+         *
+         *     Who made the change is shown to leads only (D1, #281): other members get
+         *     neither ``by`` nor ``by_command_line``.
          */
         TranslationsUpdate: {
             /**
@@ -8747,8 +8783,12 @@ export interface components {
              * Format: date-time
              */
             at: string;
-            /** By */
-            by: string;
+            by?: components["schemas"]["PersonRefView"] | null;
+            /**
+             * By Command Line
+             * @default false
+             */
+            by_command_line: boolean;
         };
         /**
          * TreeLevel
@@ -11003,7 +11043,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CheckedSentences"];
+                "application/json": components["schemas"]["CheckedSentencesSave"];
             };
         };
         responses: {

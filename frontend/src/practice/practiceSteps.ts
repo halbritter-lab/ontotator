@@ -62,7 +62,7 @@ export const PRACTICE_STEPS: Readonly<Record<PracticeTask["kind"], readonly Prac
       help: { chapter: ANNOTATOR, section: "submit-the-text" }, done: submitted },
   ],
   translation_review: [
-    { id: "correct", label: "Correct the translation", hint: "The source says arms, the translation says “Beine” (legs). Change it to “Arme”.",
+    { id: "correct", label: "Correct the translation", hint: "The source says arms, the translation says “Beine” (legs). Change it to “Arme”. The text cannot be edited while Mark checked sentences or Show changes is on: turn that off first.",
       help: { chapter: ANNOTATOR, section: "review-a-translation" },
       done: task => !!task.translation_text?.includes("Arme") && !task.translation_text.includes("Beine") },
     { id: "decision", label: "Choose a decision", hint: "Choose the decision that fits your correction.",
