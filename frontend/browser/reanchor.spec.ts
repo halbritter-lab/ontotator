@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import type { components } from '../src/api/generated';
-import { authenticatedRequest, loginExisting, openCase, selectText, submitCase, viewSubmittedResult } from './helpers';
+import { authenticatedRequest, loginExisting, openCase, selectText, submitCase, viewSubmittedResult, LEAD_REOPEN_NOTE } from './helpers';
 
 test.setTimeout(90_000);
 type Item = components['schemas']['ReanchorItem'];
@@ -149,7 +149,7 @@ test('re-creates a Unicode finding, dismisses with reason, reloads and submits w
   const submission=result.view.submissions!.at(-1)!;
   expect(submission.reanchor_inputs).toEqual(saved.view.draft.reanchor_inputs);
   expect(submission.reanchor_resolutions).toEqual(resolution);
-  await viewSubmittedResult(page);
+  await viewSubmittedResult(page, LEAD_REOPEN_NOTE);
   await expect(panel(page).getByRole('button',{name:'Re-create here'})).toHaveCount(0);
   await expect(panel(page).getByRole('button',{name:'Dismiss with reason'})).toHaveCount(0);
 });
