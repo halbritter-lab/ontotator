@@ -182,6 +182,22 @@ def test_downgrade_refuses_while_practice_projects_exist(migrated):
         command.downgrade(alembic_config(conn), PREVIOUS)
 
 
+def test_downgrade_refuses_a_practice_project_without_its_owner_row(migrated):
+    engine, _ = migrated
+    with engine.begin() as conn:
+        _exec(
+            conn,
+            f"INSERT INTO {S}.projects (project_key, name, manifest, manifest_sha256,"
+            " task_profile, task_profile_sha256, practice)"
+            " VALUES ('practice-1-cc', 'P', '{}', 'm', '{}', 't', true)",
+        )
+    with (
+        pytest.raises(RuntimeError, match="practice projects exist"),
+        engine.begin() as conn,
+    ):
+        command.downgrade(alembic_config(conn), PREVIOUS)
+
+
 def test_the_practice_flag_cannot_change_after_insert(migrated):
     engine, _ = migrated
     # As the schema owner: no bypass for anybody.

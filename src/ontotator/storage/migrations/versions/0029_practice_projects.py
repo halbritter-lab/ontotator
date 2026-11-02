@@ -221,10 +221,11 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # A practice project left behind would turn into a real one: refuse.
+    # A practice project left behind would turn into a real one: refuse. The
+    # flag counts, not practice_projects: a project without its owner row too.
     left = (
         op.get_bind()
-        .execute(sa.text(f"SELECT count(*) FROM {SCHEMA}.practice_projects"))
+        .execute(sa.text(f"SELECT count(*) FROM {SCHEMA}.projects WHERE practice"))
         .scalar_one()
     )
     if left:

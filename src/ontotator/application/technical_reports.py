@@ -120,6 +120,10 @@ class TechnicalReportView(BaseModel):
     app_revision: str | None
     route: str | None
     task: TechnicalReportTask | None
+    # Sent from the reporter's own practice task (issue 286): ``task`` stays
+    # empty, as a practice project is private and its address opens only for
+    # the reporter.
+    practice: bool = False
     user_agent: str | None
     viewport: str | None
     last_error_status: int | None
@@ -246,11 +250,12 @@ class TechnicalReportService:
     @staticmethod
     def _tasks(
         conn: Connection, rows: list[RowMapping]
-    ) -> dict[tuple[int, int], TechnicalReportTask]:
-        """Tasks named by the reports' addresses, by (assignment, owner)."""
+    ) -> tuple[dict[tuple[int, int], TechnicalReportTask], set[tuple[int, int]]]:
+        """Tasks named by the reports' addresses, by (assignment, owner); and
+        the practice tasks among them, which are only marked."""
         ids = {_assignment_id(row["route"]) for row in rows} - {None}
         if not ids:
-            return {}
+            return {}, set()
         found = conn.execute(
             select(
                 AssignmentRow.id,
@@ -264,6 +269,7 @@ class TechnicalReportService:
                 DocumentRow.language,
                 DocumentRow.version,
                 DocumentRow.origin,
+                ProjectRow.practice,
             )
             .join(ProjectRow, ProjectRow.id == AssignmentRow.project_id)
             .join(
@@ -273,10 +279,16 @@ class TechnicalReportService:
             )
             .where(AssignmentRow.id.in_(ids))
         ).mappings()
-        return {
-            (row["id"], row["user_id"]): TechnicalReportTask.model_validate(dict(row))
-            for row in found
-        }
+        tasks: dict[tuple[int, int], TechnicalReportTask] = {}
+        practice: set[tuple[int, int]] = set()
+        for row in found:
+            if row["practice"]:
+                practice.add((row["id"], row["user_id"]))
+            else:
+                tasks[(row["id"], row["user_id"])] = TechnicalReportTask.model_validate(
+                    dict(row)
+                )
+        return tasks, practice
 
     @staticmethod
     def _views(conn: Connection, rows: list[RowMapping]) -> list[TechnicalReportView]:
@@ -294,10 +306,12 @@ class TechnicalReportService:
                 ).where(UserRow.id.in_(user_ids))
             )
         }
-        tasks = TechnicalReportService._tasks(conn, rows)
+        tasks, practice = TechnicalReportService._tasks(conn, rows)
         views = []
         for row in rows:
             reporter = users[row["reporter_id"]]
+            # The address comes from the client: only the reporter's own task.
+            own = (_assignment_id(row["route"]) or 0, row["reporter_id"])
             closer = users.get(row["closed_by"]) if row["closed_by"] else None
             views.append(
                 TechnicalReportView(
@@ -314,10 +328,8 @@ class TechnicalReportService:
                     app_version=row["app_version"],
                     app_revision=row["app_revision"],
                     route=row["route"],
-                    # The address comes from the client: only the reporter's own task.
-                    task=tasks.get(
-                        (_assignment_id(row["route"]) or 0, row["reporter_id"])
-                    ),
+                    task=tasks.get(own),
+                    practice=own in practice,
                     user_agent=row["user_agent"],
                     viewport=row["viewport"],
                     last_error_status=row["last_error_status"],

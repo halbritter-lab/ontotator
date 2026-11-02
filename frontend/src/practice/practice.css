@@ -8,6 +8,14 @@
 .practice-group > summary { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); cursor: pointer; }
 .practice-group__title { font-weight: var(--weight-strong); }
 .practice-group > .toolbar, .practice-group > .data-table-scroll { margin-block-start: var(--space-3); }
+/* The status inside the Task cell: only on a phone, where the Status column is folded (issue 287). */
+.practice-task-status { display: none; }
+@media (max-width: 700px) {
+  .practice-group { padding: var(--space-2); }
+  .practice-group .data-table { --cell-pad-x: var(--space-2); }
+  .practice-group .data-table :is(th, td):nth-child(3) { display: none; }
+  .practice-task-status { display: block; margin-block-start: var(--space-1); }
+}
 .practice-banner { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-block-end: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--warning); border-radius: var(--radius); background: var(--warning-light); }
 .practice-banner > span:not(.practice-pill) { flex: 1 1 auto; }
 .practice-panel { margin-block-end: var(--space-3); padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-raised); }

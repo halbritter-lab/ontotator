@@ -124,7 +124,7 @@ You get practice if you are an annotator or a translation reviewer in at least o
 2. Your practice tasks appear in their own group, marked **Practice**, above your real tasks:
    - **Annotate from scratch**: mark findings yourself.
    - **Annotate from proposals**: check a tool's proposals. One is right, one has a prefilled value, one needs **Edit & Replace**, and the tool missed one finding. **Discard copy** takes a copy back if you change your mind.
-   - **Translation review**: the German translation has one error. Find and correct it.
+   - **Translation review**: the German translation has one error. Find and correct it. To edit the text, **Mark checked sentences** and **Show changes** must be off.
    - **Consolidation**, if you are also a consolidator: two virtual colleagues disagree. Decide. Nobody accepts the result afterwards.
 3. Open a task with **Start**. Above the task you see **Nothing here counts. Invented texts only.**
 4. The panel **Your practice** lists the steps of the task. A step ticks itself when you have really done it. **Next:** says what to do now. Each step has a **Help** link to its handbook section.

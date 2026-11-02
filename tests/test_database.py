@@ -64,6 +64,42 @@ def test_a_caught_failure_of_a_joined_scope_still_rolls_back_the_chain(
     assert isinstance(cause, RuntimeError) and str(cause) == "rejected"
 
 
+def test_after_commit_waits_for_the_outermost_commit(tmp_path: Path) -> None:
+    db = database_for(tmp_path / "a.db")
+    seen: list[tuple[str, bool]] = []
+
+    with db.transaction() as conn:
+        conn.execute(insert(StoredFileRow).values(sha256="a" * 64, size=1))
+        with db.transaction():
+            db.after_commit(lambda: seen.append(("joined", db.in_transaction())))
+        assert seen == []
+    # Outside any transaction, with the row committed.
+    assert seen == [("joined", False)] and _count(db) == 1
+
+    db.after_commit(lambda: seen.append(("now", db.in_transaction())))
+    assert seen[-1] == ("now", False)
+
+
+def test_after_commit_is_dropped_on_rollback_and_never_raises(
+    tmp_path: Path,
+) -> None:
+    db = database_for(tmp_path / "a.db")
+    seen: list[str] = []
+
+    with pytest.raises(RuntimeError, match="boom"), db.transaction():
+        db.after_commit(lambda: seen.append("rolled back"))
+        raise RuntimeError("boom")
+    assert seen == []
+
+    def failing() -> None:
+        raise OSError("disk")
+
+    with db.transaction():
+        db.after_commit(failing)
+        db.after_commit(lambda: seen.append("still runs"))
+    assert seen == ["still runs"]
+
+
 def test_a_caught_failure_inside_a_snapshot_does_not_doom_it(tmp_path: Path) -> None:
     db = database_for(tmp_path / "a.db")
 
