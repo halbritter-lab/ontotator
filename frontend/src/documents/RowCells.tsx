@@ -340,8 +340,11 @@ export function WaitingOnCell({ row }: { row: DocumentRowView }): JSX.Element {
   const { text, title, you, narrow } = waitingOnText(row);
   if (you) return <strong className="documents-waiting-on">{text}</strong>;
   if (!title || title === text) return <span className="documents-waiting-on">{text}</span>;
+  // The narrow form ends in " +n": the name alone is cut with an ellipsis, so "+n" stays visible.
+  const more = narrow ? narrow.lastIndexOf(" +") : -1;
   const shown = narrow
-    ? <><span aria-hidden="true" className="waiting-wide">{text}</span><span aria-hidden="true" className="waiting-narrow">{narrow}</span></>
+    ? <><span aria-hidden="true" className="waiting-wide">{text}</span><span aria-hidden="true" className="waiting-narrow">
+      <span className="waiting-name">{narrow.slice(0, more)}</span>{" "}<span className="waiting-more">{narrow.slice(more + 1)}</span></span></>
     : <span aria-hidden="true">{text}</span>;
   return <span className="documents-waiting-on" title={title}>{shown}<span className="visually-hidden">{title}</span></span>;
 }
