@@ -162,20 +162,54 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
   };
   // On a touch screen a swipe on the text would mark instead of scroll, so the mode is not offered there.
   const touchOnly = useMediaQuery("(hover: none) and (pointer: coarse)");
-  /** The reviewer's marks, saved on their own (never with the draft revision) shortly after each change. */
+  /**
+   * The reviewer's marks, saved on their own (never with the draft revision) shortly after each change. Each save
+   * sends the marks it was made from (`base`), so the server applies only this tab's change and marks set in
+   * another tab stay; the answer, with those marks, is shown once nothing newer waits (issue 284).
+   */
   const [marks, setMarks] = useState<StoredMarks>(() => storedOf(workspace.checked_sentences));
   const [marksError, setMarksError] = useState(false);
   const marksTimer = useRef<number | undefined>(undefined), pendingMarks = useRef<StoredMarks | null>(null);
-  const marksChain = useRef<Promise<unknown>>(Promise.resolve());
+  /** The marks the next change is made from: the last stored answer, or the marks being sent. */
+  const baseMarks = useRef<StoredMarks>(storedOf(workspace.checked_sentences));
+  /** The save in flight (one at a time); it never rejects. */
+  const marksSaving = useRef<{ value: StoredMarks; done: Promise<void> } | null>(null);
   const sendMarks = () => {
+    window.clearTimeout(marksTimer.current); marksTimer.current = undefined;
+    const value = pendingMarks.current;
+    if (!value || marksSaving.current) return;
+    pendingMarks.current = null;
+    const base = baseMarks.current;
+    const done = api.saveCheckedSentences(props.assignmentId, value, base).then(
+      stored => {
+        marksSaving.current = null;
+        baseMarks.current = value;
+        if (pendingMarks.current) { sendMarks(); return; }
+        // Nothing newer waits: show the stored marks, with those of other tabs.
+        baseMarks.current = storedOf(stored);
+        if (alive.current) { setMarksError(false); setMarks(baseMarks.current); }
+      },
+      () => {
+        // A repeated change applies once: the next save sends everything since `base` again.
+        marksSaving.current = null;
+        pendingMarks.current ??= value;
+        if (alive.current) setMarksError(true);
+      });
+    marksSaving.current = { value, done };
+  };
+  /** Sends waiting marks and resolves once no save is in flight (a failed save stays waiting). */
+  const flushMarks = async (): Promise<void> => {
+    sendMarks();
+    while (marksSaving.current) await marksSaving.current.done;
+  };
+  /** A closing tab: send waiting marks at once, in a request that outlives the page. */
+  const sendMarksOnUnload = () => {
     window.clearTimeout(marksTimer.current); marksTimer.current = undefined;
     const value = pendingMarks.current;
     if (!value) return;
     pendingMarks.current = null;
-    // One request at a time, so the last change is the one stored.
-    marksChain.current = marksChain.current.then(() => api.saveCheckedSentences(props.assignmentId, value)).then(
-      () => { if (alive.current && !pendingMarks.current) setMarksError(false); },
-      () => { pendingMarks.current ??= value; if (alive.current) setMarksError(true); });
+    void api.saveCheckedSentences(props.assignmentId, value, marksSaving.current?.value ?? baseMarks.current, { keepalive: true })
+      .catch(() => { pendingMarks.current ??= value; });
   };
   const changeMarks = (next: StoredMarks) => {
     setMarks(next); pendingMarks.current = next;
@@ -372,8 +406,12 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
   const guard = (): Promise<boolean> => {
     if (operation.current) return Promise.resolve(false);
     if (leavePromise.current) return leavePromise.current;
-    if (!saver.current?.hasUnsavedChanges) return Promise.resolve(true);
+    // Waiting marks are sent first, so a reload cannot read the marks before them (issue 284).
+    // They are a working aid: a failed save of them does not keep the reviewer here.
+    const marksSent = flushMarks();
+    if (!saver.current?.hasUnsavedChanges) return marksSent.then(() => true);
     const promise = (async () => {
+      await marksSent;
       try { return await flush(); } catch (failure) {
         if (!alive.current) return false;
         setError(failure);
@@ -386,10 +424,10 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
     void promise.then(() => { if (leavePromise.current === promise) leavePromise.current = null; });
     return promise;
   };
-  const latest = useRef({ guard, logout: (_proceed: () => void) => {} });
-  latest.current = { guard, logout: proceed => {
+  const latest = useRef({ guard, logout: (_proceed: () => void) => {}, unloadMarks: sendMarksOnUnload });
+  latest.current = { guard, unloadMarks: sendMarksOnUnload, logout: proceed => {
     if (operation.current || pendingLeave.current) return;
-    if (!saver.current?.hasUnsavedChanges) { proceed(); return; }
+    if (!saver.current?.hasUnsavedChanges) { void flushMarks().then(proceed); return; }
     const request: Leave = { kind: "logout", proceed }; pendingLeave.current = request; setLeave(request);
   } };
   useEffect(() => {
@@ -403,7 +441,11 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
   }, [props.routeLeaveRef, props.leaveGuardRef]);
   useEffect(() => {
     if (immutableReadOnly) return;
-    const warn = (event: BeforeUnloadEvent) => { if (saver.current?.hasUnsavedChanges) { event.preventDefault(); event.returnValue = ""; } };
+    const warn = (event: BeforeUnloadEvent) => {
+      // Marks are sent on their own, so they are not lost within the debounce (issue 284).
+      latest.current.unloadMarks();
+      if (saver.current?.hasUnsavedChanges) { event.preventDefault(); event.returnValue = ""; }
+    };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [immutableReadOnly]);

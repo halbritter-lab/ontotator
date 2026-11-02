@@ -9,6 +9,8 @@ import ontospan
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import Connection, delete, func, insert, select, update
 
+from ontotator.api.person_views import PersonRefView
+from ontotator.application.people import person_refs
 from ontotator.auth.accounts import normalize_languages
 from ontotator.auth.audit import Actor, record_audit
 from ontotator.authz.memberships import grant_roles
@@ -32,6 +34,7 @@ from ontotator.ontology.store import OntologyStore
 from ontotator.ontology.translation_freeze import (
     REFRESH_ACTION,
     SUPERSEDED,
+    SupersededConditions,
     condition_history,
     frozen_files,
     not_included,
@@ -72,6 +75,10 @@ class ProjectPin(BaseModel):
     t1_profile: T1Profile = "generic"
 
 
+# Captures a refresh tries before it gives up on uploads arriving meanwhile.
+_REFRESH_ATTEMPTS = 3
+
+
 class PinnedOntology(ProjectPin):
     release: str
 
@@ -102,11 +109,17 @@ class FrozenTranslations(BaseModel):
 
 
 class TranslationsUpdate(BaseModel):
-    """When and by whom the project moved to the newest translations."""
+    """When and by whom the project moved to the newest translations.
+
+    Who made the change is shown to leads only (D1, #281): other members get
+    neither ``by`` nor ``by_command_line``.
+    """
 
     at: datetime
-    # The audit actor label, e.g. ``user:lena`` or ``cli:operator``.
-    by: str
+    # The account that made the change.
+    by: PersonRefView | None = None
+    # Made with the admin command line, not by an account.
+    by_command_line: bool = False
 
 
 class EarlierTranslations(BaseModel):
@@ -115,11 +128,14 @@ class EarlierTranslations(BaseModel):
     ``reason`` is what ended them: a move to the newest translations
     (``refresh``) or a change of the ontology version or task profile
     (``ontology``). Searches that ran with them keep their
-    ``search_condition_id``, one of ``condition_ids``.
+    ``search_condition_id``, one of ``condition_ids``. ``by`` and
+    ``by_command_line`` as in ``TranslationsUpdate``.
     """
 
     until: datetime
-    by: str
+    # As in ``TranslationsUpdate``: for leads only.
+    by: PersonRefView | None = None
+    by_command_line: bool = False
     reason: Literal["refresh", "ontology"]
     condition_ids: list[str]
     files: list[FrozenTranslation]
@@ -397,7 +413,10 @@ class ProjectService:
             is not None
         )
 
-    def settings(self, key: str) -> ProjectSettings:
+    def settings(
+        self, key: str, *, viewer: Actor | None = None, viewer_is_lead: bool = False
+    ) -> ProjectSettings:
+        """``viewer_is_lead``: who changed the translations is named (#281)."""
         with (
             self.db.transaction() if self.db.in_transaction() else self.db.snapshot()
         ) as conn:
@@ -433,11 +452,23 @@ class ProjectService:
                 locked=self._locked(conn, row["id"]),
                 axis_defaults=axis_defaults(profile, pins),
                 annotation_policy_revision=row["annotation_policy_revision"],
-                frozen_translations=self._frozen_translations(conn, row["id"], profile),
+                frozen_translations=self._frozen_translations(
+                    conn,
+                    row["id"],
+                    profile,
+                    viewer_id=None if viewer is None else viewer.user_id,
+                    viewer_is_lead=viewer_is_lead,
+                ),
             )
 
     def _frozen_translations(
-        self, conn: Connection, project_id: int, profile: TaskProfile
+        self,
+        conn: Connection,
+        project_id: int,
+        profile: TaskProfile,
+        *,
+        viewer_id: int | None,
+        viewer_is_lead: bool,
     ) -> FrozenTranslations | None:
         """Read the captured conditions only; never capture them (#254)."""
         conditions = conn.execute(
@@ -467,18 +498,40 @@ class ProjectService:
         prefixes = ontology_prefixes(conn, self.store.loaded_prefixes())
         history = condition_history(conn, project_id)
         last = history[-1] if history else None
+        # The audit label names the login (``user:<login>``) or the operating
+        # system user (``cli:<name>``): never sent. Leads get a person
+        # reference, other members nobody (D1, #281).
+        people = (
+            person_refs(
+                conn,
+                (i.actor_user_id for i in history if i.actor_user_id is not None),
+                # No account has id 0: a process viewer is nobody's "me".
+                viewer_id=viewer_id or 0,
+                viewer_is_lead=True,
+            )
+            if viewer_is_lead
+            else {}
+        )
+
+        def by(item: SupersededConditions) -> dict[str, Any]:
+            if not viewer_is_lead:
+                return {}
+            if item.actor_user_id is not None:
+                return {"by": people.get(item.actor_user_id)}
+            return {"by_command_line": item.actor_label.startswith("cli:")}
+
         return FrozenTranslations(
             files=files(conditions),
             not_included=not_included(conn, conditions, prefixes),
             updated=(
-                TranslationsUpdate(at=last.at, by=last.actor_label)
+                TranslationsUpdate(at=last.at, **by(last))
                 if last is not None and last.action == REFRESH_ACTION
                 else None
             ),
             history=[
                 EarlierTranslations(
                     until=item.at,
-                    by=item.actor_label,
+                    **by(item),
                     reason="refresh" if item.action == REFRESH_ACTION else "ontology",
                     condition_ids=[
                         str(c.get("condition_id", "")) for c in item.conditions
@@ -504,7 +557,26 @@ class ProjectService:
 
         Refused with ``TRANSLATIONS_NOT_FROZEN`` before the first use and
         with ``TRANSLATIONS_CURRENT`` when no file would change.
+
+        The capture runs before the project lock. A translation upload during
+        it would let this refresh write back files older than those another
+        refresh stored meanwhile (#285): the stored files are compared again
+        under the lock, and a changed state captures again, up to
+        ``_REFRESH_ATTEMPTS`` times, then ``REVISION_CONFLICT``.
         """
+        for _ in range(_REFRESH_ATTEMPTS):
+            settings = self._refresh_translations_once(actor, key)
+            if settings is not None:
+                return settings
+        raise RevisionConflict("The translation files changed meanwhile; try again.")
+
+    def _refresh_translations_once(
+        self, actor: Actor, key: str
+    ) -> ProjectSettings | None:
+        """``None`` when the stored translation files changed during the capture."""
+        # Read before the sync: an upload after this read fails the check
+        # under the lock, whichever files the capture saw.
+        versions = self.store.translation_versions()
         # Take up files another worker stored, then capture without any lock
         # (parsing a translation can take seconds).
         self.store.sync_translations()
@@ -527,6 +599,10 @@ class ProjectService:
                 raise RevisionConflict(
                     "The ontology or task profile changed meanwhile; try again."
                 )
+            if self.store.translation_versions(conn) != versions:
+                # An upload landed during the capture; a refresh that took it
+                # may have stored newer files already. Nothing is written.
+                return None
             current = conn.execute(
                 select(ProjectSearchConditionsRow.conditions).where(
                     ProjectSearchConditionsRow.project_id == project_id
@@ -608,7 +684,7 @@ class ProjectService:
                 },
                 at=datetime.now(UTC),
             )
-            return self.settings(key)
+            return self.settings(key, viewer=actor, viewer_is_lead=True)
 
     def create(
         self,
@@ -674,7 +750,7 @@ class ProjectService:
                 on_create=created,
                 practice=practice,
             )
-            return self.settings(key)
+            return self.settings(key, viewer=actor, viewer_is_lead=True)
 
     def update_settings(
         self, actor: Actor, key: str, change: ProjectSettingsChange
@@ -744,7 +820,7 @@ class ProjectService:
                         ),
                     },
                 )
-            return self.settings(key)
+            return self.settings(key, viewer=actor, viewer_is_lead=True)
 
     def _validate_pins(
         self, conn: Connection, profile: TaskProfile, pins: Mapping[str, Pin]
@@ -1067,7 +1143,7 @@ class ProjectService:
                     **({SUPERSEDED: ended_conditions} if ended_conditions else {}),
                 },
             )
-            return self.settings(key)
+            return self.settings(key, viewer=actor, viewer_is_lead=True)
 
     def _rewrite_drafts(
         self,

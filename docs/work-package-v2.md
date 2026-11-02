@@ -25,13 +25,15 @@ A valid v2 work package ZIP archive contains:
    - `file_hashes`: SHA-256 hex digests for all other payload files in the archive
    - `origin_package_id` & `origin_manifest_hash`: Optional provenance tracking for scoped exports
    - `search_conditions`: Optional captured search inputs and runtime identities; absent on legacy packages
+   - `earlier_search_conditions`: Optional conditions the project searched with before `search_conditions`, oldest first; absent when there are none
+   - `unrecoverable_search_condition_ids`: Optional ids of conditions that search events name but the package cannot carry; absent when there are none
 2. `documents.jsonl`: UTF-8 newline-delimited documents with `document_id`, `text`, `language`, and `text_sha256`.
 3. `annotations.jsonl`: Immutable `AnnotationSnapshot` (v3) records.
 4. `evidence.jsonl`: Immutable `EvidenceSnapshot` records.
 5. `submissions.jsonl`: Immutable `Submission` records with `checked_layer_ids`, `targets`, `snapshots`, and `decisions`.
 6. `search-events.jsonl`: Audit log of search operations with `layer_id`, `query`, candidates, ranking, and selections.
 7. Optional embedded ontology files declared in `task_profile.ontologies[*].resource_path` (e.g. `ontologies/hp.json`).
-8. Optional captured translations at `search-resources/<sha256>/<filename>`, declared by search conditions and covered by `file_hashes`.
+8. Optional captured translations at `search-resources/<sha256>/<filename>`, declared by current or earlier search conditions and covered by `file_hashes`.
 
 ## Captured Search Conditions
 
@@ -55,6 +57,28 @@ package. Later ambient uploads cannot mutate its captured resource set. Export
 adds this metadata without rewriting original profile, snapshot or origin
 manifest hashes. Scoped independent exports retain only conditions/resources
 for the projected profile, preserving reference-layer isolation.
+
+### Ended conditions
+
+A move to the newest translations or a change of pins or profile ends a
+project's conditions; search events that ran with them keep their
+`search_condition_id`. A whole-project export carries every ended condition the
+project still has in `earlier_search_conditions`, with its captured files. An
+earlier condition need not be bound to the current profile: after a change of
+pins it is bound to the ontology it ran with. Only its files are validated.
+
+A change of pins or profile before 0.8.0 deleted the conditions it ended and
+their files. They cannot be recovered, and an ended condition whose files the
+project no longer has is treated the same way. The export lists their ids in
+`unrecoverable_search_condition_ids` instead of failing; the events keep their
+`search_condition_id` and nothing else about them is checked.
+
+Import checks every search event: its condition is current, earlier or listed as
+unrecoverable. Any other reference fails with `INVALID_PACKAGE` ("Search event
+condition is missing or bound to a different ontology"). Only an event of a
+current condition must match its layer in the profile. An imported project
+keeps the earlier conditions in its stored manifest and their files among its
+resources, so its own export carries them again.
 
 An external ontology remains an externally required digest-pinned artifact;
 the captured translation bytes travel with the archive. See

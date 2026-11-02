@@ -89,12 +89,15 @@ def _prepare_package_payloads(
             package.manifest.search_conditions,
             package.manifest.task_profile,
             extra_files,
+            earlier=package.manifest.earlier_search_conditions or [],
         )
     if package.manifest.task_profile is not None:
         validate_search_events(
             package.manifest.search_conditions,
             package.manifest.task_profile,
             package.search_events,
+            earlier=package.manifest.earlier_search_conditions or [],
+            unrecoverable=package.manifest.unrecoverable_search_condition_ids or [],
         )
     for filename, data in extra_files.items():
         file_hashes[filename] = hashlib.sha256(data).hexdigest()

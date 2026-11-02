@@ -1250,3 +1250,29 @@ def test_annotation_counts_started_annotations() -> None:
     # Nobody at work: nothing to count.
     cell = cells(facts(annotate_tasks=0)).annotation
     assert (cell.detail.started, cell.detail.open_tasks) == (None, None)
+
+
+def test_annotation_total_counts_the_holders_of_one_target() -> None:
+    """Issue 283: "n of m submitted" out of the limit, or out of everyone
+    holding the target with the fewest submissions when more do (the limit was
+    lowered after people were assigned); never "2 of 1"."""
+    running: dict[str, Any] = dict(
+        annotation_assignments=3,
+        open_annotations=1,
+        annotators_open=(LUC,),
+        annotators_submitted=(ANA, TOM),
+        submissions=2,
+        annotate_tasks=1,
+    )
+    cell = cells(facts(**running, annotators_holding=3)).annotation
+    assert cell.state == "in_progress"
+    assert (cell.detail.submitted, cell.detail.total) == (2, 3)
+    # Fewer holders on that target than the limit (parallel versions): the
+    # limit stays the total.
+    cell = cells(facts(**running, per_text=3, annotators_holding=2)).annotation
+    assert (cell.detail.submitted, cell.detail.total) == (2, 3)
+    done: dict[str, Any] = dict(
+        annotation_assignments=2, annotators_submitted=(ANA, TOM), submissions=2
+    )
+    cell = cells(facts(**done, per_text=2, annotators_holding=2)).annotation
+    assert (cell.state, cell.detail.submitted, cell.detail.total) == ("submitted", 2, 2)

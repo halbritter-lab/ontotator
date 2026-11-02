@@ -76,13 +76,13 @@ The **Documents** page lists every text of the project and what it needs next. O
 | Column or mark | Meaning |
 | --- | --- |
 | **Text** | The case ID, the language, the text version and a **NEW** badge for texts that are new since your last visit. |
-| **Translation**, **Annotation**, **Finalization** | The state of each stage, with the names of the people involved. |
+| **Translation**, **Annotation**, **Finalization** | The state of each stage, with the names of the people involved. Below 1600 px width the state is shorter and the names are left out; see [On a narrow screen](#on-a-narrow-screen). |
 | Robot icon | The text has tool proposals. |
 | **Waiting on** | Who the text waits for. **You** in bold means it waits for you. |
 | **Next step** | A button for the next action on this text, for example **Assign annotation…**, **Accept result…** or, when submissions differ, **Compare results…**. Rows that need your decision also have a coloured left edge. |
 | **Last activity** | When something last happened on the text. |
 
-A task starts with the person's first saved change; opening it is not enough, and neither is ticking checked sentences in a translation review. Until then **Translation** and **Annotation** read *assigned, not started* with the person's name, in the table, its tooltip, the narrow cards and the text card, where the person's row shows **Not started**. After the first save they read *in review* or *In progress*. With several people or parallel versions the cell counts them, for example *1 of 2 started*.
+A task starts with the person's first saved change; opening it is not enough, and neither is ticking checked sentences in a translation review. Until then **Translation** and **Annotation** read *assigned, not started* with the person's name, in the table (*not started* without the name below 1600 px), its tooltip, the narrow cards and the text card, where the person's row shows **Not started**. After the first save they read *in review* or *In progress*. With several people or parallel versions the cell counts them, for example *1 of 2 started*.
 
 ### Use the Documents tabs
 
@@ -132,6 +132,13 @@ Active filters show as chips above the table. Remove one with its ✕, or click 
 - Below the table, click **Next** or **Previous** to see more rows.
 
 ### On a narrow screen
+
+Below 1600 px width each text keeps one line in the table. Where the table is still wider than the page, it scrolls sideways with the **Text** column kept at the left:
+
+- The stage columns show a shorter state and leave out the names, which **Waiting on** already shows. For example *assigned, not started (Ana Weber)* reads *not started*, *1 of 2 submitted* reads *1/2 submitted*, *ready to compare* reads *to compare* and *Final is on old text* reads *on old text*.
+- **Waiting on** shows one name and *+n* for the others.
+- **Text** keeps *source*, the version marker and **NEW** on the line and cuts a long case ID with *…*.
+- Point at a cell to see the full state with the names in its tooltip. Screen readers read the full state.
 
 Below 700 px width, each case is a card with its texts. Click a stage status to see the latest activity and the actions for that stage. Click **Details** to open the full text card.
 

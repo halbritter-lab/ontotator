@@ -153,6 +153,20 @@ class PackageManifest(BaseModel):
     search_conditions: list[SearchCondition] | None = Field(
         default=None, max_length=128
     )
+    # Conditions the project searched with before ``search_conditions``,
+    # oldest first: ended by a move to the newest translations or by a change
+    # of pins or profile (#282). Search events that ran with them name them,
+    # and their captured files are in the package. Absent when there are none.
+    earlier_search_conditions: list[SearchCondition] | None = Field(
+        default=None, max_length=1024, exclude_if=lambda value: value is None
+    )
+    # Conditions search events name that the package cannot carry: ended
+    # before the project kept them (a change of pins or profile before
+    # 0.8.0). Declared, not an error: those events keep their
+    # ``search_condition_id``, and nothing else checks them. Absent when none.
+    unrecoverable_search_condition_ids: list[Digest] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
     @model_validator(mode="after")
     def validate_workflow_version(self) -> "PackageManifest":

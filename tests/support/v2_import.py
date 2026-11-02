@@ -39,6 +39,7 @@ class PackageImportService:
                 pkg.manifest.task_profile,
                 pkg.embedded_files,
                 pkg.manifest.search_conditions,
+                pkg.manifest.earlier_search_conditions or [],
             )
         # The database write is not part of the registry change: an edit that
         # holds the database and waits for an ontology to load must not meet an

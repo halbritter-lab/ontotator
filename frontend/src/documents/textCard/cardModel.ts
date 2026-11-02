@@ -3,7 +3,7 @@ import type { DocumentRowView } from "../../api/client";
 import type { ProjectDocumentsQuery, Route } from "../../app/router";
 import type { PathSegment, PathTone } from "../../ui/StagePath";
 import { earlyFinal } from "../finalPanelText";
-import { annotatorCount, shortName, stageText, startedOf, startedPart } from "../stageLabels";
+import { annotatorCount, shortName, stageText, startedOf, startedPart, submittedOf } from "../stageLabels";
 
 export type SegmentId = "translation" | "annotation" | "finalization";
 export type CardView = "path" | "history" | "details";
@@ -55,7 +55,8 @@ export function annotationState(row: DocumentRowView): State {
   const work = (row.work ?? []).filter(item => item.task === "annotate" && item.moved_to_version == null);
   const total = detail.total ?? detail.target ?? work.length;
   const done = detail.submitted ?? work.filter(item => item.status === "submitted").length;
-  const submitted = total > 0 ? `${done} of ${total} submitted` : cell?.state === "in_progress" || cell?.state === "paused" ? "in progress" : "submitted";
+  const working = cell?.state === "in_progress" || cell?.state === "paused";
+  const submitted = total > 0 ? submittedOf(done, total) : working ? "in progress" : "submitted";
   // Issue 258: assigned annotators who have not saved anything yet.
   const started = cell?.state === "in_progress" ? startedOf(detail) : "all";
   const running = started === "none" && done === 0 ? "assigned, not started"

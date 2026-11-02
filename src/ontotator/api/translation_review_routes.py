@@ -10,6 +10,7 @@ from ontotator.api.identity import PrincipalDep
 from ontotator.api.routes import get_access
 from ontotator.application.translation_reviews import (
     CheckedSentences,
+    CheckedSentencesSave,
     ReviewWorkspace,
     TranslationReviewRecord,
     TranslationReviewService,
@@ -61,13 +62,17 @@ def save_review(
 @router.put("/translation-reviews/{assignment_id}/checked-sentences")
 def save_checked_sentences(
     assignment_id: int,
-    body: CheckedSentences,
+    body: CheckedSentencesSave,
     request: Request,
     principal: PrincipalDep,
 ) -> CheckedSentences:
-    """The reviewer's own checked-sentence marks; not part of the review."""
+    """The reviewer's own checked-sentence marks; not part of the review.
+
+    With ``base``, only the change from ``base`` to the sent marks is applied, so
+    marks set meanwhile in another tab stay; the answer is the stored marks.
+    """
     return _service(request).save_checked_sentences(
-        get_access(request), assignment_id, body
+        get_access(request), assignment_id, body, base=body.base
     )
 
 

@@ -187,6 +187,8 @@ class SupersededConditions:
 
     at: datetime
     actor_label: str
+    # The account behind the change; ``None`` for a process such as the CLI.
+    actor_user_id: int | None
     action: str
     conditions: list[dict[str, Any]]
 
@@ -201,6 +203,7 @@ def condition_history(conn: Connection, project_id: int) -> list[SupersededCondi
         select(
             AuditEventRow.at,
             AuditEventRow.actor_label,
+            AuditEventRow.actor_user_id,
             AuditEventRow.action,
             AuditEventRow.details[SUPERSEDED],
         )
@@ -212,8 +215,8 @@ def condition_history(conn: Connection, project_id: int) -> list[SupersededCondi
         .order_by(AuditEventRow.at, AuditEventRow.id)
     ).tuples()
     return [
-        SupersededConditions(at, label, action, list(conditions))
-        for at, label, action, conditions in rows
+        SupersededConditions(at, label, user_id, action, list(conditions))
+        for at, label, user_id, action, conditions in rows
         if conditions
     ]
 

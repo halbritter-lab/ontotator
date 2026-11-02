@@ -164,7 +164,7 @@ What for: check which translation files term searches use in this project.
    - *Not frozen yet.* The first term search or opening a text in the editor takes the translation files on the server then.
    - *No translations: searches use the English names only.* The project froze when no translation file was on the server.
    - Otherwise the card lists the frozen files with their language, ontology and checksum. *Uploaded later, not used here* names files on the server that the project does not use.
-   - *Translations updated on …* says when and by whom the project last moved to the newest translations.
+   - *Translations updated on …* says when and by whom the project last moved to the newest translations: by display name and pseudonym, or *from the command line*. Only leads and system administrators see who; other members see only when.
    - **Earlier translations** lists, collapsed, the files earlier searches used and until when.
 
 The project froze its translations at the first use of its ontology. A file an administrator uploads after that does not reach the project by itself ([When a translation reaches a project](admin.md#when-a-translation-reaches-a-project)). To use it, see [Use the newest translations](#use-the-newest-translations). Changing the ontology version, the branches or the annotation scheme, or replacing the task profile, ends the freeze: the next use takes the files on the server then. The ended files stay listed under **Earlier translations**.
@@ -178,7 +178,7 @@ Before you start: an administrator must have uploaded the files ([Upload ontolog
 1. Open **Settings**, tab **Ontology**, card **Translations**. *Uploaded later, not used here* names the new files.
 2. Click **Use the newest translations**. The button is only there when such a file exists.
 3. Read the dialog **Use the newest translations?**. It names each file that is added, or replaced by a newer file of the same name.
-4. Click **Use the newest translations**, or **Cancel**. The card now lists the new files and says *Translations updated on* the date *by* your name.
+4. Click **Use the newest translations**, or **Cancel**. The card now lists the new files and says *Translations updated on* the date *by* your display name and pseudonym.
 
 What changes: the next term search in the project uses the new files. It can find terms by the names in them.
 

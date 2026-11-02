@@ -74,6 +74,17 @@ def _audit(client: AutoLoginClient, action: str) -> list[dict[str, Any]]:
         )
 
 
+def _labels(client: AutoLoginClient, action: str) -> list[str]:
+    with client.app.state.repo.db.transaction() as conn:  # type: ignore[attr-defined]
+        return list(
+            conn.execute(
+                select(AuditEventRow.actor_label)
+                .where(AuditEventRow.action == action)
+                .order_by(AuditEventRow.id)
+            ).scalars()
+        )
+
+
 def test_a_refresh_takes_the_newest_files_and_keeps_the_old_condition(
     tmp_path: Path,
 ) -> None:
@@ -95,7 +106,9 @@ def test_a_refresh_takes_the_newest_files_and_keeps_the_old_condition(
         ("hp-es.babelon.tsv", es),
     ]
     assert frozen["not_included"] == []
-    assert frozen["updated"]["by"].startswith("user:")
+    # The refreshing account, as a person reference (#281).
+    assert frozen["updated"]["by"]["is_me"] is True
+    assert frozen["updated"]["by_command_line"] is False
     [earlier] = frozen["history"]
     assert earlier["reason"] == "refresh"
     assert earlier["condition_ids"] == [old[0]["condition_id"]]
@@ -196,14 +209,53 @@ def test_only_a_lead_or_a_system_admin_refreshes(tmp_path: Path) -> None:
     assert _audit(client, "project.translations_refresh") == []
     response = _refresh(lead, project)
     assert response.status_code == 200, response.text
-    assert response.json()["frozen_translations"]["updated"]["by"] == "user:lena"
+    by = response.json()["frozen_translations"]["updated"]["by"]
+    assert (by["display_name"], by["is_me"]) == ("lena", True)
 
     _add(client, ES)
     response = _refresh(admin, project)
     assert response.status_code == 200, response.text
     history = response.json()["frozen_translations"]["history"]
-    assert [item["by"] for item in history] == ["user:root", "user:lena"]
+    assert [item["by"]["display_name"] for item in history] == ["root", "lena"]
     assert [len(item["files"]) for item in history] == [1, 0]
+
+
+def test_only_leads_see_who_changed_the_translations(tmp_path: Path) -> None:
+    """Members see when, not who: never the audit label (D1, #281)."""
+    client = _client(tmp_path)
+    project, key = _project(client)
+    _search(client, key, "Muskelhypotonie")
+    app = client.app
+    lead = logged_in(app, "zelda-lead", projects={project: ["lead"]})  # type: ignore[arg-type]
+    annotator = logged_in(app, "anna", projects={project: ["annotator"]})  # type: ignore[arg-type]
+    _add(client, DE)
+    assert _refresh(lead, project).status_code == 200
+    _add(client, ES)
+    assert _refresh(client, project).status_code == 200
+
+    seen = lead.get(f"/api/v1/projects/{project}/settings").json()
+    frozen = seen["frozen_translations"]
+    zelda = frozen["history"][1]["by"]
+    assert (zelda["display_name"], zelda["is_me"]) == ("zelda-lead", True)
+    assert zelda["pseudonym"]
+    assert frozen["updated"]["by"]["is_me"] is False
+    assert frozen["updated"]["by"]["display_name"]
+
+    response = annotator.get(f"/api/v1/projects/{project}/settings")
+    assert response.status_code == 200, response.text
+    frozen = response.json()["frozen_translations"]
+    assert frozen["updated"]["at"]
+    assert (frozen["updated"]["by"], frozen["updated"]["by_command_line"]) == (
+        None,
+        False,
+    )
+    assert [(item["by"], item["by_command_line"]) for item in frozen["history"]] == [
+        (None, False),
+        (None, False),
+    ]
+    assert "zelda-lead" not in response.text
+    assert zelda["pseudonym"] not in response.text
+    assert "user:" not in response.text
 
 
 def test_a_refresh_keeps_a_file_the_server_no_longer_offers(tmp_path: Path) -> None:
@@ -332,9 +384,58 @@ def test_the_cli_refreshes_like_the_settings_page(
     assert result.stdout.strip() == (
         f"'{project}' now uses the newest translations: added hp-es.babelon.tsv."
     )
-    assert _settings(client, project)["updated"]["by"].startswith("cli:")
+    # The operating-system user stays in the audit trail (#281).
+    updated = _settings(client, project)["updated"]
+    assert (updated["by"], updated["by_command_line"]) == (None, True)
+    [label] = _labels(client, "project.translations_refresh")
+    assert label.startswith("cli:")
     assert _search(client, key, "Hipotonía")["languages"] == ["en", "de", "es"]
 
     again = CliRunner().invoke(cli_app, [*command, project])
     assert again.exit_code == 1
     assert "TRANSLATIONS_CURRENT" in again.stderr
+
+
+def test_a_slow_refresh_does_not_write_older_files_back(tmp_path: Path) -> None:
+    """An upload and a second refresh during a capture (#285)."""
+    client = _client(tmp_path)
+    _add(client, DE)
+    project, key = _project(client)
+    _search(client, key, "Muskelhypotonie")
+    rows = b"subject_id\tpredicate_id\ttranslation_language\ttranslation_value\n"
+    rows += b"HP:0001284\trdfs:label\tde\tAreflexie\n"
+    newer = tmp_path / "v2" / "hp-de.babelon.tsv"
+    newer.parent.mkdir()
+    newer.write_bytes(rows)
+    v2 = _add(client, newer)
+    newest = tmp_path / "v3" / "hp-de.babelon.tsv"
+    newest.parent.mkdir()
+    newest.write_bytes(rows + b"HP:0001252\trdfs:label\tde\tHypotonie\n")
+    registry = client.app.state.ontology_store.registry  # type: ignore[attr-defined]
+    capture = registry.capture_current
+    captured: list[set[str]] = []
+    stored: list[str] = []
+
+    def slow_capture(profile: Any) -> Any:
+        result = capture(profile)
+        captured.append({f.sha256 for c in result[0] for f in c.translations})
+        if len(captured) == 1:
+            # While the first refresh holds v2 unlocked, v3 arrives and
+            # another refresh stores it.
+            stored.append(_add(client, newest))
+            assert _refresh(client, project).status_code == 200
+        return result
+
+    registry.capture_current = slow_capture
+
+    response = _refresh(client, project)
+
+    # The slow refresh captured again and found nothing newer than v3.
+    assert response.status_code == 409, response.text
+    assert response.json()["code"] == "TRANSLATIONS_CURRENT"
+    [v3] = stored
+    assert captured == [{v2}, {v3}, {v3}]
+    frozen = _settings(client, project)
+    assert [f["sha256"] for f in frozen["files"]] == [v3]
+    [details] = _audit(client, "project.translations_refresh")
+    assert details["files_after"] == [{"filename": "hp-de.babelon.tsv", "sha256": v3}]
