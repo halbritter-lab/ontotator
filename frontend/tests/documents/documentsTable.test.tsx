@@ -349,6 +349,23 @@ describe("cells", () => {
     expect(waiting.querySelector("[title]")!.getAttribute("title")).toBe("Ana Weber (ann-0003), Tom Reis (ann-0004)");
   });
 
+  it("the narrow Waiting on cuts only the name; \"+n\" is its own span, so it stays visible", () => {
+    const steps = [stepOf("annotation_in_progress", { owner: { kind: "people", person: null, count: 2, people: [ana, tom] } })];
+    renderTable(page([group("case-106", [stagedRow("case-106", "de", { steps })])]));
+    const narrow = cellsOf("case-106 de")[5].querySelector(".waiting-narrow")!;
+    expect(narrow.querySelector(".waiting-name")!.textContent).toBe("Ana Weber");
+    expect(narrow.querySelector(".waiting-more")!.textContent).toBe("+1");
+    const css = readFileSync(resolve(__dirname, "../../src/styles/screens/documents-table.css"), "utf8");
+    expect(css).toMatch(/\.waiting-more \{ flex: none; \}/);
+  });
+
+  it("the robot icon does not cut the short state: the narrow cap is on the state, not the whole cell", () => {
+    const css = readFileSync(resolve(__dirname, "../../src/styles/screens/documents-table.css"), "utf8");
+    const narrow = css.slice(css.indexOf("@media (max-width: 1599px)"));
+    expect(narrow).toMatch(/\.documents-status-cell \{ max-width: none;/);
+    expect(narrow).toMatch(/\.documents-status\.stage-cell \{ max-width: 7\.5rem; \}/);
+  });
+
   it("at most one button per row and no +n", () => {
     const steps = [stepOf("decide_report"), stepOf("assign_annotation"), stepOf("choose_final")];
     const busy = stagedRow("case-109", "de", { steps });

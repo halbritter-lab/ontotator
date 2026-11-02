@@ -150,6 +150,38 @@ test("S0 synthetic-accepted: the final is on old text after v2 corrected it; en 
   await expect(textName(page, caseId, "en")).toHaveCount(0);
 });
 
+test("S0 narrow table: the robot icon never cuts the short state, Waiting on keeps \"+n\" (1280 and 1440 px)", async ({ page }) => {
+  const s = await documentsScenario(page, "S0");
+  await loginExisting(page, s.users.lead);
+  // The fixture has no row with proposals and two waiting people: patch the de row of the list response.
+  const person = (display_name: string, pseudonym: string) => ({ display_name, pseudonym, is_me: false });
+  await page.route(url => new URL(url).pathname.endsWith("/document-rows"), async route => {
+    const body = await (await route.fetch()).json() as components["schemas"]["DocumentRowsPage"];
+    for (const row of body.groups.flatMap(entry => entry.rows)) {
+      if (row.language !== "de" || !row.next_step) continue;
+      row.stages!.annotation = { state: "submitted", tone: "done", detail: { submitted: 2, total: 2 } } as components["schemas"]["StageCellView"];
+      Object.assign(row, { proposal_count: 7, annotation_mode: { mode: "proposals", source: "project", locked: false, override: null, proposal_count: 7 } });
+      row.next_step.owner = { kind: "people", person: null, count: 2, people: [person("Carla Consolidator", "con-0001"), person("Lena Lead", "lead-0001")] };
+    }
+    await route.fulfill({ json: body });
+  });
+  await page.goto(`/#/projects/${encodeURIComponent(s.project)}/documents`);
+  await documentsReady(page);
+  const de = textRow(page, "synthetic-accepted", "de");
+  const state = rowCell(de, "annotation").locator(".documents-status");
+  const waiting = rowCell(de, "waiting").locator(".documents-waiting-on");
+  for (const width of [1440, 1280]) {
+    await page.setViewportSize({ width, height: 800 });
+    await expect(state.locator(".stage-state-narrow")).toHaveText("2/2 submitted");
+    await expect(rowCell(de, "annotation").locator(".documents-bot")).toBeVisible();
+    expect(await state.evaluate(element => element.scrollWidth - element.clientWidth), `${width} px annotation`).toBeLessThanOrEqual(0);
+    await expect(waiting.locator(".waiting-more")).toHaveText("+1");
+    expect(await waiting.evaluate(element => element.scrollWidth - element.clientWidth), `${width} px waiting on`).toBeLessThanOrEqual(0);
+    const [more, box] = await Promise.all([waiting.locator(".waiting-more").boundingBox(), waiting.boundingBox()]);
+    expect(more!.x + more!.width, `${width} px +n`).toBeLessThanOrEqual(box!.x + box!.width + 0.5);
+  }
+});
+
 test("S0 with the text card open (legacy open= link) has no axe violations", async ({ page }) => {
   await openScenario(page, "S0", "?open=synthetic-accepted%3Ade");
   const card = textCard(page, "synthetic-accepted", "de");
