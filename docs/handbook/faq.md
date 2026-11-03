@@ -202,6 +202,10 @@ This protects you from locking yourself out. Another system administrator must d
 
 The file could not be read, is too large, or is an incomplete HPO release. Read the detail below the message and upload a complete release. See [Upload ontology releases and translation files](admin.md#upload-ontology-releases-and-translation-files).
 
+### A project archive import is refused
+
+The message says why, and nothing was imported. A changed, incomplete or damaged file (*does not match its manifest*): export the archive again and copy it unchanged. An archive from a newer Ontotator: upgrade this server first. Missing ontology files: upload them on **Ontologies**, or export the archive with **Include ontology files**. Pseudonyms that are taken here: tick **Give people new pseudonyms where theirs are taken here**, or give each person the same e-mail address on both servers. See [Move a project to another server](admin.md#move-a-project-to-another-server).
+
 ### A user sent a technical report
 
 Open **Administration** › **Technical reports**. Mark it as done when it is handled. Reports are not sent anywhere; copy one into an issue by hand and leave out clinical content. See [Handle technical reports](admin.md#handle-technical-reports).
