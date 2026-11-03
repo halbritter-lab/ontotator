@@ -23,7 +23,7 @@ interface ImportResult {
 const failure = (job: JobView) => (job.error ?? "The job failed.").replace(/^\w+Error: /, "");
 
 /**
- * Projects page, administrators only (#306): export one project as a project archive for another server, and import
+ * Projects page, administrators only (issue 306): export one project as a project archive for another server, and import
  * an archive as a new project. Both run as jobs; the import checks every table against the archive's manifest.
  */
 export function ProjectArchives({ projects }: { projects: readonly ProjectSummary[] }): JSX.Element {
