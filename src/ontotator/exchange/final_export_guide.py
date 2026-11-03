@@ -1,5 +1,7 @@
 """Plain-language guide (README.txt) and result table (index.csv) for a final export.
 
+The analysis tables (findings.csv and the others) are in ``final_tables``.
+
 Both are derived only from the frozen snapshot payload and the snapshot row, so
 the same snapshot always yields byte-identical files. Nothing inside the T1
 bundles is renamed; the README explains the ontospan names instead.
@@ -242,9 +244,18 @@ def build_readme(
     out += [
         "source-texts.jsonl  The exact text versions the results refer to, one JSON",
         "                    object per line.",
+        "findings.csv        One row per finding of every submission in the",
+        "                    bundles: term, values, modifiers, origin, passages.",
+        "agreement.csv       Agreement of every two annotators on each text (F1).",
+        "agreement-summary.csv",
+        "                    The same for the project: mean over the texts and",
+        "                    pooled over all pairs.",
+        "proposals.csv       Per tool and annotator what became of the proposals;",
+        "                    per tool its precision and recall against the final",
+        "                    results.",
         "receipt.json        Audit receipt: selections, warnings, omissions, review",
         "                    decisions and the SHA-256 of every other file, including",
-        "                    this README and index.csv.",
+        "                    this README and the tables.",
     ]
     if checks:
         out += [
@@ -284,6 +295,36 @@ def build_readme(
         *_wrap(
             "Text positions are Unicode code points into the text of the matching line "
             'of source-texts.jsonl (column "source_text_line").',
+            "- ",
+            "  ",
+        ),
+        *_wrap(
+            'In findings.csv "mentions" gives each passage of a finding as '
+            '"start-end"; the parts of a passage that is interrupted are joined by '
+            '"+", passages by ";". "covered_text" quotes them the same way. A '
+            'finding of the whole text has both empty. "origin" is scratch, '
+            "confirmed, changed, added or uncertain (a proposal left open), "
+            "carried, or for a consolidation matched, decided or added.",
+            "- ",
+            "  ",
+        ),
+        *_wrap(
+            "agreement.csv compares, per text, the annotations of every two "
+            "people that the bundles hold, with ontospan's matching: strict needs "
+            "the same passage, tolerant an overlapping one; term_f1 compares the "
+            "terms with their values. Span annotation has no countable negatives, "
+            "so only F1 values are given, no kappa. agreement-summary.csv gives "
+            '"macro_mean" (mean over the texts) and "pooled" (from the summed '
+            "counts).",
+            "- ",
+            "  ",
+        ),
+        *_wrap(
+            "proposals.csv names each tool and version as the imported proposals "
+            'recorded them. Rows "annotator" count the decisions of each person\'s '
+            'proposal checks; rows "source" compare the tool\'s proposals with the '
+            "selected final result of the same text (tolerant matching): "
+            "precision = matched / proposals, recall = matched / final_findings.",
             "- ",
             "  ",
         ),
