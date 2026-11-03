@@ -1,0 +1,51 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ontotator-mcp"
+version = "0.1.0"
+description = "MCP server for an Ontotator instance: project setup, status and exports over an API token"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.27,<1",
+    "mcp>=2.3,<3",
+]
+
+[project.scripts]
+ontotator-mcp = "ontotator_mcp.__main__:main"
+
+[dependency-groups]
+dev = [
+    "jsonschema>=4.20,<5",
+    "mypy>=1.15,<3",
+    "pytest>=8,<10",
+    "ruff>=0.9,<1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ontotator_mcp"]
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-config --strict-markers"
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = [
+    "integration: starts the real Ontotator app (needs ONTOTATOR_TEST_PG_URL and the main project's environment)",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+packages = ["ontotator_mcp"]
+mypy_path = ["src"]
