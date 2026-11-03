@@ -98,6 +98,7 @@ uv run ontotator serve --help
 - [Operations guide](docs/operations.md): installation, configuration, upgrades, backups and internet exposure.
 - [Scientific workflow](docs/scientific-workflow.md): a small two-annotator pilot.
 - [Translation review export](docs/translation-review-export.md): the export format of translation reviews.
+- [MCP server](mcp/README.md): set up, follow and export projects from an MCP client such as Claude Desktop or Claude Code, with an API token.
 
 ## Configuration
 
