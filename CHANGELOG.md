@@ -14,6 +14,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Final export: `proposals.csv` counts, per tool and version as the imported bundle recorded them and per annotator, the proposals decided and how many were confirmed, rejected, changed or left uncertain, and the findings added without a proposal. Per tool it also gives precision and recall of its proposals against the selected final result of each text, with the tolerant matching of `agreement.csv` (#297).
 - README.txt of the final export names the new tables; `receipt.json` hashes them under `files` like every other file of the archive. The format stays `ontotator-final-export/v2`: nothing in the receipt changed shape.
 
+### Fixed
+
+- The scientific workflow guide and the work package format no longer describe an `ontotator analyze` command, which never existed. They now describe the real exports: the files of the final export (`index.csv`, `findings.csv`, `agreement.csv`, `agreement-summary.csv`, `proposals.csv`, `receipt.json`), the annotation results bundle and the edit log (#299).
+
 ## [0.8.1] - 2026-11-02
 
 ### Fixed
