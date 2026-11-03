@@ -88,7 +88,7 @@ What for: work in another project.
 2. Type part of the name in **Find project**.
 3. Click the project, or choose it with the arrow keys and press Enter.
 
-**All projects** opens the **Projects** page. There you see each project with **Your roles** and **Your open tasks**; click **Open** to go to a project.
+**All projects** opens the **Projects** page. There you see each project with **Your roles** and **Your open tasks**; click **Open** to go to a project. System administrators also find **Project archives** there, to move a project to another server (see [Move a project to another server](admin.md#move-a-project-to-another-server)).
 
 ## See your tasks
 
