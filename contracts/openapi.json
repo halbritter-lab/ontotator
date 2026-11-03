@@ -13275,6 +13275,11 @@
             ],
             "title": "Consolidator"
           },
+          "annotators_hidden": {
+            "type": "boolean",
+            "title": "Annotators Hidden",
+            "default": false
+          },
           "consolidation_reason": {
             "anyOf": [
               {
@@ -21107,6 +21112,11 @@
             "title": "Adjudicator Not Annotator",
             "default": false
           },
+          "blind_consolidation": {
+            "type": "boolean",
+            "title": "Blind Consolidation",
+            "default": false
+          },
           "contiguous_mentions_only": {
             "type": "boolean",
             "title": "Contiguous Mentions Only",
@@ -21267,6 +21277,11 @@
           "adjudicator_not_annotator": {
             "type": "boolean",
             "title": "Adjudicator Not Annotator",
+            "default": false
+          },
+          "blind_consolidation": {
+            "type": "boolean",
+            "title": "Blind Consolidation",
             "default": false
           },
           "contiguous_mentions_only": {
