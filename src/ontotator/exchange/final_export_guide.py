@@ -1,5 +1,7 @@
 """Plain-language guide (README.txt) and result table (index.csv) for a final export.
 
+The analysis tables (findings.csv and the others) are in ``final_tables``.
+
 Both are derived only from the frozen snapshot payload and the snapshot row, so
 the same snapshot always yields byte-identical files. Nothing inside the T1
 bundles is renamed; the README explains the ontospan names instead.
@@ -33,7 +35,7 @@ INDEX_COLUMNS = (
     "warning_codes",
     "guideline_version",
 )
-_ROW_ORDER = {"selected": 0, "omitted": 1, "provenance": 2}
+_ROW_ORDER = {"selected": 0, "omitted": 1, "compared": 2, "provenance": 3}
 _WIDTH = 76
 
 
@@ -70,8 +72,9 @@ def build_index_csv(
     payload: Mapping[str, Any],
     selected_order: Sequence[str],
     provenance_order: Sequence[str],
+    compared_order: Sequence[str] = (),
 ) -> bytes:
-    """One row per selection, omission and provenance-only submission."""
+    """One row per selection, omission, compared and provenance-only submission."""
     content = payload["content"]
     documents: Mapping[str, Any] = content["documents"]
     submissions = {sub["submission_id"]: sub for sub in content["submissions"]}
@@ -139,23 +142,27 @@ def build_index_csv(
             warning_codes=codes_for(omission["case_id"], omission["language"]),
         )
         table.append(row)
-    for index, sid in enumerate(provenance_order):
-        document_id = submissions[sid]["origin_key"]["document_id"]
-        entry = documents[document_id]
-        variant = entry["variant"]
-        case_id = variant["case_id"] if variant else document_id
-        language = variant["language"] if variant else entry["document"]["language"]
-        table.append(
-            submission_row(
-                "provenance",
-                case_id,
-                language,
-                document_id,
-                sid,
-                "provenance.t1.zip",
-                index,
+    for row_type, order in (
+        ("provenance", provenance_order),
+        ("compared", compared_order),
+    ):
+        for index, sid in enumerate(order):
+            document_id = submissions[sid]["origin_key"]["document_id"]
+            entry = documents[document_id]
+            variant = entry["variant"]
+            case_id = variant["case_id"] if variant else document_id
+            language = variant["language"] if variant else entry["document"]["language"]
+            table.append(
+                submission_row(
+                    row_type,
+                    case_id,
+                    language,
+                    document_id,
+                    sid,
+                    f"{row_type}.t1.zip",
+                    index,
+                )
             )
-        )
     table.sort(
         key=lambda r: (
             r["case_id"],
@@ -203,6 +210,7 @@ def build_readme(
     snapshot_sha256: str,
     snapshot_created_at: datetime,
     provenance_ids: Sequence[str],
+    compared_ids: Sequence[str] = (),
 ) -> bytes:
     key = payload["project"]
     name = payload.get("project_name") or key
@@ -227,11 +235,17 @@ def build_readme(
         f"{'Omitted text and language pairs:':<35}{len(state['omissions'])}",
         f"{'Warnings acknowledged at export:':<35}{len(state['warnings'])}",
         f"{'Provenance-only submissions:':<35}{len(provenance_ids)}",
+        *(
+            [f"{'Compared submissions:':<35}{len(compared_ids)}"]
+            if compared_ids
+            else []
+        ),
         "",
         *_heading("What is in this archive"),
         "README.txt          This guide.",
         "index.csv           One row per selected result, omission and provenance",
-        "                    submission, with the file and entry that holds it.",
+        "                    or compared submission, with the file and entry that",
+        "                    holds it.",
         "selected.t1.zip     The selected final results as a T1 (ontospan) bundle.",
     ]
     if provenance_ids:
@@ -239,12 +253,26 @@ def build_readme(
             "provenance.t1.zip   Earlier submissions that selected results refer to",
             "                    through carried or merged findings. Not final results.",
         ]
+    if compared_ids:
+        out += [
+            "compared.t1.zip     The other annotations of texts whose result was",
+            "                    accepted directly, for agreement. Not final results.",
+        ]
     out += [
         "source-texts.jsonl  The exact text versions the results refer to, one JSON",
         "                    object per line.",
+        "findings.csv        One row per finding of every submission in the",
+        "                    bundles: term, values, modifiers, origin, passages.",
+        "agreement.csv       Agreement of every two annotators on each text (F1).",
+        "agreement-summary.csv",
+        "                    The same for the project: mean over the texts and",
+        "                    pooled over all pairs.",
+        "proposals.csv       Per tool and annotator what became of the proposals;",
+        "                    per tool its precision and recall against the final",
+        "                    results.",
         "receipt.json        Audit receipt: selections, warnings, omissions, review",
         "                    decisions and the SHA-256 of every other file, including",
-        "                    this README and index.csv.",
+        "                    this README and the tables.",
     ]
     if checks:
         out += [
@@ -287,6 +315,36 @@ def build_readme(
             "- ",
             "  ",
         ),
+        *_wrap(
+            'In findings.csv "mentions" gives each passage of a finding as '
+            '"start-end"; the parts of a passage that is interrupted are joined by '
+            '"+", passages by ";". "covered_text" quotes them the same way. A '
+            'finding of the whole text has both empty. "origin" is scratch, '
+            "confirmed, changed, added or uncertain (a proposal left open), "
+            "carried, or for a consolidation matched, decided or added.",
+            "- ",
+            "  ",
+        ),
+        *_wrap(
+            "agreement.csv compares, per text, the annotations of every two "
+            "people that the bundles hold, with ontospan's matching: strict needs "
+            "the same passage, tolerant an overlapping one; term_f1 compares the "
+            "terms with their values. Span annotation has no countable negatives, "
+            "so only F1 values are given, no kappa. agreement-summary.csv gives "
+            '"macro_mean" (mean over the texts) and "pooled" (from the summed '
+            "counts).",
+            "- ",
+            "  ",
+        ),
+        *_wrap(
+            "proposals.csv names each tool and version as the imported proposals "
+            'recorded them. Rows "annotator" count the decisions of each person\'s '
+            'proposal checks; rows "source" compare the tool\'s proposals with the '
+            "selected final result of the same text (tolerant matching): "
+            "precision = matched / proposals, recall = matched / final_findings.",
+            "- ",
+            "  ",
+        ),
         *_wrap("Author labels are pseudonyms.", "- ", "  "),
         *(
             _wrap(
@@ -325,6 +383,17 @@ def build_readme(
             "findings, not final results.",
             "- ",
             "  ",
+        ),
+        *(
+            _wrap(
+                '"compared" rows are the other people\'s annotations of a text whose '
+                "result was accepted directly, without consolidation. They are in the "
+                "archive so that agreement.csv covers every text, not final results.",
+                "- ",
+                "  ",
+            )
+            if compared_ids
+            else []
         ),
         *_wrap(
             "guideline_ref in each annotation set names the project guideline version "
@@ -395,9 +464,13 @@ def guide_files(
 ) -> dict[str, bytes]:
     """README.txt and index.csv, ordered exactly as the worker serializes bundles."""
     selected_ids = set(payload["selected_submission_ids"])
+    compared_ids = set(payload.get("compared_submission_ids", []))
     ordered = [sub["submission_id"] for sub in payload["content"]["submissions"]]
     selected_order = [sid for sid in ordered if sid in selected_ids]
-    provenance_order = [sid for sid in ordered if sid not in selected_ids]
+    compared_order = [sid for sid in ordered if sid in compared_ids]
+    provenance_order = [
+        sid for sid in ordered if sid not in selected_ids | compared_ids
+    ]
     return {
         "README.txt": build_readme(
             payload,
@@ -405,6 +478,9 @@ def guide_files(
             snapshot_sha256=snapshot_sha256,
             snapshot_created_at=snapshot_created_at,
             provenance_ids=provenance_order,
+            compared_ids=compared_order,
         ),
-        "index.csv": build_index_csv(payload, selected_order, provenance_order),
+        "index.csv": build_index_csv(
+            payload, selected_order, provenance_order, compared_order
+        ),
     }

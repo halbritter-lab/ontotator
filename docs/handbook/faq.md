@@ -213,3 +213,11 @@ Open **Administration** › **Technical reports**. Mark it as done when it is ha
 ### The administrator lost the password
 
 This is fixed on the server, not in the app. See [Lost admin password](../operations.md#lost-admin-password) in the server operations guide.
+
+### A script with an API token gets "The API token lacks the scope this needs."
+
+The token was created without the scope the request needs, for example **Export** to start an export. Tokens cannot be changed: create a new one with the scope and revoke the old one. A token can also never do more than its owner may, and never annotation work. See [Create an API token](getting-started.md#create-an-api-token).
+
+### A script's API token suddenly stops working
+
+The token expired, was revoked, or its owner lost a project role, the administrator role or the account; each of these revokes the owner's tokens. Check its **Status** under **API tokens** and create a new one.

@@ -27,7 +27,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read"
       }
     },
     "/api/v1/projects/{key}/assignments": {
@@ -115,7 +116,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       },
       "post": {
         "tags": [
@@ -165,7 +168,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "project-admin",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/assignments/proposal": {
@@ -217,7 +222,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "project-admin",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/assignments/{assignment_id}": {
@@ -259,7 +266,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read"
       }
     },
     "/api/v1/assignments/{assignment_id}/open": {
@@ -318,7 +326,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       }
     },
     "/api/v1/assignments/{assignment_id}/reassign": {
@@ -370,7 +379,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "project-admin"
       }
     },
     "/api/v1/assignments/{assignment_id}/reopen": {
@@ -422,7 +432,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "project-admin"
       }
     },
     "/api/v1/assignments/{assignment_id}/remove": {
@@ -465,7 +476,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "project-admin"
       }
     },
     "/api/v1/assignments/{assignment_id}/revoke": {
@@ -517,7 +529,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "project-admin"
       }
     },
     "/api/v1/projects/{key}/assignments/batch/preview": {
@@ -570,7 +583,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "project-admin",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/assignments/batch": {
@@ -623,7 +638,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "project-admin",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/document-rows/selection-summary": {
@@ -676,7 +693,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/document-rows/keys": {
@@ -729,7 +748,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/assignments/{assignment_id}/rounds": {
@@ -781,7 +802,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "project-admin"
       },
       "get": {
         "tags": [
@@ -825,7 +847,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read"
       }
     },
     "/api/v1/rounds/{round_id}/open": {
@@ -867,7 +890,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       }
     },
     "/api/v1/rounds/{round_id}/inputs": {
@@ -913,7 +937,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read"
       }
     },
     "/api/v1/workspaces/{workspace_id}/round-input-resolutions": {
@@ -965,7 +990,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       }
     },
     "/api/v1/workspaces/{workspace_id}/round-input-resolutions/clear": {
@@ -1018,7 +1044,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       }
     },
     "/api/v1/assignments/{assignment_id}/round-sources": {
@@ -1064,7 +1091,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read"
       }
     },
     "/api/v1/workspaces/{workspace_id}/merge-inputs": {
@@ -1116,7 +1144,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       }
     },
     "/api/v1/rounds/{round_id}/consolidation": {
@@ -1159,7 +1188,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read"
       }
     },
     "/api/v1/workspaces/{workspace_id}/consolidation-groups/resolve": {
@@ -1212,7 +1242,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       }
     },
     "/api/v1/workspaces/{workspace_id}/consolidation-groups/annotate": {
@@ -1265,7 +1296,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       }
     },
     "/api/v1/workspaces/{workspace_id}/consolidation-groups/reopen": {
@@ -1318,7 +1350,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       }
     },
     "/api/v1/workspaces/{workspace_id}/consolidation-groups/reopen-all": {
@@ -1371,7 +1404,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       }
     },
     "/api/v1/workspaces/{workspace_id}/consolidation-groups/undo-reopen-all": {
@@ -1424,7 +1458,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       }
     },
     "/api/v1/projects/{key}/consolidations": {
@@ -1477,7 +1512,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "project-admin",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/text-changes/preview": {
@@ -1529,7 +1566,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "import",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/assignments/{assignment_id}/move-to-version": {
@@ -1581,7 +1620,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       }
     },
     "/api/v1/assignments/{assignment_id}/text-change-resolution": {
@@ -1633,7 +1673,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       }
     },
     "/api/v1/projects/{key}/submissions/{submission_id}/carry": {
@@ -1694,7 +1735,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "project-admin",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/assignments/{assignment_id}/submissions": {
@@ -1740,7 +1783,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read"
       }
     },
     "/api/v1/assignments/{assignment_id}/problem-reports": {
@@ -1792,7 +1836,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       }
     },
     "/api/v1/projects/{key}/problem-reports": {
@@ -1893,7 +1938,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/problem-reports/{report_id}": {
@@ -1935,7 +1982,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read"
       }
     },
     "/api/v1/problem-reports/{report_id}/seen": {
@@ -1977,7 +2025,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       }
     },
     "/api/v1/problem-reports/{report_id}/pause-candidates": {
@@ -2023,7 +2072,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read"
       }
     },
     "/api/v1/problem-reports/{report_id}/actions": {
@@ -2075,7 +2125,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "project-admin"
       }
     },
     "/api/v1/technical-reports": {
@@ -2117,7 +2168,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       }
     },
     "/api/v1/admin/technical-reports": {
@@ -2198,7 +2250,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "admin"
       }
     },
     "/api/v1/admin/technical-reports/summary": {
@@ -2220,7 +2273,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "admin"
       }
     },
     "/api/v1/admin/technical-reports/{report_id}/status": {
@@ -2273,7 +2327,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "admin"
       }
     },
     "/api/v1/translation-reviews/{assignment_id}": {
@@ -2315,7 +2370,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read"
       }
     },
     "/api/v1/translation-reviews/{assignment_id}/draft": {
@@ -2367,7 +2423,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       }
     },
     "/api/v1/translation-reviews/{assignment_id}/checked-sentences": {
@@ -2420,7 +2477,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       }
     },
     "/api/v1/translation-reviews/{assignment_id}/submit": {
@@ -2472,7 +2530,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       }
     },
     "/api/v1/projects/{key}/documents/{doc}/translation-reviews": {
@@ -2527,7 +2586,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/documents/{doc}/submissions/{submission_id}": {
@@ -2587,7 +2648,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/documents/{doc}/submissions": {
@@ -2642,7 +2705,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/cases": {
@@ -2749,7 +2814,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/cases/{case_id}": {
@@ -2800,7 +2867,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/documents/{doc}/annotation-versions/{kind}/{version_id}": {
@@ -2869,7 +2938,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/documents/{doc}/annotation-versions": {
@@ -2940,7 +3011,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/documents/{doc}/layers": {
@@ -2991,7 +3064,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/documents/{doc}/reanchor-items": {
@@ -3046,7 +3121,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/documents/{doc}/text": {
@@ -3097,7 +3174,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/documents/{doc}/variant": {
@@ -3149,7 +3228,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/admin/users/": {
@@ -3174,7 +3255,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "admin"
       },
       "post": {
         "tags": [
@@ -3213,7 +3295,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "admin"
       }
     },
     "/api/v1/admin/users/{username}/reset-code": {
@@ -3255,7 +3338,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "admin"
       }
     },
     "/api/v1/admin/users/{username}": {
@@ -3307,7 +3391,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "admin"
       }
     },
     "/api/v1/admin/users/{username}/anonymise": {
@@ -3360,7 +3445,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "admin"
       }
     },
     "/api/v1/admin/users/{username}/audit": {
@@ -3407,7 +3493,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "admin"
       }
     },
     "/api/v1/admin/ontologies/": {
@@ -3432,7 +3519,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "admin"
       },
       "post": {
         "tags": [
@@ -3475,7 +3563,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "admin"
       }
     },
     "/api/v1/admin/ontologies/upload-results": {
@@ -3520,7 +3609,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "admin"
       }
     },
     "/api/v1/admin/project-archives/export": {
@@ -3562,7 +3652,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "admin"
       }
     },
     "/api/v1/admin/project-archives/import": {
@@ -3604,7 +3695,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "admin"
       }
     },
     "/api/v1/admin/project-archives/jobs/{job_id}": {
@@ -3646,7 +3738,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "admin"
       }
     },
     "/api/v1/admin/project-archives/jobs/{job_id}/download": {
@@ -3682,7 +3775,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "admin"
       }
     },
     "/api/v1/projects/{key}/final-selections": {
@@ -3734,7 +3828,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "project-admin",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/exports/final/preflight": {
@@ -3776,7 +3872,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "export",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/workflow-warnings": {
@@ -3818,7 +3916,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/exports/final": {
@@ -3874,7 +3974,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "export",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/document-rows/case-ids": {
@@ -4438,7 +4540,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/document-rows": {
@@ -5033,7 +5137,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/document-rows/selected": {
@@ -5086,7 +5192,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/document-rows/{case_id}/{language}/submissions": {
@@ -5147,7 +5255,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/document-rows/{case_id}/{language}/final-panel": {
@@ -5208,7 +5318,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/documents/visit": {
@@ -5251,7 +5363,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       }
     },
     "/api/v1/projects/{key}/documents/summary": {
@@ -5294,7 +5407,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/work-plans/annotation-target-preview": {
@@ -5347,7 +5462,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/work-plans/bulk/preview": {
@@ -5399,7 +5516,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "project-admin",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/work-plans/bulk": {
@@ -5451,7 +5570,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "project-admin",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/work-plans/rows": {
@@ -5503,7 +5624,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "project-admin",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/work-plans/{case_id}/{language}": {
@@ -5573,7 +5696,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "project-admin",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/case-ids/lookup": {
@@ -5625,7 +5750,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/variants/{document_id}/discard": {
@@ -5686,7 +5813,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "project-admin",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/annotation-mode-changes": {
@@ -5750,7 +5879,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       },
       "post": {
         "tags": [
@@ -5800,7 +5931,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "project-admin",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/annotation-mode-changes/preview": {
@@ -5852,7 +5985,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "project-admin",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/annotation-mode-changes/{change_id}/restore": {
@@ -5913,7 +6048,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "project-admin",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/documents/{doc}/translation-correction-assignment": {
@@ -5974,7 +6111,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "project-admin",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/documents/{doc}/lead-correction": {
@@ -6036,7 +6175,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       }
     },
     "/api/v1/translation-reviews/{assignment_id}/source-obligations": {
@@ -6082,7 +6222,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read"
       }
     },
     "/api/v1/translation-reviews/{assignment_id}/source-obligations/{cause_id}/resolve": {
@@ -6143,7 +6284,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       }
     },
     "/api/v1/projects/{key}/guidelines": {
@@ -6185,7 +6327,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       },
       "post": {
         "tags": [
@@ -6235,7 +6379,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "project-admin",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/guidelines/{version}": {
@@ -6289,7 +6435,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/guidelines/{version}/withdraw": {
@@ -6350,7 +6498,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "project-admin",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/guidelines/{version}/reads": {
@@ -6404,7 +6554,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       }
     },
     "/api/v1/projects/{key}/progress": {
@@ -6446,7 +6597,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/exports": {
@@ -6498,7 +6651,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "export",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/exports/translation-reviews": {
@@ -6540,7 +6695,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "export",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/templates": {
@@ -6565,7 +6722,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read"
       }
     },
     "/api/v1/projects/": {
@@ -6606,7 +6764,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "admin"
       }
     },
     "/api/v1/projects/{key}/settings": {
@@ -6649,7 +6808,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       },
       "patch": {
         "tags": [
@@ -6699,7 +6860,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "project-admin",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/pins": {
@@ -6755,7 +6918,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "project-admin",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/pins/preview": {
@@ -6812,7 +6977,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "project-admin",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/pins/apply": {
@@ -6865,7 +7032,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "project-admin",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/translations/refresh": {
@@ -6908,7 +7077,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "project-admin",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/profile": {
@@ -6960,7 +7131,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "project-admin",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/members": {
@@ -7007,7 +7180,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/member-candidates": {
@@ -7064,7 +7239,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "project-admin",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/members/{username}": {
@@ -7125,7 +7302,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "project-admin",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/jobs/{job_id}": {
@@ -7167,7 +7346,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/jobs/{job_id}/download": {
@@ -7202,7 +7383,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "export",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/uploads": {
@@ -7254,7 +7437,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "import",
+        "x-ontotator-project-token": true
       },
       "get": {
         "tags": [
@@ -7328,7 +7513,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "import",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/uploads/{upload_id}": {
@@ -7379,7 +7566,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "import",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/uploads/{upload_id}/commit": {
@@ -7440,7 +7629,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "import",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/uploads/{upload_id}/discard": {
@@ -7491,7 +7682,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "import",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/proposal-sets/{set_id}": {
@@ -7542,7 +7735,419 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
+      }
+    },
+    "/api/v1/me/tokens": {
+      "get": {
+        "tags": [
+          "api-tokens"
+        ],
+        "summary": "List My Tokens",
+        "description": "The user's personal and system tokens, newest first.",
+        "operationId": "list_my_tokens_api_v1_me_tokens_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TokenView"
+                  },
+                  "type": "array",
+                  "title": "Response List My Tokens Api V1 Me Tokens Get"
+                }
+              }
+            }
+          }
+        },
+        "x-ontotator-scope": "session"
+      },
+      "post": {
+        "tags": [
+          "api-tokens"
+        ],
+        "summary": "Create My Token",
+        "description": "A personal token: acts as the user, within the chosen scopes.",
+        "operationId": "create_my_token_api_v1_me_tokens_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedToken"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-ontotator-scope": "session"
+      }
+    },
+    "/api/v1/me/tokens/{token_id}/revoke": {
+      "post": {
+        "tags": [
+          "api-tokens"
+        ],
+        "summary": "Revoke My Token",
+        "description": "Revoke one of the user's own tokens.",
+        "operationId": "revoke_my_token_api_v1_me_tokens__token_id__revoke_post",
+        "parameters": [
+          {
+            "name": "token_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Token Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-ontotator-scope": "session"
+      }
+    },
+    "/api/v1/projects/{key}/tokens": {
+      "get": {
+        "tags": [
+          "api-tokens"
+        ],
+        "summary": "List Project Tokens",
+        "description": "The project's service tokens, newest first.",
+        "operationId": "list_project_tokens_api_v1_projects__key__tokens_get",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TokenView"
+                  },
+                  "title": "Response List Project Tokens Api V1 Projects  Key  Tokens Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-ontotator-scope": "session"
+      },
+      "post": {
+        "tags": [
+          "api-tokens"
+        ],
+        "summary": "Create Project Token",
+        "description": "A service token for this project only; it acts as the lead creating it.",
+        "operationId": "create_project_token_api_v1_projects__key__tokens_post",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTokenRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedToken"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-ontotator-scope": "session"
+      }
+    },
+    "/api/v1/projects/{key}/tokens/{token_id}/revoke": {
+      "post": {
+        "tags": [
+          "api-tokens"
+        ],
+        "summary": "Revoke Project Token",
+        "description": "Revoke a service token of this project; any lead may.",
+        "operationId": "revoke_project_token_api_v1_projects__key__tokens__token_id__revoke_post",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "token_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Token Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-ontotator-scope": "session"
+      }
+    },
+    "/api/v1/admin/tokens": {
+      "get": {
+        "tags": [
+          "api-tokens"
+        ],
+        "summary": "List All Tokens",
+        "description": "Every token of the installation, newest first.",
+        "operationId": "list_all_tokens_api_v1_admin_tokens_get",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "personal",
+                    "project",
+                    "system"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TokenView"
+                  },
+                  "title": "Response List All Tokens Api V1 Admin Tokens Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-ontotator-scope": "session"
+      },
+      "post": {
+        "tags": [
+          "api-tokens"
+        ],
+        "summary": "Create System Token",
+        "description": "A system token of the administrator; the only kind with the admin scope.",
+        "operationId": "create_system_token_api_v1_admin_tokens_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTokenRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedToken"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-ontotator-scope": "session"
+      }
+    },
+    "/api/v1/admin/tokens/{token_id}/revoke": {
+      "post": {
+        "tags": [
+          "api-tokens"
+        ],
+        "summary": "Revoke Any Token",
+        "description": "Revoke any token.",
+        "operationId": "revoke_any_token_api_v1_admin_tokens__token_id__revoke_post",
+        "parameters": [
+          {
+            "name": "token_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Token Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-ontotator-scope": "session"
       }
     },
     "/api/v1/me/profile": {
@@ -7563,7 +8168,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read"
       },
       "patch": {
         "tags": [
@@ -7602,7 +8208,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       }
     },
     "/api/v1/me/password": {
@@ -7636,7 +8243,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       }
     },
     "/api/v1/me/practice": {
@@ -7658,7 +8266,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       },
       "post": {
         "tags": [
@@ -7678,7 +8287,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       },
       "delete": {
         "tags": [
@@ -7698,7 +8308,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       }
     },
     "/api/v1/me/practice/reset": {
@@ -7720,7 +8331,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       }
     },
     "/api/v1/me/practice/card": {
@@ -7762,7 +8374,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       }
     },
     "/api/v1/admin/practice-projects": {
@@ -7788,7 +8401,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "admin"
       }
     },
     "/api/v1/admin/practice-projects/{key}": {
@@ -7824,7 +8438,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "admin"
       }
     },
     "/api/v1/admin/settings/practice": {
@@ -7845,7 +8460,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "admin"
       },
       "put": {
         "tags": [
@@ -7885,7 +8501,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "admin"
       }
     },
     "/api/v1/about": {
@@ -7907,7 +8524,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read"
       }
     },
     "/api/v1/auth/login": {
@@ -7949,7 +8567,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       }
     },
     "/api/v1/auth/redeem-code": {
@@ -7991,7 +8610,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       }
     },
     "/api/v1/auth/logout": {
@@ -8006,7 +8626,8 @@
           "204": {
             "description": "Successful Response"
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       }
     },
     "/api/v1/auth/me": {
@@ -8028,7 +8649,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read"
       }
     },
     "/api/v1/auth/session": {
@@ -8050,7 +8672,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       }
     },
     "/api/v1/projects": {
@@ -8073,7 +8696,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read"
       }
     },
     "/api/v1/preferences": {
@@ -8092,7 +8716,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       },
       "put": {
         "summary": "Update Preferences",
@@ -8129,7 +8754,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       }
     },
     "/api/v1/projects/{project_key}/documents": {
@@ -8311,7 +8937,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/terms/labels": {
@@ -8354,7 +8982,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read"
       }
     },
     "/api/v1/workspaces/review-inputs": {
@@ -8397,7 +9026,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       }
     },
     "/api/v1/workspaces/open": {
@@ -8436,7 +9066,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       }
     },
     "/api/v1/workspaces/{workspace_id}/commands": {
@@ -8486,7 +9117,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       }
     },
     "/api/v1/workspaces/{workspace_id}/decisions": {
@@ -8536,7 +9168,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       }
     },
     "/api/v1/workspaces/{workspace_id}/reanchor-resolutions": {
@@ -8586,7 +9219,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       }
     },
     "/api/v1/workspaces/{workspace_id}/submit": {
@@ -8636,7 +9270,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       }
     },
     "/api/v1/workspaces/{workspace_id}/submissions/{submission_id}": {
@@ -8685,7 +9320,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       }
     },
     "/api/v1/search": {
@@ -8724,7 +9360,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read"
       }
     },
     "/api/v1/projects/{project_key}/ontologies": {
@@ -8768,7 +9405,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/ontologies": {
@@ -8791,7 +9430,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read"
       }
     },
     "/api/v1/terms/tree/open": {
@@ -8830,7 +9470,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read"
       }
     },
     "/api/v1/terms/tree/node": {
@@ -8869,7 +9510,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read"
       }
     }
   },
@@ -12688,6 +13330,44 @@
         ],
         "title": "CreateRoundRequest"
       },
+      "CreateTokenRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Name"
+          },
+          "scopes": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "read",
+                "import",
+                "export",
+                "project-admin",
+                "admin"
+              ]
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Scopes"
+          },
+          "expires_in_days": {
+            "type": "integer",
+            "maximum": 365.0,
+            "minimum": 1.0,
+            "title": "Expires In Days",
+            "default": 90
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "scopes"
+        ],
+        "title": "CreateTokenRequest"
+      },
       "CreateUserRequest": {
         "properties": {
           "username": {
@@ -12749,6 +13429,24 @@
           "display_name"
         ],
         "title": "CreateUserRequest"
+      },
+      "CreatedToken": {
+        "properties": {
+          "secret": {
+            "type": "string",
+            "title": "Secret"
+          },
+          "token": {
+            "$ref": "#/components/schemas/TokenView"
+          }
+        },
+        "type": "object",
+        "required": [
+          "secret",
+          "token"
+        ],
+        "title": "CreatedToken",
+        "description": "The new token; ``secret`` is shown this once and never again."
       },
       "CreatedUser": {
         "properties": {
@@ -25562,6 +26260,122 @@
         ],
         "title": "TextWindowView"
       },
+      "TokenView": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "personal",
+              "project",
+              "system"
+            ],
+            "title": "Kind"
+          },
+          "owner": {
+            "type": "string",
+            "title": "Owner"
+          },
+          "owner_display_name": {
+            "type": "string",
+            "title": "Owner Display Name"
+          },
+          "project_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Key"
+          },
+          "scopes": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "read",
+                "import",
+                "export",
+                "project-admin",
+                "admin"
+              ]
+            },
+            "type": "array",
+            "title": "Scopes"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
+          },
+          "revoked_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "owner",
+          "owner_display_name",
+          "project_key",
+          "scopes",
+          "created_at",
+          "expires_at",
+          "last_used_at",
+          "revoked_at",
+          "revoked_reason"
+        ],
+        "title": "TokenView",
+        "description": "A token without its secret."
+      },
       "TranslationCheck": {
         "properties": {
           "code": {
@@ -27833,5 +28647,13 @@
         "description": "Loaded view of a workspace including document, draft and submissions."
       }
     }
+  },
+  "x-ontotator-scopes": {
+    "read": "Read projects, documents, results and progress.",
+    "import": "Upload and commit texts into a project.",
+    "export": "Start exports and download their files.",
+    "project-admin": "Configure a project, assign people and work, start consolidation.",
+    "admin": "Upload ontologies and translations, manage users (system tokens).",
+    "session": "Browser sessions only; no API token reaches it."
   }
 }

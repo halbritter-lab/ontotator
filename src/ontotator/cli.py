@@ -376,10 +376,15 @@ ontologies_app = typer.Typer(
     help="Ontology and translation files on the data volume.",
     no_args_is_help=True,
 )
+tokens_app = typer.Typer(
+    help="API tokens (scopes: read, import, export, project-admin, admin).",
+    no_args_is_help=True,
+)
 app.add_typer(admin_app, name="admin")
 admin_app.add_typer(users_app, name="users")
 admin_app.add_typer(projects_app, name="projects")
 admin_app.add_typer(ontologies_app, name="ontologies")
+admin_app.add_typer(tokens_app, name="tokens")
 
 RECOVERY_INPUT_MAX_BYTES = 8 * 1024
 RECOVERY_KEYS = ("username", "password_hash", "operator", "reason")
@@ -1462,6 +1467,128 @@ def ontologies_list(ctx: typer.Context) -> None:
     with _open_database(ctx) as db:
         for item in _ontology_store(db).list():
             _print_ontology_file(item)
+
+
+@tokens_app.command("create")
+def tokens_create(
+    ctx: typer.Context,
+    owner: Annotated[
+        str, typer.Argument(help="The user the token acts as (its owner).")
+    ],
+    name: Annotated[str, typer.Option("--name", help="What the token is for.")],
+    scope: Annotated[
+        list[str],
+        typer.Option(
+            "--scope",
+            help="read, import, export, project-admin or admin; repeat for several.",
+        ),
+    ],
+    project: Annotated[
+        str | None,
+        typer.Option(
+            "--project",
+            help="Make a project token for this project; the owner must lead it.",
+            show_default=False,
+        ),
+    ] = None,
+    system: Annotated[
+        bool,
+        typer.Option(
+            "--system",
+            help="Make a system token (the only kind with the admin scope); "
+            "the owner must be a system admin.",
+        ),
+    ] = False,
+    days: Annotated[
+        int, typer.Option("--days", help="Days until the token expires (1 to 365).")
+    ] = 90,
+) -> None:
+    """Create an API token and print it once."""
+    from ontotator.auth.api_tokens import ApiTokenService, TokenKind
+
+    if project is not None and system:
+        _fail("TOKEN_KIND_INVALID", "Choose --project or --system, not both.")
+    kind: TokenKind = (
+        "system" if system else "project" if project is not None else "personal"
+    )
+    with _open_database(ctx) as db:
+        issued = ApiTokenService(db).create(
+            Actor.cli(),
+            owner,
+            name=name,
+            scopes=scope,
+            kind=kind,
+            project_key=project,
+            lifetime_days=days,
+        )
+    token = issued.token
+    until = token.expires_at.astimezone(UTC).strftime("%Y-%m-%d %H:%M")
+    where = f" for project '{token.project_key}'" if token.project_key else ""
+    typer.echo(
+        f"Created {token.kind} token {token.id} '{token.name}' of '{token.owner}'"
+        f"{where} (scopes {', '.join(token.scopes)}; valid until {until} UTC):"
+    )
+    typer.echo(f"  {issued.secret}")
+    typer.echo("Store it now. It is not shown again.")
+
+
+@tokens_app.command("list")
+def tokens_list(
+    ctx: typer.Context,
+    user: Annotated[
+        str | None,
+        typer.Option("--user", help="Only this owner's tokens.", show_default=False),
+    ] = None,
+    project: Annotated[
+        str | None,
+        typer.Option(
+            "--project", help="Only this project's tokens.", show_default=False
+        ),
+    ] = None,
+) -> None:
+    """One line per token (tabs): id, kind, name, owner, project, scopes,
+    expiry, last use and state ('-' when empty)."""
+    from datetime import datetime
+
+    from ontotator.auth.api_tokens import ApiTokenService
+
+    def shown(at: datetime | None) -> str:
+        return at.astimezone(UTC).strftime("%Y-%m-%d %H:%M") if at else "-"
+
+    with _open_database(ctx) as db:
+        owner_id = None
+        if user is not None:
+            found = AccountService(db).get_by_username(user)
+            if found is None:
+                raise DomainError("USER_NOT_FOUND", f"There is no user '{user}'.")
+            owner_id = found.id
+        tokens = ApiTokenService(db).list(owner_id=owner_id, project_key=project)
+    now = datetime.now(UTC)
+    for token in tokens:
+        if token.revoked_at is not None:
+            state = f"revoked ({token.revoked_reason})"
+        elif token.expires_at <= now:
+            state = "expired"
+        else:
+            state = "active"
+        typer.echo(
+            f"{token.id}\t{token.kind}\t{token.name}\t{token.owner}"
+            f"\t{token.project_key or '-'}\t{','.join(token.scopes)}"
+            f"\t{shown(token.expires_at)}\t{shown(token.last_used_at)}\t{state}"
+        )
+
+
+@tokens_app.command("revoke")
+def tokens_revoke(
+    ctx: typer.Context,
+    token_id: Annotated[int, typer.Argument(help="The token's id (see list).")],
+) -> None:
+    """Revoke an API token; it stops working at once."""
+    from ontotator.auth.api_tokens import ApiTokenService
+
+    with _open_database(ctx) as db:
+        token = ApiTokenService(db).revoke(Actor.cli(), token_id)
+    typer.echo(f"Token {token.id} '{token.name}' of '{token.owner}' is revoked.")
 
 
 @admin_app.command("audit")

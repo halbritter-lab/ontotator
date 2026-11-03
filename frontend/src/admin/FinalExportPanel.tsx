@@ -213,7 +213,7 @@ function FinalExportContent({ projectKey }: { projectKey: string }): JSX.Element
       </div>
     </>}
     {phase === "check" && <details className="final-export-details"><summary>What is in the file?</summary>
-      <p className="cell-secondary">A ZIP with one result file per text, a plain-language guide (README.txt) and a table of every result (index.csv).</p></details>}
+      <p className="cell-secondary">A ZIP with one result file per text, a plain-language guide (README.txt), a table of every result (index.csv) and tables for analysis: every finding (findings.csv), the agreement between annotators (agreement.csv, agreement-summary.csv) and what became of tool proposals (proposals.csv).</p></details>}
   </section>;
 }
 
