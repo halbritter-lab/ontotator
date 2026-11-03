@@ -5136,6 +5136,12 @@ export interface components {
             acknowledged_warnings: components["schemas"]["WarningAcknowledgement"][];
             /** Accepted Omissions */
             accepted_omissions: components["schemas"]["FinalOmission"][];
+            /**
+             * Format
+             * @default t1
+             * @enum {string}
+             */
+            format: "t1" | "phenopacket";
         };
         /** FinalOmission */
         FinalOmission: {

@@ -1,7 +1,7 @@
 """Explicit result selection and final export acknowledgements."""
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict, Field
@@ -76,6 +76,9 @@ class FinalExportRequest(BaseModel):
     state_digest: str = Field(pattern="^[0-9a-f]{64}$")
     acknowledged_warnings: list[WarningAcknowledgement]
     accepted_omissions: list[FinalOmission]
+    # The file of the final export: the T1 bundle with receipt, or
+    # Phenopackets derived from the same frozen results (#308).
+    format: Literal["t1", "phenopacket"] = "t1"
 
 
 def _service(request: Request, principal: Any) -> FinalResultService:
@@ -111,4 +114,7 @@ def final_preflight(
 def final_export(
     key: str, body: FinalExportRequest, principal: PrincipalDep, request: Request
 ) -> dict[str, int]:
-    return _service(request, principal).freeze(key, body.model_dump(mode="json"))
+    # A T1 request is stored without ``format``, as before #308.
+    return _service(request, principal).freeze(
+        key, body.model_dump(mode="json", exclude_defaults=True)
+    )
