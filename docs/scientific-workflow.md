@@ -103,9 +103,10 @@ People appear as pseudonyms in every export.
 | File | Content |
 |---|---|
 | `README.txt` | Plain-language guide to the archive, with the left-out texts and the warnings acknowledged at export. |
-| `index.csv` | One row per selected result (`row_type` `selected`), left-out text (`omitted`) and earlier submission the results refer to (`provenance`), naming the bundle file and entry that holds it. |
+| `index.csv` | One row per selected result (`row_type` `selected`), left-out text (`omitted`), earlier submission the results refer to (`provenance`) and other annotation of a text accepted directly (`compared`), naming the bundle file and entry that holds it. |
 | `selected.t1.zip` | The final results as a T1 (ontospan) bundle, one unit per result. |
 | `provenance.t1.zip` | The submissions the final results were consolidated or carried from. Not final results. |
+| `compared.t1.zip` | For a text whose result was accepted directly, without consolidation: the other people's latest annotations of it, so that the agreement covers every text. Not final results. |
 | `source-texts.jsonl` | The exact text versions, one per line; `source_text_line` in the tables names the line. |
 | `findings.csv` | One row per finding of every submission in the two bundles. |
 | `agreement.csv` | The agreement of every two annotators on each text. |
@@ -125,12 +126,12 @@ gets a layer of its own, `<layer id>@<digest prefix>`, with its release and dige
 
 ### findings.csv
 
-One row per finding (annotation) of each unit of `selected.t1.zip` and
-`provenance.t1.zip`, in the order of `index.csv`:
+One row per finding (annotation) of each unit of `selected.t1.zip`,
+`compared.t1.zip` and `provenance.t1.zip`, in the order of `index.csv`:
 
 - the text: `case_id`, `language`, `document_id`, `text_version`,
   `source_text_line`;
-- the submission: `row_type` (`selected` or `provenance`), `submission_id`,
+- the submission: `row_type` (`selected`, `compared` or `provenance`), `submission_id`,
   `submission_kind`, `archive_file`, `bundle_entry`, `pseudonym`;
 - the finding: `annotation_id`, `layer_id`, `term_id`, `term_label` (the
   term's name in the release the text names), `ontology` and
@@ -159,12 +160,16 @@ finding is a checked negative.
 
 ### agreement.csv and agreement-summary.csv
 
-`agreement.csv` compares the work that went into the final results: on each
-text version, every two annotation submissions by different people that the
-bundles hold (annotation from scratch and proposal checks; consolidations and
-carried results are no annotation of their own). A text whose result was
-accepted directly, without consolidation, holds one submission and has no
-row. Proposals a proposal check left uncertain are not counted as findings.
+`agreement.csv` compares, on each text version, every two annotation
+submissions by different people that the bundles hold (annotation from
+scratch and proposal checks; consolidations and carried results are no
+annotation of their own). For a consolidated text these are the submissions
+the consolidation merged. For a text whose result was accepted directly, the
+export adds the other people's latest live annotations of it
+(`compared.t1.zip`), chosen when the export is prepared as the annotation
+results export chooses them, so that texts accepted because everyone agreed
+are not left out. Proposals a proposal check left uncertain are not counted
+as findings.
 
 Each row names the text, both submissions and pseudonyms, and gives the
 values of `ontospan.agreement`, the matching Ontotator's consolidation and the

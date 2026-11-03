@@ -154,12 +154,14 @@ def read_units(
     files: Mapping[str, bytes],
     selected_order: Sequence[str],
     provenance_order: Sequence[str],
+    compared_order: Sequence[str] = (),
 ) -> list[ExportedUnit]:
-    """The units of both bundles, in the order the worker wrote them."""
+    """The units of the bundles, in the order the worker wrote them."""
     units = []
     for row_type, archive, order in (
         ("selected", "selected.t1.zip", selected_order),
         ("provenance", "provenance.t1.zip", provenance_order),
+        ("compared", "compared.t1.zip", compared_order),
     ):
         if not order:
             continue
@@ -337,7 +339,7 @@ def build_findings_csv(
     consolidations: Mapping[str, Mapping[str, Any]],
     label: Label,
 ) -> bytes:
-    """One row per finding of every selected and provenance submission."""
+    """One row per finding of every selected, compared and provenance submission."""
     context = SubmissionFacts(payload)
     axes = sorted(
         {
@@ -348,7 +350,7 @@ def build_findings_csv(
         }
     )
     columns = (*FINDINGS_COLUMNS, *(f"value_{axis}" for axis in axes), *FINDINGS_TAIL)
-    order = {"selected": 0, "provenance": 1}
+    order = {"selected": 0, "compared": 1, "provenance": 2}
     table: list[tuple[tuple[str, ...], int, dict[str, str]]] = []
     for item in units:
         sid = item.submission_id
@@ -477,9 +479,10 @@ def agreement_pairs(
 ) -> list[AgreementPair]:
     """Per text, every pair of annotation submissions by different people.
 
-    The annotations are those the export holds (selected and provenance): the
-    work that went into the final results. Consolidations and carried results
-    are no annotation of their own and are left out.
+    The annotations are those the export holds: the work a consolidation
+    merged (provenance), the other people's work on a text accepted directly
+    (compared) and the selected results themselves. Consolidations and carried
+    results are no annotation of their own and are left out.
     """
     context = SubmissionFacts(payload)
     by_text: dict[str, list[ExportedUnit]] = defaultdict(list)
