@@ -27,6 +27,7 @@ from ontotator.authz.policy import Access
 from ontotator.authz.scoped import ScopedRepository
 from ontotator.domain.errors import DomainError
 from ontotator.domain.work_rounds import CARRY_ROUND_KINDS
+from ontotator.exchange.archive import project_archive_export, project_archive_import
 from ontotator.exchange.final_export import final_t1_export
 from ontotator.exchange.reanchor_job import reanchor
 from ontotator.exchange.review_export import translation_review_export
@@ -579,4 +580,6 @@ HANDLERS: dict[str, Handler] = {
     "final_t1_export": final_t1_export,
     "edit_log_export": edit_log_export,
     "translation_review_export": translation_review_export,
+    "project_archive_export": project_archive_export,
+    "project_archive_import": project_archive_import,
 }

@@ -25,6 +25,7 @@ from starlette.concurrency import run_in_threadpool
 from ontotator import __version__, settings
 from ontotator.api.about_routes import router as about_router
 from ontotator.api.admin_routes import router as admin_router
+from ontotator.api.archive_routes import router as archive_router
 from ontotator.api.auth_routes import demo_router as demo_login_router
 from ontotator.api.auth_routes import router as auth_router
 from ontotator.api.body_limits import BodyLimitMiddleware
@@ -581,6 +582,7 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
     app.include_router(variant_router)
     app.include_router(admin_router)
     app.include_router(ontology_router)
+    app.include_router(archive_router)
     app.include_router(final_result_router)
     app.include_router(document_row_router)
     from ontotator.api.work_plan_routes import router as work_plan_router
