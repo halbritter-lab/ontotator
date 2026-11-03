@@ -199,6 +199,33 @@ What for: as system administrator you can manage every project, also without a p
 2. In the project's row, click **Open** to go to its documents, or **Settings** to change it.
 3. Work as a lead would; see the [lead overview](lead.md).
 
+## Move a project to another server
+
+What for: copy one complete project, with its texts, work, history, guidelines and people, to another Ontotator server, or keep a copy of it.
+
+A project archive is a ZIP file. It holds every record of the project, the stored files it uses and, for each person it names, the username, pseudonym and e-mail address. Keep it as private as the project itself.
+
+To export a project:
+
+1. Click **Projects** in the sidebar.
+2. Under **Project archives**, **Export a project**, choose the **Project**.
+3. Keep **Include ontology files** ticked, unless the other server already has the same ontology and translation files.
+4. Click **Export archive**. When **Archive ready** appears, click **Download archive**.
+
+An export is refused while an import or export of the project is still running.
+
+To import an archive on the other server:
+
+1. Click **Projects** in the sidebar.
+2. Under **Import an archive**, choose the file in **Archive file (.zip)**.
+3. Click **Import archive**. When **Project imported** appears, it names the new project, the people matched to accounts here and the pseudonym-only people.
+
+The import checks every file against the archive's manifest first and refuses a changed, incomplete or newer archive. It then reads the imported project back and compares every table with the archive; a difference undoes the whole import. When the project key is taken here, the copy gets a suffix such as `-2`, and the name a suffix such as *(2)*.
+
+People are matched by e-mail address. A person with an account of the same e-mail address keeps the roles in the project. A person without such an account becomes a pseudonym-only person: an anonymised account with the person's pseudonym, without name, e-mail address or login. Work recorded under a pseudonym keeps that pseudonym. When the matched account has another pseudonym, the work stays with a pseudonym-only person that is linked to the account, and the account gets the person's roles. A pseudonym-only person can be linked to an account later on the command line (see the [operations guide](../operations.md#move-a-project-to-another-server)).
+
+When someone here already has a pseudonym that the archived work carries, the import is refused. Tick **Give people new pseudonyms where theirs are taken here** to import anyway: such a person gets a new pseudonym, and a person matched by e-mail gets the account's pseudonym, in all copied work.
+
 ## Practice projects
 
 What for: see and remove the private practice projects of annotators and translation reviewers, and switch the offer on or off.

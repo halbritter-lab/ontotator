@@ -3751,6 +3751,168 @@
         "x-ontotator-scope": "admin"
       }
     },
+    "/api/v1/admin/project-archives/export": {
+      "post": {
+        "tags": [
+          "admin-project-archives"
+        ],
+        "summary": "Export Archive",
+        "description": "Queue the archive of one project (``project_archive_export``).",
+        "operationId": "export_archive_api_v1_admin_project_archives_export_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArchiveExportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArchiveJobQueued"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/project-archives/import": {
+      "post": {
+        "tags": [
+          "admin-project-archives"
+        ],
+        "summary": "Import Archive",
+        "description": "Store an uploaded archive and queue its import (``project_archive_import``).\n\n``rename_pseudonyms``: a person whose pseudonym is taken here gets a new\none, and a person matched by e-mail keeps the account's pseudonym.",
+        "operationId": "import_archive_api_v1_admin_project_archives_import_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_archive_api_v1_admin_project_archives_import_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArchiveJobQueued"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/project-archives/jobs/{job_id}": {
+      "get": {
+        "tags": [
+          "admin-project-archives"
+        ],
+        "summary": "Get Archive Job",
+        "operationId": "get_archive_job_api_v1_admin_project_archives_jobs__job_id__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArchiveJobView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/project-archives/jobs/{job_id}/download": {
+      "get": {
+        "tags": [
+          "admin-project-archives"
+        ],
+        "summary": "Download Archive",
+        "description": "The ZIP of a finished export job; audited as ``project.export_download``.",
+        "operationId": "download_archive_api_v1_admin_project_archives_jobs__job_id__download_get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{key}/final-selections": {
       "put": {
         "tags": [
@@ -10235,6 +10397,115 @@
         ],
         "title": "AnonymiseRequest"
       },
+      "ArchiveExportRequest": {
+        "properties": {
+          "project_key": {
+            "type": "string",
+            "title": "Project Key"
+          },
+          "include_ontology_files": {
+            "type": "boolean",
+            "title": "Include Ontology Files",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "project_key"
+        ],
+        "title": "ArchiveExportRequest"
+      },
+      "ArchiveJobQueued": {
+        "properties": {
+          "job_id": {
+            "type": "integer",
+            "title": "Job Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id"
+        ],
+        "title": "ArchiveJobQueued"
+      },
+      "ArchiveJobView": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "project_archive_export",
+              "project_archive_import"
+            ],
+            "title": "Kind"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "status",
+          "result",
+          "error",
+          "created_at",
+          "finished_at"
+        ],
+        "title": "ArchiveJobView"
+      },
       "AssignRequest": {
         "properties": {
           "rows": {
@@ -11533,6 +11804,25 @@
           "files[]"
         ],
         "title": "Body_create_upload_api_v1_projects__key__uploads_post"
+      },
+      "Body_import_archive_api_v1_admin_project_archives_import_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          },
+          "rename_pseudonyms": {
+            "type": "boolean",
+            "title": "Rename Pseudonyms",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_import_archive_api_v1_admin_project_archives_import_post"
       },
       "Body_publish_guideline_api_v1_projects__key__guidelines_post": {
         "properties": {
