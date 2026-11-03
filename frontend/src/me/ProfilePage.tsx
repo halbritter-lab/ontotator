@@ -1,4 +1,5 @@
 import { SearchPreferencesSection } from "./SearchPreferencesSection";
+import { TokensSection } from "./TokensSection";
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import { api, type OwnProfilePatch, type Profile } from "../api/client";
 import { ErrorNotice } from "../admin/ErrorNotice";
@@ -193,6 +194,7 @@ export function ProfilePage({ backToTask, backToDocuments, onSaved, routeLeaveRe
     </section>
     <SearchPreferencesSection pseudonym={model.baseline.pseudonym} onDirty={setSearchDirty} />
     <PracticeSection onNavigate={onNavigate} />
+    <TokensSection mode={{ kind: "personal" }} />
     <section className="detail-section">
       <h2>Change password</h2>
       <form aria-label="Change password" onSubmit={(event) => { event.preventDefault(); void changePassword(); }}>

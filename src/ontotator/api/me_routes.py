@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
-from ontotator.api.identity import PrincipalDep
+from ontotator.api.identity import PrincipalDep, session_id_of
 from ontotator.auth.accounts import AccountService, User
 from ontotator.auth.audit import Actor
 from ontotator.auth.login_attempts import client_address
@@ -84,7 +84,7 @@ def change_password(
         principal.user_id,
         body.current_password,
         body.new_password,
-        keep_session_id=principal.session_id,
+        keep_session_id=session_id_of(principal),
         client_ip=client_address(request.client.host if request.client else None),
     )
     return Response(status_code=204)

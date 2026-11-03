@@ -93,7 +93,7 @@ describe("users administration", () => {
     render(<UsersPage currentUser={currentUser} />); await load();
     more("alex", "Deactivate…");
     let dialog = screen.getByRole("dialog", { name: "Deactivate alex" });
-    expect(within(dialog).getByText("This logs the user out everywhere.")).toBeTruthy();
+    expect(within(dialog).getByText("This logs the user out everywhere and revokes their API tokens.")).toBeTruthy();
     expect(api.adminUpdateUser).not.toHaveBeenCalled(); fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
     more("alex", "Deactivate…"); dialog = screen.getByRole("dialog", { name: "Deactivate alex" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Deactivate" }));

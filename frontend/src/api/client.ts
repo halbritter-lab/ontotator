@@ -272,6 +272,12 @@ export type About = components["schemas"]["About"];
 export type OwnProfilePatch = Partial<components["schemas"]["ProfilePatch"]>;
 export type PasswordChange = components["schemas"]["PasswordChange"];
 export type AdminUser = components["schemas"]["AdminUser"];
+/** An API token without its secret (issue 305). */
+export type ApiToken = components["schemas"]["TokenView"];
+export type ApiTokenScope = ApiToken["scopes"][number];
+export type CreateApiToken = components["schemas"]["CreateTokenRequest"];
+/** A new token; `secret` is shown this once. */
+export type CreatedApiToken = components["schemas"]["CreatedToken"];
 export type TechnicalReportRequest = components["schemas"]["TechnicalReportRequest"];
 export type TechnicalReportContext = components["schemas"]["TechnicalReportContext"];
 export type TechnicalReportReceipt = components["schemas"]["TechnicalReportReceipt"];
@@ -725,6 +731,43 @@ export class ApiClient {
 
   async adminDeletePracticeProject(key: string): Promise<void> {
     return this.request<void>(`/api/v1/admin/practice-projects/${encodeURIComponent(key)}`, { method: "DELETE" });
+  }
+
+  /** API tokens (issue 305): the user's own, a project's (leads) and all (admins). */
+  async listMyTokens(): Promise<ApiToken[]> {
+    return this.request<ApiToken[]>("/api/v1/me/tokens", { method: "GET" });
+  }
+
+  async createMyToken(body: CreateApiToken): Promise<CreatedApiToken> {
+    return this.request<CreatedApiToken>("/api/v1/me/tokens", { method: "POST", body: JSON.stringify(body) });
+  }
+
+  async revokeMyToken(id: number): Promise<ApiToken> {
+    return this.request<ApiToken>(`/api/v1/me/tokens/${id}/revoke`, { method: "POST" });
+  }
+
+  async listProjectTokens(key: string): Promise<ApiToken[]> {
+    return this.request<ApiToken[]>(`/api/v1/projects/${encodeURIComponent(key)}/tokens`, { method: "GET" });
+  }
+
+  async createProjectToken(key: string, body: CreateApiToken): Promise<CreatedApiToken> {
+    return this.request<CreatedApiToken>(`/api/v1/projects/${encodeURIComponent(key)}/tokens`, { method: "POST", body: JSON.stringify(body) });
+  }
+
+  async revokeProjectToken(key: string, id: number): Promise<ApiToken> {
+    return this.request<ApiToken>(`/api/v1/projects/${encodeURIComponent(key)}/tokens/${id}/revoke`, { method: "POST" });
+  }
+
+  async adminListTokens(): Promise<ApiToken[]> {
+    return this.request<ApiToken[]>("/api/v1/admin/tokens", { method: "GET" });
+  }
+
+  async adminCreateSystemToken(body: CreateApiToken): Promise<CreatedApiToken> {
+    return this.request<CreatedApiToken>("/api/v1/admin/tokens", { method: "POST", body: JSON.stringify(body) });
+  }
+
+  async adminRevokeToken(id: number): Promise<ApiToken> {
+    return this.request<ApiToken>(`/api/v1/admin/tokens/${id}/revoke`, { method: "POST" });
   }
 
   async adminPracticeSettings(): Promise<PracticeSettings> {

@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { ErrorNotice } from "./ErrorNotice";
 import { Button, Checkbox, InlineMessage } from "../ui";
+import { TokensSection } from "../me/TokensSection";
 
-/** Administration › Server settings: server-wide settings. Today: Practice projects (issue 266). */
+/** Administration › Server settings: server-wide settings: Practice projects (issue 266) and API tokens (issue 305). */
 export function SettingsPage(): JSX.Element {
   const [offer, setOffer] = useState<{ saved: boolean; draft: boolean } | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -40,5 +41,6 @@ export function SettingsPage(): JSX.Element {
         <Button type="submit" variant="primary" loading={busy} disabled={busy || offer.draft === offer.saved}>Save changes</Button>
       </form>}
     </section>
+    <TokensSection mode={{ kind: "admin" }} />
   </div>;
 }
