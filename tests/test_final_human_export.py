@@ -239,9 +239,10 @@ _VOLATILE = [
 ]
 # receipt.json and README.txt of a carry-forward final (no draft-sourced
 # inputs): a change here changes every export of that kind. v2 (#133) added
-# the (here empty) "consolidations" record and the format string.
+# the (here empty) "consolidations" record and the format string; #295-#297
+# the analysis tables (listed in README.txt and hashed in "files").
 CARRY_FORWARD_DIGEST = (
-    "458ac726c812a016de6e19093b22497e1b4cfa429804995266cca2624e5b1875"
+    "db0c199d7a590bd5dc54bdba6e3352e2c0e334fb30ff672f9324c8a700b2966f"
 )
 
 

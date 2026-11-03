@@ -358,17 +358,22 @@ def serialize_t1_content(
     final_bundle_kind: str = "selected",
     source_ref_overrides: Mapping[str, str] | None = None,
     round_kinds: Mapping[str, str] | None = None,
+    views: dict[str, ontospan.OntologyView] | None = None,
 ) -> dict[str, Any]:
-    """Serialize exactly the supplied immutable input selection."""
+    """Serialize exactly the supplied immutable input selection.
+
+    ``views`` caches the loaded ontology releases by digest; a caller that
+    needs them afterwards (the final export's term labels) passes its own.
+    """
     if not content.submissions:
         raise DomainError("EXPORT_EMPTY", f"Project '{project}' has no submissions.")
     layers = layers_for(content.profile, content.pins)
-    views: dict[str, ontospan.OntologyView] = {}
+    cache: dict[str, ontospan.OntologyView] = {} if views is None else views
 
     def view_of(digest: str) -> ontospan.OntologyView:
-        if digest not in views:
-            views[digest] = ontospan.ObographOntology.load(db.blobs.path(digest))
-        return views[digest]
+        if digest not in cache:
+            cache[digest] = ontospan.ObographOntology.load(db.blobs.path(digest))
+        return cache[digest]
 
     # Validate historical unresolved targets before serialization, which may
     # otherwise fail without the submission context or fill missing axes.

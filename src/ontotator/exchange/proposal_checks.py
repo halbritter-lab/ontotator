@@ -1,12 +1,14 @@
-"""Per-proposal decisions of proposal-check submissions (final export receipt)."""
+"""Per-proposal decisions of proposal-check submissions (final export receipt)
+and the tool behind each proposal (proposals.csv)."""
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from typing import Any
 
 from sqlalchemy import Connection, select
 
+from ontotator.domain.annotations import AnnotationSnapshot
 from ontotator.domain.workspace import Submission
 from ontotator.exchange.t1 import _proposal_ref
 from ontotator.storage.proposal_queries import ProposalSetRef
@@ -121,3 +123,53 @@ def proposal_check_records(
         sub.submission_id: proposal_check_record(sub, project, set_of(sub))
         for sub in checks
     }
+
+
+def proposal_sources(
+    conn: Connection,
+    project_id: int | None,
+    submissions: Iterable[Submission],
+    proposals: Mapping[tuple[str, str], AnnotationSnapshot],
+) -> dict[tuple[str, str], tuple[str, str]]:
+    """Per target of a proposal check, the tool that proposed it: name and
+    version of the proposal's actor in the imported set (proposals.csv).
+
+    An actor without a name is named by its id; a seed proposal without a set
+    by the actor id of its provenance, with an empty version."""
+    wanted = {
+        (t.annotation_id, t.version)
+        for s in submissions
+        if s.origin_key.mode == "proposal_check"
+        for t in s.targets.targets
+        if (t.annotation_id, t.version) in proposals
+    }
+    actors: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    if wanted:
+        rows = conn.execute(
+            select(
+                ProposalAnnotationRow.annotation_id,
+                ProposalAnnotationRow.version,
+                ProposalSetRow.actors,
+            )
+            .outerjoin(
+                ProposalSetRow,
+                ProposalSetRow.id == ProposalAnnotationRow.proposal_set_id,
+            )
+            .where(
+                ProposalAnnotationRow.project_id == project_id,
+                ProposalAnnotationRow.annotation_id.in_({a for a, _ in wanted}),
+            )
+        )
+        actors = {
+            (r.annotation_id, r.version): list(r.actors or [])
+            for r in rows
+            if (r.annotation_id, r.version) in wanted
+        }
+    sources = {}
+    for key in sorted(wanted):
+        actor_id = proposals[key].annotation.provenance.actor.actor_id
+        actor = next(
+            (a for a in actors.get(key, []) if a.get("actor_id") == actor_id), {}
+        )
+        sources[key] = (actor.get("name") or actor_id, actor.get("version") or "")
+    return sources
