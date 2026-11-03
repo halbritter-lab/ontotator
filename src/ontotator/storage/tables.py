@@ -140,6 +140,10 @@ class ProjectRow(Base):
         server_default=text("'review_and_annotate_translations'")
     )
     tool_proposal_mode: Mapped[str] = mapped_column(server_default=text("'proposals'"))
+    # Consolidators see "Annotator A, B, …" instead of names (issue 302).
+    blind_consolidation: Mapped[bool] = mapped_column(
+        Boolean, server_default=text("false")
+    )
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now())
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     # A private practice project of one person (issue 266, migration 0029):

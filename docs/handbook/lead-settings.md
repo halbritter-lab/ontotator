@@ -247,9 +247,12 @@ What for: decide how many people annotate each text and who may consolidate.
 2. Set **Annotators per text** (1 to 5). It is an upper limit; fewer is fine.
 3. Tick **Annotate only after the translation review is accepted** if translations must be reviewed before annotation. Nobody can then annotate a translation that is not accepted; you can still assign annotators while the review is underway ([Assign work to the selected texts](lead-documents.md#assign-work-to-the-selected-texts)).
 4. Tick **Consolidator must not be one of the text's annotators** if annotators may not consolidate their own texts.
-5. Click **Save changes**.
+5. Tick **Hide annotator names during consolidation** if consolidators should decide without knowing who marked what. Off by default.
+6. Click **Save changes**.
 
 Lowering the number removes nobody; existing assignments stay.
+
+With hidden names, a consolidator sees the annotators of a text as *Annotator A*, *Annotator B* and so on, in the order they submitted, instead of names or pseudonyms; the same letters are used in the consolidation, the full editor and the submitted work they read for it. Tool proposals keep their robot icon. You and other leads still see every name, and exports are unchanged. The change applies to every consolidation the next time it opens, also to one already started. The audit trail records the change as *Project settings changed*, with the setting named.
 
 ## Add a member
 

@@ -38,6 +38,12 @@ from typing import Any
 
 from sqlalchemy import Connection, select, tuple_
 
+from ontotator.application.consolidation_blinding import (
+    Blinding,
+    blinds,
+    build_blinding,
+    recorded_at,
+)
 from ontotator.application.document_row_panel import (
     AxisDefaults,
     finding_of,
@@ -439,7 +445,20 @@ class ConsolidationReader:
                 if submitted
                 else None
             )
-            people = _people(conn, access, order, found.authors)
+            # Issue 302: "Annotator A, B, …" for a consolidator, names for leads.
+            blinding = (
+                build_blinding(
+                    access.pseudonym,
+                    order,
+                    found.authors,
+                    recorded_at(
+                        conn, pid, [s for s in order if not s.startswith("draft-")]
+                    ),
+                )
+                if blinds(conn, access, pid, item.project_key)
+                else None
+            )
+            people = _people(conn, access, order, found.authors, blinding)
             decisions = _proposal_decisions(conn, pid, order, found.authors)
             from_proposal = _from_tool_proposal(conn, pid, members, decisions)
             added = _added(members, content, defaults, found.roles)
@@ -463,10 +482,14 @@ class ConsolidationReader:
             "text": document.text,
             "people": people,
             "groups": [
-                _group_view(group, members, content, from_proposal, found.roles)
-                | {"rejected_by": _rejected_by(group, members, decisions)}
+                _blind_group(
+                    _group_view(group, members, content, from_proposal, found.roles)
+                    | {"rejected_by": _rejected_by(group, members, decisions)},
+                    blinding,
+                )
                 for group in _groups(order, members)
             ],
+            "annotators_hidden": blinding is not None,
             "added": added,
             "added_by": consolidator if added else None,
             "consolidator": consolidator,
@@ -547,19 +570,48 @@ def _added(
     return added
 
 
+def _blind_group(view: dict[str, Any], blinding: Blinding | None) -> dict[str, Any]:
+    """A group view with the blinded person ids of its members and of
+    ``rejected_by`` (issue 302)."""
+    if blinding is None:
+        return view
+    for member in view["members"]:
+        member["person_id"] = blinding.person(member["person_id"])
+    view["rejected_by"] = sorted(blinding.person(p) for p in view["rejected_by"])
+    return view
+
+
 def _people(
     conn: Connection,
     access: Access,
     order: Sequence[str],
     authors: Mapping[str, str],
+    blinding: Blinding | None = None,
 ) -> list[dict[str, Any]]:
     """The source authors in source order, with display names (U8); also
-    the author of a source without findings."""
+    the author of a source without findings. With ``blinding`` (issue 302)
+    in the order of their first submission, as "Annotator A", "Annotator
+    B", …, with an opaque person id; the viewer keeps their own name."""
     pseudonyms: list[str] = []
     for submission in order:
         person = authors.get(submission)
         if person is not None and person not in pseudonyms:
             pseudonyms.append(person)
+    if blinding is not None:
+        rank = {p: i for i, p in enumerate(blinding.order)}
+        pseudonyms.sort(key=lambda p: rank.get(p, len(rank)))
+        own = {
+            person["person_id"]: person["label"]
+            for person in _people(conn, access, ["self"], {"self": blinding.viewer})
+        }
+        return [
+            {
+                "person_id": blinding.person(p),
+                "label": own[p] if p in own else blinding.label(p),
+                "lane": min(index + 1, MAX_LANE),
+            }
+            for index, p in enumerate(pseudonyms)
+        ]
     ids = {
         row.pseudonym: row.id
         for row in conn.execute(
