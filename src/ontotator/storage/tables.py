@@ -995,3 +995,37 @@ class PracticeProjectRow(Base):
     # Whether the project has the consolidation task (owner consolidates).
     consolidation: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class ImportedPersonRow(Base):
+    """A pseudonym-only person a project archive import created (#306).
+
+    The user row is an anonymised account (no name, e-mail or login) that
+    keeps the pseudonym the archive's work carries. ``linked_user_id`` is the
+    real account an administrator linked it to later; the link grants that
+    account the person's roles and never rewrites the recorded work.
+    """
+
+    __tablename__ = "imported_people"
+    __table_args__ = (
+        UniqueConstraint(
+            "source_instance", "source_user_id", name="uq_imported_people_source"
+        ),
+    )
+
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey(UserRow.id), primary_key=True
+    )
+    # The project whose import created the person.
+    project_id: Mapped[int] = mapped_column(BigInteger, ForeignKey(ProjectRow.id))
+    archive_sha256: Mapped[str]
+    # The person in the archive: the source server's instance id and user id,
+    # so a later archive of the same server finds the same person again.
+    source_instance: Mapped[str]
+    source_user_id: Mapped[int] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    linked_user_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey(UserRow.id)
+    )
+    linked_at: Mapped[datetime | None]
+    linked_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey(UserRow.id))

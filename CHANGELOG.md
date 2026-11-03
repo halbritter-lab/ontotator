@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Project archives: a system administrator exports one complete project as a ZIP (`manifest.json` with format `ontotator-project-archive`, schema version 1, versions, per-file SHA-256 and row counts, one JSONL file per project table, the people it names and its stored files, with or without the ontology files) and imports it on another server as a new project, on the Projects page under **Project archives** or with `ontotator admin projects export-archive` and `import-archive`. The import renumbers every id, keeps immutable records with their timestamps, gives a taken key a suffix, refuses a changed or newer archive and checks every table against the manifest before it commits. People are matched by e-mail address; the others become pseudonym-only people without login, which `ontotator admin users link-person` links to an account later. Migration 0031 adds `imported_people` and changes no existing row (`/api/v1/admin/project-archives`) (#306).
+
 ## [0.8.1] - 2026-11-02
 
 ### Fixed

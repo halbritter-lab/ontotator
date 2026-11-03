@@ -25,6 +25,7 @@ EXPORT_ACTIONS = {
     "edit_log": Action.EXPORT_EDIT_LOG,
     "translation-reviews": Action.EXPORT_ALL_WORK,
 }
+ARCHIVE_JOB_KINDS = frozenset({"project_archive_export", "project_archive_import"})
 EXPORT_KINDS = {
     "t1_export": ("t1", "zip", "application/zip"),
     "final_t1_export": ("final", "zip", "application/zip"),
@@ -121,7 +122,8 @@ def get_job(job_id: int, request: Request, principal: PrincipalDep) -> JobView:
             .mappings()
             .one_or_none()
         )
-        if row is None:
+        # Project archives are read on the admin route only (#306).
+        if row is None or row["kind"] in ARCHIVE_JOB_KINDS:
             raise _not_found()
         return JobView.model_validate(dict(row))
 
