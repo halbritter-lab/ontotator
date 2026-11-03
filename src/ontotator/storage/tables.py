@@ -61,6 +61,8 @@ APPEND_ONLY_TABLES = (
     "draft_snapshots",
     "guideline_versions",
     "guideline_withdrawals",
+    "work_time_events",
+    "work_intervals",
 )
 
 NAMING_CONVENTION = {
@@ -136,6 +138,10 @@ class ProjectRow(Base):
         Boolean, server_default=text("true")
     )
     annotations_per_text: Mapped[int] = mapped_column(server_default=text("1"))
+    # Issue 298: record the working time of annotation and review tasks.
+    record_working_time: Mapped[bool] = mapped_column(
+        Boolean, server_default=text("false")
+    )
     import_plan: Mapped[str] = mapped_column(
         server_default=text("'review_and_annotate_translations'")
     )
@@ -974,6 +980,7 @@ from ontotator.storage import mode_change_tables as _mode_tables  # noqa: E402,F
 from ontotator.storage import overview_tables as _overview_tables  # noqa: E402,F401
 from ontotator.storage import plan_tables as _plan_tables  # noqa: E402,F401
 from ontotator.storage import report_tables as _report_tables  # noqa: E402,F401
+from ontotator.storage import work_time_tables as _work_time_tables  # noqa: E402,F401
 from ontotator.storage import workflow_tables as _workflow_tables  # noqa: E402, F401
 
 
