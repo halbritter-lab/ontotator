@@ -224,6 +224,8 @@ Scopes are `read`, `import`, `export`, `project-admin` and `admin` (system token
 
 A bearer request skips the CSRF check but keeps the origin and trusted-host checks; one that also sends the session cookie is refused with 400 `CREDENTIALS_AMBIGUOUS`. Unknown, expired and revoked tokens get 401 `TOKEN_INVALID`, a missing scope 403 `TOKEN_SCOPE_MISSING`, a session-only route or another project 403 `TOKEN_NOT_ALLOWED`. Every write with a token is audited as `api_token.use` before it runs, and the change's own audit entries name the token in `details.api_token`; creation and revocation are `api_token.create` and `api_token.revoke`. A change that ends a user's sessions for security (fewer project roles, losing the admin role, deactivation, anonymisation, a reset code) also revokes the user's tokens. Migration 0032 adds the empty table `api_tokens`.
 
+The [MCP server](../mcp/README.md) (`ontotator-mcp`) uses such a token from the user's computer: it runs there, speaks MCP over stdio and calls the API of the instance named by `ONTOTATOR_URL`. It needs no change on the server. Give it a project token with only the scopes the work needs; ontology uploads and new projects need a system token.
+
 ## Upgrades
 
 Take a consistent database/data-volume backup first, as in [Backups and restore](#backups-and-restore), before every image switch (upgrade, downgrade or rollback). Build or pull the verified new digest, update `ONTOTATOR_IMAGE` in `.env`, and run:
