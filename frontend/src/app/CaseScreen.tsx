@@ -117,6 +117,7 @@ import type { RouteLeaveGuard } from "./router";
 import { isReviewLike, modeBadge } from "../editor/modes";
 import { LanguageTag } from "../ui/LanguageTag";
 import { onSpaceActivate } from "../ui/spaceActivates";
+import { actorName } from "../editor/actorName";
 
 const refKey = (r: { annotation_id: string; version: string }) => JSON.stringify([r.annotation_id, r.version]);
 
@@ -3933,7 +3934,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 <p>{view.layers?.find(l => l.layer_id === selectedSource.annotation.layer_id)?.label}, Read-only</p>
                 <p>
                   <AiBadge provenance={selectedSource.annotation.provenance} source={selectedSource} />{" "}
-                  {selectedSource.annotation.provenance.actor.actor_id}, {selectedSource.annotation.provenance.method}
+                  {actorName(selectedSource.annotation.provenance.actor)}, {selectedSource.annotation.provenance.method}
                 </p>
                 {Object.entries(selectedSource.annotation.axes_values ?? {}).map(([axis, value]) => <p key={axis}>{axis}: {value ?? "Not specified"}</p>)}
                 <h3>Mentions ({selectedSource.evidence.length})</h3>
