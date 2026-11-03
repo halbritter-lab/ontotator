@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- API tokens for scripts and integrations: `Authorization: Bearer ott_...` instead of a session. Personal tokens (Profile › **API tokens**) act as their owner; project tokens (Settings › People › **Project API tokens**) work in one project only, as the lead who created them; system tokens (**Server settings** › **API tokens**, administrators) are the only kind with the `admin` scope. Scopes are `read`, `import`, `export`, `project-admin` and `admin`; a token can do only what both its scopes and its owner's roles allow, never annotation work, and cannot create tokens. Tokens are shown once, stored as SHA-256 and expire after 1 to 365 days (default 90). Bearer requests skip only the CSRF check; a request with both a token and the session cookie is refused. Every write with a token is audited with the token's id and name, as are creation and revocation, and losing a project role, the admin role or the account revokes the owner's tokens. Each operation in the OpenAPI contract names its scope (`x-ontotator-scope`). On the server: `ontotator admin tokens create|list|revoke`. Migration 0031 adds the empty table `api_tokens` (`/api/v1/me/tokens`, `/api/v1/projects/{key}/tokens`, `/api/v1/admin/tokens`) (#305).
+
 ## [0.8.1] - 2026-11-02
 
 ### Fixed
