@@ -17,7 +17,9 @@ from ontotator.auth.audit import Actor, record_audit
 from ontotator.authz.policy import Access
 from ontotator.authz.scoped import ScopedRepository
 from ontotator.domain.errors import AccessDenied, DomainError, RevisionConflict
+from ontotator.domain.results import latest_submissions
 from ontotator.domain.work_plans import RowKey
+from ontotator.domain.workspace import Submission
 from ontotator.exchange.final_content import freeze_content
 from ontotator.exchange.human_inputs import human_input_closure
 from ontotator.storage import work_plan_store
@@ -218,6 +220,63 @@ class FinalResultService:
             pid = self._authorize(conn, key, exclusive=True)
             return self._projection(conn, key, pid)
 
+    def _compared(
+        self,
+        conn: Connection,
+        pid: int,
+        key: str,
+        document_ids: set[str],
+        closure_ids: list[str],
+        round_kinds: dict[str, str],
+    ) -> list[str]:
+        """Annotations of the selected texts that are not in the closure (#295).
+
+        A text accepted directly holds one submission in the closure; the other
+        people's work on it is what its agreement compares. Per text and person
+        the latest live annotation (from scratch or from proposals), as the
+        annotation results export chooses it; none for a person the closure
+        already holds on that text. Work with round inputs (carried work) is
+        no annotation of its own and is left out. ``round_kinds`` gains the
+        kinds of the compared submissions.
+        """
+        if not document_ids:
+            return []
+        rows = conn.execute(
+            select(
+                SubmissionRow.submission_id,
+                SubmissionRow.document_id,
+                SubmissionRow.annotator_id,
+                SubmissionRow.recorded_at,
+                SubmissionRow.payload,
+            ).where(
+                SubmissionRow.project_id == pid,
+                SubmissionRow.document_id.in_(sorted(document_ids)),
+                SubmissionRow.mode.in_(("independent", "proposal_check")),
+                live_submission(),
+            )
+        ).all()
+        closure = set(closure_ids)
+        held = {
+            (r.document_id, r.annotator_id) for r in rows if r.submission_id in closure
+        }
+        groups: dict[tuple[str, str], list[Any]] = {}
+        for row in rows:
+            person = (row.document_id, row.annotator_id)
+            if person not in held:
+                groups.setdefault(person, []).append(row)
+        chosen = []
+        for _person, group in sorted(groups.items()):
+            recorded = {row.submission_id: row.recorded_at for row in group}
+            latest = max(
+                latest_submissions(Submission.model_validate(r.payload) for r in group),
+                key=lambda s: (recorded[s.submission_id], s.draft_revision),
+            )
+            chosen.append(latest.submission_id)
+        _, inputs, kinds = human_input_closure(self.repo, key, chosen)
+        compared = sorted(sid for sid in chosen if not inputs.get(sid))
+        round_kinds.update({sid: kinds[sid] for sid in compared if sid in kinds})
+        return compared
+
     def freeze(self, key: str, request: dict[str, Any]) -> dict[str, int]:
         with self.db.transaction() as conn:
             pid = self._authorize(conn, key, exclusive=True)
@@ -271,7 +330,17 @@ class FinalResultService:
             closure_ids, round_inputs, round_kinds = human_input_closure(
                 self.repo, key, selected_ids
             )
-            content = self.repo.t1_export_content_exact(key, closure_ids)
+            compared_ids = self._compared(
+                conn,
+                pid,
+                key,
+                {item["document_id"] for item in state["selections"]},
+                closure_ids,
+                round_kinds,
+            )
+            content = self.repo.t1_export_content_exact(
+                key, [*closure_ids, *compared_ids]
+            )
             immutable = [
                 {
                     "submission_id": sub.submission_id,
@@ -317,7 +386,7 @@ class FinalResultService:
                         SubmissionRow.submission_id, SubmissionRow.recorded_at
                     ).where(
                         SubmissionRow.project_id == pid,
-                        SubmissionRow.submission_id.in_(closure_ids),
+                        SubmissionRow.submission_id.in_([*closure_ids, *compared_ids]),
                     )
                 ).all()
             }
@@ -334,6 +403,8 @@ class FinalResultService:
                 "round_inputs": round_inputs,
                 "round_kinds": round_kinds,
                 "selected_submission_ids": selected_ids,
+                # Additive (#295): other annotations of the selected texts.
+                "compared_submission_ids": compared_ids,
                 "project_name": project_name,
                 "submission_recorded_at": recorded_at,
             }

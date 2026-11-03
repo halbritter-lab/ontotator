@@ -12,7 +12,7 @@ from typing import Any
 import ontospan
 import pytest
 from test_consolidation_origins import resolve_and_add, submitted
-from test_consolidation_resolve_api import FIRST, SECOND, build_round
+from test_consolidation_resolve_api import FIRST, SECOND, STATUS, build_round
 from test_draft_sourced_inputs import client as client
 from test_draft_sourced_inputs import env as env
 from work_plan_support import BASE, doc, preflight, select_final
@@ -149,23 +149,29 @@ def test_proposals_count_decisions_per_tool_and_person_and_match_the_result(
 
     env = proposal_env(tmp_path)
     selected = _proposal_check(env, "anno", ["confirmed", "rejected", "uncertain"])
+    other = _proposal_check(env, "anno2", ["confirmed", "confirmed", "confirmed"])
     select_final(env, env.c1, selected)
     archive = final_archive(env, "tables-p")
     index = {r["submission_id"]: r for r in rows(archive.read("index.csv"))}
-    author = index[selected]["author"]
+    first, second = index[selected]["author"], index[other]["author"]
+    # The second check was not selected: it is in the archive for comparison.
+    assert (index[other]["row_type"], index[other]["archive_file"]) == (
+        "compared",
+        "compared.t1.zip",
+    )
 
     table = rows(archive.read("proposals.csv"))
-    assert [(r["row_type"], r["tool"], r["tool_version"]) for r in table] == [
-        ("annotator", "test-tool", "1"),
-        ("source", "test-tool", "1"),
-    ]
-    person, source = table
+    people = {r["pseudonym"]: r for r in table if r["row_type"] == "annotator"}
+    assert set(people) == {first, second}
+    assert {(r["tool"], r["tool_version"]) for r in table} == {("test-tool", "1")}
     counted = ("submissions", "proposals", "confirmed", "rejected", "changed")
-    assert person["pseudonym"] == author
-    assert [person[k] for k in (*counted, "uncertain", "added")] == [
+    assert [people[first][k] for k in (*counted, "uncertain", "added")] == [
         "1", "3", "1", "1", "0", "1", "0",
     ]  # fmt: skip
-    assert person["precision"] == source["pseudonym"] == ""
+    assert people[second]["confirmed"] == "3"
+    assert people[first]["precision"] == ""
+    [source] = [r for r in table if r["row_type"] == "source"]
+    assert source["pseudonym"] == ""
     # Three proposals; the final result holds the one confirmed (the uncertain
     # proposal is no finding), which matches its proposal.
     assert (
@@ -183,11 +189,76 @@ def test_proposals_count_decisions_per_tool_and_person_and_match_the_result(
     assert mine["uncertain"]["unresolved"] == "yes"
     assert mine["confirmed"]["unresolved"] == ""
     assert mine["confirmed"]["submission_kind"] == "proposal_check"
-    # Only the selected submission went into the result: no pair to compare.
-    assert rows(archive.read("agreement.csv")) == []
+    assert {
+        (r["row_type"], r["origin"]) for r in findings if r["submission_id"] == other
+    } == {("compared", "confirmed")}
+    # The uncertain proposal is no finding of the person: 1 against 3.
+    [pair] = rows(archive.read("agreement.csv"))
+    assert {pair["findings_a"], pair["findings_b"]} == {"1", "3"}
+    assert pair["equal"] == "1"
+    assert pair["annotation_strict_f1"] == "0.5000"
+
+
+def test_agreement_covers_consolidated_and_directly_accepted_texts(tmp_path):
+    """c1 is consolidated from two annotations; c2 is accepted directly from
+    one of two. Both texts are compared, and the summary counts both."""
+    from test_final_panel_api import SEIZURE, finding, span_of, submit_findings
+    from work_plan_support import assign
+
+    ns = build_round(tmp_path)
+    resolve_and_add(ns)
+    consolidated_id = submitted(ns)["submission_id"]
+    env = ns.env
+    c2 = doc("c2", "en")
+    period, since = span_of(env, c2, "Neonatalzeit"), span_of(env, c2, "Seit 2")
+    submit_findings(
+        env,
+        assign(env, c2, "ana", "annotate"),
+        "sub-c2-ana",
+        [finding("x1", SEIZURE, period, temporality="current")],
+    )
+    submit_findings(
+        env,
+        assign(env, c2, "ben", "annotate"),
+        "sub-c2-ben",
+        [
+            finding("y1", SEIZURE, period, temporality="current"),
+            finding("y2", STATUS, since, temporality="current"),
+        ],
+    )
+    select_final(env, doc("c1", "en"), consolidated_id)
+    select_final(env, c2, "sub-c2-ana")
+    archive = final_archive(env, "tables-both")
+
+    receipt = json.loads(archive.read("receipt.json"))
+    assert receipt["compared_submission_ids"] == ["sub-c2-ben"]
+    assert set(receipt["provenance_only_submission_ids"]) == {FIRST, SECOND}
+    index = {r["submission_id"]: r for r in rows(archive.read("index.csv"))}
+    assert index["sub-c2-ben"]["row_type"] == "compared"
+    with zipfile.ZipFile(io.BytesIO(archive.read("compared.t1.zip"))) as bundle:
+        unit = json.loads(bundle.read(index["sub-c2-ben"]["bundle_entry"]))
+    assert unit["annotation_set"]["annotation_set_id"] == "submission-sub-c2-ben"
+    assert "compared.t1.zip" in archive.read("README.txt").decode()
+
+    pairs = {r["document_id"]: r for r in rows(archive.read("agreement.csv"))}
+    assert set(pairs) == {"c1-en", "c2-en"}
+    direct = pairs["c2-en"]
+    assert {direct["submission_a"], direct["submission_b"]} == {
+        "sub-c2-ana",
+        "sub-c2-ben",
+    }
+    assert (direct["equal"], direct["annotation_strict_f1"]) == ("1", f"{2 / 3:.4f}")
     summary = {r["scope"]: r for r in rows(archive.read("agreement-summary.csv"))}
-    assert summary["pooled"]["pairs"] == "0"
-    assert summary["pooled"]["annotation_strict_f1"] == "1.0000"
+    assert (summary["pooled"]["texts"], summary["pooled"]["pairs"]) == ("2", "2")
+    # c1: 1 equal of 3 + 4 findings; c2: 1 equal of 1 + 2.
+    assert summary["pooled"]["annotation_strict_f1"] == f"{2 * 2 / 10:.4f}"
+    assert summary["macro_mean"]["annotation_strict_f1"] == (
+        f"{(2 / 7 + 2 / 3) / 2:.4f}"
+    )
+    compared = [
+        r for r in rows(archive.read("findings.csv")) if r["row_type"] == "compared"
+    ]
+    assert {r["annotation_id"] for r in compared} == {"y1", "y2"}
 
 
 def _payload(submissions: list[dict[str, Any]]) -> dict[str, Any]:
