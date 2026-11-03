@@ -47,16 +47,37 @@ REPLACEMENT = "\N{REPLACEMENT CHARACTER}"
 
 
 @dataclass(frozen=True)
+class TokenGrant:
+    """The API token a request authenticated with (issue 305).
+
+    ``scopes`` limit the routes; the user's roles still limit the actions.
+    A ``project`` token reaches only ``project_key``.
+    """
+
+    token_id: int
+    name: str
+    kind: str
+    scopes: frozenset[str]
+    project_key: str | None = None
+    project_id: int | None = None
+
+
+@dataclass(frozen=True)
 class Principal:
-    """The logged-in user behind a request."""
+    """The user behind a request: a browser session or an API token.
+
+    A token principal has no ``session_id`` and no CSRF token; ``token``
+    names the token instead.
+    """
 
     user_id: int
     username: str
     display_name: str
     pseudonym: str
     is_system_admin: bool
-    session_id: int
+    session_id: int | None
     csrf_token: str
+    token: TokenGrant | None = None
 
 
 def _printable(value: str) -> str:

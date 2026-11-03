@@ -7,7 +7,7 @@ from datetime import datetime
 
 from sqlalchemy import Connection, update
 
-from ontotator.storage.tables import SessionRow
+from ontotator.storage.tables import ApiTokenRow, SessionRow
 
 
 def token_digest(token: str) -> str:
@@ -22,10 +22,19 @@ def token_digest(token: str) -> str:
 def revoke_user_sessions(
     conn: Connection, user_id: int, reason: str, at: datetime
 ) -> int:
-    """End every open session of ``user_id``; the number of sessions ended."""
+    """End every open session of ``user_id``; the number of sessions ended.
+
+    The user's API tokens are revoked with them (issue 305): every caller
+    ends sessions because the user's rights or credentials changed.
+    """
     result = conn.execute(
         update(SessionRow)
         .where(SessionRow.user_id == user_id, SessionRow.revoked_at.is_(None))
+        .values(revoked_at=at, revoked_reason=reason)
+    )
+    conn.execute(
+        update(ApiTokenRow)
+        .where(ApiTokenRow.owner_id == user_id, ApiTokenRow.revoked_at.is_(None))
         .values(revoked_at=at, revoked_reason=reason)
     )
     return result.rowcount
