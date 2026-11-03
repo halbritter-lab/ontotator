@@ -13,6 +13,7 @@ import { AxisValue } from "../ui/AxisValue";
 import type { AxisDefinition } from "./AnnotationPanel";
 import { ModifiersSection } from "./ModifiersSection";
 import { quoteOf, type TermInfo } from "./modifiers";
+import { actorName } from "./actorName";
 
 export type ReviewDecision = components["schemas"]["ReviewDecision"];
 export type ReviewDecisionOutcome = "confirmed" | "rejected" | "changed" | "uncertain";
@@ -250,7 +251,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
           {target.provenance ? (
             <>
               <AiBadge provenance={target.provenance} source={source} />{" "}
-              Source: <strong>{sourceLabel ?? target.provenance.actor.actor_id}</strong> ({target.provenance.actor.kind})
+              Source: <strong>{sourceLabel ?? actorName(target.provenance.actor)}</strong> ({target.provenance.actor.kind})
               {sourceMetadata && <>, imported <ImportedAt at={sourceMetadata.imported_at} /></>}
             </>
           ) : (
