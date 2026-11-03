@@ -28,6 +28,7 @@ from ontotator.authz.policy import Access, Action, can
 from ontotator.authz.scoped import ScopedRepository, project_not_found
 from ontotator.domain.errors import AccessDenied, DomainError
 from ontotator.domain.work_rounds import CARRY_ROUND_KINDS
+from ontotator.exchange.archive import project_archive_export, project_archive_import
 from ontotator.exchange.final_export import final_t1_export
 from ontotator.exchange.reanchor_job import reanchor
 from ontotator.exchange.review_export import translation_review_export
@@ -606,4 +607,6 @@ HANDLERS: dict[str, Handler] = {
     "edit_log_export": edit_log_export,
     "work_time_export": work_time_export,
     "translation_review_export": translation_review_export,
+    "project_archive_export": project_archive_export,
+    "project_archive_import": project_archive_import,
 }

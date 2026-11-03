@@ -4,6 +4,7 @@ import { DataTable, EmptyState, IconCheck, TextInput, type Column } from "../ui"
 import { PROJECT_SEARCH_THRESHOLD, projectDestination, projectRoles } from "./ProjectPicker";
 import { routeHref, type Route } from "./router";
 import { AdminPracticeProjects } from "../practice/AdminPracticeProjects";
+import { ProjectArchives } from "../admin/ProjectArchives";
 import "../styles/screens/projects.css";
 
 export interface ProjectsPageProps {
@@ -102,5 +103,6 @@ export function ProjectsPage({ projects, currentKey, onNavigate, isAdmin = false
         empty="No matching projects." />
     </>}
     {isAdmin && <AdminPracticeProjects />}
+    {isAdmin && <ProjectArchives projects={projects} />}
   </section>;
 }

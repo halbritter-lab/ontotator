@@ -1205,6 +1205,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/project-archives/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export Archive
+         * @description Queue the archive of one project (``project_archive_export``).
+         */
+        post: operations["export_archive_api_v1_admin_project_archives_export_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/project-archives/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Archive
+         * @description Store an uploaded archive and queue its import (``project_archive_import``).
+         *
+         *     ``rename_pseudonyms``: a person whose pseudonym is taken here gets a new
+         *     one, and a person matched by e-mail keeps the account's pseudonym.
+         */
+        post: operations["import_archive_api_v1_admin_project_archives_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/project-archives/jobs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Archive Job */
+        get: operations["get_archive_job_api_v1_admin_project_archives_jobs__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/project-archives/jobs/{job_id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download Archive
+         * @description The ZIP of a finished export job; audited as ``project.export_download``.
+         */
+        get: operations["download_archive_api_v1_admin_project_archives_jobs__job_id__download_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{key}/final-selections": {
         parameters: {
             query?: never;
@@ -3081,6 +3161,49 @@ export interface components {
             /** Confirm Username */
             confirm_username: string;
         };
+        /** ArchiveExportRequest */
+        ArchiveExportRequest: {
+            /** Project Key */
+            project_key: string;
+            /**
+             * Include Ontology Files
+             * @default true
+             */
+            include_ontology_files: boolean;
+        };
+        /** ArchiveJobQueued */
+        ArchiveJobQueued: {
+            /** Job Id */
+            job_id: number;
+        };
+        /** ArchiveJobView */
+        ArchiveJobView: {
+            /** Id */
+            id: number;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "project_archive_export" | "project_archive_import";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "succeeded" | "failed";
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            } | null;
+            /** Error */
+            error: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Finished At */
+            finished_at: string | null;
+        };
         /** AssignRequest */
         AssignRequest: {
             /** Rows */
@@ -3579,6 +3702,16 @@ export interface components {
             "files[]": string[];
             /** Language */
             language?: string | null;
+        };
+        /** Body_import_archive_api_v1_admin_project_archives_import_post */
+        Body_import_archive_api_v1_admin_project_archives_import_post: {
+            /** File */
+            file: string;
+            /**
+             * Rename Pseudonyms
+             * @default false
+             */
+            rename_pseudonyms: boolean;
         };
         /** Body_publish_guideline_api_v1_projects__key__guidelines_post */
         Body_publish_guideline_api_v1_projects__key__guidelines_post: {
@@ -11916,6 +12049,132 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["OntologyUploadResult"][];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_archive_api_v1_admin_project_archives_export_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArchiveExportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArchiveJobQueued"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_archive_api_v1_admin_project_archives_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_archive_api_v1_admin_project_archives_import_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArchiveJobQueued"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_archive_job_api_v1_admin_project_archives_jobs__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArchiveJobView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_archive_api_v1_admin_project_archives_jobs__job_id__download_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
