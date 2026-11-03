@@ -368,3 +368,12 @@ chapter = "admin.md"
 [[map]]
 glob = "frontend/src/admin/ProjectArchives.tsx"
 chapter = "admin.md"
+
+# Working time (issue 298): the editor's timer and the Progress sums.
+[[map]]
+glob = "frontend/src/worktime/useWorkTimer.tsx"
+chapter = "annotator.md"
+
+[[map]]
+glob = "frontend/src/worktime/ProjectWorkTime.tsx"
+chapter = "lead-documents.md"

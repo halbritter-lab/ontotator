@@ -26,6 +26,10 @@ export type ProgressStageView = components["schemas"]["ProgressStageView"];
 export type ProgressStagesView = components["schemas"]["ProgressStagesView"];
 export type ProgressWorkloadView = components["schemas"]["ProgressWorkloadView"];
 export type ExportKind = components["schemas"]["ExportRequest"]["kind"];
+export type WorkTimeView = components["schemas"]["WorkTimeView"];
+export type WorkTimeItem = components["schemas"]["WorkTimeItemRequest"];
+export type ProjectWorkTime = components["schemas"]["ProjectWorkTimeView"];
+export type WorkTimeModeTotal = components["schemas"]["ModeTotalView"];
 export type ExportCreated = components["schemas"]["ExportCreated"];
 export interface ProjectDocumentFilters { language?: string; status?: string; q?: string; origin?: string; translation_status?: string }
 export type StatusOverride = components["schemas"]["StatusOverride"];
@@ -894,6 +898,22 @@ export class ApiClient {
     const body: CheckedSentencesSave = { source: marks.source, translation: marks.translation, ...(base ? { base } : {}) };
     return this.request<CheckedSentences>(`/api/v1/translation-reviews/${assignmentId}/checked-sentences`, {
       method: "PUT", body: JSON.stringify(body), ...(options.keepalive ? { keepalive: true } : {}) });
+  }
+
+  /** Issue 298: whether the task records working time, and the owner's total on it. */
+  async getWorkTime(assignmentId: number): Promise<WorkTimeView> {
+    return this.request<WorkTimeView>(`/api/v1/assignments/${assignmentId}/work-time`, { method: "GET" });
+  }
+
+  /** A batch of work interval events; `keepalive` lets the last batch outlive a closing tab. */
+  async reportWorkTime(assignmentId: number, items: WorkTimeItem[], options: { keepalive?: boolean } = {}): Promise<WorkTimeView> {
+    return this.request<WorkTimeView>(`/api/v1/assignments/${assignmentId}/work-time`, {
+      method: "POST", body: JSON.stringify({ items }), ...(options.keepalive ? { keepalive: true } : {}) });
+  }
+
+  /** Sums per mode for leads: texts, total and median per text. */
+  async getProjectWorkTime(key: string): Promise<ProjectWorkTime> {
+    return this.request<ProjectWorkTime>(`/api/v1/projects/${encodeURIComponent(key)}/work-time`, { method: "GET" });
   }
 
   async submitTranslationReview(assignmentId: number, expectedRevision: TranslationReviewSubmitRequest["expected_revision"]): Promise<TranslationReviewRecord> {

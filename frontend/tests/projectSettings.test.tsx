@@ -785,7 +785,7 @@ describe("creation recovery and lifetime", () => {
 });
 
 describe("workflow settings", () => {
-  const WORKFLOW_BODY = { import_plan: "review_and_annotate_translations", annotations_per_text: 1, tool_proposal_mode: "proposals", annotate_accepted_translations_only: true, adjudicator_not_annotator: false, blind_consolidation: false };
+  const WORKFLOW_BODY = { import_plan: "review_and_annotate_translations", annotations_per_text: 1, tool_proposal_mode: "proposals", annotate_accepted_translations_only: true, adjudicator_not_annotator: false, blind_consolidation: false, record_working_time: false };
 
   it("reads in the order a text moves through work, with the new copy (M-8b)", async () => {
     const view = renderSettings();
@@ -793,7 +793,7 @@ describe("workflow settings", () => {
     view.show("workflow");
     const form = screen.getByRole("form", { name: "Workflow" });
     expect(document.activeElement).toBe(form);
-    expect(within(form).getAllByRole("heading", { level: 2 }).map(heading => heading.textContent)).toEqual(["New imports", "Texts with tool proposals", "Annotation and consolidation"]);
+    expect(within(form).getAllByRole("heading", { level: 2 }).map(heading => heading.textContent)).toEqual(["New imports", "Texts with tool proposals", "Annotation and consolidation", "Working time"]);
     const group = within(form).getByRole("radiogroup", { name: "New imports" });
     expect(within(group).getAllByRole("radio").map(radio => radio.closest("label")!.textContent)).toEqual(["Plan review and annotation for every translation", "Plan nothing; I plan texts on Documents"]);
     expect(within(group).getByRole("radio", { name: "Plan review and annotation for every translation" })).toHaveProperty("checked", true);
@@ -837,6 +837,18 @@ describe("workflow settings", () => {
     fireEvent.change(within(form).getByRole("spinbutton", { name: /Annotators per text/ }), { target: { value: "3" } });
     fireEvent.click(within(form).getByRole("button", { name: "Save changes" }));
     await waitFor(() => expect(api.updateProjectSettings).toHaveBeenCalledWith(settings.project_key, { ...WORKFLOW_BODY, import_plan: "nothing", annotations_per_text: 3 }));
+  });
+
+  it("switches working time recording on, off by default (issue 298)", async () => {
+    renderSettings("workflow");
+    const form = await screen.findByRole("form", { name: "Workflow" });
+    const box = within(form).getByRole("checkbox", { name: "Record working time" });
+    expect(box).toHaveProperty("checked", false);
+    fireEvent.click(box);
+    vi.mocked(api.updateProjectSettings).mockResolvedValue({ ...settings, record_working_time: true });
+    fireEvent.click(within(form).getByRole("button", { name: "Save changes" }));
+    await within(form).findByText("Workflow saved.");
+    expect(api.updateProjectSettings).toHaveBeenLastCalledWith(settings.project_key, { ...WORKFLOW_BODY, record_working_time: true });
   });
 
   it("saves how annotators work on texts with tool proposals", async () => {

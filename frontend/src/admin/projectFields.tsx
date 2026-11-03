@@ -162,8 +162,8 @@ export function ProfileUpload({ onChange, disabled, id = "project-profile-file",
 }
 
 export type ToolProposalMode = "proposals" | "scratch";
-export interface WorkflowDraft { import_plan: ProjectSettings["import_plan"]; annotations_per_text: number; tool_proposal_mode: ToolProposalMode; annotate_accepted_translations_only: boolean; adjudicator_not_annotator: boolean; blind_consolidation: boolean }
-export const workflowOf = (settings: ProjectSettings): WorkflowDraft => ({ import_plan: settings.import_plan ?? "review_and_annotate_translations", annotations_per_text: settings.annotations_per_text ?? 1, tool_proposal_mode: settings.tool_proposal_mode ?? "proposals", annotate_accepted_translations_only: settings.annotate_accepted_translations_only ?? true, adjudicator_not_annotator: settings.adjudicator_not_annotator, blind_consolidation: settings.blind_consolidation ?? false });
+export interface WorkflowDraft { import_plan: ProjectSettings["import_plan"]; annotations_per_text: number; tool_proposal_mode: ToolProposalMode; annotate_accepted_translations_only: boolean; adjudicator_not_annotator: boolean; blind_consolidation: boolean; record_working_time: boolean }
+export const workflowOf = (settings: ProjectSettings): WorkflowDraft => ({ import_plan: settings.import_plan ?? "review_and_annotate_translations", annotations_per_text: settings.annotations_per_text ?? 1, tool_proposal_mode: settings.tool_proposal_mode ?? "proposals", annotate_accepted_translations_only: settings.annotate_accepted_translations_only ?? true, adjudicator_not_annotator: settings.adjudicator_not_annotator, blind_consolidation: settings.blind_consolidation ?? false, record_working_time: settings.record_working_time ?? false });
 const toolProposalOptions: { value: ToolProposalMode; label: string; help: string }[] = [
   { value: "proposals", label: "Annotators work from the proposals", help: "confirm, reject, correct, add" },
   { value: "scratch", label: "Annotators start from scratch", help: "proposals hidden" },
@@ -230,6 +230,11 @@ export function WorkflowFields({ projectKey, value, saved, onChange, disabled }:
         </div>
       </div>
       {rows !== null && <p role="status" className="field-hint">{rows > 0 ? `${rows} ${rows === 1 ? "row has" : "rows have"} more annotators than the new limit. Nobody is removed.` : "Nobody is removed."}</p>}
+    </SettingsCard>
+    <SettingsCard title="Working time" hint="Off by default. Applies from the next opened task."
+      why="Annotation and translation review tasks show a timer to the person working. It pauses after 3 minutes without input and while the tab is in the background. Progress shows only sums per text; the periods themselves are in the Working time research export, under pseudonyms.">
+      <Checkbox id={`${prefix}-working-time`} label="Record working time" hint="Annotators are told on their first task in this project."
+        checked={value.record_working_time} disabled={disabled} onChange={event => onChange({ ...value, record_working_time: event.target.checked })} />
     </SettingsCard>
   </>;
 }

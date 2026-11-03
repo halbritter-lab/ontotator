@@ -236,6 +236,10 @@ export interface CaseScreenProps {
   documentVersion?: number | null;
   /** `WorkRoundView.round_ordinal` of the open round; My submissions names it while it has no submission. */
   roundOrdinal?: number | null;
+  /** The working time control (issue 298), shown before the save status. */
+  headerTimer?: React.ReactNode;
+  /** Called whenever an edit is sent; the working time resumes on it. */
+  onEdit?: () => void;
 }
 
 const NO_ROUND_INPUTS: readonly import("../api/client").RoundInputView[] = [];
@@ -254,7 +258,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   onSubmitted,
   annotatorName,
   leaveGuardRef,
-  readOnly: serverReadOnly = false, routeLeaveRef, assignmentNavigation, onReadonlyRequired, versionContext, menuItems = [], userPseudonym, guidelineNotice, held = false, holdReason, saveBeforeReportRef, roundInputs = NO_ROUND_INPUTS, roundKind, roundActive = true, roundBadge, roundTitle, documentVersion, roundOrdinal,
+  readOnly: serverReadOnly = false, routeLeaveRef, assignmentNavigation, onReadonlyRequired, versionContext, menuItems = [], userPseudonym, guidelineNotice, held = false, holdReason, saveBeforeReportRef, roundInputs = NO_ROUND_INPUTS, roundKind, roundActive = true, roundBadge, roundTitle, documentVersion, roundOrdinal, headerTimer, onEdit,
 }) => {
   const versionIdentity = JSON.stringify([versionContext?.username, versionContext?.assignmentId, versionContext?.canBrowseVersions, workspaceId, view.key]);
   const [acceptedSubmission, setAcceptedSubmission] = useState<{ identity: string; value: Submission } | null>(null);
@@ -510,12 +514,15 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     setDisplayed(null);
   }, [versionContext?.canBrowseVersions]);
 
+  const onEditRef = useRef(onEdit);
+  onEditRef.current = onEdit;
   // Dedicated mutation queue for this workspace
   const queueRef = useRef<MutationQueue>(null as unknown as MutationQueue);
   if (!queueRef.current) queueRef.current = (
     createMutationQueue({
       initialRevision: view.draft.revision,
       onState: (state) => {
+        if (state === "saving") onEditRef.current?.();
         setQueueState(state);
         setQueueError(state === "error" || state === "conflict" ? queueRef.current?.getLastError() ?? null : null);
       },
@@ -3538,6 +3545,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           </span>
         </div>
         <div className="app-actions">
+          {!readOnly && headerTimer}
           {/* Submitted: the status sits where the submit button stands, so the text sheet does not move (#25). */}
           {serverReadOnly || submittedAt ? <span role="status" className="case-status">
             <StatusBadge status="submitted" title={serverReadOnly ? readOnlyNote : undefined}>Submitted{submittedAt && <> <time dateTime={submittedAt} title={fullTimestamp(submittedAt)}>{formatTime(submittedAt)}</time></>}</StatusBadge>
