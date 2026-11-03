@@ -252,24 +252,30 @@ def final_t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
         for entry in payload["content"]["documents"].values()
     )
     files = {"selected.t1.zip": selected, "source-texts.jsonl": sources}
+    compared_ids = set(payload.get("compared_submission_ids", []))
     closure = [
-        sub for sub in content.submissions if sub.submission_id not in selected_ids
+        sub
+        for sub in content.submissions
+        if sub.submission_id not in selected_ids | compared_ids
     ]
-    if closure:
-        provenance = serialize_t1_content(
+    compared = [sub for sub in content.submissions if sub.submission_id in compared_ids]
+    for bundle_kind, subs in (("provenance", closure), ("compared", compared)):
+        if not subs:
+            continue
+        written = serialize_t1_content(
             ctx.db,
             actor,
             project,
-            replace(content, submissions=closure),
+            replace(content, submissions=subs),
             job.id,
             final_snapshot_id=row["snapshot_id"],
-            final_bundle_kind="provenance",
+            final_bundle_kind=bundle_kind,
             source_ref_overrides=overrides,
             round_kinds=payload["round_kinds"],
             views=views,
         )
-        files["provenance.t1.zip"] = ctx.db.blobs.path(
-            provenance["sha256"]
+        files[f"{bundle_kind}.t1.zip"] = ctx.db.blobs.path(
+            written["sha256"]
         ).read_bytes()
     files.update(
         guide_files(
@@ -296,6 +302,7 @@ def final_t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
                 files,
                 [s.submission_id for s in selected_content.submissions],
                 [s.submission_id for s in closure],
+                [s.submission_id for s in compared],
             ),
             consolidations=consolidations,
             proposals=tool_proposals(content, tool_sources),
@@ -318,6 +325,12 @@ def final_t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
             for sub in content.submissions
         },
         "provenance_only_submission_ids": [sub.submission_id for sub in closure],
+        # Additive (#295); left out without them so older exports stay identical.
+        **(
+            {"compared_submission_ids": [sub.submission_id for sub in compared]}
+            if compared
+            else {}
+        ),
         # v2: how each finding of a consolidation came about (#133).
         "consolidations": consolidations,
         # Additive; left out without proposal checks so older exports stay identical.
