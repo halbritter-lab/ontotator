@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `CITATION.cff` and `.zenodo.json` with the citation metadata of the project, and a **How to cite** section in the README (#300).
+- Test coverage reports in CI: `pytest-cov` writes `coverage.xml` for the Python tests and Vitest writes a V8 report (`npm run test:coverage`); both are uploaded as workflow artifacts. No thresholds are enforced (#301).
+
+### Changed
+
+- README and `docs/operations.md`: releases `v0.1.0` to `v0.8.1` are tagged and follow Semantic Versioning; the image build fetches the public `ontospan` repository from GitHub, a token is optional, and only the build needs network access (#300).
+
 ## [0.8.1] - 2026-11-02
 
 ### Fixed
