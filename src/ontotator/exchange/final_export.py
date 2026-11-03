@@ -5,13 +5,14 @@ import io
 import json
 import zipfile
 from collections.abc import Iterable, Mapping
-from dataclasses import asdict, replace
+from dataclasses import asdict, dataclass, replace
 from typing import Any
 
 import ontospan
-from sqlalchemy import select
+from sqlalchemy import RowMapping, select
 
 from ontotator.application.workflow_warnings import state_digest
+from ontotator.auth.audit import Actor
 from ontotator.authz.scoped import ScopedRepository
 from ontotator.domain.consolidation_origins import finding_origins, origin_counts
 from ontotator.domain.errors import DomainError
@@ -126,29 +127,45 @@ def tool_proposals(
     return proposals
 
 
-def final_t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
-    from ontotator.exchange.jobs import (
-        _audit,
-        draft_input_ref,
-        requester,
-        serialize_t1_content,
-        store_file,
-    )
+@dataclass(frozen=True)
+class FrozenFinal:
+    """A verified final-result snapshot, ready to serialize."""
+
+    actor: Actor
+    project: str
+    row: RowMapping
+    payload: Mapping[str, Any]
+    content: ProjectExport
+    selected_content: ProjectExport
+    selected_ids: set[str]
+    overrides: dict[str, str]
+    input_receipt: list[dict[str, Any]]
+    proposal_checks: dict[str, Any]
+    # The tool and version of each proposal a proposal check judged.
+    tool_sources: dict[tuple[str, str], tuple[str, str]]
+
+
+def load_frozen_final(job: Job, ctx: JobContext) -> FrozenFinal:
+    """The job's snapshot, checked against the live immutable inputs.
+
+    A lead may use only their own snapshots; the operator on the command
+    line (a system admin, Q5) any snapshot of the project.
+    """
+    from ontotator.exchange.jobs import draft_input_ref, requester
 
     if set(job.payload) != {"project", "snapshot_id", "snapshot_sha256"}:
         raise DomainError("INVALID_EXPORT_SNAPSHOT")
     project = job.payload["project"]
     actor, access = requester(ctx.db, job)
+    conditions = [
+        ExportSelectionSnapshotRow.snapshot_id == job.payload["snapshot_id"],
+        ExportSelectionSnapshotRow.project_id == job.project_id,
+    ]
+    if actor.user_id is not None:
+        conditions.append(ExportSelectionSnapshotRow.requester_id == actor.user_id)
     with ctx.db.transaction() as conn:
         row = (
-            conn.execute(
-                select(ExportSelectionSnapshotRow).where(
-                    ExportSelectionSnapshotRow.snapshot_id
-                    == job.payload["snapshot_id"],
-                    ExportSelectionSnapshotRow.project_id == job.project_id,
-                    ExportSelectionSnapshotRow.requester_id == actor.user_id,
-                )
-            )
+            conn.execute(select(ExportSelectionSnapshotRow).where(*conditions))
             .mappings()
             .first()
         )
@@ -228,18 +245,50 @@ def final_t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
                     "exported_ref": external,
                 }
             )
-    views: dict[str, ontospan.OntologyView] = {}
     selected_content = replace(
         content,
         submissions=[
             sub for sub in content.submissions if sub.submission_id in selected_ids
         ],
     )
+    return FrozenFinal(
+        actor=actor,
+        project=project,
+        row=row,
+        payload=payload,
+        content=content,
+        selected_content=selected_content,
+        selected_ids=selected_ids,
+        overrides=overrides,
+        input_receipt=input_receipt,
+        proposal_checks=proposal_checks,
+        tool_sources=tool_sources,
+    )
+
+
+def final_t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
+    from ontotator.exchange.jobs import _audit, serialize_t1_content, store_file
+
+    frozen = load_frozen_final(job, ctx)
+    actor, project, row, payload = (
+        frozen.actor,
+        frozen.project,
+        frozen.row,
+        frozen.payload,
+    )
+    content, selected_ids, overrides = (
+        frozen.content,
+        frozen.selected_ids,
+        frozen.overrides,
+    )
+    input_receipt, proposal_checks = frozen.input_receipt, frozen.proposal_checks
+    tool_sources = frozen.tool_sources
+    views: dict[str, ontospan.OntologyView] = {}
     result = serialize_t1_content(
         ctx.db,
         actor,
         project,
-        selected_content,
+        frozen.selected_content,
         job.id,
         final_snapshot_id=row["snapshot_id"],
         source_ref_overrides=overrides,
@@ -300,7 +349,7 @@ def final_t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
             payload,
             read_units(
                 files,
-                [s.submission_id for s in selected_content.submissions],
+                [s.submission_id for s in frozen.selected_content.submissions],
                 [s.submission_id for s in closure],
                 [s.submission_id for s in compared],
             ),

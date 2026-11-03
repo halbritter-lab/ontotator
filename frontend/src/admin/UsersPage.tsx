@@ -46,6 +46,7 @@ const auditActions: Readonly<Record<string, string>> = {
   "project.export_download": "Export downloaded",
   "project.final_export": "Final export created",
   "project.final_export_requested": "Final export requested",
+  "project.final_phenopacket_export": "Phenopackets created",
   "project.final_selection": "Final selection changed",
   "project.translation_review_export": "Translation reviews exported",
   "assignment.create": "Task assigned",

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type FinalPreflight } from "../api/client";
 import { saveDownload } from "../api/download";
-import { Button, Checkbox, InlineMessage } from "../ui";
+import { Button, Checkbox, InlineMessage, Select } from "../ui";
 import { ErrorNotice } from "./ErrorNotice";
 import { routeHref } from "../app/router";
 import { FINAL_SELECTION_CHANGED } from "../variants/finalSelectionState";
@@ -31,6 +31,13 @@ function Group({ projectKey, title, lines, muted = false }: { projectKey: string
   </tbody>;
 }
 
+/** The file of the final export (issue 308): both come from the same frozen results. */
+type Format = "t1" | "phenopacket";
+const FORMATS: Record<Format, { label: string; kind: string; file: string }> = {
+  t1: { label: "Results with receipt (ontospan)", kind: "final_t1_export", file: "final" },
+  phenopacket: { label: "Phenopackets (derived, lossy)", kind: "final_phenopacket_export", file: "final-phenopackets" },
+};
+
 type Changed = "rerun" | "hidden" | "after_job";
 const CHANGED_TEXT: Record<Changed, string> = {
   rerun: "Final selections changed. The check was run again.",
@@ -57,6 +64,8 @@ function FinalExportContent({ projectKey }: { projectKey: string }): JSX.Element
   const [jobId, setJobId] = useState<number | null>(null);
   const [changed, setChanged] = useState<Changed | null>(null);
   const [exported, setExported] = useState(0);
+  const [format, setFormat] = useState<Format>("t1");
+  const [exportedFormat, setExportedFormat] = useState<Format>("t1");
   const requestId = useRef("");
   const alive = useRef(false);
   const creatingRef = useRef(false);
@@ -69,7 +78,7 @@ function FinalExportContent({ projectKey }: { projectKey: string }): JSX.Element
   const acknowledgement = useRef<HTMLInputElement>(null);
   const { job, error: jobError } = useJob(jobId);
   const failed = job?.status === "failed";
-  const succeeded = job?.kind === "final_t1_export" && job.status === "succeeded";
+  const succeeded = job?.kind === FORMATS[exportedFormat].kind && job.status === "succeeded";
   const phase = jobId !== null && !failed && jobError == null ? "job" : "check";
   inJob.current = phase === "job" || creating;
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
@@ -122,9 +131,10 @@ function FinalExportContent({ projectKey }: { projectKey: string }): JSX.Element
     if (needsAck(state) && !accepted) { acknowledgement.current?.focus(); return; }
     creatingRef.current = true;
     setExported(state.selections.length);
+    setExportedFormat(format);
     setCreating(true); setError(undefined);
     try {
-      const result = await api.startFinalExport(projectKey, { request_id: requestId.current, state_digest: state.state_digest, acknowledged_warnings: state.warnings.map(({ id, cause_revision }) => ({ id, cause_revision })), accepted_omissions: state.omissions });
+      const result = await api.startFinalExport(projectKey, { request_id: requestId.current, state_digest: state.state_digest, acknowledged_warnings: state.warnings.map(({ id, cause_revision }) => ({ id, cause_revision })), accepted_omissions: state.omissions, format });
       if (alive.current) { setJobId(result.job_id); setState(undefined); setAccepted(false); }
     } catch (err) { if (alive.current) { setError(err); setState(undefined); setAccepted(false); setChanged(null); focusCheck.current = true; } }
     finally { creatingRef.current = false; if (alive.current) setCreating(false); }
@@ -133,7 +143,7 @@ function FinalExportContent({ projectKey }: { projectKey: string }): JSX.Element
     if (!jobId || downloadingRef.current || !succeeded) return;
     downloadingRef.current = true;
     setDownloading(true); setError(undefined);
-    try { const file = await api.downloadJob(jobId); if (alive.current) saveDownload(file, `${projectKey}-final.zip`); }
+    try { const file = await api.downloadJob(jobId); if (alive.current) saveDownload(file, `${projectKey}-${FORMATS[exportedFormat].file}.zip`); }
     catch (err) { if (alive.current) setError(err); }
     finally { downloadingRef.current = false; if (alive.current) setDownloading(false); }
   };
@@ -194,6 +204,9 @@ function FinalExportContent({ projectKey }: { projectKey: string }): JSX.Element
       </section>}
       {creating && <p id="final-export-creating-hint" className="field-hint">The export is being created.</p>}
       <div className="final-export-actions" role="group" aria-label="Final export actions">
+        <Select id="final-export-format" label="Format" value={format} disabled={creating} onChange={event => setFormat(event.target.value as Format)}>
+          {(Object.keys(FORMATS) as Format[]).map(value => <option key={value} value={value}>{FORMATS[value].label}</option>)}
+        </Select>
         <Button variant="primary" loading={creating} aria-disabled={blockedBy ? "true" : undefined} aria-describedby={blockedBy} onClick={() => { void start(); }}>Create final export</Button>
         {blockedBy === "final-export-ack-hint" && <span id="final-export-ack-hint" className="field-hint">Tick the box above to continue.</span>}
       </div>
@@ -203,7 +216,7 @@ function FinalExportContent({ projectKey }: { projectKey: string }): JSX.Element
     {failed && <InlineMessage tone="error"><p>Final export could not be created.</p><details><summary>Technical diagnostics</summary><pre>{job.error}</pre></details></InlineMessage>}
     {phase === "job" && <>
       {error != null && <ErrorNotice error={error} />}
-      {succeeded && <InlineMessage tone="success" title={`Final export ready: ${exported} ${exported === 1 ? "result" : "results"}`}>
+      {succeeded && <InlineMessage tone="success" title={`${exportedFormat === "phenopacket" ? "Phenopackets" : "Final export"} ready: ${exported} ${exported === 1 ? "result" : "results"}`}>
         <p>Created <Time iso={job.finished_at ?? job.created_at} />.</p>
       </InlineMessage>}
       {!succeeded && <p id="final-export-download-hint" className="field-hint">The download is available when the export has finished.</p>}
@@ -213,7 +226,8 @@ function FinalExportContent({ projectKey }: { projectKey: string }): JSX.Element
       </div>
     </>}
     {phase === "check" && <details className="final-export-details"><summary>What is in the file?</summary>
-      <p className="cell-secondary">A ZIP with one result file per text, a plain-language guide (README.txt), a table of every result (index.csv) and tables for analysis: every finding (findings.csv), the agreement between annotators (agreement.csv, agreement-summary.csv) and what became of tool proposals (proposals.csv).</p></details>}
+      <p className="cell-secondary">Results with receipt: a ZIP with one result file per text, a plain-language guide (README.txt), a table of every result (index.csv) and tables for analysis: every finding (findings.csv), the agreement between annotators (agreement.csv, agreement-summary.csv) and what became of tool proposals (proposals.csv).</p>
+      <p className="cell-secondary">Phenopackets: one Phenopacket per text, made from the same results for tools that read phenotypic features. They leave out what a Phenopacket cannot hold, such as findings about family members, uncertain findings and findings left unresolved; a report per text and a summary (report.json) count what was left out. Texts of the same patient are not grouped yet.</p></details>}
   </section>;
 }
 

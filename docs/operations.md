@@ -204,11 +204,12 @@ stage_file ./proposals.zip /tmp/proposals.zip
 docker compose exec ontotator_app ontotator admin import ward-7 /tmp/proposals.zip
 docker compose exec ontotator_app ontotator admin export ward-7 /tmp/results.zip
 docker compose exec -T ontotator_app cat /tmp/results.zip > ./results.zip
+docker compose exec ontotator_app ontotator admin export ward-7 /tmp/phenopackets.zip --format phenopacket
 docker compose exec ontotator_app ontotator admin export-edit-log ward-7 /tmp/edits.jsonl
 docker compose exec -T ontotator_app cat /tmp/edits.jsonl > ./edits.jsonl
 ```
 
-`docker compose cp` cannot copy out of app's `/tmp` either: it reads the container filesystem, not the tmpfs mount, and reports that the file is missing. Stream outputs out with `exec -T ... cat` in Bash, never through PowerShell redirection. Imports/exports are jobs, awaited by default; `--no-wait` queues them for a server worker. `/tmp` is ephemeral and limited to 256 MiB. For larger files use a provisioned private directory on `/data` or a deployment-managed writable staging mount, then clean up staged files after copying. Imported blobs and job outputs in persistent storage must remain with the database backup. Keep clinical exports private.
+`--format phenopacket` writes Phenopackets of the newest final export a lead created under **Export**; without a final export it is refused. `docker compose cp` cannot copy out of app's `/tmp` either: it reads the container filesystem, not the tmpfs mount, and reports that the file is missing. Stream outputs out with `exec -T ... cat` in Bash, never through PowerShell redirection. Imports/exports are jobs, awaited by default; `--no-wait` queues them for a server worker. `/tmp` is ephemeral and limited to 256 MiB. For larger files use a provisioned private directory on `/data` or a deployment-managed writable staging mount, then clean up staged files after copying. Imported blobs and job outputs in persistent storage must remain with the database backup. Keep clinical exports private.
 
 ### API tokens
 

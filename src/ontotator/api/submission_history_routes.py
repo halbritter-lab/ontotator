@@ -1,6 +1,7 @@
 """Authorized immutable human history, independent of proposal-read rights."""
 
 from datetime import datetime
+from typing import Any
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
@@ -9,6 +10,10 @@ from sqlalchemy import select
 from ontotator.api.encoded_routes import EncodedParameterRoute
 from ontotator.api.identity import PrincipalDep
 from ontotator.api.variant_routes import _repo
+from ontotator.application.consolidation_blinding import (
+    Blinding,
+    submission_blinding,
+)
 from ontotator.application.round_reads import enrich_inputs
 from ontotator.authz.visibility import current_access, require_case_text
 from ontotator.authz.workflow import may_read_human_submission
@@ -120,6 +125,14 @@ def _history(
                 )
             )
         }
+        # Issue 302: an input submission a consolidator reads for their round
+        # names "Annotator A", … instead of its author.
+        blindings = {
+            row["submission_id"]: submission_blinding(
+                conn, access, pid, key, row["submission_id"], row["annotator_id"]
+            )
+            for row in rows
+        }
         facts = (
             guideline_facts(conn, pid)
             if any(row["guideline_version"] is not None for row in rows)
@@ -129,7 +142,7 @@ def _history(
             SubmissionHistorySummary(
                 submission_id=row["submission_id"],
                 document_id=doc,
-                author_label=row["annotator_id"],
+                author_label=_author(row, blindings[row["submission_id"]]),
                 created_at=row["created_at"],
                 mode=row["mode"],
                 round_id=bindings.get(row["submission_id"])
@@ -151,6 +164,21 @@ def _history(
             for e in s.evidence
         }
     summary = summaries[0]
+    blinding = blindings[summary.submission_id]
+    round_inputs = _carried_inputs(repo, key, summary.round_id)
+    if blinding is not None:
+        return SubmissionHistoryDetail(
+            summary=summary,
+            annotations=blinding.snapshots(submission.snapshots),
+            evidence=list(evidence.values()),
+            decisions=[blinding.decision(d) for d in submission.decisions],
+            checked_layer_ids=submission.checked_layer_ids,
+            document_checked=submission.document_checked,
+            reanchor_inputs=submission.reanchor_inputs,
+            reanchor_resolutions=submission.reanchor_resolutions,
+            round_inputs=[blinding.input_view(i) for i in round_inputs],
+            round_input_resolutions=submission.round_input_resolutions,
+        )
     return SubmissionHistoryDetail(
         summary=summary,
         annotations=submission.snapshots,
@@ -160,9 +188,13 @@ def _history(
         document_checked=submission.document_checked,
         reanchor_inputs=submission.reanchor_inputs,
         reanchor_resolutions=submission.reanchor_resolutions,
-        round_inputs=_carried_inputs(repo, key, summary.round_id),
+        round_inputs=round_inputs,
         round_input_resolutions=submission.round_input_resolutions,
     )
+
+
+def _author(row: Any, blinding: Blinding | None) -> str:
+    return blinding.label(row["annotator_id"]) if blinding else row["annotator_id"]
 
 
 @router.get(
