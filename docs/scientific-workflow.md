@@ -232,3 +232,30 @@ The record is derived from the consolidation's stored decisions at export
 time, so it is also complete for consolidations submitted before v2. Version
 v1 receipts have no `consolidations`; the decisions' `consolidation.action`
 under `review_decisions` holds the same information per group there.
+
+## Phenopackets of the final results
+
+The final export can also be created as Phenopackets (export format
+`ontotator-final-phenopackets/v1`, the `format` field of `receipt.json` and
+`report.json`). It is derived from the same frozen snapshot as the T1 final
+export, with the conversion of ontospan (`ontospan.phenopacket`), and is lossy
+by design:
+
+- `phenopackets/NNNNN.json`: one Phenopacket v2 (protobuf JSON) per selected
+  result. `id` and `subject.id` are the text's exported `document_id`. Texts
+  are not grouped by patient: Ontotator has no patient identity.
+- `reports/NNNNN.json`: for the Phenopacket of the same number, the case,
+  language, submission ID and `ontospan_report`, ontospan's counts of what it
+  exported and left out (`omitted_family`, `omitted_other_person`,
+  `omitted_unknown_experiencer`, `omitted_uncertain`, `skipped_other_layers`,
+  plus `historical` and `frequency_modifiers` for exported findings that lose
+  meaning). `left_out_unresolved` counts findings left unresolved in
+  consolidation: Phenopackets cannot hold a reviewer resolution, so Ontotator
+  leaves them out before the conversion.
+- `report.json`: every text's record and the `totals`.
+
+Uncertain assertions are not included (ontospan's default). Each feature's
+evidence refers to its finding in the bundle `selected-<snapshot ID>`, the
+`selected.t1.zip` of the T1 final export of the same snapshot. On the command
+line, `ontotator admin export PROJECT OUT.zip --format phenopacket` exports the
+Phenopackets of the project's newest final-result snapshot.

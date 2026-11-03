@@ -22,6 +22,7 @@ router = APIRouter(prefix="/api/v1/jobs", tags=["jobs"])
 EXPORT_ACTIONS = {
     "t1": Action.EXPORT_ALL_WORK,
     "final": Action.EXPORT_ALL_WORK,
+    "final-phenopackets": Action.EXPORT_ALL_WORK,
     "edit_log": Action.EXPORT_EDIT_LOG,
     # Working time (issue 298): requested as ``work_time``, saved as ``work-time``.
     "work_time": Action.EXPORT_EDIT_LOG,
@@ -31,6 +32,7 @@ EXPORT_ACTIONS = {
 EXPORT_KINDS = {
     "t1_export": ("t1", "zip", "application/zip"),
     "final_t1_export": ("final", "zip", "application/zip"),
+    "final_phenopacket_export": ("final-phenopackets", "zip", "application/zip"),
     "edit_log_export": ("edit_log", "jsonl", "application/x-ndjson"),
     "work_time_export": ("work-time", "jsonl", "application/x-ndjson"),
     "translation_review_export": (
