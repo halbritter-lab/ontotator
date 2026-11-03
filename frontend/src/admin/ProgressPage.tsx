@@ -4,6 +4,7 @@ import { personLabel } from "../app/identity";
 import { routeHref, type ProjectDocumentsQuery, type Route } from "../app/router";
 import { Button, EmptyState, IconChevronRight, IconWarning, InlineMessage, Toolbar } from "../ui";
 import { ErrorNotice } from "./ErrorNotice";
+import { ProjectWorkTime } from "../worktime/ProjectWorkTime";
 import { countLabel, ledeSentence, stageCards, type StageCard, type StageRow } from "./progressLabels";
 
 export interface ProgressPageProps { projectKey: string; onNavigate: (route: Route) => void }
@@ -123,6 +124,7 @@ function ProgressContent({ projectKey, onNavigate }: ProgressPageProps): JSX.Ele
             <p className="muted progress-people-note">"Open" = assigned and not yet submitted; paused tasks count under Paused. A name links to Documents filtered to that person's next steps.</p>
           </>}
       </section>
+      <ProjectWorkTime projectKey={projectKey} revision={revision} />
     </>}
   </section>;
 }

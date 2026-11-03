@@ -870,6 +870,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/assignments/{assignment_id}/work-time": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Work Time */
+        get: operations["work_time_api_v1_assignments__assignment_id__work_time_get"];
+        put?: never;
+        /** Report Work Time */
+        post: operations["report_work_time_api_v1_assignments__assignment_id__work_time_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{key}/work-time": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Project Work Time */
+        get: operations["project_work_time_api_v1_projects__key__work_time_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{key}/documents/{doc}/submissions/{submission_id}": {
         parameters: {
             query?: never;
@@ -4803,7 +4838,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "t1" | "edit_log";
+            kind: "t1" | "edit_log" | "work_time";
         };
         /** FinalExportRequest */
         FinalExportRequest: {
@@ -5678,6 +5713,20 @@ export interface components {
         ModeRestoreRequest: {
             /** Expected Revision */
             expected_revision: number;
+        };
+        /** ModeTotalView */
+        ModeTotalView: {
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "proposals" | "scratch" | "translation_review";
+            /** Texts */
+            texts: number;
+            /** Total Seconds */
+            total_seconds: number;
+            /** Median Seconds Per Text */
+            median_seconds_per_text: number;
         };
         /**
          * Modifier
@@ -6841,6 +6890,8 @@ export interface components {
              * @default true
              */
             annotate_accepted_translations_only: boolean;
+            /** Record Working Time */
+            record_working_time?: boolean;
             /** Hidden Axis Values */
             hidden_axis_values?: {
                 [key: string]: {
@@ -6932,6 +6983,8 @@ export interface components {
              * @default true
              */
             annotate_accepted_translations_only: boolean;
+            /** Record Working Time */
+            record_working_time?: boolean;
             /** Hidden Axis Values */
             hidden_axis_values?: {
                 [key: string]: {
@@ -6972,6 +7025,13 @@ export interface components {
             document_count: number;
             /** Can Manage */
             can_manage: boolean;
+        };
+        /** ProjectWorkTimeView */
+        ProjectWorkTimeView: {
+            /** Record */
+            record: boolean;
+            /** Modes */
+            modes: components["schemas"]["ModeTotalView"][];
         };
         /** ProposalRequest */
         ProposalRequest: {
@@ -9389,6 +9449,44 @@ export interface components {
             /** Document Version */
             document_version?: number | null;
         };
+        /** WorkTimeItemRequest */
+        WorkTimeItemRequest: {
+            /** Interval Id */
+            interval_id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "open" | "heartbeat" | "close";
+            /** Client At */
+            client_at?: string | null;
+            /** End Reason */
+            end_reason?: ("idle" | "hidden" | "manual_pause" | "closed") | null;
+        };
+        /** WorkTimeReport */
+        WorkTimeReport: {
+            /** Items */
+            items: components["schemas"]["WorkTimeItemRequest"][];
+        };
+        /**
+         * WorkTimeView
+         * @description ``record``: run the timer. ``active_seconds``: the owner's closed time on
+         *     this task. ``closed``: interval ids of the batch the server holds closed.
+         */
+        WorkTimeView: {
+            /** Record */
+            record: boolean;
+            /** First In Project */
+            first_in_project: boolean;
+            /** Active Seconds */
+            active_seconds: number;
+            /** Closed */
+            closed: string[];
+            /** Heartbeat Seconds */
+            heartbeat_seconds: number;
+            /** Idle Seconds */
+            idle_seconds: number;
+        };
         /**
          * WorkspaceKey
          * @description Identifier for an isolated local workspace.
@@ -11121,6 +11219,103 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TranslationReviewRecord"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    work_time_api_v1_assignments__assignment_id__work_time_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assignment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkTimeView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    report_work_time_api_v1_assignments__assignment_id__work_time_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assignment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkTimeReport"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkTimeView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    project_work_time_api_v1_projects__key__work_time_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectWorkTimeView"];
                 };
             };
             /** @description Validation Error */

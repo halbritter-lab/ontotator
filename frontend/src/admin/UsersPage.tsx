@@ -42,6 +42,7 @@ const auditActions: Readonly<Record<string, string>> = {
   "project.translations_refresh": "Newest translations used",
   "project.import": "Texts imported",
   "project.edit_log_export": "Edit log exported",
+  "project.work_time_export": "Working time exported",
   "project.export": "Export created",
   "project.export_download": "Export downloaded",
   "project.final_export": "Final export created",

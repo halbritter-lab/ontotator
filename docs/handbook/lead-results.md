@@ -202,7 +202,7 @@ Each text in an export names the ontology release its work was made under, which
 What for: download raw material for analysis. People appear as pseudonyms.
 
 1. On **Export**, go to **Research data**.
-2. Choose a row: **Annotation results**, **Edit log** or **Translation reviews**.
+2. Choose a row: **Annotation results**, **Edit log**, **Working time** or **Translation reviews**. **Working time** holds data only if the project records working time ([Record working time](lead-settings.md#record-working-time)).
 3. Click **Create**, then **Download** when it is ready.
 
 How to analyse these files is described in the [scientific workflow guide](../scientific-workflow.md).

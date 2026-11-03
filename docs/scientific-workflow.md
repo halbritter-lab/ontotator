@@ -138,6 +138,42 @@ Preserve uncertain targets and ambiguous branches for adjudication outside the
 automatic extraction. Hashes establish content identity; the annotator ID is the
 logged-in user's pseudonym, so it names the account that did the work.
 
+## Working time
+
+A project records working time only when its lead ticks **Record working time**
+(Settings › Workflow, off by default). Annotation and translation review tasks
+then count the person's active time; consolidations are not timed. An interval
+starts when the task opens, or on the first input after a pause, and ends when
+the editor pauses: after 3 minutes without keyboard, pointer, scroll or
+selection input (`idle`, the 3 minutes count as reading time), when the tab is
+hidden (`hidden`), on **Pause timer** (`manual_pause`) or when the task is left
+(`closed`). The server's receipt times are the start and end; the browser's
+clock only orders a batch. An interval never ends later than 4 minutes (one
+heartbeat gap plus the idle threshold) after its last heartbeat; one whose
+heartbeats stopped, for example a closed laptop, ends at its last heartbeat as
+`lost`. Time a browser spent offline is therefore not counted.
+
+Export it from **Export** › **Research data** › **Working time**
+(`work-time.jsonl`). Like the edit log it is pseudonymised: `annotator` is the
+person's pseudonym and the file holds no user, session or assignment ids. One
+line per closed interval, in the order the server recorded them:
+
+```json
+{"record":"interval","interval":12,"annotator":"ann-0003","document_id":"EN100017","task":"annotate","mode":"scratch","started_at":"2026-11-03T09:00:00Z","ended_at":"2026-11-03T09:12:41Z","active_seconds":761,"end_reason":"idle"}
+```
+
+followed by one active total per annotator, text, task and mode:
+
+```json
+{"record":"task_total","annotator":"ann-0003","document_id":"EN100017","task":"annotate","mode":"scratch","intervals":3,"active_seconds":1405}
+```
+
+`mode` is `proposals` or `scratch` for annotation and `translation_review` for a
+review. Times are UTC to the second; `active_seconds` is rounded per line, so
+the total is computed before rounding. Working time is a measure of effort, not
+of quality: compare modes and texts in the study protocol, and keep in mind that
+reading without input counts for at most 3 minutes at a time.
+
 ## Annotation from proposals in the export
 
 In an "Annotate from proposals" round the person goes through the tool's
