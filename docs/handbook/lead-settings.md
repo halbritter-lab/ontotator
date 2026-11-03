@@ -271,7 +271,7 @@ What for: give or take away a role.
 
 1. Open **Settings**, tab **People**. The table **Project members** shows one row per person.
 2. Tick a role checkbox to give the role. It saves at once.
-3. Untick a role checkbox to take it away, then confirm with **Remove role**. This logs the person out on all devices; they can log in again right away.
+3. Untick a role checkbox to take it away, then confirm with **Remove role**. This logs the person out on all devices and revokes their API tokens; they can log in again right away.
 
 A project needs at least one lead: **Add another project lead before removing the last lead.**
 
@@ -285,6 +285,17 @@ Warning: if the person still has open work, removing them revokes their open ass
 2. In the person's row, click **Remove…**.
 3. Confirm with **Remove from project**.
 4. If the person still has open work, the dialog **Revoke affected assignments?** lists it, annotations and translation reviews alike. Click **Remove and revoke their open assignments**.
+
+## Give a script access to the project
+
+What for: let a script import, export or read this project, for example a nightly export, without anyone's password.
+
+1. Open **Settings**, tab **People**.
+2. Under **Project API tokens**, click **New token…**.
+3. Enter a **Token name**, tick the scopes it needs (**Read**, **Import**, **Export**, **Project administration**) and set **Valid for (days)**.
+4. Click **Create token**. Copy the token from the dialog with **Copy token** and store it; it is shown only once.
+
+A project token works in this project only and acts as you, the lead who created it. It stops working when you leave the project or lose the lead role. Every lead of the project sees its tokens and can stop one with **Revoke…** and **Revoke token**. Changes made with a token are in the audit trail with the token's name.
 
 ## Publish the first or a new guideline version
 
