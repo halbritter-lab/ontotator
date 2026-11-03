@@ -2591,6 +2591,144 @@
         "x-ontotator-project-token": true
       }
     },
+    "/api/v1/assignments/{assignment_id}/work-time": {
+      "get": {
+        "tags": [
+          "work-time"
+        ],
+        "summary": "Work Time",
+        "operationId": "work_time_api_v1_assignments__assignment_id__work_time_get",
+        "parameters": [
+          {
+            "name": "assignment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Assignment Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkTimeView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-ontotator-scope": "session"
+      },
+      "post": {
+        "tags": [
+          "work-time"
+        ],
+        "summary": "Report Work Time",
+        "operationId": "report_work_time_api_v1_assignments__assignment_id__work_time_post",
+        "parameters": [
+          {
+            "name": "assignment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Assignment Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkTimeReport"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkTimeView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-ontotator-scope": "session"
+      }
+    },
+    "/api/v1/projects/{key}/work-time": {
+      "get": {
+        "tags": [
+          "work-time"
+        ],
+        "summary": "Project Work Time",
+        "operationId": "project_work_time_api_v1_projects__key__work_time_get",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectWorkTimeView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
+      }
+    },
     "/api/v1/projects/{key}/documents/{doc}/submissions/{submission_id}": {
       "get": {
         "tags": [
@@ -15473,7 +15611,8 @@
             "type": "string",
             "enum": [
               "t1",
-              "edit_log"
+              "edit_log",
+              "work_time"
             ],
             "title": "Kind"
           }
@@ -17878,6 +18017,39 @@
           "expected_revision"
         ],
         "title": "ModeRestoreRequest"
+      },
+      "ModeTotalView": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "proposals",
+              "scratch",
+              "translation_review"
+            ],
+            "title": "Mode"
+          },
+          "texts": {
+            "type": "integer",
+            "title": "Texts"
+          },
+          "total_seconds": {
+            "type": "integer",
+            "title": "Total Seconds"
+          },
+          "median_seconds_per_text": {
+            "type": "integer",
+            "title": "Median Seconds Per Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mode",
+          "texts",
+          "total_seconds",
+          "median_seconds_per_text"
+        ],
+        "title": "ModeTotalView"
       },
       "Modifier": {
         "properties": {
@@ -20955,6 +21127,10 @@
             "title": "Annotate Accepted Translations Only",
             "default": true
           },
+          "record_working_time": {
+            "type": "boolean",
+            "title": "Record Working Time"
+          },
           "hidden_axis_values": {
             "additionalProperties": {
               "additionalProperties": {
@@ -21118,6 +21294,10 @@
             "title": "Annotate Accepted Translations Only",
             "default": true
           },
+          "record_working_time": {
+            "type": "boolean",
+            "title": "Record Working Time"
+          },
           "hidden_axis_values": {
             "additionalProperties": {
               "additionalProperties": {
@@ -21259,6 +21439,27 @@
         ],
         "title": "ProjectSummary",
         "description": "A project on the dashboard, with what the user may do in it."
+      },
+      "ProjectWorkTimeView": {
+        "properties": {
+          "record": {
+            "type": "boolean",
+            "title": "Record"
+          },
+          "modes": {
+            "items": {
+              "$ref": "#/components/schemas/ModeTotalView"
+            },
+            "type": "array",
+            "title": "Modes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "record",
+          "modes"
+        ],
+        "title": "ProjectWorkTimeView"
       },
       "ProposalRequest": {
         "properties": {
@@ -28447,6 +28648,122 @@
           "active"
         ],
         "title": "WorkRoundView"
+      },
+      "WorkTimeItemRequest": {
+        "properties": {
+          "interval_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9-]+$",
+            "title": "Interval Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "open",
+              "heartbeat",
+              "close"
+            ],
+            "title": "Kind"
+          },
+          "client_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client At"
+          },
+          "end_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "idle",
+                  "hidden",
+                  "manual_pause",
+                  "closed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "interval_id",
+          "kind"
+        ],
+        "title": "WorkTimeItemRequest"
+      },
+      "WorkTimeReport": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/WorkTimeItemRequest"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "WorkTimeReport"
+      },
+      "WorkTimeView": {
+        "properties": {
+          "record": {
+            "type": "boolean",
+            "title": "Record"
+          },
+          "first_in_project": {
+            "type": "boolean",
+            "title": "First In Project"
+          },
+          "active_seconds": {
+            "type": "integer",
+            "title": "Active Seconds"
+          },
+          "closed": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Closed"
+          },
+          "heartbeat_seconds": {
+            "type": "integer",
+            "title": "Heartbeat Seconds"
+          },
+          "idle_seconds": {
+            "type": "integer",
+            "title": "Idle Seconds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "record",
+          "first_in_project",
+          "active_seconds",
+          "closed",
+          "heartbeat_seconds",
+          "idle_seconds"
+        ],
+        "title": "WorkTimeView",
+        "description": "``record``: run the timer. ``active_seconds``: the owner's closed time on\nthis task. ``closed``: interval ids of the batch the server holds closed."
       },
       "WorkspaceKey": {
         "properties": {

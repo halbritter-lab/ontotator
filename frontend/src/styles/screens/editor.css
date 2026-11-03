@@ -2944,3 +2944,19 @@ details.case-version-controls > .btn { vertical-align: bottom; }
 /* M2 M-2: the status strip after a decision moves on (success notice with a check icon). */
 .advance-strip { margin: 0; }
 .advance-strip > .icon { margin-inline-end: var(--space-1); vertical-align: -3px; }
+/* Working time (issue 298): own active time on the task and Pause/Resume, beside the save status. */
+.work-timer {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  white-space: nowrap;
+}
+.work-timer__value {
+  font-size: var(--size-sm);
+  line-height: var(--leading-sm);
+  font-variant-numeric: tabular-nums;
+}
+.work-timer__state,
+.work-timer--idle .work-timer__value,
+.work-timer--hidden .work-timer__value,
+.work-timer--paused .work-timer__value { color: var(--text-muted); }

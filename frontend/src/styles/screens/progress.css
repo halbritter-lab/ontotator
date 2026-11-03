@@ -58,3 +58,4 @@
   .progress-meter span { forced-color-adjust: none; background: Highlight; }
   .progress-skeleton-bar { background: GrayText; }
 }
+.progress-work-time { margin-bottom: var(--space-6); }

@@ -215,7 +215,7 @@ class ProjectProgress(BaseModel):
 
 class ExportRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    kind: Literal["t1", "edit_log"]
+    kind: Literal["t1", "edit_log", "work_time"]
 
 
 class ExportCreated(BaseModel):

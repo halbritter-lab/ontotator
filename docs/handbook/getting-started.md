@@ -146,7 +146,7 @@ What for: start or continue your work on a text.
    - **Continue** for a task in progress or a reopened one,
    - **View** for a submitted task (read-only),
    - **View paused task** for a paused task (read-only).
-3. The task opens. While it loads you see **Opening task…**.
+3. The task opens. While it loads you see **Opening task…**. In a project that records working time, a timer starts in the toolbar ([Working time](annotator.md#working-time)).
 
 A link to a task that still waits shows **Waiting for translation review** instead of the text. Nothing is lost; the task opens by itself once the review is accepted. A link to a task the lead has to decide on shows **Waiting for the project lead**.
 

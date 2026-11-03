@@ -1,5 +1,5 @@
 import { taskText } from "../app/identity";
-import { useEffect, useRef, useState, type MutableRefObject } from "react";
+import { useEffect, useRef, useState, type ComponentProps, type MutableRefObject } from "react";
 import { api, ApiError, type AssignmentOpenRequest, type AssignmentView, type AssignmentWorkspace, type CurrentUser, type RoundInputView, type TaskSummary, type WorkRoundView } from "../api/client";
 import { ErrorNotice } from "../admin/ErrorNotice";
 import { Button, Dialog, InlineMessage, Select, type ToastMessage } from "../ui";
@@ -20,6 +20,7 @@ import { ConsolidationScreen } from "../consolidation/ConsolidationScreen";
 import { onSpaceActivate } from "../ui/spaceActivates";
 import { HelpLink } from "../help/HelpLink";
 import { helpHref, type HelpScreen } from "../help/sections";
+import { useWorkTimer, WorkTimeNotice, WorkTimerControl } from "../worktime/useWorkTimer";
 
 interface TaskEditorProps {
   assignmentId: number;
@@ -68,7 +69,7 @@ export function TaskEditor(props: TaskEditorProps): JSX.Element {
     // Lead correction shows no problem reporter, whose focus reload otherwise refreshes the task metadata.
     return <TaskGuidelines assignment={assignment} place="header" readOnly={assignment.status === "submitted" || assignment.held}
       onRefresh={assignment.lead_correction ? value => setState({ identity, assignment: value }) : undefined}>{guidelines => <>
-      <TranslationReviewScreen key={identity} assignmentId={props.assignmentId} username={props.user.username}
+      <TimedTranslationReview key={identity} editable={assignment.status !== "submitted" && !assignment.held} assignmentId={props.assignmentId} username={props.user.username}
         held={assignment.held} holdReason={assignment.hold_reason} saveBeforeReportRef={saveBeforeReportRef}
         guidelineActions={<>{guidelines.button}<HelpLink screen="translationReview" /></>} guidelineNotice={guidelines.notice}
         reportActions={<TaskProblemActions assignment={assignment} onSaveBeforeReport={async () => { await saveBeforeReportRef.current?.(); }} onRefresh={value => setState({ identity, assignment: value })} />}
@@ -77,6 +78,13 @@ export function TaskEditor(props: TaskEditorProps): JSX.Element {
     </>}</TaskGuidelines>;
   }
   return <AnnotationTaskEditor key={identity} {...props} />;
+}
+
+/** A translation review with its working time (issue 298): the timer in the review bar, the notice above it. */
+function TimedTranslationReview({ editable, ...props }: ComponentProps<typeof TranslationReviewScreen> & { editable: boolean }): JSX.Element {
+  const timer = useWorkTimer(props.assignmentId, editable);
+  return <TranslationReviewScreen {...props} headerTimer={<WorkTimerControl timer={timer} />} onEdit={timer.edit}
+    guidelineNotice={<><WorkTimeNotice timer={timer} />{props.guidelineNotice}</>} />;
 }
 
 function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, leaveGuardRef, view, showToast }: TaskEditorProps): JSX.Element {
@@ -98,6 +106,10 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
   const [roundInfo, setRoundInfo] = useState<WorkRoundView | null>(null);
   const [taskError, setTaskError] = useState<unknown>(null);
   const saveBeforeReportRef = useRef<(() => Promise<void>) | null>(null);
+  // Issue 298: an editable annotation task in the editor records working time (not the consolidation view).
+  const consolidationView = roundInfo?.kind === "consolidation" && roundInfo.active && view !== "editor";
+  const workTimer = useWorkTimer(assignmentId, !loading && workspace !== null && !workspace.read_only && !workspace.assignment.held
+    && workspace.assignment.task === "annotate" && !consolidationView);
   const loadTasks = async () => {
     const request = ++taskGeneration.current;
     setTaskError(null);
@@ -167,7 +179,7 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
   const assignment = workspace.assignment;
   const listed = tasks.find(task => task.assignment_id === assignment.id);
   // An active consolidation round opens the consolidation view (acceptance fixes WP-E); "Edit in editor…" adds view=editor.
-  if (roundInfo?.kind === "consolidation" && roundInfo.active && view !== "editor") {
+  if (consolidationView) {
     // The task's guidelines and "Report a text problem" stay at hand: the consolidator decides guideline questions.
     return <TaskGuidelines assignment={assignment} place="header" readOnly={workspace.read_only || assignment.held}>{guidelines => <>
       <ConsolidationScreen projectKey={assignment.project_key} roundId={roundInfo.round_id} assignmentId={assignmentId} practice={!!listed?.practice}
@@ -215,7 +227,8 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
       roundInputs={roundInputs} roundKind={roundInfo?.kind} roundActive={roundInfo?.active} roundBadge={roundBadge} roundTitle={roundTitle}
       roundOrdinal={roundInfo?.round_ordinal} documentVersion={roundInfo?.document_version}
       held={assignment.held} holdReason={assignment.hold_reason} saveBeforeReportRef={saveBeforeReportRef}
-      guidelineNotice={<>{/* Reloads when a lead acts on the task (revision) or a new answer arrives (My tasks list). */}
+      headerTimer={<WorkTimerControl timer={workTimer} />} onEdit={workTimer.edit}
+      guidelineNotice={<><WorkTimeNotice timer={workTimer} />{/* Reloads when a lead acts on the task (revision) or a new answer arrives (My tasks list). */}
         <ReportAnswerNotice key={`${assignment.workflow_revision}:${current.answered_report_id ?? ""}`} projectKey={assignment.project_key}
           assignmentId={assignment.id} held={assignment.held} onNavigate={onNavigate} />{guidelines.notice}</>}
       versionContext={{ username: user.username, assignmentId, onNavigate, canBrowseVersions: versionAccess.allowed }}

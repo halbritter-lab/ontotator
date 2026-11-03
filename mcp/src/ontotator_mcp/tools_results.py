@@ -15,12 +15,21 @@ from ontotator_mcp.tooling import register
 from ontotator_mcp.tools_status import rows
 
 Project = Annotated[str, Field(description="Project key, e.g. 'ward-7'.")]
-ExportKind = Literal["final", "annotations", "edit_log", "translation_reviews"]
+ExportKind = Literal[
+    "final",
+    "phenopacket",
+    "annotations",
+    "edit_log",
+    "work_time",
+    "translation_reviews",
+]
 # Job kinds whose file /api/v1/jobs/{id}/download delivers.
 DOWNLOADABLE = {
     "final_t1_export": "final",
+    "final_phenopacket_export": "phenopacket",
     "t1_export": "annotations",
     "edit_log_export": "edit_log",
+    "work_time_export": "work_time",
     "translation_review_export": "translation_reviews",
 }
 MAX_LISTED = 50
@@ -225,8 +234,12 @@ def register_results(server: MCPServer, api: OntotatorClient) -> None:
                 description=(
                     "'final': accepted final results with findings.csv,"
                     " agreement.csv, agreement-summary.csv, proposals.csv and a"
-                    " README (ZIP). 'annotations': every submission as an"
+                    " README (ZIP). 'phenopacket': the same accepted results as"
+                    " one Phenopacket per text, with a report of what was left"
+                    " out (ZIP). 'annotations': every submission as an"
                     " Ontospan bundle (ZIP). 'edit_log': every edit (JSONL)."
+                    " 'work_time': the recorded work intervals under"
+                    " pseudonyms (JSONL)."
                     " 'translation_reviews': translation review records (JSONL)."
                 )
             ),
@@ -249,7 +262,7 @@ def register_results(server: MCPServer, api: OntotatorClient) -> None:
         warnings and omissions final_export_check lists must be
         acknowledged.
         """
-        if kind == "final":
+        if kind in ("final", "phenopacket"):
             state = await api.post(project_path(project, "exports/final/preflight"))
             warnings = state.get("warnings", [])
             omissions = state.get("omissions", [])
@@ -276,6 +289,7 @@ def register_results(server: MCPServer, api: OntotatorClient) -> None:
                         {"case_id": o["case_id"], "language": o["language"]}
                         for o in omissions
                     ],
+                    **({"format": "phenopacket"} if kind == "phenopacket" else {}),
                 },
             )
         elif kind == "translation_reviews":
@@ -285,7 +299,11 @@ def register_results(server: MCPServer, api: OntotatorClient) -> None:
         else:
             created = await api.post(
                 project_path(project, "exports"),
-                {"kind": "t1" if kind == "annotations" else "edit_log"},
+                {
+                    "kind": {"annotations": "t1", "work_time": "work_time"}.get(
+                        kind, "edit_log"
+                    )
+                },
             )
         job_id = int(created["job_id"])
         if not wait:

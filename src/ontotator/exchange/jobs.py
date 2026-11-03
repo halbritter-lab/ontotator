@@ -21,11 +21,12 @@ import ontospan
 from sqlalchemy import Connection, Text, cast, delete, exists, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
+from ontotator.application.work_time import work_time_export as work_time_lines
 from ontotator.auth.audit import Actor, record_audit
 from ontotator.authz.memberships import MembershipService
-from ontotator.authz.policy import Access
-from ontotator.authz.scoped import ScopedRepository
-from ontotator.domain.errors import DomainError
+from ontotator.authz.policy import Access, Action, can
+from ontotator.authz.scoped import ScopedRepository, project_not_found
+from ontotator.domain.errors import AccessDenied, DomainError
 from ontotator.domain.work_rounds import CARRY_ROUND_KINDS
 from ontotator.exchange.archive import project_archive_export, project_archive_import
 from ontotator.exchange.final_export import final_t1_export
@@ -612,6 +613,36 @@ def edit_log_export(job: Job, ctx: JobContext) -> dict[str, Any]:
     return result
 
 
+def work_time_export(job: Job, ctx: JobContext) -> dict[str, Any]:
+    """Write the project's working time as pseudonymised JSONL (issue 298).
+
+    One line per closed interval in id order, then one active total per task;
+    no user, session or assignment ids. The rights are those of the edit log.
+    Audited as ``project.work_time_export``.
+    """
+    db = ctx.db
+    project = job.payload["project"]
+    actor, access = requester(db, job)
+    if not can(access, Action.VIEW_PROJECT, project):
+        raise project_not_found(project)
+    if not can(access, Action.EXPORT_EDIT_LOG, project):
+        raise AccessDenied(
+            "NOT_ALLOWED", "You may not export the working time of this project."
+        )
+    project_id = _project_id(db, project)
+    with db.transaction() as conn:
+        lines = work_time_lines(conn, project_id, datetime.now(UTC))
+    data = "".join(
+        json.dumps(line, ensure_ascii=False, separators=(",", ":")) + "\n"
+        for line in lines
+    ).encode("utf-8")
+    sha = store_file(db, data)
+    intervals = sum(1 for line in lines if line["record"] == "interval")
+    result = {"sha256": sha, "intervals": intervals, "tasks": len(lines) - intervals}
+    _audit(db, actor, "project.work_time_export", project, {**result, "job_id": job.id})
+    return result
+
+
 HANDLERS: dict[str, Handler] = {
     "reanchor": reanchor,
     "upload_preview": upload_preview,
@@ -621,6 +652,7 @@ HANDLERS: dict[str, Handler] = {
     "final_t1_export": final_t1_export,
     "final_phenopacket_export": final_phenopacket_export,
     "edit_log_export": edit_log_export,
+    "work_time_export": work_time_export,
     "translation_review_export": translation_review_export,
     "project_archive_export": project_archive_export,
     "project_archive_import": project_archive_import,
