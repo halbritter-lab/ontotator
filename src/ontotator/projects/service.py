@@ -153,6 +153,8 @@ class ProjectSettingsChange(BaseModel):
     require_spanless_note: bool = True
     require_chosen_axes: bool = False
     adjudicator_not_annotator: bool = False
+    # Consolidators see "Annotator A, B, …", not names or pseudonyms (#302).
+    blind_consolidation: bool = False
     contiguous_mentions_only: bool = False
     annotate_accepted_translations_only: bool = True
     # Issue 298: record working time on annotation and translation review tasks.
