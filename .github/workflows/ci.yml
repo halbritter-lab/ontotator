@@ -45,6 +45,28 @@ jobs:
       # PostgreSQL comes from a testcontainer (tests/pg_harness.py); the runner has Docker.
       - run: uv run pytest -q -n 4 --durations=20
 
+  mcp:
+    name: MCP server (lint, types, pytest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: mcp
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: mcp/uv.lock
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy
+      # The integration test needs ONTOTATOR_TEST_PG_URL and is skipped here.
+      - run: uv run pytest -q
+
   frontend:
     name: Frontend (types, API drift, vitest, bundle)
     runs-on: ubuntu-latest
