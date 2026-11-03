@@ -188,14 +188,27 @@ What for: download the accepted final results.
 1. In the sidebar, click **Export**. Or click **Export final results…** on **Documents** or **Progress**.
 2. The card **Final results** checks every text. It lists texts that need your decision and texts left out because they have no final result.
 3. If texts need your decision or are left out, a tick box names how many results are exported and how many texts are left out, for example *Export the 3 results as they are; leave out the other 243 texts*. Tick it to export now anyway. Without the tick, **Create final export** does not start. The export's README.txt lists the left-out texts and the warnings you acknowledged with this tick.
-4. Click **Create final export**.
-5. When it is ready, click **Download (ZIP)**.
+4. Under **Format**, keep **Results with receipt (ontospan)**, or choose **Phenopackets (derived, lossy)**; see [Phenopackets](#phenopackets).
+5. Click **Create final export**.
+6. When it is ready, click **Download (ZIP)**.
 
 ![The final results check on the Export page](images/lead-export.png)
 
 Click **Check again** after you accepted more results. **What is in the file?** explains the contents. Values that annotators never confirmed are marked as *defaulted* in the file; proposals still unresolved in an accepted submission keep their reviewer flag and note. Once a consolidator decides such a group, the result is a normal decided finding, or no finding if left out, and the annotator's note stays in the provenance part of the export. The file formats are described in the [scientific workflow guide](../scientific-workflow.md) and the [translation review export guide](../translation-review-export.md).
 
 Each text in an export names the ontology release its work was made under, which can be older than the project's current release. If the texts of one export were made under different releases, the newest keeps the layer ID (for example `hpo-layer`) and each older release gets a layer of its own (`hpo-layer@<start of its checksum>`), which the file lists with its release and checksum.
+
+### Phenopackets
+
+What for: hand the final results to tools that read GA4GH Phenopackets (schema v2).
+
+The Phenopackets come from the same check and the same accepted results as the results with receipt; nothing is selected again. The ZIP holds one Phenopacket per text, a report per text of what was left out, a summary (report.json) and a README.txt. They are derived and lossy: keep the results with receipt as the complete record.
+
+- Only findings about the patient on the HPO layer become phenotypic features. Findings about family members or other persons, with an unknown experiencer, with assertion *uncertain*, or left unresolved in consolidation are left out and counted in the reports. Findings of other layers are skipped.
+- Assertion *absent* becomes an excluded feature. A historical finding is exported as a feature, because a Phenopacket cannot say "in the past"; the reports count these.
+- Each Phenopacket is named after the text (its document ID), which is also the subject. Texts of the same patient are not grouped into one Phenopacket yet.
+
+An operator can create the Phenopackets of the newest final export on the command line, with `ontotator admin export PROJECT OUT.zip --format phenopacket`.
 
 ### Export research data
 

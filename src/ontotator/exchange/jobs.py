@@ -28,6 +28,7 @@ from ontotator.authz.scoped import ScopedRepository
 from ontotator.domain.errors import DomainError
 from ontotator.domain.work_rounds import CARRY_ROUND_KINDS
 from ontotator.exchange.final_export import final_t1_export
+from ontotator.exchange.final_phenopackets import final_phenopacket_export
 from ontotator.exchange.reanchor_job import reanchor
 from ontotator.exchange.review_export import translation_review_export
 from ontotator.exchange.t1 import (
@@ -347,19 +348,28 @@ def draft_input_ref(project: str, entry: Mapping[str, Any]) -> str:
     )
 
 
-def serialize_t1_content(
+@dataclass(frozen=True)
+class T1Units:
+    """The validated units of one export, before they are written."""
+
+    units: list[ontospan.AnnotatedDocument]
+    # Per unit: the ontology view of each layer's ontology, by ontology id.
+    views: list[dict[str, ontospan.OntologyView]]
+    counts: ExportCounts
+    legacy_warnings: list[dict[str, Any]]
+    warning_counts: dict[str, int]
+
+
+def build_t1_units(
     db: Database,
-    actor: Actor,
     project: str,
     content: ProjectExport,
-    job_id: int,
     *,
     final_snapshot_id: str | None = None,
-    final_bundle_kind: str = "selected",
     source_ref_overrides: Mapping[str, str] | None = None,
     round_kinds: Mapping[str, str] | None = None,
-) -> dict[str, Any]:
-    """Serialize exactly the supplied immutable input selection."""
+) -> T1Units:
+    """Build and validate one unit per supplied submission, in order."""
     if not content.submissions:
         raise DomainError("EXPORT_EMPTY", f"Project '{project}' has no submissions.")
     layers = layers_for(content.profile, content.pins)
@@ -495,18 +505,41 @@ def serialize_t1_content(
         units.append(with_layers(unit, by_layer))
         for name in counts:
             counts[name] += unit_counts[name]  # type: ignore[literal-required]
+    unit_views = [
+        {
+            layer.ontology.id: view_of(layer.ontology.sha256 or "")
+            for layer in by_layer.values()
+        }
+        for by_layer in submission_layers
+    ]
     # write_bundle checks the format without ontology views. Validate against
     # the release each unit names before storing an export artifact.
-    warning_counts = _validate(
-        units,
-        [
-            {
-                layer.ontology.id: view_of(layer.ontology.sha256 or "")
-                for layer in by_layer.values()
-            }
-            for by_layer in submission_layers
-        ],
+    warning_counts = _validate(units, unit_views)
+    return T1Units(units, unit_views, counts, legacy_warnings, warning_counts)
+
+
+def serialize_t1_content(
+    db: Database,
+    actor: Actor,
+    project: str,
+    content: ProjectExport,
+    job_id: int,
+    *,
+    final_snapshot_id: str | None = None,
+    final_bundle_kind: str = "selected",
+    source_ref_overrides: Mapping[str, str] | None = None,
+    round_kinds: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
+    """Serialize exactly the supplied immutable input selection."""
+    built = build_t1_units(
+        db,
+        project,
+        content,
+        final_snapshot_id=final_snapshot_id,
+        source_ref_overrides=source_ref_overrides,
+        round_kinds=round_kinds,
     )
+    units, counts = built.units, built.counts
     now = datetime.now(UTC).replace(microsecond=0)
     bundle_id = (
         f"{final_bundle_kind}-{final_snapshot_id}"
@@ -538,8 +571,11 @@ def serialize_t1_content(
         "counts": dict(counts),
         # ontospan warnings (e.g. ``cohort_frequency``, ``exclusive_modifier_class``)
         # by code, with their counts next to them.
-        "warnings": [*legacy_warnings, *({"code": code} for code in warning_counts)],
-        "warning_counts": warning_counts,
+        "warnings": [
+            *built.legacy_warnings,
+            *({"code": code} for code in built.warning_counts),
+        ],
+        "warning_counts": built.warning_counts,
     }
     _audit(db, actor, "project.export", project, {**result, "job_id": job_id})
     return result
@@ -572,6 +608,7 @@ HANDLERS: dict[str, Handler] = {
     "t1_import": t1_import,
     "t1_export": t1_export,
     "final_t1_export": final_t1_export,
+    "final_phenopacket_export": final_phenopacket_export,
     "edit_log_export": edit_log_export,
     "translation_review_export": translation_review_export,
 }

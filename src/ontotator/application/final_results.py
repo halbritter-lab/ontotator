@@ -38,6 +38,12 @@ from ontotator.storage.tables import (
 )
 from ontotator.storage.workflow_tables import ReviewObligationResolutionRow
 
+# The job of each final export format; both read the same frozen snapshot.
+FINAL_JOB_KINDS = {
+    "t1": "final_t1_export",
+    "phenopacket": "final_phenopacket_export",
+}
+
 
 def _pseudonym(conn: Connection, user_id: int | None) -> str | None:
     if user_id is None:
@@ -240,7 +246,7 @@ class FinalResultService:
                 job = conn.execute(
                     select(JobRow.id).where(
                         JobRow.project_id == pid,
-                        JobRow.kind == "final_t1_export",
+                        JobRow.kind == FINAL_JOB_KINDS[request.get("format", "t1")],
                         JobRow.payload["snapshot_id"].astext == previous["snapshot_id"],
                     )
                 ).scalar_one()
@@ -352,7 +358,7 @@ class FinalResultService:
             job_id = conn.execute(
                 insert(JobRow)
                 .values(
-                    kind="final_t1_export",
+                    kind=FINAL_JOB_KINDS[request.get("format", "t1")],
                     status="queued",
                     project_id=pid,
                     requested_by=self.actor.user_id,

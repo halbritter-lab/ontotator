@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Final results as Phenopackets: on Export › **Final results**, **Format** › **Phenopackets (derived, lossy)** creates one GA4GH Phenopacket (schema v2) per text from the same check and accepted results as the final export, with the conversion of ontospan. The ZIP holds a report per text and a summary (`report.json`) of what was left out, such as findings about family members, uncertain findings and findings left unresolved in consolidation, and a README.txt. The Phenopacket and subject IDs are the document ID; texts of the same patient are not grouped yet. New job kind `final_phenopacket_export` (`format` on `POST /api/v1/projects/{key}/exports/final`, default `t1`), and `ontotator admin export PROJECT OUT --format phenopacket` exports the Phenopackets of the newest final export (#308).
+
 ## [0.8.1] - 2026-11-02
 
 ### Fixed
