@@ -9,6 +9,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - Working time: a lead can tick **Record working time** in Settings › Workflow (off by default; the change is kept in the project's settings history like the other rules). Annotation and translation review tasks then show the person working a timer of their own active time on the task, with **Pause timer** and **Resume timer**, and a one-time notice on their first task in the project. The timer pauses after 3 minutes without input (those 3 minutes still count) and while the tab is hidden, and goes on with the next input; a manual pause holds until **Resume timer** or a change to the work. The browser reports work intervals in batches (on pause and close, and a heartbeat every minute); the server keeps its own receipt times, ignores repeated items and ends an interval no later than 4 minutes after its last heartbeat, as `lost` when the heartbeats stopped. Progress shows **Working time** per task type (texts, total, median per text) without naming anyone, and **Export** › **Research data** › **Working time** writes the pseudonymised `<project>-work-time-<timestamp>.jsonl`, one line per interval plus a total per task, described in the scientific workflow guide. Migration 0031 adds `projects.record_working_time` and the append-only tables `work_time_events` and `work_intervals` (`GET`/`POST /api/v1/assignments/{assignment_id}/work-time`, `GET /api/v1/projects/{key}/work-time`, export kind `work_time`) (#298).
+- `CITATION.cff` and `.zenodo.json` with the citation metadata of the project, and a **How to cite** section in the README (#300).
+- Test coverage reports in CI: `pytest-cov` writes `coverage.xml` for the Python tests and Vitest writes a V8 report (`npm run test:coverage`); both are uploaded as workflow artifacts. No thresholds are enforced (#301).
+
+### Changed
+
+- README and `docs/operations.md`: releases `v0.1.0` to `v0.8.1` are tagged and follow Semantic Versioning; the image build fetches the public `ontospan` repository from GitHub, a token is optional, and only the build needs network access (#300).
 
 ## [0.8.1] - 2026-11-02
 
