@@ -646,7 +646,7 @@ export class ApiClient {
     return this.request<ExportCreated>(`/api/v1/projects/${encodeURIComponent(key)}/exports`, { method: "POST", body: JSON.stringify({ kind }) });
   }
 
-  /** Project archives (#306), system administrators only. */
+  /** Project archives, system administrators only. */
   async adminExportArchive(projectKey: string, includeOntologyFiles: boolean): Promise<ArchiveJobQueued> {
     return this.request<ArchiveJobQueued>("/api/v1/admin/project-archives/export", { method: "POST", body: JSON.stringify({ project_key: projectKey, include_ontology_files: includeOntologyFiles }) });
   }
