@@ -92,6 +92,7 @@ def test_the_lead_switches_recording_on_in_the_settings_history(timed):
     settings = lead.get(f"{BASE}/settings").json()
     unchanged = (
         "annotate_accepted_translations_only",
+        "blind_consolidation",
         "adjudicator_not_annotator",
         "description",
     )
