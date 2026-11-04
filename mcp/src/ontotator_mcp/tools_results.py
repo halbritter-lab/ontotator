@@ -20,6 +20,7 @@ ExportKind = Literal[
     "phenopacket",
     "annotations",
     "edit_log",
+    "work_time",
     "translation_reviews",
 ]
 # Job kinds whose file /api/v1/jobs/{id}/download delivers.
@@ -28,6 +29,7 @@ DOWNLOADABLE = {
     "final_phenopacket_export": "phenopacket",
     "t1_export": "annotations",
     "edit_log_export": "edit_log",
+    "work_time_export": "work_time",
     "translation_review_export": "translation_reviews",
 }
 MAX_LISTED = 50
@@ -236,6 +238,8 @@ def register_results(server: MCPServer, api: OntotatorClient) -> None:
                     " one Phenopacket per text, with a report of what was left"
                     " out (ZIP). 'annotations': every submission as an"
                     " Ontospan bundle (ZIP). 'edit_log': every edit (JSONL)."
+                    " 'work_time': the recorded work intervals under"
+                    " pseudonyms (JSONL)."
                     " 'translation_reviews': translation review records (JSONL)."
                 )
             ),
@@ -295,7 +299,11 @@ def register_results(server: MCPServer, api: OntotatorClient) -> None:
         else:
             created = await api.post(
                 project_path(project, "exports"),
-                {"kind": "t1" if kind == "annotations" else "edit_log"},
+                {
+                    "kind": {"annotations": "t1", "work_time": "work_time"}.get(
+                        kind, "edit_log"
+                    )
+                },
             )
         job_id = int(created["job_id"])
         if not wait:

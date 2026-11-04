@@ -844,3 +844,66 @@ def test_renamed_pseudonyms_map_email_accounts_and_keep_work_usable(
     tasks = target.get("/api/v1/me/tasks", headers=headers)
     assert tasks.status_code == 200, tasks.text
     assert scenario.key in tasks.text
+
+
+def test_working_time_keeps_its_times_and_orphaned_tasks(
+    servers: tuple[TestClient, TestClient], tmp_path: Path
+) -> None:
+    """Work intervals and events (#298) arrive as recorded; an interval of a
+    purged task keeps its (negated) task id."""
+    from datetime import UTC, datetime
+
+    from ontotator.storage.tables import AssignmentRow
+    from ontotator.storage.work_time_tables import WorkIntervalRow, WorkTimeEventRow
+
+    source, target = servers
+    scenario = _simple_project(source.app)  # type: ignore[arg-type]
+    started = datetime(2026, 11, 1, 9, 0, tzinfo=UTC)
+    ended = datetime(2026, 11, 1, 9, 7, 30, tzinfo=UTC)
+    with _db(source).transaction() as conn:
+        pid, task, user = conn.execute(
+            select(AssignmentRow.project_id, AssignmentRow.id, AssignmentRow.user_id)
+            .join(ProjectRow, ProjectRow.id == AssignmentRow.project_id)
+            .where(ProjectRow.project_key == scenario.key)
+        ).one()
+        for assignment_id in (task, 999_999):
+            common = {
+                "project_id": pid,
+                "assignment_id": assignment_id,
+                "user_id": user,
+                "document_id": "d",
+                "task": "annotate",
+                "mode": "scratch",
+                "interval_id": f"i-{assignment_id}",
+            }
+            conn.execute(
+                insert(WorkTimeEventRow).values(**common, kind="open", at=started)
+            )
+            conn.execute(
+                insert(WorkIntervalRow).values(
+                    **common, started_at=started, ended_at=ended, end_reason="idle"
+                )
+            )
+    data = _export(source, scenario.key, tmp_path)
+
+    result = project_archive.import_archive(_db(target), OPERATOR, data)
+
+    assert result["verification"]["ok"]
+    with _db(target).snapshot() as conn:
+        intervals = conn.execute(
+            select(
+                WorkIntervalRow.assignment_id,
+                WorkIntervalRow.started_at,
+                WorkIntervalRow.ended_at,
+            )
+            .join(ProjectRow, ProjectRow.id == WorkIntervalRow.project_id)
+            .where(ProjectRow.project_key == scenario.key)
+            .order_by(WorkIntervalRow.assignment_id)
+        ).all()
+        copied_task = conn.execute(
+            select(AssignmentRow.id)
+            .join(ProjectRow, ProjectRow.id == AssignmentRow.project_id)
+            .where(ProjectRow.project_key == scenario.key)
+        ).scalar_one()
+    assert [i.assignment_id for i in intervals] == [-999_999, copied_task]
+    assert {(i.started_at, i.ended_at) for i in intervals} == {(started, ended)}

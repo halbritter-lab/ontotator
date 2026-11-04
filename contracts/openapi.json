@@ -2630,7 +2630,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       },
       "post": {
         "tags": [
@@ -2680,7 +2681,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "session"
       }
     },
     "/api/v1/projects/{key}/work-time": {
@@ -2722,7 +2724,9 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/documents/{doc}/submissions/{submission_id}": {

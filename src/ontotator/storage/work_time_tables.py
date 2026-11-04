@@ -6,7 +6,7 @@ a ``heartbeat`` every minute while it runs, and a close with its reason. The
 server stores each event at its own receipt time (``at``); ``client_at`` only
 orders a batch. A closed interval is written once to ``work_intervals``;
 an interval whose heartbeats stopped is closed there as ``lost``, at its last
-event. Both tables are append-only (migration 0032).
+event. Both tables are append-only (migration 0034).
 """
 
 from datetime import datetime

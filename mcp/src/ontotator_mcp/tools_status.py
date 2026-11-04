@@ -121,6 +121,17 @@ def register_status(server: MCPServer, api: OntotatorClient) -> None:
         return result
 
     @register(server, scopes="read", effect="read")
+    async def working_time_summary(project: Project) -> dict[str, Any]:
+        """Recorded working time per annotation mode: texts, total and median per text.
+
+        Only sums, as the lead's Progress page shows them; whether the
+        project records working time at all is in 'record'. The single work
+        intervals are in start_export with kind 'work_time'.
+        """
+        summary: dict[str, Any] = await api.get(project_path(project, "work-time"))
+        return summary
+
+    @register(server, scopes="read", effect="read")
     async def list_texts(
         project: Project,
         language: list[str] | None = None,
