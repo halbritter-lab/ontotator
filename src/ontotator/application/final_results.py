@@ -21,6 +21,8 @@ from ontotator.domain.results import latest_submissions
 from ontotator.domain.work_plans import RowKey
 from ontotator.domain.workspace import Submission
 from ontotator.exchange.final_content import freeze_content
+from ontotator.exchange.final_export_guide import submission_kind
+from ontotator.exchange.final_tables import ANNOTATION_KINDS
 from ontotator.exchange.human_inputs import human_input_closure
 from ontotator.storage import work_plan_store
 from ontotator.storage.database import Database
@@ -225,20 +227,48 @@ class FinalResultService:
         conn: Connection,
         pid: int,
         key: str,
-        document_ids: set[str],
+        selections: list[dict[str, Any]],
         closure_ids: list[str],
         round_kinds: dict[str, str],
     ) -> list[str]:
-        """Annotations of the selected texts that are not in the closure (#295).
+        """Other annotations of the texts accepted directly (#295).
 
-        A text accepted directly holds one submission in the closure; the other
-        people's work on it is what its agreement compares. Per text and person
-        the latest live annotation (from scratch or from proposals), as the
+        A text is accepted directly when its selected result is an annotation
+        of its own (from scratch or a proposal check). Its closure holds that
+        one submission; the other people's work on it is what its agreement
+        compares. A consolidated text compares the work the consolidation
+        merged, and a carried result its earlier work (both provenance), so
+        neither gains compared submissions, not even work submitted after the
+        consolidation. Per text and person the latest live annotation, as the
         annotation results export chooses it; none for a person the closure
         already holds on that text. Work with round inputs (carried work) is
         no annotation of its own and is left out. ``round_kinds`` gains the
         kinds of the compared submissions.
         """
+        modes: dict[str, str] = dict(
+            conn.execute(
+                select(SubmissionRow.submission_id, SubmissionRow.mode).where(
+                    SubmissionRow.project_id == pid,
+                    SubmissionRow.submission_id.in_(
+                        sorted(item["submission_id"] for item in selections)
+                    ),
+                )
+            )
+            .tuples()
+            .all()
+        )
+        document_ids = {
+            item["document_id"]
+            for item in selections
+            if submission_kind(
+                {
+                    "submission_id": item["submission_id"],
+                    "origin_key": {"mode": modes[item["submission_id"]]},
+                },
+                round_kinds,
+            )
+            in ANNOTATION_KINDS
+        }
         if not document_ids:
             return []
         rows = conn.execute(
@@ -334,7 +364,7 @@ class FinalResultService:
                 conn,
                 pid,
                 key,
-                {item["document_id"] for item in state["selections"]},
+                state["selections"],
                 closure_ids,
                 round_kinds,
             )

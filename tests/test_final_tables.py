@@ -261,6 +261,81 @@ def test_agreement_covers_consolidated_and_directly_accepted_texts(tmp_path):
     assert {r["annotation_id"] for r in compared} == {"y1", "y2"}
 
 
+def test_work_after_a_consolidation_is_not_compared(tmp_path):
+    """A third annotator submits on c1 after its consolidation: the result
+    stays consolidated, so nothing is compared and c1 keeps its one pair."""
+    from test_final_panel_api import SEIZURE, finding, span_of, submit_findings
+    from work_plan_support import assign
+
+    ns = build_round(tmp_path)
+    resolve_and_add(ns)
+    consolidated_id = submitted(ns)["submission_id"]
+    env = ns.env
+    c1 = doc("c1", "en")
+    period = span_of(env, c1, "Neonatalzeit")
+    submit_findings(
+        env,
+        assign(env, c1, "ana", "annotate"),
+        "sub-c1-ana",
+        [finding("z1", SEIZURE, period, temporality="current")],
+    )
+    select_final(env, c1, consolidated_id)
+    archive = final_archive(env, "tables-third")
+
+    receipt = json.loads(archive.read("receipt.json"))
+    assert receipt.get("compared_submission_ids", []) == []
+    assert "compared.t1.zip" not in archive.namelist()
+    assert "sub-c1-ana" not in {
+        r["submission_id"] for r in rows(archive.read("index.csv"))
+    }
+    pairs = rows(archive.read("agreement.csv"))
+    assert [{p["submission_a"], p["submission_b"]} for p in pairs] == [{FIRST, SECOND}]
+
+
+def test_one_annotator_has_no_pair_and_empty_summary(tmp_path):
+    """A text accepted directly from its only annotator has no pair; the
+    summary says so with empty values, not with an agreement of 1."""
+    from test_final_panel_api import SEIZURE, finding, span_of, submit_findings
+    from work_plan_support import assign, plan_env
+
+    env = plan_env(tmp_path)
+    c2 = doc("c2", "en")
+    period = span_of(env, c2, "Neonatalzeit")
+    submit_findings(
+        env,
+        assign(env, c2, "ana", "annotate"),
+        "sub-c2-ana",
+        [finding("x1", SEIZURE, period, temporality="current")],
+    )
+    select_final(env, c2, "sub-c2-ana")
+    archive = final_archive(env, "tables-one")
+
+    assert rows(archive.read("agreement.csv")) == []
+    summary = {r["scope"]: r for r in rows(archive.read("agreement-summary.csv"))}
+    for scope in ("macro_mean", "pooled"):
+        assert (summary[scope]["texts"], summary[scope]["pairs"]) == ("0", "0")
+        assert all(summary[scope][name] == "" for name in F1_COLUMNS), scope
+
+
+def test_summary_without_pairs_has_no_values():
+    summary = agreement_summary([])
+    for scope in ("macro_mean", "pooled"):
+        assert (summary[scope]["texts"], summary[scope]["pairs"]) == (0, 0)
+        assert all(summary[scope][name] is None for name in F1_COLUMNS), scope
+    assert all(summary["pooled"][name] == 0 for name in COUNT_COLUMNS)
+
+
+def test_pairs_without_findings_still_agree():
+    """Two empty submissions agree per pair, and so does their pooled row."""
+    counts = dict.fromkeys(COUNT_COLUMNS, 0)
+    values = dict.fromkeys(F1_COLUMNS, 1.0) | {"modifier_agreement": None}
+    pooled = agreement_summary([AgreementPair("t1", "a", "b", values, counts)])[
+        "pooled"
+    ]
+    assert pooled["annotation_strict_f1"] == 1.0
+    assert pooled["modifier_agreement"] is None
+
+
 def _payload(submissions: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "state": {"selections": []},

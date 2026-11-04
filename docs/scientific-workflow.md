@@ -164,12 +164,21 @@ finding is a checked negative.
 submissions by different people that the bundles hold (annotation from
 scratch and proposal checks; consolidations and carried results are no
 annotation of their own). For a consolidated text these are the submissions
-the consolidation merged. For a text whose result was accepted directly, the
-export adds the other people's latest live annotations of it
+the consolidation merged, and only those: work submitted on the text after
+the consolidation is not compared. For a text whose result was accepted
+directly (the selected result is an annotation from scratch or a proposal
+check), the export adds the other people's latest live annotations of it
 (`compared.t1.zip`), chosen when the export is prepared as the annotation
 results export chooses them, so that texts accepted because everyone agreed
-are not left out. Proposals a proposal check left uncertain are not counted
-as findings.
+are not left out. A result carried to a new text version gets no compared
+annotations; its agreement is that of the earlier work it was carried from.
+Proposals a proposal check left uncertain are not counted as findings.
+
+The rows follow the text versions the bundles hold, so a text whose result
+was carried or consolidated from work on an earlier version also has rows
+for that earlier version (`text_version` and `source_text_line` name it).
+They are the agreement behind the text's final result, and for a carried
+result the only one; filter on `text_version` to compare one version only.
 
 Each row names the text, both submissions and pseudonyms, and gives the
 values of `ontospan.agreement`, the matching Ontotator's consolidation and the
@@ -193,6 +202,8 @@ without findings agree (F1 1).
 `agreement-summary.csv` has two rows. `macro_mean` averages each value over
 the pairs of a text, then over the texts. `pooled` computes each value from
 the counts summed over all pairs (micro average) and lists those sums.
+Without any pair (for example when every text had one annotator), both rows
+have `pairs` 0 and empty values.
 
 Only F1 values are given. Span annotation has no countable negatives (every
 place in a text where nobody marked anything would be one), so chance-corrected

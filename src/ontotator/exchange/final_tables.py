@@ -194,7 +194,8 @@ def _ratio(part: int, whole: int) -> float | None:
 
 
 def _f1(agreeing: int, n_a: int, n_b: int) -> float:
-    # As ontospan.matching: two empty sets agree.
+    # As ontospan.matching: two empty sets agree. Only for counts of at least
+    # one pair; without pairs there is nothing to agree (agreement_summary).
     return 1.0 if n_a + n_b == 0 else 2 * agreeing / (n_a + n_b)
 
 
@@ -521,7 +522,9 @@ def agreement_pairs(
 
 def agreement_summary(pairs: Sequence[AgreementPair]) -> dict[str, dict[str, Any]]:
     """``macro_mean`` (mean over texts of each text's mean over its pairs) and
-    ``pooled`` (F1 of the counts summed over every pair)."""
+    ``pooled`` (F1 of the counts summed over every pair). Without pairs both
+    have empty values: two empty submissions agree, but no pair is no
+    agreement."""
     texts: dict[str, list[AgreementPair]] = defaultdict(list)
     for pair in pairs:
         texts[pair.document_id].append(pair)
@@ -550,7 +553,11 @@ def agreement_summary(pairs: Sequence[AgreementPair]) -> dict[str, dict[str, Any
                 for name in F1_COLUMNS
             },
         },
-        "pooled": {**size, **_pooled(totals), **totals},
+        "pooled": {
+            **size,
+            **(_pooled(totals) if pairs else dict.fromkeys(F1_COLUMNS)),
+            **totals,
+        },
     }
 
 
@@ -599,14 +606,16 @@ def build_proposals_csv(
     context = SubmissionFacts(payload)
     source_of = {(p.submission_id, p.annotation.annotation_id): p for p in proposals}
     empty = dict.fromkeys(PROPOSALS_COLUMNS[4:11], 0)
+    of_submission: dict[str, list[Proposal]] = defaultdict(list)
+    for decided in proposals:
+        of_submission[decided.submission_id].append(decided)
     people: dict[tuple[str, str, str], dict[str, int]] = {}
     for item in units:
         sid = item.submission_id
         if context.kind(sid) != "proposal_check":
             continue
         targets = sorted(
-            (p for p in proposals if p.submission_id == sid),
-            key=lambda p: p.annotation.annotation_id,
+            of_submission.get(sid, []), key=lambda p: p.annotation.annotation_id
         )
         # A round works on one proposal set; its added findings count for
         # the tool of that set (none for a text without proposals).

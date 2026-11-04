@@ -241,9 +241,10 @@ _VOLATILE = [
 # inputs): a change here changes every export of that kind. v2 (#133) added
 # the (here empty) "consolidations" record and the format string; #295-#297
 # the analysis tables (listed in README.txt and hashed in "files") and
-# the compared rows that index.csv may hold.
+# the compared rows that index.csv may hold; the README line of agreement.csv
+# names the text versions.
 CARRY_FORWARD_DIGEST = (
-    "e12e84f29504f8d7f48e7cd1075e4898d5dac9e79c54b51f74941820b6a0a886"
+    "f437e31ca3983cc51cd2e76fb7d6439f7f64ab97a7da7559d8b89cca3054c939"
 )
 
 
