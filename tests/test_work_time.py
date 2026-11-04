@@ -90,7 +90,11 @@ def test_the_lead_switches_recording_on_in_the_settings_history(timed):
     )
     # The Workflow form sends every field; only the changed one is recorded.
     settings = lead.get(f"{BASE}/settings").json()
-    unchanged = ("blind_consolidation", "adjudicator_not_annotator", "description")
+    unchanged = (
+        "annotate_accepted_translations_only",
+        "adjudicator_not_annotator",
+        "description",
+    )
     form = {name: settings[name] for name in unchanged}
     response = lead.patch(f"{BASE}/settings", json=form | {"record_working_time": True})
     assert response.status_code == 200, response.text
