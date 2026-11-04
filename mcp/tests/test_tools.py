@@ -378,6 +378,24 @@ async def test_other_exports_use_the_export_route(
     assert fake.calls_to("POST", f"{P}/exports")[0].json() == body
 
 
+async def test_phenopacket_export_is_a_final_export_in_that_format(
+    fake: FakeApi, mcp_client: Client
+) -> None:
+    fake.on(
+        "POST",
+        f"{P}/exports/final/preflight",
+        build("FinalPreflight", warnings=[], omissions=[], state_digest="e" * 64),
+    )
+    fake.on("POST", f"{P}/exports/final", {"job_id": 91})
+    await call(
+        mcp_client,
+        "start_export",
+        {"project": "p", "kind": "phenopacket", "wait": False},
+    )
+    [export] = fake.calls_to("POST", f"{P}/exports/final")
+    assert export.json()["format"] == "phenopacket"
+
+
 def _export_job(fake: FakeApi, content: bytes, **job: Any) -> None:
     fake.on(
         "GET",
