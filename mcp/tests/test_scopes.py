@@ -7,6 +7,7 @@ description names. No tool may call a browser-only route.
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 from typing import Any
 
@@ -85,6 +86,9 @@ def _arguments(folder: Path) -> dict[str, dict[str, Any]]:
         "start_export": {"project": "p", "kind": "final"},
         "get_job": {"job_id": 1, "wait": True},
         "download_export": {"job_id": 1, "path": str(folder / "out.zip")},
+        "export_project_archive": {"project": "p"},
+        "download_project_archive": {"job_id": 2, "path": str(folder / "a.zip")},
+        "import_project_archive": {"path": str(file)},
     }
 
 
@@ -111,6 +115,18 @@ def _flows(fake: FakeApi) -> None:
     )
     fake.on("POST", f"{P}/exports/final", {"job_id": 1})
     fake.on("GET", "/api/v1/jobs/{job_id}/download", b"data")
+    fake.on(
+        "GET",
+        "/api/v1/admin/project-archives/jobs/{job_id}",
+        build(
+            "ArchiveJobView",
+            id=2,
+            kind="project_archive_export",
+            status="succeeded",
+            result={"sha256": hashlib.sha256(b"data").hexdigest()},
+        ),
+    )
+    fake.on("GET", "/api/v1/admin/project-archives/jobs/{job_id}/download", b"data")
 
 
 @pytest.mark.anyio

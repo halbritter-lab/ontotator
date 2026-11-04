@@ -133,6 +133,10 @@ EXCLUDED: dict[str, str] = {
         " never reaches another server"
     ),
     "practice_projects": "practice projects are never archived",
+    "api_tokens": (
+        "secrets bound to the source server and its accounts; not portable,"
+        " tokens are issued again on the target"
+    ),
     "imported_people": (
         "server record of the pseudonym-only people an archive import created"
     ),

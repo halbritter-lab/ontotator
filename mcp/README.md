@@ -112,8 +112,11 @@ A token can do only what both its scopes and its owner's roles allow. Most tools
 | `start_export` | read, export | adds | Start an export job of the project; download it with download_export. |
 | `get_job` | read | reads | The state of an import or export job: queued, running, succeeded or failed. |
 | `download_export` | read, export | writes a local file | Download the file of a finished export job to a local path. |
+| `export_project_archive` | admin | adds | Write one complete project as a project archive for another server. |
+| `download_project_archive` | admin | writes a local file | Download the archive of a finished project archive export to a local path. |
+| `import_project_archive` | admin | adds | Import a project archive as a new project and verify it. |
 
-Useful token sets: a project token with `read`, `import`, `export` and `project-admin` covers everything a lead does; `read` and `export` are enough for status and downloads; ontology uploads, new projects and the user list need a system token with `admin` (and `read`).
+Useful token sets: a project token with `read`, `import`, `export` and `project-admin` covers everything a lead does; `read` and `export` are enough for status and downloads; ontology uploads, new projects, the user list and project archives need a system token with `admin` (and `read`).
 
 ### Resources
 

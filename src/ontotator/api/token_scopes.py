@@ -235,6 +235,11 @@ ROUTE_SCOPES: Mapping[tuple[str, str], RouteScope] = {
     ("DELETE", "/api/v1/admin/practice-projects/{key}"): "admin",
     ("GET", "/api/v1/admin/settings/practice"): "admin",
     ("PUT", "/api/v1/admin/settings/practice"): "admin",
+    # Project archives (#306)
+    ("POST", "/api/v1/admin/project-archives/export"): "admin",
+    ("POST", "/api/v1/admin/project-archives/import"): "admin",
+    ("GET", "/api/v1/admin/project-archives/jobs/{job_id}"): "admin",
+    ("GET", "/api/v1/admin/project-archives/jobs/{job_id}/download"): "admin",
 }
 
 # Routes without a project in the path that a project token may call: they
