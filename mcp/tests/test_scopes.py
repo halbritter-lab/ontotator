@@ -73,6 +73,7 @@ def _arguments(folder: Path) -> dict[str, dict[str, Any]]:
         "project_overview": {"project": "p"},
         "get_progress": {"project": "p"},
         "list_texts": {"project": "p"},
+        "working_time_summary": {"project": "p"},
         "agreement_summary": {"project": "p"},
         "start_consolidation": {
             "project": "p",

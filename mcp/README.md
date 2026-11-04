@@ -104,6 +104,7 @@ A token can do only what both its scopes and its owner's roles allow. Most tools
 | `update_work_plan` | read, project-admin | may remove or withdraw | Turn translation review and annotation on or off and set the annotation mode. |
 | `project_overview` | read | reads | Where a project stands: settings, totals per stage, people and open decisions. |
 | `get_progress` | read | reads | Assignment progress per text version and per person (open, in progress, submitted). |
+| `working_time_summary` | read | reads | Recorded working time per annotation mode: texts, total and median per text. |
 | `list_texts` | read | reads | The project's texts with IDs, stage, assigned people and final result. |
 | `agreement_summary` | read | reads | Agreement of the submitted annotations per text, as the lead's panel shows it. |
 | `start_consolidation` | read, project-admin | adds | Start a consolidation of a text's submissions by a consolidator. |
@@ -155,7 +156,7 @@ This example sets up an HPO annotation project in which annotators check the HPO
 6. **Annotation** happens in the browser: alice and bob confirm, change or reject each proposal.
 7. **Status.** *"How far is phentrieve-pilot, and where do alice and bob disagree?"* `project_overview`, `get_progress`, `agreement_summary`.
 8. **Results.** *"Accept every text where both agree; show me the list first. Start a consolidation by carla for the others."* `accept_agreeing_texts` (dry run, then `confirm`) and `start_consolidation` per text. Carla consolidates in the browser, and the lead accepts the consolidations on the Documents page.
-9. **Export.** *"Check the final export, then export it and save it to ~/pilot/final.zip."* `final_export_check`, `start_export` (`kind: final`; warnings and texts without a result must be acknowledged), `download_export`. The archive holds `findings.csv`, `agreement.csv`, `agreement-summary.csv` and `proposals.csv`, which gives Phentrieve's precision and recall against the final results. Its README is the resource `ontotator://jobs/{job_id}/readme`. The edit log (`kind: edit_log`) and the translation reviews (`kind: translation_reviews`) export the same way.
+9. **Export.** *"Check the final export, then export it and save it to ~/pilot/final.zip."* `final_export_check`, `start_export` (`kind: final`; warnings and texts without a result must be acknowledged), `download_export`. The archive holds `findings.csv`, `agreement.csv`, `agreement-summary.csv` and `proposals.csv`, which gives Phentrieve's precision and recall against the final results. Its README is the resource `ontotator://jobs/{job_id}/readme`. The edit log (`kind: edit_log`), the working time (`kind: work_time`) and the translation reviews (`kind: translation_reviews`) export the same way.
 
 ## Not reachable with a token
 
