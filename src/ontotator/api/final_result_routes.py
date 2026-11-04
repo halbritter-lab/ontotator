@@ -114,7 +114,9 @@ def final_preflight(
 def final_export(
     key: str, body: FinalExportRequest, principal: PrincipalDep, request: Request
 ) -> dict[str, int]:
-    # A T1 request is stored without ``format``, as before #308.
+    # A T1 request is stored without ``format``, as before #308, so that a
+    # replayed older request matches its stored one.
+    exclude = {"format"} if body.format == "t1" else None
     return _service(request, principal).freeze(
-        key, body.model_dump(mode="json", exclude_defaults=True)
+        key, body.model_dump(mode="json", exclude=exclude)
     )
