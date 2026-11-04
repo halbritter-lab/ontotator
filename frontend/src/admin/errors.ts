@@ -145,7 +145,7 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   PASSWORD_RULES: "The password does not meet the required rules. Use 12–256 characters and a password different from the username.",
   PAYLOAD_TOO_LARGE: "The upload exceeds the server's size limit. Select fewer or smaller files.",
   PER_DOCUMENT_INVALID: "Choose at least one assignee per document.",
-  PHENOPACKET_UNREPRESENTABLE: "A final result cannot be converted to a Phenopacket. No file was created. The diagnostics name the text; the final export (T1) is not affected.",
+  PHENOPACKET_UNREPRESENTABLE: "A final result cannot be converted to a Phenopacket. No file was created. Technical diagnostics name the text.",
   PIN_MISMATCH: "The ontology, release, branches or annotation scheme do not match this project's ontology settings.",
   PIN_MISSING: "Add the required ontology pin before continuing.",
   PRACTICE_IMPORT_FAILED: "The practice texts could not be loaded. Try again in a moment.",

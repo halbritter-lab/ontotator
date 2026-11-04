@@ -3,6 +3,7 @@ import { api, type FinalPreflight } from "../api/client";
 import { saveDownload } from "../api/download";
 import { Button, Checkbox, InlineMessage, Select } from "../ui";
 import { ErrorNotice } from "./ErrorNotice";
+import { ExportFailure } from "./ExportFailure";
 import { routeHref } from "../app/router";
 import { FINAL_SELECTION_CHANGED } from "../variants/finalSelectionState";
 import { useJob } from "./useJob";
@@ -213,7 +214,8 @@ function FinalExportContent({ projectKey }: { projectKey: string }): JSX.Element
     </>}
     {jobError != null && <ErrorNotice error={jobError} />}
     {job && !succeeded && !failed && <p role="status">Creating the final export…</p>}
-    {failed && <InlineMessage tone="error"><p>Final export could not be created.</p><details><summary>Technical diagnostics</summary><pre>{job.error}</pre></details></InlineMessage>}
+    {failed && <ExportFailure result={job.result} error={job.error}
+      fallback={`${job.kind === FORMATS.phenopacket.kind ? "The Phenopackets" : "The final export"} could not be created. Open diagnostics for the technical details.`} />}
     {phase === "job" && <>
       {error != null && <ErrorNotice error={error} />}
       {succeeded && <InlineMessage tone="success" title={`${exportedFormat === "phenopacket" ? "Phenopackets" : "Final export"} ready: ${exported} ${exported === 1 ? "result" : "results"}`}>
