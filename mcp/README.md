@@ -156,7 +156,7 @@ This example sets up an HPO annotation project in which annotators check the HPO
 6. **Annotation** happens in the browser: alice and bob confirm, change or reject each proposal.
 7. **Status.** *"How far is phentrieve-pilot, and where do alice and bob disagree?"* `project_overview`, `get_progress`, `agreement_summary`.
 8. **Results.** *"Accept every text where both agree; show me the list first. Start a consolidation by carla for the others."* `accept_agreeing_texts` (dry run, then `confirm`) and `start_consolidation` per text. Carla consolidates in the browser, and the lead accepts the consolidations on the Documents page.
-9. **Export.** *"Check the final export, then export it and save it to ~/pilot/final.zip."* `final_export_check`, `start_export` (`kind: final`; warnings and texts without a result must be acknowledged), `download_export`. The archive holds `findings.csv`, `agreement.csv`, `agreement-summary.csv` and `proposals.csv`, which gives Phentrieve's precision and recall against the final results. Its README is the resource `ontotator://jobs/{job_id}/readme`. The edit log (`kind: edit_log`), the working time (`kind: work_time`) and the translation reviews (`kind: translation_reviews`) export the same way.
+9. **Export.** *"Check the final export, then export it and save it to ~/pilot/final.zip."* `final_export_check`, `start_export` (`kind: final`; warnings and texts without a result must be acknowledged), `download_export`. The archive holds `index.csv` and the selected results as Ontospan bundles. Its README is the resource `ontotator://jobs/{job_id}/readme`. The edit log (`kind: edit_log`), the working time (`kind: work_time`) and the translation reviews (`kind: translation_reviews`) export the same way.
 
 ## Not reachable with a token
 
@@ -170,7 +170,7 @@ Limits of the token kinds:
 
 - A project token reaches only routes with its project in the path (and the job routes), so `whoami`, `list_projects`, `list_ontologies` and `list_project_templates` need a personal or system token.
 - Creating a project needs the `admin` scope, so a system token: a lead cannot create a project with a token.
-- The API gives agreement per text (the lead's comparison panel) but no project-wide figure; `agreement_summary` sums the panels, and the F1 values per text and for the project are in the final export (`agreement.csv`, `agreement-summary.csv`).
+- The API gives agreement per text (the lead's comparison panel) but no project-wide figure; `agreement_summary` sums the panels.
 
 Left to the web interface on purpose, although a token could call the route: choosing a final result among differing submissions or confirming one after a change (`PUT .../final-selections`; `accept_agreeing_texts` covers full agreement only), handling problem reports, reopening, reassigning and revoking single tasks, and changing the annotation mode of a text that already has work, which discards its submissions.
 

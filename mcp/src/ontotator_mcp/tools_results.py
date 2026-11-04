@@ -226,8 +226,7 @@ def register_results(server: MCPServer, api: OntotatorClient) -> None:
             ExportKind,
             Field(
                 description=(
-                    "'final': accepted final results with findings.csv,"
-                    " agreement.csv, agreement-summary.csv, proposals.csv and a"
+                    "'final': accepted final results with index.csv and a"
                     " README (ZIP). 'annotations': every submission as an"
                     " Ontospan bundle (ZIP). 'edit_log': every edit (JSONL)."
                     " 'work_time': the recorded work intervals under"

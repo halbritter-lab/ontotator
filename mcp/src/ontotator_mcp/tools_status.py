@@ -186,8 +186,7 @@ def register_status(server: MCPServer, api: OntotatorClient) -> None:
 
         For each text with at least two submissions: findings compared,
         matching, differing in context or in details, and whether all match
-        (then accept_agreeing_texts can accept it). Project-wide F1 values
-        are in the final export (agreement.csv, agreement-summary.csv).
+        (then accept_agreeing_texts can accept it).
         """
         found, _ = await rows(api, project, stage=["final", "done"])
         if case_ids is not None:
