@@ -365,7 +365,11 @@ async def test_final_export_needs_acknowledged_warnings(
 
 @pytest.mark.parametrize(
     ("kind", "body"),
-    [("annotations", {"kind": "t1"}), ("edit_log", {"kind": "edit_log"})],
+    [
+        ("annotations", {"kind": "t1"}),
+        ("edit_log", {"kind": "edit_log"}),
+        ("work_time", {"kind": "work_time"}),
+    ],
 )
 async def test_other_exports_use_the_export_route(
     fake: FakeApi, mcp_client: Client, kind: str, body: dict[str, str]
@@ -376,6 +380,24 @@ async def test_other_exports_use_the_export_route(
     )
     assert result == {"job_id": 5, "kind": kind, "status": "queued"}
     assert fake.calls_to("POST", f"{P}/exports")[0].json() == body
+
+
+async def test_working_time_summary_reads_the_project_sums(
+    fake: FakeApi, mcp_client: Client
+) -> None:
+    sums = {
+        "record": True,
+        "modes": [
+            {
+                "mode": "scratch",
+                "texts": 2,
+                "total_seconds": 600,
+                "median_seconds_per_text": 300,
+            }
+        ],
+    }
+    fake.on("GET", f"{P}/work-time", sums)
+    assert await call(mcp_client, "working_time_summary", {"project": "p"}) == sums
 
 
 def _export_job(fake: FakeApi, content: bytes, **job: Any) -> None:
