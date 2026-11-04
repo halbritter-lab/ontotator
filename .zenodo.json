@@ -1,0 +1,13 @@
+{
+  "upload_type": "software",
+  "title": "Ontotator",
+  "description": "Self-hosted web service for collaborative annotation of ontology terms, such as Human Phenotype Ontology concepts, in texts.",
+  "license": "MIT",
+  "creators": [
+    {"name": "Lerch, Jan-Paul"}
+  ],
+  "keywords": ["Human Phenotype Ontology", "text annotation", "clinical NLP"],
+  "related_identifiers": [
+    {"identifier": "https://github.com/halbritter-lab/ontotator", "relation": "isSupplementTo", "scheme": "url"}
+  ]
+}
