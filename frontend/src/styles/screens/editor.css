@@ -2950,6 +2950,10 @@ details.case-version-controls > .btn { vertical-align: bottom; }
   align-items: center;
   gap: var(--space-1);
   white-space: nowrap;
+  /* A divider keeps the save status (only a dot on narrow screens) from reading as part of the timer. */
+  padding-inline-end: var(--space-2);
+  margin-inline-end: var(--space-1);
+  border-inline-end: 1px solid var(--border);
 }
 .work-timer__value {
   font-size: var(--size-sm);

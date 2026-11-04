@@ -346,7 +346,7 @@ What for: see the whole project at a glance.
 2. The first line counts cases, reviews and annotations. Click **need your decision** or **to assign** to jump to those texts.
 3. The cards **Translation review**, **Annotation** and **Final result** count the texts per state. Each count opens **Documents** with the same texts.
 4. The **People** table shows each person's open and submitted work; tasks that wait for a translation review count under **Waiting for review**, not as open. Click a name to see their texts.
-5. In a project that records working time, **Working time** shows per task type the number of texts, the **Total active time** of everyone together and the **Median per text**. It names no person; single work periods are only in the research export ([Export research data](lead-results.md#export-research-data)).
+5. In a project that records working time, **Working time** shows per task type the number of texts, the **Total active time** of everyone together and the **Median per text**, for example *2 min* or *1 h 05 min*. Active time includes the up to 3 minutes before each automatic pause. It names no person; single work periods are only in the research export ([Export research data](lead-results.md#export-research-data)).
 
 ![The Progress page with the stage cards and the People table](images/lead-progress.png)
 

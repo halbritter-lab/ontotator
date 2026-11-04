@@ -157,3 +157,11 @@ export function formatWorkTime(seconds: number): string {
   const hours = Math.floor(total / 3600), minutes = Math.floor((total % 3600) / 60), rest = total % 60;
   return hours > 0 ? `${hours}:${String(minutes).padStart(2, "0")} h` : `${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}`;
 }
+
+/** Sums in tables: "45 s", "2 min", "1 h 05 min", so they never read as a clock. */
+export function formatWorkDuration(seconds: number): string {
+  const total = Math.max(Math.floor(seconds), 0);
+  if (total < 60) return `${total} s`;
+  const hours = Math.floor(total / 3600), minutes = Math.floor((total % 3600) / 60);
+  return hours > 0 ? `${hours} h ${String(minutes).padStart(2, "0")} min` : `${minutes} min`;
+}

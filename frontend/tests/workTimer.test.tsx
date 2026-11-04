@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, type WorkTimeView } from "../src/api/client";
-import { formatWorkTime, WorkTimer, type EndReason } from "../src/worktime/workTimer";
+import { formatWorkDuration, formatWorkTime, WorkTimer, type EndReason } from "../src/worktime/workTimer";
 import { useWorkTimer, WorkTimeNotice, WorkTimerControl } from "../src/worktime/useWorkTimer";
 
 type Logged = [kind: "open" | "heartbeat", id: string] | [kind: "close", id: string, reason: EndReason];
@@ -136,6 +136,12 @@ describe("WorkTimer", () => {
     expect(formatWorkTime(245.9)).toBe("04:05");
     expect(formatWorkTime(3599)).toBe("59:59");
     expect(formatWorkTime(3720)).toBe("1:02 h");
+  });
+
+  it("formats table sums with units", () => {
+    expect(formatWorkDuration(45.5)).toBe("45 s");
+    expect(formatWorkDuration(150)).toBe("2 min");
+    expect(formatWorkDuration(3900)).toBe("1 h 05 min");
   });
 });
 

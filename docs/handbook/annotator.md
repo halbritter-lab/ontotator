@@ -80,7 +80,7 @@ What for: know what the timer in the toolbar counts, in projects that record wor
 A lead can switch on working time for a project. On your first task in such a project a notice, **This project records working time**, says so. The toolbar of an annotation task, and the bar of a translation review, then shows your own active time on this task, for example *12:05*, or *1:02 h* from one hour on. It adds up over all the times you opened the task.
 
 - The timer starts when you open the task.
-- It pauses by itself after 3 minutes without input (typing, clicking, moving the pointer, scrolling or selecting text) and while the tab or window is in the background. It then reads *auto-paused* and goes on with your next input.
+- It pauses by itself after 3 minutes without input (typing, clicking, moving the pointer, scrolling or selecting text) and while the tab or window is in the background. It then reads *auto-paused* and goes on with your next input. The 3 minutes before an automatic pause still count as working time, as reading time.
 - Click **Pause timer** for a break. Input does not restart it; **Resume timer** or a change to your work does.
 - A submitted or paused task shows no timer.
 

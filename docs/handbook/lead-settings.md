@@ -262,7 +262,7 @@ What for: measure how long annotation and translation review take, for example f
 2. Tick **Record working time**. It is off by default.
 3. Click **Save changes**.
 
-From the next opened task, annotation and translation review tasks show the person working a timer of their own active time. It pauses after 3 minutes without input, while the tab is in the background and when the person pauses it ([Working time](annotator.md#working-time)). Everyone is told on their first task in the project. Consolidations are not timed.
+From the next opened task, annotation and translation review tasks show the person working a timer of their own active time. It pauses after 3 minutes without input (those 3 minutes still count, as reading time), while the tab is in the background and when the person pauses it ([Working time](annotator.md#working-time)). Everyone is told on their first task in the project. Consolidations are not timed.
 
 You see sums only: **Progress** › **Working time** ([Watch progress](lead-documents.md#watch-progress)). The single work periods, under pseudonyms, are in the **Working time** research export ([Export research data](lead-results.md#export-research-data)). Switching the setting off stops recording; times already recorded stay. Like every settings change, the change is kept in the project's history.
 
