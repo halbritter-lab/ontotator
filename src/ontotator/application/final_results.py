@@ -243,12 +243,19 @@ class FinalResultService:
                     raise RevisionConflict(
                         "Export request ID was already used for another acknowledgement."
                     )
+                # The job this request queued: the first of its kind for the
+                # snapshot by this user. ``admin export --format phenopacket``
+                # adds further jobs for the same snapshot.
                 job = conn.execute(
-                    select(JobRow.id).where(
+                    select(JobRow.id)
+                    .where(
                         JobRow.project_id == pid,
                         JobRow.kind == FINAL_JOB_KINDS[request.get("format", "t1")],
                         JobRow.payload["snapshot_id"].astext == previous["snapshot_id"],
+                        JobRow.requested_by == self.actor.user_id,
                     )
+                    .order_by(JobRow.id)
+                    .limit(1)
                 ).scalar_one()
                 return {"job_id": job}
             state = self._projection(conn, key, pid)

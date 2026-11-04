@@ -12,6 +12,7 @@ import ontospan
 import pytest
 from auth_harness import logged_in
 from pg_harness import database_url_for
+from sqlalchemy import select
 from t1_builders import bundle, native_unit
 from t1_fixtures import HP_PATH, TEXT, annotation, create_project, hpo_profile
 from t1_fixtures import run_import as import_bundle
@@ -30,6 +31,7 @@ from ontotator.domain.documents import (
 from ontotator.domain.review import ReviewTargetSet
 from ontotator.domain.workspace import Submission, WorkspaceKey
 from ontotator.exchange.final_phenopackets import to_packets
+from ontotator.storage.final_tables import ExportSelectionSnapshotRow
 from ontotator.storage.repository import _key_str
 
 BASE = "/api/v1/projects/proj"
@@ -307,3 +309,36 @@ def test_cli_exports_phenopackets_of_the_newest_final_export(env, monkeypatch):
     assert "1 Phenopacket" in done.output
     packet = json.loads(_archive(out.read_bytes()).read("phenopackets/00000.json"))
     assert packet["id"] == DOC
+
+
+def test_replayed_request_after_cli_export_returns_its_own_job(env, monkeypatch):
+    """The CLI queues a second Phenopacket job of the same snapshot; a replay of
+    the lead's request still answers with the lead's job, not a 500."""
+    monkeypatch.setenv("ONTOTATOR_DATA_DIR", str(env.db.data_dir))
+    request = _request(env, "pp-replay", format="phenopacket")
+    queued = env.lead.post(f"{BASE}/exports/final", json=request)
+    assert queued.status_code == 200, queued.text
+    _run(env, queued.json()["job_id"])
+    out = env.tmp_path / "cli.zip"
+    args = ["--database-url", database_url_for(env.tmp_path / "auth.db")]
+    done = CliRunner().invoke(
+        cli_app, ["admin", *args, "export", "proj", str(out), "--format", "phenopacket"]
+    )
+    assert done.exit_code == 0, done.output
+    replay = env.lead.post(f"{BASE}/exports/final", json=request)
+    assert replay.status_code == 200, replay.text
+    assert replay.json() == queued.json()
+
+
+def test_t1_request_keeps_nested_fields(env):
+    """Only ``format`` is left out of a stored T1 request, not nested fields."""
+    request = _request(env, "t1-nested")
+    queued = env.lead.post(f"{BASE}/exports/final", json=request)
+    assert queued.status_code == 200, queued.text
+    with env.db.transaction() as conn:
+        stored = conn.execute(
+            select(ExportSelectionSnapshotRow.payload).where(
+                ExportSelectionSnapshotRow.request_id == "t1-nested"
+            )
+        ).scalar_one()["request"]
+    assert stored == request
