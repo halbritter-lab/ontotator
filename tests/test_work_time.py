@@ -88,7 +88,12 @@ def test_the_lead_switches_recording_on_in_the_settings_history(timed):
         worker.patch(f"{BASE}/settings", json={"record_working_time": True}).status_code
         == 403
     )
-    _switch(lead, True)
+    # The Workflow form sends every field; only the changed one is recorded.
+    settings = lead.get(f"{BASE}/settings").json()
+    unchanged = ("blind_consolidation", "adjudicator_not_annotator", "description")
+    form = {name: settings[name] for name in unchanged}
+    response = lead.patch(f"{BASE}/settings", json=form | {"record_working_time": True})
+    assert response.status_code == 200, response.text
     with app.state.repo.db.transaction() as conn:
         details = conn.execute(
             select(AuditEventRow.details)
