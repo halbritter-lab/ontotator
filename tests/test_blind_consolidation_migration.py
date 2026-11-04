@@ -11,7 +11,7 @@ from sqlalchemy import Connection, create_engine, text
 from ontotator.storage.schema import alembic_config, upgrade
 
 REVISION = "0033"
-PREVIOUS = "0030"
+PREVIOUS = "0032"
 S = "ontotator"
 
 

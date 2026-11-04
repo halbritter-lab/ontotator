@@ -5,15 +5,14 @@ false``; a constant default, so PostgreSQL adds it without rewriting the
 table and every existing project keeps showing names). No existing row
 changes. The downgrade drops the column.
 
-Numbered 0033 on top of 0030: revisions 0031 and 0032 are on other branches;
-the merge chains this revision after them.
+Follows 0032 (imported people of project archives).
 """
 
 import sqlalchemy as sa
 from alembic import op
 
 revision = "0033"
-down_revision = "0030"
+down_revision = "0032"
 branch_labels = None
 depends_on = None
 SCHEMA = "ontotator"
