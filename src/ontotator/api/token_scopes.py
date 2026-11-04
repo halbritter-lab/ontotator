@@ -137,6 +137,10 @@ ROUTE_SCOPES: Mapping[tuple[str, str], RouteScope] = {
     ("POST", f"{P}/exports/translation-reviews"): "export",
     ("POST", f"{P}/exports/final"): "export",
     ("POST", f"{P}/exports/final/preflight"): "export",
+    # Working time (issue 298): the timer is annotation work; the lead reads sums.
+    ("GET", "/api/v1/assignments/{assignment_id}/work-time"): SESSION,
+    ("POST", "/api/v1/assignments/{assignment_id}/work-time"): SESSION,
+    ("GET", f"{P}/work-time"): "read",
     ("GET", "/api/v1/jobs/{job_id}"): "read",
     ("GET", "/api/v1/jobs/{job_id}/download"): "export",
     # Assignments, work plans and final selection (project administration)
