@@ -6,7 +6,7 @@ New here? Start with [Your first task, start to finish](first-task.md). How to l
 
 ## Contents
 
-- Basics: [The editor screen](#the-editor-screen), [When is a task done?](#when-is-a-task-done)
+- Basics: [The editor screen](#the-editor-screen), [When is a task done?](#when-is-a-task-done), [Working time](#working-time)
 - Findings: [Mark text and add a finding](#mark-text-and-add-a-finding), [Search a term](#search-a-term), [Browse the ontology tree](#browse-the-ontology-tree), [Set values and confirm defaults](#set-values-and-confirm-defaults), [Manage mentions](#manage-mentions-of-a-finding), [Add a finding without a text span](#add-a-finding-without-a-text-span), [Change term, note or delete a finding](#change-term-note-or-delete-a-finding), [Add modifiers](#add-modifiers-to-a-finding), [Turn a finding into a modifier](#turn-a-standalone-modifier-finding-into-a-modifier), [Work in several layers](#work-in-several-layers)
 - Special tasks: [Review tool proposals](#review-tool-proposals), [Review carried findings](#review-carried-findings), [Re-create findings after a text correction](#re-create-findings-after-a-text-correction)
 - Finishing: [Submit the text](#submit-the-text), [Confirm values and acknowledge warnings](#confirm-values-and-acknowledge-warnings-in-the-submit-dialog), [View your submissions](#view-your-submissions), [Start a new work round](#start-a-new-work-round)
@@ -72,6 +72,19 @@ A task is done when you submit it. Before that:
 - you have read the whole text once more for findings you missed.
 
 **Next open item** takes you to everything that still needs you. After you submit, the lead receives your work; see [What happens next](first-task.md#9-what-happens-next).
+
+## Working time
+
+What for: know what the timer in the toolbar counts, in projects that record working time.
+
+A lead can switch on working time for a project. On your first task in such a project a notice, **This project records working time**, says so. The toolbar of an annotation task, and the bar of a translation review, then shows your own active time on this task, for example *12:05*, or *1:02 h* from one hour on. It adds up over all the times you opened the task.
+
+- The timer starts when you open the task.
+- It pauses by itself after 3 minutes without input (typing, clicking, moving the pointer, scrolling or selecting text) and while the tab or window is in the background. It then reads *auto-paused* and goes on with your next input. The 3 minutes before an automatic pause still count as working time, as reading time.
+- Click **Pause timer** for a break. Input does not restart it; **Resume timer** or a change to your work does.
+- A submitted or paused task shows no timer.
+
+The project lead sees only sums per text and task type, never your single work periods. The research export lists the periods under your pseudonym.
 
 ## Mark text and add a finding
 

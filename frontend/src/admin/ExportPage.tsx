@@ -20,11 +20,14 @@ const jsonl = "JSONL, one record per line";
 const definitions = [
   { kind: "t1", title: "Annotation results", format: "ZIP, ontospan format", description: "Each person's latest submission per text and task" },
   { kind: "edit_log", title: "Edit log", format: jsonl, description: "Every editing step in order, for method studies" },
+  { kind: "work_time", title: "Working time", format: jsonl, description: "Active work periods per task, with a total per task, if the project records working time" },
   { kind: "translation_reviews", title: "Translation reviews", format: jsonl, description: "Every review decision with the source text" },
 ] as const;
 type CardKind = ExportKind | "translation_reviews";
-const jobKinds: Record<CardKind, string> = { t1: "t1_export", edit_log: "edit_log_export", translation_reviews: "translation_review_export" };
-const exportNames: Record<CardKind, string> = { t1: "an annotation results", edit_log: "an edit log", translation_reviews: "a translation review" };
+const jobKinds: Record<CardKind, string> = { t1: "t1_export", edit_log: "edit_log_export", work_time: "work_time_export", translation_reviews: "translation_review_export" };
+const exportNames: Record<CardKind, string> = { t1: "an annotation results", edit_log: "an edit log", work_time: "a working time", translation_reviews: "a translation review" };
+/** Saved file names: `work-time.jsonl` as in the scientific workflow guide. */
+const fileNames: Record<CardKind, string> = { t1: "t1.zip", edit_log: "edit_log.jsonl", work_time: "work-time.jsonl", translation_reviews: "translation_reviews.jsonl" };
 const denied = (error: unknown) => error instanceof ApiError && [401, 403, 404].includes(error.status);
 const positiveJobId = (value: string | null) => value !== null && /^[1-9]\d*$/.test(value) && Number.isSafeInteger(Number(value)) ? Number(value) : null;
 
@@ -131,7 +134,7 @@ function ExportRow({ projectKey, storageKey, kind, title, format, description }:
       // Successful job metadata is not download authorization. Recheck through
       // the authenticated endpoint on every click; never reuse a cached blob.
       const payload = await api.downloadJob(jobId);
-      if (alive.current) saveDownload(payload, `${projectKey}-${kind}.${kind === "t1" ? "zip" : "jsonl"}`);
+      if (alive.current) saveDownload(payload, `${projectKey}-${fileNames[kind]}`);
     } catch (err: unknown) {
       if (alive.current) { setError(err); if (denied(err)) { remember(null); setJobId(null); } }
     } finally { if (alive.current) { downloadRequest.current = false; setDownloading(false); } }

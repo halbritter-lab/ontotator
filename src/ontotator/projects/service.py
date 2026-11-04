@@ -155,6 +155,9 @@ class ProjectSettingsChange(BaseModel):
     adjudicator_not_annotator: bool = False
     contiguous_mentions_only: bool = False
     annotate_accepted_translations_only: bool = True
+    # Issue 298: record working time on annotation and translation review tasks.
+    # A factory default keeps the field optional in the generated types.
+    record_working_time: bool = Field(default_factory=lambda: False)
     hidden_axis_values: HiddenValues = Field(default_factory=dict)
     creation_defaults: CreationDefaults = Field(default_factory=dict)
     # ``None`` keeps the stored value (the settings page sends full replaces).
@@ -770,6 +773,10 @@ class ProjectService:
             require_project_management(
                 conn, actor, key, row["id"], Action.MANAGE_PROJECT_SETTINGS
             )
+            # Forms send every field; only real changes are written and audited.
+            fields = {
+                name: value for name, value in fields.items() if value != row[name]
+            }
             combined = dict(row) | fields
             validate_hidden_values(
                 TaskProfile.model_validate(row["task_profile"]),

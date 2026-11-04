@@ -42,6 +42,10 @@ export interface TranslationReviewScreenProps {
    * stays on the submitted review and offers the next task itself.
    */
   onSubmitted?: (result: { label: string; assignmentId: number; next?: number }) => void;
+  /** The working time control (issue 298), shown in the review bar while the review is editable. */
+  headerTimer?: ReactNode;
+  /** Called on every edit of the review; the working time resumes on it. */
+  onEdit?: () => void;
 }
 type RawDraft = { text: string; form: Record<string, unknown> };
 /** The reviewer's next open task after submitting (spec A.5). */
@@ -451,7 +455,7 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
   }, [immutableReadOnly]);
   const edit = (next: RawDraft) => {
     if (readOnlyRef.current || operation.current) return;
-    draftRef.current = next; setDraft(next); saver.current?.update(next); setServerIssues([]);
+    draftRef.current = next; setDraft(next); saver.current?.update(next); setServerIssues([]); props.onEdit?.();
   };
   const retrySave = async () => { try { await flush(); if (alive.current) { setError(null); refresh(n => n + 1); } } catch (failure) { if (alive.current) setError(failure); } };
   const reload = async () => { if (await guard() && alive.current) onReload(); };
@@ -664,6 +668,7 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
         </details>
       </div>
       <div className="translation-review-tools">
+        {!readOnly && props.headerTimer}
         {props.guidelineActions}
         {!leadCorrection && props.reportActions}
         <span role="status" className="translation-save-status"><StatusBadge tone={statusTone}>{status}</StatusBadge></span>
