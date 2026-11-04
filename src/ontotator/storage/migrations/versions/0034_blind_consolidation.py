@@ -5,14 +5,14 @@ false``; a constant default, so PostgreSQL adds it without rewriting the
 table and every existing project keeps showing names). No existing row
 changes. The downgrade drops the column.
 
-Follows 0032 (imported people of project archives).
+Follows 0033 (imported people of project archives).
 """
 
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0033"
-down_revision = "0032"
+revision = "0034"
+down_revision = "0033"
 branch_labels = None
 depends_on = None
 SCHEMA = "ontotator"
