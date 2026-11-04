@@ -773,6 +773,10 @@ class ProjectService:
             require_project_management(
                 conn, actor, key, row["id"], Action.MANAGE_PROJECT_SETTINGS
             )
+            # Forms send every field; only real changes are written and audited.
+            fields = {
+                name: value for name, value in fields.items() if value != row[name]
+            }
             combined = dict(row) | fields
             validate_hidden_values(
                 TaskProfile.model_validate(row["task_profile"]),
