@@ -151,6 +151,6 @@ export function WorkTimeNotice({ timer }: { timer: WorkTimerHandle }): JSX.Eleme
   const [dismissed, setDismissed] = useState(false);
   if (!timer.firstInProject || dismissed) return null;
   return <InlineMessage tone="info" title="This project records working time" onDismiss={() => setDismissed(true)}>
-    <p>The timer in the header counts your active time on each task. It pauses after 3 minutes without input and while the tab is in the background, and you can pause it yourself. Project leads see only sums per text, never your single work periods.</p>
+    <p>The timer next to "Pause timer" counts your active time on each task. It pauses after 3 minutes without input (those 3 minutes still count) and while the tab is in the background, and you can pause it yourself. Project leads see only sums per text, never your single work periods.</p>
   </InlineMessage>;
 }

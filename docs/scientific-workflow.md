@@ -154,7 +154,7 @@ heartbeats stopped, for example a closed laptop, ends at its last heartbeat as
 `lost`. Time a browser spent offline is therefore not counted.
 
 Export it from **Export** › **Research data** › **Working time**
-(`work-time.jsonl`). Like the edit log it is pseudonymised: `annotator` is the
+(`<project>-work-time-<timestamp>.jsonl`). Like the edit log it is pseudonymised: `annotator` is the
 person's pseudonym and the file holds no user, session or assignment ids. One
 line per closed interval, in the order the server recorded them:
 
