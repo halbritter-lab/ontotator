@@ -2883,9 +2883,92 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
     fireEvent.click(await screen.findByRole("button", { name: "Actions, Severe" }));
     fireEvent.click(await screen.findByRole("menuitem", { name: "Remove text span" }));
     await waitFor(() => expect(payloads(apply)[0]).toEqual({ command: "set_modifier_segments", annotation_id: "seizure", term_id: "HP:0012828", segments: [] }));
-    expect(await screen.findByText("Removed the text span of Severe")).toBeDefined();
-    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    const toast = (await screen.findByText("Removed the text span of Severe")).closest(".ui-toast") as HTMLElement;
+    // Without a history (none in this mock), the toast puts the span back by command.
+    fireEvent.click(within(toast).getByRole("button", { name: "Undo" }));
     await waitFor(() => expect(payloads(apply)[1]).toEqual({ command: "set_modifier_segments", annotation_id: "seizure", term_id: "HP:0012828", segments: [pos("schwere")] }));
+  });
+
+  describe("undo, redo and reset (issue 320)", () => {
+    const step = (before: number, after: number, action: string) =>
+      ({ before_revision: before, after_revision: after, action, outcome: null, annotation_id: "seizure", layer_id: "phenotype", term_id: "HP:0001250", commands: 1 });
+    const historyAt = (revision: number, extra: Record<string, unknown> = {}) =>
+      ({ available: true, revision, undo: null, redo: null, undo_count: 0, redo_count: 0, changed: false, ...extra });
+    const historyOf = (view: WorkspaceView, extra: Record<string, unknown>) => vi.spyOn(api, "getHistory")
+      .mockResolvedValue(historyAt(view.draft.revision, extra) as never);
+    const restoring = (view: WorkspaceView) => vi.spyOn(api, "applyHistory")
+      .mockImplementation(async (_ws, envelope) => ({ ...structuredClone(view.draft), revision: envelope.expected_revision + 1 }) as never);
+
+    it("the header buttons name the step and undo through the history", async () => {
+      const view = modView(SEVERE_ON_SEIZURE);
+      historyOf(view, { undo: step(0, 1, "remove_modifier"), undo_count: 1, changed: true });
+      const history = restoring(view);
+      await setup(view);
+      const undo = await screen.findByRole("button", { name: "Undo" });
+      await waitFor(() => expect(undo.getAttribute("title")).toBe("Undo: remove a modifier from Seizure"));
+      expect((screen.getByRole("button", { name: "Redo" }) as HTMLButtonElement).disabled).toBe(true);
+      fireEvent.click(undo);
+      await waitFor(() => expect(history).toHaveBeenCalledTimes(1));
+      expect(history.mock.calls[0][1]).toMatchObject({ expected_revision: 1, payload: { command: "undo_step", step: 1 } });
+    });
+
+    it("Ctrl+Z undoes and Ctrl+Shift+Z redoes, but not inside a text field", async () => {
+      const view = modView(SEVERE_ON_SEIZURE);
+      historyOf(view, { undo: step(0, 1, "add_modifier"), redo: step(1, 2, "set_axes"), undo_count: 1, redo_count: 1, changed: true });
+      const history = restoring(view);
+      await setup(view);
+      await waitFor(() => expect((screen.getByRole("button", { name: "Undo" }) as HTMLButtonElement).disabled).toBe(false));
+      const field = document.createElement("textarea"); document.body.appendChild(field);
+      fireEvent.keyDown(field, { key: "z", ctrlKey: true });
+      expect(history).not.toHaveBeenCalled();
+      field.remove();
+      fireEvent.keyDown(window, { key: "Z", ctrlKey: true, shiftKey: true });
+      await waitFor(() => expect(history).toHaveBeenCalledTimes(1));
+      expect(history.mock.calls[0][1].payload).toEqual({ command: "redo_step", step: 2 });
+    });
+
+    it("the toast's Undo takes back its own step through the history", async () => {
+      const view = modView(SEVERE_ON_SEIZURE);
+      // The removal makes revision 2; the history then has it on top.
+      vi.spyOn(api, "getHistory").mockImplementation(async () =>
+        historyAt(2, { undo: step(1, 2, "set_modifier_segments"), undo_count: 1, changed: true }) as never);
+      const history = restoring(view);
+      const { container, apply } = await setup(view);
+      fireEvent.click(container.querySelector('[data-list-key="annotation:seizure"]')!);
+      fireEvent.click(await screen.findByRole("button", { name: "Actions, Severe" }));
+      fireEvent.click(await screen.findByRole("menuitem", { name: "Remove text span" }));
+      const toast = (await screen.findByText("Removed the text span of Severe")).closest(".ui-toast") as HTMLElement;
+      fireEvent.click(within(toast).getByRole("button", { name: "Undo" }));
+      await waitFor(() => expect(history).toHaveBeenCalledTimes(1));
+      expect(history.mock.calls[0][1].payload).toEqual({ command: "undo_step", step: 2 });
+      expect(payloads(apply)).toHaveLength(1);
+    });
+
+    it("Reset all my changes asks first, says what is lost and resets", async () => {
+      const view = modView(SEVERE_ON_SEIZURE);
+      historyOf(view, { undo: step(0, 1, "add_modifier"), undo_count: 3, changed: true });
+      const history = restoring(view);
+      await setup(view);
+      await waitFor(() => expect((screen.getByRole("button", { name: "Undo" }) as HTMLButtonElement).disabled).toBe(false));
+      fireEvent.click(screen.getByRole("button", { name: "More actions" }));
+      fireEvent.click(await screen.findByRole("menuitem", { name: "Reset all my changes…" }));
+      const dialog = await screen.findByRole("dialog", { name: "Reset all my changes?" });
+      expect(dialog.textContent).toContain("Your 3 changes in this round are taken back");
+      expect(dialog.textContent).toContain("You can undo the reset.");
+      fireEvent.click(within(dialog).getByRole("button", { name: "Reset all my changes" }));
+      await waitFor(() => expect(history).toHaveBeenCalledTimes(1));
+      expect(history.mock.calls[0][1].payload).toEqual({ command: "reset_changes" });
+    });
+
+    it("a read-only task has no undo, redo or reset", async () => {
+      const view = modView(SEVERE_ON_SEIZURE);
+      const read = historyOf(view, { undo: step(0, 1, "add_modifier"), undo_count: 1, changed: true });
+      vi.spyOn(api, "resolveTermLabels").mockResolvedValue([] as never);
+      render(<CaseScreen view={view} workspaceId="ws-mod" onClose={vi.fn()} readOnly />);
+      await screen.findByRole("button", { name: "More actions" });
+      expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
+      expect(read).not.toHaveBeenCalled();
+    });
   });
 
   it("Change term offers a modifier term with the warning reason", async () => {
