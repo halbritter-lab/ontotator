@@ -92,7 +92,11 @@ available as `ontotator admin export`, `export-edit-log` and
   mode and text, final or not, for analyses outside the final results.
 - **Edit log** (JSONL): one line per edit event in order, with the time (UTC,
   to the second), the text, the person's pseudonym, the working mode, the
-  command and the submission it went into. No user or session ids.
+  command and the submission it went into. No user or session ids. The
+  commands of one user action share a `step_id`. An undo, redo or reset in
+  the editor is an event of its own (`undo_step` and `redo_step` with the
+  `step` they take back or bring back, `reset_changes`), and its `state` is
+  the content it put back; earlier events are never changed.
 - **Translation reviews**: see the
   [translation review export guide](translation-review-export.md).
 

@@ -1517,6 +1517,12 @@
   flex: 0 0 auto;
   white-space: nowrap;
 }
+/* Undo and Redo (issue 320): two icon buttons that stay together. */
+.case-history {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+}
 .case-mode {
   color: var(--text-muted);
   font-size: var(--size-sm);

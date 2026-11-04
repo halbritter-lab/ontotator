@@ -482,6 +482,10 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
                     "ROUND_INPUT_RESOLUTION_STALE": 409,
                     "ROUND_INPUT_CARRIED_FINDING_PRESENT": 409,
                     "ROUND_NOT_EDITABLE": 409,
+                    # Issue 320: refused, not stale; the editor keeps its queue.
+                    "HISTORY_STEP_UNAVAILABLE": 422,
+                    "HISTORY_NOTHING_TO_RESET": 422,
+                    "HISTORY_NOT_AVAILABLE": 422,
                     "ROUND_ACTIVE": 409,
                     "CONSOLIDATION_ACTIVE": 409,
                     "ROUND_ALREADY_EXISTS": 409,

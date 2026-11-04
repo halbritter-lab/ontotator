@@ -190,6 +190,8 @@ ROUTE_SCOPES: Mapping[tuple[str, str], RouteScope] = {
     ("POST", "/api/v1/workspaces/{workspace_id}/decisions"): SESSION,
     ("POST", "/api/v1/workspaces/{workspace_id}/reanchor-resolutions"): SESSION,
     ("POST", "/api/v1/workspaces/{workspace_id}/submit"): SESSION,
+    ("GET", "/api/v1/workspaces/{workspace_id}/history"): SESSION,
+    ("POST", "/api/v1/workspaces/{workspace_id}/history"): SESSION,
     ("GET", "/api/v1/workspaces/{workspace_id}/submissions/{submission_id}"): SESSION,
     ("POST", "/api/v1/workspaces/{workspace_id}/round-input-resolutions"): SESSION,
     ("POST", "/api/v1/workspaces/{workspace_id}/round-input-resolutions/clear"): (
