@@ -3790,7 +3790,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "admin"
       }
     },
     "/api/v1/admin/project-archives/import": {
@@ -3832,7 +3833,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "admin"
       }
     },
     "/api/v1/admin/project-archives/jobs/{job_id}": {
@@ -3874,7 +3876,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "admin"
       }
     },
     "/api/v1/admin/project-archives/jobs/{job_id}/download": {
@@ -3910,7 +3913,8 @@
               }
             }
           }
-        }
+        },
+        "x-ontotator-scope": "admin"
       }
     },
     "/api/v1/projects/{key}/final-selections": {
