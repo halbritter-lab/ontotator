@@ -3,8 +3,6 @@ message: "If you use Ontotator, please cite it using these metadata."
 title: Ontotator
 abstract: Self-hosted web service for collaborative annotation of ontology terms, such as Human Phenotype Ontology concepts, in texts.
 type: software
-version: 0.8.1
-date-released: 2026-11-02
 license: MIT
 repository-code: https://github.com/halbritter-lab/ontotator
 url: https://halbritter-lab.github.io/ontotator/

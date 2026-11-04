@@ -14,7 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
-- README and `docs/operations.md`: releases `v0.1.0` to `v0.8.1` are tagged and follow Semantic Versioning; the image build fetches the public `ontospan` repository from GitHub, a token is optional, and only the build needs network access (#300).
+- README and `docs/operations.md`: releases are tagged `vX.Y.Z` from `v0.1.0` on and follow Semantic Versioning; the image build fetches the public `ontospan` repository from GitHub, a token is optional, and only the build needs network access (#300).
 
 ## [0.8.1] - 2026-11-02
 

@@ -12,11 +12,11 @@ Several people mark text spans, link them to ontology concepts and review each o
 
 Website with tutorial videos: <https://halbritter-lab.github.io/ontotator/> (source in [`site/`](site/)).
 
-Ontotator is still changing: interfaces, data formats and the database schema can differ between releases. Releases are tagged `v0.1.0` to `v0.8.1` and follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html); the [CHANGELOG](CHANGELOG.md) lists what each release changes.
+Ontotator is still changing: interfaces, data formats and the database schema can differ between releases. Releases are tagged `vX.Y.Z` (from `v0.1.0`) and follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html); the [CHANGELOG](CHANGELOG.md) lists what each release changes.
 
 ## How to cite
 
-Cite the release you used. [`CITATION.cff`](CITATION.cff) holds the citation metadata; GitHub shows it under **Cite this repository**. A Zenodo DOI is minted for each release.
+Cite the release you used. [`CITATION.cff`](CITATION.cff) holds the citation metadata; GitHub shows it under **Cite this repository**.
 
 ## How it works
 
