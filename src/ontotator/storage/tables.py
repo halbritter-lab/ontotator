@@ -370,7 +370,7 @@ class DraftRow(Base):
         server_default=text("'[]'::jsonb")
     )
     reanchor_inputs_initialized_at: Mapped[datetime | None]
-    # The content the draft started with, as a DraftState (0035, issue 320);
+    # The content the draft started with, as a DraftState (0032, issue 320);
     # NULL for drafts created before.
     initial_state: Mapped[dict[str, Any] | None]
     updated_at: Mapped[datetime]
@@ -689,7 +689,7 @@ class EditEventRow(Base):
     revision_after: Mapped[int]
     state: Mapped[dict[str, Any]]
     submission_id: Mapped[str | None]
-    # Shared by the commands of one user action (0035, issue 320).
+    # Shared by the commands of one user action (0032, issue 320).
     step_id: Mapped[str | None]
 
 

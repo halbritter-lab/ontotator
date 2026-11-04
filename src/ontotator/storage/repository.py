@@ -3285,7 +3285,7 @@ class Repository:
     def _draft_initial_state(self, conn: Connection, key: WorkspaceKey) -> DraftState:
         """The content the current draft of ``key`` started with (issue 320).
 
-        Stored at creation since 0035; computed again for an older draft.
+        Stored at creation since 0032; computed again for an older draft.
 
         Raises:
             DomainError: ``DRAFT_NOT_FOUND`` when the key has no draft.
@@ -3382,7 +3382,7 @@ class Repository:
         and its round and assignment are advanced, before the receipt.
         """
         key_string = _key_str(key)
-        # Without an unset step ID, so receipts stored before 0035 still match.
+        # Without an unset step ID, so receipts stored before 0032 still match.
         request_hash = canonical_hash(envelope.model_dump(exclude_none=True))
         with self.db.transaction() as conn:
             self._before_workspace_locks(conn, key, exclusive=exclusive_project)

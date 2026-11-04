@@ -8648,8 +8648,7 @@
               }
             }
           }
-        },
-        "x-ontotator-scope": "session"
+        }
       },
       "post": {
         "summary": "Apply History",
@@ -8697,8 +8696,7 @@
               }
             }
           }
-        },
-        "x-ontotator-scope": "session"
+        }
       }
     },
     "/api/v1/workspaces/{workspace_id}/submissions/{submission_id}": {

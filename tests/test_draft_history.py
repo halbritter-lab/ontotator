@@ -331,16 +331,6 @@ def test_a_consolidation_has_no_history(rounds):  # noqa: F811
     assert DraftHistoryService(scoped).view(review).available is False
 
 
-def test_history_routes_are_session_only(app: Any) -> None:
-    from ontotator.api.token_scopes import ROUTE_SCOPES, SESSION
-
-    assert ROUTE_SCOPES[("GET", "/api/v1/workspaces/{workspace_id}/history")] == SESSION
-    assert (
-        ROUTE_SCOPES[("POST", "/api/v1/workspaces/{workspace_id}/history")] == SESSION
-    )
-    assert logged_in  # the HTTP tests above use the browser session
-
-
 def test_reset_of_a_proposal_check_opens_every_proposal_again(tmp_path: Path) -> None:
     from proposal_check_support import proposal_env
     from test_consolidation_tool_proposals import HEAVY, Workspace

@@ -138,6 +138,15 @@ Preserve uncertain targets and ambiguous branches for adjudication outside the
 automatic extraction. Hashes establish content identity; the annotator ID is the
 logged-in user's pseudonym, so it names the account that did the work.
 
+## Undo, redo and reset in the edit log
+
+The edit log (**Export** › **Research data** › **Edit log**, or
+`ontotator admin export-edit-log`) has one line per edit event in order. The
+commands of one user action share a `step_id`. An undo, redo or reset in the
+editor is an event of its own (`undo_step` and `redo_step` with the `step`
+they take back or bring back, `reset_changes`), and its `state` is the content
+it put back; earlier events are never changed.
+
 ## Working time
 
 A project records working time only when its lead ticks **Record working time**
