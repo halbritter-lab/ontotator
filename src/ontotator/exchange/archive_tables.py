@@ -120,6 +120,9 @@ ARCHIVED: tuple[ArchivedTable, ...] = (
     ArchivedTable("final_selection_events"),
     ArchivedTable("export_selection_snapshots"),
     ArchivedTable("audit_events"),
+    # Working time (#298): append-only, inserted with their recorded times.
+    ArchivedTable("work_time_events"),
+    ArchivedTable("work_intervals"),
 )
 
 # Project-scoped tables an archive leaves out, with the reason.
@@ -151,6 +154,11 @@ EXTRA_REFERENCES: tuple[ExtraReference, ...] = (
     ExtraReference(
         "round_inputs", "payload", ("source_draft_snapshot_id",), "draft_snapshots"
     ),
+    # No foreign key: working time outlives purged work, as edit events do.
+    ExtraReference(
+        "work_time_events", "assignment_id", (), "assignments", orphans=True
+    ),
+    ExtraReference("work_intervals", "assignment_id", (), "assignments", orphans=True),
 )
 
 # Integer columns named like references that are plain values.
