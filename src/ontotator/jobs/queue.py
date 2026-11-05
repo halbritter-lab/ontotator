@@ -16,7 +16,7 @@ import logging
 import threading
 import time
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -33,6 +33,7 @@ from sqlalchemy import (
 )
 
 from ontotator.auth.audit import Actor
+from ontotator.auth.context import api_token_ref, current_job_api_token
 from ontotator.domain.errors import DomainError
 from ontotator.storage.database import Database
 from ontotator.storage.lease import _discard
@@ -122,6 +123,15 @@ def _job(row: Row[Any]) -> Job:
     )
 
 
+def handler_payload(stored: Mapping[str, Any]) -> dict[str, Any]:
+    """A job's stored payload as its handler gets it: without ``api_token``.
+
+    ``enqueue`` adds the API token that started a job to the stored payload
+    (issue 305); a handler that reads its job's row again compares this.
+    """
+    return {k: v for k, v in stored.items() if k != "api_token"}
+
+
 class JobQueue:
     """Records handler failures; outcome-persistence errors propagate to the worker."""
 
@@ -149,6 +159,10 @@ class JobQueue:
     ) -> int:
         if kind not in self.handlers:
             raise DomainError("JOB_KIND_UNKNOWN", f"No job handler for '{kind}'.")
+        token = api_token_ref()
+        if token is not None:
+            # The job's audit entries name the token; _run takes it out again.
+            payload = {**payload, "api_token": token}
         with self.db.transaction() as conn:
             return int(
                 conn.execute(
@@ -273,6 +287,16 @@ class JobQueue:
             self._release(job.id)
 
     def _run(self, job: Job, worker: str) -> Job:
+        token = job.payload.get("api_token")
+        if token is not None:
+            job = replace(job, payload=handler_payload(job.payload))
+        reset = current_job_api_token.set(token)
+        try:
+            return self._run_handler(job, worker)
+        finally:
+            current_job_api_token.reset(reset)
+
+    def _run_handler(self, job: Job, worker: str) -> Job:
         try:
             handler = self.handlers.get(job.kind)
             if handler is None:

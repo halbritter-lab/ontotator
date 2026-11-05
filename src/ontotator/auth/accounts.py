@@ -55,7 +55,12 @@ from ontotator.auth.passwords import (
     hash_password,
     verify_password,
 )
-from ontotator.auth.tokens import revoke_user_sessions, token_digest
+from ontotator.auth.tokens import (
+    revoke_unbacked_tokens,
+    revoke_user_sessions,
+    revoke_user_tokens,
+    token_digest,
+)
 from ontotator.domain.errors import DomainError
 from ontotator.storage.database import Database, advisory_lock_id
 from ontotator.storage.report_tables import TechnicalReportRow
@@ -463,11 +468,15 @@ class AccountService:
         *,
         keep_session_id: int,
         client_ip: str = "unknown",
-    ) -> None:
+    ) -> int:
         """Change credentials atomically; commit a failed attempt before raising.
 
         Like login, this operation must own its transaction. Address/name locks
         precede the user row, so login and credential changes cannot deadlock.
+        The user's other sessions end and all of their API tokens are revoked
+        (issue 305): a password change often answers a suspected leak, and a
+        token copied with it must not outlive it. Returns the number of
+        tokens revoked.
         """
         from ontotator.auth.login_attempts import (
             SessionPolicy,
@@ -487,6 +496,7 @@ class AccountService:
         if username is None:
             raise DomainError("USER_NOT_FOUND", "The user no longer exists.")
         wrong = False
+        tokens = 0
         with self.db.transaction() as conn:
             conn.execute(select(func.pg_advisory_xact_lock(address_lock(client_ip))))
             conn.execute(select(func.pg_advisory_xact_lock(username_lock(username))))
@@ -544,25 +554,26 @@ class AccountService:
                         updated_at=now,
                     )
                 )
-                conn.execute(
-                    update(SessionRow)
-                    .where(
-                        SessionRow.user_id == user_id,
-                        SessionRow.id != keep_session_id,
-                        SessionRow.revoked_at.is_(None),
-                    )
-                    .values(revoked_at=now, revoked_reason="password_set")
+                revoke_user_sessions(
+                    conn,
+                    user_id,
+                    "password_set",
+                    now,
+                    keep_session_id=keep_session_id,
                 )
+                tokens = revoke_user_tokens(conn, user_id, "password_set", now)
                 record_audit(
                     conn,
                     Actor.user(user_id, username),
                     "user.password_set",
                     target_type="user",
                     target_id=username,
+                    details={"tokens_revoked": tokens} if tokens else None,
                     at=now,
                 )
         if wrong:
             raise DomainError("PASSWORD_WRONG", "The current password is incorrect.")
+        return tokens
 
     # Users and codes
 
@@ -698,13 +709,20 @@ class AccountService:
             # A reset often answers a suspected compromise: log the user out now,
             # not only once the code is redeemed.
             revoked = revoke_user_sessions(conn, row.id, "reset_code", now)
+            details: dict[str, object] = {
+                "purpose": purpose,
+                "sessions_revoked": revoked,
+            }
+            tokens = revoke_user_tokens(conn, row.id, "reset_code", now)
+            if tokens:
+                details["tokens_revoked"] = tokens
             record_audit(
                 conn,
                 actor,
                 "user.reset_code",
                 target_type="user",
                 target_id=row.username,
-                details={"purpose": purpose, "sessions_revoked": revoked},
+                details=details,
                 at=now,
             )
             return self._issue_code(conn, actor, row, purpose, now)
@@ -860,13 +878,28 @@ class AccountService:
                     purge_practice_of_user(conn, actor, row.id, "account_deactivated"),
                 )
             self._new_generation(conn, row.id, now, reason=action)
+            details: dict[str, object] = {column: value}
+            # Issue 305: deactivation (and, harmlessly, reactivation) revokes
+            # every token; losing the admin role only the tokens it backed.
+            # Gaining it revokes none: the owner's tokens already act with
+            # the owner's rights, and no token kind or scope gains a meaning
+            # it did not have when it was created (a personal or project token
+            # never holds the admin scope).
+            if column == "active":
+                tokens = revoke_user_tokens(conn, row.id, action, now)
+            elif not value:
+                tokens = revoke_unbacked_tokens(conn, row.id, action, now)
+            else:
+                tokens = 0
+            if tokens:
+                details["tokens_revoked"] = tokens
             record_audit(
                 conn,
                 actor,
                 action,
                 target_type="user",
                 target_id=row.username,
-                details={column: value},
+                details=details,
                 at=now,
             )
             return _user(self._lock_user(conn, row.username))
@@ -882,7 +915,9 @@ class AccountService:
         technical reports and its idempotency receipts. The old username is
         replaced by ``anonymised-<id>`` in the audit trail (actor
         label, target and ``details.username``; the append-only trigger lets
-        this one transaction through) and in job labels.
+        this one transaction through) and in job labels. Every stored
+        project archive of a finished export or import job is deleted, since
+        it may carry the e-mail address (#306).
 
         Raises:
             DomainError: ``USER_NOT_FOUND``, ``USER_ACTIVE`` for an active
@@ -906,6 +941,13 @@ class AccountService:
                 self.db,
                 purge_practice_of_user(conn, actor, row.id, "account_anonymised"),
             )
+            # Issue 306: stored project archives may name the person with
+            # their e-mail address; every finished one goes.
+            from ontotator.exchange.archive import discard_archive_files
+
+            unlink_after_commit(
+                self.db, discard_archive_files(conn, now, everything=True)
+            )
             conn.execute(
                 update(UserRow)
                 .where(UserRow.id == row.id)
@@ -928,6 +970,7 @@ class AccountService:
                 delete(LoginAttemptRow).where(LoginAttemptRow.username == row.username)
             )
             self._new_generation(conn, row.id, now, reason="user.anonymise")
+            revoke_user_tokens(conn, row.id, "user.anonymise", now)
             # Session rows stay (edit events reference them); their traces go.
             conn.execute(
                 update(SessionRow)
@@ -1101,7 +1144,7 @@ class AccountService:
         *,
         reason: str,
     ) -> None:
-        """Store a password hash; this ends the user's sessions and codes."""
+        """Store a password hash; this ends the user's sessions, codes and tokens."""
         statement = pg_insert(PasswordCredentialRow).values(
             user_id=user_id, password_hash=password_hash, changed_at=now
         )
@@ -1115,12 +1158,16 @@ class AccountService:
             )
         )
         self._new_generation(conn, user_id, now, reason=reason)
+        revoke_user_tokens(conn, user_id, reason, now)
 
     @staticmethod
     def _new_generation(
         conn: Connection, user_id: int, now: datetime, *, reason: str
     ) -> None:
-        """Invalidate the user's outstanding codes and end its sessions."""
+        """Invalidate the user's outstanding codes and end its sessions.
+
+        API tokens are the caller's to revoke (``ontotator.auth.tokens``).
+        """
         conn.execute(
             update(UserRow)
             .where(UserRow.id == user_id)

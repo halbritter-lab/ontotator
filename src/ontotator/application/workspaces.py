@@ -6,6 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from ontotator.application.consolidation_blinding import round_blinding
 from ontotator.domain.annotations import AnnotationRef, AnnotationSnapshot
 from ontotator.domain.axes import AxisDefinition
 from ontotator.domain.axis_visibility import editor_profile, legacy_axes_config
@@ -225,6 +226,19 @@ class WorkspaceService:
             for snap in snapshots
         ]
 
+    def _blind_inputs(
+        self, key: WorkspaceKey, inputs: list[EditorProposal]
+    ) -> list[EditorProposal]:
+        """A consolidation's inputs without their authors' pseudonyms when the
+        project hides annotator names (issue 302); a lead sees them."""
+        access = getattr(self.repo, "access", None)
+        if key.round_id is None or access is None or not inputs:
+            return inputs
+        with self.repo.db.transaction() as conn:
+            pid = self.repo._require_project(conn, key.project_key)
+            blinding = round_blinding(conn, access, pid, key.project_key, key.round_id)
+        return blinding.snapshots(inputs) if blinding else inputs
+
     def open(
         self,
         key: WorkspaceKey,
@@ -423,6 +437,7 @@ class WorkspaceService:
         editor_inputs = self._editor_proposals(
             key.project_key, key.document_id, available_inputs
         )
+        editor_inputs = self._blind_inputs(key, editor_inputs)
         offered = [
             (snap.annotation.annotation_id, snap.version, snap.proposal_set_id)
             for snap in editor_inputs

@@ -7,6 +7,7 @@ import { GuidelinesSection } from "./GuidelinesSection";
 import { hiddenCount, HiddenAxisValuesField } from "./HiddenAxisValuesField";
 import { LanguagesField } from "./LanguagesField";
 import { MembersSection } from "./MembersSection";
+import { TokensSection } from "../me/TokensSection";
 import { SettingsCard, SettingsHint } from "./SettingsCard";
 import { draftPins, PinFields, ProfileUpload, ReleaseFields, serializePins, ANNOTATION_SCHEME_LABELS, TaskProfileHelp, WorkflowFields, workflowOf, type UploadedProfile } from "./projectFields";
 import { RepinReportPanel } from "./RepinReport";
@@ -118,7 +119,7 @@ function SettingsEditor({ initial, ontologies, projectKey, onSaved, section = DE
   const work: Record<Section, () => Promise<ProjectSettings>> = {
     General: () => api.updateProjectSettings(projectKey, { name: general.name, description: general.description.trim() ? general.description : null, languages: general.languages }),
     Annotation: () => api.updateProjectSettings(projectKey, annotation),
-    Workflow: () => api.updateProjectSettings(projectKey, { import_plan: workflow.import_plan, annotations_per_text: workflow.annotations_per_text, tool_proposal_mode: workflow.tool_proposal_mode, annotate_accepted_translations_only: workflow.annotate_accepted_translations_only, adjudicator_not_annotator: workflow.adjudicator_not_annotator, record_working_time: workflow.record_working_time }),
+    Workflow: () => api.updateProjectSettings(projectKey, { import_plan: workflow.import_plan, annotations_per_text: workflow.annotations_per_text, tool_proposal_mode: workflow.tool_proposal_mode, annotate_accepted_translations_only: workflow.annotate_accepted_translations_only, adjudicator_not_annotator: workflow.adjudicator_not_annotator, blind_consolidation: workflow.blind_consolidation, record_working_time: workflow.record_working_time }),
     // The check first: a move that touches drafts, or any move once work was submitted, waits for the lead's look.
     Pins: async () => {
       const chosen = serializePins(ids, pins);
@@ -231,7 +232,7 @@ function SettingsEditor({ initial, ontologies, projectKey, onSaved, section = DE
 
   let content: JSX.Element;
   switch (section) {
-    case "people": content = <div ref={bindSection} tabIndex={-1} className="settings-section"><MembersSection projectKey={projectKey} /></div>; break;
+    case "people": content = <div ref={bindSection} tabIndex={-1} className="settings-section"><MembersSection projectKey={projectKey} /><TokensSection mode={{ kind: "project", projectKey }} /></div>; break;
     case "workflow": content = <form ref={bindSection} tabIndex={-1} className="settings-section" aria-label="Workflow" onSubmit={event => submit(event, "Workflow")}>
       <fieldset disabled={busy !== null}><legend className="visually-hidden">Workflow</legend>
         <WorkflowFields projectKey={projectKey} value={workflow} saved={workflowOf(model)} disabled={busy !== null} onChange={value => { setWorkflow(value); setSaved(null); }} />

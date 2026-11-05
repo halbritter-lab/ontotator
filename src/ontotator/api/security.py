@@ -1,11 +1,23 @@
-"""Session cookie, CSRF and origin checks for the API (T2 P3, index D-h, D-k).
+"""Session cookie, API token, CSRF and origin checks for the API (T2 P3, index D-h, D-k).
 
 Every ``/api/`` request needs an open session, named by the HttpOnly cookie
-``ontotator_session``. A write (POST, PUT, PATCH, DELETE) must also come
-from this site and carry the session's CSRF token in ``X-CSRF-Token``. The
+``ontotator_session``, or an API token in ``Authorization: Bearer`` (issue
+305). A write (POST, PUT, PATCH, DELETE) must also come from this site and,
+with a session, carry the session's CSRF token in ``X-CSRF-Token``. The
 two routes that have no session yet, login and code redemption, accept a
 write only when the browser says it comes from this site (``Origin`` or
 ``Sec-Fetch-Site``); a request that says nothing is refused.
+
+Only the ``Bearer`` scheme (in any case) selects a token; a request with
+another ``Authorization`` scheme, such as the HTTP Basic auth of a proxy in
+front, is a session request like one without the header. A bearer request
+skips only the CSRF check: a browser never adds the
+header by itself, so a cross-site page cannot make one. It is refused when
+it also carries the session cookie, when the browser says it comes from
+another site, and on every route whose scope in
+``ontotator.api.token_scopes`` the token lacks (session-only routes, the
+token routes among them, for every token). A write with a token is audited
+as ``api_token.use`` before it runs.
 """
 
 from __future__ import annotations
@@ -23,8 +35,10 @@ from starlette.datastructures import MutableHeaders
 from starlette.middleware.base import RequestResponseEndpoint
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from ontotator.api import token_scopes
+from ontotator.auth.api_tokens import ApiTokenService
 from ontotator.auth.context import current_principal as current_principal
-from ontotator.auth.sessions import SessionService
+from ontotator.auth.sessions import Principal, SessionService
 from ontotator.storage.database import busy_cause
 
 logger = logging.getLogger(__name__)
@@ -43,6 +57,10 @@ PUBLIC_PATHS = frozenset(
     }
 )
 CROSS_SITE_MESSAGE = "The request does not come from this site."
+TOKEN_INVALID_MESSAGE = (
+    "The API token is unknown, expired or revoked. Send a valid token as"
+    " 'Authorization: Bearer <token>'."
+)
 
 # The built frontend loads only same-origin scripts, styles and fonts; its
 # favicon and CSS icons are data: images; React sets styles via the CSSOM,
@@ -141,18 +159,114 @@ def project_busy(request: Request, cause: str) -> JSONResponse:
     return response
 
 
+def bearer_secret(authorization: str | None) -> str | None:
+    """The token of an ``Authorization: Bearer`` header ("" if it has none).
+
+    None for no header and for any other scheme: a proxy in front of the
+    server may use HTTP Basic auth, whose header the browser then sends on
+    every request, and such a request still uses the session cookie.
+    """
+    parts = (authorization or "").split(None, 1)
+    if not parts or parts[0].lower() != "bearer":
+        return None
+    return parts[1].strip() if len(parts) > 1 else ""
+
+
+def _token_refusal(
+    principal: Principal, needed: token_scopes.Requirement | None
+) -> JSONResponse | None:
+    """Why the token of ``principal`` may not call the route, or None."""
+    grant = principal.token
+    assert grant is not None
+    if needed is None or needed.scope == token_scopes.SESSION:
+        return _error(
+            403,
+            "TOKEN_NOT_ALLOWED",
+            "This route needs a browser session; an API token cannot use it.",
+        )
+    accepted = token_scopes.accepted_scopes(needed.scope)
+    if not set(accepted) & set(grant.scopes):
+        names = " or ".join(f"'{scope}'" for scope in accepted)
+        return _error(
+            403,
+            "TOKEN_SCOPE_MISSING",
+            f"The API token needs the {names} scope for this route.",
+        )
+    if grant.project_key is not None and not (
+        needed.project_token and needed.project_key in (None, grant.project_key)
+    ):
+        return _error(
+            403,
+            "TOKEN_NOT_ALLOWED",
+            f"This project token works only in project '{grant.project_key}'.",
+        )
+    return None
+
+
 def install_security(
     app: FastAPI,
     sessions: SessionService | None,
     public_origin: str | None,
     trusted_hosts: Collection[str] | None = None,
+    tokens: ApiTokenService | None = None,
 ) -> None:
-    """Add the middleware that resolves the session and checks writes.
+    """Add the middleware that resolves the session or token and checks writes.
 
     With ``trusted_hosts``, a request for any other host is refused first,
     whatever its path (DNS rebinding). Without ``sessions`` (the schema-only
-    app) every API request is refused, the public ones included.
+    app) every API request is refused, the public ones included. Without
+    ``tokens``, every bearer request is refused.
     """
+
+    async def bearer(
+        request: Request, call_next: RequestResponseEndpoint, secret: str
+    ) -> Response:
+        if not secret or tokens is None:
+            return _error(401, "TOKEN_INVALID", TOKEN_INVALID_MESSAGE)
+        if SESSION_COOKIE in request.cookies:
+            return _error(
+                400,
+                "CREDENTIALS_AMBIGUOUS",
+                "Send either the session cookie or an API token, not both.",
+            )
+        unsafe = request.method in UNSAFE_METHODS
+        if unsafe and cross_site(request, public_origin, fail_closed=False):
+            return _error(403, "CROSS_SITE_REQUEST", CROSS_SITE_MESSAGE)
+        try:
+            resolved = await run_in_threadpool(tokens.resolve, secret)
+        except SQLAlchemyError as exc:
+            cause = busy_cause(exc)
+            if cause is None:
+                raise
+            return project_busy(request, cause)
+        if resolved is None or resolved.token is None:
+            return _error(401, "TOKEN_INVALID", TOKEN_INVALID_MESSAGE)
+        principal: Principal = resolved
+        path = request.scope["path"]
+        needed = token_scopes.requirement(request.method, path)
+        refusal = _token_refusal(principal, needed)
+        if refusal is not None:
+            return refusal
+        if (
+            unsafe
+            and needed is not None
+            and token_scopes.accepted_scopes(needed.scope) != ("read",)
+        ):
+            try:
+                await run_in_threadpool(
+                    tokens.record_use, principal, request.method, path
+                )
+            except SQLAlchemyError as exc:
+                cause = busy_cause(exc)
+                if cause is None:
+                    raise
+                return project_busy(request, cause)
+        request.state.principal = principal
+        reset = current_principal.set(principal)
+        try:
+            return await call_next(request)
+        finally:
+            current_principal.reset(reset)
 
     @app.middleware("http")
     async def authenticate(
@@ -172,6 +286,11 @@ def install_security(
             return await call_next(request)
         if sessions is None:
             return _error(401, "NOT_AUTHENTICATED", "Log in to continue.")
+        # Only the Bearer scheme names a token: a proxy in front may use HTTP
+        # Basic auth, whose header the browser then sends on every request.
+        secret = bearer_secret(request.headers.get("authorization"))
+        if secret is not None:
+            return await bearer(request, call_next, secret)
         unsafe = request.method in UNSAFE_METHODS
         if path in PUBLIC_PATHS:  # no session yet
             if unsafe and cross_site(request, public_origin, fail_closed=True):

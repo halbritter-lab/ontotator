@@ -56,6 +56,9 @@ export interface ConsolidationScreenProps {
 
 type NextTask = { kind: "loading" } | { kind: "ready"; next: TaskSummary | null; remaining: number } | { kind: "error"; error: unknown };
 
+/** Issue 302: the project hides who annotated, so the inputs read "Annotator A", "Annotator B", … */
+const HIDDEN_NAMES = "Annotator names are hidden in this project. Annotator A, B, … are the annotators in the order they submitted.";
+
 /** Codepoint ranges of every exact occurrence of `query` (trimmed) in `text`. */
 export function passagesOf(text: string, query: string): TextRange[] {
   const needle = query.trim();
@@ -339,6 +342,7 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
     </header>
     {props.notice}
     {view.consolidation_reason && <InlineMessage tone="info" live={false}><p className="cons-lead-reason">{consolidationReasonText(view.consolidation_reason)}</p></InlineMessage>}
+    {view.annotators_hidden && <p className="field-hint cons-hidden-names">{HIDDEN_NAMES}</p>}
     {reason && !submitted && <InlineMessage tone="info">{reason}</InlineMessage>}
     {submitted && <div className="cons-submitted" role="status">
       <p>{props.practice ? "Consolidation submitted." : submittedText(!!isLead)}</p>

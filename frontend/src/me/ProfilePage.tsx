@@ -1,4 +1,5 @@
 import { SearchPreferencesSection } from "./SearchPreferencesSection";
+import { TokensSection } from "./TokensSection";
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import { api, type OwnProfilePatch, type Profile } from "../api/client";
 import { ErrorNotice } from "../admin/ErrorNotice";
@@ -61,6 +62,8 @@ export function ProfilePage({ backToTask, backToDocuments, onSaved, routeLeaveRe
   const [saved, setSaved] = useState(false);
   const [passwordError, setPasswordError] = useState<unknown>();
   const [passwordSaved, setPasswordSaved] = useState(false);
+  // A password change revokes the API tokens (issue 305): reload their list.
+  const [tokensEpoch, setTokensEpoch] = useState(0);
   const [passwords, setPasswords] = useState({ current: "", next: "", repeat: "" });
   const alive = useRef(false);
   const [leaving, setLeaving] = useState<{ resolve?: (allowed: boolean) => void; proceed?: () => void } | null>(null);
@@ -154,6 +157,7 @@ export function ProfilePage({ backToTask, backToDocuments, onSaved, routeLeaveRe
       if (!alive.current) return;
       setPasswords({ current: "", next: "", repeat: "" });
       setPasswordSaved(true);
+      setTokensEpoch(value => value + 1);
     } catch (error: unknown) {
       if (alive.current) setPasswordError(error);
     } finally {
@@ -193,8 +197,10 @@ export function ProfilePage({ backToTask, backToDocuments, onSaved, routeLeaveRe
     </section>
     <SearchPreferencesSection pseudonym={model.baseline.pseudonym} onDirty={setSearchDirty} />
     <PracticeSection onNavigate={onNavigate} />
+    <TokensSection key={tokensEpoch} mode={{ kind: "personal" }} />
     <section className="detail-section">
       <h2>Change password</h2>
+      <p>This logs out your other sessions and revokes all your API tokens, the project tokens you created included.</p>
       <form aria-label="Change password" onSubmit={(event) => { event.preventDefault(); void changePassword(); }}>
         <TextInput id="password-current" label="Current password" type="password" autoComplete="current-password" required value={passwords.current} disabled={!!busy}
           onChange={(event) => { setPasswordSaved(false); setPasswords({ ...passwords, current: event.target.value }); }} />
@@ -203,7 +209,7 @@ export function ProfilePage({ backToTask, backToDocuments, onSaved, routeLeaveRe
         <TextInput id="password-repeat" label="Repeat new password" type="password" autoComplete="new-password" required value={passwords.repeat} disabled={!!busy}
           onChange={(event) => { setPasswordSaved(false); setPasswords({ ...passwords, repeat: event.target.value }); }} />
         {passwordError != null && <ErrorNotice error={passwordError} />}
-        {passwordSaved && <InlineMessage tone="success">Password changed. Other sessions were logged out.</InlineMessage>}
+        {passwordSaved && <InlineMessage tone="success">Password changed. Other sessions were logged out and your API tokens were revoked.</InlineMessage>}
         <Button type="submit" disabled={!!busy} loading={busy === "password"}>Change password</Button>
       </form>
     </section>

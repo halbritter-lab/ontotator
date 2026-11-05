@@ -56,6 +56,34 @@ class BlobStore:
             raise
         return digest
 
+    def put_file(self, source: Path, sha256: str) -> bool:
+        """Store the file ``source`` under ``sha256`` without reading it into
+        memory; whether it was written (False: stored already).
+
+        Raises:
+            ValueError: the file's SHA-256 is not ``sha256``.
+        """
+        target = self.path(sha256)
+        if target.is_file():
+            return False
+        target.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=target.parent, prefix=".incoming-")
+        try:
+            digest = hashlib.sha256()
+            with os.fdopen(fd, "wb") as handle, source.open("rb") as reader:
+                while chunk := reader.read(1024 * 1024):
+                    digest.update(chunk)
+                    handle.write(chunk)
+                handle.flush()
+                os.fsync(handle.fileno())
+            if digest.hexdigest() != sha256:
+                raise ValueError(f"{source} is not {sha256}")
+            os.replace(tmp, target)
+        except BaseException:
+            Path(tmp).unlink(missing_ok=True)
+            raise
+        return True
+
     def delete(self, sha256: str) -> None:
         """Remove the stored file; the caller checked that nothing references it."""
         self.path(sha256).unlink(missing_ok=True)

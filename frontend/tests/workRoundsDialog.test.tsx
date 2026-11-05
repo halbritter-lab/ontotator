@@ -256,6 +256,18 @@ describe("Original evidence dialog", () => {
     expect(summary.closest("details")!.open).toBe(false);
   });
 
+  it("names a blinded author as Annotator A, not by the opaque id (#302)", async () => {
+    vi.spyOn(api, "getVariantText").mockResolvedValue({ document_id: "target", text: "Had seizure today.", text_sha256: "hash" });
+    const blinded = input();
+    blinded.source_snapshot.annotation.provenance.actor.actor_id = "annotator-a";
+    render(<RoundInputEvidenceDialog projectKey="p" input={blinded} onClose={vi.fn()} labelFor={labelFor} sourceName="Round 2" />);
+    const box = screen.getByRole("dialog", { name: "Original finding from Round 2" });
+    expect(box.querySelector(".round-evidence__meta")!.textContent).toBe("Submitted 19 Oct, 00:57, de v1, Annotator A");
+    await waitFor(() => expect(box.querySelector(".text-container")).not.toBeNull());
+    expect(box.textContent).toContain("Annotator A, ");
+    expect(box.textContent).not.toContain("annotator-a,");
+  });
+
   it("keeps facts and details when the original text is unavailable", async () => {
     vi.spyOn(api, "getVariantText").mockResolvedValue({ document_id: "target", text: "Wrong", text_sha256: "other" });
     render(<RoundInputEvidenceDialog projectKey="p" input={input()} onClose={vi.fn()} labelFor={labelFor} sourceName="Round 2" />);

@@ -16,6 +16,7 @@ from ontotator.auth.accounts import (
     User,
     normalize_languages,
 )
+from ontotator.auth.api_tokens import token_usable
 from ontotator.auth.audit import Actor, read_audit
 from ontotator.auth.authority import lock_user_authority
 from ontotator.auth.sessions import Principal, SessionService
@@ -208,22 +209,27 @@ def _admin_write(
             raise AccessDenied(
                 "ADMIN_REQUIRED", "Only a system administrator may do this."
             )
-        session = conn.execute(
-            select(SessionRow).where(
-                SessionRow.id == principal.session_id,
-                SessionRow.user_id == principal.user_id,
-                SessionRow.revoked_at.is_(None),
-            )
-        ).one_or_none()
         sessions: SessionService = request.app.state.sessions
         # Match resolution's injected clock, including time spent waiting above.
         now = sessions._now()
-        if (
-            session is None
-            or session.expires_at <= now
-            or now - session.last_seen_at > sessions.policy.idle
-        ):
-            raise NotAuthenticated()
+        if principal.token is not None:
+            # A system token (issue 305): still open, read after the locks.
+            if not token_usable(conn, principal.token.token_id, now):
+                raise NotAuthenticated()
+        else:
+            session = conn.execute(
+                select(SessionRow).where(
+                    SessionRow.id == principal.session_id,
+                    SessionRow.user_id == principal.user_id,
+                    SessionRow.revoked_at.is_(None),
+                )
+            ).one_or_none()
+            if (
+                session is None
+                or session.expires_at <= now
+                or now - session.last_seen_at > sessions.policy.idle
+            ):
+                raise NotAuthenticated()
         if target_username is not None and target is None:
             raise DomainError("USER_NOT_FOUND", "The user does not exist.")
         yield target
@@ -356,6 +362,7 @@ def user_audit(
         user = accounts.get_by_username(username)
         if user is None:
             raise DomainError("USER_NOT_FOUND", "The user does not exist.")
-        return [
-            AuditEventView(**vars(event)) for event in read_audit(conn, user_id=user.id)
-        ]
+        # Token requests would crowd out account changes; the changes they made
+        # name the token themselves, and `ontotator admin audit` keeps them.
+        events = read_audit(conn, user_id=user.id, exclude_actions=("api_token.use",))
+        return [AuditEventView(**vars(event)) for event in events]

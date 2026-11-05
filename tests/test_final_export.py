@@ -52,5 +52,5 @@ def test_queued_final_export_keeps_exact_old_selection(case_env):
     with zipfile.ZipFile(io.BytesIO(downloaded.content)) as bundle:
         receipt = json.loads(bundle.read("receipt.json"))
         assert receipt["selections"][0]["submission_id"] == "original"
-        assert "selected.t1.zip" in bundle.namelist()
+        assert "selected-results.ontospan.zip" in bundle.namelist()
         assert receipt["omissions"] == state["omissions"]
