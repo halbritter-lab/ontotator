@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import time
 import zipfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -44,7 +45,7 @@ from ontotator.auth.audit import Actor
 from ontotator.domain.errors import DomainError
 from ontotator.exchange import archive as project_archive
 from ontotator.exchange.jobs import HANDLERS, store_file
-from ontotator.jobs.queue import JobQueue, Worker
+from ontotator.jobs.queue import JobQueue
 from ontotator.storage.tables import (
     AssignmentRow,
     AuditEventRow,
@@ -56,13 +57,6 @@ from ontotator.storage.tables import (
     SubmissionRow,
     UserRow,
 )
-
-
-@pytest.fixture(autouse=True)
-def _no_server_worker(monkeypatch: pytest.MonkeyPatch) -> None:
-    """These tests run jobs inline; the app's worker would race them for a claim."""
-    monkeypatch.setattr(Worker, "start", lambda self: None)
-
 
 FULL = {"assertion": "present", "experiencer": "patient", "temporality": "current"}
 
@@ -88,7 +82,17 @@ def _run_job(db: Any, kind: str, payload: dict[str, Any], **options: Any) -> Any
     queue = JobQueue(db, HANDLERS)
     job_id = queue.enqueue(kind, payload, actor=OPERATOR, **options)
     claimed = queue.claim(job_id, "test")
-    assert claimed is not None
+    if claimed is None:
+        # The server's own job worker claimed it first: wait for its outcome.
+        deadline = time.monotonic() + 60
+        while (job := queue.get(job_id)) is not None and job.status in (
+            "queued",
+            "running",
+        ):
+            assert time.monotonic() < deadline, f"job {job_id} did not finish"
+            time.sleep(0.05)
+        assert job is not None
+        return job
     return queue.run(claimed, "test")
 
 
@@ -755,6 +759,8 @@ def test_an_import_on_the_same_server_keeps_the_export_file(tmp_path: Path) -> N
         assert job.status == "succeeded", job.error
         assert db.blobs.path(sha).exists()
 
+        # The server's worker must not run the queued import before the expiry below.
+        source.app.state.job_worker.stop()  # type: ignore[attr-defined]
         queue = JobQueue(db, HANDLERS)
         queued = queue.enqueue(
             "project_archive_import",
