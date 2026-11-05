@@ -718,6 +718,31 @@ def test_a_token_follows_up_on_the_work_its_scope_starts(
     assert "'read' or 'import' or 'export'" in refused.json()["details"]
 
 
+@pytest.mark.parametrize("kind", ["personal", "project"])
+def test_every_export_a_token_starts_runs(
+    app: FastAPI, admin: TestClient, kind: str
+) -> None:
+    url = (
+        "/api/v1/me/tokens"
+        if kind == "personal"
+        else f"/api/v1/projects/{PROJECT}/tokens"
+    )
+    exporter = _bearer(app, _create(admin, ["export"], url)["secret"], **ORIGIN)
+    started = [
+        exporter.post(f"/api/v1/projects/{PROJECT}/exports", json={"kind": export})
+        for export in ("edit_log", "work_time")
+    ]
+    started.append(
+        exporter.post(f"/api/v1/projects/{PROJECT}/exports/translation-reviews")
+    )
+    for response in started:
+        assert response.status_code == 200, response.text
+        job = app.state.jobs.claim(response.json()["job_id"], "token-test")
+        finished = app.state.jobs.run(job, "token-test")
+        assert finished.status == "succeeded", (job.kind, finished.error)
+        assert exporter.get(f"/api/v1/jobs/{finished.id}/download").status_code == 200
+
+
 def test_a_project_token_polls_only_jobs_of_its_project(
     app: FastAPI, admin: TestClient
 ) -> None:

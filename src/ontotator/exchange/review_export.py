@@ -203,12 +203,19 @@ def translation_review_export(job: Job, ctx: JobContext) -> dict[str, Any]:
             .join(ProjectRow, ProjectRow.id == JobRow.project_id)
             .where(JobRow.id == job.id)
         ).one_or_none()
+        # The queue keeps the API token that started the job in the stored
+        # payload and hands the handler the payload without it (issue 305).
+        stored = (
+            None
+            if row is None
+            else {k: v for k, v in row.payload.items() if k != "api_token"}
+        )
         if (
             row is None
             or row.kind != "translation_review_export"
             or row.project_id != job.project_id
-            or row.payload != job.payload
-            or row.payload != {"project": row.project_key}
+            or stored != job.payload
+            or stored != {"project": row.project_key}
         ):
             raise DomainError("PROJECT_NOT_FOUND")
         key, pid = row.project_key, row.project_id
