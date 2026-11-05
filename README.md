@@ -2,7 +2,7 @@
 
 Ontotator is a self-hosted web service for collaborative annotation of ontology terms, such as Human Phenotype Ontology (HPO) concepts, in texts.
 
-[![CI](https://github.com/halbritter-lab/ontotator/actions/workflows/ci.yml/badge.svg)](https://github.com/halbritter-lab/ontotator/actions/workflows/ci.yml)
+[![CI](https://github.com/phentrieve/ontotator/actions/workflows/ci.yml/badge.svg)](https://github.com/phentrieve/ontotator/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](pyproject.toml)
 
@@ -10,7 +10,7 @@ Ontotator is a self-hosted web service for collaborative annotation of ontology 
 
 Several people mark text spans, link them to ontology concepts and review each other's work. Administrators load ontology releases and documents, set up projects and assign people to them. The server runs without internet access; operators supply the ontology releases.
 
-Website with tutorial videos: <https://halbritter-lab.github.io/ontotator/> (source in [`site/`](site/)).
+Website with tutorial videos: <https://phentrieve.github.io/ontotator/> (source in [`site/`](site/)).
 
 Ontotator is still changing: interfaces, data formats and the database schema can differ between releases. Releases are tagged `vX.Y.Z` (from `v0.1.0`) and follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html); the [CHANGELOG](CHANGELOG.md) lists what each release changes.
 
