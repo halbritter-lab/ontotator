@@ -14801,6 +14801,15 @@
             },
             "type": "array",
             "title": "Accepted Omissions"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "t1",
+              "phenopacket"
+            ],
+            "title": "Format",
+            "default": "t1"
           }
         },
         "additionalProperties": false,

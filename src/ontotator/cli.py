@@ -13,7 +13,7 @@ from collections.abc import Iterator
 from datetime import UTC
 from importlib import metadata
 from pathlib import Path
-from typing import Annotated, Any, NoReturn
+from typing import Annotated, Any, Literal, NoReturn
 from urllib.parse import urlsplit
 
 import typer
@@ -1141,6 +1141,33 @@ def import_command(
         typer.echo(f"warnings: {', '.join(result['warnings'])}")
 
 
+def _newest_final_snapshot(db: Database, project: str) -> dict[str, str]:
+    """The job payload naming the project's newest final-result snapshot."""
+    from sqlalchemy import select
+
+    from ontotator.storage.final_tables import ExportSelectionSnapshotRow
+    from ontotator.storage.tables import ProjectRow
+
+    with db.transaction() as conn:
+        row = conn.execute(
+            select(
+                ExportSelectionSnapshotRow.snapshot_id,
+                ExportSelectionSnapshotRow.sha256,
+            )
+            .join(ProjectRow, ProjectRow.id == ExportSelectionSnapshotRow.project_id)
+            .where(ProjectRow.project_key == project)
+            .order_by(ExportSelectionSnapshotRow.created_at.desc())
+            .limit(1)
+        ).first()
+    if row is None:
+        _fail(
+            "NO_FINAL_EXPORT",
+            f"Project '{project}' has no final export yet; a lead creates one "
+            "under Export > Final results.",
+        )
+    return {"project": project, "snapshot_id": row[0], "snapshot_sha256": row[1]}
+
+
 def _export(
     ctx: typer.Context, kind: str, project: str, out: Path, *, wait: bool
 ) -> None:
@@ -1148,7 +1175,12 @@ def _export(
     if wait and out.exists():
         _fail("OUTPUT_EXISTS", f"{out} exists; choose another file.")
     with _open_database(ctx) as db:
-        job = _run_job(db, kind, {"project": project}, wait=wait)
+        payload = (
+            _newest_final_snapshot(db, project)
+            if kind == "final_phenopacket_export"
+            else {"project": project}
+        )
+        job = _run_job(db, kind, payload, wait=wait)
         if job is None:
             return
         data = db.blobs.get(job.result["sha256"])
@@ -1167,6 +1199,14 @@ def _export(
         )
     elif kind == "translation_review_export":
         typer.echo(f"Wrote {out}: {_plural(result['reviews'], 'review')}.")
+    elif kind == "final_phenopacket_export":
+        totals = result["totals"]
+        typer.echo(
+            f"Wrote {out}: {_plural(result['phenopackets'], 'Phenopacket')} of "
+            f"final export {result['snapshot_id']}, "
+            f"{_plural(totals['exported'], 'feature')}; see report.json for what "
+            "was left out."
+        )
     else:
         typer.echo(f"Wrote {out}: {_plural(result['events'], 'event')}.")
 
@@ -1187,9 +1227,19 @@ def export_command(
     project: ProjectArgument,
     out: OutOption,
     no_wait: NoWaitOption = False,
+    export_format: Annotated[
+        Literal["t1", "phenopacket"],
+        typer.Option(
+            "--format",
+            help="t1: the latest submissions as an Ontospan bundle. phenopacket: "
+            "Phenopackets (derived, lossy) of the results of the newest final "
+            "export, which a lead creates in the web app.",
+        ),
+    ] = "t1",
 ) -> None:
-    """Export the latest submissions as a T1 bundle (ZIP)."""
-    _export(ctx, "t1_export", project, out, wait=not no_wait)
+    """Export the latest submissions as an Ontospan bundle (ZIP), or Phenopackets."""
+    kind = "t1_export" if export_format == "t1" else "final_phenopacket_export"
+    _export(ctx, kind, project, out, wait=not no_wait)
 
 
 @admin_app.command("export-edit-log")

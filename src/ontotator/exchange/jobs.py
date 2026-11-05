@@ -8,8 +8,10 @@ a system admin (Q5).
 
 from __future__ import annotations
 
+import io
 import json
 import tempfile
+import zipfile
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -18,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 import ontospan
+from ontospan.bundle import MANIFEST as BUNDLE_MANIFEST
 from sqlalchemy import Connection, Text, cast, delete, exists, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
@@ -29,6 +32,7 @@ from ontotator.authz.scoped import ScopedRepository, project_not_found
 from ontotator.domain.errors import AccessDenied, DomainError
 from ontotator.domain.work_rounds import CARRY_ROUND_KINDS
 from ontotator.exchange.final_export import final_t1_export
+from ontotator.exchange.final_phenopackets import final_phenopacket_export
 from ontotator.exchange.reanchor_job import reanchor
 from ontotator.exchange.review_export import translation_review_export
 from ontotator.exchange.t1 import (
@@ -348,20 +352,29 @@ def draft_input_ref(project: str, entry: Mapping[str, Any]) -> str:
     )
 
 
-def serialize_t1_content(
+@dataclass(frozen=True)
+class T1Units:
+    """The validated units of one export, before they are written."""
+
+    units: list[ontospan.AnnotatedDocument]
+    # Per unit: the ontology view of each layer's ontology, by ontology id.
+    views: list[dict[str, ontospan.OntologyView]]
+    counts: ExportCounts
+    legacy_warnings: list[dict[str, Any]]
+    warning_counts: dict[str, int]
+
+
+def build_t1_units(
     db: Database,
-    actor: Actor,
     project: str,
     content: ProjectExport,
-    job_id: int,
     *,
     final_snapshot_id: str | None = None,
-    final_bundle_kind: str = "selected",
     source_ref_overrides: Mapping[str, str] | None = None,
     round_kinds: Mapping[str, str] | None = None,
     views: dict[str, ontospan.OntologyView] | None = None,
-) -> dict[str, Any]:
-    """Serialize exactly the supplied immutable input selection.
+) -> T1Units:
+    """Build and validate one unit per supplied submission, in order.
 
     ``views`` caches the loaded ontology releases by digest; a caller that
     needs them afterwards (the final export's term labels) passes its own.
@@ -501,41 +514,109 @@ def serialize_t1_content(
         units.append(with_layers(unit, by_layer))
         for name in counts:
             counts[name] += unit_counts[name]  # type: ignore[literal-required]
+    unit_views = [
+        {
+            layer.ontology.id: view_of(layer.ontology.sha256 or "")
+            for layer in by_layer.values()
+        }
+        for by_layer in submission_layers
+    ]
     # write_bundle checks the format without ontology views. Validate against
     # the release each unit names before storing an export artifact.
-    warning_counts = _validate(
-        units,
-        [
-            {
-                layer.ontology.id: view_of(layer.ontology.sha256 or "")
-                for layer in by_layer.values()
-            }
-            for by_layer in submission_layers
-        ],
+    warning_counts = _validate(units, unit_views)
+    return T1Units(units, unit_views, counts, legacy_warnings, warning_counts)
+
+
+def t1_contributors(content: ProjectExport) -> list[ontospan.Contributor]:
+    return [
+        ontospan.Contributor(actor_id=pseudonym, name=name, orcid=orcid)
+        for pseudonym, name, orcid in content.contributors
+    ]
+
+
+def write_t1_bundle(
+    units: Sequence[ontospan.AnnotatedDocument],
+    *,
+    bundle_id: str,
+    created_at: datetime,
+    contributors: Sequence[ontospan.Contributor],
+) -> bytes:
+    """The bundle as a ZIP whose bytes depend only on its content.
+
+    ontospan stamps ZIP entries with the current time; this writes the same
+    files in the same order, stamped with ``created_at``.
+    """
+    created_at = created_at.astimezone(UTC).replace(microsecond=0)
+    stamp = created_at.timetuple()[:6]
+    with tempfile.TemporaryDirectory(prefix="ontotator-export-") as tmp:
+        target = Path(tmp) / bundle_id
+        try:
+            manifest = ontospan.write_bundle(
+                target,
+                units,
+                bundle_id=bundle_id,
+                created_at=created_at,
+                contributors=contributors,
+            )
+        except ontospan.FormatError as exc:
+            raise _invalid(exc.report) from None
+        output = io.BytesIO()
+        with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
+            for path in (BUNDLE_MANIFEST, *(entry.path for entry in manifest.files)):
+                info = zipfile.ZipInfo(path, date_time=stamp)
+                info.compress_type = zipfile.ZIP_DEFLATED
+                info.external_attr = 0o600 << 16
+                archive.writestr(info, (target / path).read_bytes())
+    return output.getvalue()
+
+
+def serialize_t1_content(
+    db: Database,
+    actor: Actor,
+    project: str,
+    content: ProjectExport,
+    job_id: int,
+    *,
+    final_snapshot_id: str | None = None,
+    final_bundle_kind: str = "selected",
+    source_ref_overrides: Mapping[str, str] | None = None,
+    round_kinds: Mapping[str, str] | None = None,
+    created_at: datetime | None = None,
+    views: dict[str, ontospan.OntologyView] | None = None,
+) -> dict[str, Any]:
+    """Serialize exactly the supplied immutable input selection.
+
+    ``created_at`` fixes the bundle's time (the final export passes the
+    snapshot's), so the same input gives the same bytes; default is now.
+    ``views`` caches the loaded ontology releases by digest; a caller that
+    needs them afterwards (the final export's term labels) passes its own.
+    """
+    built = build_t1_units(
+        db,
+        project,
+        content,
+        final_snapshot_id=final_snapshot_id,
+        source_ref_overrides=source_ref_overrides,
+        round_kinds=round_kinds,
+        views=views,
     )
+    units, counts = built.units, built.counts
     now = datetime.now(UTC).replace(microsecond=0)
     bundle_id = (
         f"{final_bundle_kind}-{final_snapshot_id}"
         if final_snapshot_id
         else f"{project}-{now:%Y%m%dT%H%M%SZ}"
     )
-    contributors = [
-        ontospan.Contributor(actor_id=pseudonym, name=name, orcid=orcid)
-        for pseudonym, name, orcid in content.contributors
-    ]
-    with tempfile.TemporaryDirectory(prefix="ontotator-export-") as tmp:
-        target = Path(tmp) / f"{bundle_id}.zip"
-        try:
-            ontospan.write_bundle(
-                target,
-                units,
-                bundle_id=bundle_id,
-                created_at=now,
-                contributors=contributors,
-            )
-        except ontospan.FormatError as exc:
-            raise _invalid(exc.report) from None
-        sha = store_file(db, target.read_bytes())
+    contributors = t1_contributors(content)
+    sha = store_file(
+        db,
+        write_t1_bundle(
+            units,
+            bundle_id=bundle_id,
+            created_at=now if created_at is None else created_at,
+            contributors=contributors,
+        ),
+    )
     result = {
         "sha256": sha,
         "bundle_id": bundle_id,
@@ -544,8 +625,11 @@ def serialize_t1_content(
         "counts": dict(counts),
         # ontospan warnings (e.g. ``cohort_frequency``, ``exclusive_modifier_class``)
         # by code, with their counts next to them.
-        "warnings": [*legacy_warnings, *({"code": code} for code in warning_counts)],
-        "warning_counts": warning_counts,
+        "warnings": [
+            *built.legacy_warnings,
+            *({"code": code} for code in built.warning_counts),
+        ],
+        "warning_counts": built.warning_counts,
     }
     _audit(db, actor, "project.export", project, {**result, "job_id": job_id})
     return result
@@ -608,6 +692,7 @@ HANDLERS: dict[str, Handler] = {
     "t1_import": t1_import,
     "t1_export": t1_export,
     "final_t1_export": final_t1_export,
+    "final_phenopacket_export": final_phenopacket_export,
     "edit_log_export": edit_log_export,
     "work_time_export": work_time_export,
     "translation_review_export": translation_review_export,

@@ -180,6 +180,10 @@ Only you and the members with the **Consolidator** role are listed; the hint und
 
 Some texts still need your decision or have no final result. Either decide them in **Documents** first, or tick the box to export the ready results and leave the others out. See [Export final results](lead-results.md#export-final-results).
 
+### The Phenopackets could not be created
+
+A final result holds something a Phenopacket cannot, for example findings of one text made under two HPO releases. **Technical diagnostics** names the text. The results with receipt are not affected: choose that format to export them. See [Phenopackets](lead-results.md#phenopackets).
+
 ### I cannot remove a lead
 
 A project needs at least one lead. Add another lead first, then remove the role. See [Change a member's roles](lead-settings.md#change-a-members-roles).

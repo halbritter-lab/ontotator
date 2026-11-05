@@ -42,6 +42,12 @@ from ontotator.storage.tables import (
 )
 from ontotator.storage.workflow_tables import ReviewObligationResolutionRow
 
+# The job of each final export format; both read the same frozen snapshot.
+FINAL_JOB_KINDS = {
+    "t1": "final_t1_export",
+    "phenopacket": "final_phenopacket_export",
+}
+
 
 def _pseudonym(conn: Connection, user_id: int | None) -> str | None:
     if user_id is None:
@@ -326,12 +332,19 @@ class FinalResultService:
                     raise RevisionConflict(
                         "Export request ID was already used for another acknowledgement."
                     )
+                # The job this request queued: the first of its kind for the
+                # snapshot by this user. ``admin export --format phenopacket``
+                # adds further jobs for the same snapshot.
                 job = conn.execute(
-                    select(JobRow.id).where(
+                    select(JobRow.id)
+                    .where(
                         JobRow.project_id == pid,
-                        JobRow.kind == "final_t1_export",
+                        JobRow.kind == FINAL_JOB_KINDS[request.get("format", "t1")],
                         JobRow.payload["snapshot_id"].astext == previous["snapshot_id"],
+                        JobRow.requested_by == self.actor.user_id,
                     )
+                    .order_by(JobRow.id)
+                    .limit(1)
                 ).scalar_one()
                 return {"job_id": job}
             state = self._projection(conn, key, pid)
@@ -453,7 +466,7 @@ class FinalResultService:
             job_id = conn.execute(
                 insert(JobRow)
                 .values(
-                    kind="final_t1_export",
+                    kind=FINAL_JOB_KINDS[request.get("format", "t1")],
                     status="queued",
                     project_id=pid,
                     requested_by=self.actor.user_id,
