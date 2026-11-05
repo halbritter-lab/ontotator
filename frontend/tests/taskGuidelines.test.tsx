@@ -235,7 +235,8 @@ describe("task guidelines in the task screens", () => {
     annotationTask();
     await screen.findByRole("heading", { level: 1 });
     fireEvent.click(await screen.findByRole("button", { name: "More actions" }));
-    await waitFor(() => expect(screen.getAllByRole("menuitem").map(item => item.textContent))
+    // Names: an item with a description (Reset all my changes…, unavailable here) is named by its label.
+    await waitFor(() => expect(screen.getAllByRole("menuitem").map(item => item.getAttribute("aria-label") ?? item.textContent))
       .toEqual(["Work rounds", "Report a text problem…", "Report a technical problem…", "Guidelines v3", "Help for this screen", "Reset all my changes…", "Keyboard shortcuts (?)"]));
     expect(screen.queryByRole("button", { name: /^Guidelines v3, open the project guidelines/ })).toBeNull();
     fireEvent.click(screen.getByRole("menuitem", { name: "Guidelines v3" }));

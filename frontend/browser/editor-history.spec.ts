@@ -14,8 +14,9 @@ test.use({ actionTimeout: 15_000 });
 
 const textPane = (page: Page) => page.locator(".text-container");
 const findingRows = (page: Page) => page.locator('[data-list-key^="annotation:"]');
-const undoButton = (page: Page) => page.getByRole("button", { name: "Undo", exact: true });
-const redoButton = (page: Page) => page.getByRole("button", { name: "Redo", exact: true });
+// The header buttons; the Undo of a message is a different button ("Undo").
+const undoButton = (page: Page) => page.getByRole("button", { name: "Undo last change", exact: true });
+const redoButton = (page: Page) => page.getByRole("button", { name: "Redo last change", exact: true });
 const historyResponse = (page: Page, command: string) => page.waitForResponse(response =>
   response.url().endsWith("/history") && response.request().method() === "POST"
   && (response.request().postDataJSON() as { payload?: { command?: string } } | null)?.payload?.command === command);
@@ -33,6 +34,12 @@ test("undo and redo step through the changes, survive a reload, and reset return
   const s = await openLoop(page);
   await expect(undoButton(page)).toBeDisabled();
   await expect(redoButton(page)).toBeDisabled();
+  // Nothing to reset yet: the item says so and does nothing.
+  await page.getByRole("button", { name: "More actions" }).click();
+  const unavailable = page.getByRole("menuitem", { name: "Reset all my changes…" });
+  await expect(unavailable).toHaveAttribute("aria-disabled", "true");
+  await expect(unavailable).toHaveAccessibleDescription("Nothing changed in this round yet");
+  await page.keyboard.press("Escape");
 
   // Two steps: add Seizure, then confirm its default values.
   const start = s.texts["loop-en"].indexOf("seizure");
@@ -82,4 +89,45 @@ test("undo and redo step through the changes, survive a reload, and reset return
   await expect(undoButton(page)).toHaveAttribute("title", "Undo: reset all my changes");
   await undoButton(page).click();
   await expect(findingRows(page)).toHaveCount(1);
+});
+
+/** Adds Seizure with its defaults confirmed and waits until the history has both steps. */
+async function addSeizure(page: Page, s: ReviewFlowScenario): Promise<void> {
+  const start = s.texts["loop-en"].indexOf("seizure");
+  await selectText(page, start, start + "seizure".length);
+  await expect(page.getByRole("listbox", { name: "Terms", exact: true }).locator('[aria-selected="true"]')).toContainText("Seizure");
+  await page.keyboard.press("Enter");
+  await expect(page.locator("[data-confirm-defaults]")).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("[data-confirm-defaults]")).toHaveCount(0);
+  await expect(undoButton(page)).toHaveAttribute("title", "Undo: change the values of Seizure");
+}
+
+test("Ctrl+Z right after a value change undoes that change (review F1)", async ({ page }) => {
+  const s = await openLoop(page);
+  await addSeizure(page, s);
+  const assertion = page.getByRole("group", { name: /^Assertion/ });
+  const radio = (name: string) => assertion.getByRole("radio", { name: new RegExp(`^${name}`) });
+  await expect(radio("Present")).toBeChecked();
+  const refused: string[] = [];
+  page.on("response", response => { if (response.url().endsWith("/history") && response.status() >= 400) refused.push(`${response.status()}`); });
+
+  // The undo is pressed before the change is saved or the history is read again.
+  const undone = historyResponse(page, "undo_step");
+  await radio("Absent").check();
+  await page.keyboard.press("Control+z");
+  expect((await undone).ok()).toBeTruthy();
+  await expect(radio("Present")).toBeChecked();
+  await expect(undoButton(page)).toHaveAttribute("title", "Undo: change the values of Seizure");
+  await expect(redoButton(page)).toHaveAttribute("title", "Redo: change the values of Seizure");
+
+  // Two quick changes are one step (handbook): one Ctrl+Z takes both back.
+  const second = historyResponse(page, "undo_step");
+  await radio("Uncertain").check();
+  await radio("Absent").check();
+  await page.keyboard.press("Control+z");
+  expect((await second).ok()).toBeTruthy();
+  await expect(radio("Present")).toBeChecked();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  expect(refused).toEqual([]);
 });

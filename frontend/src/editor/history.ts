@@ -11,7 +11,8 @@ export function stepText(step: HistoryStepView, term: (layerId: string, termId: 
   const proposal = name ? `proposal ${name}` : "a proposal";
   const carried = name ? `carried finding ${name}` : "a carried finding";
   switch (step.action) {
-    case "create_annotation": return `add ${finding}`;
+    // "copy": Edit & Replace made an editable copy of a proposal.
+    case "create_annotation": return step.outcome === "copy" ? `edit and replace ${proposal}` : `add ${finding}`;
     case "recreate_reanchor": return `re-create ${finding}`;
     case "delete_draft_annotation": return `delete ${finding}`;
     case "set_term": return name ? `change the term to ${name}` : "change a term";
@@ -24,7 +25,7 @@ export function stepText(step: HistoryStepView, term: (layerId: string, termId: 
     case "remove_modifier": return `remove a modifier${name ? ` from ${name}` : ""}`;
     case "set_modifier_segments": return `change a modifier span${of}`;
     case "convert_to_modifier": return name ? `make ${name} a modifier` : "make a finding a modifier";
-    case "check_layer": return "mark a layer as checked";
+    case "check_layer": return step.outcome === "unchecked" ? "mark a layer as not checked" : "mark a layer as checked";
     case "decision":
       switch (step.outcome) {
         case "confirmed": return `accept ${proposal}`;
@@ -33,7 +34,8 @@ export function stepText(step: HistoryStepView, term: (layerId: string, termId: 
         case "changed": return `correct ${proposal}`;
         default: return `reset the decision on ${proposal}`;
       }
-    case "resolve_round_input": return step.outcome === "dismissed" ? `dismiss ${carried}` : `link ${carried}`;
+    // The server tells a check ("checked", also an older "completed") from a link to another finding ("linked").
+    case "resolve_round_input": return step.outcome === "dismissed" ? `dismiss ${carried}` : step.outcome === "linked" ? `link ${carried}` : `check ${carried}`;
     case "clear_round_input_resolution": return `reopen ${carried}`;
     case "resolve_reanchor": return `resolve moved ${finding}`;
     case "reset_changes": return "reset all my changes";

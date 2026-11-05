@@ -19,7 +19,7 @@ import { useCaseVersions } from "../variants/useCaseVersions";
 import { VariantDetails, variantDescription } from "../variants/CaseViewer";
 import { annotationOptions, pickVariant, refForKey } from "../variants/versionState";
 import { ErrorNotice } from "../admin/ErrorNotice";
-import { errorMessage } from "../admin/errors";
+import { ERROR_MESSAGES, errorMessage } from "../admin/errors";
 import type { AnnotationVersion, DraftHistoryView, HistoryStepView } from "../api/client";
 import { routeHref, type Route } from "./router";
 import { InlineMessage } from "../ui/InlineMessage";
@@ -35,6 +35,7 @@ import {
   onSessionRestored,
   ValidationError,
   ApiError,
+  ConflictError,
   type TaskSummary,
   type AnnotationSnapshot,
   type AxesValues,
@@ -777,7 +778,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   };
   const reportError = (error: unknown) => {
     if (error instanceof DiscardedChangesError) return; // user explicitly discarded these edits
-    setActionError(error instanceof Error ? error.message : String(error));
+    // A refusal without its own message ("API request failed with status 422") reads as its code's message.
+    const generic = error instanceof ApiError && /^API request failed with status \d+$/.test(error.message);
+    setActionError(generic ? errorMessage(error) : error instanceof Error ? error.message : String(error));
   };
 
   /** In-app confirmation dialog (resolves true when confirmed). */
@@ -1642,9 +1645,15 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       if (!(error instanceof DiscardedChangesError)) reportError(error);
       return;
     }
-    selectListKey(`annotation:${ann.annotation_id}`, true);
-    announceCarried(`Restored ${findingNameOf(deleted.snapshot)}.`);
+    announceRestored(deleted);
   });
+  /** Selects the restored finding and says so, after an undo by commands or through the history. */
+  const announceRestored = (deleted: DeletedFinding) => {
+    const id = deleted.snapshot.annotation.annotation_id;
+    if (!latestDraft.current.annotations?.some(a => a.annotation.annotation_id === id)) return;
+    selectListKey(`annotation:${id}`, true);
+    announceCarried(`Restored ${findingNameOf(deleted.snapshot)}.`);
+  };
 
   /** Delete; a deleted carried finding becomes its placeholder row, selected with "Dismiss with reason…" focused. */
   const deleteAnnotation = async (annotationId: string) => {
@@ -1661,7 +1670,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       const name = findingNameOf(deleted.snapshot);
       modifierCommands.showToast(canRestore(deleted)
         ? { message: `Deleted ${name}`, actionLabel: "Undo", undo: true,
-          onAction: () => { void undoFromToast(revision, () => restoreDeletedFinding(deleted)); } }
+          onAction: () => { void undoFromToast(revision, () => restoreDeletedFinding(deleted), () => announceRestored(deleted)); } }
         : { message: `Deleted ${name}` });
     }
     const after = homes.length ? carriedStateNow(homes[0].input.input_id) : undefined;
@@ -1683,21 +1692,44 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   // A ref as well: a second click before the next render must not send a second undo.
   const historyBusyRef = useRef(false);
   const setHistoryBusy = (busy: boolean) => { historyBusyRef.current = busy; setHistoryBusyState(busy); };
-  const historyRequest = useRef(0);
-  const loadHistory = async (): Promise<DraftHistoryView | null> => {
-    const request = ++historyRequest.current;
-    const next = await api.getHistory(workspaceId);
-    if (request !== historyRequest.current) return historyRef.current;
-    historyRef.current = next; setHistory(next);
-    return next;
+  // One read per draft revision: the editor's own reload and an undo pressed right after an edit share it, and
+  // an older answer never replaces a newer one. The epoch ends reads of another workspace.
+  const historyEpoch = useRef(0);
+  const historyLoad = useRef<{ epoch: number; revision: number; promise: Promise<DraftHistoryView> } | null>(null);
+  const historyAt = (revision: number): Promise<DraftHistoryView> => {
+    const known = historyRef.current;
+    if (known?.revision === revision) return Promise.resolve(known);
+    const epoch = historyEpoch.current;
+    const running = historyLoad.current;
+    if (running && running.epoch === epoch && running.revision === revision) return running.promise;
+    const promise = api.getHistory(workspaceId).then(next => {
+      if (epoch === historyEpoch.current && next.revision >= (historyRef.current?.revision ?? -1)) {
+        historyRef.current = next; setHistory(next);
+      }
+      return next;
+    }).finally(() => { if (historyLoad.current?.promise === promise) historyLoad.current = null; });
+    historyLoad.current = { epoch, revision, promise };
+    return promise;
   };
   useEffect(() => {
-    if (!historyEnabled) { historyRequest.current += 1; setHistory(null); return; }
+    if (!historyEnabled) { historyEpoch.current += 1; historyLoad.current = null; historyRef.current = null; setHistory(null); return; }
     // After the queue has saved: the history then describes the draft the editor shows.
     if (queueState !== "saved" || historyRef.current?.revision === draft.revision) return;
-    loadHistory().catch(() => undefined);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadHistory reads refs only
+    historyAt(draft.revision).catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- historyAt reads refs only
   }, [historyEnabled, queueState, draft.revision, workspaceId]);
+  /**
+   * The history of exactly the saved draft (call after flushing the queue). A step is never taken from the
+   * history of an older revision: if the server's draft moved on (another tab), this refuses instead.
+   */
+  const savedHistory = async (): Promise<DraftHistoryView> => {
+    const revision = latestDraft.current.revision;
+    const known = await historyAt(revision);
+    if (known.revision !== revision || latestDraft.current.revision !== revision) {
+      throw new ConflictError(ERROR_MESSAGES.REVISION_CONFLICT, "REVISION_CONFLICT");
+    }
+    return known;
+  };
   const currentHistory = history && history.revision === draft.revision ? history : null;
   const stepName = (step: HistoryStepView) => stepText(step, (layerId, termId) => termLabel(layerId, termId) ?? undefined);
 
@@ -1748,8 +1780,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       await queueRef.current.flush();
       let target = step;
       if (command !== "reset_changes" && target === undefined) {
-        const known = historyRef.current?.revision === latestDraft.current.revision ? historyRef.current : await loadHistory();
-        const top = command === "undo_step" ? known?.undo : known?.redo;
+        const known = await savedHistory();
+        const top = command === "undo_step" ? known.undo : known.redo;
         if (!top) return false;
         target = top.after_revision;
       }
@@ -1768,15 +1800,18 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
    * An Undo toast takes back its own action through the history while that action is still the newest step
    * (`revision` is the draft revision the action produced); otherwise `fallback` puts things back by commands.
    */
-  const undoFromToast = async (revision: number, fallback: () => Promise<unknown> | void) => {
+  const undoFromToast = async (revision: number, fallback: () => Promise<unknown> | void, onUndone?: () => void) => {
     if (historyEnabled && !readOnlyRef.current) {
+      let top: HistoryStepView | null = null;
       try {
         await queueRef.current.flush();
-        const known = historyRef.current?.revision === latestDraft.current.revision ? historyRef.current : await loadHistory();
-        const top = known?.undo;
-        // Taken back through the history, or refused there with a message: never also by commands.
-        if (top && top.before_revision < revision && revision <= top.after_revision) { await runHistory("undo_step", top.after_revision); return; }
+        top = (await savedHistory()).undo ?? null;
       } catch { /* no history now: the commands below put it back */ }
+      // Taken back through the history, or refused there with a message: never also by commands.
+      if (top && top.before_revision < revision && revision <= top.after_revision) {
+        if (await runHistory("undo_step", top.after_revision)) onUndone?.();
+        return;
+      }
     }
     await fallback();
   };
@@ -3733,9 +3768,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           )}
 
           {historyEnabled && <span className="case-history" role="group" aria-label="Undo and redo">
-            <IconButton size="sm" variant="quiet" label="Undo" title={undoTitle} icon={<IconUndo />}
+            <IconButton size="sm" variant="quiet" label="Undo last change" title={undoTitle} icon={<IconUndo />}
               disabled={!undoStep || historyBusy} onClick={() => { void runHistory("undo_step"); }} />
-            <IconButton size="sm" variant="quiet" label="Redo" title={redoTitle} icon={<IconRedo />}
+            <IconButton size="sm" variant="quiet" label="Redo last change" title={redoTitle} icon={<IconRedo />}
               disabled={!redoStep || historyBusy} onClick={() => { void runHistory("redo_step"); }} />
           </span>}
 
@@ -3743,7 +3778,12 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             ...menuItems,
             // Issue 320: back to the start of the round; the reset itself can be undone.
             ...(historyEnabled ? [{ id: "reset-changes", label: "Reset all my changes…",
-              ...(currentHistory && !currentHistory.changed ? { description: "Nothing changed in this round yet" } : {}),
+              // Unavailable, with the reason, while nothing changed, the history loads or a step runs.
+              ...(!currentHistory?.changed || historyBusy ? {
+                disabled: true,
+                description: historyBusy ? "Wait until the last change is saved"
+                  : currentHistory ? "Nothing changed in this round yet" : "Loading your changes…",
+              } : {}),
               onSelect: () => { void resetAllChanges(); } }] : []),
             // Below 1024 px "Next open item" leaves the bar for this menu.
             ...(narrowHeader && !readOnly && openItems.length > 0 ? [{ id: "next-open", label: "Next open item", onSelect: goToNextOpenItem }] : []),

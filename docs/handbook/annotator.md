@@ -197,9 +197,9 @@ To change a modifier later, open its row menu: **Link a text span…**, **Remove
 
 What for: step back through your own changes before you submit, or start the round again.
 
-- **Undo** and **Redo** in the header step back and forward one change at a time. One change is one action: adding, deleting or moving a finding, changing its term, text span, a value, a modifier or the note, or deciding a proposal. A note counts once it is saved. Point at the button to see the step, for example "Undo: delete finding Seizure".
+- **Undo** and **Redo** in the header step back and forward one change at a time. One change is one action: adding, deleting or moving a finding, changing its term, text span, a value, a modifier or the note, or deciding a proposal. A note counts once it is saved. Values you change on one finding in quick succession are saved together, so they are one change. Point at the button to see the step, for example "Undo: delete finding Seizure".
 - `Ctrl+Z` (macOS: `Cmd+Z`) undoes, `Ctrl+Shift+Z` (macOS: `Cmd+Shift+Z`) or `Ctrl+Y` redoes. Inside a text field these keys undo your typing instead.
-- **More** › **Reset all my changes…** returns the task to how this round started, after a confirmation: the tool proposals are all open again, the carried findings are back as they were, or the task has no findings. The reset is one step, so **Undo** brings your changes back.
+- **More** › **Reset all my changes…** returns the task to how this round started, after a confirmation: the tool proposals are all open again, the carried findings are back as they were, or the task has no findings. The reset is one step, so **Undo** brings your changes back. While nothing has changed in this round, the item is unavailable and says so.
 
 Every undo, redo and reset is saved like any other change, and the history stays after a reload. A new change after an undo drops the steps you could redo. Undo and reset are not available after submitting, in a paused or read-only task, or in a consolidation.
 

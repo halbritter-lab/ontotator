@@ -5,6 +5,7 @@ import { act, render, screen, fireEvent, waitFor, within } from "@testing-librar
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CaseScreen, initialAxisValues, type WorkspaceView } from "../src/app/CaseScreen";
 import { api, ApiError, AuthError, ConflictError, ValidationError, type Draft } from "../src/api/client";
+import { ERROR_MESSAGES } from "../src/admin/errors";
 
 it("never pre-fills clinical axis values (no assertion default for HPO terms)", () => {
   const axes = [
@@ -2904,9 +2905,9 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
       historyOf(view, { undo: step(0, 1, "remove_modifier"), undo_count: 1, changed: true });
       const history = restoring(view);
       await setup(view);
-      const undo = await screen.findByRole("button", { name: "Undo" });
+      const undo = await screen.findByRole("button", { name: "Undo last change" });
       await waitFor(() => expect(undo.getAttribute("title")).toBe("Undo: remove a modifier from Seizure"));
-      expect((screen.getByRole("button", { name: "Redo" }) as HTMLButtonElement).disabled).toBe(true);
+      expect((screen.getByRole("button", { name: "Redo last change" }) as HTMLButtonElement).disabled).toBe(true);
       fireEvent.click(undo);
       await waitFor(() => expect(history).toHaveBeenCalledTimes(1));
       expect(history.mock.calls[0][1]).toMatchObject({ expected_revision: 1, payload: { command: "undo_step", step: 1 } });
@@ -2917,7 +2918,7 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
       historyOf(view, { undo: step(0, 1, "add_modifier"), redo: step(1, 2, "set_axes"), undo_count: 1, redo_count: 1, changed: true });
       const history = restoring(view);
       await setup(view);
-      await waitFor(() => expect((screen.getByRole("button", { name: "Undo" }) as HTMLButtonElement).disabled).toBe(false));
+      await waitFor(() => expect((screen.getByRole("button", { name: "Undo last change" }) as HTMLButtonElement).disabled).toBe(false));
       const field = document.createElement("textarea"); document.body.appendChild(field);
       fireEvent.keyDown(field, { key: "z", ctrlKey: true });
       expect(history).not.toHaveBeenCalled();
@@ -2949,7 +2950,7 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
       historyOf(view, { undo: step(0, 1, "add_modifier"), undo_count: 3, changed: true });
       const history = restoring(view);
       await setup(view);
-      await waitFor(() => expect((screen.getByRole("button", { name: "Undo" }) as HTMLButtonElement).disabled).toBe(false));
+      await waitFor(() => expect((screen.getByRole("button", { name: "Undo last change" }) as HTMLButtonElement).disabled).toBe(false));
       fireEvent.click(screen.getByRole("button", { name: "More actions" }));
       fireEvent.click(await screen.findByRole("menuitem", { name: "Reset all my changes…" }));
       const dialog = await screen.findByRole("dialog", { name: "Reset all my changes?" });
@@ -2960,13 +2961,92 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
       expect(history.mock.calls[0][1].payload).toEqual({ command: "reset_changes" });
     });
 
+    it("Ctrl+Z right after a value change undoes that change, not the one before (F1)", async () => {
+      const view = modView(SEVERE_ON_SEIZURE);
+      let server = view.draft.revision;
+      const read = vi.spyOn(api, "getHistory").mockImplementation(async () => {
+        const at = server;
+        await new Promise(resolve => setTimeout(resolve, 15));
+        return historyAt(at, { undo: step(at - 1, at, at === 1 ? "add_modifier" : "set_axes"), undo_count: at, changed: true }) as never;
+      });
+      const history = restoring(view);
+      const { container, apply } = await setup(view);
+      // The save answers in a later task, as over the network: the undo continues before the editor re-renders.
+      apply.mockImplementation(async (_ws, envelope) => {
+        await new Promise(resolve => setTimeout(resolve, 5));
+        server = envelope.expected_revision + 1; return { ...structuredClone(view.draft), revision: server } as never;
+      });
+      await waitFor(() => expect((screen.getByRole("button", { name: "Undo last change" }) as HTMLButtonElement).disabled).toBe(false));
+      fireEvent.click(container.querySelector('[data-list-key="annotation:seizure"]')!);
+      fireEvent.click(within(await screen.findByRole("group", { name: /^Assertion/ })).getByRole("radio", { name: /^Absent/ }));
+      (document.activeElement as HTMLElement | null)?.blur?.();
+      fireEvent.keyDown(window, { key: "z", ctrlKey: true });
+      await waitFor(() => expect(history).toHaveBeenCalledTimes(1));
+      expect(history.mock.calls[0][1]).toMatchObject({ expected_revision: 2, payload: { command: "undo_step", step: 2 } });
+      expect(read).toHaveBeenCalled();
+      expect(screen.queryByRole("alert")).toBeNull();
+    });
+
+    it("a refused step reads as its message, not as the status code (F2)", async () => {
+      const view = modView(SEVERE_ON_SEIZURE);
+      historyOf(view, { undo: step(0, 1, "remove_modifier"), undo_count: 1, changed: true });
+      vi.spyOn(api, "applyHistory").mockRejectedValue(new ValidationError("API request failed with status 422", "HISTORY_STEP_UNAVAILABLE", { step: 1 }));
+      await setup(view);
+      const undo = await screen.findByRole("button", { name: "Undo last change" });
+      await waitFor(() => expect((undo as HTMLButtonElement).disabled).toBe(false));
+      fireEvent.click(undo);
+      expect(await screen.findByText(ERROR_MESSAGES.HISTORY_STEP_UNAVAILABLE)).toBeDefined();
+      expect(screen.queryByText(/API request failed/)).toBeNull();
+    });
+
+    it("Undo in the delete toast through the history selects the finding and says so (F3)", async () => {
+      const view = modView(SEVERE_ON_SEIZURE);
+      vi.spyOn(api, "getHistory").mockImplementation(async () =>
+        historyAt(2, { undo: step(1, 2, "delete_draft_annotation"), undo_count: 1, changed: true }) as never);
+      const history = restoring(view);
+      const { container, apply } = await setup(view);
+      apply.mockImplementation(async (_ws, envelope) => ({ ...structuredClone(view.draft), revision: envelope.expected_revision + 1, annotations: [], evidence: [] }) as never);
+      fireEvent.click(container.querySelector('[data-list-key="annotation:seizure"]')!);
+      fireEvent.click(await screen.findByText("Delete finding"));
+      fireEvent.click(screen.getByRole("button", { name: /Yes, delete/i }));
+      const toast = (await screen.findByText("Deleted Seizure")).closest(".ui-toast") as HTMLElement;
+      fireEvent.click(within(toast).getByRole("button", { name: "Undo" }));
+      await waitFor(() => expect(history).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(container.querySelector("[data-carried-announcer]")?.textContent).toBe("Restored Seizure."));
+      await waitFor(() => expect(container.querySelector('[data-list-key="annotation:seizure"]')?.classList.contains("selected")).toBe(true));
+    });
+
+    it("Reset all my changes is unavailable, with the reason, while nothing changed (F6)", async () => {
+      const view = modView(SEVERE_ON_SEIZURE);
+      historyOf(view, { changed: false });
+      const history = restoring(view);
+      await setup(view);
+      await waitFor(() => expect(api.getHistory).toHaveBeenCalled());
+      fireEvent.click(screen.getByRole("button", { name: "More actions" }));
+      const item = await screen.findByRole("menuitem", { name: "Reset all my changes…" });
+      await waitFor(() => expect(item.getAttribute("aria-disabled")).toBe("true"));
+      expect(item.textContent).toContain("Nothing changed in this round yet");
+      fireEvent.click(item);
+      expect(screen.queryByRole("dialog", { name: "Reset all my changes?" })).toBeNull();
+      expect(history).not.toHaveBeenCalled();
+    });
+
+    it("the header buttons and the toast's Undo have different names (F7)", async () => {
+      const view = modView(SEVERE_ON_SEIZURE);
+      historyOf(view, { undo: step(0, 1, "remove_modifier"), undo_count: 1, changed: true });
+      restoring(view);
+      await setup(view);
+      const group = await screen.findByRole("group", { name: "Undo and redo" });
+      expect(within(group).getAllByRole("button").map(button => button.getAttribute("aria-label"))).toEqual(["Undo last change", "Redo last change"]);
+    });
+
     it("a read-only task has no undo, redo or reset", async () => {
       const view = modView(SEVERE_ON_SEIZURE);
       const read = historyOf(view, { undo: step(0, 1, "add_modifier"), undo_count: 1, changed: true });
       vi.spyOn(api, "resolveTermLabels").mockResolvedValue([] as never);
       render(<CaseScreen view={view} workspaceId="ws-mod" onClose={vi.fn()} readOnly />);
       await screen.findByRole("button", { name: "More actions" });
-      expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Undo last change" })).toBeNull();
       expect(read).not.toHaveBeenCalled();
     });
   });
