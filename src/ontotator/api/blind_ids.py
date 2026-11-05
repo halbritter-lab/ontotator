@@ -23,7 +23,7 @@ adjudicator role (and not the lead role) in a project with
   setting changes.
 
 The permutation is keyed per user from an instance secret kept in
-``instance_state`` (created on first use), so a token says nothing about the
+``instance_state`` (created at the first start), so a token says nothing about the
 value and cannot be recomputed. Hashes of public, author-independent content
 keep their value: the text, ontology, layer, axes and scope hashes the page
 compares with other answers. Document text is never touched (its offsets
@@ -265,6 +265,8 @@ class BlindIdsMiddleware:
 
 def _lookup(state: Any, repo: Any, principal: Principal) -> tuple[IdCipher, bool]:
     with repo.db.transaction() as conn:
+        # Read at the app's start (``create_app``); created here only when an
+        # app was built without it.
         secret = getattr(state, "blind_ids_key", None)
         if secret is None:
             secret = instance_key(conn)
