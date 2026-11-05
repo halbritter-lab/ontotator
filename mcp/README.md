@@ -79,7 +79,7 @@ Ask the client to call `whoami` first: it shows who the token acts as and the se
 
 ## Tools
 
-Every tool description names the token scope it needs and whether it changes data; the MCP annotations say the same (`readOnlyHint`, `destructiveHint`, `idempotentHint`). Tools with a `confirm` argument (`set_ontology_pins`, `distribute_texts`, `update_work_plan`, `accept_agreeing_texts`) only do a dry run without it; the client should show you the dry run before it confirms. Imports and exports are server jobs: the tools wait for them by default, and `get_job` polls one.
+Every tool description names the token scope it needs and whether it changes data; the MCP annotations say the same (`readOnlyHint`, `destructiveHint`, `idempotentHint`). Tools with a `confirm` argument (`set_ontology_pins`, `distribute_texts`, `update_work_plan`, `accept_agreeing_texts`, `set_member_roles`) only do a dry run without it (`set_member_roles` needs `confirm` only to take roles away or remove a person, which logs the person out, revokes their tokens and, with `revoke_assignments`, withdraws their open tasks; adding roles is applied at once); the client should show you the dry run before it confirms. Imports and exports are server jobs: the tools wait for them by default, and `get_job` polls one.
 
 ### Scopes
 
@@ -107,7 +107,7 @@ A token can do only what both its scopes and its owner's roles allow. Most tools
 | `discard_upload` | import | may remove or withdraw | Drop a staged upload that was not imported; imported texts stay. |
 | `list_people` | read | reads | Project members with roles, languages and open tasks. |
 | `list_users` | admin | reads | Every user account of the server with projects and languages. |
-| `set_member_roles` | project-admin | may remove or withdraw | Set a person's roles in the project (adds the person if new). |
+| `set_member_roles` | read, project-admin | may remove or withdraw | Set a person's roles in the project (adds the person if new). |
 | `assign_texts` | project-admin | adds | Assign text versions to people, one task per row. |
 | `distribute_texts` | read, project-admin | adds | Assign many texts of one language at once, after a dry run. |
 | `update_work_plan` | read, project-admin | may remove or withdraw | Turn translation review and annotation on or off and set the annotation mode. |

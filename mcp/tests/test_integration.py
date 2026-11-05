@@ -170,6 +170,23 @@ async def test_setup_import_status_and_export(
         people = await call(client, "list_people", {"project": PROJECT})
         assert "ann1" in {p["username"] for p in people}
 
+        # Taking a role away is a dry run until confirmed.
+        remove = {"project": PROJECT, "username": "ann1", "roles": []}
+        dry = await call(client, "set_member_roles", remove)
+        assert dry["applied"] is False
+        assert dry["plan"]["removed_roles"] == ["annotator"]
+        people = await call(client, "list_people", {"project": PROJECT})
+        assert "ann1" in {p["username"] for p in people}
+        done = await call(client, "set_member_roles", remove | {"confirm": True})
+        assert done["applied"] is True
+        people = await call(client, "list_people", {"project": PROJECT})
+        assert "ann1" not in {p["username"] for p in people}
+        await call(
+            client,
+            "set_member_roles",
+            {"project": PROJECT, "username": "ann1", "roles": ["annotator"]},
+        )
+
         overview = await call(client, "project_overview", {"project": PROJECT})
         assert overview["name"] == "MCP smoke"
 

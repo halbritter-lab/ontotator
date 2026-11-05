@@ -184,6 +184,97 @@ async def test_files_dir_limits_what_is_read_and_written(
         assert done["path"] == str((allowed / "out.zip").resolve())
 
 
+def _member(username: str, roles: list[str]) -> dict[str, Any]:
+    return build("Member", username=username, roles=roles)
+
+
+def _task(task: str, status: str = "open", **extra: Any) -> dict[str, Any]:
+    return (
+        build(
+            "AssignmentView",
+            id=len(task) + len(status) + len(extra),
+            document_id=f"d-{task}-{status}",
+            task=task,
+            status=status,
+            revoked_at=None,
+            lead_correction=False,
+        )
+        | extra
+    )
+
+
+MEMBER = f"{P}/members/{{username}}"
+
+
+async def test_adding_roles_needs_no_confirm(fake: FakeApi, mcp_client: Client) -> None:
+    fake.on("GET", f"{P}/members", [_member("ann", ["annotator"])])
+    fake.on("PUT", MEMBER, _member("ann", ["adjudicator", "annotator"]))
+    result = await call(
+        mcp_client,
+        "set_member_roles",
+        {"project": "p", "username": "ann", "roles": ["annotator", "adjudicator"]},
+    )
+    assert result["applied"] is True
+    assert result["plan"]["added_roles"] == ["adjudicator"]
+    assert result["plan"]["removed_roles"] == []
+    [put] = fake.calls_to("PUT", MEMBER)
+    assert put.json()["roles"] == ["annotator", "adjudicator"]
+    assert not fake.calls_to("GET", f"{P}/assignments")
+
+
+async def test_removing_a_person_is_a_dry_run_without_confirm(
+    fake: FakeApi, mcp_client: Client
+) -> None:
+    fake.on("GET", f"{P}/members", [_member("ann", ["adjudicator", "annotator"])])
+    fake.on(
+        "GET",
+        f"{P}/assignments",
+        [
+            _task("annotate"),
+            _task("annotate", "submitted"),
+            _task("review", "in_progress"),
+            _task("annotate", revoked_at="2026-11-01T10:00:00Z"),
+            _task("translation_review", lead_correction=True),
+        ],
+    )
+    args: dict[str, Any] = {"project": "p", "username": "ann", "roles": []}
+    dry = await call(mcp_client, "set_member_roles", args)
+    assert dry["applied"] is False
+    plan = dry["plan"]
+    assert plan["current_roles"] == ["adjudicator", "annotator"]
+    assert plan["removed_roles"] == ["adjudicator", "annotator"]
+    assert [t["task"] for t in plan["open_tasks"]] == ["annotate", "review"]
+    assert "block the change" in plan["consequences"][1]
+    assert "logged out" in plan["consequences"][0]
+    assert not fake.calls_to("PUT", MEMBER)
+    [listed] = fake.calls_to("GET", f"{P}/assignments")
+    assert listed.request.url.params["username"] == "ann"
+
+    fake.on("PUT", MEMBER, _member("ann", []))
+    applied = await call(
+        mcp_client,
+        "set_member_roles",
+        args | {"revoke_assignments": True, "confirm": True},
+    )
+    assert applied["applied"] is True
+    assert "2 open task(s) are withdrawn." in applied["plan"]["consequences"]
+    [put] = fake.calls_to("PUT", MEMBER)
+    assert put.json() == {"roles": [], "revoke_assignments": True}
+
+
+async def test_unchanged_roles_change_nothing(
+    fake: FakeApi, mcp_client: Client
+) -> None:
+    fake.on("GET", f"{P}/members", [_member("ann", ["annotator"])])
+    result = await call(
+        mcp_client,
+        "set_member_roles",
+        {"project": "p", "username": "ann", "roles": ["annotator"]},
+    )
+    assert result["applied"] is False
+    assert not fake.calls_to("PUT", MEMBER)
+
+
 @pytest.mark.parametrize(
     "error", [httpx.WriteError, httpx.ReadError, httpx.RemoteProtocolError]
 )

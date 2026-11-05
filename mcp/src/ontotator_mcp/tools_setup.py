@@ -55,6 +55,36 @@ def upload_summary(view: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+OPEN_STATES = ("open", "in_progress", "reopened")
+
+
+def tasks_of_roles(
+    assignments: list[dict[str, Any]], removed: set[str]
+) -> list[dict[str, Any]]:
+    """The open tasks that rest on one of the ``removed`` roles.
+
+    As the server decides it: annotation on the annotator role, review on
+    the consolidator (adjudicator) role, a translation review on the
+    annotator role, and a lead correction on the lead role.
+    """
+    found = []
+    for item in assignments:
+        if item.get("revoked_at") or item.get("status") not in OPEN_STATES:
+            continue
+        task = item.get("task")
+        if task == "translation_review":
+            needs = "lead" if item.get("lead_correction") else "annotator"
+        else:
+            needs = {"annotate": "annotator", "review": "adjudicator"}.get(
+                str(task), ""
+            )
+        if needs in removed:
+            found.append(
+                {key: item.get(key) for key in ("id", "document_id", "task", "status")}
+            )
+    return found
+
+
 async def all_case_ids(api: OntotatorClient, project: str) -> list[str]:
     """Every case of the project (at most 2000, the API's selection limit)."""
     found = await api.get(project_path(project, "document-rows/case-ids"))
@@ -472,7 +502,9 @@ def register_setup(server: MCPServer, api: OntotatorClient) -> None:
         users: list[dict[str, Any]] = await api.get("/api/v1/admin/users/")
         return users
 
-    @register(server, scopes="project-admin", effect="destructive", idempotent=True)
+    @register(
+        server, scopes=("read", "project-admin"), effect="destructive", idempotent=True
+    )
     async def set_member_roles(
         project: Project,
         username: str,
@@ -488,17 +520,68 @@ def register_setup(server: MCPServer, api: OntotatorClient) -> None:
         revoke_assignments: Annotated[
             bool, Field(description="Also withdraw open tasks of removed roles.")
         ] = False,
+        confirm: Annotated[
+            bool,
+            Field(
+                description=(
+                    "Needed only to take roles away. False: dry run. True: apply."
+                )
+            ),
+        ] = False,
     ) -> dict[str, Any]:
         """Set a person's roles in the project (adds the person if new).
 
+        Adding roles only is applied at once. Taking a role away, or
+        removing the person with an empty list, needs confirm: without it
+        the tool returns the current roles, the roles it would remove and
+        the person's open tasks that rest on them, and changes nothing.
         Taking a role away logs the person out everywhere and revokes their
-        API tokens.
+        API tokens; their open tasks of removed roles block the change
+        unless revoke_assignments withdraws them.
         """
+        members = await api.get(project_path(project, "members"))
+        current: list[str] = next(
+            (m.get("roles", []) for m in members if m.get("username") == username),
+            [],
+        )
+        plan: dict[str, Any] = {
+            "username": username,
+            "member": bool(current),
+            "current_roles": sorted(current),
+            "new_roles": sorted(set(roles)),
+            "added_roles": sorted(set(roles) - set(current)),
+            "removed_roles": sorted(set(current) - set(roles)),
+        }
+        if plan["removed_roles"]:
+            assigned = await api.get(
+                project_path(project, "assignments"), username=username
+            )
+            tasks = tasks_of_roles(assigned, set(plan["removed_roles"]))
+            plan |= {
+                "open_tasks": _cut(tasks),
+                "open_task_count": len(tasks),
+                "consequences": [
+                    "The person is logged out everywhere and their API tokens"
+                    " are revoked.",
+                    (
+                        f"{len(tasks)} open task(s) are withdrawn."
+                        if revoke_assignments
+                        else f"{len(tasks)} open task(s) block the change; pass"
+                        " revoke_assignments to withdraw them."
+                    )
+                    if tasks
+                    else "No open task rests on the removed roles.",
+                ],
+            }
+            if not confirm:
+                return {"applied": False, "plan": plan}
+        elif not plan["added_roles"]:
+            return {"applied": False, "plan": plan, "note": "Nothing to change."}
         member: dict[str, Any] = await api.put(
             project_path(project, "members", seg(username)),
             {"roles": roles, "revoke_assignments": revoke_assignments},
         )
-        return member
+        return {"applied": True, "plan": plan, "member": member}
 
     @register(server, scopes="project-admin", effect="additive")
     async def assign_texts(

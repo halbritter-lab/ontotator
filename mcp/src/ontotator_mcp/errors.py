@@ -61,6 +61,10 @@ HINTS: dict[str, str] = {
         "Accept at least one final result first (accept_agreeing_texts, or the"
         " Documents page)."
     ),
+    "MEMBER_HAS_ASSIGNMENTS": (
+        "Open tasks rest on the roles being removed. Pass revoke_assignments to"
+        " withdraw them, or reassign them in the web interface first."
+    ),
     "PAYLOAD_TOO_LARGE": "The file exceeds the server's configured upload limit.",
 }
 
