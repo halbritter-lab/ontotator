@@ -100,6 +100,7 @@ A token can do only what both its scopes and its owner's roles allow. Many tools
 | `set_ontology_pins` | project-admin | may remove or withdraw | Pin the project to ontology releases, after a dry run. |
 | `refresh_translations` | project-admin | overwrites | Move the project to the newest translation files on the server. |
 | `publish_guideline` | project-admin | adds | Publish a new version of the project's annotation guideline. |
+| `withdraw_guideline` | read, project-admin | overwrites | Withdraw a published guideline version, for example one published by mistake. |
 | `upload_texts` | import | adds | Stage texts or a proposal bundle and check them; imports nothing yet. |
 | `get_upload` | import | reads | The state and check of one staged upload. |
 | `list_uploads` | import | reads | The project's staged and committed uploads. |

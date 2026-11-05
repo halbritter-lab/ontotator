@@ -339,3 +339,21 @@ async def test_a_final_export_with_a_request_id_can_be_repeated(
             "start_export",
             {"project": "p", "kind": "edit_log", "request_id": "x"},
         )
+
+
+async def test_withdraw_guideline_names_the_latest_version_it_saw(
+    fake: FakeApi, mcp_client: Client
+) -> None:
+    fake.on(
+        "GET",
+        f"{P}/guidelines",
+        build("GuidelineListing", latest_version=3, current=None, versions=[]),
+    )
+    await call(
+        mcp_client,
+        "withdraw_guideline",
+        {"project": "p", "version": 3, "reason": "wrong file"},
+    )
+    [post] = fake.calls_to("POST", f"{P}/guidelines/{{version}}/withdraw")
+    assert post.request.url.path.endswith("/guidelines/3/withdraw")
+    assert post.json() == {"reason": "wrong file", "expected_latest_version": 3}

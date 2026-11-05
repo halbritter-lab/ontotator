@@ -415,6 +415,28 @@ def register_setup(server: MCPServer, api: OntotatorClient) -> None:
         )
         return summary | {"local_files": [str(file) for file in files]}
 
+    @register(server, scopes=("read", "project-admin"), effect="changes")
+    async def withdraw_guideline(
+        project: Project,
+        version: Annotated[int, Field(ge=1, description="Guideline version.")],
+        reason: str | None = None,
+    ) -> dict[str, Any]:
+        """Withdraw a published guideline version, for example one published by mistake.
+
+        The version stays in the history, marked withdrawn; annotators are
+        shown the newest version that is not withdrawn. Refused with
+        REVISION_CONFLICT if another version was published meanwhile.
+        """
+        listing = await api.get(project_path(project, "guidelines"))
+        summary: dict[str, Any] = await api.post(
+            project_path(project, "guidelines", seg(version), "withdraw"),
+            {
+                "reason": reason,
+                "expected_latest_version": listing.get("latest_version"),
+            },
+        )
+        return summary
+
     @register(server, scopes="import", effect="additive")
     async def upload_texts(
         project: Project,
