@@ -13,6 +13,7 @@ import { Time } from "../app/Time";
 import { submissionGuidelineLabel } from "../guidelines/submissionLabel";
 import { Button, InlineMessage, type ButtonVariant } from "../ui";
 import { onSpaceActivate } from "../ui/spaceActivates";
+import { useMediaQuery } from "../ui/useMediaQuery";
 import { ConsolidationLauncher, type ConsolidationStarted } from "../variants/ConsolidationLauncher";
 import { refKey } from "../variants/versionState";
 import { failureOf, keepRequest, selectionPayload, selectRequest, type FinalConfirmFailure, type FinalConfirmRequest } from "./FinalConfirm";
@@ -447,11 +448,43 @@ function CompareContent(props: ContentProps): JSX.Element {
   </div>;
 }
 
-/** Submission, Findings, Only here, with "Open submission" and "Use as final" per submission. */
+/**
+ * Submission, Findings, Only here, with "Open submission" and "Use as final" per submission. In the sheet (below
+ * 700 px) the four columns do not fit: each submission is a list item with its buttons on their own line (issue 333).
+ */
 function SubmissionTable(props: ContentProps & { listed: FinalPanelSubmissionView[] }): JSX.Element {
   const { row, data, listed, busy, onSave, onAnnounce, guidelineCurrent, now } = props;
   const id = useId();
   const { route, link } = useEditorRoute(props);
+  const narrow = useMediaQuery("(max-width: 699px)");
+  const actions = (submission: FinalPanelSubmissionView, nameId: string, triggerId: string, isFinal: boolean) => <>
+    {link(route(submission.document_id, submission.submission_id), "Open submission", `Open submission, ${personName(submission)}`)}
+    {" "}
+    {isFinal ? <span>Final</span> : <ChoiceButton id={triggerId} label="Use as final" blocked={!submission.eligible} busy={busy} describedBy={nameId}
+      onAnnounce={onAnnounce} onChoose={() => onSave(selectRequest(row, data.submissions, submission, triggerId), triggerId)} />}
+  </>;
+  const idsOf = (submission: FinalPanelSubmissionView) => ({
+    nameId: `${id}-${encodeURIComponent(submission.submission_id)}-name`,
+    triggerId: `${id}-${encodeURIComponent(submission.submission_id)}-use`,
+    isFinal: row.final?.submission_id === submission.submission_id,
+  });
+  if (narrow) return <div className="final-panel-list">
+    {compareGroups(listed, row.parallel_roots).map(({ label, items }) => <div key={label ?? "compared"} className="final-panel-list-group">
+      {label && <p className="final-panel-list-group-label">{label}</p>}
+      <ul className="submissions-list" aria-label={label ?? `Submissions, ${rowName(row)}`}>
+        {items.map(submission => {
+          const { nameId, triggerId, isFinal } = idsOf(submission);
+          return <li key={submission.submission_id} className={isFinal ? "submissions-list-item final-row" : "submissions-list-item"}>
+            <span id={nameId} className="submissions-list-label">{submissionName(submission)}</span>
+            <span className="cell-secondary">{submissionWhen(submission, now)}</span>
+            <span className="cell-secondary">{submissionGuidelineLabel(submission.guideline_version, submission.guideline_withdrawn, guidelineCurrent)}</span>
+            <span className="submissions-list-findings">{`${plural(submission.finding_count, "finding")}, only here: ${onlyHereText(submission, row.parallel_roots)}`}</span>
+            <div className="submissions-list-line">{actions(submission, nameId, triggerId, isFinal)}</div>
+          </li>;
+        })}
+      </ul>
+    </div>)}
+  </div>;
   return <table className="data-table density-compact final-panel-table">
       <caption className="visually-hidden">{`Submissions, ${rowName(row)}`}</caption>
       <thead><tr>
@@ -461,9 +494,7 @@ function SubmissionTable(props: ContentProps & { listed: FinalPanelSubmissionVie
       {compareGroups(listed, row.parallel_roots).map(({ label, items }) => <tbody key={label ?? "compared"}>
         {label && <tr className="final-panel-table-group"><th scope="colgroup" colSpan={4}>{label}</th></tr>}
         {items.map(submission => {
-        const nameId = `${id}-${encodeURIComponent(submission.submission_id)}-name`;
-        const triggerId = `${id}-${encodeURIComponent(submission.submission_id)}-use`;
-        const isFinal = row.final?.submission_id === submission.submission_id;
+        const { nameId, triggerId, isFinal } = idsOf(submission);
         return <tr key={submission.submission_id} className={isFinal ? "final-row" : undefined}>
           <th scope="row" id={nameId}>
             {submissionName(submission)}
@@ -472,12 +503,7 @@ function SubmissionTable(props: ContentProps & { listed: FinalPanelSubmissionVie
           </th>
           <td>{submission.finding_count}</td>
           <td>{onlyHereText(submission, row.parallel_roots)}</td>
-          <td className="final-panel-row-actions">
-            {link(route(submission.document_id, submission.submission_id), "Open submission", `Open submission, ${personName(submission)}`)}
-            {" "}
-            {isFinal ? <span>Final</span> : <ChoiceButton id={triggerId} label="Use as final" blocked={!submission.eligible} busy={busy} describedBy={nameId}
-              onAnnounce={onAnnounce} onChoose={() => onSave(selectRequest(row, data.submissions, submission, triggerId), triggerId)} />}
-          </td>
+          <td className="final-panel-row-actions">{actions(submission, nameId, triggerId, isFinal)}</td>
         </tr>;
       })}</tbody>)}
     </table>;

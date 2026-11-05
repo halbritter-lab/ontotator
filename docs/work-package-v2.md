@@ -114,7 +114,7 @@ logical origin and scope identity, including after an independent export project
 reference layers out of the local profile; completion is validated against the
 current local permissions.
 
-Use `ontotator analyze PACKAGE --annotator ID --output results.json` for versioned current-result rows, explicit missing/checked-negative/uncertain states, full evidence and round ambiguity. See [the scientific workflow](scientific-workflow.md) for the two-annotator technical pilot and interpretation rules.
+Ontotator has no analysis command. For analysis, use the final export: `index.csv` (one row per final result, left-out text and earlier submission), `findings.csv` (one row per finding with values, origin and passages), `agreement.csv` and `agreement-summary.csv` (pairwise F1 agreement of the annotators), `proposals.csv` (decisions on tool proposals and each tool's precision and recall) and `receipt.json` (selections, decisions and file hashes); the edit log export gives every edit event. See [the scientific workflow](scientific-workflow.md#results-for-analysis) for the files and the two-annotator technical pilot.
 
 ## TaskProfile Schema
 

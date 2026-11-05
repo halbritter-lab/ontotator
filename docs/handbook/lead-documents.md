@@ -165,9 +165,9 @@ In the card:
 
 What for: see what happened to a text and its technical IDs.
 
-1. In the text card footer, click **History** or **Details**.
+1. In the text card footer, click **History** or **Details**. The view's name stands next to **Back** at the top of the card.
    - **History** lists all activity, newest first, with reviewers' reasons, reassignments and mode changes.
-   - **Details** shows the **Plan**, the **Problem reports** and the **Technical details**.
+   - **Details** shows the **Plan**, the **Problem reports** and the **Technical details**. Each problem report shows its title, then who reported it, when, its state and the paused tasks, then **Open report**.
 2. Click **Back** to return to the path.
 
 ### Read a text and other people's work in the text view

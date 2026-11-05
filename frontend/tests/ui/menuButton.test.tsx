@@ -91,3 +91,19 @@ it("opens below the trigger, flips above near the bottom and stays inside the vi
   // No room either way: the side with more room, clamped into view.
   expect(menuPosition({ top: 20, bottom: 50, right: 900 }, menu, { width: 1000, height: 160 }).top).toBe(6);
 });
+
+it("a disabled item stays focusable with its reason and does nothing when chosen", async () => {
+  const user = userEvent.setup();
+  const reset = vi.fn();
+  render(<MenuButton label="More actions" buttonLabel="More"
+    items={[{ id: "reset", label: "Reset all my changes…", description: "Nothing changed in this round yet", disabled: true, onSelect: reset }]} />);
+  await user.click(screen.getByRole("button", { name: "More actions" }));
+  const entry = item("Reset all my changes…");
+  expect(entry.getAttribute("aria-disabled")).toBe("true");
+  expect(document.activeElement).toBe(entry);
+  expect(document.getElementById(entry.getAttribute("aria-describedby")!)?.textContent).toBe("Nothing changed in this round yet");
+  await user.click(entry);
+  await user.keyboard("{Enter}");
+  expect(reset).not.toHaveBeenCalled();
+  expect(screen.getByRole("menu")).toBeDefined();
+});

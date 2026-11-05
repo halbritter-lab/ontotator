@@ -1,4 +1,4 @@
-"""Migration 0032 (issue 302): ``projects.blind_consolidation``, purely additive."""
+"""Migration 0034 (issue 302): ``projects.blind_consolidation``, purely additive."""
 
 from __future__ import annotations
 
@@ -10,8 +10,8 @@ from sqlalchemy import Connection, create_engine, text
 
 from ontotator.storage.schema import alembic_config, upgrade
 
-REVISION = "0032"
-PREVIOUS = "0031"
+REVISION = "0034"
+PREVIOUS = "0033"
 S = "ontotator"
 
 

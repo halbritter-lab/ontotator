@@ -30,6 +30,8 @@ export function useCoalescedAxisChange(
   const [, rerender] = useReducer((count: number) => count + 1, 0);
   const refresh = () => { if (mounted.current) rerender(); };
 
+  // Once the saved values moved on, what was sent is settled: an undo back to the same values must not show it again.
+  if (sent.current.key !== baseKey && Object.keys(sent.current.values).length > 0) sent.current = { key: baseKey, values: {} };
   const sentFor = (key: string) => (sent.current.key === key ? sent.current.values : {});
 
   const flush = useCallback(() => {
