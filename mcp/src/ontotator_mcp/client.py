@@ -22,6 +22,13 @@ from ontotator_mcp.errors import OntotatorError, api_error, redact, transport_er
 
 JOB_DONE = ("succeeded", "failed")
 CHUNK = 1024 * 1024
+# A server that refuses an upload as too large (413) may close the connection
+# while the body is still being sent; the client then sees one of these.
+UPLOAD_CUT = (httpx.ReadError, httpx.WriteError, httpx.RemoteProtocolError)
+
+
+def _megabytes(size: int) -> str:
+    return f"{size / 1_000_000:.1f} MB"
 
 
 def seg(value: str | int) -> str:
@@ -120,6 +127,7 @@ class OntotatorClient:
         params: Mapping[str, Any] | None = None,
         files: Any = None,
         data: Mapping[str, Any] | None = None,
+        upload_bytes: int | None = None,
     ) -> httpx.Response:
         try:
             response = await self._http.request(
@@ -130,6 +138,15 @@ class OntotatorClient:
                 files=files,
                 data=data,
             )
+        except UPLOAD_CUT as exc:
+            if upload_bytes is None:
+                raise self._unreachable(exc) from None
+            raise OntotatorError(
+                f"Ontotator closed the connection during the upload to {path}"
+                f" ({type(exc).__name__}). The file(s), {_megabytes(upload_bytes)}"
+                " in all, may exceed the server's upload limit; ask its"
+                " administrator, or upload fewer or smaller files."
+            ) from None
         except httpx.HTTPError as exc:
             raise self._unreachable(exc) from None
         if response.is_redirect:
@@ -154,10 +171,17 @@ class OntotatorClient:
         params: Mapping[str, Any] | None = None,
         files: Any = None,
         data: Mapping[str, Any] | None = None,
+        upload_bytes: int | None = None,
     ) -> Any:
         """The JSON body of a successful call (None for an empty body)."""
         response = await self._send(
-            method, path, json=json, params=params, files=files, data=data
+            method,
+            path,
+            json=json,
+            params=params,
+            files=files,
+            data=data,
+            upload_bytes=upload_bytes,
         )
         if not response.content:
             return None
@@ -197,8 +221,11 @@ class OntotatorClient:
         data: Mapping[str, Any] | None = None,
     ) -> Any:
         """POST ``files`` (from ``local_files``) as multipart ``field``, streamed."""
+        size = sum(file.stat().st_size for file in files)
         with open_files(field, files) as parts:
-            return await self.request("POST", path, files=parts, data=data)
+            return await self.request(
+                "POST", path, files=parts, data=data, upload_bytes=size
+            )
 
     async def job(self, job_id: int) -> dict[str, Any]:
         job: dict[str, Any] = await self.get(f"/api/v1/jobs/{seg(job_id)}")

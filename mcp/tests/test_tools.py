@@ -184,6 +184,31 @@ async def test_files_dir_limits_what_is_read_and_written(
         assert done["path"] == str((allowed / "out.zip").resolve())
 
 
+@pytest.mark.parametrize(
+    "error", [httpx.WriteError, httpx.ReadError, httpx.RemoteProtocolError]
+)
+async def test_a_connection_closed_during_an_upload_names_the_size(
+    fake: FakeApi, mcp_client: Client, tmp_path: Path, error: type[Exception]
+) -> None:
+    big = tmp_path / "big.zip"
+    big.write_bytes(b"x" * 2_500_000)
+
+    def cut(request: httpx.Request) -> httpx.Response:
+        raise error("connection closed")
+
+    fake.on("POST", f"{P}/uploads", cut)
+    with pytest.raises(ToolFailed) as raised:
+        await call(
+            mcp_client,
+            "upload_texts",
+            {"project": "p", "paths": [str(big)], "format": "ontospan"},
+        )
+    assert "closed the connection during the upload" in str(raised.value)
+    assert "2.5 MB" in str(raised.value)
+    assert "upload limit" in str(raised.value)
+    assert "Cannot reach" not in str(raised.value)
+
+
 def test_files_dir_comes_from_the_environment(tmp_path: Path) -> None:
     env = {
         "ONTOTATOR_URL": "https://o.test",
