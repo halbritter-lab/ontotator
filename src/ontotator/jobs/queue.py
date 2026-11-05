@@ -123,6 +123,15 @@ def _job(row: Row[Any]) -> Job:
     )
 
 
+def handler_payload(stored: Mapping[str, Any]) -> dict[str, Any]:
+    """A job's stored payload as its handler gets it: without ``api_token``.
+
+    ``enqueue`` adds the API token that started a job to the stored payload
+    (issue 305); a handler that reads its job's row again compares this.
+    """
+    return {k: v for k, v in stored.items() if k != "api_token"}
+
+
 class JobQueue:
     """Records handler failures; outcome-persistence errors propagate to the worker."""
 
@@ -280,9 +289,7 @@ class JobQueue:
     def _run(self, job: Job, worker: str) -> Job:
         token = job.payload.get("api_token")
         if token is not None:
-            job = replace(
-                job, payload={k: v for k, v in job.payload.items() if k != "api_token"}
-            )
+            job = replace(job, payload=handler_payload(job.payload))
         reset = current_job_api_token.set(token)
         try:
             return self._run_handler(job, worker)

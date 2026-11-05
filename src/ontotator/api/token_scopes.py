@@ -203,6 +203,9 @@ ROUTE_SCOPES: Mapping[tuple[str, str], RouteScope] = {
         SESSION
     ),
     ("POST", "/api/v1/workspaces/{workspace_id}/merge-inputs"): SESSION,
+    # Undo, redo and reset of one's own draft (issue 320) are annotation work.
+    ("GET", "/api/v1/workspaces/{workspace_id}/history"): SESSION,
+    ("POST", "/api/v1/workspaces/{workspace_id}/history"): SESSION,
     ("POST", "/api/v1/workspaces/{workspace_id}/consolidation-groups/resolve"): (
         SESSION
     ),
@@ -246,6 +249,13 @@ ROUTE_SCOPES: Mapping[tuple[str, str], RouteScope] = {
     ("DELETE", "/api/v1/admin/practice-projects/{key}"): "admin",
     ("GET", "/api/v1/admin/settings/practice"): "admin",
     ("PUT", "/api/v1/admin/settings/practice"): "admin",
+    # Project archives (issue 306): an export carries the whole project with
+    # the e-mail addresses of its people, so only a system token reaches it.
+    # An import creates a project and accounts: browser sessions only.
+    ("POST", "/api/v1/admin/project-archives/export"): "admin",
+    ("GET", "/api/v1/admin/project-archives/jobs/{job_id}"): "admin",
+    ("GET", "/api/v1/admin/project-archives/jobs/{job_id}/download"): "admin",
+    ("POST", "/api/v1/admin/project-archives/import"): SESSION,
 }
 
 # Routes without a project in the path that a project token may call: they

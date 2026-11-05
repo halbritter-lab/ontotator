@@ -396,6 +396,40 @@ def test_upload_commit_activates_the_second_import_entrypoint(runtime):
     assert execute(env, child["id"]).status == "succeeded"
 
 
+def test_upload_commit_with_an_api_token_runs_its_correction_jobs(runtime):
+    # The queue stores the token behind a job in its payload and hands the
+    # handler the payload without it; the correction job a token's import
+    # starts must still recognise its own row (issue 305).
+    from fastapi.testclient import TestClient
+
+    env = runtime
+    admin = logged_in(env.app, "root", system_admin=True, assignments=[])
+    created = admin.post(
+        "/api/v1/me/tokens", json={"name": "importer", "scopes": ["import"]}
+    )
+    assert created.status_code == 201, created.text
+    token = TestClient(
+        env.app, headers={"Authorization": f"Bearer {created.json()['secret']}"}
+    )
+    path = bundle(
+        env.tmp_path, [env.source, correction_unit(env.source, "Prefix " + TEXT)]
+    )
+    upload = _ready(
+        env.app, token, data=path.read_bytes(), name=path.name, kind="t1", language=""
+    )
+    response = token.post(
+        f"{BASE}/{upload['id']}/commit", json={"plan_sha256": upload["plan_sha256"]}
+    )
+    assert response.status_code == 200, response.text
+    outcome = _run(env.app, response.json()["job_id"])
+    assert outcome.status == "succeeded", outcome.error
+    child = rows(env, JobRow, JobRow.id == children(env)[0])[0]
+    assert child["payload"]["api_token"]["name"] == "importer"
+    finished = execute(env, child["id"])
+    assert finished.status == "succeeded", finished.error
+    assert len(generated(env)) == 1
+
+
 def test_retry_is_zero_write_and_zero_additional_audit(runtime):
     env = runtime
     corrected(env)

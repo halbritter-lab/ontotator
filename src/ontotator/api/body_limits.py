@@ -78,6 +78,14 @@ LIMITS: tuple[BodyLimit, ...] = (
         "PAYLOAD_TOO_LARGE",
         lambda _app: "Ontology uploads exceed the configured byte limit.",
     ),
+    # A project archive carries its ontology files: the same limit.
+    BodyLimit(
+        "POST",
+        re.compile(r"^/api/v1/admin/project-archives/import/?$"),
+        lambda app: _config(app, "max_ontology_bytes"),
+        "PAYLOAD_TOO_LARGE",
+        lambda _app: "The archive exceeds the configured byte limit.",
+    ),
     *(
         BodyLimit(
             method,

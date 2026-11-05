@@ -251,3 +251,15 @@ it("a project without texts shows Nothing to export yet and no export action (#4
   fireEvent.click(screen.getByRole("link", { name: "Go to Documents" }));
   expect(onNavigate).toHaveBeenCalledWith({ name: "projectDocuments", key: "p" });
 });
+it("asks for the format before the tick box and describes only the chosen format", async () => {
+  vi.mocked(api.finalExportPreflight).mockResolvedValue({ ...emptyPreflight, selections: [selection], warnings: [warning] });
+  render(<ExportPage projectKey="p" currentUser={user} />);
+  const format = await finals().findByLabelText("Format");
+  const tick = finals().getByLabelText(/^Export the 1 result as it is/);
+  expect(format.compareDocumentPosition(tick) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(finals().getByText(/^A ZIP with one result file per text/)).toBeTruthy();
+  expect(finals().queryByText(/^One Phenopacket per text/)).toBeNull();
+  fireEvent.change(format, { target: { value: "phenopacket" } });
+  expect(finals().getByText(/^One Phenopacket per text/)).toBeTruthy();
+  expect(finals().queryByText(/^A ZIP with one result file per text/)).toBeNull();
+});

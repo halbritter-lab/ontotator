@@ -18,6 +18,8 @@ export type UploadCreated = components["schemas"]["UploadCreated"];
 export type UploadStatus = NonNullable<NonNullable<operations["list_uploads_api_v1_projects__key__uploads_get"]["parameters"]["query"]>["status"]>[number];
 export type ImportPlan = components["schemas"]["ImportPlan"];
 export type JobView = components["schemas"]["JobView"];
+export type ArchiveJobView = components["schemas"]["ArchiveJobView"];
+export type ArchiveJobQueued = components["schemas"]["ArchiveJobQueued"];
 export type ProjectProgress = components["schemas"]["ProjectProgress"];
 export type ProgressLedeView = components["schemas"]["ProgressLedeView"];
 export type ProgressStageView = components["schemas"]["ProgressStageView"];
@@ -218,6 +220,8 @@ export type StartConsolidationRequest = components["schemas"]["StartConsolidatio
 export type StartConsolidationResponse = components["schemas"]["StartConsolidationResponse"];
 export type MutationEnvelope = components["schemas"]["MutationEnvelope"];
 export type Draft = components["schemas"]["Draft"];
+export type DraftHistoryView = components["schemas"]["DraftHistoryView"];
+export type HistoryStepView = components["schemas"]["HistoryStepView"];
 export type Submission = components["schemas"]["Submission"];
 export type SearchRequest = components["schemas"]["SearchRequest"];
 export type SearchResult = components["schemas"]["SearchResult"];
@@ -648,6 +652,27 @@ export class ApiClient {
 
   async startExport(key: string, kind: ExportKind): Promise<ExportCreated> {
     return this.request<ExportCreated>(`/api/v1/projects/${encodeURIComponent(key)}/exports`, { method: "POST", body: JSON.stringify({ kind }) });
+  }
+
+  /** Project archives, system administrators only. */
+  async adminExportArchive(projectKey: string, includeOntologyFiles: boolean): Promise<ArchiveJobQueued> {
+    return this.request<ArchiveJobQueued>("/api/v1/admin/project-archives/export", { method: "POST", body: JSON.stringify({ project_key: projectKey, include_ontology_files: includeOntologyFiles }) });
+  }
+
+  async adminImportArchive(file: File, renamePseudonyms: boolean): Promise<ArchiveJobQueued> {
+    const body = new FormData();
+    body.append("file", file);
+    body.append("rename_pseudonyms", renamePseudonyms ? "true" : "false");
+    return this.request<ArchiveJobQueued>("/api/v1/admin/project-archives/import", { method: "POST", body });
+  }
+
+  async adminGetArchiveJob(id: number): Promise<ArchiveJobView> {
+    return this.request<ArchiveJobView>(`/api/v1/admin/project-archives/jobs/${id}`, { method: "GET" });
+  }
+
+  async adminDownloadArchive(id: number): Promise<DownloadPayload> {
+    const response = await this.requestResponse(`/api/v1/admin/project-archives/jobs/${id}/download`, { method: "GET" });
+    return { blob: await response.blob(), filename: attachmentFilename(response.headers.get("Content-Disposition")) };
   }
 
   async downloadJob(id: number): Promise<DownloadPayload> {
@@ -1156,6 +1181,18 @@ export class ApiClient {
 
   async resolveReanchor(workspaceId: string, envelope: MutationEnvelope): Promise<Draft> {
     return this.request<Draft>(`/api/v1/workspaces/${encodeURIComponent(workspaceId)}/reanchor-resolutions`, {
+      method: "POST", body: JSON.stringify(envelope),
+    });
+  }
+
+  /** Issue 320: what Undo, Redo and Reset all my changes would do now. */
+  async getHistory(workspaceId: string): Promise<DraftHistoryView> {
+    return this.request<DraftHistoryView>(`/api/v1/workspaces/${encodeURIComponent(workspaceId)}/history`);
+  }
+
+  /** Issue 320: undo or redo one step, or reset to the start of the round; saved as a new edit. */
+  async applyHistory(workspaceId: string, envelope: MutationEnvelope): Promise<Draft> {
+    return this.request<Draft>(`/api/v1/workspaces/${encodeURIComponent(workspaceId)}/history`, {
       method: "POST", body: JSON.stringify(envelope),
     });
   }

@@ -1,4 +1,4 @@
-"""Migration 0033: API tokens, a new table on a database that holds data."""
+"""Migration 0036: API tokens, a new table on a database that holds data."""
 
 from collections.abc import Iterator
 
@@ -9,8 +9,8 @@ from sqlalchemy.exc import IntegrityError
 
 from ontotator.storage.schema import upgrade
 
-REVISION = "0033"
-PREVIOUS = "0032"
+REVISION = "0036"
+PREVIOUS = "0035"
 S = "ontotator"
 
 

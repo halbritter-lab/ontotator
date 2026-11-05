@@ -333,7 +333,7 @@ async def test_a_final_export_with_a_request_id_can_be_repeated(
     await call(mcp_client, "start_export", args)
     sent = [c.json()["request_id"] for c in fake.calls_to("POST", f"{P}/exports/final")]
     assert sent == ["nightly-2026-11-05", "nightly-2026-11-05"]
-    with pytest.raises(ToolFailed, match="final export only"):
+    with pytest.raises(ToolFailed, match="final and Phenopackets exports only"):
         await call(
             mcp_client,
             "start_export",

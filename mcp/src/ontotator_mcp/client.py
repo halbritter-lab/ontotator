@@ -21,6 +21,7 @@ from ontotator_mcp.config import FILES_DIR_VARIABLE, Settings
 from ontotator_mcp.errors import OntotatorError, api_error, redact, transport_error
 
 JOB_DONE = ("succeeded", "failed")
+JOBS = "/api/v1/jobs"
 CHUNK = 1024 * 1024
 # A server that refuses an upload as too large (413) may close the connection
 # while the body is still being sent; the client then sees one of these.
@@ -244,26 +245,29 @@ class OntotatorClient:
                 "POST", path, files=parts, data=data, upload_bytes=size
             )
 
-    async def job(self, job_id: int) -> dict[str, Any]:
-        job: dict[str, Any] = await self.get(f"/api/v1/jobs/{seg(job_id)}")
+    async def job(self, job_id: int, base: str = JOBS) -> dict[str, Any]:
+        """A job's state from ``base``/{id} (project archives have their own)."""
+        job: dict[str, Any] = await self.get(f"{base}/{seg(job_id)}")
         return job
 
     async def wait_job(
-        self, job_id: int, timeout: float | None = None
+        self, job_id: int, timeout: float | None = None, base: str = JOBS
     ) -> dict[str, Any]:
         """The job once it succeeded or failed, polling; or as it is at the timeout."""
         deadline = time.monotonic() + (timeout or self.settings.job_timeout)
         interval = self.settings.poll_interval
         while True:
-            job = await self.job(job_id)
+            job = await self.job(job_id, base)
             if job.get("status") in JOB_DONE or time.monotonic() >= deadline:
                 return job
             await anyio.sleep(interval)
             interval = min(interval * 1.5, 10.0)
 
-    async def finished_job(self, job_id: int, what: str) -> dict[str, Any]:
+    async def finished_job(
+        self, job_id: int, what: str, base: str = JOBS
+    ) -> dict[str, Any]:
         """The job once it succeeded; an error if it failed or is still running."""
-        job = await self.wait_job(job_id)
+        job = await self.wait_job(job_id, base=base)
         if job.get("status") == "failed":
             raise OntotatorError(f"{what} (job {job_id}) failed: {job.get('error')}")
         if job.get("status") != "succeeded":

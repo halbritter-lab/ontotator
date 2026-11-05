@@ -82,6 +82,13 @@ export const IconUndo = (p: IconProps) => (
   </Icon>
 );
 
+/** The undo arrow mirrored (issue 320). */
+export const IconRedo = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M10.5 6.5H6a3 3 0 0 0 0 6h3.5M8.5 4l2.5 2.5L8.5 9" />
+  </Icon>
+);
+
 export const IconTrash = (p: IconProps) => (
   <Icon {...p}>
     <path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.5 8.5h6l.5-8.5" />

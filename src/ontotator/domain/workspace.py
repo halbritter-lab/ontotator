@@ -193,6 +193,9 @@ class MutationEnvelope(BaseModel):
     mutation_id: str
     expected_revision: int
     payload: dict[str, Any]
+    # The commands of one user action share a step ID (an edit and the review
+    # decision it updates); undo takes them back as one step (issue 320).
+    step_id: str | None = Field(default=None, min_length=1, max_length=64)
 
 
 class MutationReceipt(BaseModel):

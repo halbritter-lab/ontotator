@@ -306,6 +306,8 @@ def register_setup(server: MCPServer, api: OntotatorClient) -> None:
                     " {'annotations_per_text': 2, 'languages': ['en','de'],"
                     " 'adjudicator_not_annotator': true, 'import_plan':"
                     " 'review_and_annotate_translations'}."
+                    " 'blind_consolidation': true hides the annotators' names"
+                    " from consolidators (Annotator A, B, ...)."
                 )
             ),
         ],

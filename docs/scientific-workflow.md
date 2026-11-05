@@ -246,6 +246,15 @@ Preserve uncertain targets and ambiguous branches for adjudication. Hashes
 establish content identity; the annotator ID is the logged-in user's
 pseudonym, so it names the account that did the work.
 
+## Undo, redo and reset in the edit log
+
+The edit log (**Export** › **Research data** › **Edit log**, or
+`ontotator admin export-edit-log`) has one line per edit event in order. The
+commands of one user action share a `step_id`. An undo, redo or reset in the
+editor is an event of its own (`undo_step` and `redo_step` with the `step`
+they take back or bring back, `reset_changes`), and its `state` is the content
+it put back; earlier events are never changed.
+
 ## Working time
 
 A project records working time only when its lead ticks **Record working time**
@@ -344,3 +353,47 @@ The record is derived from the consolidation's stored decisions at export
 time, so it is also complete for consolidations submitted before v2. Version
 v1 receipts have no `consolidations`; the decisions' `consolidation.action`
 under `review_decisions` holds the same information per group there.
+
+## Phenopackets of the final results
+
+The final export can also be created as Phenopackets (export format
+`ontotator-final-phenopackets/v1`, the `format` field of `receipt.json` and
+`report.json`). It is derived from the same frozen snapshot as the final
+export, with the conversion of ontospan (`ontospan.phenopacket`), and is lossy
+by design. The complete selected results travel with it:
+
+- `phenopackets/NNNNN.json`: one Phenopacket v2 (protobuf JSON) per selected
+  result. `id` and `subject.id` are the text's exported `document_id`. Texts
+  are not grouped by patient: Ontotator has no patient identity.
+- `reports/NNNNN.json`: for the Phenopacket of the same number, the case,
+  language, submission ID and `ontospan_report`, ontospan's counts of what it
+  exported and left out (`omitted_family`, `omitted_other_person`,
+  `omitted_unknown_experiencer`, `omitted_uncertain`, `skipped_other_layers`,
+  plus `historical` and `frequency_modifiers` for exported findings that lose
+  meaning). `left_out_unresolved` counts findings left unresolved in
+  consolidation: Phenopackets cannot hold a reviewer resolution, so Ontotator
+  leaves them out before the conversion.
+- `report.json`: every text's record and the `totals`.
+- `selected-results.ontospan.zip`: the selected results as an Ontospan bundle
+  (bundle ID `selected-<snapshot ID>`). It is written with the same serializer,
+  bundle ID and time (the snapshot's) as the selected results of the final
+  export of the same snapshot, so the two files are byte for byte the same.
+  `receipt.json` names it under `selected_results` and lists its SHA-256 under
+  `files`, like every other file.
+
+Uncertain assertions are not included (ontospan's default). Each feature's
+evidence has a reference id of the form
+`urn:ontospan:selected-<snapshot ID>:<set ID>:<annotation ID>`, each part
+percent-encoded (`ontospan.parse_annotation_ref` decodes it), which names its
+finding (annotation set and annotation) in `selected-results.ontospan.zip` of
+the same ZIP.
+
+Time is carried over only as ontospan converts it. A feature's `onset` is
+filled only from an HPO onset modifier of the finding (a term under *Onset*,
+HP:0003674); nothing else sets a time. The temporality axis is not represented:
+a historical finding becomes a feature like a current one, since a Phenopacket
+cannot say "in the past", and `historical` counts these findings per text. The
+temporality of each finding stays in `selected-results.ontospan.zip`.
+
+On the command line, `ontotator admin export PROJECT OUT.zip --format phenopacket` exports the
+Phenopackets of the project's newest final-result snapshot.
