@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- `CITATION.cff` and `.zenodo.json` with the citation metadata of the project, and a **How to cite** section in the README (#300).
+- Test coverage reports in CI: `pytest-cov` writes `coverage.xml` for the Python tests and Vitest writes a V8 report (`npm run test:coverage`); both are uploaded as workflow artifacts. No thresholds are enforced (#301).
+
+### Changed
+
+- README and `docs/operations.md`: releases are tagged `vX.Y.Z` from `v0.1.0` on and follow Semantic Versioning; the image build fetches the public `ontospan` repository from GitHub, a token is optional, and only the build needs network access (#300).
+
+## [0.9.0] - 2026-11-04
+
+### Added
+
 - Working time: a lead can tick **Record working time** in Settings › Workflow (off by default; the change is kept in the project's settings history like the other rules). Annotation and translation review tasks then show the person working a timer of their own active time on the task, with **Pause timer** and **Resume timer**, and a one-time notice on their first task in the project. The timer pauses after 3 minutes without input (those 3 minutes still count) and while the tab is hidden, and goes on with the next input; a manual pause holds until **Resume timer** or a change to the work. The browser reports work intervals in batches (on pause and close, and a heartbeat every minute); the server keeps its own receipt times, ignores repeated items and ends an interval no later than 4 minutes after its last heartbeat, as `lost` when the heartbeats stopped. Progress shows **Working time** per task type (texts, total, median per text) without naming anyone, and **Export** › **Research data** › **Working time** writes the pseudonymised `<project>-work-time-<timestamp>.jsonl`, one line per interval plus a total per task, described in the scientific workflow guide. Migration 0031 adds `projects.record_working_time` and the append-only tables `work_time_events` and `work_intervals` (`GET`/`POST /api/v1/assignments/{assignment_id}/work-time`, `GET /api/v1/projects/{key}/work-time`, export kind `work_time`) (#298).
 - Final results as Phenopackets: on Export › **Final results**, **Format** › **Phenopackets (derived, lossy)** creates one GA4GH Phenopacket (schema v2) per text from the same check and accepted results as the final export, with the conversion of ontospan. The ZIP holds a report per text and a summary (`report.json`) of what was left out, such as findings about family members, uncertain findings and findings left unresolved in consolidation, and a README.txt. The Phenopacket and subject IDs are the document ID; texts of the same patient are not grouped yet. New job kind `final_phenopacket_export` (`format` on `POST /api/v1/projects/{key}/exports/final`, default `t1`), and `ontotator admin export PROJECT OUT --format phenopacket` exports the Phenopackets of the newest final export (#308).
 
@@ -238,7 +249,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 First public release.
 
-[Unreleased]: https://github.com/halbritter-lab/ontotator/compare/v0.8.1...HEAD
+[Unreleased]: https://github.com/halbritter-lab/ontotator/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/halbritter-lab/ontotator/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/halbritter-lab/ontotator/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/halbritter-lab/ontotator/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/halbritter-lab/ontotator/compare/v0.6.1...v0.7.0
