@@ -37,15 +37,19 @@ export function TextDetails({ row, data, plan, planRevision, reportRoute, onRout
       <span id={`${id}-plan`} className="text-card-plan-label">Plan</span>{plan}
     </div>}
     {reports.length > 0 && <section aria-labelledby={`${id}-reports`}>
-      <h3 id={`${id}-reports`} className="text-card-subheading">{`Problem reports (${reports.length})`}</h3>
-      <ul className="row-activity-lines">{reports.map(report => <li key={report.report_id}>
-        {report.title}{", "}{personOf(report.reporter_label)}{", "}<Time iso={report.created_at} now={now} />
-        {", "}Report: {REPORT_STATE_TEXT[report.state]}{", "}Paused tasks: {report.active_hold_count}{", "}
-        <RouteLink route={reportRoute(report.report_id)} onNavigate={onRoute}>Open report</RouteLink>
+      <h4 id={`${id}-reports`} className="text-card-subheading">{`Problem reports (${reports.length})`}</h4>
+      {/* Title, then reporter · date · state as a muted line, then Open report (issue 335). */}
+      <ul className="text-card-reports">{reports.map(report => <li key={report.report_id} className="text-card-report">
+        <span className="text-card-report-title">{report.title}</span>
+        <span className="text-card-muted">
+          {personOf(report.reporter_label)}{" · "}<Time iso={report.created_at} now={now} />
+          {" · "}Report: {REPORT_STATE_TEXT[report.state]}{" · "}Paused tasks: {report.active_hold_count}
+        </span>
+        <span><RouteLink route={reportRoute(report.report_id)} onNavigate={onRoute} className="btn btn-secondary btn-sm">Open report</RouteLink></span>
       </li>)}</ul>
     </section>}
     <section aria-labelledby={`${id}-technical`}>
-      <h3 id={`${id}-technical`} className="text-card-subheading">Technical details</h3>
+      <h4 id={`${id}-technical`} className="text-card-subheading">Technical details</h4>
       <dl className="technical-details">
         <dt>Text ID</dt><dd>{row.case_id}</dd>
         {planRevision != null && <><dt>Plan revision</dt><dd>{planRevision}</dd></>}

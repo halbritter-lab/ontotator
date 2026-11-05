@@ -8,6 +8,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- `CITATION.cff` and `.zenodo.json` with the citation metadata of the project, and a **How to cite** section in the README (#300).
+- Test coverage reports in CI: `pytest-cov` writes `coverage.xml` for the Python tests and Vitest writes a V8 report (`npm run test:coverage`); both are uploaded as workflow artifacts. No thresholds are enforced (#301).
+
+### Changed
+
+- README and `docs/operations.md`: releases are tagged `vX.Y.Z` from `v0.1.0` on and follow Semantic Versioning; the image build fetches the public `ontospan` repository from GitHub, a token is optional, and only the build needs network access (#300).
+
+### Fixed
+
+- Text card: the card no longer jumps up and down when you switch between **Translation**, **Annotation** and **Finalization** or open **History** or **Details**. From 700 px it hangs from a fixed top edge and only its height changes; from 1280 px it is up to 960 px wide instead of 760 px (#330).
+- Text card at phone width: **Final result** lists the submissions one under the other, with **Open submission** and **Use as final** on their own line, instead of a table wider than the screen that hid both buttons (#333).
+- Text card: the keyboard focus ring of the path segments is drawn inside the arrow, so the chevrons no longer cut it, and in white on the current (filled) segment, where it was invisible (#334).
+- Text card: **History** and **Details** show their name as a heading next to **Back**, and a problem report under **Details** reads as its title, a line with who reported it, when, its state and the paused tasks, and **Open report**, instead of one comma-joined line (#335).
+
+## [0.9.0] - 2026-11-04
+
+### Added
+
 - Working time: a lead can tick **Record working time** in Settings › Workflow (off by default; the change is kept in the project's settings history like the other rules). Annotation and translation review tasks then show the person working a timer of their own active time on the task, with **Pause timer** and **Resume timer**, and a one-time notice on their first task in the project. The timer pauses after 3 minutes without input (those 3 minutes still count) and while the tab is hidden, and goes on with the next input; a manual pause holds until **Resume timer** or a change to the work. The browser reports work intervals in batches (on pause and close, and a heartbeat every minute); the server keeps its own receipt times, ignores repeated items and ends an interval no later than 4 minutes after its last heartbeat, as `lost` when the heartbeats stopped. Progress shows **Working time** per task type (texts, total, median per text) without naming anyone, and **Export** › **Research data** › **Working time** writes the pseudonymised `<project>-work-time-<timestamp>.jsonl`, one line per interval plus a total per task, described in the scientific workflow guide. Migration 0031 adds `projects.record_working_time` and the append-only tables `work_time_events` and `work_intervals` (`GET`/`POST /api/v1/assignments/{assignment_id}/work-time`, `GET /api/v1/projects/{key}/work-time`, export kind `work_time`) (#298).
 - Project archives: a system administrator exports one complete project as a ZIP (`manifest.json` with format `ontotator-project-archive`, schema version 1, versions, per-file SHA-256 and row counts, one JSONL file per project table, the people it names and its stored files, with or without the ontology files) and imports it on another server as a new project, on the Projects page under **Project archives** or with `ontotator admin projects export-archive` and `import-archive`. The import renumbers every id, keeps immutable records with their timestamps, gives a taken key a suffix, refuses a changed archive, one of another database revision or one whose rows point to another project and checks every table against the manifest before it commits. People are matched by e-mail address (an archive carries the e-mail address only of people who worked in the project); the others become pseudonym-only people without login, which `ontotator admin users link-person` links to an account later. Work under annotator ids without an account is checked against the pseudonyms here as well, and `--rename-pseudonyms` changes only the fields that record who did the work, never texts. An archive never contains earlier archives or export results; the server deletes an exported archive after 24 hours (and every stored archive when an account is erased) and an uploaded one when its import ends. The import refuses archives that would expand beyond `ONTOTATOR_ARCHIVE_MAX_EXPANDED_BYTES` (default 8 GiB) or too far per byte (`ARCHIVE_TOO_LARGE`) and file names other than the archive's own, streams stored files to disk and writes them only after every check. Migration 0032 adds `imported_people` and changes no existing row (`/api/v1/admin/project-archives`) (#306).
 
@@ -238,7 +256,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 First public release.
 
-[Unreleased]: https://github.com/halbritter-lab/ontotator/compare/v0.8.1...HEAD
+[Unreleased]: https://github.com/halbritter-lab/ontotator/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/halbritter-lab/ontotator/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/halbritter-lab/ontotator/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/halbritter-lab/ontotator/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/halbritter-lab/ontotator/compare/v0.6.1...v0.7.0
