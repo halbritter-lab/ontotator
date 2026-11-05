@@ -321,7 +321,8 @@ def register_results(server: MCPServer, api: OntotatorClient) -> None:
             Field(
                 description=(
                     "Absolute local file to write (or starting with ~),"
-                    " e.g. ~/exports/ward-7.zip."
+                    " inside the folders of ONTOTATOR_MCP_FILES_DIR,"
+                    " e.g. ~/ontotator/ward-7.zip."
                 )
             ),
         ],
@@ -330,14 +331,15 @@ def register_results(server: MCPServer, api: OntotatorClient) -> None:
         """Download the file of a finished export job to a local path.
 
         WRITES A FILE ON THE USER'S COMPUTER; ``path`` in the result is the
-        absolute path written. The file is streamed to disk and checked
+        absolute path written. Only inside the folders of
+        ONTOTATOR_MCP_FILES_DIR; without that variable it refuses. The file is streamed to disk and checked
         against the SHA-256 the server recorded. An existing file is
         replaced only with overwrite, and only by a complete download that
         matches. Calling it again downloads the file again.
         """
+        target = api.local_path(path)
         job = await api.job(job_id)
         kind = export_target(job)
-        target = api.local_path(path)
         expected = (job.get("result") or {}).get("sha256")
         written, digest = await api.download(
             f"/api/v1/jobs/{seg(job_id)}/download",

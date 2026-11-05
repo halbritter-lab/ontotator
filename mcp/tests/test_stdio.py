@@ -13,14 +13,12 @@ from mcp import Client, StdioServerParameters
 
 @pytest.mark.anyio
 async def test_the_server_lists_its_tools_over_stdio() -> None:
+    # Without ONTOTATOR_MCP_FILES_DIR: the server starts all the same.
+    env = {k: v for k, v in os.environ.items() if not k.startswith("ONTOTATOR_")}
     params = StdioServerParameters(
         command=sys.executable,
         args=["-m", "ontotator_mcp"],
-        env={
-            **os.environ,
-            "ONTOTATOR_URL": "http://127.0.0.1:9",
-            "ONTOTATOR_TOKEN": TOKEN,
-        },
+        env=env | {"ONTOTATOR_URL": "http://127.0.0.1:9", "ONTOTATOR_TOKEN": TOKEN},
     )
     async with Client(params) as client:
         tools = (await client.list_tools()).tools

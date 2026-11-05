@@ -17,7 +17,7 @@ import anyio
 import httpx
 
 from ontotator_mcp import __version__
-from ontotator_mcp.config import Settings
+from ontotator_mcp.config import FILES_DIR_VARIABLE, Settings
 from ontotator_mcp.errors import OntotatorError, api_error, redact, transport_error
 
 JOB_DONE = ("succeeded", "failed")
@@ -43,29 +43,38 @@ def project_path(project: str, *rest: str) -> str:
     return f"{base}/{tail}" if tail else base
 
 
-def local_path(path: str, folders: Sequence[Path] = ()) -> Path:
+def local_path(path: str, folders: Sequence[Path]) -> Path:
     """The absolute path the caller named, symlinks resolved, inside ``folders``.
 
-    ``~`` is expanded; a relative path is refused, because the MCP server's
-    working folder is not one the user chose. With ``folders`` (from
-    ``ONTOTATOR_MCP_FILES_DIR``) the resolved path must lie in one of them.
+    ``folders`` come from ``ONTOTATOR_MCP_FILES_DIR``; without any, no local
+    file may be read or written. ``~`` is expanded; a relative path is
+    refused, because the MCP server's working folder is not one the user
+    chose. The resolved path must lie in one of ``folders``.
     """
+    if not folders:
+        raise OntotatorError(
+            f"This tool reads or writes local files, which is off: set"
+            f" {FILES_DIR_VARIABLE} to the folders it may use (absolute paths or"
+            f" starting with ~, separated by {os.pathsep!r}), for example"
+            f" {FILES_DIR_VARIABLE}=~/ontotator, in the MCP client's settings"
+            " for this server, and restart the server."
+        )
     given = Path(path).expanduser()
     if not given.is_absolute():
         raise OntotatorError(
             f"Give an absolute path, or one starting with ~, not {path!r}."
         )
     resolved = given.resolve()
-    if folders and not any(resolved.is_relative_to(folder) for folder in folders):
+    if not any(resolved.is_relative_to(folder) for folder in folders):
         allowed = ", ".join(str(folder) for folder in folders)
         raise OntotatorError(
             f"{resolved} is outside the folders this MCP server may use"
-            f" (ONTOTATOR_MCP_FILES_DIR: {allowed})."
+            f" ({FILES_DIR_VARIABLE}: {allowed})."
         )
     return resolved
 
 
-def local_file(path: str, folders: Sequence[Path] = ()) -> Path:
+def local_file(path: str, folders: Sequence[Path]) -> Path:
     """An existing regular file the caller named; see ``local_path``."""
     resolved = local_path(path, folders)
     if not resolved.is_file():

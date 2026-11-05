@@ -102,8 +102,13 @@ def live() -> Iterator[dict[str, str]]:
             process.wait(timeout=30)
 
 
-def _server(info: dict[str, str], token: str) -> Any:
-    settings = Settings(url=info["url"], token=token, poll_interval=0.2)
+def _server(info: dict[str, str], token: str, *files_dirs: Path) -> Any:
+    settings = Settings(
+        url=info["url"],
+        token=token,
+        poll_interval=0.2,
+        files_dirs=tuple(folder.resolve() for folder in files_dirs),
+    )
     return build_server(settings)
 
 
@@ -111,7 +116,8 @@ def _server(info: dict[str, str], token: str) -> Any:
 async def test_setup_import_status_and_export(
     live: dict[str, str], tmp_path: Path
 ) -> None:
-    async with Client(_server(live, live["admin_token"])) as client:
+    files = (FIXTURES, tmp_path)
+    async with Client(_server(live, live["admin_token"], *files)) as client:
         me = await call(client, "whoami", {})
         assert me["user"]["username"] == "root"
 

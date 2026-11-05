@@ -76,7 +76,7 @@ class Settings:
     timeout: float = 60.0
     job_timeout: float = 900.0
     poll_interval: float = 1.0
-    # Folders the tools may read and write local files in; empty means anywhere.
+    # Folders the tools may read and write local files in; empty means none.
     files_dirs: tuple[Path, ...] = ()
 
     @classmethod

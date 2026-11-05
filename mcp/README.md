@@ -34,13 +34,13 @@ The token is shown once. Store it like a password: the MCP client keeps it in it
 | `ONTOTATOR_ALLOW_HTTP` | `1` allows plain `http` to another host, for a trusted network only. |
 | `ONTOTATOR_TIMEOUT` | Seconds per HTTP request (default 60). |
 | `ONTOTATOR_JOB_TIMEOUT` | Seconds a tool waits for an import or export job (default 900). |
-| `ONTOTATOR_MCP_FILES_DIR` | Recommended. The folders the tools may read local files from and write downloads to, as absolute paths (or starting with `~`), several separated by `:` (`;` on Windows). Unset, any file you can read can be uploaded. |
+| `ONTOTATOR_MCP_FILES_DIR` | Required for local files. The folders the tools may read local files from and write downloads to, as absolute paths (or starting with `~`), several separated by `:` (`;` on Windows). Unset, the server still starts, but every tool that reads or writes a local file refuses; the other tools work. |
 
 ### Local files
 
 Some tools read a file from your computer and upload it to Ontotator: `upload_texts`, `upload_ontology_files`, `publish_guideline`, and `create_project` and `set_task_profile` with `profile_path`. `download_export` writes a file on your computer. Their descriptions say so, paths must be absolute (or start with `~`), and each result names the absolute path it read or wrote (`local_files`, or `path` for a download).
 
-A model that follows instructions hidden in a text, a guideline or a web page could be talked into uploading a file you did not mean to share, such as a key or a password file. Set `ONTOTATOR_MCP_FILES_DIR` to the folders that hold your Ontotator files, for example `~/ontotator`: the server then resolves each path (following symbolic links) and refuses any file outside these folders, for uploads and downloads alike. Check the paths in the client's tool calls before you approve them.
+These tools need `ONTOTATOR_MCP_FILES_DIR`, set to the folders that hold your Ontotator files, for example `~/ontotator`. Without it they refuse and name the variable; the tools without local files work as before. A model that follows instructions hidden in a text, a guideline or a web page could otherwise be talked into uploading a file you did not mean to share, such as a key or a password file. The server resolves each path (following symbolic links) and refuses any file outside these folders, for uploads and downloads alike. Keep only Ontotator files there, and check the paths in the client's tool calls before you approve them.
 
 ### Claude Code
 
@@ -148,24 +148,24 @@ A refusal of the API becomes a tool error with the HTTP status, the API's code a
 
 ## Worked example: a Phentrieve proposals project
 
-This example sets up an HPO annotation project in which annotators check the HPO terms that [Phentrieve](https://github.com/halbritter-lab/phentrieve) proposed for a set of clinical texts. It assumes an Ontotator instance at `https://ontotator.example.org`, an Ontospan bundle `phentrieve-bundle.zip` holding the texts and Phentrieve's proposals (written with the Ontospan tools), and an HPO release `hp.json` with its German translation `hp-de.babelon.tsv`. The prompts are what you type into the client; the tools it calls are named after each.
+This example sets up an HPO annotation project in which annotators check the HPO terms that [Phentrieve](https://github.com/halbritter-lab/phentrieve) proposed for a set of clinical texts. It assumes an Ontotator instance at `https://ontotator.example.org`, an Ontospan bundle `phentrieve-bundle.zip` holding the texts and Phentrieve's proposals (written with the Ontospan tools), and an HPO release `hp.json` with its German translation `hp-de.babelon.tsv`, all in `~/ontotator` with `ONTOTATOR_MCP_FILES_DIR=~/ontotator`. The prompts are what you type into the client; the tools it calls are named after each.
 
 1. **Ontology and project** (system token with `read` and `admin`).
-   *"Upload ~/hpo/hp.json and ~/hpo/hp-de.babelon.tsv to Ontotator, then create the project `phentrieve-pilot` named 'Phentrieve pilot' with the HPO template, languages en and de, pinned to the HP release you just uploaded."*
+   *"Upload ~/ontotator/hpo/hp.json and ~/ontotator/hpo/hp-de.babelon.tsv to Ontotator, then create the project `phentrieve-pilot` named 'Phentrieve pilot' with the HPO template, languages en and de, pinned to the HP release you just uploaded."*
    `upload_ontology_files`, `list_project_templates`, `create_project`. You become the project's lead. Upload translations before anyone works in the project: its first term search freezes the translations it uses.
 2. **Switch to a project token.** In Settings › People › **Project API tokens**, create a token for `phentrieve-pilot` with `read`, `import`, `export` and `project-admin`, and restart the client with it.
 3. **Settings, guideline and people.**
-   *"Set two annotators per text, publish ~/pilot/guideline.md as the guideline, and give alice and bob the annotator role and carla the consolidator role."*
+   *"Set two annotators per text, publish ~/ontotator/pilot/guideline.md as the guideline, and give alice and bob the annotator role and carla the consolidator role."*
    `update_project_settings` (`{"annotations_per_text": 2}`), `publish_guideline`, `set_member_roles` (consolidator is the role `adjudicator`).
 4. **Import the proposals.**
-   *"Check ~/pilot/phentrieve-bundle.zip as an Ontospan bundle and show me the result."* `upload_texts` stages and checks the bundle: cases, texts, proposals, problems and the planned work. *"Import it."* `commit_upload` imports exactly what was checked.
+   *"Check ~/ontotator/pilot/phentrieve-bundle.zip as an Ontospan bundle and show me the result."* `upload_texts` stages and checks the bundle: cases, texts, proposals, problems and the planned work. *"Import it."* `commit_upload` imports exactly what was checked.
 5. **Work plan and assignments.**
    *"Annotate the English texts from the proposals and give every text to alice and bob. Show me the dry run first."*
    `update_work_plan` (`annotation_mode: proposals`) and `distribute_texts` (`mode: each`), each first without and then with `confirm`.
 6. **Annotation** happens in the browser: alice and bob confirm, change or reject each proposal.
 7. **Status.** *"How far is phentrieve-pilot, and where do alice and bob disagree?"* `project_overview`, `get_progress`, `agreement_summary`.
 8. **Results.** *"Accept every text where both agree; show me the list first. Start a consolidation by carla for the others."* `accept_agreeing_texts` (dry run, then `confirm`) and `start_consolidation` per text. Carla consolidates in the browser, and the lead accepts the consolidations on the Documents page.
-9. **Export.** *"Check the final export, then export it and save it to ~/pilot/final.zip."* `final_export_check`, `start_export` (`kind: final`; warnings and texts without a result must be acknowledged), `download_export`. The archive holds `index.csv` and the selected results as Ontospan bundles. Its README is the resource `ontotator://jobs/{job_id}/readme`. The edit log (`kind: edit_log`), the working time (`kind: work_time`) and the translation reviews (`kind: translation_reviews`) export the same way.
+9. **Export.** *"Check the final export, then export it and save it to ~/ontotator/pilot/final.zip."* `final_export_check`, `start_export` (`kind: final`; warnings and texts without a result must be acknowledged), `download_export`. The archive holds `index.csv` and the selected results as Ontospan bundles. Its README is the resource `ontotator://jobs/{job_id}/readme`. The edit log (`kind: edit_log`), the working time (`kind: work_time`) and the translation reviews (`kind: translation_reviews`) export the same way.
 
 ## Not reachable with a token
 

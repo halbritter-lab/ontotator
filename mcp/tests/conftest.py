@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -25,8 +26,15 @@ def fake() -> FakeApi:
 
 
 @pytest.fixture
-def settings() -> Settings:
-    return Settings(url=URL, token=TOKEN, poll_interval=0.001, job_timeout=5)
+def settings(tmp_path: Path) -> Settings:
+    # The test's own folder is the one ONTOTATOR_MCP_FILES_DIR allows.
+    return Settings(
+        url=URL,
+        token=TOKEN,
+        poll_interval=0.001,
+        job_timeout=5,
+        files_dirs=(tmp_path.resolve(),),
+    )
 
 
 @pytest.fixture

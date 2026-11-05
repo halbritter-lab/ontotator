@@ -22,8 +22,19 @@ from ontotator_mcp.tooling import register
 
 Project = Annotated[str, Field(description="Project key, e.g. 'ward-7'.")]
 Paths = Annotated[
-    list[str], Field(min_length=1, description="Paths of local files to upload.")
+    list[str],
+    Field(
+        min_length=1,
+        description=(
+            "Absolute paths (or starting with ~) of local files to upload,"
+            " inside the folders of ONTOTATOR_MCP_FILES_DIR."
+        ),
+    ),
 ]
+PROFILE_PATH = (
+    "Absolute local path (or starting with ~) of a task profile JSON file,"
+    " inside the folders of ONTOTATOR_MCP_FILES_DIR."
+)
 UPLOAD_KINDS = {"text": "text", "ontospan": "t1"}
 MAX_LISTED = 50
 
@@ -174,7 +185,9 @@ def register_setup(server: MCPServer, api: OntotatorClient) -> None:
 
         UPLOADS FILES FROM THE USER'S COMPUTER: it reads the named local
         files and sends them to Ontotator; ``local_files`` in the result
-        names the absolute paths read. Each file is added once; a file the
+        names the absolute paths read. Only files inside the folders of
+        ONTOTATOR_MCP_FILES_DIR; without that variable it refuses. Each file
+        is added once; a file the
         server already has is reported as ``already_present``. Add
         translations before anyone works in a project: its first term
         search freezes the translations it uses. Needs a system token.
@@ -207,9 +220,7 @@ def register_setup(server: MCPServer, api: OntotatorClient) -> None:
             dict[str, Any] | None,
             Field(description="Task profile JSON (ontotator-task-profile/v1)."),
         ] = None,
-        profile_path: Annotated[
-            str | None, Field(description="Local path of a task profile JSON file.")
-        ] = None,
+        profile_path: Annotated[str | None, Field(description=PROFILE_PATH)] = None,
     ) -> dict[str, Any]:
         """Create a project from a template or a task profile.
 
@@ -217,7 +228,8 @@ def register_setup(server: MCPServer, api: OntotatorClient) -> None:
         owner becomes the project's lead. Needs a system token. With
         profile_path it READS A FILE FROM THE USER'S COMPUTER and sends its
         content to Ontotator; ``local_files`` in the result names the
-        absolute path read.
+        absolute path read. profile_path must lie inside the folders of
+        ONTOTATOR_MCP_FILES_DIR; without that variable it is refused.
         """
         chosen, read = _profile(api, profile, profile_path)
         if (template is None) == (chosen is None):
@@ -271,16 +283,15 @@ def register_setup(server: MCPServer, api: OntotatorClient) -> None:
         profile: Annotated[
             dict[str, Any] | None, Field(description="Task profile JSON.")
         ] = None,
-        profile_path: Annotated[
-            str | None, Field(description="Local path of a task profile JSON file.")
-        ] = None,
+        profile_path: Annotated[str | None, Field(description=PROFILE_PATH)] = None,
     ) -> dict[str, Any]:
         """Replace the project's task profile (layers, annotation types, value axes).
 
         The server refuses a change that would not fit work already done.
         With profile_path it READS A FILE FROM THE USER'S COMPUTER and sends
         its content to Ontotator; ``local_files`` in the result names the
-        absolute path read.
+        absolute path read. profile_path must lie inside the folders of
+        ONTOTATOR_MCP_FILES_DIR; without that variable it is refused.
         """
         chosen, read = _profile(api, profile, profile_path)
         if chosen is None:
@@ -334,14 +345,24 @@ def register_setup(server: MCPServer, api: OntotatorClient) -> None:
     @register(server, scopes="project-admin", effect="additive")
     async def publish_guideline(
         project: Project,
-        path: Annotated[str, Field(description="Local Markdown or text file.")],
+        path: Annotated[
+            str,
+            Field(
+                description=(
+                    "Absolute path (or starting with ~) of a local Markdown or"
+                    " text file, inside the folders of ONTOTATOR_MCP_FILES_DIR."
+                )
+            ),
+        ],
         change_note: str = "",
     ) -> dict[str, Any]:
         """Publish a new version of the project's annotation guideline.
 
         UPLOADS A FILE FROM THE USER'S COMPUTER: it reads the named local
         file and sends it to Ontotator; ``local_files`` in the result names
-        the absolute path read. Earlier versions stay; annotators are asked
+        the absolute path read. Only files inside the folders of
+        ONTOTATOR_MCP_FILES_DIR; without that variable it refuses. Earlier
+        versions stay; annotators are asked
         to read the new one.
         """
         files = api.local_files([path])
@@ -381,7 +402,8 @@ def register_setup(server: MCPServer, api: OntotatorClient) -> None:
         commit_upload to import, or discard_upload. UPLOADS FILES FROM THE
         USER'S COMPUTER: it reads the named local files (streamed from disk)
         and sends them to Ontotator; ``local_files`` in the result names the
-        absolute paths read.
+        absolute paths read. Only files inside the folders of
+        ONTOTATOR_MCP_FILES_DIR; without that variable it refuses.
         """
         if format == "text" and not language:
             raise OntotatorError("Plain text needs the language of the texts.")

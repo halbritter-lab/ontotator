@@ -23,7 +23,9 @@ environment:
   ONTOTATOR_TIMEOUT        seconds per HTTP request (default 60)
   ONTOTATOR_JOB_TIMEOUT    seconds a tool waits for a job (default 900)
   ONTOTATOR_MCP_FILES_DIR  folders the tools may read and write local files
-                           in, separated by the path separator (recommended)
+                           in, separated by the path separator; required for
+                           any local file access (unset, the file tools refuse
+                           and the others still work)
 """
 
 

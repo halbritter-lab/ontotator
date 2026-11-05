@@ -184,6 +184,39 @@ async def test_files_dir_limits_what_is_read_and_written(
         assert done["path"] == str((allowed / "out.zip").resolve())
 
 
+async def test_without_files_dir_local_files_are_refused(
+    fake: FakeApi, settings: Settings, tmp_path: Path
+) -> None:
+    text = tmp_path / "case.zip"
+    text.write_bytes(b"PK")
+    fake.on("GET", "/api/v1/auth/me", build("CurrentUser", username="lead"))
+    _export_job(fake, b"zip-bytes")
+    unset = replace(settings, files_dirs=())
+    server = build_server(unset, transport=httpx.MockTransport(fake))
+    tools: list[tuple[str, dict[str, Any]]] = [
+        ("upload_texts", {"project": "p", "paths": [str(text)], "format": "ontospan"}),
+        ("upload_ontology_files", {"paths": [str(text)]}),
+        ("publish_guideline", {"project": "p", "path": str(text)}),
+        ("set_task_profile", {"project": "p", "profile_path": str(text)}),
+        (
+            "create_project",
+            {"key": "k", "name": "K", "pins": [], "profile_path": str(text)},
+        ),
+        ("download_export", {"job_id": 9, "path": str(tmp_path / "out.zip")}),
+    ]
+    async with Client(server) as client:
+        for name, args in tools:
+            with pytest.raises(ToolFailed) as refused:
+                await call(client, name, args)
+            assert "set ONTOTATOR_MCP_FILES_DIR" in str(refused.value), name
+        # Nothing was sent, written or even looked up.
+        assert not fake.calls
+        assert not (tmp_path / "out.zip").exists()
+        # Tools without local files work as before.
+        me = await call(client, "whoami", {})
+        assert me["user"]["username"] == "lead"
+
+
 def _member(username: str, roles: list[str]) -> dict[str, Any]:
     return build("Member", username=username, roles=roles)
 
