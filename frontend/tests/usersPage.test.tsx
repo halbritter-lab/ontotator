@@ -129,9 +129,19 @@ describe("users administration", () => {
     fireEvent.click(editForm().getByRole("button", { name: "Remove en" })); fireEvent.click(editForm().getByLabelText("System administrator"));
     fireEvent.click(editForm().getByRole("button", { name: "Save changes" }));
     const confirm = screen.getByRole("dialog", { name: "Change administrator role" }); expect(api.adminUpdateUser).not.toHaveBeenCalled();
+    expect(confirm.textContent).toContain("revokes their system tokens and their project tokens for projects they do not lead");
     fireEvent.click(within(confirm).getByRole("button", { name: "Save changes" }));
     await screen.findByText("Server name"); expect(api.adminUpdateUser).toHaveBeenCalledOnce();
     expect(api.adminUpdateUser).toHaveBeenCalledWith("alex", { display_name: "Edited name", email: null, languages: [], is_system_admin: false });
+  });
+
+  it("says that granting the administrator role keeps the API tokens (#305)", async () => {
+    vi.mocked(api.adminListUsers).mockResolvedValue([root, { ...alex, is_system_admin: false }]);
+    render(<UsersPage currentUser={currentUser} />); await load(); fireEvent.click(screen.getByRole("button", { name: "Edit alex" }));
+    fireEvent.click(editForm().getByLabelText("System administrator"));
+    fireEvent.click(editForm().getByRole("button", { name: "Save changes" }));
+    const confirm = screen.getByRole("dialog", { name: "Change administrator role" });
+    expect(confirm.textContent).toContain("This logs the user out everywhere. Their API tokens keep working.");
   });
 
   it("sends only edited fields and closes an unchanged edit without an API write", async () => {

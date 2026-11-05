@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
-from auth_harness import ORIGIN, logged_in
+from auth_harness import ORIGIN, PASSWORD, logged_in
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import select
@@ -23,6 +23,8 @@ from ontotator.api.token_scopes import (
 )
 from ontotator.auth.api_tokens import TOKEN_PREFIX
 from ontotator.auth.audit import Actor
+from ontotator.auth.passwords import hash_password
+from ontotator.auth.tokens import token_digest
 from ontotator.storage.tables import ApiTokenRow, AuditEventRow
 
 PROJECT = "phenotypes"
@@ -313,37 +315,216 @@ def test_a_revoked_token_stops_working_and_last_use_is_recorded(
     assert foreign.status_code == 404
 
 
-def test_losing_a_role_or_the_account_revokes_the_tokens(
+def _state(app: FastAPI, secret_of: dict[str, str]) -> dict[str, str]:
+    """``revoked_reason`` of each named token ("" while it is not revoked)."""
+    with app.state.repo.db.transaction() as conn:
+        rows = {
+            row.token_sha256: row.revoked_reason or ""
+            for row in conn.execute(select(ApiTokenRow))
+        }
+    return {name: rows[token_digest(secret)] for name, secret in secret_of.items()}
+
+
+def _reaches(app: FastAPI, secret: str, project: str) -> int:
+    client = _bearer(app, secret)
+    return client.get(f"/api/v1/projects/{project}/ontologies").status_code
+
+
+def test_losing_the_lead_role_revokes_only_that_projects_tokens(
     app: FastAPI, admin: TestClient
 ) -> None:
-    lead = logged_in(app, "lea", projects={PROJECT: ["lead", "annotator"]})
-    personal = _create(lead, ["read"])["secret"]
-    project = _create(lead, ["read"], f"/api/v1/projects/{PROJECT}/tokens")["secret"]
-    for secret in (personal, project):
-        assert (
-            _bearer(app, secret).get(f"/api/v1/projects/{PROJECT}/members").is_success
-        )
-    app.state.memberships.set_roles(Actor.cli(), PROJECT, "lea", ["annotator"])
-    for secret in (personal, project):
-        assert _bearer(app, secret).get("/api/v1/about").status_code == 401
-    with app.state.repo.db.transaction() as conn:
-        reasons = set(conn.execute(select(ApiTokenRow.revoked_reason)).scalars())
-    assert reasons == {"project.member_roles"}
+    create_project(app, admin, "other")
+    lead = logged_in(
+        app, "lea", projects={PROJECT: ["lead", "annotator"], "other": ["lead"]}
+    )
+    tokens = {
+        "personal": _create(lead, ["read"])["secret"],
+        "here": _create(lead, ["read"], f"/api/v1/projects/{PROJECT}/tokens")["secret"],
+        "other": _create(lead, ["read"], "/api/v1/projects/other/tokens")["secret"],
+    }
+    # A lost role no token depends on revokes nothing.
+    app.state.memberships.set_roles(
+        Actor.cli(), PROJECT, "lea", ["lead"], revoke_assignments=True
+    )
+    assert set(_state(app, tokens).values()) == {""}
+    assert _reaches(app, tokens["here"], PROJECT) == 200
 
-    log_in_again = logged_in(app, "lea")
-    secret = _create(log_in_again, ["read"])["secret"]
-    app.state.accounts.set_active(Actor.cli(), "lea", False)
-    assert _bearer(app, secret).get("/api/v1/about").status_code == 401
+    app.state.memberships.set_roles(
+        Actor.cli(), PROJECT, "lea", ["annotator"], revoke_assignments=True
+    )
+    assert _state(app, tokens) == {
+        "personal": "",
+        "here": "project.member_roles",
+        "other": "",
+    }
+    assert _reaches(app, tokens["here"], PROJECT) == 401
+    assert _reaches(app, tokens["other"], "other") == 200
+    # The personal token keeps what the annotator may still read here.
+    assert _reaches(app, tokens["personal"], PROJECT) == 200
+    removals = [event.details for event in _audit(app, "project.member_remove")]
+    assert removals[-1] == {"username": "lea", "roles": ["lead"], "tokens_revoked": 1}
+    assert "tokens_revoked" not in removals[0]
 
 
-def test_a_system_token_ends_with_the_admin_role(
+def test_a_personal_token_loses_a_project_at_once_but_keeps_the_others(
+    app: FastAPI, admin: TestClient
+) -> None:
+    create_project(app, admin, "other")
+    member = logged_in(
+        app, "ann", projects={PROJECT: ["annotator"], "other": ["annotator"]}
+    )
+    secret = _create(member, ["read"])["secret"]
+    assert _reaches(app, secret, PROJECT) == 200
+    assert _reaches(app, secret, "other") == 200
+    app.state.memberships.set_roles(
+        Actor.cli(), PROJECT, "ann", [], revoke_assignments=True
+    )
+    # Checked on the very next request: no stale right survives.
+    assert _reaches(app, secret, PROJECT) == 404
+    listed = _bearer(app, secret).get("/api/v1/projects").json()
+    assert [project["project_key"] for project in listed] == ["other"]
+    assert _reaches(app, secret, "other") == 200
+    assert _state(app, {"personal": secret}) == {"personal": ""}
+
+
+def test_a_project_token_survives_a_lost_lead_role_while_its_owner_is_an_admin(
     app: FastAPI, admin: TestClient
 ) -> None:
     logged_in(app, "second", system_admin=True)
-    secret = _create(admin, ["admin"], "/api/v1/admin/tokens")["secret"]
-    assert _bearer(app, secret).get("/api/v1/admin/users/").status_code == 200
+    app.state.memberships.set_roles(Actor.cli(), PROJECT, "second", ["lead"])
+    second = logged_in(app, "second")
+    secret = _create(second, ["read"], f"/api/v1/projects/{PROJECT}/tokens")["secret"]
+    app.state.memberships.set_roles(Actor.cli(), PROJECT, "second", [])
+    # A system admin may still manage the project, so the token still works ...
+    assert _reaches(app, secret, PROJECT) == 200
+    # ... until the admin role goes too.
+    app.state.accounts.set_system_admin(Actor.cli(), "second", False)
+    assert _state(app, {"token": secret}) == {"token": "user.system_admin"}
+    assert _reaches(app, secret, PROJECT) == 401
+
+
+def test_losing_the_admin_role_revokes_only_the_tokens_it_backed(
+    app: FastAPI, admin: TestClient
+) -> None:
+    create_project(app, admin, "other")
+    logged_in(app, "second", system_admin=True)
+    app.state.memberships.set_roles(Actor.cli(), PROJECT, "root", [])
+    app.state.memberships.set_roles(Actor.cli(), "other", "root", ["lead"])
+    root = logged_in(app, "root")
+    tokens = {
+        "system": _create(root, ["admin"], "/api/v1/admin/tokens")["secret"],
+        "personal": _create(root, ["read"])["secret"],
+        "unled": _create(root, ["read"], f"/api/v1/projects/{PROJECT}/tokens")[
+            "secret"
+        ],
+        "led": _create(root, ["read"], "/api/v1/projects/other/tokens")["secret"],
+    }
+    assert _reaches(app, tokens["personal"], PROJECT) == 200  # as an admin
     app.state.accounts.set_system_admin(Actor.cli(), "root", False)
-    assert _bearer(app, secret).get("/api/v1/admin/users/").status_code == 401
+    assert _state(app, tokens) == {
+        "system": "user.system_admin",
+        "personal": "",
+        "unled": "user.system_admin",
+        "led": "",
+    }
+    users = _bearer(app, tokens["system"]).get("/api/v1/admin/users/")
+    assert users.status_code == 401
+    assert _reaches(app, tokens["led"], "other") == 200
+    # The personal token now reads only what its owner may read.
+    assert _reaches(app, tokens["personal"], PROJECT) == 404
+    assert _reaches(app, tokens["personal"], "other") == 200
+    [event] = _audit(app, "user.system_admin")
+    assert event.details == {"is_system_admin": False, "tokens_revoked": 2}
+
+
+def test_gaining_the_admin_role_revokes_no_token(
+    app: FastAPI, admin: TestClient
+) -> None:
+    lead = logged_in(app, "lea", projects={PROJECT: ["lead"]})
+    tokens = {
+        "personal": _create(lead, ["read"])["secret"],
+        "project": _create(lead, ["read"], f"/api/v1/projects/{PROJECT}/tokens")[
+            "secret"
+        ],
+    }
+    app.state.accounts.set_system_admin(Actor.cli(), "lea", True)
+    assert set(_state(app, tokens).values()) == {""}
+    assert _reaches(app, tokens["project"], PROJECT) == 200
+    [event] = _audit(app, "user.system_admin")
+    assert event.details == {"is_system_admin": True}
+
+
+def test_changing_the_own_password_revokes_every_own_token(
+    app: FastAPI, admin: TestClient
+) -> None:
+    lead = logged_in(app, "lea", projects={PROJECT: ["lead"]})
+    other = logged_in(app, "ann", projects={PROJECT: ["annotator"]})
+    tokens = {
+        "personal": _create(lead, ["read"])["secret"],
+        "project": _create(lead, ["read"], f"/api/v1/projects/{PROJECT}/tokens")[
+            "secret"
+        ],
+        "system": _create(admin, ["admin"], "/api/v1/admin/tokens")["secret"],
+        "someone else's": _create(other, ["read"])["secret"],
+    }
+    new = {"current_password": PASSWORD, "new_password": "another long passphrase"}
+    changed = lead.post("/api/v1/me/password", json=new)
+    assert changed.status_code == 204, changed.text
+    assert lead.get("/api/v1/me/tokens").status_code == 200  # the session stays
+    assert _state(app, tokens) == {
+        "personal": "password_set",
+        "project": "password_set",
+        "system": "",
+        "someone else's": "",
+    }
+    for name in ("personal", "project"):
+        assert _reaches(app, tokens[name], PROJECT) == 401
+    assert _audit(app, "user.password_set")[-1].details == {"tokens_revoked": 2}
+
+    changed = admin.post("/api/v1/me/password", json=new)
+    assert changed.status_code == 204, changed.text
+    assert _state(app, {"system": tokens["system"]}) == {"system": "password_set"}
+
+
+@pytest.mark.parametrize("change", ["reset_code", "deactivate", "recover"])
+def test_new_credentials_or_a_lost_account_revoke_every_token(
+    app: FastAPI, admin: TestClient, change: str
+) -> None:
+    logged_in(app, "second", system_admin=True)
+    app.state.memberships.set_roles(Actor.cli(), PROJECT, "second", ["lead"])
+    owner = logged_in(app, "second")
+    tokens = {
+        "personal": _create(owner, ["read"])["secret"],
+        "project": _create(owner, ["read"], f"/api/v1/projects/{PROJECT}/tokens")[
+            "secret"
+        ],
+        "system": _create(owner, ["admin"], "/api/v1/admin/tokens")["secret"],
+    }
+    accounts = app.state.accounts
+    if change == "reset_code":
+        accounts.issue_reset_code(Actor.cli(), "second")
+        reason = "reset_code"
+        [event] = _audit(app, "user.reset_code")
+        assert event.details["tokens_revoked"] == 3
+    elif change == "deactivate":
+        accounts.set_active(Actor.cli(), "second", False)
+        reason = "user.active"
+    else:
+        hashed = hash_password("a recovered passphrase")
+        accounts.recover_admin("second", hashed, "ops", "lost laptop")
+        reason = "recovered"
+    assert set(_state(app, tokens).values()) == {reason}
+    for secret in tokens.values():
+        assert _bearer(app, secret).get("/api/v1/about").status_code == 401
+
+
+def test_anonymising_keeps_every_token_revoked(app: FastAPI, admin: TestClient) -> None:
+    owner = logged_in(app, "lea", projects={PROJECT: ["lead"]})
+    secret = _create(owner, ["read"])["secret"]
+    app.state.accounts.set_active(Actor.cli(), "lea", False)
+    app.state.accounts.anonymise(Actor.cli(), "lea")
+    assert _state(app, {"personal": secret}) == {"personal": "user.active"}
+    assert _bearer(app, secret).get("/api/v1/about").status_code == 401
 
 
 # Project tokens

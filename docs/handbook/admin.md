@@ -86,7 +86,7 @@ What for: correct a name, e-mail, qualification or languages, or grant or remove
 1. On **Users**, click **Edit** in the row.
 2. Change **Display name**, **E-mail**, **Qualification**, **Languages** or **System administrator**.
 3. Click **Save changes**.
-4. If you changed the administrator role, confirm with **Save changes** again. The person is logged out everywhere and their API tokens are revoked.
+4. If you changed the administrator role, confirm with **Save changes** again. The person is logged out everywhere. Removing the role revokes their system tokens and their project tokens for projects they do not lead; their personal tokens keep working with the roles they still have. Granting the role revokes no token.
 
 You cannot remove your own administrator role. The last active system administrator cannot lose the role either; add another one first.
 
@@ -234,6 +234,6 @@ What for: see every API token of the server, stop one, or create a system token 
 3. To stop a token, click **Revoke…** in its row, then **Revoke token**.
 4. To create a system token, click **New system token…**, enter a **Token name**, tick its scopes and click **Create token**. Copy the token from the dialog; it is shown only once.
 
-Only a system token may hold the **System administration** scope, for ontology and translation uploads and user accounts. It acts as you and stops working when you are no longer a system administrator. Token creation, revocation and every change made with a token are in the audit trail.
+Only a system token may hold the **System administration** scope, for ontology and translation uploads and user accounts. It acts as you and is revoked when you are no longer a system administrator, when you change your password and when your account is deactivated. Token creation, revocation and every change made with a token are in the audit trail.
 
 On the server, `ontotator admin tokens create`, `list` and `revoke` do the same from the command line.
