@@ -216,6 +216,38 @@ describe("choose", () => {
     expect(within(old).getByRole("link", { name: "Open submission, Tom Old" })).toBeTruthy();
   });
 
+  it("in the sheet (below 700 px) lists each submission with its buttons on their own line, no table (issue 333)", async () => {
+    vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: media.includes("max-width: 699px"), addEventListener: () => {}, removeEventListener: () => {} }));
+    try {
+      const v2 = (overrides = {}) => anaSubmission("case-112", "de", { document_id: "case-112-de-v2", version: 2, ...overrides });
+      panels[rowKey("case-112", "de")] = finalPanel({
+        submissions: [
+          v2({ submission_id: "a2", finding_count: 5, only_here: 1 }),
+          tomSubmission("case-112", "de", { submission_id: "t2", document_id: "case-112-de-v2", version: 2, only_here: 0 }),
+          tomSubmission("case-112", "de", { submission_id: "t1", author: { ...tom, display_name: "Tom Old" }, comparable: false, only_here: null }),
+        ],
+        agreement: agreement({ compared_version: 2, total: 6, matching: 4 }),
+      });
+      renderPanel("case-112:de", page([group("case-112", [chooseRow("case-112", "de")])]));
+      const list = await screen.findByRole("list", { name: "Submissions, case-112 de" });
+      expect(screen.queryByRole("table")).toBeNull();
+      const items = within(list).getAllByRole("listitem");
+      expect(items).toHaveLength(2);
+      expect(items[0].textContent).toContain("Ana Weber");
+      expect(items[0].textContent).toContain("5 findings, only here: 1");
+      expect(within(items[0]).getByRole("link", { name: "Open submission, Ana Weber" })).toBeTruthy();
+      expect(within(items[0]).getByRole("button", { name: "Use as final" })).toBeTruthy();
+      const old = within(screen.getByRole("list", { name: "On v1 (old text)" })).getByRole("listitem");
+      expect(old.textContent).toContain("only here: on v1, not compared");
+      const use = within(old).getByRole("button", { name: "Use as final" });
+      expect(document.getElementById(use.getAttribute("aria-describedby")!)!.textContent).toBe("Tom Old");
+      fireEvent.click(use);
+      expect(api.selectFinalResult).toHaveBeenCalledWith("p", expect.objectContaining({ submission_id: "t1" }));
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("own result: Use as final aria-disabled with OWN_RESULT_REASON", async () => {
     panels[rowKey("case-111", "de")] = finalPanel({
       submissions: [anaSubmission("case-111", "de", { is_me: true, eligible: false, only_here: 1 }), tomSubmission("case-111", "de", { only_here: 0 })],

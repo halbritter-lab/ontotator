@@ -420,11 +420,14 @@ describe("footer", () => {
     renderCard();
     fireEvent.click(await within(card()).findByRole("button", { name: /^History \(\d+\)$/ }));
     expect(within(card()).getByRole("list", { name: "Activity" })).toBeTruthy();
+    // Each view names itself with a level-3 heading next to Back (issue 335).
+    expect(within(card()).getByRole("heading", { level: 3, name: "History" })).toBeTruthy();
     expect(within(card()).queryByRole("navigation", { name: "Text path" })).toBeNull();
     fireEvent.click(within(card()).getByRole("button", { name: "Back" }));
     expect(within(card()).getByRole("navigation", { name: "Text path" })).toBeTruthy();
     fireEvent.click(within(card()).getByRole("button", { name: "Details" }));
-    expect(await within(card()).findByRole("heading", { name: "Technical details" })).toBeTruthy();
+    expect(await within(card()).findByRole("heading", { level: 4, name: "Technical details" })).toBeTruthy();
+    expect(within(card()).getByRole("heading", { level: 3, name: "Details" })).toBeTruthy();
     fireEvent.click(within(card()).getByRole("button", { name: "Back" }));
     expect(within(card()).getByRole("navigation", { name: "Text path" })).toBeTruthy();
   });
@@ -459,9 +462,10 @@ describe("problem reports (from the row panel)", () => {
     ] }) });
     const section = (await within(card()).findByRole("heading", { name: "Problem reports (2)" })).closest("section")!;
     const items = within(section).getAllByRole("listitem");
-    expect(items.map(item => item.textContent)).toEqual([
-      `Wrong language…, ann-0004, ${formatTime("2026-10-19T10:00:00Z", { now })}, Report: Withdrawn, Paused tasks: 0, Open report`,
-      `Text is cut off, ann-0004, ${formatTime("2026-10-19T08:00:00Z", { now })}, Report: Closed, Paused tasks: 1, Open report`,
+    // Title, then a muted line with reporter · date · state, then Open report (issue 335).
+    expect(items.map(item => [...item.children].map(child => child.textContent))).toEqual([
+      ["Wrong language…", `ann-0004 · ${formatTime("2026-10-19T10:00:00Z", { now })} · Report: Withdrawn · Paused tasks: 0`, "Open report"],
+      ["Text is cut off", `ann-0004 · ${formatTime("2026-10-19T08:00:00Z", { now })} · Report: Closed · Paused tasks: 1`, "Open report"],
     ]);
     fireEvent.click(within(items[0]).getByRole("link", { name: "Open report" }));
     expect(onNavigate).toHaveBeenCalledWith(reportRoute("r-2"));
