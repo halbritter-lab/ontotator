@@ -2,7 +2,9 @@
 
 Every route here needs a browser session (``ontotator.api.token_scopes``):
 a token cannot create, list or revoke tokens. A new token's secret is in
-the creation response only.
+the creation response only. The one exception is ``GET /api/v1/me/token``:
+a token reads its own record (name, kind, scopes, project, expiry), so a
+script or the MCP server can see when it must be replaced.
 """
 
 from __future__ import annotations
@@ -27,10 +29,12 @@ from ontotator.auth.api_tokens import (
 )
 from ontotator.auth.audit import Actor
 from ontotator.authz.policy import Action
+from ontotator.domain.errors import DomainError
 
 me_router = APIRouter(prefix="/api/v1/me/tokens", tags=["api-tokens"])
 project_router = APIRouter(prefix="/api/v1/projects/{key}/tokens", tags=["api-tokens"])
 admin_router = APIRouter(prefix="/api/v1/admin/tokens", tags=["api-tokens"])
+current_router = APIRouter(prefix="/api/v1/me", tags=["api-tokens"])
 
 
 class TokenView(BaseModel):
@@ -109,6 +113,27 @@ def _create(
             lifetime_days=body.expires_in_days,
         )
     )
+
+
+# The token of the request itself
+
+
+@current_router.get("/token")
+def current_token(principal: PrincipalDep, request: Request) -> TokenView:
+    """The API token this request was sent with, without its secret.
+
+    Any of the scopes ``read``, ``import``, ``export`` and ``project-admin``
+    reads it, a project token included: a script checks its expiry and
+    scopes before it has to be replaced. A browser session has
+    no token here (``TOKEN_NOT_FOUND``).
+    """
+    grant = principal.token
+    found = _service(request).get(grant.token_id) if grant is not None else None
+    if found is None:
+        raise DomainError(
+            "TOKEN_NOT_FOUND", "This request was not sent with an API token."
+        )
+    return TokenView.of(found)
 
 
 # The user's own tokens
