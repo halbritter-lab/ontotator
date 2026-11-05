@@ -4158,6 +4158,11 @@ export interface components {
             added_by?: string | null;
             /** Consolidator */
             consolidator?: string | null;
+            /**
+             * Annotators Hidden
+             * @default false
+             */
+            annotators_hidden: boolean;
             /** Consolidation Reason */
             consolidation_reason?: string | null;
             /** Workflow Revision */
@@ -6963,6 +6968,11 @@ export interface components {
              */
             adjudicator_not_annotator: boolean;
             /**
+             * Blind Consolidation
+             * @default false
+             */
+            blind_consolidation: boolean;
+            /**
              * Contiguous Mentions Only
              * @default false
              */
@@ -7055,6 +7065,11 @@ export interface components {
              * @default false
              */
             adjudicator_not_annotator: boolean;
+            /**
+             * Blind Consolidation
+             * @default false
+             */
+            blind_consolidation: boolean;
             /**
              * Contiguous Mentions Only
              * @default false

@@ -278,7 +278,9 @@ def build_modifiers(app: FastAPI, started: bool) -> dict[str, Any]:
     )
 
 
-def build(app: FastAPI, started: bool, people: int = 2) -> dict[str, Any]:
+def build(
+    app: FastAPI, started: bool, people: int = 2, blind: bool = False
+) -> dict[str, Any]:
     from t1_builders import native_unit
 
     scenario = new_project(app, "C1")
@@ -302,12 +304,26 @@ def build(app: FastAPI, started: bool, people: int = 2) -> dict[str, Any]:
         for name, items in findings.items()
     ]
     ids: dict[str, Any] = {}
+    if blind:
+        add_user(scenario, "adj", ["adjudicator"])
+        with scenario.db.transaction() as conn:
+            conn.execute(
+                update(ProjectRow)
+                .where(ProjectRow.project_key == scenario.key)
+                .values(blind_consolidation=True)
+            )
     if started:
-        round_view = start_as_lead(scenario, document_id, sources)
+        round_view = start_as_lead(
+            scenario, document_id, sources, reviewer="adj" if blind else "lead"
+        )
         ids = {
             "round_id": round_view.round_id,
             "assignment_id": round_view.assignment_id,
         }
+    accounts = scenario.app.state.accounts
+    ids["pseudonyms"] = {
+        n: accounts.get_by_username(u).pseudonym for n, u in scenario.users.items()
+    }
     return result(
         scenario,
         [(CASE, "en")],
@@ -327,9 +343,10 @@ def register_consolidation_scenario_route(app: FastAPI) -> None:
         started: bool = Query(False),
         people: int = Query(2, ge=2, le=3),
         scenario: Literal["default", "modifiers"] = Query("default"),
+        blind: bool = Query(False),
     ) -> dict[str, Any]:
         if scenario == "modifiers":
             return build_modifiers(app, started)
-        return build(app, started, people)
+        return build(app, started, people, blind)
 
     app.router.routes.insert(0, app.router.routes.pop())

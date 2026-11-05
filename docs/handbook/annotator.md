@@ -252,7 +252,7 @@ What for: check findings that were carried over from an earlier round, for examp
 1. The toolbar names the round, for example *Round 2, continued from Round 1*, or reads **Review carried findings**. The progress line counts checked findings.
 2. Click **Next unchecked** (or press `n`) to select the next finding marked **Check needed**.
 3. Read **What to check**: the text span, the values or the note. For a finding without a text span the note is listed as its **Reason for no text span**. Carried values are not confirmed.
-4. Optional: to see the finding as it was, click **Show original evidence**.
+4. Optional: to see the finding as it was, click **Show original evidence**. It names who made the finding; in a consolidation of a project that hides annotator names, it reads *Annotator A*, *Annotator B* and so on.
 5. If it is right (after any edits), click **Mark as checked** or press `c`.
 6. If it does not apply to this text, open **Does not apply…**, give a reason and click **Dismiss**.
 
