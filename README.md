@@ -12,7 +12,11 @@ Several people mark text spans, link them to ontology concepts and review each o
 
 Website with tutorial videos: <https://halbritter-lab.github.io/ontotator/> (source in [`site/`](site/)).
 
-Ontotator is in early development. Interfaces, data formats and the database schema can still change. There are no tagged releases yet.
+Ontotator is still changing: interfaces, data formats and the database schema can differ between releases. Releases are tagged `vX.Y.Z` (from `v0.1.0`) and follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html); the [CHANGELOG](CHANGELOG.md) lists what each release changes.
+
+## How to cite
+
+Cite the release you used. [`CITATION.cff`](CITATION.cff) holds the citation metadata; GitHub shows it under **Cite this repository**.
 
 ## How it works
 
@@ -49,7 +53,7 @@ Admin is a system-wide flag. The other roles are per project, and one person can
 
 The disposable development stack runs PostgreSQL, the schema migrations and the application in Docker. You need Docker with Compose v2.
 
-The Docker build installs the `ontospan` Python dependency from GitHub. A GitHub token is optional. The development Compose file passes the file named by `GITHUB_TOKEN_FILE` as the `github_token` build secret; an empty file means an anonymous fetch.
+The Docker build needs network access, because it installs the `ontospan` Python dependency from GitHub; the running service does not need it. A GitHub token is optional. The development Compose file passes the file named by `GITHUB_TOKEN_FILE` as the `github_token` build secret; an empty file means an anonymous fetch.
 
 ```bash
 export GITHUB_TOKEN_FILE=/absolute/path/to/github-token-or-empty-file
