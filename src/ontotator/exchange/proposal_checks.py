@@ -12,7 +12,12 @@ from ontotator.domain.annotations import AnnotationSnapshot
 from ontotator.domain.workspace import Submission
 from ontotator.exchange.t1 import _proposal_ref
 from ontotator.storage.proposal_queries import ProposalSetRef
-from ontotator.storage.tables import ProposalAnnotationRow, ProposalSetRow
+from ontotator.storage.tables import (
+    DocumentRow,
+    EmptyProposalSetRow,
+    ProposalAnnotationRow,
+    ProposalSetRow,
+)
 
 DECISION_WORDS = {
     "confirmed": "confirmed",
@@ -182,9 +187,10 @@ def tool_chances(
     texts on which one of its proposal sets was imported, each with whether
     the tool proposed anything there (proposals.csv, recall).
 
-    ``sets`` holds ``(document_id, actors, payload)`` of stored proposal sets.
-    A tool had the chance to propose on a text when it is a tool actor of a
-    set of that text, or the actor of one of the set's annotations."""
+    ``sets`` holds ``(document_id, actors, payload)`` of stored proposal sets
+    and of imported sets without any finding (payload ``{}``). A tool had the
+    chance to propose on a text when it is a tool actor of a set of that text,
+    or the actor of one of the set's annotations."""
     chances: dict[tuple[str, str], dict[str, bool]] = {}
     for document_id, actors, payload in sets:
         named = {
@@ -214,7 +220,13 @@ def tool_chances(
 def proposal_set_chances(
     conn: Connection, project_id: int | None, document_ids: Iterable[str]
 ) -> dict[tuple[str, str], dict[str, bool]]:
-    """:func:`tool_chances` of the proposal sets stored for these texts."""
+    """:func:`tool_chances` of the proposal sets stored for these texts.
+
+    Besides the stored proposal sets this counts the imported sets without
+    any finding (``empty_proposal_sets``). Those of an earlier version of a
+    corrected text count for the correction too, as the reanchored copy of a
+    set with findings does: an empty set has nothing to reanchor. Texts
+    imported before ``empty_proposal_sets`` existed have no such record."""
     wanted = set(document_ids)
     if not wanted:
         return {}
@@ -228,4 +240,37 @@ def proposal_set_chances(
         )
         .order_by(ProposalSetRow.id)
     )
-    return tool_chances((r.document_id, r.actors or [], r.payload or {}) for r in rows)
+    sets: list[tuple[str, Iterable[Mapping[str, Any]], Mapping[str, Any]]] = [
+        (r.document_id, r.actors or [], r.payload or {}) for r in rows
+    ]
+    corrected_from = {
+        r.document_id: r.derived_from
+        for r in conn.execute(
+            select(DocumentRow.document_id, DocumentRow.derived_from).where(
+                DocumentRow.project_id == project_id,
+                DocumentRow.origin == "correction",
+                DocumentRow.derived_from.is_not(None),
+            )
+        )
+    }
+    # Each stored version and the wanted texts its empty sets count for.
+    counts_for: dict[str, set[str]] = {}
+    for document_id in wanted:
+        version: str | None = document_id
+        while version is not None and document_id not in counts_for.get(version, ()):
+            counts_for.setdefault(version, set()).add(document_id)
+            version = corrected_from.get(version)
+    empty = conn.execute(
+        select(EmptyProposalSetRow.document_id, EmptyProposalSetRow.actors)
+        .where(
+            EmptyProposalSetRow.project_id == project_id,
+            EmptyProposalSetRow.document_id.in_(counts_for),
+        )
+        .order_by(EmptyProposalSetRow.id)
+    )
+    sets.extend(
+        (document_id, r.actors or [], {})
+        for r in empty
+        for document_id in sorted(counts_for[r.document_id])
+    )
+    return tool_chances(sets)

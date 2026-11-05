@@ -140,8 +140,18 @@ def test_archive_lists_and_hashes_the_tables(consolidated):
     assert "no kappa" in readme
     # The empty count cells of macro_mean are explained, not a gap.
     assert "count columns are empty on purpose" in " ".join(readme.split())
-    # No proposal checks: the table has its header only.
-    assert rows(archive.read("proposals.csv")) == []
+    # No proposal checks, so no person rows. The imported set of c1 names
+    # test-tool and holds no finding: the tool ran there and proposed
+    # nothing, so c1 counts for its recall with every final finding missed.
+    [source] = rows(archive.read("proposals.csv"))
+    assert (source["row_type"], source["tool"], source["tool_version"]) == (
+        "source",
+        "test-tool",
+        "1",
+    )
+    assert (source["texts"], source["proposals"], source["matched"]) == ("1", "0", "0")
+    assert int(source["final_findings"]) > 0
+    assert (source["precision"], source["recall"]) == ("", "0.0000")
 
 
 def test_proposals_count_decisions_per_tool_and_person_and_match_the_result(

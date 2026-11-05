@@ -231,11 +231,16 @@ on which the tool had the chance to propose), `proposals`, `final_findings`,
 on a text when an imported proposal set of that text names it as a tool
 actor. A text where it proposed nothing in that set still counts: with no
 proposals, all its final findings are misses, so recall is not overstated by
-leaving out the texts the tool was silent on. Proposals on texts without a
-selected result in the export are not compared, nor are texts where the tool
-did propose but no proposal check worked on its proposals. The import keeps
-no set for a unit without any finding, so a text on which no tool of the
-set proposed anything is not counted.
+leaving out the texts the tool was silent on. This includes a unit whose tool
+set holds no finding at all: the import keeps no proposal set for it (the
+text is imported without proposals), but records that the set's tools ran
+there. Such a record of an earlier version of a corrected text also counts
+for the correction, as the reanchored proposals of a set with findings do.
+Texts imported before this record existed (before migration 0032) count only
+through their stored proposal sets: there a tool's silent texts are missing
+from its recall. Proposals on texts without a selected result in the export
+are not compared, nor are texts where the tool did propose but no proposal
+check worked on its proposals.
 
 Preserve uncertain targets and ambiguous branches for adjudication. Hashes
 establish content identity; the annotator ID is the logged-in user's
@@ -295,7 +300,9 @@ decisions under `proposal_checks`, keyed by submission ID:
 - `counts`: the number of each decision and of added findings.
 
 The proposals of a round are the **newest proposal set of the document when the
-round was created**. Older sets on the same document are never targets and are
+round was created**. A set without any finding is never that set: a later run
+of a tool that found nothing on the text leaves the proposals of the earlier
+set as the targets. Older sets on the same document are never targets and are
 not in the record. A later import does not change an existing round; its
 proposals only become targets of rounds created after it.
 

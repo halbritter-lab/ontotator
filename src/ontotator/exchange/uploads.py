@@ -49,7 +49,12 @@ from ontotator.exchange.plan import (
     upload_work_plan,
     with_work_plan,
 )
-from ontotator.exchange.t1 import ImportCounts, ImportedDocument, ImportedSet
+from ontotator.exchange.t1 import (
+    EmptyImportedSet,
+    ImportCounts,
+    ImportedDocument,
+    ImportedSet,
+)
 from ontotator.exchange.text import expanded_size, read_text_upload
 from ontotator.exchange.variant_overrides import (
     StatusOverride,
@@ -440,6 +445,25 @@ def apply_plan(
                 ),
             )
         )
+    # A tool set without any finding stores no proposal set; record that its
+    # tools ran on the text (proposals.csv recall), once per identity.
+    empty: dict[tuple[str | None, str, str], EmptyImportedSet] = {}
+    for _, unit in occurrences:
+        if unit.set is not None or unit.empty_set is None:
+            continue
+        annotation_set_id, set_kind = unit.empty_set
+        document_id = variants[identity(unit)].document_id
+        empty.setdefault(
+            (unit.bundle_id, annotation_set_id, document_id),
+            EmptyImportedSet(
+                document_id,
+                unit.bundle_id,
+                unit.manifest_sha256,
+                annotation_set_id,
+                set_kind,
+                list(unit.source_actors),
+            ),
+        )
     repo = Repository(db)
     counts = repo.add_documents_and_proposals(
         project,
@@ -448,6 +472,7 @@ def apply_plan(
         source_sha256=sources[0][0] if sources else "",
         imported_by=actor.user_id,
         job_id=job_id,
+        empty_sets=list(empty.values()),
     )
     counts["documents_skipped"] = len(occurrences) - counts["documents_added"]
     counts["documents_only"] = len(plan.documents_only)

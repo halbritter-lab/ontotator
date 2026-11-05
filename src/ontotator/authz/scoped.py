@@ -58,7 +58,13 @@ from ontotator.domain.workspace import (
     Submission,
     WorkspaceKey,
 )
-from ontotator.exchange.t1 import ImportCounts, ImportedDocument, ImportedSet, Pin
+from ontotator.exchange.t1 import (
+    EmptyImportedSet,
+    ImportCounts,
+    ImportedDocument,
+    ImportedSet,
+    Pin,
+)
 from ontotator.ontology.conditions import SearchCondition
 from ontotator.packages.models import (
     PackageManifest,
@@ -502,6 +508,7 @@ class ScopedRepository(Repository):
         job_id: int | None = None,
         on_done: Callable[[Connection, int, ImportCounts], None] | None = None,
         snapshots_added: bool = False,
+        empty_sets: Sequence[EmptyImportedSet] = (),
     ) -> ImportCounts:
         self._visible(project_key)
         if not can(self.access, Action.IMPORT_DOCUMENTS, project_key):
@@ -515,6 +522,7 @@ class ScopedRepository(Repository):
             job_id=job_id,
             on_done=on_done,
             snapshots_added=snapshots_added,
+            empty_sets=empty_sets,
         )
 
     def get_search_conditions(self, project_key: str) -> list[SearchCondition] | None:

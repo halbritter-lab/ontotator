@@ -102,6 +102,22 @@ class ImportedSet:
     pending_items: list[dict[str, Any]] = field(default_factory=list)
 
 
+@dataclass(frozen=True)
+class EmptyImportedSet:
+    """A delivered tool set of a unit without any finding.
+
+    No proposal set is stored for it (the text is imported documents-only);
+    this records that its tools ran on the text and proposed nothing there,
+    for the recall in ``proposals.csv``."""
+
+    document_id: str
+    bundle_id: str | None
+    manifest_sha256: str | None
+    annotation_set_id: str
+    set_kind: str
+    actors: list[dict[str, Any]]
+
+
 class ImportCounts(TypedDict):
     documents_added: int
     documents_skipped: int
