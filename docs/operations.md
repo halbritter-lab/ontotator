@@ -210,6 +210,33 @@ docker compose exec -T ontotator_app cat /tmp/edits.jsonl > ./edits.jsonl
 
 `docker compose cp` cannot copy out of app's `/tmp` either: it reads the container filesystem, not the tmpfs mount, and reports that the file is missing. Stream outputs out with `exec -T ... cat` in Bash, never through PowerShell redirection. Imports/exports are jobs, awaited by default; `--no-wait` queues them for a server worker. `/tmp` is ephemeral and limited to 256 MiB. For larger files use a provisioned private directory on `/data` or a deployment-managed writable staging mount, then clean up staged files after copying. Imported blobs and job outputs in persistent storage must remain with the database backup. Keep clinical exports private.
 
+### API tokens
+
+Scripts and integrations use the HTTP API with an API token instead of a session: `Authorization: Bearer ott_...`. A token is shown once when it is created; the database stores only its SHA-256. Users create personal tokens in Profile › **API tokens**, leads project tokens in Settings › People › **Project API tokens**, administrators system tokens in **Server settings** › **API tokens**, where they also see and revoke every token. On the server:
+
+```bash
+docker compose exec ontotator_app ontotator admin tokens create alice --name nightly-export --scope read --scope export --project ward-7 --days 30
+docker compose exec ontotator_app ontotator admin tokens list --project ward-7
+docker compose exec ontotator_app ontotator admin tokens revoke 12
+```
+
+Scopes are `read`, `import`, `export`, `project-admin` and `admin` (system tokens only, `--system`). A token acts as its owner: what it may do is the intersection of its scopes and the owner's roles. A project token reaches only its project and stops working when the owner may no longer manage it; a system token stops when its owner is no longer a system admin. Tokens last 1 to 365 days (default 90). Annotation, review and translation review work, preferences and the token routes themselves need a browser session, so a token cannot create tokens. Imports and exports run as jobs; a job's status (`GET /api/v1/jobs/{job_id}`) is open to `read`, `import` and `export`, so a token can follow the work its scope started, and an export's download needs `export`. Each operation in `contracts/openapi.json` names its scope in `x-ontotator-scope` (`session` for browser-only routes; a list when any one of several scopes is enough) and carries `x-ontotator-project-token: true` when a project token may call it.
+
+Only the `Bearer` scheme (in any case) selects a token. A request with another `Authorization` scheme is a session request as if the header were absent, so a reverse proxy may protect the site with HTTP Basic auth: the browser then sends `Authorization: Basic ...` on every request and the session cookie still decides. A `Bearer` header without a token gets 401 `TOKEN_INVALID` and never falls back to the cookie. A bearer request skips the CSRF check but keeps the origin and trusted-host checks; one that also sends the session cookie is refused with 400 `CREDENTIALS_AMBIGUOUS`. Unknown, expired and revoked tokens get 401 `TOKEN_INVALID`, a missing scope 403 `TOKEN_SCOPE_MISSING`, a session-only route or another project 403 `TOKEN_NOT_ALLOWED`. Every write with a token is audited as `api_token.use` before it runs, and the change's own audit entries name the token in `details.api_token`; creation and revocation are `api_token.create` and `api_token.revoke`. Migration 0033 adds the empty table `api_tokens`.
+
+Which change revokes which tokens. A revoked token's `revoked_reason` names the change; the audit entries `user.password_set` (own change), `user.reset_code`, `user.active`, `user.system_admin` and `project.member_remove` carry `details.tokens_revoked` when they revoked any.
+
+| Change | Sessions | Personal tokens | Project tokens | System tokens |
+| --- | --- | --- | --- | --- |
+| Own password change | other sessions end | revoked | revoked | revoked |
+| Reset code issued, password set with a code, `admin recover-admin` | all end | revoked | revoked | revoked |
+| Deactivation, anonymisation | all end | revoked | revoked | revoked |
+| A project role taken away in P | all end | kept | revoked for P when the owner no longer leads P and is not a system admin | kept |
+| Admin role taken away | all end | kept | revoked for every project the owner does not lead | revoked |
+| Admin role or a project role granted | admin role: all end; project role: kept | kept | kept | kept |
+
+A kept personal token loses the lost role's rights at once: every request reads the owner's current admin flag and project roles, so the token's reach is always its scopes intersected with what the owner may do now. Granting the admin role revokes nothing: a personal token then reaches what its owner reaches, which is what a token acting as its owner means, and no personal or project token can hold the `admin` scope, so none gains the user-administration routes.
+
 ## Upgrades
 
 Take a consistent database/data-volume backup first, as in [Backups and restore](#backups-and-restore), before every image switch (upgrade, downgrade or rollback). Build or pull the verified new digest, update `ONTOTATOR_IMAGE` in `.env`, and run:

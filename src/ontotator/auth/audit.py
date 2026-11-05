@@ -9,6 +9,7 @@ from typing import Any
 
 from sqlalchemy import Connection, insert, or_, select
 
+from ontotator.auth.context import api_token_ref
 from ontotator.storage.tables import AuditEventRow, ProjectRow, UserRow
 
 
@@ -56,8 +57,13 @@ def record_audit(
     the trail and the change carry the same time. A ``user`` target also
     records the account's id, resolved from the username at this moment. An
     event in a practice project (issue 266) is marked ``details.practice``.
+    A change made with an API token (issue 305), also by a job it started,
+    names the token in ``details.api_token``.
     """
     details = dict(details or {})
+    token = api_token_ref()
+    if token is not None:
+        details.setdefault("api_token", token)
     if (
         project_id is not None
         and conn.execute(
@@ -102,6 +108,7 @@ def read_audit(
     user_id: int | None = None,
     project_key: str | None = None,
     since: datetime | None = None,
+    exclude_actions: tuple[str, ...] = (),
     limit: int = 200,
 ) -> list[AuditEvent]:
     """The newest events first, at most ``limit``.
@@ -134,6 +141,8 @@ def read_audit(
         statement = statement.where(ProjectRow.project_key == project_key)
     if since is not None:
         statement = statement.where(AuditEventRow.at >= since)
+    if exclude_actions:
+        statement = statement.where(AuditEventRow.action.not_in(exclude_actions))
     return [
         AuditEvent(
             at=row.at,

@@ -6,7 +6,7 @@ from fastapi import APIRouter, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
-from ontotator.api.identity import PrincipalDep
+from ontotator.api.identity import PrincipalDep, session_id_of
 from ontotator.api.security import SESSION_COOKIE
 from ontotator.auth.accounts import AccountService
 from ontotator.auth.login_attempts import client_address
@@ -91,7 +91,7 @@ def _start_session(
     )
     previous = request.cookies.get(SESSION_COOKIE)
     replaced = sessions.resolve(previous) if previous else None
-    if replaced is not None:
+    if replaced is not None and replaced.session_id is not None:
         sessions.logout(replaced.session_id)
     response.set_cookie(
         SESSION_COOKIE,
@@ -131,7 +131,7 @@ def redeem_code(
 @router.post("/logout", status_code=204)
 def logout(principal: PrincipalDep, request: Request) -> Response:
     """End this session and delete the cookie."""
-    _sessions(request).logout(principal.session_id)
+    _sessions(request).logout(session_id_of(principal))
     response = Response(status_code=204)
     response.delete_cookie(
         SESSION_COOKIE,

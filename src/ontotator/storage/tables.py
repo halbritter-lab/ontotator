@@ -28,7 +28,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy import text as sql_text
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 SCHEMA = "ontotator"
@@ -587,6 +587,57 @@ class LoginAttemptRow(Base):
     # Refused because of a lock: recorded, but not counted towards one.
     throttled: Mapped[bool] = mapped_column(server_default=text("false"))
     at: Mapped[datetime]
+
+
+class ApiTokenRow(Base):
+    """An API token (issue 305); only the token's SHA-256 is stored.
+
+    ``personal`` and ``system`` tokens act as their owner everywhere their
+    scopes allow, a ``project`` token only in ``project_id``. Only a
+    ``system`` token may hold the ``admin`` scope.
+    """
+
+    __tablename__ = "api_tokens"
+    __table_args__ = (
+        CheckConstraint("kind IN ('personal', 'project', 'system')", name="kind"),
+        CheckConstraint(
+            "(kind = 'project') = (project_id IS NOT NULL)", name="project_kind"
+        ),
+        CheckConstraint(
+            "cardinality(scopes) > 0 AND scopes <@ ARRAY['read', 'import',"
+            " 'export', 'project-admin', 'admin']::text[]",
+            name="scopes",
+        ),
+        CheckConstraint(
+            "kind = 'system' OR NOT ('admin' = ANY (scopes))", name="admin_scope"
+        ),
+        CheckConstraint("char_length(name) BETWEEN 1 AND 100", name="name"),
+        CheckConstraint(
+            "expires_at > created_at"
+            " AND expires_at <= created_at + interval '366 days'",
+            name="lifetime",
+        ),
+        CheckConstraint(
+            "(revoked_at IS NULL) = (revoked_reason IS NULL)", name="revoked"
+        ),
+        Index("ix_api_tokens_owner_id_revoked_at", "owner_id", "revoked_at"),
+        Index("ix_api_tokens_project_id", "project_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    token_sha256: Mapped[str] = mapped_column(unique=True)
+    name: Mapped[str]
+    kind: Mapped[str]
+    owner_id: Mapped[int] = mapped_column(BigInteger, ForeignKey(UserRow.id))
+    project_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey(ProjectRow.id)
+    )
+    scopes: Mapped[list[str]] = mapped_column(ARRAY(Text))
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    expires_at: Mapped[datetime]
+    last_used_at: Mapped[datetime | None]
+    revoked_at: Mapped[datetime | None]
+    revoked_reason: Mapped[str | None]
 
 
 class AuditEventRow(Base):

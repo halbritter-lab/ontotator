@@ -86,7 +86,7 @@ What for: correct a name, e-mail, qualification or languages, or grant or remove
 1. On **Users**, click **Edit** in the row.
 2. Change **Display name**, **E-mail**, **Qualification**, **Languages** or **System administrator**.
 3. Click **Save changes**.
-4. If you changed the administrator role, confirm with **Save changes** again. The person is logged out everywhere.
+4. If you changed the administrator role, confirm with **Save changes** again. The person is logged out everywhere. Removing the role revokes their system tokens and their project tokens for projects they do not lead; their personal tokens keep working with the roles they still have. Granting the role revokes no token.
 
 You cannot remove your own administrator role. The last active system administrator cannot lose the role either; add another one first.
 
@@ -96,7 +96,7 @@ What for: stop someone from logging in, without deleting their work.
 
 1. On **Users**, click **More…** in the row.
 2. Choose **Deactivate…**.
-3. Confirm with **Deactivate**. The person is logged out everywhere.
+3. Confirm with **Deactivate**. The person is logged out everywhere and their API tokens are revoked.
 4. To undo, open **More…** again and choose **Activate**.
 
 You cannot deactivate your own account. In project member lists the person shows as **Inactive**.
@@ -107,7 +107,7 @@ What for: check what was changed on an account and by whom.
 
 1. On **Users**, click **More…** in the row and choose **History**. For anonymised accounts, click the **History** button in the row.
 2. Read the table: **When**, **By**, **What**, **Whom**, **Project**, **Details**. Research exports are listed too, for example *Edit log exported* or *Working time exported*.
-3. The dialog shows the newest 200 entries. For the whole trail, use the command `ontotator admin audit`, see [Server operations](../operations.md#users-ontologies-and-projects).
+3. Changes made with an API token name it under **Details** (*Via API token*); the single requests a token made are left out here. The dialog shows the newest 200 entries. For the whole trail, use the command `ontotator admin audit`, see [Server operations](../operations.md#users-ontologies-and-projects).
 
 ## Anonymise a deactivated account
 
@@ -225,3 +225,15 @@ Off hides the card on **My tasks** and **Start practice** in the profile. Existi
 
 A practice project freezes its translations like any project. A translation file uploaded later does not reach a practice project that is already in use, and the upload warning does not name practice projects. The owner gets the new file with **Reset…** in the profile.
 
+## API tokens
+
+What for: see every API token of the server, stop one, or create a system token for administration scripts.
+
+1. Click **Server settings** under **Administration**.
+2. Go to **API tokens**. The table shows each token's **Kind** (*Personal*, *Project* or *System*), **Owner**, **Project**, **Scopes**, expiry, last use and **Status**.
+3. To stop a token, click **Revoke…** in its row, then **Revoke token**. A token the server revoked by itself says why next to **Revoked**, for example *project role removed* or *password changed*.
+4. To create a system token, click **New system token…**, enter a **Token name**, tick its scopes and click **Create token**. Copy the token from the dialog; it is shown only once.
+
+Only a system token may hold the **System administration** scope, for ontology and translation uploads and user accounts. It acts as you and is revoked when you are no longer a system administrator, when you change your password and when your account is deactivated. Token creation, revocation and every change made with a token are in the audit trail.
+
+On the server, `ontotator admin tokens create`, `list` and `revoke` do the same from the command line.
