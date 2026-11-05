@@ -12,6 +12,10 @@ consolidation view, the round's inputs, the workspace's available inputs and
 the input submissions' history (re-anchor reviewers included). Tool
 proposals keep their tool actor. Leads (and system admins) always see names;
 exports do not change.
+
+The hashes in these payloads (snapshot versions and every id derived from
+them) would let a consolidator recompute the author; ``api.blind_ids`` makes
+them opaque for the consolidator.
 """
 
 from __future__ import annotations
@@ -74,9 +78,10 @@ class Blinding:
     def snapshot(self, snap: S) -> S:
         """``snap`` with a hidden human author; a tool keeps its actor.
 
-        The version stays the snapshot's: references by (id, version) keep
-        working, and a reader cannot recompute the author from the hash
-        without the other fields of the author's original.
+        The version stays the snapshot's, so references by (id, version)
+        keep working. It hashes the author too: ``api.blind_ids`` replaces it
+        (and every id derived from it) with an opaque token in what a
+        blinded consolidator reads and maps the token back on requests.
         """
         actor = snap.annotation.provenance.actor
         if actor.kind != "human" or actor.actor_id == self.viewer:
