@@ -1,12 +1,12 @@
 """The one map from API route to API token scope (issue 305).
 
 Every route of the API is listed here with the scope a token needs for it,
-or ``SESSION`` for a route only a browser session may use (logging in,
+a tuple of scopes any one of which is enough, or ``SESSION`` for a route only a browser session may use (logging in,
 annotation work, preferences and the token routes themselves: a token
 cannot create, list or revoke tokens). The security middleware enforces the
 map for every bearer request; a route missing here is refused to tokens.
 The OpenAPI contract carries the scope of each operation as
-``x-ontotator-scope`` (and ``x-ontotator-project-token`` when a project
+``x-ontotator-scope``, a list for a route any of several scopes opens (and ``x-ontotator-project-token`` when a project
 token may call it), so clients such as an MCP server can read it there or
 import ``ROUTE_SCOPES`` directly.
 
@@ -31,7 +31,10 @@ from starlette.routing import compile_path
 from ontotator.auth.api_tokens import SCOPE_DESCRIPTIONS, TokenScope
 
 SESSION: Final = "session"
-RouteScope = TokenScope | Literal["session"]
+# A route that any of several scopes opens: following up on work (polling a
+# job) must work with the scope that started it (issue 305).
+AnyScope = tuple[TokenScope, ...]
+RouteScope = TokenScope | Literal["session"] | AnyScope
 
 P = "/api/v1/projects/{key}"
 ROUTE_SCOPES: Mapping[tuple[str, str], RouteScope] = {
@@ -141,7 +144,9 @@ ROUTE_SCOPES: Mapping[tuple[str, str], RouteScope] = {
     ("GET", "/api/v1/assignments/{assignment_id}/work-time"): SESSION,
     ("POST", "/api/v1/assignments/{assignment_id}/work-time"): SESSION,
     ("GET", f"{P}/work-time"): "read",
-    ("GET", "/api/v1/jobs/{job_id}"): "read",
+    # Imports and exports run as jobs: the scope that started one may poll it.
+    # Only export jobs have a download.
+    ("GET", "/api/v1/jobs/{job_id}"): ("read", "import", "export"),
     ("GET", "/api/v1/jobs/{job_id}/download"): "export",
     # Assignments, work plans and final selection (project administration)
     ("GET", f"{P}/assignments"): "read",
@@ -253,6 +258,16 @@ PROJECT_RESOLVED: frozenset[tuple[str, str]] = frozenset(
 PROJECT_PARAMETERS = ("key", "project_key")
 
 
+def accepted_scopes(scope: RouteScope) -> tuple[str, ...]:
+    """The scopes any one of which opens a route listed with ``scope``."""
+    return scope if isinstance(scope, tuple) else (scope,)
+
+
+def contract_scope(scope: RouteScope) -> str | list[str]:
+    """``scope`` as ``x-ontotator-scope`` writes it: a list for any-of."""
+    return list(scope) if isinstance(scope, tuple) else scope
+
+
 @dataclass(frozen=True)
 class Requirement:
     """What a bearer request needs for the route it names."""
@@ -332,7 +347,7 @@ def annotate_openapi(schema: dict[str, Any]) -> dict[str, Any]:
             entry = listed.get((method.upper(), path))
             if entry is None or not isinstance(operation, dict):
                 continue
-            operation["x-ontotator-scope"] = entry[0]
+            operation["x-ontotator-scope"] = contract_scope(entry[0])
             if entry[1]:
                 operation["x-ontotator-project-token"] = True
     schema["x-ontotator-scopes"] = {

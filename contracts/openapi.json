@@ -7319,7 +7319,11 @@
             }
           }
         },
-        "x-ontotator-scope": "read",
+        "x-ontotator-scope": [
+          "read",
+          "import",
+          "export"
+        ],
         "x-ontotator-project-token": true
       }
     },

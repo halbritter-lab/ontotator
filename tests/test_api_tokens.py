@@ -16,6 +16,8 @@ from test_projects_api import create_project
 from ontotator.api.token_scopes import (
     ROUTE_SCOPES,
     SESSION,
+    accepted_scopes,
+    contract_scope,
     openapi_path,
     requirement,
 )
@@ -170,15 +172,56 @@ def test_a_bearer_write_from_another_site_is_refused(
 
 @pytest.mark.parametrize(
     "authorization",
-    ["Bearer ott_unknown", "Bearer", "Basic cm9vdDpwdw==", "Bearer not-a-token"],
+    ["Bearer ott_unknown", "Bearer", "bearer  ", "Bearer not-a-token"],
 )
-def test_unknown_or_malformed_credentials_are_refused(
+def test_unknown_or_malformed_tokens_are_refused(
     app: FastAPI, authorization: str
 ) -> None:
     client = TestClient(app, headers={"Authorization": authorization})
     response = client.get("/api/v1/projects")
     assert response.status_code == 401
     assert response.json()["code"] == "TOKEN_INVALID"
+
+
+@pytest.mark.parametrize("authorization", ["Bearer", "Bearer   "])
+def test_a_bearer_header_without_token_never_falls_back_to_the_cookie(
+    app: FastAPI, admin: TestClient, authorization: str
+) -> None:
+    client = TestClient(
+        app, cookies=dict(admin.cookies), headers={"Authorization": authorization}
+    )
+    response = client.get("/api/v1/projects")
+    assert response.status_code == 401
+    assert response.json()["code"] == "TOKEN_INVALID"
+
+
+def test_the_bearer_scheme_is_case_insensitive(app: FastAPI, admin: TestClient) -> None:
+    secret = _create(admin, ["read"])["secret"]
+    client = TestClient(app, headers={"Authorization": f"bEaReR {secret}"})
+    assert client.get("/api/v1/projects").status_code == 200
+
+
+def test_another_authorization_scheme_keeps_the_session(
+    app: FastAPI, admin: TestClient
+) -> None:
+    # A proxy using HTTP Basic auth makes the browser send its header on
+    # every request; the session cookie still decides.
+    basic = {"Authorization": "Basic cm9vdDpwdw=="}
+    browser = TestClient(app, cookies=dict(admin.cookies), headers=basic)
+    assert browser.get("/api/v1/projects").status_code == 200
+    csrf = admin.get("/api/v1/auth/me").json()["csrf_token"]
+    started = browser.post(
+        f"/api/v1/projects/{PROJECT}/exports",
+        json={"kind": "t1"},
+        headers={"X-CSRF-Token": csrf, **ORIGIN},
+    )
+    assert started.status_code == 200, started.text
+    # Still a session request: the CSRF check applies.
+    unchecked = browser.post(f"/api/v1/projects/{PROJECT}/exports", json={})
+    assert unchecked.json()["code"] == "CSRF_FAILED"
+    without_cookie = TestClient(app, headers=basic).get("/api/v1/projects")
+    assert without_cookie.status_code == 401
+    assert without_cookie.json()["code"] == "NOT_AUTHENTICATED"
 
 
 def test_scopes_limit_the_routes(app: FastAPI, admin: TestClient) -> None:
@@ -412,12 +455,18 @@ def test_every_route_has_exactly_one_scope(app: FastAPI) -> None:
     }
     # Demo logins exist only on a demo stack.
     assert routes == set(ROUTE_SCOPES) - {("GET", "/api/v1/auth/demo-logins")}
+    # An any-of entry names token scopes only, never "session" or "admin".
+    for scope in ROUTE_SCOPES.values():
+        if isinstance(scope, tuple):
+            assert len(scope) > 1 and len(set(scope)) == len(scope)
+            assert set(scope) <= {"read", "import", "export", "project-admin"}
+        assert accepted_scopes(scope)
 
 
 def test_the_contract_names_each_operations_scope(app: FastAPI) -> None:
     schema = app.openapi()
     listed = {
-        (method, openapi_path(path)): scope
+        (method, openapi_path(path)): contract_scope(scope)
         for (method, path), scope in ROUTE_SCOPES.items()
     }
     for path, operations in schema["paths"].items():
@@ -431,9 +480,71 @@ def test_the_contract_names_each_operations_scope(app: FastAPI) -> None:
         "admin",
         SESSION,
     }
+    job = schema["paths"]["/api/v1/jobs/{job_id}"]["get"]
+    assert job["x-ontotator-scope"] == ["read", "import", "export"]
     exports = schema["paths"]["/api/v1/projects/{key}/exports"]["post"]
     assert exports["x-ontotator-project-token"] is True
     assert "x-ontotator-project-token" not in schema["paths"]["/api/v1/projects"]["get"]
+
+
+def test_a_token_follows_up_on_the_work_its_scope_starts(
+    app: FastAPI, admin: TestClient
+) -> None:
+    exporter = _bearer(app, _create(admin, ["export"])["secret"], **ORIGIN)
+    started = exporter.post(
+        f"/api/v1/projects/{PROJECT}/exports", json={"kind": "edit_log"}
+    )
+    assert started.status_code == 200, started.text
+    job_id = started.json()["job_id"]
+    polled = exporter.get(f"/api/v1/jobs/{job_id}")
+    assert polled.status_code == 200, polled.text
+    job = app.state.jobs.claim(job_id, "token-test")
+    assert app.state.jobs.run(job, "token-test").status == "succeeded"
+    downloaded = exporter.get(f"/api/v1/jobs/{job_id}/download")
+    assert downloaded.status_code == 200, downloaded.text
+
+    importer = _bearer(app, _create(admin, ["import"])["secret"], **ORIGIN)
+    uploaded = importer.post(
+        f"/api/v1/projects/{PROJECT}/uploads",
+        data={"kind": "text", "language": "de"},
+        files=[("files[]", ("a.txt", b"Some text.\r\n"))],
+    )
+    assert uploaded.status_code == 200, uploaded.text
+    upload = uploaded.json()
+    polled = importer.get(f"/api/v1/jobs/{upload['job_id']}")
+    assert polled.status_code == 200, polled.text
+    status = importer.get(f"/api/v1/projects/{PROJECT}/uploads/{upload['upload_id']}")
+    assert status.status_code == 200, status.text
+    # Only export jobs have a download, and it needs the export scope.
+    no_download = importer.get(f"/api/v1/jobs/{job_id}/download")
+    assert no_download.json()["code"] == "TOKEN_SCOPE_MISSING"
+
+    # A token with neither scope still cannot poll.
+    other = _bearer(app, _create(admin, ["project-admin"])["secret"])
+    refused = other.get(f"/api/v1/jobs/{job_id}")
+    assert refused.status_code == 403
+    assert refused.json()["code"] == "TOKEN_SCOPE_MISSING"
+    assert "'read' or 'import' or 'export'" in refused.json()["details"]
+
+
+def test_a_project_token_polls_only_jobs_of_its_project(
+    app: FastAPI, admin: TestClient
+) -> None:
+    create_project(app, admin, "other")
+    secret = _create(admin, ["export"], f"/api/v1/projects/{PROJECT}/tokens")["secret"]
+    client = _bearer(app, secret, **ORIGIN)
+    own = client.post(f"/api/v1/projects/{PROJECT}/exports", json={"kind": "t1"})
+    assert client.get(f"/api/v1/jobs/{own.json()['job_id']}").status_code == 200
+    elsewhere = admin.post("/api/v1/projects/other/exports", json={"kind": "edit_log"})
+    job_id = elsewhere.json()["job_id"]
+    job = app.state.jobs.claim(job_id, "token-test")
+    assert app.state.jobs.run(job, "token-test").status == "succeeded"
+    assert client.get(f"/api/v1/jobs/{job_id}").status_code == 404
+    assert client.get(f"/api/v1/jobs/{job_id}/download").status_code == 404
+    # A personal import token of a user outside the other project neither.
+    member = logged_in(app, "ann", projects={PROJECT: ["lead", "annotator"]})
+    importer = _bearer(app, _create(member, ["import"])["secret"])
+    assert importer.get(f"/api/v1/jobs/{job_id}").status_code == 404
 
 
 def test_path_parameters_match_like_the_routers() -> None:
