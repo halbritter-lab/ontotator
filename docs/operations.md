@@ -258,6 +258,8 @@ Which change revokes which tokens. A revoked token's `revoked_reason` names the 
 
 A kept personal token loses the lost role's rights at once: every request reads the owner's current admin flag and project roles, so the token's reach is always its scopes intersected with what the owner may do now. Granting the admin role revokes nothing: a personal token then reaches what its owner reaches, which is what a token acting as its owner means, and no personal or project token can hold the `admin` scope, so none gains the user-administration routes.
 
+The [MCP server](../mcp/README.md) (`ontotator-mcp`) uses such a token from the user's computer: it runs there, speaks MCP over stdio and calls the API of the instance named by `ONTOTATOR_URL`. It needs no change on the server. Give it a project token with only the scopes the work needs; ontology uploads and new projects need a system token.
+
 ## Upgrades
 
 Take a consistent database/data-volume backup first, as in [Backups and restore](#backups-and-restore), before every image switch (upgrade, downgrade or rollback). Build or pull the verified new digest, update `ONTOTATOR_IMAGE` in `.env`, and run:
