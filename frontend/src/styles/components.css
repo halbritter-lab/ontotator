@@ -728,6 +728,7 @@ a.shell-product { color: inherit; text-decoration: none; }
 .final-export-card .notice, .final-export-card .form-group { margin: 0; }
 .final-export-details, .export-research-details { font-size: var(--size-sm); }
 .final-export-details > p, .export-research-details > p { margin: var(--space-2) 0 0; }
+.final-export-details > ul { margin: var(--space-1) 0 0; padding-left: var(--space-5); }
 .final-export-table td, .export-research-table :is(th, td) { vertical-align: middle; }
 .final-export-table td:last-child, .export-research-table td:last-child { text-align: right; }
 .final-export-group th { text-align: left; font-size: var(--size-sm); }
@@ -1080,6 +1081,9 @@ ul.task-counts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space
 .ui-menu-item:hover,
 .ui-menu-item:focus-visible { background: var(--accent-light); }
 .ui-menu-item:focus-visible { outline: var(--focus-width) solid var(--focus-ring); outline-offset: calc(-1 * var(--focus-width)); }
+/* An unavailable item stays focusable so its reason is read; it does not look or act clickable. */
+.ui-menu-item[aria-disabled="true"] { color: var(--text-muted); cursor: default; }
+.ui-menu-item[aria-disabled="true"]:hover { background: transparent; }
 /* Side panel: a modal right panel (Dialog variant "side"); the page behind it is inert. */
 .modal-overlay--side { justify-content: flex-end; align-items: stretch; }
 .ui-dialog--side { width: 480px; max-width: 100vw; height: 100dvh; max-height: none; border-radius: 0; animation: ui-side-in 150ms ease-out; }

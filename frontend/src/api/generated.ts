@@ -2722,6 +2722,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read History
+         * @description What Undo, Redo and Reset all my changes would do now (issue 320).
+         */
+        get: operations["read_history_api_v1_workspaces__workspace_id__history_get"];
+        put?: never;
+        /**
+         * Apply History
+         * @description Undo or redo one step, or reset to the start of the round (issue 320).
+         *
+         *     The payload is ``{"command": "undo_step" | "redo_step", "step": n}`` (the
+         *     step's ``after_revision`` from the history) or ``{"command":
+         *     "reset_changes"}``. Each is saved as a new edit.
+         */
+        post: operations["apply_history_api_v1_workspaces__workspace_id__history_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/submissions/{submission_id}": {
         parameters: {
             query?: never;
@@ -4266,6 +4294,11 @@ export interface components {
             added_by?: string | null;
             /** Consolidator */
             consolidator?: string | null;
+            /**
+             * Annotators Hidden
+             * @default false
+             */
+            annotators_hidden: boolean;
             /** Consolidation Reason */
             consolidation_reason?: string | null;
             /** Workflow Revision */
@@ -4839,6 +4872,33 @@ export interface components {
             /** Checked Layer Ids */
             checked_layer_ids?: string[];
         };
+        /**
+         * DraftHistoryView
+         * @description What undo, redo and reset would do now.
+         */
+        DraftHistoryView: {
+            /** Available */
+            available: boolean;
+            /** Revision */
+            revision: number;
+            undo?: components["schemas"]["HistoryStepView"] | null;
+            redo?: components["schemas"]["HistoryStepView"] | null;
+            /**
+             * Undo Count
+             * @default 0
+             */
+            undo_count: number;
+            /**
+             * Redo Count
+             * @default 0
+             */
+            redo_count: number;
+            /**
+             * Changed
+             * @default false
+             */
+            changed: boolean;
+        };
         /** DraftRequest */
         DraftRequest: {
             /** Expected Revision */
@@ -4986,6 +5046,12 @@ export interface components {
             acknowledged_warnings: components["schemas"]["WarningAcknowledgement"][];
             /** Accepted Omissions */
             accepted_omissions: components["schemas"]["FinalOmission"][];
+            /**
+             * Format
+             * @default t1
+             * @enum {string}
+             */
+            format: "t1" | "phenopacket";
         };
         /** FinalOmission */
         FinalOmission: {
@@ -5368,6 +5434,31 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * HistoryStepView
+         * @description One step as the editor names it ("Undo: delete finding Seizure").
+         */
+        HistoryStepView: {
+            /** Before Revision */
+            before_revision: number;
+            /** After Revision */
+            after_revision: number;
+            /** Action */
+            action: string;
+            /** Outcome */
+            outcome?: string | null;
+            /** Annotation Id */
+            annotation_id?: string | null;
+            /** Layer Id */
+            layer_id?: string | null;
+            /** Term Id */
+            term_id?: string | null;
+            /**
+             * Commands
+             * @default 1
+             */
+            commands: number;
         };
         /**
          * ImportAcceptance
@@ -5928,6 +6019,8 @@ export interface components {
             payload: {
                 [key: string]: unknown;
             };
+            /** Step Id */
+            step_id?: string | null;
         };
         /** NewMembership */
         NewMembership: {
@@ -7017,6 +7110,11 @@ export interface components {
              */
             adjudicator_not_annotator: boolean;
             /**
+             * Blind Consolidation
+             * @default false
+             */
+            blind_consolidation: boolean;
+            /**
              * Contiguous Mentions Only
              * @default false
              */
@@ -7109,6 +7207,11 @@ export interface components {
              * @default false
              */
             adjudicator_not_annotator: boolean;
+            /**
+             * Blind Consolidation
+             * @default false
+             */
+            blind_consolidation: boolean;
             /**
              * Contiguous Mentions Only
              * @default false
@@ -14834,6 +14937,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Submission"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_history_api_v1_workspaces__workspace_id__history_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftHistoryView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    apply_history_api_v1_workspaces__workspace_id__history_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MutationEnvelope"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Draft"];
                 };
             };
             /** @description Validation Error */

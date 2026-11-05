@@ -6,7 +6,7 @@ import { Button, EmptyState, InlineMessage } from "../ui";
 import { RouteLink } from "../documents/RowCells";
 import type { Route } from "../app/router";
 import { ErrorNotice } from "./ErrorNotice";
-import { ERROR_MESSAGES } from "./errors";
+import { ExportFailure } from "./ExportFailure";
 import { useJob } from "./useJob";
 import { Time } from "../app/Time";
 
@@ -37,32 +37,6 @@ function readRemembered(key: string): { id: number | null; storageError: boolean
 }
 
 const record = (value: unknown): Record<string, unknown> | undefined => typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
-const exportFailureReasons: Record<string, string> = {
-  UNKNOWN_TERM: "The term is not in the project's pinned ontology.",
-  OBSOLETE_TERM: "The term is obsolete in the project's pinned ontology.",
-  INCOMPLETE_AXES: "Required clinical axis values are missing.",
-  TARGET_NOT_FOUND: "The original finding version is missing.",
-};
-
-function ExportFailure({ result, error }: { result: Record<string, unknown> | null; error: string | null }): JSX.Element {
-  const failure = record(result?.error);
-  const details = record(failure?.details);
-  const cause = record(details?.cause);
-  if (failure?.code !== "EXPORT_UNRESOLVED_INVALID" || !details || typeof cause?.code !== "string") {
-    return <InlineMessage tone="error"><p>Export could not be created. Open diagnostics for the technical details.</p><details><summary>Technical diagnostics</summary><pre>{error || "The export failed without further details."}</pre></details></InlineMessage>;
-  }
-  const causeDetails = record(cause.details);
-  return <InlineMessage tone="error">
-    <p>{ERROR_MESSAGES.EXPORT_UNRESOLVED_INVALID}</p>
-    <p>Document: {String(details.document_id)}, Submission: {String(details.submission_id)}</p>
-    <p>Finding: {String(details.annotation_id)}, Version: {String(details.version)}</p>
-    <p>{exportFailureReasons[cause.code] || ERROR_MESSAGES[cause.code] || "The finding does not meet the project profile."} ({cause.code})</p>
-    {typeof cause.details === "string" && <p>{cause.details}</p>}
-    {typeof causeDetails?.term_id === "string" && <p>Term: {causeDetails.term_id}</p>}
-    <p>If this review is not available to reopen, ask the project lead or server operator to correct its imported history.</p>
-  </InlineMessage>;
-}
-
 export function ExportPage({ projectKey, currentUser, documentCount, onNavigate }: ExportPageProps): JSX.Element {
   // shortcut: the count comes from the project list loaded with the session, so texts uploaded since then show only after a reload.
   if (documentCount === 0) return <section><h1>Export</h1><EmptyState title="Nothing to export yet" action={

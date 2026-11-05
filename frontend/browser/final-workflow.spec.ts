@@ -175,7 +175,7 @@ test('ordinary human carry-forward stays private, then exact consolidation is ex
     // Texts without a final result are left out only after a tick that names their count (#194).
     await expect(page.getByRole('rowgroup', { name: 'Left out: no final result' })).toBeVisible();
     await expect(create).toHaveAttribute('aria-disabled', 'true');
-    await page.getByRole('region', { name: 'Export check' }).getByRole('checkbox', { name: /; leave out the other / }).check();
+    await page.getByRole('region', { name: 'Final results' }).getByRole('checkbox', { name: /; leave out the other / }).check();
     await expect(create).not.toHaveAttribute('aria-disabled', 'true');
     const exportResponse = page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith('/exports/final'));
     await create.click(); expect((await exportResponse).ok()).toBeTruthy();

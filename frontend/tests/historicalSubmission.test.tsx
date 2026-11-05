@@ -76,6 +76,17 @@ describe("HistoricalSubmissionDialog", () => {
     expect(within(section).queryByRole("button")).toBeNull();
   });
 
+  it("names a blinded re-anchor reviewer as Annotator A, never the opaque id (issue 302)", () => {
+    const item = { proposal_set_id: 1, source_ref: { annotation_id: "tool-1", version: "v" } };
+    const detail: SubmissionHistoryDetail = { ...plainDetail, reanchor_inputs: [item],
+      reanchor_resolutions: [{ item, outcome: "dismissed", replacement: null, reason: "gone", reviewer_id: "annotator-a" }] };
+    render(<HistoricalSubmissionDialog view={fromHistoryDetail(detail, "Round 1", () => "")} documentText="Patient seizures."
+      currentDocumentId="target" termLabel={() => null} onClose={vi.fn()} />);
+    const section = screen.getByRole("region", { name: "Re-anchor review history" });
+    expect(within(section).getByText("tool-1 (v): Dismissed by Annotator A: gone")).toBeDefined();
+    expect(section.textContent).not.toContain("annotator-a");
+  });
+
   it("fetches the text of a submission on another text version for its quotes", async () => {
     const text = vi.spyOn(api, "getVariantText").mockResolvedValue({ document_id: "target", text: "Earlier XYZ text", text_sha256: "text" } as never);
     render(<HistoricalSubmissionDialog view={fromHistoryDetail(plainDetail, "Round 1", () => "")} documentText="Current text." currentDocumentId="current"

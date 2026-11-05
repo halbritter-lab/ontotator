@@ -77,6 +77,8 @@ ARCHIVED: tuple[ArchivedTable, ...] = (
     ArchivedTable("proposal_sets"),
     ArchivedTable("proposal_annotations"),
     ArchivedTable("proposal_evidence"),
+    # Imported tool sets without a finding on a text (recall, proposals.csv).
+    ArchivedTable("empty_proposal_sets"),
     ArchivedTable("drafts"),
     ArchivedTable("draft_annotations", parent=("draft_id", "drafts", "id")),
     ArchivedTable("draft_evidence", parent=("draft_id", "drafts", "id")),

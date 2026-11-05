@@ -19,13 +19,14 @@ import { useCaseVersions } from "../variants/useCaseVersions";
 import { VariantDetails, variantDescription } from "../variants/CaseViewer";
 import { annotationOptions, pickVariant, refForKey } from "../variants/versionState";
 import { ErrorNotice } from "../admin/ErrorNotice";
-import { errorMessage } from "../admin/errors";
-import type { AnnotationVersion } from "../api/client";
+import { ERROR_MESSAGES, errorMessage } from "../admin/errors";
+import type { AnnotationVersion, DraftHistoryView, HistoryStepView } from "../api/client";
 import { routeHref, type Route } from "./router";
 import { InlineMessage } from "../ui/InlineMessage";
 import { PausedNotice } from "../editor/PausedNotice";
 import { Textarea } from "../ui/Textarea";
 import { Button } from "../ui/Button";
+import { IconButton } from "../ui/IconButton";
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { flushSync } from "react-dom";
 import {
@@ -34,6 +35,7 @@ import {
   onSessionRestored,
   ValidationError,
   ApiError,
+  ConflictError,
   type TaskSummary,
   type AnnotationSnapshot,
   type AxesValues,
@@ -103,7 +105,8 @@ import { attachCandidates, findingDescription, modifierDisplayId, modifierMarks,
 import { Toast } from "../ui/Toast";
 import { type MentionDisplay, type SelectionPayload } from "../spans/adapter";
 import { markColourSlot } from "../editor/markColours";
-import { IconCheck, IconClose, IconLock, IconMore, IconPencil, IconQuestion, IconRetry, IconUndo } from "../ui/icons";
+import { IconCheck, IconClose, IconLock, IconMore, IconPencil, IconQuestion, IconRedo, IconRetry, IconUndo } from "../ui/icons";
+import { stepText } from "../editor/history";
 import { MenuButton, type MenuItem } from "../ui/MenuButton";
 import { isNegated } from "../editor/negation";
 import { Dialog } from "../ui/Dialog";
@@ -117,6 +120,7 @@ import type { RouteLeaveGuard } from "./router";
 import { isReviewLike, modeBadge } from "../editor/modes";
 import { LanguageTag } from "../ui/LanguageTag";
 import { onSpaceActivate } from "../ui/spaceActivates";
+import { actorName } from "../editor/actorName";
 
 const refKey = (r: { annotation_id: string; version: string }) => JSON.stringify([r.annotation_id, r.version]);
 
@@ -437,6 +441,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   } | null>(null);
   const treeNonce = useRef(0);
 
+  // Issue 320: the undo and redo steps of the current round (their terms are named in the tooltips).
+  const [history, setHistory] = useState<DraftHistoryView | null>(null);
+  const historyRef = useRef(history);
+  historyRef.current = history;
   const displayedTerms = useMemo(() => [
     ...(draft.annotations ?? []),
     ...(display?.value?.annotations ?? []),
@@ -444,7 +452,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     ...submissions.flatMap((submission) => submission.snapshots),
     ...roundInputs.flatMap(input => [input.source_snapshot, ...(input.target_snapshot ? [input.target_snapshot] : [])]),
   ].flatMap((snapshot) => [snapshot.annotation.term_id, ...((snapshot.annotation as { modifiers?: { term_id: string }[] }).modifiers ?? []).map(m => m.term_id)]
-    .map(term_id => ({ layer_id: snapshot.annotation.layer_id, term_id }))).concat(pendingReanchorItems.map(item=>({layer_id:item.layer_id,term_id:item.term_id}))), [draft.annotations, display?.value, view.available_inputs, submissions, view.pending_reanchor_items, roundInputs]);
+    .map(term_id => ({ layer_id: snapshot.annotation.layer_id, term_id }))).concat(pendingReanchorItems.map(item=>({layer_id:item.layer_id,term_id:item.term_id})))
+    // A finding an undo or redo step names may be in no draft the editor shows (deleted, or not added yet).
+    .concat([history?.undo, history?.redo].flatMap(step => step?.layer_id && step.term_id ? [{ layer_id: step.layer_id, term_id: step.term_id }] : [])),
+  [draft.annotations, display?.value, view.available_inputs, submissions, view.pending_reanchor_items, roundInputs, history]);
   const termLabel = useTermLabels(view.key.project_key, displayedTerms);
 
   const searchManager = useMemo(() => new SearchManager(api), []);
@@ -768,7 +779,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   };
   const reportError = (error: unknown) => {
     if (error instanceof DiscardedChangesError) return; // user explicitly discarded these edits
-    setActionError(error instanceof Error ? error.message : String(error));
+    // A refusal without its own message ("API request failed with status 422") reads as its code's message.
+    const generic = error instanceof ApiError && /^API request failed with status \d+$/.test(error.message);
+    setActionError(generic ? errorMessage(error) : error instanceof Error ? error.message : String(error));
   };
 
   /** In-app confirmation dialog (resolves true when confirmed). */
@@ -1017,15 +1030,29 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     return () => window.removeEventListener("beforeunload", warn);
   }, []);
 
+  /**
+   * Issue 320: the commands of one user action share a step ID, so Undo takes them back together. The step
+   * holds while the action runs; a command another action sends meanwhile joins it (undone together).
+   */
+  const ambientStep = useRef<string | null>(null);
+  const inStep = async <T,>(action: () => Promise<T>): Promise<T> => {
+    if (ambientStep.current) return action();
+    const step = crypto.randomUUID();
+    ambientStep.current = step;
+    try { return await action(); } finally { if (ambientStep.current === step) ambientStep.current = null; }
+  };
+
   // Execute mutation through the queue
   const enqueueMutation = async (payload: Record<string, unknown> | ((current: Draft) => Record<string, unknown>)): Promise<Draft> => {
     assertWritable();
     setActionError(null);
     const mutationId = crypto.randomUUID();
+    const step = ambientStep.current;
     let envelope: Parameters<typeof api.applyCommand>[1] | undefined;
     return queueRef.current.enqueue(async (expectedRevision) => {
       assertWritable();
-      envelope ??= { mutation_id: mutationId, expected_revision: expectedRevision, payload: typeof payload === "function" ? payload(latestDraft.current) : payload };
+      envelope ??= { mutation_id: mutationId, expected_revision: expectedRevision, payload: typeof payload === "function" ? payload(latestDraft.current) : payload,
+        ...(step ? { step_id: step } : {}) };
       const updatedDraft = await api.applyCommand(workspaceId, envelope).catch(assignmentFailure);
       latestDraft.current = updatedDraft;
       setDraft(updatedDraft);
@@ -1037,6 +1064,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     assertWritable();
     setActionError(null);
     const mutationId = crypto.randomUUID();
+    const step = ambientStep.current;
     let envelope: Parameters<typeof api.resolveReanchor>[1] | undefined;
     return queueRef.current.enqueue(async expectedRevision => {
       assertWritable();
@@ -1044,7 +1072,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         const saved = outcome === "recreated" ? latestDraft.current.annotations?.find(snapshot => snapshot.annotation.annotation_id === value) : undefined;
         if (outcome === "recreated" && !saved) throw new ValidationError("Save the replacement finding before resolving this item.");
         envelope = {mutation_id:mutationId,expected_revision:expectedRevision,payload:{item:reanchorRef(item),outcome,
-          ...(saved ? {replacement:{annotation_id:saved.annotation.annotation_id,version:saved.version}} : {reason:value})}};
+          ...(saved ? {replacement:{annotation_id:saved.annotation.annotation_id,version:saved.version}} : {reason:value})},
+          ...(step ? { step_id: step } : {})};
       }
       const updated = await api.resolveReanchor(workspaceId,envelope).catch(assignmentFailure);
       latestDraft.current=updated;setDraft(updated);return updated;
@@ -1205,6 +1234,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   ): Promise<Draft> => {
     if (readOnlyRef.current) return Promise.reject(new DiscardedChangesError());
     const mutationId = crypto.randomUUID();
+    const step = ambientStep.current;
     let envelope: Parameters<typeof api.recordDecision>[1] | undefined;
     return queueRef.current.enqueue(async (expectedRevision) => {
       assertWritable();
@@ -1223,6 +1253,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               : undefined,
             note,
           },
+          ...(step ? { step_id: step } : {}),
         };
       }
       const nextDraft = await api.recordDecision(workspaceId, envelope).catch(assignmentFailure);
@@ -1261,14 +1292,15 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   };
 
   // Mutate an annotation and synchronize any linked review decision
-  const mutateAnnotationAndSyncDecision = async (
+  // Issue 320: the edit and the decision it updates are one undo step.
+  const mutateAnnotationAndSyncDecision = (
     annotationId: string,
     mutationAction: () => Promise<Draft>
-  ): Promise<Draft> => {
+  ): Promise<Draft> => inStep(async () => {
     const updatedDraft = await mutationAction();
     await syncReplacementDecision(annotationId);
     return updatedDraft;
-  };
+  });
 
   const saveAnnotationNote = async (id: string): Promise<void> => {
     const running = annotationNoteSaves.current.get(id);
@@ -1324,11 +1356,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     announcementRef.current = ""; setCarriedAnnouncement("");
     announceTimer.current = window.setTimeout(() => { announcementRef.current = message; setCarriedAnnouncement(message); }, 50);
   };
+  // Set below, once the history is known (issue 320).
+  const undoFromToastRef = useRef<(revision: number, fallback: () => Promise<unknown> | void) => Promise<void>>(async (_r, fallback) => { await fallback(); });
   const modifierCommands = useModifierCommands({
     mutate: (annotationId, payload) => mutateAnnotationAndSyncDecision(annotationId, () => enqueueMutation({ ...payload })),
     segmentsOf: (annotationId, termId) => latestDraft.current.annotations?.find(a => a.annotation.annotation_id === annotationId)
       ?.annotation.modifiers?.find(m => m.term_id === termId)?.segments,
     reportError: error => reportError(error),
+    undoFromToast: (revision, fallback) => undoFromToastRef.current(revision, fallback),
   });
   // A read-only case has no link-a-span mode (the mode may have started before the case became read-only).
   const linkSpan = readOnly ? null : modifierCommands.linkSpan;
@@ -1591,7 +1626,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     ? "Delete this finding and all its mentions? This is a carried finding. After deleting it, you must link another finding or dismiss it with a reason."
     : undefined;
   /** Issue 150: puts a deleted finding back (Undo in the toast or Ctrl+Z) and selects it. */
-  const restoreDeletedFinding = async (deleted: DeletedFinding) => {
+  const restoreDeletedFinding = (deleted: DeletedFinding) => inStep(async () => {
     if (readOnlyRef.current) return;
     const ann = deleted.snapshot.annotation;
     const type = view.layers?.find(layer => layer.layer_id === ann.layer_id)?.annotation_types.find(item => item.type_id === ann.type_id);
@@ -1611,7 +1646,13 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       if (!(error instanceof DiscardedChangesError)) reportError(error);
       return;
     }
-    selectListKey(`annotation:${ann.annotation_id}`, true);
+    announceRestored(deleted);
+  });
+  /** Selects the restored finding and says so, after an undo by commands or through the history. */
+  const announceRestored = (deleted: DeletedFinding) => {
+    const id = deleted.snapshot.annotation.annotation_id;
+    if (!latestDraft.current.annotations?.some(a => a.annotation.annotation_id === id)) return;
+    selectListKey(`annotation:${id}`, true);
     announceCarried(`Restored ${findingNameOf(deleted.snapshot)}.`);
   };
 
@@ -1624,11 +1665,13 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const neighbour = index < 0 ? undefined : rowKeys[index + 1] ?? rowKeys[index - 1];
     const deleted = captureDeletedFinding(latestDraft.current, annotationId);
     await handleDeleteAnnotation(annotationId);
+    const revision = latestDraft.current.revision;
     // Issue 150: like a removed modifier, a deleted finding can be undone (toast or Ctrl+Z).
     if (deleted && !readOnlyRef.current) {
       const name = findingNameOf(deleted.snapshot);
       modifierCommands.showToast(canRestore(deleted)
-        ? { message: `Deleted ${name}`, actionLabel: "Undo", undo: true, onAction: () => { void restoreDeletedFinding(deleted); } }
+        ? { message: `Deleted ${name}`, actionLabel: "Undo", undo: true,
+          onAction: () => { void undoFromToast(revision, () => restoreDeletedFinding(deleted), () => announceRestored(deleted)); } }
         : { message: `Deleted ${name}` });
     }
     const after = homes.length ? carriedStateNow(homes[0].input.input_id) : undefined;
@@ -1642,6 +1685,170 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     selectListKey(key);
     setFocusRequest({ key, find: root => root.querySelector<HTMLElement>("[data-carried-dismiss]") });
   };
+
+  // Issue 320: undo and redo in steps, and reset to the start of the round. The history comes from the saved
+  // edits (it survives a reload); each undo, redo or reset is saved as a new edit through the same queue.
+  const historyEnabled = !readOnly && !consolidationEditor && (view.key.mode === "independent" || view.key.mode === "proposal_check");
+  const [historyBusy, setHistoryBusyState] = useState(false);
+  // A ref as well: a second click before the next render must not send a second undo.
+  const historyBusyRef = useRef(false);
+  const setHistoryBusy = (busy: boolean) => { historyBusyRef.current = busy; setHistoryBusyState(busy); };
+  // One read per draft revision: the editor's own reload and an undo pressed right after an edit share it, and
+  // an older answer never replaces a newer one. The epoch ends reads of another workspace.
+  const historyEpoch = useRef(0);
+  const historyLoad = useRef<{ epoch: number; revision: number; promise: Promise<DraftHistoryView> } | null>(null);
+  const historyAt = (revision: number): Promise<DraftHistoryView> => {
+    const known = historyRef.current;
+    if (known?.revision === revision) return Promise.resolve(known);
+    const epoch = historyEpoch.current;
+    const running = historyLoad.current;
+    if (running && running.epoch === epoch && running.revision === revision) return running.promise;
+    const promise = api.getHistory(workspaceId).then(next => {
+      if (epoch === historyEpoch.current && next.revision >= (historyRef.current?.revision ?? -1)) {
+        historyRef.current = next; setHistory(next);
+      }
+      return next;
+    }).finally(() => { if (historyLoad.current?.promise === promise) historyLoad.current = null; });
+    historyLoad.current = { epoch, revision, promise };
+    return promise;
+  };
+  useEffect(() => {
+    if (!historyEnabled) { historyEpoch.current += 1; historyLoad.current = null; historyRef.current = null; setHistory(null); return; }
+    // After the queue has saved: the history then describes the draft the editor shows.
+    if (queueState !== "saved" || historyRef.current?.revision === draft.revision) return;
+    historyAt(draft.revision).catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- historyAt reads refs only
+  }, [historyEnabled, queueState, draft.revision, workspaceId]);
+  /**
+   * The history of exactly the saved draft (call after flushing the queue). A step is never taken from the
+   * history of an older revision: if the server's draft moved on (another tab), this refuses instead.
+   */
+  const savedHistory = async (): Promise<DraftHistoryView> => {
+    const revision = latestDraft.current.revision;
+    const known = await historyAt(revision);
+    if (known.revision !== revision || latestDraft.current.revision !== revision) {
+      throw new ConflictError(ERROR_MESSAGES.REVISION_CONFLICT, "REVISION_CONFLICT");
+    }
+    return known;
+  };
+  const currentHistory = history && history.revision === draft.revision ? history : null;
+  const stepName = (step: HistoryStepView) => stepText(step, (layerId, termId) => termLabel(layerId, termId) ?? undefined);
+
+  const enqueueHistory = (payload: Record<string, unknown>): Promise<Draft> => {
+    assertWritable();
+    setActionError(null);
+    const mutationId = crypto.randomUUID();
+    let envelope: Parameters<typeof api.applyHistory>[1] | undefined;
+    return queueRef.current.enqueue(async expectedRevision => {
+      assertWritable();
+      envelope ??= { mutation_id: mutationId, expected_revision: expectedRevision, payload };
+      const updated = await api.applyHistory(workspaceId, envelope).catch(assignmentFailure);
+      latestDraft.current = updated; setDraft(updated);
+      return updated;
+    });
+  };
+
+  /** Local editor state that belongs to the replaced content is dropped; a selection whose finding is gone ends. */
+  const afterHistoryChange = (updated: Draft) => {
+    modifierCommands.dismissToast();
+    const ids = new Set((updated.annotations ?? []).map(snapshot => snapshot.annotation.annotation_id));
+    annotationNoteDraftsRef.current = {}; setAnnotationNoteDrafts({});
+    noteDraftsRef.current = {}; setNoteDrafts({});
+    setRequiredNoteKey(null);
+    for (const id of [...copiedModifiers.current.keys()]) if (!ids.has(id)) copiedModifiers.current.delete(id);
+    // A decision note ("Confirmed X … Next open proposal") names a decision that may be gone now.
+    setAdvanceStatus(null);
+    // The selected row is gone: a carried input then shows in another row (its finding came back or went), so
+    // the selection follows it there instead of keeping the old row's details; any other selection ends.
+    const selected = selectedListKeyRef.current;
+    const gone = selected?.startsWith("input:") || (!!selectedAnnotationId && !ids.has(selectedAnnotationId));
+    const before = gone ? carried.states.find(state => rowKeyOf(state) === selected) : undefined;
+    const after = before && deriveCarriedStates(carriedInputs, updated.round_input_resolutions ?? [], updated.annotations ?? [])
+      .find(state => state.input.input_id === before.input.input_id);
+    if (after && rowKeyOf(after) !== selected) selectListKey(rowKeyOf(after));
+    else if (selectedAnnotationId && !ids.has(selectedAnnotationId)) handleDeselectAll();
+    modifierCommands.setLinkSpan(null);
+  };
+
+  /**
+   * Undo or redo (`step` names the step; else the current top) or reset. Pending values and notes are saved
+   * first, so a committed note is the newest step. Refused while a new finding or a decision is half done.
+   */
+  const runHistory = async (command: "undo_step" | "redo_step" | "reset_changes", step?: number): Promise<boolean> => {
+    if (readOnlyRef.current || !historyEnabled || historyBusyRef.current) return false;
+    if (pendingRef.current || creatingPending.current || pendingEvidenceAdoption) {
+      setActionError("Finish or cancel the new finding first."); return false;
+    }
+    if (decisionIntentKeys.length > 0) {
+      setActionError("Save or reset the open decision first."); return false;
+    }
+    setHistoryBusy(true);
+    try {
+      flushPendingAxes();
+      flushTextResize.current?.();
+      await flushAnnotationNotes();
+      if (unsavedAnnotationNotes().length > 0) { setActionError("Complete the note first."); return false; }
+      await queueRef.current.flush();
+      let target = step;
+      if (command !== "reset_changes" && target === undefined) {
+        const known = await savedHistory();
+        const top = command === "undo_step" ? known.undo : known.redo;
+        if (!top) return false;
+        target = top.after_revision;
+      }
+      const updated = await enqueueHistory({ command, ...(target !== undefined ? { step: target } : {}) });
+      afterHistoryChange(updated);
+      return true;
+    } catch (error) {
+      reportError(error);
+      return false;
+    } finally {
+      setHistoryBusy(false);
+    }
+  };
+
+  /**
+   * An Undo toast takes back its own action through the history while that action is still the newest step
+   * (`revision` is the draft revision the action produced); otherwise `fallback` puts things back by commands.
+   */
+  const undoFromToast = async (revision: number, fallback: () => Promise<unknown> | void, onUndone?: () => void) => {
+    if (historyEnabled && !readOnlyRef.current) {
+      let top: HistoryStepView | null = null;
+      try {
+        await queueRef.current.flush();
+        top = (await savedHistory()).undo ?? null;
+      } catch { /* no history now: the commands below put it back */ }
+      // Taken back through the history, or refused there with a message: never also by commands.
+      if (top && top.before_revision < revision && revision <= top.after_revision) {
+        if (await runHistory("undo_step", top.after_revision)) onUndone?.();
+        return;
+      }
+    }
+    await fallback();
+  };
+  undoFromToastRef.current = undoFromToast;
+
+  const resetAllChanges = async () => {
+    if (readOnlyRef.current || !historyEnabled || !currentHistory?.changed) return;
+    const outcome = view.key.mode === "proposal_check" ? "All tool proposals are open again, as at the start of this round."
+      : isCarryKind(roundKind) ? "The carried findings come back as they were at the start of this round."
+      : "The task has no findings again, as at the start of this round.";
+    // No count: the logged steps (undo_count) include undone and reset ones, not the net changes.
+    const ok = await askConfirm("Reset all my changes?",
+      `Your changes in this round are taken back: findings, values, notes, modifiers and decisions. ${outcome} You can undo the reset.`,
+      "Reset all my changes");
+    if (ok) await runHistory("reset_changes");
+  };
+
+  const undoStep = currentHistory?.undo ?? null;
+  const redoStep = currentHistory?.redo ?? null;
+  const undoTitle = undoStep ? `Undo: ${stepName(undoStep)}` : "Nothing to undo";
+  const redoTitle = redoStep ? `Redo: ${stepName(redoStep)}` : "Nothing to redo";
+  // Inside a text field the browser's own text undo keeps working (shortcuts skip typing targets).
+  useShortcut(["Ctrl+z", "Meta+z"], () => { void runHistory("undo_step"); },
+    { scope: "screen", description: "Undo the last change", group: "Editor", enabled: historyEnabled && !!undoStep && !historyBusy });
+  useShortcut(["Ctrl+Shift+z", "Meta+Shift+z", "Ctrl+y"], () => { void runHistory("redo_step"); },
+    { scope: "screen", description: "Redo", group: "Editor", enabled: historyEnabled && !!redoStep && !historyBusy });
 
   useEffect(() => {
     if (!saveBeforeReportRef) return;
@@ -1808,7 +2015,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     announceCarried("Marked text discarded.");
   };
 
-  const createPendingAnnotation = async (termId: string, searchId?: string, termText?: string) => {
+  const createPendingAnnotation = (termId: string, searchId?: string, termText?: string) => inStep(async () => {
     if (readOnlyRef.current) return;
     if (!pendingAnnotation || creatingPending.current) return;
     // A handle moved by keyboard reports after a pause: take that move along.
@@ -1880,7 +2087,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       });
     } catch (error) { reportError(error); }
     finally { creatingPending.current = false; }
-  };
+  });
 
   const handlePickMention = (evidenceId: string) => {
     if (evidenceId === pendingAnnotation?.evidenceId) return;
@@ -2306,8 +2513,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   // Adopt a review target as an editable draft copy and switch to editing it.
   // The "changed" decision is recorded only once the copy actually differs.
   // Resolves with the copy's id once it is open (null when nothing was copied).
-  const handleAdoptAndEditTarget = async (target: TargetProposal, reason?: string, supportingSegments?: SelectionPayload["segments"],
-    { implicit = false }: { implicit?: boolean } = {}): Promise<string | null> => {
+  const handleAdoptAndEditTarget = (target: TargetProposal, reason?: string, supportingSegments?: SelectionPayload["segments"],
+    { implicit = false }: { implicit?: boolean } = {}): Promise<string | null> => inStep(async () => {
     if (readOnlyRef.current) return null;
     setActionError(null);
     const key = targetKeyOf(target);
@@ -2429,14 +2636,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     setPendingEvidenceAdoption(null);
     openCopy(newAnnId);
     return newAnnId;
-  };
+  });
 
   /**
    * M2 M-4 (HPO guide principle 3: one term and one set of attributes per annotation): one mention leaves the finding
    * and becomes a new finding with the same term and values; the modifiers stay with the finding. Created first, then
    * detached, so a failure never loses the mention.
    */
-  const moveMentionToNewFinding = async (annotationId: string, evidenceId: string) => {
+  const moveMentionToNewFinding = (annotationId: string, evidenceId: string) => inStep(async () => {
     if (readOnlyRef.current) return;
     const source = latestDraft.current.annotations?.find(a => a.annotation.annotation_id === annotationId);
     const refs = source?.annotation.evidence_refs ?? [];
@@ -2475,7 +2682,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     setSelectedEvidenceId(movedEvidenceId);
     setAdvanceStatus({ listKey: `annotation:${newId}`, decidedKey: "",
       text: `Moved mention ${index + 1} “${quoteSegments(view.document.text, segments, 40)}” to a new finding ${finding}. The new finding is selected.${stays}` });
-  };
+  });
   /** R-7: a proposal replaced by a copy with a single mention has nothing left to move (the move acts on the copy). */
   const proposalCopyCanMove = (target: TargetProposal) => {
     const decision = decisionsMap[refKey(target)];
@@ -3570,8 +3777,24 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             </Button>
           )}
 
+          {historyEnabled && <span className="case-history" role="group" aria-label="Undo and redo">
+            <IconButton size="sm" variant="quiet" label="Undo last change" title={undoTitle} icon={<IconUndo />}
+              disabled={!undoStep || historyBusy} onClick={() => { void runHistory("undo_step"); }} />
+            <IconButton size="sm" variant="quiet" label="Redo last change" title={redoTitle} icon={<IconRedo />}
+              disabled={!redoStep || historyBusy} onClick={() => { void runHistory("redo_step"); }} />
+          </span>}
+
           <MenuButton label="More actions" buttonLabel="More" icon={<IconMore />} items={[
             ...menuItems,
+            // Issue 320: back to the start of the round; the reset itself can be undone.
+            ...(historyEnabled ? [{ id: "reset-changes", label: "Reset all my changes…",
+              // Unavailable, with the reason, while nothing changed, the history loads or a step runs.
+              ...(!currentHistory?.changed || historyBusy ? {
+                disabled: true,
+                description: historyBusy ? "Wait until the last change is saved"
+                  : currentHistory ? "Nothing changed in this round yet" : "Loading your changes…",
+              } : {}),
+              onSelect: () => { void resetAllChanges(); } }] : []),
             // Below 1024 px "Next open item" leaves the bar for this menu.
             ...(narrowHeader && !readOnly && openItems.length > 0 ? [{ id: "next-open", label: "Next open item", onSelect: goToNextOpenItem }] : []),
             { id: "shortcuts", label: "Keyboard shortcuts (?)", onSelect: openShortcutHelp },
@@ -3933,7 +4156,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 <p>{view.layers?.find(l => l.layer_id === selectedSource.annotation.layer_id)?.label}, Read-only</p>
                 <p>
                   <AiBadge provenance={selectedSource.annotation.provenance} source={selectedSource} />{" "}
-                  {selectedSource.annotation.provenance.actor.actor_id}, {selectedSource.annotation.provenance.method}
+                  {actorName(selectedSource.annotation.provenance.actor)}, {selectedSource.annotation.provenance.method}
                 </p>
                 {Object.entries(selectedSource.annotation.axes_values ?? {}).map(([axis, value]) => <p key={axis}>{axis}: {value ?? "Not specified"}</p>)}
                 <h3>Mentions ({selectedSource.evidence.length})</h3>

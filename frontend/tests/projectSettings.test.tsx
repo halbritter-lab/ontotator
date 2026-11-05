@@ -785,7 +785,7 @@ describe("creation recovery and lifetime", () => {
 });
 
 describe("workflow settings", () => {
-  const WORKFLOW_BODY = { import_plan: "review_and_annotate_translations", annotations_per_text: 1, tool_proposal_mode: "proposals", annotate_accepted_translations_only: true, adjudicator_not_annotator: false, record_working_time: false };
+  const WORKFLOW_BODY = { import_plan: "review_and_annotate_translations", annotations_per_text: 1, tool_proposal_mode: "proposals", annotate_accepted_translations_only: true, adjudicator_not_annotator: false, blind_consolidation: false, record_working_time: false };
 
   it("reads in the order a text moves through work, with the new copy (M-8b)", async () => {
     const view = renderSettings();
@@ -891,10 +891,14 @@ describe("workflow settings", () => {
     expect(count.compareDocumentPosition(gate) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(gate.compareDocumentPosition(consolidator) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(within(form).getByText("The consolidator rule is checked when you assign consolidation.")).toBeTruthy();
+    const blind = within(form).getByRole("checkbox", { name: "Hide annotator names during consolidation" }) as HTMLInputElement;
+    expect(blind.checked).toBe(false);
+    expect(consolidator.compareDocumentPosition(blind) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     fireEvent.click(gate);
     fireEvent.click(consolidator);
+    fireEvent.click(blind);
     fireEvent.click(within(form).getByRole("button", { name: "Save changes" }));
-    await waitFor(() => expect(api.updateProjectSettings).toHaveBeenLastCalledWith(settings.project_key, expect.objectContaining({ annotate_accepted_translations_only: false, adjudicator_not_annotator: true })));
+    await waitFor(() => expect(api.updateProjectSettings).toHaveBeenLastCalledWith(settings.project_key, expect.objectContaining({ annotate_accepted_translations_only: false, adjudicator_not_annotator: true, blind_consolidation: true })));
   });
 
   it("names the consolidator rule in D2 words", async () => {

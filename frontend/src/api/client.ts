@@ -220,6 +220,8 @@ export type StartConsolidationRequest = components["schemas"]["StartConsolidatio
 export type StartConsolidationResponse = components["schemas"]["StartConsolidationResponse"];
 export type MutationEnvelope = components["schemas"]["MutationEnvelope"];
 export type Draft = components["schemas"]["Draft"];
+export type DraftHistoryView = components["schemas"]["DraftHistoryView"];
+export type HistoryStepView = components["schemas"]["HistoryStepView"];
 export type Submission = components["schemas"]["Submission"];
 export type SearchRequest = components["schemas"]["SearchRequest"];
 export type SearchResult = components["schemas"]["SearchResult"];
@@ -1136,6 +1138,18 @@ export class ApiClient {
 
   async resolveReanchor(workspaceId: string, envelope: MutationEnvelope): Promise<Draft> {
     return this.request<Draft>(`/api/v1/workspaces/${encodeURIComponent(workspaceId)}/reanchor-resolutions`, {
+      method: "POST", body: JSON.stringify(envelope),
+    });
+  }
+
+  /** Issue 320: what Undo, Redo and Reset all my changes would do now. */
+  async getHistory(workspaceId: string): Promise<DraftHistoryView> {
+    return this.request<DraftHistoryView>(`/api/v1/workspaces/${encodeURIComponent(workspaceId)}/history`);
+  }
+
+  /** Issue 320: undo or redo one step, or reset to the start of the round; saved as a new edit. */
+  async applyHistory(workspaceId: string, envelope: MutationEnvelope): Promise<Draft> {
+    return this.request<Draft>(`/api/v1/workspaces/${encodeURIComponent(workspaceId)}/history`, {
       method: "POST", body: JSON.stringify(envelope),
     });
   }

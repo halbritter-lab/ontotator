@@ -875,7 +875,7 @@ def test_historical_receipt_replay_cannot_downgrade_persisted_draft_policy(tmp_p
                 project_id=project_id,
                 workspace_key=_key_str(key),
                 mutation_id=envelope.mutation_id,
-                request_hash=canonical_hash(envelope.model_dump()),
+                request_hash=canonical_hash(envelope.model_dump(exclude_none=True)),
                 response=historical_response,
                 created_at=datetime.now(UTC),
             )

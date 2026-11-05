@@ -222,3 +222,22 @@ it("the header shows the language flag", () => {
   expect(tag?.textContent).toBe("de");
   expect(tag?.querySelector("svg.language-flag")).not.toBeNull();
 });
+
+it("a reset clears the decision note of the decisions it took back (issue 320)", async () => {
+  const view = proposalView();
+  recordDecisions(view);
+  vi.spyOn(api, "getHistory").mockImplementation(async () => ({ available: true, revision: 1, undo_count: 1, redo_count: 0, changed: true, redo: null,
+    undo: { before_revision: 0, after_revision: 1, action: "decision", outcome: "confirmed", annotation_id: "p-1", layer_id: "phenotype", term_id: "HP:0001252", commands: 1 } }) as never);
+  const reset = vi.spyOn(api, "applyHistory").mockImplementation(async (_ws, envelope) => ({ ...structuredClone(view.draft), revision: envelope.expected_revision + 1 }) as never);
+  render(<CaseScreen view={view} workspaceId="ws-pc" onClose={vi.fn()} />);
+  fireEvent.click(document.querySelector('[data-list-key^="target:"]')!);
+  fireEvent.keyDown(window, { key: "1" });
+  const status = () => document.querySelector("[data-advance-status]")?.textContent ?? "";
+  await waitFor(() => expect(status()).toMatch(/^Confirmed /));
+  await waitFor(() => expect((screen.getByRole("button", { name: "Undo last change" }) as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.click(screen.getByRole("button", { name: "More actions" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Reset all my changes…" }));
+  fireEvent.click(within(await screen.findByRole("dialog", { name: "Reset all my changes?" })).getByRole("button", { name: "Reset all my changes" }));
+  await waitFor(() => expect(reset).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(status()).toBe(""));
+});
