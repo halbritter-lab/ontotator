@@ -149,7 +149,7 @@ The text card shows everything about one text and lets you act on it.
 ### Open the text card
 
 1. Double-click a row, or focus the text name and press Enter.
-2. The card shows the path **Translation**, **Annotation**, **Finalization**. Click a part to see it.
+2. The card shows the path **Translation**, **Annotation**, **Finalization**. Click a part to see it. The card opens on the part that needs work now, or on the part with your next step.
 
 ![The text card with its three parts. The Annotation part is open and lists the annotators.](images/lead-text-card.png)
 
@@ -157,7 +157,9 @@ In the card:
 
 - **Open text** opens the [text view](#read-a-text-and-other-peoples-work-in-the-text-view).
 - **Previous text** and **Next text** walk through the table (keys `K` and `J`).
-- **Other languages** switches to another language of the same case.
+- **Other languages** switches to another language of the same case. Below 700 px width it shares a line with **Open text**.
+- Your steps stand where they act. An open problem report is a notice above the path with **Open** and **Decide on report…**. Other steps stand at the top of their part under *Next step*, for example **Resolve…** in **Translation** or **Carry to v2…** in **Annotation**. A part's other actions share its action row, for example **Open result** and **Change final…** in **Finalization**.
+- Every person's remove action is **Remove…**. Its dialog says what happens: an unsubmitted annotation is removed with its draft; other work is revoked and stays in the history.
 - In **Finalization**, **Open consolidation** opens your own running consolidation as your task; a submitted one opens read-only.
 - ✕ or Esc closes the card.
 
@@ -187,8 +189,8 @@ What for: read a text with other people's findings or the final result, and comp
 What for: see each version of a translation, its reviews and its origin.
 
 1. Open the text card and click **Translation**.
-2. The list shows each version with its origin and status. Older ones are under **Older versions**.
-3. Click **View text** to read a version, or **Translation reviews** to see every review decision.
+2. The list shows each version with its origin and status, then one row per person who worked on it: the name, the task and the status. Older ones are under **Older versions**; with parallel versions they are grouped by version chain.
+3. Click **View text** to read a version, or **Translation reviews** to see every review decision. In a reviewer's row, **Reopen…** lets them review the version again and **Remove…** removes their assignment.
 4. Click **Compare with source** to compare the translation with the source text.
 
 ### Request a translation correction

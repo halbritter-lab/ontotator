@@ -33,7 +33,7 @@ If the project rule says the consolidator may not be an annotator, you cannot ac
 What for: accept a result before everyone has submitted.
 
 1. Open the text card at **Finalization**. It lists the annotations still open.
-2. Optional: remove open work with **Remove assignment…**.
+2. Optional: remove open work with **Remove…** in the warning.
 3. Choose the result as in [Accept a result or compare results](#accept-a-result-or-compare-results).
 
 Open work stays assigned unless you remove it.
@@ -95,7 +95,7 @@ What for: confirm a final result after something changed, for example a newer su
 What for: pick another result after you already chose one.
 
 1. Open the text card at **Finalization**.
-2. Click **Change final…**.
+2. Click **Change final…** next to **Open result**.
 3. Click **Use as final** in the row of the result you want.
 
 ## Translation and text-change decisions
@@ -163,7 +163,7 @@ Annotators and reviewers can report a problem with a text. This pauses their tas
 
 What for: answer a report and let the work go on.
 
-1. On **Documents**, click **Decide on report…** in the row. Or click **Open report** in the text card.
+1. On **Documents**, click **Decide on report…** in the row. Or click **Decide on report…** in the problem report's notice of the text card.
 2. Read the report: who reported it, the reason and the history.
 3. In the common case, write an optional answer and click the close-and-resume button, for example *Close and resume the annotation of CASE-1 de by Ana Weber (ann-0004)*. The page names a task by its kind, text and owner, not by a number.
 4. For other cases, open **Other decisions** and choose one:

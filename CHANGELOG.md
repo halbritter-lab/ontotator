@@ -14,6 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 
 - README and `docs/operations.md`: releases are tagged `vX.Y.Z` from `v0.1.0` on and follow Semantic Versioning; the image build fetches the public `ontospan` repository from GitHub, a token is optional, and only the build needs network access (#300).
+- Text card: every remove action is called **Remove…** (it was **Remove assignment** in the version list and **Remove assignment…** in the Finalization warning); its dialog still says whether the assignment is revoked or removed with its draft. A submitted translation review or consolidation in the version list offers **Reopen…** like a submitted annotation, and no longer **Reassign…** (#329).
+- Text card: the lead's steps stand where they act instead of in a row above the path. **Decide on report…** is in the problem report's notice next to **Open**; **Resolve…**, **Carry to v2…**, **Resume task…** and the other steps sit at the top of their part under *Next step*, and the card opens on that part when it is the row's first step. A stage's **Assign a new review…** and **Change final…** join the part's action row, so **Open result** and **Change final…** share one row (#332).
 
 ### Fixed
 
@@ -21,6 +23,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Text card at phone width: **Final result** lists the submissions one under the other, with **Open submission** and **Use as final** on their own line, instead of a table wider than the screen that hid both buttons (#333).
 - Text card: the keyboard focus ring of the path segments is drawn inside the arrow, so the chevrons no longer cut it, and in white on the current (filled) segment, where it was invisible (#334).
 - Text card: **History** and **Details** show their name as a heading next to **Back**, and a problem report under **Details** reads as its title, a line with who reported it, when, its state and the paused tasks, and **Open report**, instead of one comma-joined line (#335).
+- Text card, **Translation**: the people of each version are person rows with the name, the task, a status pill in one column and **Reopen…** / **Remove…** on the right, as in **Annotation**, instead of a sentence with a remove button that wrapped onto its own line. **View text** is a button, the versions share the part's left edge without a second left rule, and **Older versions** groups parallel versions by chain (#329).
+- Text card, **Finalization** and footer: the decision block is no longer a box inside the part, the table's first column, **How is this counted?** and **History** / **Details** sit on the part's edge, and **Remove…** in the warning about open annotations is a button instead of grey text. The part now has one edge plus the warning's inset instead of seven different left edges (#331).
+- Text card: a stage without actions no longer leaves an empty block and an extra 16 px gap before the footer, and at phone width **Open text** and **Other languages** share one line, so the path starts about 50 px higher (#332).
 
 ## [0.9.0] - 2026-11-04
 
