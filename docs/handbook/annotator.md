@@ -7,7 +7,7 @@ New here? Start with [Your first task, start to finish](first-task.md). How to l
 ## Contents
 
 - Basics: [The editor screen](#the-editor-screen), [When is a task done?](#when-is-a-task-done), [Working time](#working-time)
-- Findings: [Mark text and add a finding](#mark-text-and-add-a-finding), [Search a term](#search-a-term), [Browse the ontology tree](#browse-the-ontology-tree), [Set values and confirm defaults](#set-values-and-confirm-defaults), [Manage mentions](#manage-mentions-of-a-finding), [Add a finding without a text span](#add-a-finding-without-a-text-span), [Change term, note or delete a finding](#change-term-note-or-delete-a-finding), [Add modifiers](#add-modifiers-to-a-finding), [Turn a finding into a modifier](#turn-a-standalone-modifier-finding-into-a-modifier), [Work in several layers](#work-in-several-layers)
+- Findings: [Mark text and add a finding](#mark-text-and-add-a-finding), [Search a term](#search-a-term), [Browse the ontology tree](#browse-the-ontology-tree), [Set values and confirm defaults](#set-values-and-confirm-defaults), [Manage mentions](#manage-mentions-of-a-finding), [Add a finding without a text span](#add-a-finding-without-a-text-span), [Change term, note or delete a finding](#change-term-note-or-delete-a-finding), [Add modifiers](#add-modifiers-to-a-finding), [Undo, redo and reset](#undo-redo-and-reset-your-changes), [Turn a finding into a modifier](#turn-a-standalone-modifier-finding-into-a-modifier), [Work in several layers](#work-in-several-layers)
 - Special tasks: [Review tool proposals](#review-tool-proposals), [Review carried findings](#review-carried-findings), [Re-create findings after a text correction](#re-create-findings-after-a-text-correction)
 - Finishing: [Submit the text](#submit-the-text), [Confirm values and acknowledge warnings](#confirm-values-and-acknowledge-warnings-in-the-submit-dialog), [View your submissions](#view-your-submissions), [Start a new work round](#start-a-new-work-round)
 - Problems: [Report a text problem](#report-a-text-problem), [Resume a paused task or withdraw a report](#resume-a-paused-task-or-withdraw-a-report)
@@ -172,9 +172,9 @@ What for: correct a finding you made.
 2. Use the action you need:
    - **Change term**, then search a new one: changes the term and keeps the mentions.
    - **Note**: type a comment. It is saved with the finding and the lead can read it.
-   - **Delete finding**, then **Yes, delete**: deletes the finding and all its mentions. The message that follows offers **Undo**; `Ctrl+Z` (macOS: `Cmd+Z`) does the same while you are not typing in a field. Undo puts the finding back with its mentions, values, note and modifiers, and selects it.
+   - **Delete finding**, then **Yes, delete**: deletes the finding and all its mentions. The message that follows offers **Undo**. Undo puts the finding back with its mentions, values, note and modifiers.
 
-Undo is offered only right after deleting, until the message closes. A restored carried finding may need a new check.
+A deleted finding can also be put back later with **Undo** in the header, see [Undo, redo and reset your changes](#undo-redo-and-reset-your-changes). A restored carried finding may need a new check.
 
 If a term has become obsolete, the panel says so. Change the term or delete the finding.
 
@@ -191,7 +191,17 @@ You can also start from the text:
 2. The panel asks which finding it belongs to. Click the finding in the list or in the text. The nearest ones are listed under **Nearest in this sentence:**.
 3. If the modifier names the finding itself, choose the option to use it as the finding instead.
 
-To change a modifier later, open its row menu: **Link a text span…**, **Remove text span** or **Remove modifier**. A removal can be undone with **Undo** or `Ctrl+Z`.
+To change a modifier later, open its row menu: **Link a text span…**, **Remove text span** or **Remove modifier**. A removal can be undone with **Undo** in the message or in the header.
+
+## Undo, redo and reset your changes
+
+What for: step back through your own changes before you submit, or start the round again.
+
+- **Undo** and **Redo** in the header step back and forward one change at a time. One change is one action: adding, deleting or moving a finding, changing its term, text span, a value, a modifier or the note, or deciding a proposal. A note counts once it is saved. Values you change on one finding in quick succession are saved together, so they are one change. Point at the button to see the step, for example "Undo: delete finding Seizure".
+- `Ctrl+Z` (macOS: `Cmd+Z`) undoes, `Ctrl+Shift+Z` (macOS: `Cmd+Shift+Z`) or `Ctrl+Y` redoes. Inside a text field these keys undo your typing instead.
+- **More** › **Reset all my changes…** returns the task to how this round started, after a confirmation: the tool proposals are all open again, the carried findings are back as they were, or the task has no findings. The reset is one step, so **Undo** brings your changes back. While nothing has changed in this round, the item is unavailable and says so.
+
+Every undo, redo and reset is saved like any other change, and the history stays after a reload. A new change after an undo drops the steps you could redo. Undo and reset are not available after submitting, in a paused or read-only task, or in a consolidation.
 
 ## Turn a standalone modifier finding into a modifier
 
@@ -426,7 +436,8 @@ What for: work without the mouse. Shortcuts are off while you type in a field or
 | `0` | Reset the decision to open, or discard your copy of the proposal |
 | `n` / `Shift+N` | Next / previous unchecked carried finding |
 | `c` | Mark carried finding as checked |
-| `Ctrl+Z` (macOS: `Cmd+Z`) | Undo deleting a finding or removing a modifier |
+| `Ctrl+Z` (macOS: `Cmd+Z`) | Undo the last change |
+| `Ctrl+Shift+Z` or `Ctrl+Y` (macOS: `Cmd+Shift+Z`) | Redo |
 | `Alt+←` / `Alt+→` | Previous / next text |
 | `Alt+P` | Switch project |
 

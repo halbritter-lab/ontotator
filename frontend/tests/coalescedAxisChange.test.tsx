@@ -76,3 +76,16 @@ it("does not send a change back to the saved value when nothing was sent", () =>
   expect(send).not.toHaveBeenCalled();
   expect(result.current.values.assertion).toBe("present");
 });
+
+it("an undo back to the values a change was sent against shows them, not the sent change (issue 320)", () => {
+  const send = vi.fn();
+  let base: Record<string, string | null> = { assertion: "present" };
+  const { result, rerender } = renderHook(() => useCoalescedAxisChange(base, send));
+  act(() => { result.current.change("assertion", "absent"); result.current.flush(); });
+  base = { assertion: "absent" };
+  rerender();
+  // Undo puts the saved values back to where the change started.
+  base = { assertion: "present" };
+  rerender();
+  expect(result.current.values.assertion).toBe("present");
+});
