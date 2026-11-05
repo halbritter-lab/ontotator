@@ -2954,7 +2954,9 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
       fireEvent.click(screen.getByRole("button", { name: "More actions" }));
       fireEvent.click(await screen.findByRole("menuitem", { name: "Reset all my changes…" }));
       const dialog = await screen.findByRole("dialog", { name: "Reset all my changes?" });
-      expect(dialog.textContent).toContain("Your 3 changes in this round are taken back");
+      // No step count: the logged steps are not the net changes.
+      expect(dialog.textContent).toContain("Your changes in this round are taken back");
+      expect(dialog.textContent).not.toMatch(/\d changes/);
       expect(dialog.textContent).toContain("You can undo the reset.");
       fireEvent.click(within(dialog).getByRole("button", { name: "Reset all my changes" }));
       await waitFor(() => expect(history).toHaveBeenCalledTimes(1));

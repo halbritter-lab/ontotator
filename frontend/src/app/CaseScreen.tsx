@@ -1755,7 +1755,17 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     noteDraftsRef.current = {}; setNoteDrafts({});
     setRequiredNoteKey(null);
     for (const id of [...copiedModifiers.current.keys()]) if (!ids.has(id)) copiedModifiers.current.delete(id);
-    if (selectedAnnotationId && !ids.has(selectedAnnotationId)) handleDeselectAll();
+    // A decision note ("Confirmed X … Next open proposal") names a decision that may be gone now.
+    setAdvanceStatus(null);
+    // The selected row is gone: a carried input then shows in another row (its finding came back or went), so
+    // the selection follows it there instead of keeping the old row's details; any other selection ends.
+    const selected = selectedListKeyRef.current;
+    const gone = selected?.startsWith("input:") || (!!selectedAnnotationId && !ids.has(selectedAnnotationId));
+    const before = gone ? carried.states.find(state => rowKeyOf(state) === selected) : undefined;
+    const after = before && deriveCarriedStates(carriedInputs, updated.round_input_resolutions ?? [], updated.annotations ?? [])
+      .find(state => state.input.input_id === before.input.input_id);
+    if (after && rowKeyOf(after) !== selected) selectListKey(rowKeyOf(after));
+    else if (selectedAnnotationId && !ids.has(selectedAnnotationId)) handleDeselectAll();
     modifierCommands.setLinkSpan(null);
   };
 
@@ -1822,10 +1832,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const outcome = view.key.mode === "proposal_check" ? "All tool proposals are open again, as at the start of this round."
       : isCarryKind(roundKind) ? "The carried findings come back as they were at the start of this round."
       : "The task has no findings again, as at the start of this round.";
-    const count = currentHistory?.undo_count ?? 0;
-    const steps = count === 1 ? "1 change" : `${count} changes`;
+    // No count: the logged steps (undo_count) include undone and reset ones, not the net changes.
     const ok = await askConfirm("Reset all my changes?",
-      `Your ${steps} in this round ${count === 1 ? "is" : "are"} taken back: findings, values, notes, modifiers and decisions. ${outcome} You can undo the reset.`,
+      `Your changes in this round are taken back: findings, values, notes, modifiers and decisions. ${outcome} You can undo the reset.`,
       "Reset all my changes");
     if (ok) await runHistory("reset_changes");
   };

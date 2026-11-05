@@ -23,9 +23,15 @@ describe("stepText (issue 320)", () => {
     expect(name(step("check_layer", "unchecked", false))).toBe("mark a layer as not checked");
   });
 
+  it("a step is named after its button", () => {
+    expect(name(step("decision", "confirmed"))).toBe("confirm proposal Seizure");
+    expect(name(step("decision", "uncertain"))).toBe("mark proposal Seizure as unresolved");
+    expect(name(step("clear_round_input_resolution"))).toBe("undo the dismissal of carried finding Seizure");
+  });
+
   it("a carried finding is checked, linked or dismissed", () => {
-    expect(name(step("resolve_round_input", "checked"))).toBe("check carried finding Seizure");
-    expect(name(step("resolve_round_input", "completed"))).toBe("check carried finding Seizure");
+    expect(name(step("resolve_round_input", "checked"))).toBe("mark carried finding Seizure as checked");
+    expect(name(step("resolve_round_input", "completed"))).toBe("mark carried finding Seizure as checked");
     expect(name(step("resolve_round_input", "linked"))).toBe("link carried finding Seizure");
     expect(name(step("resolve_round_input", "dismissed"))).toBe("dismiss carried finding Seizure");
   });

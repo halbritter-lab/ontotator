@@ -28,15 +28,16 @@ export function stepText(step: HistoryStepView, term: (layerId: string, termId: 
     case "check_layer": return step.outcome === "unchecked" ? "mark a layer as not checked" : "mark a layer as checked";
     case "decision":
       switch (step.outcome) {
-        case "confirmed": return `accept ${proposal}`;
+        case "confirmed": return `confirm ${proposal}`;
         case "rejected": return `reject ${proposal}`;
-        case "uncertain": return `mark ${proposal} as uncertain`;
-        case "changed": return `correct ${proposal}`;
+        case "uncertain": return `mark ${proposal} as unresolved`;
+        case "changed": return `edit and replace ${proposal}`;
         default: return `reset the decision on ${proposal}`;
       }
+    // Named after the buttons (Confirm, Unresolved, Edit & Replace, Mark as checked, Undo dismissal).
     // The server tells a check ("checked", also an older "completed") from a link to another finding ("linked").
-    case "resolve_round_input": return step.outcome === "dismissed" ? `dismiss ${carried}` : step.outcome === "linked" ? `link ${carried}` : `check ${carried}`;
-    case "clear_round_input_resolution": return `reopen ${carried}`;
+    case "resolve_round_input": return step.outcome === "dismissed" ? `dismiss ${carried}` : step.outcome === "linked" ? `link ${carried}` : `mark ${carried} as checked`;
+    case "clear_round_input_resolution": return `undo the dismissal of ${carried}`;
     case "resolve_reanchor": return `resolve moved ${finding}`;
     case "reset_changes": return "reset all my changes";
     default: return "the last change";
