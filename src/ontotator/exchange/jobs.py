@@ -8,6 +8,7 @@ a system admin (Q5).
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import tempfile
@@ -31,6 +32,7 @@ from ontotator.authz.policy import Access, Action, can
 from ontotator.authz.scoped import ScopedRepository, project_not_found
 from ontotator.domain.errors import AccessDenied, DomainError
 from ontotator.domain.work_rounds import CARRY_ROUND_KINDS
+from ontotator.exchange.archive import project_archive_export, project_archive_import
 from ontotator.exchange.final_export import final_t1_export
 from ontotator.exchange.final_phenopackets import final_phenopacket_export
 from ontotator.exchange.reanchor_job import reanchor
@@ -79,11 +81,32 @@ def store_file(db: Database, data: bytes) -> str:
     return digest
 
 
-def delete_unreferenced_file(conn: Connection, digest: str) -> bool:
+def store_path(db: Database, path: Path) -> str:
+    """``store_file`` of a file on disk, streamed rather than read into memory."""
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        while chunk := handle.read(1024 * 1024):
+            digest.update(chunk)
+    sha = digest.hexdigest()
+    with db.transaction() as conn:
+        Database.lock_blob(conn, sha)
+        db.blobs.put_file(path, sha)
+        conn.execute(
+            pg_insert(StoredFileRow)
+            .values(sha256=sha, size=path.stat().st_size)
+            .on_conflict_do_nothing()
+        )
+    return sha
+
+
+def delete_unreferenced_file(
+    conn: Connection, digest: str, *, ignore_job_kinds: frozenset[str] = frozenset()
+) -> bool:
     """Delete the ``stored_files`` row of a file nothing references; whether it did.
 
     References are uploads that are not discarded, job payloads and results
-    (imports, exports), proposal sets, project resources and ontology files.
+    (imports, exports) except those of jobs of ``ignore_job_kinds``, proposal
+    sets, project resources and ontology files.
     Runs in the caller's transaction; after it commits, ``unlink_deleted_files``
     removes the files. shortcut: a job payload or result is recorded after its
     ``store_file`` commits, so a discard of identical bytes in between drops the
@@ -99,10 +122,11 @@ def delete_unreferenced_file(conn: Connection, digest: str) -> bool:
                     cast(UploadRow.files, Text).contains(digest),
                 ),
                 exists().where(
+                    JobRow.kind.not_in(ignore_job_kinds),
                     or_(
                         cast(JobRow.payload, Text).contains(digest),
                         cast(JobRow.result, Text).contains(digest),
-                    )
+                    ),
                 ),
                 exists().where(ProposalSetRow.source_sha256 == digest),
                 exists().where(ProjectResourceRow.sha256 == digest),
@@ -696,4 +720,6 @@ HANDLERS: dict[str, Handler] = {
     "edit_log_export": edit_log_export,
     "work_time_export": work_time_export,
     "translation_review_export": translation_review_export,
+    "project_archive_export": project_archive_export,
+    "project_archive_import": project_archive_import,
 }

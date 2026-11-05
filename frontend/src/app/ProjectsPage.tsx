@@ -4,6 +4,7 @@ import { DataTable, EmptyState, IconCheck, TextInput, type Column } from "../ui"
 import { PROJECT_SEARCH_THRESHOLD, projectDestination, projectRoles } from "./ProjectPicker";
 import { routeHref, type Route } from "./router";
 import { AdminPracticeProjects } from "../practice/AdminPracticeProjects";
+import { ProjectArchives } from "../admin/ProjectArchives";
 import "../styles/screens/projects.css";
 
 export interface ProjectsPageProps {
@@ -13,6 +14,8 @@ export interface ProjectsPageProps {
   onNavigate: (route: Route) => void;
   /** A system administrator also gets "Show practice projects (n)" (issue 266). */
   isAdmin?: boolean;
+  /** Reload the project list (a project archive was imported). */
+  onProjectsChanged?: () => void;
 }
 
 const leads = (project: ProjectSummary) => project.can_manage && project.roles.includes("lead");
@@ -56,7 +59,7 @@ function useOpenTasks(enabled: boolean): Counts | null {
 }
 
 /** Every project of the user (spec F8, D4): the landing of a lead when no last-used project is accessible. */
-export function ProjectsPage({ projects, currentKey, onNavigate, isAdmin = false }: ProjectsPageProps): JSX.Element {
+export function ProjectsPage({ projects, currentKey, onNavigate, isAdmin = false, onProjectsChanged }: ProjectsPageProps): JSX.Element {
   const [search, setSearch] = useState("");
   const decisions = useDecisionCounts(projects);
   const openTasks = useOpenTasks(projects.length > 0);
@@ -102,5 +105,6 @@ export function ProjectsPage({ projects, currentKey, onNavigate, isAdmin = false
         empty="No matching projects." />
     </>}
     {isAdmin && <AdminPracticeProjects />}
+    {isAdmin && <ProjectArchives projects={projects} onImported={onProjectsChanged} />}
   </section>;
 }

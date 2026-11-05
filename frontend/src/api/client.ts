@@ -18,6 +18,8 @@ export type UploadCreated = components["schemas"]["UploadCreated"];
 export type UploadStatus = NonNullable<NonNullable<operations["list_uploads_api_v1_projects__key__uploads_get"]["parameters"]["query"]>["status"]>[number];
 export type ImportPlan = components["schemas"]["ImportPlan"];
 export type JobView = components["schemas"]["JobView"];
+export type ArchiveJobView = components["schemas"]["ArchiveJobView"];
+export type ArchiveJobQueued = components["schemas"]["ArchiveJobQueued"];
 export type ProjectProgress = components["schemas"]["ProjectProgress"];
 export type ProgressLedeView = components["schemas"]["ProgressLedeView"];
 export type ProgressStageView = components["schemas"]["ProgressStageView"];
@@ -644,6 +646,27 @@ export class ApiClient {
 
   async startExport(key: string, kind: ExportKind): Promise<ExportCreated> {
     return this.request<ExportCreated>(`/api/v1/projects/${encodeURIComponent(key)}/exports`, { method: "POST", body: JSON.stringify({ kind }) });
+  }
+
+  /** Project archives, system administrators only. */
+  async adminExportArchive(projectKey: string, includeOntologyFiles: boolean): Promise<ArchiveJobQueued> {
+    return this.request<ArchiveJobQueued>("/api/v1/admin/project-archives/export", { method: "POST", body: JSON.stringify({ project_key: projectKey, include_ontology_files: includeOntologyFiles }) });
+  }
+
+  async adminImportArchive(file: File, renamePseudonyms: boolean): Promise<ArchiveJobQueued> {
+    const body = new FormData();
+    body.append("file", file);
+    body.append("rename_pseudonyms", renamePseudonyms ? "true" : "false");
+    return this.request<ArchiveJobQueued>("/api/v1/admin/project-archives/import", { method: "POST", body });
+  }
+
+  async adminGetArchiveJob(id: number): Promise<ArchiveJobView> {
+    return this.request<ArchiveJobView>(`/api/v1/admin/project-archives/jobs/${id}`, { method: "GET" });
+  }
+
+  async adminDownloadArchive(id: number): Promise<DownloadPayload> {
+    const response = await this.requestResponse(`/api/v1/admin/project-archives/jobs/${id}/download`, { method: "GET" });
+    return { blob: await response.blob(), filename: attachmentFilename(response.headers.get("Content-Disposition")) };
   }
 
   async downloadJob(id: number): Promise<DownloadPayload> {

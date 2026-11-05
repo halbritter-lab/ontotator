@@ -24,6 +24,7 @@ from starlette.concurrency import run_in_threadpool
 from ontotator import __version__, settings
 from ontotator.api.about_routes import router as about_router
 from ontotator.api.admin_routes import router as admin_router
+from ontotator.api.archive_routes import router as archive_router
 from ontotator.api.auth_routes import demo_router as demo_login_router
 from ontotator.api.auth_routes import router as auth_router
 from ontotator.api.blind_ids import BlindIdsMiddleware, instance_key
@@ -67,6 +68,7 @@ from ontotator.domain.errors import (
     PayloadTooLarge,
     RevisionConflict,
 )
+from ontotator.exchange.archive import expire_archive_files
 from ontotator.jobs.queue import Handler, JobContext, JobQueue, Worker
 from ontotator.ontology.modifiers import install_service_source
 from ontotator.ontology.translations import parse_translation_name
@@ -143,6 +145,11 @@ async def _runtime_lease(app: FastAPI) -> AsyncIterator[None]:
         await run_in_threadpool(practice_sweep, app)
     except Exception:
         logger.warning("The practice project sweep failed.", exc_info=True)
+    # Issue 306: project archives past their retention go at start.
+    try:
+        await run_in_threadpool(expire_archive_files, app.state.repo.db)
+    except Exception:
+        logger.warning("The project archive sweep failed.", exc_info=True)
     try:
         yield
     finally:
@@ -581,6 +588,7 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
     app.include_router(variant_router)
     app.include_router(admin_router)
     app.include_router(ontology_router)
+    app.include_router(archive_router)
     app.include_router(final_result_router)
     app.include_router(document_row_router)
     from ontotator.api.work_plan_routes import router as work_plan_router
