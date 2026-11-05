@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
 from mcp.server.mcpserver import MCPServer
@@ -18,7 +19,7 @@ from ontotator_mcp.models import (
     PlanChoice,
     TextRef,
 )
-from ontotator_mcp.tooling import register
+from ontotator_mcp.tooling import Scope, register
 
 Project = Annotated[str, Field(description="Project key, e.g. 'ward-7'.")]
 Paths = Annotated[
@@ -36,6 +37,9 @@ PROFILE_PATH = (
     " inside the folders of ONTOTATOR_MCP_FILES_DIR."
 )
 UPLOAD_KINDS = {"text": "text", "ontospan": "t1"}
+ANY_SCOPE: tuple[Scope, ...] = ("read", "import", "export", "project-admin")
+# A token closer than this to its expiry is reported for replacement.
+EXPIRY_WARNING_DAYS = 14
 MAX_LISTED = 50
 
 
@@ -43,6 +47,42 @@ def _cut(items: Any, limit: int = MAX_LISTED) -> Any:
     if isinstance(items, list) and len(items) > limit:
         return [*items[:limit], f"... {len(items) - limit} more"]
     return items
+
+
+def utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
+def token_summary(token: dict[str, Any], *, now: datetime) -> dict[str, Any]:
+    """The token's own record as whoami reports it; never a secret."""
+    summary = {
+        key: token.get(key)
+        for key in (
+            "id",
+            "name",
+            "kind",
+            "owner",
+            "project_key",
+            "scopes",
+            "created_at",
+            "expires_at",
+            "last_used_at",
+        )
+    }
+    summary["scopes"] = list(summary["scopes"] or [])
+    expires = token.get("expires_at")
+    try:
+        left = datetime.fromisoformat(str(expires)) - now
+    except (TypeError, ValueError):
+        return summary
+    summary["expires_in_days"] = round(left.total_seconds() / 86400, 1)
+    if left.total_seconds() < EXPIRY_WARNING_DAYS * 86400:
+        summary["warning"] = (
+            "The token expires soon. A person creates its successor in the web"
+            " interface (Profile, project Settings or Server settings > API"
+            " tokens, or ontotator admin tokens create); then revoke this one."
+        )
+    return summary
 
 
 def upload_summary(view: dict[str, Any]) -> dict[str, Any]:
@@ -129,28 +169,29 @@ def _profile(
 
 
 def register_setup(server: MCPServer, api: OntotatorClient) -> None:
-    @register(server, scopes="read", effect="read")
+    @register(server, any_of=ANY_SCOPE, effect="read")
     async def whoami() -> dict[str, Any]:
-        """Who the API token acts as, and the server's version and address.
+        """The API token in use (kind, scopes, project, expiry) and who it acts as.
 
         Call this first to check that ONTOTATOR_URL and ONTOTATOR_TOKEN work.
-        A project token reaches only routes of its project, so for one this
-        reports the project the server names instead of the user.
+        Any scope but admin alone reads the token itself; ``expires_in_days`` and a warning
+        tell when to replace it. With the read scope and a token that is not
+        a project token it also names the user and the server's version.
         """
-        try:
-            me = await api.get("/api/v1/auth/me")
-        except OntotatorError as exc:
-            if exc.code != "TOKEN_NOT_ALLOWED":
-                raise
-            return {
-                "user": None,
-                "project_token": True,
-                "note": str(exc).split(": HTTP 403 TOKEN_NOT_ALLOWED. ")[-1],
-                "url": api.settings.url,
-            }
+        token = token_summary(await api.get("/api/v1/me/token"), now=utc_now())
+        result: dict[str, Any] = {"token": token, "url": api.settings.url}
+        if "read" not in token["scopes"] or token["project_key"] is not None:
+            result["user"] = None
+            result["note"] = (
+                f"A project token works in project '{token['project_key']}' only."
+                if token["project_key"] is not None
+                else "Without the read scope the token cannot read its user."
+            )
+            return result
+        me = await api.get("/api/v1/auth/me")
         about = await api.get("/api/v1/about")
         me.pop("csrf_token", None)
-        return {"user": me, "server": about, "url": api.settings.url}
+        return result | {"user": me, "server": about}
 
     @register(server, scopes="read", effect="read")
     async def list_projects() -> list[dict[str, Any]]:
@@ -375,6 +416,28 @@ def register_setup(server: MCPServer, api: OntotatorClient) -> None:
             data={"change_note": change_note},
         )
         return summary | {"local_files": [str(file) for file in files]}
+
+    @register(server, scopes=("read", "project-admin"), effect="changes")
+    async def withdraw_guideline(
+        project: Project,
+        version: Annotated[int, Field(ge=1, description="Guideline version.")],
+        reason: str | None = None,
+    ) -> dict[str, Any]:
+        """Withdraw a published guideline version, for example one published by mistake.
+
+        The version stays in the history, marked withdrawn; annotators are
+        shown the newest version that is not withdrawn. Refused with
+        GUIDELINE_VERSION_CONFLICT if another version was published meanwhile.
+        """
+        listing = await api.get(project_path(project, "guidelines"))
+        summary: dict[str, Any] = await api.post(
+            project_path(project, "guidelines", seg(version), "withdraw"),
+            {
+                "reason": reason,
+                "expected_latest_version": listing.get("latest_version"),
+            },
+        )
+        return summary
 
     @register(server, scopes="import", effect="additive")
     async def upload_texts(

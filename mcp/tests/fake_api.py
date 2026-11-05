@@ -13,10 +13,30 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
-from contract import check, match, response_schema, synth
+from contract import check, match, named, response_schema, synth
 
 TOKEN = "ott_test-token-never-shown"
 Handler = Callable[[httpx.Request], Any]
+
+
+def token_view(**fields: Any) -> dict[str, Any]:
+    """``GET /api/v1/me/token``: the token's own record (never its secret)."""
+    body = {
+        "id": 1,
+        "name": "mcp",
+        "kind": "personal",
+        "owner": "lead",
+        "owner_display_name": "Lea Lead",
+        "project_key": None,
+        "scopes": ["read", "import", "export", "project-admin"],
+        "created_at": "2026-11-01T10:00:00Z",
+        "expires_at": "2099-01-01T00:00:00Z",
+        "last_used_at": None,
+        "revoked_at": None,
+        "revoked_reason": None,
+    } | fields
+    check(body, named("TokenView"))
+    return body
 
 
 @dataclass
@@ -37,6 +57,8 @@ class FakeApi:
     def __post_init__(self) -> None:
         # Jobs finish at once unless a test says otherwise.
         self.on("GET", "/api/v1/jobs/{job_id}", self._job)
+        # A personal token with every scope but admin, far from its expiry.
+        self.on("GET", "/api/v1/me/token", token_view())
 
     @staticmethod
     def _job(request: httpx.Request) -> dict[str, Any]:
