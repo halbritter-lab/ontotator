@@ -743,6 +743,56 @@ def test_every_export_a_token_starts_runs(
         assert exporter.get(f"/api/v1/jobs/{finished.id}/download").status_code == 200
 
 
+def test_only_a_system_token_exports_a_project_archive(
+    app: FastAPI, admin: TestClient
+) -> None:
+    body = {"project_key": PROJECT, "include_ontology_files": False}
+    url = "/api/v1/admin/project-archives"
+    # The archive carries the people's e-mail addresses: export scope alone
+    # (a personal token of a system administrator) does not reach it.
+    personal = _bearer(app, _create(admin, ["read", "export"])["secret"], **ORIGIN)
+    refused = personal.post(f"{url}/export", json=body)
+    assert refused.status_code == 403
+    assert refused.json()["code"] == "TOKEN_SCOPE_MISSING"
+
+    system = _bearer(
+        app, _create(admin, ["admin"], "/api/v1/admin/tokens")["secret"], **ORIGIN
+    )
+    started = system.post(f"{url}/export", json=body)
+    assert started.status_code == 200, started.text
+    job = app.state.jobs.claim(started.json()["job_id"], "token-test")
+    finished = app.state.jobs.run(job, "token-test")
+    assert finished.status == "succeeded", finished.error
+    assert system.get(f"{url}/jobs/{finished.id}").json()["status"] == "succeeded"
+    assert system.get(f"{url}/jobs/{finished.id}/download").status_code == 200
+    # An import creates a project and accounts: browser sessions only.
+    imported = system.post(
+        f"{url}/import", files=[("file", ("a.zip", b"PK\x05\x06" + bytes(18)))]
+    )
+    assert imported.status_code == 403
+    assert imported.json()["code"] == "TOKEN_NOT_ALLOWED"
+
+
+@pytest.mark.parametrize("kind", ["personal", "project"])
+def test_workspace_history_is_session_only(
+    app: FastAPI, admin: TestClient, kind: str
+) -> None:
+    url = (
+        "/api/v1/me/tokens"
+        if kind == "personal"
+        else f"/api/v1/projects/{PROJECT}/tokens"
+    )
+    scopes = ["read", "import", "export", "project-admin"]
+    client = _bearer(app, _create(admin, scopes, url)["secret"], **ORIGIN)
+    path = "/api/v1/workspaces/1/history"
+    for response in (
+        client.get(path),
+        client.post(path, json={"command": "reset_changes"}),
+    ):
+        assert response.status_code == 403
+        assert response.json()["code"] == "TOKEN_NOT_ALLOWED"
+
+
 def test_a_project_token_polls_only_jobs_of_its_project(
     app: FastAPI, admin: TestClient
 ) -> None:

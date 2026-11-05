@@ -7,13 +7,14 @@ import hashlib
 import ipaddress
 import json
 import os
+import shutil
 import stat
 import sys
 from collections.abc import Iterator
 from datetime import UTC
 from importlib import metadata
 from pathlib import Path
-from typing import Annotated, Any, NoReturn
+from typing import Annotated, Any, Literal, NoReturn
 from urllib.parse import urlsplit
 
 import typer
@@ -674,6 +675,34 @@ def users_anonymise(
     typer.echo(f"Anonymised: now '{user.username}', pseudonym {user.pseudonym} kept.")
 
 
+@users_app.command("link-person")
+def users_link_person(
+    ctx: typer.Context,
+    pseudonym: Annotated[
+        str,
+        typer.Argument(help="The pseudonym of a pseudonym-only person of an import."),
+    ],
+    username: UsernameArgument,
+) -> None:
+    """Link a pseudonym-only person of a project archive import to an account.
+
+    The account gets the person's project roles; the person's work stays
+    under its pseudonym. A link cannot be undone.
+    """
+    from ontotator.exchange.archive import link_person
+
+    with _open_database(ctx) as db:
+        linked = link_person(db, Actor.cli(), pseudonym, username)
+    shown = "; ".join(
+        f"{key}: {', '.join(_role_word(r) for r in roles)}"
+        for key, roles in linked["roles"].items()
+    )
+    typer.echo(
+        f"Linked {linked['pseudonym']} to '{linked['username']}'"
+        f" ({shown or 'no new roles'})."
+    )
+
+
 ProjectArgument = Annotated[str, typer.Argument(help="The project key.")]
 
 
@@ -771,6 +800,139 @@ def projects_remove_member(
             revoke_assignments=revoke_assignments,
         )
     _print_roles(username.strip().lower(), project, roles)
+
+
+@projects_app.command("export-archive")
+def projects_export_archive(
+    ctx: typer.Context,
+    project: ProjectArgument,
+    out: Annotated[
+        Path,
+        typer.Argument(
+            help="The ZIP file to write; it must not exist.", dir_okay=False
+        ),
+    ],
+    without_ontology_files: Annotated[
+        bool,
+        typer.Option(
+            "--without-ontology-files",
+            help=(
+                "Leave out the ontology and translation files of the pins; the"
+                " target server must have files with the same SHA-256."
+            ),
+        ),
+    ] = False,
+    no_wait: Annotated[
+        bool,
+        typer.Option("--no-wait", help="Only queue the job for the server's worker."),
+    ] = False,
+) -> None:
+    """Write one complete project as a project archive (ZIP) for another server.
+
+    The archive holds every row of the project, the people it names (with
+    the e-mail addresses of those who worked in it) and the files it uses.
+    Keep it private. The server keeps no copy once the file is written.
+    """
+    if not no_wait and out.exists():
+        _fail("OUTPUT_EXISTS", f"{out} exists; choose another file.")
+    with _open_database(ctx) as db:
+        job = _run_job(
+            db,
+            "project_archive_export",
+            {
+                "project": project,
+                "include_ontology_files": not without_ontology_files,
+            },
+            wait=not no_wait,
+        )
+        if job is None:
+            return
+        try:
+            with (
+                db.blobs.path(job.result["sha256"]).open("rb") as stored,
+                out.open("xb") as handle,
+            ):
+                shutil.copyfileobj(stored, handle, 1024 * 1024)
+        except FileExistsError:
+            _fail("OUTPUT_EXISTS", f"{out} exists; choose another file.")
+        # The file is out: the server keeps no copy (#306).
+        from ontotator.exchange.archive import release_archive_file
+
+        release_archive_file(db, job.id)
+    result = job.result
+    typer.echo(
+        f"Wrote {out}: {_plural(result['rows'], 'row')} in "
+        f"{_plural(result['tables'], 'table')}, {_plural(result['people'], 'person')}"
+        f" named, {_plural(result['blobs'], 'file')}; SHA-256 {result['sha256']}."
+    )
+
+
+@projects_app.command("import-archive")
+def projects_import_archive(
+    ctx: typer.Context,
+    path: Annotated[
+        Path,
+        typer.Argument(
+            help="A project archive (ZIP).", exists=True, readable=True, dir_okay=False
+        ),
+    ],
+    rename_pseudonyms: Annotated[
+        bool,
+        typer.Option(
+            "--rename-pseudonyms",
+            help=(
+                "Give a person whose pseudonym is taken here a new one, and name"
+                " the matched account's pseudonym in the copied work."
+            ),
+        ),
+    ] = False,
+    no_wait: Annotated[
+        bool,
+        typer.Option("--no-wait", help="Only queue the job for the server's worker."),
+    ] = False,
+) -> None:
+    """Import a project archive as a new project and verify it.
+
+    People are matched by e-mail address; the others become pseudonym-only
+    people without login (link them later with 'admin users link-person').
+    A taken project key gets a suffix such as '-2'.
+    """
+    from ontotator.exchange.jobs import store_path
+
+    with _open_database(ctx) as db:
+        sha = store_path(db, path)
+        job = _run_job(
+            db,
+            "project_archive_import",
+            {
+                "blob_sha256": sha,
+                "filename": path.name,
+                "rename_pseudonyms": rename_pseudonyms,
+            },
+            wait=not no_wait,
+        )
+    if job is None:
+        return
+    result = job.result
+    people = result["people"]
+    renamed = (
+        f" (renamed from '{result['archived_project']}')" if result["renamed"] else ""
+    )
+    typer.echo(f"Imported project '{result['project']}'{renamed}: {result['name']}.")
+    typer.echo(
+        f"rows: {result['rows']}, verified: "
+        f"{'yes' if result['verification']['ok'] else 'no'}"
+    )
+    for item in people["mapped"]:
+        typer.echo(f"mapped\t{item['pseudonym']}\t{item.get('username', '-')}")
+    for old, new in result.get("renamed_pseudonyms", {}).items():
+        typer.echo(f"renamed\t{old}\t{new}")
+    for item in people["pseudonym_only"]:
+        linked = item.get("linked_to")
+        typer.echo(
+            f"pseudonym-only\t{item['pseudonym']}"
+            + (f"\tlinked to {linked}" if linked else "")
+        )
 
 
 @projects_app.command("refresh-translations")
@@ -968,7 +1130,7 @@ def _zip_directory(folder: Path) -> bytes:
 
 
 def _run_job(db: Database, kind: str, payload: dict[str, Any], *, wait: bool) -> Any:
-    """Enqueue a job for the project in ``payload`` and run it inline.
+    """Enqueue a job (for the project in ``payload``, if any) and run it inline.
 
     Without ``wait`` it only queues the job and returns None. A server's worker
     may take the job first; then its outcome is awaited. A failed job is
@@ -983,12 +1145,16 @@ def _run_job(db: Database, kind: str, payload: dict[str, Any], *, wait: bool) ->
     from ontotator.jobs.queue import Job, JobContext, JobQueue
     from ontotator.storage.tables import ProjectRow
 
-    with db.transaction() as conn:
-        project_id = conn.execute(
-            select(ProjectRow.id).where(ProjectRow.project_key == payload["project"])
-        ).scalar_one_or_none()
-    if project_id is None:
-        _fail("PROJECT_NOT_FOUND", f"There is no project '{payload['project']}'.")
+    project_id = None
+    if "project" in payload:
+        with db.transaction() as conn:
+            project_id = conn.execute(
+                select(ProjectRow.id).where(
+                    ProjectRow.project_key == payload["project"]
+                )
+            ).scalar_one_or_none()
+        if project_id is None:
+            _fail("PROJECT_NOT_FOUND", f"There is no project '{payload['project']}'.")
     queue = JobQueue(db, HANDLERS, context=JobContext(db=db, data_dir=db.data_dir))
     job_id = queue.enqueue(kind, payload, project_id=project_id, actor=Actor.cli())
     if not wait:
@@ -1146,6 +1312,33 @@ def import_command(
         typer.echo(f"warnings: {', '.join(result['warnings'])}")
 
 
+def _newest_final_snapshot(db: Database, project: str) -> dict[str, str]:
+    """The job payload naming the project's newest final-result snapshot."""
+    from sqlalchemy import select
+
+    from ontotator.storage.final_tables import ExportSelectionSnapshotRow
+    from ontotator.storage.tables import ProjectRow
+
+    with db.transaction() as conn:
+        row = conn.execute(
+            select(
+                ExportSelectionSnapshotRow.snapshot_id,
+                ExportSelectionSnapshotRow.sha256,
+            )
+            .join(ProjectRow, ProjectRow.id == ExportSelectionSnapshotRow.project_id)
+            .where(ProjectRow.project_key == project)
+            .order_by(ExportSelectionSnapshotRow.created_at.desc())
+            .limit(1)
+        ).first()
+    if row is None:
+        _fail(
+            "NO_FINAL_EXPORT",
+            f"Project '{project}' has no final export yet; a lead creates one "
+            "under Export > Final results.",
+        )
+    return {"project": project, "snapshot_id": row[0], "snapshot_sha256": row[1]}
+
+
 def _export(
     ctx: typer.Context, kind: str, project: str, out: Path, *, wait: bool
 ) -> None:
@@ -1153,15 +1346,24 @@ def _export(
     if wait and out.exists():
         _fail("OUTPUT_EXISTS", f"{out} exists; choose another file.")
     with _open_database(ctx) as db:
-        job = _run_job(db, kind, {"project": project}, wait=wait)
+        payload = (
+            _newest_final_snapshot(db, project)
+            if kind == "final_phenopacket_export"
+            else {"project": project}
+        )
+        job = _run_job(db, kind, payload, wait=wait)
         if job is None:
             return
         data = db.blobs.get(job.result["sha256"])
-    try:
-        with out.open("xb") as handle:
-            handle.write(data)
-    except FileExistsError:
-        _fail("OUTPUT_EXISTS", f"{out} exists; choose another file.")
+        try:
+            with out.open("xb") as handle:
+                handle.write(data)
+        except FileExistsError:
+            _fail("OUTPUT_EXISTS", f"{out} exists; choose another file.")
+        # The file is out: the server keeps no copy (#306).
+        from ontotator.exchange.archive import release_archive_file
+
+        release_archive_file(db, job.id)
     result = job.result
     if kind == "t1_export":
         counts = result["counts"]
@@ -1172,6 +1374,14 @@ def _export(
         )
     elif kind == "translation_review_export":
         typer.echo(f"Wrote {out}: {_plural(result['reviews'], 'review')}.")
+    elif kind == "final_phenopacket_export":
+        totals = result["totals"]
+        typer.echo(
+            f"Wrote {out}: {_plural(result['phenopackets'], 'Phenopacket')} of "
+            f"final export {result['snapshot_id']}, "
+            f"{_plural(totals['exported'], 'feature')}; see report.json for what "
+            "was left out."
+        )
     else:
         typer.echo(f"Wrote {out}: {_plural(result['events'], 'event')}.")
 
@@ -1192,9 +1402,19 @@ def export_command(
     project: ProjectArgument,
     out: OutOption,
     no_wait: NoWaitOption = False,
+    export_format: Annotated[
+        Literal["t1", "phenopacket"],
+        typer.Option(
+            "--format",
+            help="t1: the latest submissions as an Ontospan bundle. phenopacket: "
+            "Phenopackets (derived, lossy) of the results of the newest final "
+            "export, which a lead creates in the web app.",
+        ),
+    ] = "t1",
 ) -> None:
-    """Export the latest submissions as a T1 bundle (ZIP)."""
-    _export(ctx, "t1_export", project, out, wait=not no_wait)
+    """Export the latest submissions as an Ontospan bundle (ZIP), or Phenopackets."""
+    kind = "t1_export" if export_format == "t1" else "final_phenopacket_export"
+    _export(ctx, kind, project, out, wait=not no_wait)
 
 
 @admin_app.command("export-edit-log")

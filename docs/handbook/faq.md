@@ -180,6 +180,10 @@ Only you and the members with the **Consolidator** role are listed; the hint und
 
 Some texts still need your decision or have no final result. Either decide them in **Documents** first, or tick the box to export the ready results and leave the others out. See [Export final results](lead-results.md#export-final-results).
 
+### The Phenopackets could not be created
+
+A final result holds something a Phenopacket cannot, for example findings of one text made under two HPO releases. **Technical diagnostics** names the text. The results with receipt are not affected: choose that format to export them. See [Phenopackets](lead-results.md#phenopackets).
+
 ### I cannot remove a lead
 
 A project needs at least one lead. Add another lead first, then remove the role. See [Change a member's roles](lead-settings.md#change-a-members-roles).
@@ -201,6 +205,10 @@ This protects you from locking yourself out. Another system administrator must d
 ### An ontology upload is refused
 
 The file could not be read, is too large, or is an incomplete HPO release. Read the detail below the message and upload a complete release. See [Upload ontology releases and translation files](admin.md#upload-ontology-releases-and-translation-files).
+
+### A project archive import is refused
+
+The message says why, and nothing was imported. An incomplete or damaged file (*damaged or incomplete*): export the archive again and copy it unchanged. A file that expands too far (*refused*): ask the operator, who can raise the limit. An archive from another Ontotator version: upgrade the older server, export the project again and import the new archive. Missing ontology files: upload them on **Ontologies**, or export the archive with **Include ontology files**. Pseudonyms that are taken here: tick **Give people new pseudonyms where theirs are taken here**, or give each person the same e-mail address on both servers. See [Move a project to another server](admin.md#move-a-project-to-another-server).
 
 ### A user sent a technical report
 

@@ -372,3 +372,8 @@ chapter = "annotator.md"
 [[map]]
 glob = "frontend/src/worktime/ProjectWorkTime.tsx"
 chapter = "lead-documents.md"
+
+# Project archives (#306): export and import on the Projects page.
+[[map]]
+glob = "frontend/src/admin/ProjectArchives.tsx"
+chapter = "admin.md"

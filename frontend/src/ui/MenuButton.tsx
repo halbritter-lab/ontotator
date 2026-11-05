@@ -7,6 +7,8 @@ export interface MenuItem {
   onSelect: () => void;
   /** One line under the label on what the item does (the item's accessible description). */
   description?: string;
+  /** Not available now: stays in the menu and focusable (`aria-disabled`), choosing it does nothing. */
+  disabled?: boolean;
 }
 export interface MenuButtonProps {
   /** Accessible name of the button and the menu, e.g. "2 more actions for case-107 de". */
@@ -78,7 +80,7 @@ export function MenuButton({ label, items, buttonLabel, icon, content, className
   }, [open]);
 
   const close = () => { setOpen(null); button.current?.focus(); };
-  const choose = (item: MenuItem) => { close(); item.onSelect(); };
+  const choose = (item: MenuItem) => { if (item.disabled) return; close(); item.onSelect(); };
   const onButtonKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
     if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
     event.preventDefault();
@@ -108,6 +110,7 @@ export function MenuButton({ label, items, buttonLabel, icon, content, className
     {open && <div ref={menu} id={menuId} role="menu" aria-label={label} className="ui-menu" onKeyDown={onMenuKeyDown}
       style={{ position: "fixed", top: `${position.top}px`, left: `${position.left}px` }}>
       {items.map((item) => <button key={item.id} type="button" role="menuitem" tabIndex={-1} className="ui-menu-item" onClick={() => choose(item)}
+        aria-disabled={item.disabled ? true : undefined}
         aria-label={item.description ? item.label : undefined} aria-describedby={item.description ? `${menuId}-${item.id}` : undefined}>
         {item.label}{item.description && <span id={`${menuId}-${item.id}`} className="ui-menu-item-description">{item.description}</span>}
       </button>)}

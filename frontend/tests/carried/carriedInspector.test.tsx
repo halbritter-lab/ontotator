@@ -98,6 +98,27 @@ describe("carried finding inspector", () => {
     expect(within(section()).getByText("You changed this finding after checking it. Check it again.")).toBeDefined();
   });
 
+  it("an undo through the history that brings the dismissed finding back selects its row (issue 320)", async () => {
+    const carried = finding("carried");
+    const dismissed = { input_id: "input-1", outcome: "dismissed", reason: "Not here" };
+    vi.spyOn(api, "resolveRoundInput").mockResolvedValue(draftWith(1, [], [dismissed]));
+    vi.spyOn(api, "getHistory").mockImplementation(async () => ({ available: true, revision: 1, undo_count: 1, redo_count: 0, changed: true, redo: null,
+      undo: { before_revision: 0, after_revision: 1, action: "resolve_round_input", outcome: "dismissed", annotation_id: "carried", layer_id: null, term_id: null, commands: 1 } }) as never);
+    const undo = vi.spyOn(api, "applyHistory").mockResolvedValue(draftWith(2, [carried], []));
+    const { container } = setup({ annotations: [carried], inputs: [input("input-1", carried)] });
+    fireEvent.click(row(container, "annotation:carried"));
+    await dismissWithReason("Does not apply…", "Not here");
+    await waitFor(() => expect(pressed(container)).toEqual(["input:input-1"]));
+    const button = screen.getByRole("button", { name: "Undo last change" }) as HTMLButtonElement;
+    await waitFor(() => expect(button.disabled).toBe(false));
+    await act(async () => { fireEvent.click(button); });
+    await waitFor(() => expect(undo).toHaveBeenCalledTimes(1));
+    // The details follow the carried finding back into its row, not the dismissed input's panel.
+    await waitFor(() => expect(pressed(container)).toEqual(["annotation:carried"]));
+    expect(within(section()).getByRole("button", { name: /Mark as checked/ })).toBeDefined();
+    expect(within(section()).queryByRole("button", { name: "Undo dismissal" })).toBeNull();
+  });
+
   it("dismisses atomically and undo restores the carried finding", async () => {
     const carried = finding("carried");
     const dismissed = { input_id: "input-1", outcome: "dismissed", reason: "Not here" };

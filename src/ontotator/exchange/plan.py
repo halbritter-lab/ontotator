@@ -33,6 +33,7 @@ from ontotator.domain.work_plans import (
     import_defaults,
 )
 from ontotator.exchange.t1 import (
+    IMPORTABLE_SET_KINDS,
     ImportedProposals,
     Pin,
     check_importable,
@@ -82,6 +83,22 @@ class IncomingUnit:
     case_id: str | None = None
     variant: ontospan.Variant | None = None
     translation: dict[str, Any] | None = None
+    # (annotation_set_id, set_kind) of a delivered set without any annotation
+    # that would be importable with findings (a tool set): its tools ran on the
+    # text and proposed nothing (proposals.csv recall).
+    empty_set: tuple[str, str] | None = None
+
+
+def _silent_tool_set(aset: ontospan.AnnotationSet) -> bool:
+    """Whether an empty set is a tool run that found nothing: its kind is one
+    an import accepts with findings, it meets that kind's rule (every actor a
+    tool for ``tool_output``) and it names a tool."""
+    rule = IMPORTABLE_SET_KINDS.get(aset.set_kind)
+    return (
+        rule is not None
+        and rule(aset)
+        and any(actor.kind == "tool" for actor in aset.actors)
+    )
 
 
 @dataclass(frozen=True)
@@ -463,6 +480,9 @@ def read_t1_upload(
                 raw.document.variant,
                 raw.document.translation.model_dump(mode="json")
                 if raw.document.translation
+                else None,
+                (aset.annotation_set_id, aset.set_kind)
+                if not aset.annotations and _silent_tool_set(aset)
                 else None,
             )
         )

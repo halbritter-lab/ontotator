@@ -70,73 +70,190 @@ the importing machine's global translation files.
 5. Import one export into a fresh database. Log in as the same annotator, open
    their work and verify that its annotations and evidence are restored.
    Multiple rounds require explicit round selection.
-6. Run the analysis command below for each export. Verify expected case coverage,
-   check negative/uncertain cases, and inspect the corrected case's selected
-   revision and quoted evidence.
+6. Consolidate the two submissions of each case, accept the consolidations
+   and create the final export. Check case coverage in `index.csv`, the
+   negative and uncertain cases and the corrected case's quoted evidence in
+   `findings.csv`, and the two annotators' agreement in `agreement.csv`.
 
 This is a technical acceptance procedure. A clinician pilot is still needed to
 assess whether the guideline and workflow produce useful, consistent annotation.
 
-## Extract results for analysis
+## Results for analysis
 
-```sh
-ontotator analyze annotator-a.zip --annotator A --output annotator-a.json
-ontotator analyze annotator-b.zip --annotator B --output annotator-b.json
-```
+Ontotator has no analysis command. The results come as exports, which a
+lead creates on the Export page; the research data exports are also
+available as `ontotator admin export`, `export-edit-log` and
+`export-translation-reviews`:
 
-`--mode independent` (annotation) or `--mode review` (consolidation) restricts the
-output to that working mode. `--annotator` is repeatable and declares expected people; it
-does not remove other contributors present in the package. Without the option,
-only people represented by submissions are known. An entirely unsubmitted export
-therefore needs an expected annotator ID to produce missing-work rows. Analyze
-each per-annotator export separately; absence from another person's scoped export
-does not establish absence from the study.
+- **Final export** (ZIP, format `ontotator-final-export/v2`): the accepted
+  final result of each text and the work behind it. Its files are described
+  below.
+- **Annotation results** (T1 bundle): the latest submission of every person,
+  mode and text, final or not, for analyses outside the final results.
+- **Edit log** (JSONL): one line per edit event in order, with the time (UTC,
+  to the second), the text, the person's pseudonym, the working mode, the
+  command and the submission it went into. No user or session ids.
+- **Translation reviews**: see the
+  [translation review export guide](translation-review-export.md).
 
-The JSON format is `ontotator-analysis/v1`. It includes the source manifest,
-one row per document/person/mode/layer/scope/round, and explicit ambiguity records.
-The command validates the archive before producing output. Output is written
-atomically and cannot overwrite the input package.
+People appear as pseudonyms in every export.
 
-| Row status | Interpretation |
+### Files of the final export
+
+| File | Content |
 |---|---|
-| `missing` | No submitted work for this expected document/person/mode/layer. Drafts are not results. |
-| `checked_negative` | The text and layer were checked and the submitted result has no approved annotations or uncertain review targets. |
-| `positive` | Checked submission contains approved annotations for this layer. Clinical assertion axes still need interpretation. |
-| `uncertain` | At least one review target in this layer remains uncertain. Other approved annotations are retained separately. |
-| `unverified` | A historical submission lacks explicit text/layer checking; no confirmed negative is inferred. |
-| `ambiguous` | Multiple origin workspaces qualify for the same row; no result is automatically selected. |
+| `README.txt` | Plain-language guide to the archive, with the left-out texts and the warnings acknowledged at export. |
+| `index.csv` | One row per selected result (`row_type` `selected`), left-out text (`omitted`), earlier submission the results refer to (`provenance`) and other annotation of a text accepted directly (`compared`), naming the bundle file and entry that holds it. |
+| `selected-results.ontospan.zip` | The final results as an Ontospan bundle, one unit per result. |
+| `provenance-results.ontospan.zip` | The submissions the final results were consolidated or carried from. Not final results. |
+| `compared-results.ontospan.zip` | For a text whose result was accepted directly, without consolidation: the other people's latest annotations of it, so that the agreement covers every text. Not final results. |
+| `source-texts.jsonl` | The exact text versions, one per line; `source_text_line` in the tables names the line. |
+| `findings.csv` | One row per finding of every submission in the two bundles. |
+| `agreement.csv` | The agreement of every two annotators on each text. |
+| `agreement-summary.csv` | The agreement over the project. |
+| `proposals.csv` | Per tool and annotator what became of the tool's proposals, and per tool its precision and recall. |
+| `receipt.json` | Audit receipt: selections, warnings, omissions, review decisions, proposal checks, consolidations and the SHA-256 of every other file. |
 
-The highest draft revision is selected only within the complete origin workspace
-key. Wall-clock timestamps do not supersede revisions. Conflicting records at the
-same origin/revision fail analysis. Different scopes or review rounds remain
-separate and appear in `ambiguities`; choose the study's intended round explicitly
-before aggregation. Different working modes and people are never pooled.
+The CSV files are UTF-8 with a byte order mark and CRLF line ends. Text
+positions are Unicode code points into the canonical text of the line of
+`source-texts.jsonl` named in `source_text_line`. The tables are computed
+from the two bundles, so each row describes what the bundles hold.
 
-Annotation rows preserve term/type/layer, axes, provenance, immutable versions,
-text and ontology hashes, and referenced evidence with exact codepoint segments,
-cue segments and quoted text. `positive` means the submitted annotation set is
-nonempty; an annotation whose clinical assertion is `absent` remains an annotation
-and is not equivalent to a document with no findings.
-
-A T1 bundle names, per text, the ontology release recorded with its submission,
+An Ontospan bundle of the final export names, per text, the ontology release recorded with its submission,
 which can be older than the project's current release. If its texts were made
 under different releases, the newest keeps the layer ID and each older release
 gets a layer of its own, `<layer id>@<digest prefix>`, with its release and digest.
 
-`review_targets` retains full proposal records, including rejected and uncertain
-targets, separately from approved `annotations`. Decisions refer to those exact
-target versions. This keeps uncertainty and rejection interpretable without
-promoting their proposals into the approved result set.
+### findings.csv
 
-For agreement analysis across two exports, first verify the source package/profile
-and document text hashes correspond, then choose matching layers, working modes
-and intended rounds. Define term equality, ontology-aware matching, span matching
-and unknown-axis treatment in the study protocol. The adapter deliberately
-computes no agreement statistic and designates no participant as ground truth.
+One row per finding (annotation) of each unit of `selected-results.ontospan.zip`,
+`compared-results.ontospan.zip` and `provenance-results.ontospan.zip`, in the order of `index.csv`:
 
-Preserve uncertain targets and ambiguous branches for adjudication outside the
-automatic extraction. Hashes establish content identity; the annotator ID is the
-logged-in user's pseudonym, so it names the account that did the work.
+- the text: `case_id`, `language`, `document_id`, `text_version`,
+  `source_text_line`;
+- the submission: `row_type` (`selected`, `compared` or `provenance`), `submission_id`,
+  `submission_kind`, `archive_file`, `bundle_entry`, `pseudonym`;
+- the finding: `annotation_id`, `layer_id`, `term_id`, `term_label` (the
+  term's name in the release the text names), `ontology` and
+  `ontology_release`;
+- one `value_<axis>` column per value field (for example `value_assertion`),
+  and `defaulted_values`, the value fields nobody chose (basis `defaulted`),
+  joined by `;`;
+- `modifiers`: the modifier term IDs, joined by `;`;
+- `origin`: how the finding came about. `scratch` for annotation from
+  scratch. In a proposal check `confirmed` (a proposal confirmed as it was),
+  `changed` (the person's correction of a proposal), `added` (no proposal)
+  or `uncertain` (a proposal left uncertain; kept in the bundle with its
+  reviewer flag, but no finding of the person). In a result carried to a new
+  text version `carried` or `added`. In a consolidation `matched`, `decided`
+  or `added`, as under `consolidations` in `receipt.json`;
+- `unresolved`: `yes` when the finding carries a reviewer's uncertain flag;
+- `mentions`: each passage as `start-end`; the parts of a passage that is
+  interrupted are joined by `+`, passages by `;`, for example
+  `12-20+31-37;80-88`. `covered_text` quotes the passages in the same way.
+  A finding of the whole text without a passage has both empty. The
+  positions are authoritative when a quoted passage itself contains `+` or
+  `;`.
+
+An annotation whose assertion is `absent` is a finding; a text with no
+finding is a checked negative.
+
+### agreement.csv and agreement-summary.csv
+
+`agreement.csv` compares, on each text version, every two annotation
+submissions by different people that the bundles hold (annotation from
+scratch and proposal checks; consolidations and carried results are no
+annotation of their own). For a consolidated text these are the submissions
+the consolidation merged, and only those: work submitted on the text after
+the consolidation is not compared. For a text whose result was accepted
+directly (the selected result is an annotation from scratch or a proposal
+check), the export adds the other people's latest live annotations of it
+(`compared-results.ontospan.zip`), chosen when the export is prepared as the annotation
+results export chooses them, so that texts accepted because everyone agreed
+are not left out. A result carried to a new text version gets no compared
+annotations; its agreement is that of the earlier work it was carried from.
+Proposals a proposal check left uncertain are not counted as findings.
+
+The rows follow the text versions the bundles hold, so a text whose result
+was carried or consolidated from work on an earlier version also has rows
+for that earlier version (`text_version` and `source_text_line` name it).
+They are the agreement behind the text's final result, and for a carried
+result the only one; filter on `text_version` to compare one version only.
+
+Each row names the text, both submissions and pseudonyms, and gives the
+values of `ontospan.agreement`, the matching Ontotator's consolidation and the
+ontospan benchmark share. Findings pair only within a layer, one to one, by
+an optimal assignment:
+
+- `annotation_strict_f1`: same term, values and passages;
+- `annotation_tolerant_f1`: same term and values, overlapping passages (a
+  finding of the whole text and one with a passage also match);
+- `mention_strict_f1`, `mention_tolerant_f1`: the same per passage;
+- `term_f1`: the sets of terms with their values, regardless of passages;
+- `modifier_agreement`: the share of matched findings with the same
+  modifiers, empty without matched findings.
+
+The counts behind them follow: `findings_a`, `findings_b`, `equal`,
+`compatible`, `axis_conflicts` (same term, other values), `term_conflicts`
+(other term on overlapping text), `a_only`, `b_only`, the mention and term
+counts, `modifiers_compared` and `modifiers_agreeing`. Two submissions
+without findings agree (F1 1).
+
+`agreement-summary.csv` has two rows. `macro_mean` averages each value over
+the pairs of a text, then over the texts. `pooled` computes each value from
+the counts summed over all pairs (micro average) and lists those sums.
+Without any pair (for example when every text had one annotator), both rows
+have `pairs` 0 and empty values.
+
+Only F1 values are given. Span annotation has no countable negatives (every
+place in a text where nobody marked anything would be one), so chance-corrected
+coefficients such as Cohen's kappa are not defined for it. Define in the study
+protocol which value is the primary measure; ontology-aware matching (an
+ancestor term as a partial match) is not part of these values.
+
+### proposals.csv
+
+Rows of `row_type` `annotator`, one per tool, tool version and person, count
+the person's proposal checks in the bundles: `submissions`, `proposals` (the
+proposals decided), `confirmed`, `rejected`, `changed` and `uncertain` (the
+decision words of Ontotator; `receipt.json` writes `corrected` for
+`changed`), and `added`, the findings the person added without a proposal.
+`tool` and `tool_version` are the name and version of the proposal's actor
+as the imported bundle recorded them (the actor ID when it had no name). A
+round on a text without proposals counts its findings under an empty tool.
+
+Rows of `row_type` `source`, one per tool and version, compare the tool's
+proposals on each text with that text's selected final result, using the
+tolerant matching of `agreement.csv`: `texts` (texts with a selected result
+on which the tool had the chance to propose), `proposals`, `final_findings`,
+`matched`, `precision` (`matched / proposals`) and `recall`
+(`matched / final_findings`), pooled over the texts. The tool had the chance
+on a text when an imported proposal set of that text names it as a tool
+actor. A text where it proposed nothing in that set still counts: with no
+proposals, all its final findings are misses, so recall is not overstated by
+leaving out the texts the tool was silent on. This includes a unit whose tool
+set holds no finding at all: the import keeps no proposal set for it (the
+text is imported without proposals), but records that the set's tools ran
+there. Such a record of an earlier version of a corrected text also counts
+for the correction, as the reanchored proposals of a set with findings do.
+Texts imported before this record existed (before migration 0032) count only
+through their stored proposal sets: there a tool's silent texts are missing
+from its recall. Proposals on texts without a selected result in the export
+are not compared, nor are texts where the tool did propose but no proposal
+check worked on its proposals.
+
+Preserve uncertain targets and ambiguous branches for adjudication. Hashes
+establish content identity; the annotator ID is the logged-in user's
+pseudonym, so it names the account that did the work.
+
+## Undo, redo and reset in the edit log
+
+The edit log (**Export** › **Research data** › **Edit log**, or
+`ontotator admin export-edit-log`) has one line per edit event in order. The
+commands of one user action share a `step_id`. An undo, redo or reset in the
+editor is an event of its own (`undo_step` and `redo_step` with the `step`
+they take back or bring back, `reset_changes`), and its `state` is the content
+it put back; earlier events are never changed.
 
 ## Working time
 
@@ -192,21 +309,25 @@ decisions under `proposal_checks`, keyed by submission ID:
 - `counts`: the number of each decision and of added findings.
 
 The proposals of a round are the **newest proposal set of the document when the
-round was created**. Older sets on the same document are never targets and are
+round was created**. A set without any finding is never that set: a later run
+of a tool that found nothing on the text leaves the proposals of the earlier
+set as the targets. Older sets on the same document are never targets and are
 not in the record. A later import does not change an existing round; its
 proposals only become targets of rounds created after it.
 
-Tool precision is computed per proposal set: group the records by
+`proposals.csv` gives the counts per tool and person ready made. A precision
+from the decisions alone is computed per proposal set: group the records by
 `proposal_set.annotation_set_id` and compute
 `confirmed / (confirmed + rejected + corrected)`. A corrected proposal counts as
 not exact. `uncertain` decisions are reported separately and left out of
-precision. Added findings are what the tool missed.
+precision. Added findings are what the tool missed. The precision in
+`proposals.csv` instead compares the proposals with the final result.
 
 ## Consolidated findings in the export
 
 Since export format `ontotator-final-export/v2` (the `format` field of
 `receipt.json`), the receipt tells how each finding of a consolidation came
-about. In the T1 bundle every such finding has provenance method `merged`, so
+about. In the Ontospan bundle every such finding has provenance method `merged`, so
 the bundle alone cannot tell an automatically taken-over match from a
 consolidator's decision. `receipt.json` holds `consolidations`, keyed by the
 submission ID of every consolidation in the archive (selected and
@@ -232,3 +353,47 @@ The record is derived from the consolidation's stored decisions at export
 time, so it is also complete for consolidations submitted before v2. Version
 v1 receipts have no `consolidations`; the decisions' `consolidation.action`
 under `review_decisions` holds the same information per group there.
+
+## Phenopackets of the final results
+
+The final export can also be created as Phenopackets (export format
+`ontotator-final-phenopackets/v1`, the `format` field of `receipt.json` and
+`report.json`). It is derived from the same frozen snapshot as the final
+export, with the conversion of ontospan (`ontospan.phenopacket`), and is lossy
+by design. The complete selected results travel with it:
+
+- `phenopackets/NNNNN.json`: one Phenopacket v2 (protobuf JSON) per selected
+  result. `id` and `subject.id` are the text's exported `document_id`. Texts
+  are not grouped by patient: Ontotator has no patient identity.
+- `reports/NNNNN.json`: for the Phenopacket of the same number, the case,
+  language, submission ID and `ontospan_report`, ontospan's counts of what it
+  exported and left out (`omitted_family`, `omitted_other_person`,
+  `omitted_unknown_experiencer`, `omitted_uncertain`, `skipped_other_layers`,
+  plus `historical` and `frequency_modifiers` for exported findings that lose
+  meaning). `left_out_unresolved` counts findings left unresolved in
+  consolidation: Phenopackets cannot hold a reviewer resolution, so Ontotator
+  leaves them out before the conversion.
+- `report.json`: every text's record and the `totals`.
+- `selected-results.ontospan.zip`: the selected results as an Ontospan bundle
+  (bundle ID `selected-<snapshot ID>`). It is written with the same serializer,
+  bundle ID and time (the snapshot's) as the selected results of the final
+  export of the same snapshot, so the two files are byte for byte the same.
+  `receipt.json` names it under `selected_results` and lists its SHA-256 under
+  `files`, like every other file.
+
+Uncertain assertions are not included (ontospan's default). Each feature's
+evidence has a reference id of the form
+`urn:ontospan:selected-<snapshot ID>:<set ID>:<annotation ID>`, each part
+percent-encoded (`ontospan.parse_annotation_ref` decodes it), which names its
+finding (annotation set and annotation) in `selected-results.ontospan.zip` of
+the same ZIP.
+
+Time is carried over only as ontospan converts it. A feature's `onset` is
+filled only from an HPO onset modifier of the finding (a term under *Onset*,
+HP:0003674); nothing else sets a time. The temporality axis is not represented:
+a historical finding becomes a feature like a current one, since a Phenopacket
+cannot say "in the past", and `historical` counts these findings per text. The
+temporality of each finding stays in `selected-results.ontospan.zip`.
+
+On the command line, `ontotator admin export PROJECT OUT.zip --format phenopacket` exports the
+Phenopackets of the project's newest final-result snapshot.

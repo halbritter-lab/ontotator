@@ -172,9 +172,12 @@ test("keyboard-only path: Tab to More, the Guidelines item, Enter, Escape return
   await page.locator("body").focus();
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   await tabTo(page, entry(page));
-  // ArrowUp opens the menu at its last item ("Keyboard shortcuts (?)"); above it "Help for this screen", then the guidelines item.
-  for (let step = 0; step < 3; step += 1) await page.keyboard.press("ArrowUp");
-  await expect(page.getByRole("menuitem", { name: /^Guidelines v1/ })).toBeFocused();
+  // ArrowUp opens the menu at its last item ("Keyboard shortcuts (?)"). Above it the editor's own action "Reset all
+  // my changes…" (issue 320), then the screen's items "Help for this screen" and the guidelines item.
+  for (const name of ["Keyboard shortcuts (?)", "Reset all my changes…", "Help for this screen", /^Guidelines v1/]) {
+    await page.keyboard.press("ArrowUp");
+    await expect(page.getByRole("menuitem", { name, exact: typeof name === "string" })).toBeFocused();
+  }
   await page.keyboard.press("Enter");
   const panel = aside(page);
   await expect(panel).toBeVisible();
