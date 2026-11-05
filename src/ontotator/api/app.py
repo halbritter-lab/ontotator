@@ -67,6 +67,7 @@ from ontotator.domain.errors import (
     PayloadTooLarge,
     RevisionConflict,
 )
+from ontotator.exchange.archive import expire_archive_files
 from ontotator.jobs.queue import Handler, JobContext, JobQueue, Worker
 from ontotator.ontology.modifiers import install_service_source
 from ontotator.ontology.translations import parse_translation_name
@@ -143,6 +144,11 @@ async def _runtime_lease(app: FastAPI) -> AsyncIterator[None]:
         await run_in_threadpool(practice_sweep, app)
     except Exception:
         logger.warning("The practice project sweep failed.", exc_info=True)
+    # Issue 306: project archives past their retention go at start.
+    try:
+        await run_in_threadpool(expire_archive_files, app.state.repo.db)
+    except Exception:
+        logger.warning("The project archive sweep failed.", exc_info=True)
     try:
         yield
     finally:

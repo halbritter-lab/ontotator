@@ -1,7 +1,9 @@
 """System-admin project archives: export a project, import an archive (#306).
 
 Both run as jobs. An import job belongs to no project until it has created
-one, so archive jobs are read here and not through ``/api/v1/jobs``.
+one, so archive jobs are read here and not through ``/api/v1/jobs``. An
+exported archive can be downloaded for ``ARCHIVE_RETENTION`` (24 hours), an
+uploaded one is deleted when its import job ends.
 """
 
 from datetime import UTC, datetime
@@ -17,6 +19,12 @@ from starlette.responses import FileResponse
 from ontotator.api.identity import PrincipalDep, require_system_admin
 from ontotator.auth.audit import Actor, record_audit
 from ontotator.domain.errors import PayloadTooLarge
+from ontotator.exchange.archive import (
+    EXPORT_KIND,
+    IMPORT_KIND,
+    expire_archive_files,
+)
+from ontotator.exchange.archive_tables import ARCHIVE_JOB_KINDS
 from ontotator.exchange.jobs import store_file
 from ontotator.storage.repository import Repository
 from ontotator.storage.tables import JobRow, ProjectRow
@@ -25,9 +33,7 @@ router = APIRouter(
     prefix="/api/v1/admin/project-archives", tags=["admin-project-archives"]
 )
 
-EXPORT_KIND = "project_archive_export"
-IMPORT_KIND = "project_archive_import"
-ARCHIVE_KINDS = frozenset({EXPORT_KIND, IMPORT_KIND})
+ARCHIVE_KINDS = ARCHIVE_JOB_KINDS
 
 
 class ArchiveExportRequest(BaseModel):
@@ -61,6 +67,7 @@ def export_archive(
     """Queue the archive of one project (``project_archive_export``)."""
     require_system_admin(principal)
     db = request.app.state.repo.db
+    expire_archive_files(db)
     with db.transaction() as conn:
         project_id = Repository._project_id(conn, body.project_key)
         practice = conn.execute(
@@ -158,8 +165,13 @@ def get_archive_job(
 def download_archive(
     job_id: int, principal: PrincipalDep, request: Request
 ) -> FileResponse:
-    """The ZIP of a finished export job; audited as ``project.export_download``."""
+    """The ZIP of a finished export job; audited as ``project.export_download``.
+
+    410 once the archive was deleted (``ARCHIVE_RETENTION`` after the export,
+    or at an account erasure).
+    """
     require_system_admin(principal)
+    expire_archive_files(request.app.state.repo.db)
     row = _job(request, job_id)
     result = row.result if isinstance(row.result, dict) else {}
     sha = result.get("sha256")
@@ -172,12 +184,19 @@ def download_archive(
         or not isinstance(key, str)
     ):
         raise HTTPException(status_code=404, detail="Job not found.")
+    gone = HTTPException(
+        status_code=410,
+        detail="The archive was deleted (24 hours after the export, or when an"
+        " account was erased). Export the project again.",
+    )
+    if result.get("file_deleted_at"):
+        raise gone
     db = request.app.state.repo.db
     try:
         path = db.blobs.path(sha)
         stat = path.stat()
     except (ValueError, OSError):
-        raise HTTPException(status_code=404, detail="Job not found.") from None
+        raise gone from None
     safe_key = "".join(
         c if c.isascii() and (c.isalnum() or c in "-_") else "_" for c in key
     )

@@ -9,13 +9,16 @@ it is classified.
 from pathlib import Path
 
 from pg_harness import database_for
-from sqlalchemy import Integer, text
+from sqlalchemy import JSON, Integer, String, text
 
 from ontotator.exchange.archive_tables import (
     ARCHIVED,
     EXCLUDED,
     EXTRA_REFERENCES,
     PLAIN_INTEGER_COLUMNS,
+    PSEUDONYM_COLUMNS,
+    PSEUDONYM_LABEL_COLUMNS,
+    WORKSPACE_KEY_COLUMNS,
     all_tables,
     archived_names,
     column_roles,
@@ -142,5 +145,27 @@ def test_insert_order_puts_referred_tables_first() -> None:
             if target in position and target != name:
                 assert position[target] < position[name], (name, target)
     for extra in EXTRA_REFERENCES:
-        if extra.target in position:
+        # A job names the job it came from: inserted in id order instead.
+        if extra.target in position and extra.target != extra.table:
             assert position[extra.target] < position[extra.table]
+
+
+def test_every_column_that_can_name_a_person_is_classified() -> None:
+    """A text column named like an annotator id, pseudonym, workspace key or
+    person label is one ``--rename-pseudonyms`` knows; any other text column
+    is free text it never changes."""
+    classified = PSEUDONYM_COLUMNS | PSEUDONYM_LABEL_COLUMNS | WORKSPACE_KEY_COLUMNS
+    looks_like = ("annotator", "reviewer_id", "pseudonym", "workspace_key", "_by_label")
+    unclassified = [
+        f"{name}.{column.name}"
+        for name in archived_names()
+        if name != "audit_events"
+        for column in table(name).columns
+        if isinstance(column.type, String)
+        and not isinstance(column.type, JSON)
+        and any(part in column.name for part in looks_like)
+        and (name, column.name) not in classified
+    ]
+    assert unclassified == []
+    for name, column in classified:
+        assert column in {c.name for c in table(name).columns}, (name, column)

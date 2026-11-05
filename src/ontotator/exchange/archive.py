@@ -8,12 +8,18 @@ A project archive is a ZIP:
   and row counts of every table;
 - ``tables/<table>.jsonl``: the project's rows of each table of
   ``archive_tables.ARCHIVED``, one JSON object per line, sorted;
-- ``people.jsonl``: every account the rows name (id, username, pseudonym,
-  e-mail), the only personal data of the archive;
+- ``people.jsonl``: every account the rows name (id, username, pseudonym;
+  the e-mail address only of people named in the project's work, not of
+  those only in its audit trail or job records), the only personal data of
+  the archive;
 - ``ontology_files.jsonl`` and ``blobs/<sha256>``: the stored files the rows
-  refer to (uploaded texts, captured search resources, imported bundles,
-  export results) and the ontology and translation files of the pins, unless
-  the ontology files were left out.
+  refer to (``archive_tables.BLOB_REFERENCES``: uploaded texts and bundles,
+  captured search resources) and the ontology and translation files of the
+  pins, unless the ontology files were left out. Export results and earlier
+  archives are never included.
+
+The manifest is not signed: it detects a damaged or incomplete archive, not
+a deliberate change by someone who rewrites the manifest as well.
 
 The rows keep the source server's ids. The import renumbers every generated
 id, rewrites the references and the project, maps people
@@ -21,8 +27,9 @@ id, rewrites the references and the project, maps people
 to the archive's ids and compares every table with the manifest; a
 difference rolls the import back. Immutable records keep their content and
 timestamps. Only a taken project key, server-wide ids this server already
-has and, on request, taken pseudonyms are replaced in the copied content; no
-content hash is recomputed.
+has and, on request, taken pseudonyms in the identity fields of
+``archive_tables.PSEUDONYM_COLUMNS`` and its siblings are replaced in the
+copied content; free text never changes and no content hash is recomputed.
 """
 
 from __future__ import annotations
@@ -31,19 +38,23 @@ import hashlib
 import io
 import json
 import re
+import shutil
 import tempfile
 import zipfile
-from collections.abc import Callable, Iterable, Mapping
+import zlib
+from collections.abc import Callable, Iterable, Iterator, Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
-from functools import cached_property
+from datetime import UTC, datetime, timedelta
+from functools import cache, cached_property
 from pathlib import Path
-from typing import Any
+from typing import IO, Any
 from uuid import uuid4
 
 from alembic.script import ScriptDirectory
 from sqlalchemy import (
     JSON,
+    ColumnElement,
     Connection,
     DateTime,
     Table,
@@ -52,6 +63,7 @@ from sqlalchemy import (
     insert,
     select,
     text,
+    union,
     update,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -68,13 +80,21 @@ from ontotator.auth.audit import Actor, record_audit
 from ontotator.authz.memberships import grant_roles
 from ontotator.domain.errors import DomainError
 from ontotator.exchange.archive_tables import (
+    ARCHIVE_JOB_KINDS,
     ARCHIVED,
+    AUDIT_TARGET_ROWS,
+    BLOB_REFERENCES,
     EXTRA_REFERENCES,
     PROJECTS,
+    PSEUDONYM_COLUMNS,
+    PSEUDONYM_JSON_KEYS,
+    PSEUDONYM_LABEL_COLUMNS,
     USERS,
+    WORKSPACE_KEY_COLUMNS,
     ArchivedTable,
     ExtraReference,
     column_roles,
+    extra_self_references,
     global_ids,
     identity_column,
     insert_order,
@@ -82,20 +102,26 @@ from ontotator.exchange.archive_tables import (
     table,
 )
 from ontotator.jobs.queue import Job, JobContext, StructuredJobError
+from ontotator.settings import ARCHIVE_MAX_EXPANDED_ENV, archive_max_expanded_bytes
 from ontotator.storage.database import Database
 from ontotator.storage.repository import _decode_key_str, _key_str, _lock_id
 from ontotator.storage.schema import alembic_config, current_revision
 from ontotator.storage.tables import (
+    AnnotationSnapshotRow,
     AuditEventRow,
+    DocumentRow,
+    DraftRow,
     ImportedPersonRow,
     InstanceStateRow,
     JobRow,
     OntologyFileRow,
     ProjectMembershipRow,
-    ProjectOntologyRow,
     ProjectResourceRow,
     ProjectRow,
+    ReviewDecisionRow,
+    SearchEventRow,
     StoredFileRow,
+    SubmissionRow,
     UserRow,
 )
 
@@ -104,7 +130,25 @@ SCHEMA_VERSION = 1
 MANIFEST = "manifest.json"
 PEOPLE = "people.jsonl"
 ONTOLOGY_FILES = "ontology_files.jsonl"
-_DIGEST = re.compile(r"\b[0-9a-f]{64}\b")
+EXPORT_KIND = "project_archive_export"
+IMPORT_KIND = "project_archive_import"
+# The only file names an archive has: no directories, no "..", no absolute
+# paths, nothing an extraction could misplace.
+_FILE_NAME = re.compile(
+    r"manifest\.json|people\.jsonl|ontology_files\.jsonl"
+    r"|tables/[a-z][a-z0-9_]*\.jsonl|blobs/[0-9a-f]{64}"
+)
+# Import limits, from the ZIP's own entries: the total expanded size
+# (ONTOTATOR_ARCHIVE_MAX_EXPANDED_BYTES, default 8 GiB) and, for an entry of
+# more than 1 MiB, its compression ratio.
+MAX_RATIO = 200
+RATIO_FROM_BYTES = 1024 * 1024
+MAX_MANIFEST_BYTES = 64 * 1024 * 1024
+_CHUNK_BYTES = 1024 * 1024
+# An exported archive is kept this long after its job finished, then deleted
+# (and at once when an account is erased); an uploaded archive goes when its
+# import job finished.
+ARCHIVE_RETENTION = timedelta(hours=24)
 # A JSON column holding the JSON value ``null`` (SQL NULL is ``null``).
 JSON_NULL = {"$json_null": True}
 _ONTOLOGY_FILE_COLUMNS = (
@@ -117,7 +161,7 @@ _ONTOLOGY_FILE_COLUMNS = (
     "uploaded_at",
 )
 # Upgrade functions of older archive schema versions: version -> function
-# returning the manifest and files of the next version. None yet.
+# returning the manifest and the (non-blob) files of the next version. None yet.
 UPGRADES: dict[
     int,
     Callable[
@@ -194,11 +238,20 @@ def instance_id(conn: Connection) -> str:
 
 
 def _rows(
-    conn: Connection, entry: ArchivedTable, project_id: int
+    conn: Connection,
+    entry: ArchivedTable,
+    project_id: int,
+    *,
+    where: Any = None,
 ) -> list[dict[str, Any]]:
-    """The project's rows of one table, by column name, sessions left out."""
+    """The project's rows of one table, by column name, sessions left out.
+
+    ``where`` replaces the project condition (the jobs rows refer to).
+    """
     t = table(entry.name)
-    if entry.name == PROJECTS:
+    if where is not None:
+        pass
+    elif entry.name == PROJECTS:
         where = t.c.id == project_id
     elif entry.parent is not None:
         column, parent_name, parent_column = entry.parent
@@ -210,7 +263,12 @@ def _rows(
         where = t.c.project_id == project_id
     if entry.name == "jobs":
         # Finished jobs only: the archive's own export job is still running.
-        where = where & t.c.status.in_(("succeeded", "failed"))
+        # Archive jobs never: an archive would carry the earlier archives.
+        where = (
+            where
+            & t.c.status.in_(("succeeded", "failed"))
+            & t.c.kind.not_in(ARCHIVE_JOB_KINDS)
+        )
     roles = column_roles(entry.name)
     json_columns = [c for c in t.columns if isinstance(c.type, JSON)]
     flags = [func.jsonb_typeof(c) == "null" for c in json_columns]
@@ -283,12 +341,194 @@ def _people_ids(name: str, rows: list[dict[str, Any]]) -> set[int]:
     return ids
 
 
+def _referenced(name: str, rows: list[dict[str, Any]], target: str) -> set[int]:
+    """The ids of ``target`` rows the rows of one table must have with them:
+    foreign keys and ``EXTRA_REFERENCES`` without ``orphans``."""
+    ids: set[int] = set()
+
+    def collect(value: int) -> int:
+        ids.add(value)
+        return value
+
+    for column, role in column_roles(name).items():
+        if role.kind != "row" or role.target != target or _orphans(name, column):
+            continue
+        for row in rows:
+            if row.get(column) is not None:
+                _json_ids(row[column], collect)
+    for extra in EXTRA_REFERENCES:
+        if (
+            extra.table == name
+            and extra.target == target
+            and extra.path
+            and not extra.orphans
+        ):
+            for row in rows:
+                _at_path(row.get(extra.column), extra.path, collect)
+    return ids
+
+
+def _strings_at(value: Any, path: tuple[str, ...]) -> Iterator[str]:
+    """The strings at ``path`` in a column value (``*``: each list item)."""
+    if not path:
+        if isinstance(value, str):
+            yield value
+        return
+    head, rest = path[0], path[1:]
+    if head == "*" and isinstance(value, list):
+        for item in value:
+            yield from _strings_at(item, rest)
+    elif isinstance(value, dict) and head in value:
+        yield from _strings_at(value[head], rest)
+
+
+def _blob_refs(found: Mapping[str, list[dict[str, Any]]]) -> set[str]:
+    """The stored files the rows refer to, from ``BLOB_REFERENCES`` only."""
+    digests: set[str] = set()
+    for name, column, path in BLOB_REFERENCES:
+        for row in found.get(name, []):
+            digests.update(_strings_at(row.get(column), path))
+    return {d for d in digests if re.fullmatch(r"[0-9a-f]{64}", d)}
+
+
+# Pseudonyms in the work --------------------------------------------------
+
+
+@cache
+def _json_columns(name: str) -> frozenset[str]:
+    return frozenset(c.name for c in table(name).columns if isinstance(c.type, JSON))
+
+
+def _in_key(value: str, fn: Callable[[str], str]) -> str:
+    """A stored workspace key with its annotator id mapped by ``fn``."""
+    if "|" not in value and value.count(":") != 5:
+        return value
+    try:
+        key = _decode_key_str(value)
+    except (DomainError, ValueError):
+        return value
+    if _key_str(key) != value:
+        return value
+    new = fn(key.annotator_id)
+    if new == key.annotator_id:
+        return value
+    return _key_str(key.model_copy(update={"annotator_id": new}))
+
+
+def _json_people(value: Any, fn: Callable[[str], str]) -> Any:
+    if isinstance(value, dict):
+        return {
+            k: fn(v)
+            if k in PSEUDONYM_JSON_KEYS and isinstance(v, str)
+            else _json_people(v, fn)
+            for k, v in value.items()
+        }
+    if isinstance(value, list):
+        return [_json_people(item, fn) for item in value]
+    if isinstance(value, str):
+        return _in_key(value, fn)
+    return value
+
+
+def _people_in_row(
+    name: str,
+    row: Mapping[str, Any],
+    fn: Callable[[str], str],
+    *,
+    labels: bool = True,
+) -> dict[str, Any]:
+    """``row`` with every pseudonym of its identity fields mapped by ``fn``.
+
+    Identity fields only: ``PSEUDONYM_COLUMNS``, ``WORKSPACE_KEY_COLUMNS``
+    and, in JSON columns, ``PSEUDONYM_JSON_KEYS`` and whole workspace keys.
+    ``labels``: also ``PSEUDONYM_LABEL_COLUMNS``. Free text (document texts,
+    notes, guidelines, comments) never changes. The audit trail records what
+    happened and keeps its names.
+    """
+    out = dict(row)
+    if name == "audit_events":
+        return out
+    json_columns = _json_columns(name)
+    for column, value in row.items():
+        if value is None:
+            continue
+        if isinstance(value, str) and (
+            (name, column) in PSEUDONYM_COLUMNS
+            or (labels and (name, column) in PSEUDONYM_LABEL_COLUMNS)
+        ):
+            out[column] = fn(value)
+        elif (name, column) in WORKSPACE_KEY_COLUMNS and isinstance(value, str):
+            out[column] = _in_key(value, fn)
+        elif column in json_columns:
+            out[column] = _json_people(value, fn)
+    return out
+
+
+def _identities(tables: Mapping[str, list[dict[str, Any]]]) -> set[str]:
+    """Every pseudonym (annotator id) the archived work names a person by
+    (display labels aside)."""
+    found: set[str] = set()
+
+    def collect(value: str) -> str:
+        if value:
+            found.add(value)
+        return value
+
+    for name, rows in tables.items():
+        for row in rows:
+            _people_in_row(name, row, collect, labels=False)
+    return found
+
+
 @dataclass
 class BuiltArchive:
     path: Path
     sha256: str
     size: int
     manifest: dict[str, Any]
+
+
+def _file_sha(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        while chunk := handle.read(_CHUNK_BYTES):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _with_jobs_referred_to(
+    conn: Connection, found: dict[str, list[dict[str, Any]]], project_id: int, key: str
+) -> None:
+    """Add the jobs rows refer to that name no project (a T1 import from the
+    command line, ...) as jobs of the project: an archive without them could
+    not be imported.
+
+    Raises:
+        DomainError: ``ARCHIVE_JOBS_RUNNING`` while such a job is not finished.
+    """
+    jobs = found["jobs"]
+    have = {int(row["id"]) for row in jobs}
+    while True:
+        wanted: set[int] = set()
+        for name, rows in found.items():
+            wanted |= _referenced(name, rows, "jobs")
+        wanted -= have
+        if not wanted:
+            return
+        more = _rows(
+            conn, ArchivedTable("jobs"), project_id, where=JobRow.id.in_(sorted(wanted))
+        )
+        missing = wanted - {int(row["id"]) for row in more}
+        if missing:
+            raise DomainError(
+                "ARCHIVE_JOBS_RUNNING",
+                f"Rows of '{key}' refer to job(s) {sorted(missing)}, which are"
+                " queued or running; archive the project once they finished.",
+            )
+        for row in more:
+            row["project_id"] = project_id
+        jobs.extend(more)
+        have |= {int(row["id"]) for row in more}
 
 
 def build_archive(
@@ -307,7 +547,7 @@ def build_archive(
     Raises:
         DomainError: ``PROJECT_NOT_FOUND``; ``ARCHIVE_PRACTICE_PROJECT`` for a
             practice project; ``ARCHIVE_JOBS_RUNNING`` while a job of the
-            project is queued or running.
+            project, or one its rows refer to, is queued or running.
     """
     created = (now or datetime.now(UTC)).astimezone(UTC).replace(microsecond=0)
     files: dict[str, bytes] = {}
@@ -343,22 +583,32 @@ def build_archive(
                 " archive the project once they finished.",
             )
         revision = current_revision(conn)
+        found = {entry.name: _rows(conn, entry, project.id) for entry in ARCHIVED}
+        _with_jobs_referred_to(conn, found, project.id, project_key)
         rows: dict[str, int] = {}
         columns: dict[str, list[str]] = {}
         people: set[int] = set()
+        workers: set[int] = set()
         for entry in ARCHIVED:
-            found = _rows(conn, entry, project.id)
-            data = jsonl(found)
+            data = jsonl(found[entry.name])
             files[table_file(entry.name)] = data
-            rows[entry.name] = len(found)
+            rows[entry.name] = len(found[entry.name])
             columns[entry.name] = [c.name for c in table(entry.name).columns]
-            people |= _people_ids(entry.name, found)
+            named = _people_ids(entry.name, found[entry.name])
+            people |= named
+            if entry.name not in {"audit_events", "jobs"}:
+                workers |= named
+        # E-mail addresses only of the people who worked in the project
+        # (members, assignees, authors, ...): the import matches them to
+        # their accounts. People named only in the audit trail or job records
+        # (an administrator of the source server) keep their pseudonym and
+        # username and become pseudonym-only people on another server.
         person_rows = [
             {
                 "id": row.id,
                 "username": row.username,
                 "pseudonym": row.pseudonym,
-                "email": row.email,
+                "email": row.email if row.id in workers else None,
                 "anonymised": row.anonymised_at is not None,
             }
             for row in conn.execute(
@@ -372,18 +622,7 @@ def build_archive(
             )
         ]
         files[PEOPLE] = jsonl(person_rows)
-        mentioned: set[str] = set()
-        for name, data in files.items():
-            if name != PEOPLE:
-                mentioned.update(_DIGEST.findall(data.decode("utf-8")))
-        pins = conn.execute(
-            select(
-                ProjectOntologyRow.sha256, ProjectOntologyRow.superseded_sha256
-            ).where(ProjectOntologyRow.project_id == project.id)
-        ).all()
-        for pin in pins:
-            mentioned.add(pin.sha256)
-            mentioned.update(str(d) for d in pin.superseded_sha256)
+        mentioned = _blob_refs(found)
         stored = set(
             conn.execute(
                 select(StoredFileRow.sha256).where(
@@ -449,13 +688,15 @@ def build_archive(
         for name, data in sorted(files.items()):
             archive.writestr(zipfile.ZipInfo(name, stamp), data, zipfile.ZIP_DEFLATED)
         for digest in sorted(blobs):
-            archive.writestr(
-                zipfile.ZipInfo(blob_file(digest), stamp),
-                db.blobs.get(digest),
-                zipfile.ZIP_DEFLATED,
-            )
-    data = target.read_bytes()
-    return BuiltArchive(target, _sha(data), len(data), manifest)
+            info = zipfile.ZipInfo(blob_file(digest), stamp)
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.file_size = db.blobs.path(digest).stat().st_size
+            with (
+                db.blobs.path(digest).open("rb") as reader,
+                archive.open(info, "w", force_zip64=True) as writer,
+            ):
+                shutil.copyfileobj(reader, writer, _CHUNK_BYTES)
+    return BuiltArchive(target, _file_sha(target), target.stat().st_size, manifest)
 
 
 # Reading an archive ----------------------------------------------------
@@ -463,44 +704,137 @@ def build_archive(
 
 @dataclass
 class Archive:
-    """A checked archive: every file matches the manifest."""
+    """A checked archive: every file matches the manifest.
+
+    ``blobs`` are files in a temporary folder that lives as long as the
+    ``open_archive`` block.
+    """
 
     manifest: dict[str, Any]
     tables: dict[str, list[dict[str, Any]]]
     people: list[dict[str, Any]]
     ontology_files: list[dict[str, Any]]
-    blobs: dict[str, bytes]
+    blobs: dict[str, Path]
     sha256: str
 
 
-def _tampered(detail: str) -> DomainError:
+def _damaged(detail: str) -> DomainError:
     return DomainError(
         "ARCHIVE_TAMPERED",
-        f"The archive does not match its manifest: {detail}. Nothing was imported.",
+        f"The archive is damaged or incomplete: {detail}. Nothing was imported."
+        " (The manifest is not signed: this check finds damage, not a deliberate"
+        " change.)",
     )
 
 
-def read_archive(data: bytes) -> Archive:
-    """Open and check an archive: format, version, every file's digest and size.
+def _too_large(detail: str) -> DomainError:
+    return DomainError(
+        "ARCHIVE_TOO_LARGE", f"The archive is refused: {detail}. Nothing was imported."
+    )
+
+
+def _copy_entry(archive: zipfile.ZipFile, info: zipfile.ZipInfo, out: IO[bytes]) -> str:
+    """Stream one entry to ``out``, at most the size its header gives; its
+    SHA-256."""
+    digest = hashlib.sha256()
+    written = 0
+    try:
+        with archive.open(info) as reader:
+            while chunk := reader.read(_CHUNK_BYTES):
+                written += len(chunk)
+                if written > info.file_size:
+                    raise _too_large(f"{info.filename} expands beyond its header")
+                digest.update(chunk)
+                out.write(chunk)
+    except (zipfile.BadZipFile, zlib.error, EOFError, OSError) as error:
+        raise _damaged(f"{info.filename} cannot be read ({error})") from None
+    if written != info.file_size:
+        raise _damaged(f"{info.filename} is shorter than its header says")
+    return digest.hexdigest()
+
+
+def _read_entry(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> tuple[bytes, str]:
+    buffer = io.BytesIO()
+    digest = _copy_entry(archive, info, buffer)
+    return buffer.getvalue(), digest
+
+
+def _check_entries(infos: list[zipfile.ZipInfo], limit: int) -> None:
+    """Names and sizes from the ZIP's own directory, before anything is read.
 
     Raises:
-        DomainError: ``ARCHIVE_INVALID`` (not an archive),
-            ``ARCHIVE_FORMAT_UNSUPPORTED`` (another format or schema version
-            without an upgrade function) or ``ARCHIVE_TAMPERED`` (a file is
-            missing, extra or differs from the manifest).
+        DomainError: ``ARCHIVE_INVALID`` (a name an archive never has, a
+            duplicate or encrypted entry), ``ARCHIVE_TOO_LARGE`` (more than
+            ``limit`` bytes in total or an entry above ``MAX_RATIO``).
     """
+    seen: set[str] = set()
+    for info in infos:
+        name = info.filename
+        if info.is_dir() or not _FILE_NAME.fullmatch(name):
+            raise DomainError(
+                "ARCHIVE_INVALID",
+                f"The archive holds {name!r}, a name a project archive never has."
+                " Nothing was imported.",
+            )
+        if name in seen:
+            raise DomainError("ARCHIVE_INVALID", f"The archive holds {name!r} twice.")
+        if info.flag_bits & 0x1:
+            raise DomainError("ARCHIVE_INVALID", f"{name} is encrypted.")
+        seen.add(name)
+        if info.file_size > RATIO_FROM_BYTES and info.file_size > MAX_RATIO * max(
+            info.compress_size, 1
+        ):
+            raise _too_large(
+                f"{name} expands {info.file_size // max(info.compress_size, 1)}-fold"
+                f" (compression ratio above {MAX_RATIO})"
+            )
+    total = sum(info.file_size for info in infos)
+    if total > limit:
+        raise _too_large(
+            f"it expands to {total} bytes, more than the {limit} allowed"
+            f" ({ARCHIVE_MAX_EXPANDED_ENV})"
+        )
+
+
+@contextmanager
+def open_archive(source: Path | bytes) -> Iterator[Archive]:
+    """Open and check an archive: names, sizes, format, version, every file's
+    digest and size. Stored files are streamed to a temporary folder.
+
+    Raises:
+        DomainError: ``ARCHIVE_INVALID`` (not an archive, or a file name an
+            archive never has), ``ARCHIVE_TOO_LARGE`` (expands beyond the
+            limit or too far per byte), ``ARCHIVE_FORMAT_UNSUPPORTED``
+            (another format or schema version without an upgrade function) or
+            ``ARCHIVE_TAMPERED`` (a file is missing, extra or differs from the
+            manifest: a damaged archive).
+    """
+    limit = archive_max_expanded_bytes()
+    with tempfile.TemporaryDirectory(prefix="ontotator-archive-") as tmp:
+        folder = Path(tmp)
+        if isinstance(source, bytes):
+            path = folder / "archive.zip"
+            path.write_bytes(source)
+        else:
+            path = source
+        yield _read_archive(path, folder, limit)
+
+
+def _read_archive(path: Path, folder: Path, limit: int) -> Archive:
     try:
-        archive = zipfile.ZipFile(io.BytesIO(data))
-    except zipfile.BadZipFile:
+        archive = zipfile.ZipFile(path)
+    except (zipfile.BadZipFile, OSError):
         raise DomainError("ARCHIVE_INVALID", "The file is not a ZIP archive.") from None
     with archive:
-        infos = {
-            info.filename: info for info in archive.infolist() if not info.is_dir()
-        }
-        if MANIFEST not in infos:
+        infos = archive.infolist()
+        _check_entries(infos, limit)
+        by_name = {info.filename: info for info in infos}
+        if MANIFEST not in by_name:
             raise DomainError("ARCHIVE_INVALID", "The archive has no manifest.json.")
+        if by_name[MANIFEST].file_size > MAX_MANIFEST_BYTES:
+            raise _too_large("manifest.json is too large")
         try:
-            manifest = json.loads(archive.read(MANIFEST))
+            manifest = json.loads(_read_entry(archive, by_name[MANIFEST])[0])
         except ValueError:
             raise DomainError("ARCHIVE_INVALID", "manifest.json is not JSON.") from None
         if not isinstance(manifest, dict) or manifest.get("format") != FORMAT:
@@ -522,24 +856,39 @@ def read_archive(data: bytes) -> Archive:
             )
         listed = manifest.get("files")
         if not isinstance(listed, dict):
-            raise _tampered("no file list")
-        names = set(infos) - {MANIFEST}
+            raise _damaged("the manifest lists no files")
+        for name in listed:
+            if name == MANIFEST or not _FILE_NAME.fullmatch(str(name)):
+                raise DomainError(
+                    "ARCHIVE_INVALID",
+                    f"The manifest lists {name!r}, a name a project archive never"
+                    " has. Nothing was imported.",
+                )
+        names = set(by_name) - {MANIFEST}
         if names != set(listed):
             extra = sorted(names - set(listed))
             missing = sorted(set(listed) - names)
-            raise _tampered(f"extra files {extra}, missing files {missing}")
+            raise _damaged(f"extra files {extra}, missing files {missing}")
         contents: dict[str, bytes] = {}
-        for name, expected in listed.items():
-            if not isinstance(expected, dict) or infos[name].file_size != expected.get(
-                "size"
-            ):
-                raise _tampered(f"{name} has another size")
-            content = archive.read(name)
-            if _sha(content) != expected.get("sha256"):
-                raise _tampered(f"{name} has another SHA-256")
-            if name.startswith("blobs/") and name != blob_file(_sha(content)):
-                raise _tampered(f"{name} is not named by its SHA-256")
-            contents[name] = content
+        blobs: dict[str, Path] = {}
+        (folder / "blobs").mkdir(exist_ok=True)
+        for name, expected in sorted(listed.items()):
+            info = by_name[name]
+            if not isinstance(expected, dict) or info.file_size != expected.get("size"):
+                raise _damaged(f"{name} has another size")
+            if name.startswith("blobs/"):
+                digest_name = name.removeprefix("blobs/")
+                target = folder / "blobs" / digest_name
+                with target.open("wb") as out:
+                    digest = _copy_entry(archive, info, out)
+                if digest != digest_name:
+                    raise _damaged(f"{name} is not named by its SHA-256")
+                blobs[digest] = target
+            else:
+                content, digest = _read_entry(archive, info)
+                contents[name] = content
+            if digest != expected.get("sha256"):
+                raise _damaged(f"{name} has another SHA-256")
     while version < SCHEMA_VERSION:
         manifest, contents = UPGRADES[version](manifest, contents)
         version = manifest["schema_version"]
@@ -554,27 +903,22 @@ def read_archive(data: bytes) -> Archive:
     for name, count in counts.items():
         found = contents.get(table_file(name))
         if found is None:
-            raise _tampered(f"{table_file(name)} is missing")
+            raise _damaged(f"{table_file(name)} is missing")
         rows = _read_jsonl(found)
         if len(rows) != count:
-            raise _tampered(f"{name} has {len(rows)} rows, the manifest {count}")
+            raise _damaged(f"{name} has {len(rows)} rows, the manifest {count}")
         tables[name] = rows
     if PEOPLE not in contents or ONTOLOGY_FILES not in contents:
-        raise _tampered("people.jsonl or ontology_files.jsonl is missing")
+        raise _damaged("people.jsonl or ontology_files.jsonl is missing")
     if len(tables.get(PROJECTS, [])) != 1:
         raise DomainError("ARCHIVE_INVALID", "The archive holds no single project.")
-    blobs = {
-        name.removeprefix("blobs/"): content
-        for name, content in contents.items()
-        if name.startswith("blobs/")
-    }
     return Archive(
         manifest=manifest,
         tables=tables,
         people=_read_jsonl(contents[PEOPLE]),
         ontology_files=_read_jsonl(contents[ONTOLOGY_FILES]),
         blobs=blobs,
-        sha256=_sha(data),
+        sha256=_file_sha(path),
     )
 
 
@@ -613,54 +957,50 @@ class PeoplePlan:
     new: set[int] = field(default_factory=set)
     # Archived pseudonyms the copied work names differently here: old -> new.
     pseudonyms: dict[str, str] = field(default_factory=dict)
+    # Annotator ids of the work without an account in the archive (work
+    # imported from T1 bundles, ...).
+    without_account: list[str] = field(default_factory=list)
 
 
-def _work_text(archive: Archive) -> str:
-    """The rows that name people by pseudonym as their identity.
-
-    Left out: the audit trail and display labels (``*_label`` columns),
-    which only record how a person was shown.
-    """
-    return "\n".join(
-        _line({k: v for k, v in row.items() if not k.endswith("_label")})
-        for name, rows in archive.tables.items()
-        if name != "audit_events"
-        for row in rows
+def _imported_from(conn: Connection, source: str) -> set[int]:
+    """Projects this server imported from archives of server ``source``."""
+    audited = select(AuditEventRow.project_id).where(
+        AuditEventRow.action == "project.import_archive",
+        AuditEventRow.details["source_instance"].astext == source,
+        AuditEventRow.project_id.is_not(None),
     )
-
-
-_TOKEN_EDGE = r"[\w.-]"
-
-
-def _token(pseudonym: str) -> str:
-    """A pattern for ``pseudonym`` as a whole token, also percent-encoded."""
-    from urllib.parse import quote
-
-    forms = sorted({pseudonym, quote(pseudonym, safe="")}, key=len, reverse=True)
-    alternatives = "|".join(re.escape(form) for form in forms)
-    return rf"(?<!{_TOKEN_EDGE})(?:{alternatives})(?!{_TOKEN_EDGE})"
-
-
-def _named(pseudonym: str, work: str) -> bool:
-    """Whether the work carries ``pseudonym`` as an identity token."""
-    return re.search(_token(pseudonym), work) is not None
-
-
-def _pseudonym_forms(
-    renamed: Mapping[str, str],
-) -> tuple[re.Pattern[str], dict[str, str]]:
-    """A pattern for each renamed pseudonym as a whole token (also
-    percent-encoded) and its replacement per form."""
-    from urllib.parse import quote
-
-    forms = {quote(old, safe=""): quote(new, safe="") for old, new in renamed.items()}
-    forms.update(renamed)
-    pattern = re.compile(
-        rf"(?<!{_TOKEN_EDGE})(?:"
-        + "|".join(re.escape(f) for f in sorted(forms, key=len, reverse=True))
-        + rf")(?!{_TOKEN_EDGE})"
+    people = select(ImportedPersonRow.project_id).where(
+        ImportedPersonRow.source_instance == source
     )
-    return pattern, forms
+    found: list[Any] = list(conn.execute(union(audited, people)).scalars())
+    return {int(project) for project in found if project}
+
+
+def _annotator_ids_outside(conn: Connection, excluded: set[int]) -> set[str]:
+    """``_annotator_ids_in_use`` of the projects not in ``excluded``."""
+    actor = AnnotationSnapshotRow.payload[
+        ("annotation", "provenance", "actor", "actor_id")
+    ].astext
+    event = SearchEventRow.payload[("workspace_key", "annotator_id")].astext
+    skip = sorted(excluded)
+    queries = [
+        select(column).where(column.like("ann-%"), project.not_in(skip))
+        for column, project in (
+            (DraftRow.annotator_id, DraftRow.project_id),
+            (SubmissionRow.annotator_id, SubmissionRow.project_id),
+            (actor, AnnotationSnapshotRow.project_id),
+            (event, SearchEventRow.project_id),
+        )
+    ]
+    queries.append(
+        select(ReviewDecisionRow.reviewer_id)
+        .join(DraftRow, DraftRow.id == ReviewDecisionRow.draft_id)
+        .where(
+            ReviewDecisionRow.reviewer_id.like("ann-%"),
+            DraftRow.project_id.not_in(skip),
+        )
+    )
+    return {str(value) for value in conn.execute(union(*queries)).scalars()}
 
 
 def _resolve_people(
@@ -677,19 +1017,27 @@ def _resolve_people(
     pseudonym-only person an earlier archive of the same server created, the
     one account with the person's e-mail address, a new pseudonym-only person.
 
-    The work names people by pseudonym. By default it keeps the archived
-    pseudonyms: an e-mail account with another pseudonym does not take the
-    work over; a pseudonym-only person keeps the pseudonym instead, linked to
-    that account (which gets the person's roles). With ``rename_pseudonyms``
-    the copied work names the e-mail account's pseudonym, and a person whose
-    pseudonym is taken here gets a new one (content hashes are kept).
+    The work names people by pseudonym (``_identities``: identity fields
+    only, never free text). By default it keeps the archived pseudonyms: an
+    e-mail account with another pseudonym does not take the work over; a
+    pseudonym-only person keeps the pseudonym instead, linked to that account
+    (which gets the person's roles). With ``rename_pseudonyms`` the copied
+    work names the e-mail account's pseudonym, and a person whose pseudonym
+    is taken here gets a new one (content hashes are kept).
+
+    Annotator ids of the work without an account in the archive are checked
+    the same way against the pseudonyms here and the annotator ids of this
+    server's work (but for projects imported from the same server, and for
+    an archive of this server): such work must not be attributed to someone
+    here. They are refused, or renamed with ``rename_pseudonyms``.
 
     Raises:
-        DomainError: ``ARCHIVE_PSEUDONYM_TAKEN`` when another person here has
-            a pseudonym the archived work carries, without ``rename_pseudonyms``.
+        DomainError: ``ARCHIVE_PSEUDONYM_TAKEN`` when another person here, or
+            the work of another project, has a pseudonym the archived work
+            carries, without ``rename_pseudonyms``.
     """
     plan = PeoplePlan()
-    work = _work_text(archive)
+    work = _identities(archive.tables)
     source = str(archive.manifest.get("instance_id") or "")
     earlier = {
         row.source_user_id: row
@@ -730,19 +1078,30 @@ def _resolve_people(
         if source == here
         else {}
     )
-    in_use = set(conn.execute(select(UserRow.pseudonym)).scalars())
-    in_use |= _annotator_ids_in_use(conn)
+    pseudonyms_here = set(conn.execute(select(UserRow.pseudonym)).scalars())
+    in_use = pseudonyms_here | _annotator_ids_in_use(conn)
+    archived = {str(p["pseudonym"]) for p in archive.people}
+    without_account = sorted(work - archived)
+    taken_by_work = (
+        pseudonyms_here | _annotator_ids_outside(conn, _imported_from(conn, source))
+        if source != here
+        else set()
+    )
 
     def fresh() -> str:
         while True:
             candidate = AccountService._next_pseudonym(conn)
-            if candidate not in in_use and not _named(candidate, work):
+            if (
+                candidate not in in_use
+                and candidate not in work
+                and candidate not in plan.pseudonyms.values()
+            ):
                 return candidate
 
     conflicts: list[str] = []
     for person in sorted(archive.people, key=lambda p: int(p["id"])):
         source_id, pseudonym = int(person["id"]), str(person["pseudonym"])
-        named = _named(pseudonym, work)
+        named = pseudonym in work
         own = same.get(source_id)
         if own is not None and own.pseudonym == pseudonym:
             plan.users[source_id] = own.id
@@ -806,16 +1165,26 @@ def _resolve_people(
             plan.links.append((source_id, account.id))
             entry["linked_to"] = account.username
         plan.created.append(entry)
+    plan.without_account = without_account
+    for annotator_id in without_account:
+        if annotator_id not in taken_by_work:
+            continue
+        if not rename_pseudonyms:
+            conflicts.append(annotator_id)
+            continue
+        new = fresh()
+        in_use.add(new)
+        plan.pseudonyms[annotator_id] = new
     if conflicts:
         raise DomainError(
             "ARCHIVE_PSEUDONYM_TAKEN",
             {
                 "pseudonyms": sorted(conflicts),
                 "message": (
-                    "People on this server already use pseudonyms the archived"
-                    " work carries. Import with new pseudonyms for them"
-                    " (--rename-pseudonyms), or give each person the same e-mail"
-                    " address on both servers."
+                    "People or work on this server already use pseudonyms (annotator"
+                    " ids) the archived work carries. Import with new pseudonyms for"
+                    " them (--rename-pseudonyms), or give each person the same"
+                    " e-mail address on both servers."
                 ),
             },
         )
@@ -992,15 +1361,17 @@ class Mapper:
                 out[extra.column] = _at_path(
                     out[extra.column], extra.path, self._extra(extra)
                 )
+        if name == "audit_events":
+            target = AUDIT_TARGET_ROWS.get(str(out.get("target_type")))
+            value = out.get("target_id")
+            if target and isinstance(value, str) and re.fullmatch(r"-?\d+", value):
+                out["target_id"] = str(self.row_id(target, int(value), orphans=True))
         if self.ids:
             for column, value in list(out.items()):
                 if roles[column].kind == "plain":
                     out[column] = _replace_ids(value, self._id_pattern, self.ids)
-        if self.pseudonyms and name != "audit_events":
-            pattern, forms = self._pseudonym_pattern
-            for column, value in list(out.items()):
-                if roles[column].kind == "plain":
-                    out[column] = _replace_ids(value, pattern, forms)
+        if self.pseudonyms:
+            out = _people_in_row(name, out, self._pseudonym)
         if self.key != self.archive_key and name != "audit_events":
             for column, value in list(out.items()):
                 if roles[column].kind == "plain":
@@ -1015,13 +1386,12 @@ class Mapper:
                         out[column] = {**value, "project": self.key}
         return out
 
+    def _pseudonym(self, value: str) -> str:
+        return self.pseudonyms.get(value, value)
+
     @cached_property
     def _id_pattern(self) -> re.Pattern[str]:
         return re.compile("|".join(re.escape(old) for old in self.ids))
-
-    @cached_property
-    def _pseudonym_pattern(self) -> tuple[re.Pattern[str], dict[str, str]]:
-        return _pseudonym_forms(self.pseudonyms)
 
     def _rows_of(self, target: str, *, orphans: bool) -> Callable[[int], int]:
         return lambda value: self.row_id(target, value, orphans=orphans)
@@ -1106,18 +1476,20 @@ def _insert(
     t = table(name)
     ident = identity_column(t)
     ordered = _ordered(name, rows)
-    converted = [mapper.convert(name, row) for row in ordered]
     if ident is None:
-        params = [_typed(t, row) for row in converted]
+        params = [_typed(t, mapper.convert(name, row)) for row in ordered]
         for start in range(0, len(params), _CHUNK):
             conn.execute(_statement(t), params[start : start + _CHUNK])
         return
     ids = mapper.rows.setdefault(name, {})
-    for start in range(0, len(converted), _CHUNK):
-        chunk = converted[start : start + _CHUNK]
+    # Rows naming other rows of their table outside a foreign key (a job and
+    # the job it came from) go one by one, each after the rows it names.
+    chunk_size = 1 if extra_self_references(name) else _CHUNK
+    for start in range(0, len(ordered), chunk_size):
+        chunk = ordered[start : start + chunk_size]
         params = []
         for row in chunk:
-            values = _typed(t, row)
+            values = _typed(t, mapper.convert(name, row))
             values.pop(ident.key, None)
             params.append(values)
         returned = (
@@ -1152,20 +1524,12 @@ def _free_key_and_name(conn: Connection, key: str, name: str) -> tuple[str, str]
     return new_key, new_name
 
 
-def _ontology_files(conn: Connection, db: Database, archive: Archive) -> None:
-    """Store the archived files and the ontology files the pins need.
+def _check_ontology_files(conn: Connection, archive: Archive) -> None:
+    """Refuse an archive without ontology files this server lacks.
 
     Raises:
-        DomainError: ``ARCHIVE_ONTOLOGY_MISSING`` when the archive left out
-            ontology files this server does not have.
+        DomainError: ``ARCHIVE_ONTOLOGY_MISSING``.
     """
-    for digest, content in archive.blobs.items():
-        db.put_blob(conn, content)
-        conn.execute(
-            pg_insert(StoredFileRow)
-            .values(sha256=digest, size=len(content))
-            .on_conflict_do_nothing()
-        )
     have = set(
         conn.execute(
             select(OntologyFileRow.sha256).where(
@@ -1175,18 +1539,11 @@ def _ontology_files(conn: Connection, db: Database, archive: Archive) -> None:
             )
         ).scalars()
     )
-    missing = []
-    for row in archive.ontology_files:
-        if row["sha256"] in have:
-            continue
-        if row["sha256"] not in archive.blobs:
-            missing.append(f"{row['filename']} ({row['sha256']})")
-            continue
-        conn.execute(
-            pg_insert(OntologyFileRow)
-            .values(**_typed(OntologyFileRow.__table__, row), uploaded_by=None)  # type: ignore[arg-type]
-            .on_conflict_do_nothing()
-        )
+    missing = [
+        f"{row['filename']} ({row['sha256']})"
+        for row in archive.ontology_files
+        if row["sha256"] not in have and row["sha256"] not in archive.blobs
+    ]
     if missing:
         raise DomainError(
             "ARCHIVE_ONTOLOGY_MISSING",
@@ -1199,6 +1556,34 @@ def _ontology_files(conn: Connection, db: Database, archive: Archive) -> None:
                 ),
             },
         )
+
+
+def _record_files(conn: Connection, archive: Archive) -> None:
+    """The ``stored_files`` and ``ontology_files`` rows of the archived files,
+    under their blob locks; the files themselves are written last
+    (``_write_files``)."""
+    for digest, path in sorted(archive.blobs.items()):
+        Database.lock_blob(conn, digest)
+        conn.execute(
+            pg_insert(StoredFileRow)
+            .values(sha256=digest, size=path.stat().st_size)
+            .on_conflict_do_nothing()
+        )
+    for row in archive.ontology_files:
+        if row["sha256"] in archive.blobs:
+            conn.execute(
+                pg_insert(OntologyFileRow)
+                .values(**_typed(OntologyFileRow.__table__, row), uploaded_by=None)  # type: ignore[arg-type]
+                .on_conflict_do_nothing()
+            )
+
+
+def _write_files(db: Database, archive: Archive, written: list[str]) -> None:
+    """Store the archived files this server lacks; ``written`` names each one
+    written, so a rollback can remove it again."""
+    for digest, path in sorted(archive.blobs.items()):
+        if db.blobs.put_file(path, digest):
+            written.append(digest)
 
 
 def _check_columns(archive: Archive) -> None:
@@ -1249,6 +1634,29 @@ def verify(conn: Connection, archive: Archive, mapper: Mapper) -> dict[str, Any]
             mismatches.append(
                 {"table": entry.name, "rows": len(found), "expected_rows": count}
             )
+    # The texts once more without any mapping back: no import may change one
+    # (spans and text hashes depend on every character).
+    archived_texts = sorted(
+        (str(r["document_id"]), r.get("text"), r.get("text_sha256"))
+        for r in archive.tables.get("documents", [])
+    )
+    imported_texts = sorted(
+        (str(r.document_id), r.text, r.text_sha256)
+        for r in conn.execute(
+            select(
+                DocumentRow.document_id, DocumentRow.text, DocumentRow.text_sha256
+            ).where(DocumentRow.project_id == mapper.project_id)
+        )
+    )
+    if archived_texts != imported_texts:
+        mismatches.append(
+            {
+                "table": "documents",
+                "check": "texts",
+                "rows": len(imported_texts),
+                "expected_rows": len(archived_texts),
+            }
+        )
     return {
         "ok": not mismatches,
         "tables_checked": len(archive.tables),
@@ -1317,33 +1725,63 @@ def _erase_labels(conn: Connection, project_id: int, plan: PeoplePlan) -> None:
 def import_archive(
     db: Database,
     actor: Actor,
-    data: bytes,
+    data: bytes | Path,
     *,
     rename_pseudonyms: bool = False,
     now: datetime | None = None,
 ) -> dict[str, Any]:
     """Import an archive as a new project, verify it and audit it, in one transaction.
 
-    ``rename_pseudonyms``: see ``_resolve_people``.
+    ``data`` is the archive or the path of its file. ``rename_pseudonyms``:
+    see ``_resolve_people``. Everything is checked and resolved before the
+    archived files are written; a failure removes the files it wrote.
 
     Raises:
-        DomainError: the ``read_archive`` and ``check_revision`` errors,
+        DomainError: the ``open_archive`` and ``check_revision`` errors,
             ``ARCHIVE_ONTOLOGY_MISSING``, ``ARCHIVE_PSEUDONYM_TAKEN``;
             ``ARCHIVE_VERIFICATION_FAILED`` (a ``StructuredJobError``) when the
             imported project does not read back as archived.
     """
-    archive = read_archive(data)
+    with open_archive(data) as archive:
+        written: list[str] = []
+        try:
+            return _import(
+                db,
+                actor,
+                archive,
+                written,
+                rename_pseudonyms=rename_pseudonyms,
+                now=now,
+            )
+        except BaseException:
+            from ontotator.exchange.jobs import unlink_deleted_files
+
+            # Only files whose stored_files row the rollback removed go.
+            unlink_deleted_files(db, written)
+            raise
+
+
+def _import(
+    db: Database,
+    actor: Actor,
+    archive: Archive,
+    written: list[str],
+    *,
+    rename_pseudonyms: bool,
+    now: datetime | None,
+) -> dict[str, Any]:
     check_revision(archive.manifest.get("alembic_revision"))
     _check_columns(archive)
     at = now or datetime.now(UTC)
     source = archive.tables[PROJECTS][0]
+    source_instance = str(archive.manifest.get("instance_id") or "")
     with db.transaction() as conn:
         conn.execute(
             select(func.pg_advisory_xact_lock(_lock_id("project-archive-import")))
         )
         key, name = _free_key_and_name(conn, source["project_key"], source["name"])
         conn.execute(select(func.pg_advisory_xact_lock(_lock_id("project", key))))
-        _ontology_files(conn, db, archive)
+        _check_ontology_files(conn, archive)
         plan = _resolve_people(
             conn,
             archive,
@@ -1351,6 +1789,7 @@ def import_archive(
             at,
             rename_pseudonyms=rename_pseudonyms,
         )
+        _record_files(conn, archive)
         project_row = dict(source)
         project_row.update(project_key=key, name=name, practice=False)
         values = _typed(table(PROJECTS), project_row)
@@ -1373,9 +1812,6 @@ def import_archive(
                 continue
             _insert(conn, mapper, table_name, archive.tables[table_name])
         verification = verify(conn, archive, mapper)
-        for digest in archive.blobs:
-            db.blobs.get(digest)
-        verification["blobs_checked"] = len(archive.blobs)
         if not verification["ok"]:
             raise StructuredJobError("ARCHIVE_VERIFICATION_FAILED", verification)
         _erase_labels(conn, project_id, plan)
@@ -1386,7 +1822,7 @@ def import_archive(
                     user_id=plan.users[source_id],
                     project_id=project_id,
                     archive_sha256=archive.sha256,
-                    source_instance=str(archive.manifest.get("instance_id") or ""),
+                    source_instance=source_instance,
                     source_user_id=source_id,
                     created_at=at,
                     linked_user_id=links.get(source_id),
@@ -1394,6 +1830,9 @@ def import_archive(
                     linked_by=actor.user_id if source_id in links else None,
                 )
             )
+        # The files last, once everything else is in place.
+        _write_files(db, archive, written)
+        verification["blobs_checked"] = len(archive.blobs)
         manifest = archive.manifest
         result = {
             "project": key,
@@ -1405,12 +1844,14 @@ def import_archive(
             "archive_created_at": manifest.get("created_at"),
             "archive_ontotator_version": manifest.get("ontotator_version"),
             "archive_alembic_revision": manifest.get("alembic_revision"),
+            "source_instance": source_instance,
             "rows": sum(manifest["rows"].values()),
             "new_ids": len(mapper.ids),
             "renamed_pseudonyms": dict(sorted(plan.pseudonyms.items())),
             "people": {
                 "mapped": plan.mapped,
                 "pseudonym_only": plan.created,
+                "without_account": plan.without_account,
             },
             "verification": verification,
         }
@@ -1571,16 +2012,130 @@ def _require_admin(db: Database, job: Job) -> Actor:
     return actor
 
 
+def discard_archive_files(
+    conn: Connection,
+    now: datetime,
+    *,
+    everything: bool = False,
+    job_ids: Iterable[int] | None = None,
+) -> list[str]:
+    """Delete the stored archives: an export's ZIP ``ARCHIVE_RETENTION``
+    after its job finished, an uploaded ZIP once its import job finished.
+
+    ``everything``: every finished job's archive at once (an account
+    erasure: any archive may name the person with their e-mail address).
+    ``job_ids``: only these jobs' archives, at once (the command line wrote
+    the file out). The export job's result records ``file_deleted_at``.
+    Returns the files whose rows went; remove them after the commit
+    (``unlink_after_commit``). A file something else refers to stays.
+    """
+    from ontotator.exchange.jobs import delete_unreferenced_file
+
+    cutoff = now - ARCHIVE_RETENTION
+    finished = JobRow.status.in_(("succeeded", "failed"))
+    due: ColumnElement[bool]
+    if job_ids is not None:
+        due = JobRow.id.in_(sorted(job_ids))
+    elif everything:
+        due = JobRow.finished_at.is_not(None)
+    else:
+        due = JobRow.finished_at < cutoff
+    deleted: list[str] = []
+    exports = conn.execute(
+        select(JobRow.id, JobRow.result)
+        .where(
+            JobRow.kind == EXPORT_KIND,
+            JobRow.status == "succeeded",
+            JobRow.result["sha256"].astext.is_not(None),
+            JobRow.result["file_deleted_at"].astext.is_(None),
+            due,
+        )
+        .with_for_update()
+    ).all()
+    for job_id, result in exports:
+        digest = str(result["sha256"])
+        if delete_unreferenced_file(conn, digest, ignore_job_kinds=ARCHIVE_JOB_KINDS):
+            deleted.append(digest)
+        conn.execute(
+            update(JobRow)
+            .where(JobRow.id == job_id)
+            .values(
+                result=JobRow.result.op("||")(
+                    func.jsonb_build_object("file_deleted_at", now.isoformat())
+                )
+            )
+        )
+    uploads = conn.execute(
+        select(JobRow.payload["blob_sha256"].astext)
+        .where(JobRow.kind == IMPORT_KIND, finished, due)
+        .where(JobRow.payload["blob_sha256"].astext.in_(select(StoredFileRow.sha256)))
+    ).scalars()
+    for digest in sorted({str(d) for d in uploads}):
+        Database.lock_blob(conn, digest)
+        if _import_waits_for(conn, digest):
+            continue
+        if delete_unreferenced_file(conn, digest, ignore_job_kinds=ARCHIVE_JOB_KINDS):
+            deleted.append(digest)
+    return deleted
+
+
+def expire_archive_files(db: Database, now: datetime | None = None) -> None:
+    """``discard_archive_files`` of the archives past their retention (server
+    start, each archive request and export)."""
+    from ontotator.exchange.jobs import unlink_after_commit
+
+    with db.transaction() as conn:
+        deleted = discard_archive_files(conn, now or datetime.now(UTC))
+        unlink_after_commit(db, deleted)
+
+
+def release_archive_file(db: Database, job_id: int) -> None:
+    """Delete the stored archive of one finished archive job now."""
+    from ontotator.exchange.jobs import unlink_after_commit
+
+    with db.transaction() as conn:
+        deleted = discard_archive_files(conn, datetime.now(UTC), job_ids=[job_id])
+        unlink_after_commit(db, deleted)
+
+
+def _import_waits_for(conn: Connection, digest: str, job_id: int = 0) -> bool:
+    """Whether another import job, queued or running, needs the file."""
+    return (
+        conn.execute(
+            select(JobRow.id).where(
+                JobRow.kind == IMPORT_KIND,
+                JobRow.status.in_(("queued", "running")),
+                JobRow.id != job_id,
+                JobRow.payload["blob_sha256"].astext == digest,
+            )
+        ).first()
+        is not None
+    )
+
+
+def _release_upload(db: Database, digest: str, job_id: int) -> None:
+    """Delete the uploaded archive of an import that has finished."""
+    from ontotator.exchange.jobs import delete_unreferenced_file, unlink_after_commit
+
+    with db.transaction() as conn:
+        Database.lock_blob(conn, digest)
+        if _import_waits_for(conn, digest, job_id):
+            return
+        if delete_unreferenced_file(conn, digest, ignore_job_kinds=ARCHIVE_JOB_KINDS):
+            unlink_after_commit(db, [digest])
+
+
 def project_archive_export(job: Job, ctx: JobContext) -> dict[str, Any]:
     """Write the archive of ``payload.project``; audited as ``project.export_archive``.
 
     ``payload.include_ontology_files`` (default true) adds the ontology and
-    translation files of the pins.
+    translation files of the pins. The ZIP is kept ``ARCHIVE_RETENTION``.
     """
     from ontotator.exchange.jobs import store_file
 
     db = ctx.db
     actor = _require_admin(db, job)
+    expire_archive_files(db)
     project = job.payload["project"]
     include = bool(job.payload.get("include_ontology_files", True))
     with tempfile.TemporaryDirectory(prefix="ontotator-archive-") as tmp:
@@ -1603,6 +2158,7 @@ def project_archive_export(job: Job, ctx: JobContext) -> dict[str, Any]:
         "blobs": sum(1 for name in manifest["files"] if name.startswith("blobs/")),
         "ontology_files_included": include,
         "created_at": manifest["created_at"],
+        "expires_at": (datetime.now(UTC) + ARCHIVE_RETENTION).isoformat(),
     }
     with db.transaction() as conn:
         record_audit(
@@ -1618,24 +2174,30 @@ def project_archive_export(job: Job, ctx: JobContext) -> dict[str, Any]:
 
 
 def project_archive_import(job: Job, ctx: JobContext) -> dict[str, Any]:
-    """Import the archive stored as ``payload.blob_sha256`` as a new project."""
+    """Import the archive stored as ``payload.blob_sha256`` as a new project.
+
+    The stored ZIP is deleted when the job ends, whether it succeeded or not.
+    """
     db = ctx.db
-    actor = _require_admin(db, job)
-    data = db.blobs.get(job.payload["blob_sha256"])
-    result = import_archive(
-        db,
-        actor,
-        data,
-        rename_pseudonyms=bool(job.payload.get("rename_pseudonyms", False)),
-    )
-    with db.transaction() as conn:
-        conn.execute(
-            update(JobRow)
-            .where(JobRow.id == job.id)
-            .values(
-                project_id=select(ProjectRow.id)
-                .where(ProjectRow.project_key == result["project"])
-                .scalar_subquery()
-            )
+    digest = job.payload["blob_sha256"]
+    try:
+        actor = _require_admin(db, job)
+        result = import_archive(
+            db,
+            actor,
+            db.blobs.path(digest),
+            rename_pseudonyms=bool(job.payload.get("rename_pseudonyms", False)),
         )
-    return result
+        with db.transaction() as conn:
+            conn.execute(
+                update(JobRow)
+                .where(JobRow.id == job.id)
+                .values(
+                    project_id=select(ProjectRow.id)
+                    .where(ProjectRow.project_key == result["project"])
+                    .scalar_subquery()
+                )
+            )
+        return result
+    finally:
+        _release_upload(db, digest, job.id)

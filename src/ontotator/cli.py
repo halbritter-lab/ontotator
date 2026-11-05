@@ -824,7 +824,8 @@ def projects_export_archive(
     """Write one complete project as a project archive (ZIP) for another server.
 
     The archive holds every row of the project, the people it names (with
-    their e-mail addresses) and the files it uses. Keep it private.
+    the e-mail addresses of those who worked in it) and the files it uses.
+    Keep it private. The server keeps no copy once the file is written.
     """
     if not no_wait and out.exists():
         _fail("OUTPUT_EXISTS", f"{out} exists; choose another file.")
@@ -841,11 +842,15 @@ def projects_export_archive(
         if job is None:
             return
         data = db.blobs.get(job.result["sha256"])
-    try:
-        with out.open("xb") as handle:
-            handle.write(data)
-    except FileExistsError:
-        _fail("OUTPUT_EXISTS", f"{out} exists; choose another file.")
+        try:
+            with out.open("xb") as handle:
+                handle.write(data)
+        except FileExistsError:
+            _fail("OUTPUT_EXISTS", f"{out} exists; choose another file.")
+        # The file is out: the server keeps no copy (#306).
+        from ontotator.exchange.archive import release_archive_file
+
+        release_archive_file(db, job.id)
     result = job.result
     typer.echo(
         f"Wrote {out}: {_plural(result['rows'], 'row')} in "
@@ -1311,11 +1316,15 @@ def _export(
         if job is None:
             return
         data = db.blobs.get(job.result["sha256"])
-    try:
-        with out.open("xb") as handle:
-            handle.write(data)
-    except FileExistsError:
-        _fail("OUTPUT_EXISTS", f"{out} exists; choose another file.")
+        try:
+            with out.open("xb") as handle:
+                handle.write(data)
+        except FileExistsError:
+            _fail("OUTPUT_EXISTS", f"{out} exists; choose another file.")
+        # The file is out: the server keeps no copy (#306).
+        from ontotator.exchange.archive import release_archive_file
+
+        release_archive_file(db, job.id)
     result = job.result
     if kind == "t1_export":
         counts = result["counts"]

@@ -159,6 +159,84 @@ EXTRA_REFERENCES: tuple[ExtraReference, ...] = (
         "work_time_events", "assignment_id", (), "assignments", orphans=True
     ),
     ExtraReference("work_intervals", "assignment_id", (), "assignments", orphans=True),
+    # A re-anchoring job names the import job or the translation review it
+    # came from (``reanchor_job._authority`` reads the job).
+    ExtraReference("jobs", "payload", ("producer", "job_id"), "jobs"),
+    ExtraReference(
+        "jobs",
+        "payload",
+        ("producer", "review_id"),
+        "translation_reviews",
+        orphans=True,
+    ),
+    # The audit trail records the rows it is about; a row the archive lacks
+    # (a purged task, an archive job) keeps its id negated.
+    ExtraReference(
+        "audit_events", "details", ("assignment_id",), "assignments", orphans=True
+    ),
+    ExtraReference("audit_events", "details", ("job_id",), "jobs", orphans=True),
+    ExtraReference("audit_events", "details", ("user_id",), USERS),
+    ExtraReference("audit_events", "details", ("actor_id",), USERS),
+)
+
+# Audit entries whose ``target_id`` is the id of an archived row (as text),
+# by ``target_type``; a row the archive lacks keeps its id negated.
+AUDIT_TARGET_ROWS: dict[str, str] = {"assignment": "assignments"}
+
+# The jobs of the archives themselves: never archived (an archive would carry
+# the earlier archives), and their files are never part of another archive.
+ARCHIVE_JOB_KINDS: frozenset[str] = frozenset(
+    {"project_archive_export", "project_archive_import"}
+)
+
+# Where rows refer to stored files (``stored_files``): (table, column, JSON
+# path, ``*`` for each item of a list). Only these files go into an archive;
+# job payloads and results, audit details and other text are never searched.
+BLOB_REFERENCES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+    ("uploads", "files", ("*", "sha256")),
+    ("proposal_sets", "source_sha256", ()),
+    ("project_resources", "sha256", ()),
+    ("project_ontologies", "sha256", ()),
+    ("project_ontologies", "superseded_sha256", ("*",)),
+)
+
+# Where the work names a person by pseudonym (annotator id): the only places
+# ``--rename-pseudonyms`` changes and an import checks, never free text.
+# Columns whose whole value is one:
+PSEUDONYM_COLUMNS: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("drafts", "annotator_id"),
+        ("submissions", "annotator_id"),
+        ("review_decisions", "reviewer_id"),
+        ("work_rounds", "annotator_id"),
+        ("translation_reviews", "reviewer_pseudonym"),
+    }
+)
+# Display labels that show a pseudonym: renamed with the person, but not
+# counted as work under it (they record how a person was shown).
+PSEUDONYM_LABEL_COLUMNS: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("guideline_versions", "created_by_label"),
+        ("guideline_withdrawals", "withdrawn_by_label"),
+    }
+)
+# Columns holding a stored workspace key, whose annotator id is one:
+WORKSPACE_KEY_COLUMNS: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("drafts", "draft_key"),
+        ("submissions", "local_key"),
+        ("submissions", "origin_key"),
+        ("search_events", "workspace_key"),
+        ("search_events", "local_key"),
+        ("round_workspace_bindings", "workspace_key"),
+        ("draft_snapshots", "workspace_key"),
+    }
+)
+# In JSON columns (the audit trail aside): a string under one of these keys
+# (``provenance.actor.actor_id``, ``origin_key.annotator_id``, a decision's
+# ``reviewer_id``, ...), and a string that is a whole stored workspace key.
+PSEUDONYM_JSON_KEYS: frozenset[str] = frozenset(
+    {"actor_id", "annotator_id", "reviewer_id", "reviewer_pseudonym", "pseudonym"}
 )
 
 # Integer columns named like references that are plain values.
@@ -278,7 +356,7 @@ def insert_order() -> list[str]:
             if target in archived and target != name:
                 needs[name].add(target)
     for extra in EXTRA_REFERENCES:
-        if extra.target in archived:
+        if extra.target in archived and extra.target != extra.table:
             needs[extra.table].add(extra.target)
     done: list[str] = []
     while len(done) < len(order):
@@ -287,6 +365,11 @@ def insert_order() -> list[str]:
             raise RuntimeError(f"Archived tables refer to each other: {needs}")
         done.append(ready[0])
     return done
+
+
+def extra_self_references(name: str) -> bool:
+    """Whether rows of a table name other rows of it outside a foreign key."""
+    return any(e.table == name and e.target == name for e in EXTRA_REFERENCES)
 
 
 def self_references(name: str) -> Iterator[tuple[list[str], list[str]]]:

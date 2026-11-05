@@ -76,11 +76,14 @@ def store_file(db: Database, data: bytes) -> str:
     return digest
 
 
-def delete_unreferenced_file(conn: Connection, digest: str) -> bool:
+def delete_unreferenced_file(
+    conn: Connection, digest: str, *, ignore_job_kinds: frozenset[str] = frozenset()
+) -> bool:
     """Delete the ``stored_files`` row of a file nothing references; whether it did.
 
     References are uploads that are not discarded, job payloads and results
-    (imports, exports), proposal sets, project resources and ontology files.
+    (imports, exports) except those of jobs of ``ignore_job_kinds``, proposal
+    sets, project resources and ontology files.
     Runs in the caller's transaction; after it commits, ``unlink_deleted_files``
     removes the files. shortcut: a job payload or result is recorded after its
     ``store_file`` commits, so a discard of identical bytes in between drops the
@@ -96,10 +99,11 @@ def delete_unreferenced_file(conn: Connection, digest: str) -> bool:
                     cast(UploadRow.files, Text).contains(digest),
                 ),
                 exists().where(
+                    JobRow.kind.not_in(ignore_job_kinds),
                     or_(
                         cast(JobRow.payload, Text).contains(digest),
                         cast(JobRow.result, Text).contains(digest),
-                    )
+                    ),
                 ),
                 exists().where(ProposalSetRow.source_sha256 == digest),
                 exists().where(ProjectResourceRow.sha256 == digest),

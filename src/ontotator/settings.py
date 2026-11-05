@@ -125,6 +125,26 @@ def server_settings(env: Mapping[str, str] | None = None) -> ServerSettings:
     )
 
 
+ARCHIVE_MAX_EXPANDED_ENV = "ONTOTATOR_ARCHIVE_MAX_EXPANDED_BYTES"
+ARCHIVE_MAX_EXPANDED_BYTES = 8 * 1024**3
+
+
+def archive_max_expanded_bytes(env: Mapping[str, str] | None = None) -> int:
+    """How many bytes a project archive may expand to on import (#306).
+
+    Read when an import starts, so the job worker and the CLI honour it.
+    """
+    env = os.environ if env is None else env
+    raw = env.get(ARCHIVE_MAX_EXPANDED_ENV, "")
+    if not raw:
+        return ARCHIVE_MAX_EXPANDED_BYTES
+    if not raw.isascii() or not raw.isdigit() or int(raw) <= 0:
+        raise SettingsError(
+            f"{ARCHIVE_MAX_EXPANDED_ENV} must be a positive whole number of bytes"
+        )
+    return int(raw)
+
+
 DEMO_LOGINS_ENV = "ONTOTATOR_DEMO_LOGINS_FILE"
 MAX_DEMO_LOGINS = 20
 

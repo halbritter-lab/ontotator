@@ -882,7 +882,9 @@ class AccountService:
         technical reports and its idempotency receipts. The old username is
         replaced by ``anonymised-<id>`` in the audit trail (actor
         label, target and ``details.username``; the append-only trigger lets
-        this one transaction through) and in job labels.
+        this one transaction through) and in job labels. Every stored
+        project archive of a finished export or import job is deleted, since
+        it may carry the e-mail address (#306).
 
         Raises:
             DomainError: ``USER_NOT_FOUND``, ``USER_ACTIVE`` for an active
@@ -905,6 +907,13 @@ class AccountService:
             unlink_after_commit(
                 self.db,
                 purge_practice_of_user(conn, actor, row.id, "account_anonymised"),
+            )
+            # Issue 306: stored project archives may name the person with
+            # their e-mail address; every finished one goes.
+            from ontotator.exchange.archive import discard_archive_files
+
+            unlink_after_commit(
+                self.db, discard_archive_files(conn, now, everything=True)
             )
             conn.execute(
                 update(UserRow)
