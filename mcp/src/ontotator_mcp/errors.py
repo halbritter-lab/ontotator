@@ -4,7 +4,7 @@ The API answers a refusal with ``{"code": ..., "details": ...}`` (request
 validation with ``{"detail": [...]}``). Each error becomes one
 ``OntotatorError``: the HTTP status, the code, the server's own text and,
 for the codes a script meets most, what to do about it. The token is never
-part of a message.
+part of a message: should the server echo it back, it is replaced by ``***``.
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ import httpx
 from mcp.server.mcpserver.exceptions import ToolError
 
 MAX_DETAILS = 4000
+REDACTED = "***"
 
 # What the caller can do about a code; the server's own text comes first.
 HINTS: dict[str, str] = {
@@ -85,6 +86,33 @@ def _text(value: Any) -> str:
     return text
 
 
+def redact(text: str, token: str | None) -> str:
+    """``text`` with every occurrence of ``token`` replaced by ``***``."""
+    if not token:
+        return text
+    return text.replace(token, REDACTED)
+
+
+def _bearer(request: httpx.Request) -> str | None:
+    """The token the request carried, so that a message can leave it out."""
+    value = str(request.headers.get("authorization", ""))
+    scheme, _, token = value.partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
+        return None
+    return token.strip()
+
+
+def sentences(parts: list[str]) -> str:
+    """The parts as sentences: each ends with one full stop, not two."""
+    out = []
+    for part in parts:
+        part = part.strip()
+        if not part:
+            continue
+        out.append(part if part[-1] in ".!?" else part + ".")
+    return " ".join(out)
+
+
 def api_error(response: httpx.Response) -> OntotatorError:
     """The error for a non-success ``response``."""
     request = response.request
@@ -119,13 +147,19 @@ def api_error(response: httpx.Response) -> OntotatorError:
         hint = "Not found, or not visible to the token's owner."
     if hint:
         parts.append(hint)
-    return OntotatorError(". ".join(parts), status=response.status_code, code=code)
+    message = redact(sentences(parts), _bearer(request))
+    return OntotatorError(message, status=response.status_code, code=code)
 
 
-def transport_error(url: str, exc: httpx.HTTPError) -> OntotatorError:
+def transport_error(
+    url: str, exc: httpx.HTTPError, token: str | None = None
+) -> OntotatorError:
     """The error for a request that got no answer."""
     kind = type(exc).__name__
     return OntotatorError(
-        f"Cannot reach Ontotator at {url} ({kind}: {exc}). Check ONTOTATOR_URL and"
-        " that the server is running."
+        redact(
+            f"Cannot reach Ontotator at {url} ({kind}: {exc}). Check ONTOTATOR_URL"
+            " and that the server is running.",
+            token,
+        )
     )

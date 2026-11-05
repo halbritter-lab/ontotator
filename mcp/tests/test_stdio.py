@@ -41,3 +41,21 @@ def test_a_missing_token_stops_the_server_with_a_message() -> None:
     assert done.returncode == 2
     assert "ONTOTATOR_TOKEN" in done.stderr
     assert done.stdout == ""
+
+
+@pytest.mark.parametrize(
+    ("flag", "expected"), [("--help", "ONTOTATOR_TOKEN"), ("--version", "0.")]
+)
+def test_help_and_version_answer_without_starting(flag: str, expected: str) -> None:
+    env = {k: v for k, v in os.environ.items() if not k.startswith("ONTOTATOR_")}
+    done = subprocess.run(
+        [sys.executable, "-m", "ontotator_mcp", flag],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+        stdin=subprocess.DEVNULL,
+    )
+    assert done.returncode == 0
+    assert expected in done.stdout

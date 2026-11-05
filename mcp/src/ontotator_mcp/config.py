@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ipaddress
+import math
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -36,8 +37,8 @@ def _seconds(env: Mapping[str, str], name: str, default: float) -> float:
         value = float(raw)
     except ValueError:
         raise ConfigError(f"{name} must be a number of seconds.") from None
-    if value <= 0:
-        raise ConfigError(f"{name} must be positive.")
+    if not math.isfinite(value) or value <= 0:
+        raise ConfigError(f"{name} must be a positive, finite number of seconds.")
     return value
 
 
@@ -69,13 +70,26 @@ class Settings:
                 f"Set {TOKEN_VARIABLE} to an API token of that instance"
                 " (Profile > API tokens in Ontotator)."
             )
-        parts = urlsplit(url)
-        if parts.scheme not in ("http", "https") or not parts.hostname:
+        if any(char.isspace() for char in token):
+            raise ConfigError(
+                f"{TOKEN_VARIABLE} contains whitespace; paste the token alone."
+            )
+        try:
+            parts = urlsplit(url)
+            hostname = parts.hostname
+        except ValueError:
+            raise ConfigError(f"{URL_VARIABLE} is not a valid URL.") from None
+        if parts.scheme not in ("http", "https") or not hostname:
             raise ConfigError(f"{URL_VARIABLE} must be an http(s) URL with a host.")
         if parts.query or parts.fragment:
             raise ConfigError(f"{URL_VARIABLE} must not have a query or fragment.")
+        if "@" in parts.netloc:
+            raise ConfigError(
+                f"{URL_VARIABLE} must not contain a user name or password; the"
+                f" API token in {TOKEN_VARIABLE} is the only credential."
+            )
         allow_http = env.get(ALLOW_HTTP_VARIABLE, "").strip() == "1"
-        if parts.scheme == "http" and not _loopback(parts.hostname) and not allow_http:
+        if parts.scheme == "http" and not _loopback(hostname) and not allow_http:
             raise ConfigError(
                 f"{URL_VARIABLE} uses plain http to another host, which would send"
                 f" the token unencrypted. Use https, or set {ALLOW_HTTP_VARIABLE}=1"

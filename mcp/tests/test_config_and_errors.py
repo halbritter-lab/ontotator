@@ -10,6 +10,7 @@ from mcp import Client
 
 from ontotator_mcp.config import ConfigError, Settings
 from ontotator_mcp.errors import api_error
+from ontotator_mcp.server import build_server
 
 
 def test_settings_come_from_the_environment() -> None:
@@ -135,3 +136,74 @@ async def test_a_redirect_is_not_followed(fake: FakeApi, mcp_client: Client) -> 
     ):
         await call(mcp_client, "list_projects", {})
     assert len(fake.calls) == 1
+
+
+@pytest.mark.parametrize(
+    ("extra", "message"),
+    [
+        ({"ONTOTATOR_TIMEOUT": "nan"}, "ONTOTATOR_TIMEOUT"),
+        ({"ONTOTATOR_TIMEOUT": "-1"}, "ONTOTATOR_TIMEOUT"),
+        ({"ONTOTATOR_JOB_TIMEOUT": "inf"}, "ONTOTATOR_JOB_TIMEOUT"),
+        ({"ONTOTATOR_URL": "https://user:pw@a.example"}, "user name or password"),
+        ({"ONTOTATOR_URL": "https://[bad"}, "not a valid URL"),
+        ({"ONTOTATOR_TOKEN": "ott_one two"}, "whitespace"),
+        ({"ONTOTATOR_TOKEN": "ott_one\nott_two"}, "whitespace"),
+    ],
+)
+def test_odd_values_are_refused(extra: dict[str, str], message: str) -> None:
+    env = {"ONTOTATOR_URL": "https://a.example", "ONTOTATOR_TOKEN": TOKEN} | extra
+    with pytest.raises(ConfigError, match=re.escape(message)) as raised:
+        Settings.from_env(env)
+    assert "pw" not in str(raised.value)
+
+
+def test_messages_end_with_one_full_stop() -> None:
+    error = api_error(_response(403, {"code": "NOT_ALLOWED", "details": "Leads only."}))
+    assert ".." not in str(error)
+    assert "HTTP 403 NOT_ALLOWED. Leads only. The token's owner" in str(error)
+
+
+@pytest.mark.anyio
+async def test_an_echoed_token_is_redacted(fake: FakeApi, mcp_client: Client) -> None:
+    def echo(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500, text="debug: " + request.headers["authorization"])
+
+    fake.on("GET", "/api/v1/projects", echo)
+    with pytest.raises(ToolFailed) as raised:
+        await call(mcp_client, "list_projects", {})
+    assert "debug: Bearer ***" in str(raised.value)
+    assert TOKEN not in str(raised.value)
+
+    fake.on(
+        "GET",
+        "/api/v1/projects",
+        lambda r: refusal(400, "BAD", {"header": r.headers["authorization"]}),
+    )
+    with pytest.raises(ToolFailed) as raised:
+        await call(mcp_client, "list_projects", {})
+    assert "Bearer ***" in str(raised.value)
+    assert TOKEN not in str(raised.value)
+
+    fake.on(
+        "GET",
+        "/api/v1/projects",
+        httpx.Response(302, headers={"location": f"https://o.test/?t={TOKEN}"}),
+    )
+    with pytest.raises(ToolFailed) as raised:
+        await call(mcp_client, "list_projects", {})
+    assert "?t=***" in str(raised.value)
+    assert TOKEN not in str(raised.value)
+
+
+@pytest.mark.anyio
+async def test_a_transport_error_does_not_show_the_token(settings: Settings) -> None:
+    def fail(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError(f"refused {request.headers['authorization']}")
+
+    server = build_server(settings, transport=httpx.MockTransport(fail))
+    async with Client(server) as client:
+        with pytest.raises(ToolFailed) as raised:
+            await call(client, "list_projects", {})
+    assert "Cannot reach Ontotator" in str(raised.value)
+    assert "Bearer ***" in str(raised.value)
+    assert TOKEN not in str(raised.value)

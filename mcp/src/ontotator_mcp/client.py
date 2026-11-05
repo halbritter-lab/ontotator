@@ -18,7 +18,7 @@ import httpx
 
 from ontotator_mcp import __version__
 from ontotator_mcp.config import Settings
-from ontotator_mcp.errors import OntotatorError, api_error, transport_error
+from ontotator_mcp.errors import OntotatorError, api_error, redact, transport_error
 
 JOB_DONE = ("succeeded", "failed")
 CHUNK = 1024 * 1024
@@ -87,6 +87,9 @@ class OntotatorClient:
     async def aclose(self) -> None:
         await self._http.aclose()
 
+    def _unreachable(self, exc: httpx.HTTPError) -> OntotatorError:
+        return transport_error(self.settings.url, exc, self.settings.token)
+
     async def _send(
         self,
         method: str,
@@ -107,12 +110,15 @@ class OntotatorClient:
                 data=data,
             )
         except httpx.HTTPError as exc:
-            raise transport_error(self.settings.url, exc) from None
+            raise self._unreachable(exc) from None
         if response.is_redirect:
+            location = redact(
+                response.headers.get("location", "?"), self.settings.token
+            )
             raise OntotatorError(
                 f"Ontotator answered {method} {path} with a redirect to"
-                f" {response.headers.get('location', '?')}. Set ONTOTATOR_URL to"
-                " the final address; the token is not sent on redirects."
+                f" {location}. Set ONTOTATOR_URL to the final address; the token"
+                " is not sent on redirects."
             )
         if response.is_error:
             raise api_error(response)
@@ -227,7 +233,7 @@ class OntotatorClient:
                             digest.update(chunk)
                             written += len(chunk)
                 except httpx.HTTPError as exc:
-                    raise transport_error(self.settings.url, exc) from None
+                    raise self._unreachable(exc) from None
             os.replace(partial, target)
         except BaseException:
             with contextlib.suppress(OSError):

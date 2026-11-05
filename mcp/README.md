@@ -29,7 +29,7 @@ The token is shown once. Store it like a password: the MCP client keeps it in it
 
 | Variable | Meaning |
 | --- | --- |
-| `ONTOTATOR_URL` | Address of the instance, for example `https://ontotator.example.org`. Plain `http` is accepted only for `localhost` and loopback addresses. |
+| `ONTOTATOR_URL` | Address of the instance, for example `https://ontotator.example.org`. Plain `http` is accepted only for `localhost` and loopback addresses, or for another host with `ONTOTATOR_ALLOW_HTTP=1`. |
 | `ONTOTATOR_TOKEN` | The API token (`ott_...`). It is sent only as `Authorization: Bearer` to `ONTOTATOR_URL`, never logged, never part of a tool result, and not sent again after a redirect. |
 | `ONTOTATOR_ALLOW_HTTP` | `1` allows plain `http` to another host, for a trusted network only. |
 | `ONTOTATOR_TIMEOUT` | Seconds per HTTP request (default 60). |
