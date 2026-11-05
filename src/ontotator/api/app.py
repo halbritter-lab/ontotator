@@ -50,6 +50,7 @@ from ontotator.api.submission_history_routes import (
     router as submission_history_router,
 )
 from ontotator.api.token_routes import admin_router as admin_token_router
+from ontotator.api.token_routes import current_router as current_token_router
 from ontotator.api.token_routes import me_router as my_token_router
 from ontotator.api.token_routes import project_router as project_token_router
 from ontotator.api.token_scopes import annotate_openapi
@@ -623,6 +624,7 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
     app.include_router(job_router)
     app.include_router(upload_router)
     app.include_router(my_token_router)
+    app.include_router(current_token_router)
     app.include_router(project_token_router)
     app.include_router(admin_token_router)
     app.include_router(me_router)

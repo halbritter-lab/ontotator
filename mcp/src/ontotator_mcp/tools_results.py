@@ -253,6 +253,19 @@ def register_results(server: MCPServer, api: OntotatorClient) -> None:
             bool,
             Field(description="Final export: leave out texts without a final result."),
         ] = False,
+        request_id: Annotated[
+            str | None,
+            Field(
+                min_length=1,
+                max_length=128,
+                description=(
+                    "Final or Phenopackets export: a name for this request, e.g."
+                    " 'nightly-2026-11-05'. Repeating the call with the same"
+                    " request_id and an unchanged project returns the same job"
+                    " instead of a second export. None: a new export each call."
+                ),
+            ),
+        ] = None,
         wait: Annotated[
             bool, Field(description="Wait until the file is ready (polls the job).")
         ] = True,
@@ -260,12 +273,18 @@ def register_results(server: MCPServer, api: OntotatorClient) -> None:
         """Start an export job of the project; download it with download_export.
 
         Stores a new export file on the server; changes no project data.
-        Each call starts a new job.
+        Each call starts a new job, except a final or Phenopackets export
+        repeated with the same request_id.
         A final export freezes the accepted results as they are now; the
         warnings and omissions final_export_check lists must be
         acknowledged.
         """
-        if kind in ("final", "phenopackets"):
+        final = kind in ("final", "phenopackets")
+        if request_id is not None and not final:
+            raise OntotatorError(
+                "request_id applies to the final and Phenopackets exports only."
+            )
+        if final:
             state = await api.post(project_path(project, "exports/final/preflight"))
             warnings = state.get("warnings", [])
             omissions = state.get("omissions", [])
@@ -282,7 +301,7 @@ def register_results(server: MCPServer, api: OntotatorClient) -> None:
             created = await api.post(
                 project_path(project, "exports/final"),
                 {
-                    "request_id": str(uuid.uuid4()),
+                    "request_id": request_id or str(uuid.uuid4()),
                     "state_digest": state["state_digest"],
                     "acknowledged_warnings": [
                         {"id": w["id"], "cause_revision": w["cause_revision"]}
