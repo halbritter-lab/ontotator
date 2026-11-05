@@ -89,9 +89,17 @@ describe("project members", () => {
     const dialog = await screen.findByRole("dialog", { name: "Remove Alice from the project?" });
     expect(dialog.textContent).toContain("Alice loses access to this project.");
     expect(dialog.textContent).toContain("This logs Alice out of Ontotator on all devices");
+    expect(dialog.textContent).not.toContain("project API tokens");
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(api.setMemberRoles).not.toHaveBeenCalled();
     expect((screen.getByRole("checkbox", { name: "alice: Annotator" }) as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("says that losing the lead role revokes the person's project tokens (#305)", async () => {
+    render(<MembersSection projectKey="p" />);
+    fireEvent.click(await screen.findByRole("checkbox", { name: "lead: Lead" }));
+    const dialog = await screen.findByRole("dialog", { name: "Remove Lead from the project?" });
+    expect(dialog.textContent).toContain("The project API tokens Lead created for this project are revoked, unless Lead is a system administrator.");
   });
 
   it("suggests matching people to a lead from three typed letters on", async () => {

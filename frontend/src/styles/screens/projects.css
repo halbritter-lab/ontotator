@@ -6,6 +6,9 @@
 .projects-page__actions { display: inline-flex; flex-wrap: nowrap; gap: var(--space-2); white-space: nowrap; }
 .projects-table tbody th[scope="row"] { background: transparent; font-weight: var(--weight-regular); }
 .projects-table tr.projects-table__row--current > :first-child { box-shadow: inset 3px 0 0 var(--accent); }
+/* Project archives (#306): export and import read as two parts, not one form. */
+.project-archives h3 { margin-top: var(--space-6); }
+.project-archives .btn + .notice { margin-top: var(--space-3); }
 
 @media (max-width: 699px) {
   .projects-page .data-table-scroll { overflow-x: visible; }

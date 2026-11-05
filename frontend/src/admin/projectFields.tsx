@@ -162,8 +162,8 @@ export function ProfileUpload({ onChange, disabled, id = "project-profile-file",
 }
 
 export type ToolProposalMode = "proposals" | "scratch";
-export interface WorkflowDraft { import_plan: ProjectSettings["import_plan"]; annotations_per_text: number; tool_proposal_mode: ToolProposalMode; annotate_accepted_translations_only: boolean; adjudicator_not_annotator: boolean; record_working_time: boolean }
-export const workflowOf = (settings: ProjectSettings): WorkflowDraft => ({ import_plan: settings.import_plan ?? "review_and_annotate_translations", annotations_per_text: settings.annotations_per_text ?? 1, tool_proposal_mode: settings.tool_proposal_mode ?? "proposals", annotate_accepted_translations_only: settings.annotate_accepted_translations_only ?? true, adjudicator_not_annotator: settings.adjudicator_not_annotator, record_working_time: settings.record_working_time ?? false });
+export interface WorkflowDraft { import_plan: ProjectSettings["import_plan"]; annotations_per_text: number; tool_proposal_mode: ToolProposalMode; annotate_accepted_translations_only: boolean; adjudicator_not_annotator: boolean; blind_consolidation: boolean; record_working_time: boolean }
+export const workflowOf = (settings: ProjectSettings): WorkflowDraft => ({ import_plan: settings.import_plan ?? "review_and_annotate_translations", annotations_per_text: settings.annotations_per_text ?? 1, tool_proposal_mode: settings.tool_proposal_mode ?? "proposals", annotate_accepted_translations_only: settings.annotate_accepted_translations_only ?? true, adjudicator_not_annotator: settings.adjudicator_not_annotator, blind_consolidation: settings.blind_consolidation ?? false, record_working_time: settings.record_working_time ?? false });
 const toolProposalOptions: { value: ToolProposalMode; label: string; help: string }[] = [
   { value: "proposals", label: "Annotators work from the proposals", help: "confirm, reject, correct, add" },
   { value: "scratch", label: "Annotators start from scratch", help: "proposals hidden" },
@@ -215,7 +215,7 @@ export function WorkflowFields({ projectKey, value, saved, onChange, disabled }:
       </div>
     </SettingsCard>
     <SettingsCard title="Annotation and consolidation" hint="Checked when you assign."
-      why={<><p>Native source texts are never held back by the translation review; the Assign dialog can override this for one assignment.</p><p>The consolidator rule is checked when you assign consolidation.</p></>}>
+      why={<><p>Native source texts are never held back by the translation review; the Assign dialog can override this for one assignment.</p><p>The consolidator rule is checked when you assign consolidation.</p><p>Hidden names apply to every consolidation the next time it opens.</p></>}>
       <div className="settings-card-row">
         <TextInput id={`${prefix}-annotations`} label="Annotators per text" type="number" min={1} max={5} step={1} required hint="Upper limit; fewer is fine." value={Number.isFinite(target) ? String(target) : ""} disabled={disabled}
           onChange={event => onChange({ ...value, annotations_per_text: event.target.value === "" ? Number.NaN : Number(event.target.value) })} />
@@ -224,6 +224,9 @@ export function WorkflowFields({ projectKey, value, saved, onChange, disabled }:
             checked={value.annotate_accepted_translations_only} disabled={disabled} onChange={event => onChange({ ...value, annotate_accepted_translations_only: event.target.checked })} />
           <Checkbox id={`${prefix}-consolidator`} label="Consolidator must not be one of the text's annotators"
             checked={value.adjudicator_not_annotator} disabled={disabled} onChange={event => onChange({ ...value, adjudicator_not_annotator: event.target.checked })} />
+          <Checkbox id={`${prefix}-blind`} label="Hide annotator names during consolidation"
+            hint="Consolidators see Annotator A, B, … instead of names. Leads and exports still name everyone."
+            checked={value.blind_consolidation} disabled={disabled} onChange={event => onChange({ ...value, blind_consolidation: event.target.checked })} />
         </div>
       </div>
       {rows !== null && <p role="status" className="field-hint">{rows > 0 ? `${rows} ${rows === 1 ? "row has" : "rows have"} more annotators than the new limit. Nobody is removed.` : "Nobody is removed."}</p>}

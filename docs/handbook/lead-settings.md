@@ -247,9 +247,12 @@ What for: decide how many people annotate each text and who may consolidate.
 2. Set **Annotators per text** (1 to 5). It is an upper limit; fewer is fine.
 3. Tick **Annotate only after the translation review is accepted** if translations must be reviewed before annotation. Nobody can then annotate a translation that is not accepted; you can still assign annotators while the review is underway ([Assign work to the selected texts](lead-documents.md#assign-work-to-the-selected-texts)).
 4. Tick **Consolidator must not be one of the text's annotators** if annotators may not consolidate their own texts.
-5. Click **Save changes**.
+5. Tick **Hide annotator names during consolidation** if consolidators should decide without knowing who marked what. Off by default.
+6. Click **Save changes**.
 
 Lowering the number removes nobody; existing assignments stay.
+
+With hidden names, a consolidator sees the annotators of a text as *Annotator A*, *Annotator B* and so on, in the order they submitted, instead of names or pseudonyms; the same letters are used in the consolidation, the full editor and the submitted work they read for it. A person keeps their letter in later consolidation rounds of the same task. The technical ids and checksums the consolidator's browser receives are scrambled too, so they cannot be used to work out who wrote a finding. Tool proposals keep their robot icon. You and other leads still see every name, and exports are unchanged. The change applies to every consolidation the next time it opens, also to one already started. The audit trail records the change as *Project settings changed*, with the setting named.
 
 ## Record working time
 
@@ -283,7 +286,7 @@ What for: give or take away a role.
 
 1. Open **Settings**, tab **People**. The table **Project members** shows one row per person.
 2. Tick a role checkbox to give the role. It saves at once.
-3. Untick a role checkbox to take it away, then confirm with **Remove role**. This logs the person out on all devices; they can log in again right away.
+3. Untick a role checkbox to take it away, then confirm with **Remove role**. This logs the person out on all devices; they can log in again right away. Taking away the lead role also revokes the project API tokens the person created for this project, unless they are a system administrator. Their personal tokens keep working, but no longer with the role you took away.
 
 A project needs at least one lead: **Add another project lead before removing the last lead.**
 
@@ -297,6 +300,17 @@ Warning: if the person still has open work, removing them revokes their open ass
 2. In the person's row, click **Remove…**.
 3. Confirm with **Remove from project**.
 4. If the person still has open work, the dialog **Revoke affected assignments?** lists it, annotations and translation reviews alike. Click **Remove and revoke their open assignments**.
+
+## Give a script access to the project
+
+What for: let a script import, export or read this project, for example a nightly export, without anyone's password.
+
+1. Open **Settings**, tab **People**.
+2. Under **Project API tokens**, click **New token…**.
+3. Enter a **Token name**, tick the scopes it needs (**Read**, **Import**, **Export**, **Project administration**) and set **Valid for (days)**.
+4. Click **Create token**. Copy the token from the dialog with **Copy token** and store it; it is shown only once.
+
+A project token works in this project only and acts as you, the lead who created it. It is revoked when you leave the project or lose the lead role (unless you are a system administrator), when you change your password and when your account is deactivated. Every lead of the project sees its tokens and can stop one with **Revoke…** and **Revoke token**. Changes made with a token are in the audit trail with the token's name.
 
 ## Publish the first or a new guideline version
 

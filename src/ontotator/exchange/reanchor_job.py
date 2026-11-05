@@ -45,7 +45,7 @@ from ontotator.exchange.t1 import (
     document_to_t1,
     layers_for,
 )
-from ontotator.jobs.queue import Job, JobContext, JobQueue
+from ontotator.jobs.queue import Job, JobContext, JobQueue, handler_payload
 from ontotator.storage.database import Database
 from ontotator.storage.repository import Repository, _lock_id
 from ontotator.storage.tables import (
@@ -360,7 +360,7 @@ def _pair(row: Mapping[Any, Any], project_id: int, project: str) -> PairJob:
     from pydantic import ValidationError
 
     try:
-        payload = ReanchorPayload.model_validate(row["payload"])
+        payload = ReanchorPayload.model_validate(handler_payload(row["payload"]))
     except ValidationError as exc:
         raise DomainError("REANCHOR_PRODUCER_INVALID") from exc
     if (
@@ -654,7 +654,7 @@ def reanchor(job: Job, ctx: JobContext) -> dict[str, Any]:
             or current["status"] != "running"
             or current["kind"] != "reanchor"
             or current["project_id"] is None
-            or current["payload"] != job.payload
+            or handler_payload(current["payload"]) != job.payload
         ):
             raise DomainError("REANCHOR_PRODUCER_INVALID")
         project = conn.execute(

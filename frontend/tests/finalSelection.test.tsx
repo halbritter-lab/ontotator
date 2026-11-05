@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, expect, it, vi } from "vitest";
 import { api } from "../src/api/client";
 import { FinalExportPanel } from "../src/admin/FinalExportPanel";
+import { ERROR_MESSAGES } from "../src/admin/errors";
 const preflight = { project: "p", selections: [{ case_id: "case", language: "en", document_id: "d", submission_id: "s", revision: 1 }], warnings: [{ id: "w", code: "OPEN_PROBLEM_REPORT", cause_revision: 2, case_id: "case", language: "en", reason: "Wording under review", destination: "#/tasks/1" }], omissions: [], state_digest: "a".repeat(64) };
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 const ACK = /^Export the 1 result as it is/;
@@ -77,6 +78,7 @@ it("shows the counts and the grouped table without moving focus", async () => {
   vi.spyOn(api, "finalExportPreflight").mockResolvedValue({ ...preflight, omissions: [{ case_id: "other", language: "de" }] });
   render(<FinalExportPanel projectKey="p" username="lead" />);
   expect(screen.getByText(/one result file per text, a plain-language guide \(README\.txt\)/)).toBeDefined();
+  expect(screen.getByText(/the agreement between annotators \(agreement\.csv, agreement-summary\.csv\)/)).toBeDefined();
   const check = await screen.findByRole("region", { name: "Export check" });
   expect(check.contains(document.activeElement)).toBe(false);
   const counts = [...check.querySelectorAll(".stat-row > div")].map(item => item.textContent);
@@ -245,4 +247,44 @@ it("counts the texts it lists: one row per text, a text to decide is not also le
   expect(screen.getByText("Left out: no final result (2)")).toBeDefined();
   expect(screen.getByText("An open problem report needs a lead decision. Paragraph two is missing.")).toBeDefined();
   expect(screen.getByText("left out: no final result").parentElement!.textContent).toContain("2");
+});
+
+it("creates Phenopackets from the same check when that format is chosen (issue 308)", async () => {
+  vi.spyOn(api, "finalExportPreflight").mockResolvedValue({ ...preflight, warnings: [] });
+  const start = vi.spyOn(api, "startFinalExport").mockResolvedValue({ job_id: 9 });
+  vi.spyOn(api, "getJob").mockResolvedValue({ ...job("succeeded"), id: 9, kind: "final_phenopacket_export", finished_at: "2026-10-18T12:01:00Z" } as never);
+  const download = vi.spyOn(api, "downloadJob").mockResolvedValue({ blob: new Blob(["zip"]), filename: "server.zip" });
+  const save = vi.spyOn(await import("../src/api/download"), "saveDownload").mockImplementation(() => {});
+  render(<FinalExportPanel projectKey="p" username="lead" />);
+  await waitFor(() => expect(screen.getByRole("button", { name: "Create final export" }).getAttribute("aria-disabled")).toBeNull());
+  fireEvent.change(screen.getByLabelText("Format"), { target: { value: "phenopacket" } });
+  fireEvent.click(screen.getByRole("button", { name: "Create final export" }));
+  await waitFor(() => expect(start).toHaveBeenCalledWith("p", expect.objectContaining({ format: "phenopacket" })));
+  expect(await screen.findByText(/^Phenopackets ready: 1 result/)).toBeDefined();
+  fireEvent.click(screen.getByRole("button", { name: "Download (ZIP)" }));
+  await waitFor(() => expect(save).toHaveBeenCalledWith(expect.anything(), "p-final-phenopackets.zip"));
+  expect(download).toHaveBeenCalledWith(9);
+});
+
+it("names why Phenopackets failed from the job's error code, or says which format failed", async () => {
+  vi.spyOn(api, "finalExportPreflight").mockResolvedValue({ ...preflight, warnings: [] });
+  vi.spyOn(api, "startFinalExport").mockResolvedValue({ job_id: 9 });
+  const failedJob = (result: unknown) => ({ ...job("failed"), id: 9, kind: "final_phenopacket_export", result, error: "StructuredJobError: two HPO releases", finished_at: "2026-10-18T12:01:00Z" });
+  const getJob = vi.spyOn(api, "getJob").mockResolvedValue(failedJob({ error: { code: "PHENOPACKET_UNREPRESENTABLE", details: { document_id: "EN-1", reason: "two HPO releases" } } }) as never);
+  render(<FinalExportPanel projectKey="p" username="lead" />);
+  await waitFor(() => expect(screen.getByRole("button", { name: "Create final export" }).getAttribute("aria-disabled")).toBeNull());
+  fireEvent.change(screen.getByLabelText("Format"), { target: { value: "phenopacket" } });
+  fireEvent.click(screen.getByRole("button", { name: "Create final export" }));
+  expect(await screen.findByText(ERROR_MESSAGES.PHENOPACKET_UNREPRESENTABLE)).toBeDefined();
+  expect(screen.getByText("Document: EN-1")).toBeDefined();
+  expect(screen.getByText("Technical diagnostics").closest("details")?.open).toBe(false);
+  expect(screen.queryByText(/Final export could not be created/)).toBeNull();
+  cleanup();
+
+  getJob.mockResolvedValue(failedJob(null) as never);
+  render(<FinalExportPanel projectKey="p" username="lead" />);
+  await waitFor(() => expect(screen.getByRole("button", { name: "Create final export" }).getAttribute("aria-disabled")).toBeNull());
+  fireEvent.change(screen.getByLabelText("Format"), { target: { value: "phenopacket" } });
+  fireEvent.click(screen.getByRole("button", { name: "Create final export" }));
+  expect(await screen.findByText("The Phenopackets could not be created. Open diagnostics for the technical details.")).toBeDefined();
 });

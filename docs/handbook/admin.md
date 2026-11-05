@@ -86,7 +86,7 @@ What for: correct a name, e-mail, qualification or languages, or grant or remove
 1. On **Users**, click **Edit** in the row.
 2. Change **Display name**, **E-mail**, **Qualification**, **Languages** or **System administrator**.
 3. Click **Save changes**.
-4. If you changed the administrator role, confirm with **Save changes** again. The person is logged out everywhere.
+4. If you changed the administrator role, confirm with **Save changes** again. The person is logged out everywhere. Removing the role revokes their system tokens and their project tokens for projects they do not lead; their personal tokens keep working with the roles they still have. Granting the role revokes no token.
 
 You cannot remove your own administrator role. The last active system administrator cannot lose the role either; add another one first.
 
@@ -96,7 +96,7 @@ What for: stop someone from logging in, without deleting their work.
 
 1. On **Users**, click **More…** in the row.
 2. Choose **Deactivate…**.
-3. Confirm with **Deactivate**. The person is logged out everywhere.
+3. Confirm with **Deactivate**. The person is logged out everywhere and their API tokens are revoked.
 4. To undo, open **More…** again and choose **Activate**.
 
 You cannot deactivate your own account. In project member lists the person shows as **Inactive**.
@@ -106,8 +106,8 @@ You cannot deactivate your own account. In project member lists the person shows
 What for: check what was changed on an account and by whom.
 
 1. On **Users**, click **More…** in the row and choose **History**. For anonymised accounts, click the **History** button in the row.
-2. Read the table: **When**, **By**, **What**, **Whom**, **Project**, **Details**. Research exports are listed too, for example *Edit log exported* or *Working time exported*.
-3. The dialog shows the newest 200 entries. For the whole trail, use the command `ontotator admin audit`, see [Server operations](../operations.md#users-ontologies-and-projects).
+2. Read the table: **When**, **By**, **What**, **Whom**, **Project**, **Details**. **What** names the change in plain words, for example *Project settings changed*, *Final export created* or *Phenopackets created*. Research exports are listed too, for example *Edit log exported* or *Working time exported*.
+3. Changes made with an API token name it under **Details** (*Via API token*); the single requests a token made are left out here. The dialog shows the newest 200 entries. For the whole trail, use the command `ontotator admin audit`, see [Server operations](../operations.md#users-ontologies-and-projects).
 
 ## Anonymise a deactivated account
 
@@ -199,6 +199,33 @@ What for: as system administrator you can manage every project, also without a p
 2. In the project's row, click **Open** to go to its documents, or **Settings** to change it.
 3. Work as a lead would; see the [lead overview](lead.md).
 
+## Move a project to another server
+
+What for: copy one complete project, with its texts, work, history, guidelines and people, to another Ontotator server, or keep a copy of it.
+
+A project archive is a ZIP file. It holds every record of the project, the stored files it uses and, for each person it names, the username and pseudonym, and the e-mail address of each person who worked in the project. Keep it as private as the project itself.
+
+To export a project:
+
+1. Click **Projects** in the sidebar.
+2. Under **Project archives**, **Export a project**, choose the **Project**.
+3. Keep **Include ontology files** ticked, unless the other server already has the same ontology and translation files.
+4. Click **Export archive**. When **Archive ready** appears, click **Download archive**. When the archive is larger than this page accepts as an upload (300 MiB unless the operator changed it), the message says so: the operator then imports it on the other server on the command line.
+
+An export is refused while an import or export of the project is still running. Download the archive within 24 hours: the server then deletes it, and at once when an account is erased. Export again to get a new one. The server also deletes an uploaded archive once its import has finished.
+
+To import an archive on the other server:
+
+1. Click **Projects** in the sidebar.
+2. Under **Import an archive**, choose the file in **Archive file (.zip)**.
+3. Click **Import archive**. When **Project imported** appears, it names the new project, the people matched to accounts here, the pseudonym-only people and any new pseudonyms in the copied work (for example `ann-0005 → ann-0007`).
+
+Both servers must run the same Ontotator version: an archive from another version is refused. The import checks every file against the archive's manifest first and refuses a damaged or incomplete archive, one that would expand to far more than its size, and one whose records point to another project here. The manifest is not signed, so the check finds damage, not a deliberate change: only import archives from a source you trust. It then reads the imported project back and compares every table with the archive; a difference undoes the whole import. When the project key is taken here, the copy gets a suffix such as `-2`, and the name a suffix such as *(2)*; a copy of such a copy gets the next number (`-3`, *(3)*).
+
+People are matched by e-mail address. A person with an account of the same e-mail address keeps the roles in the project. A person without such an account becomes a pseudonym-only person: an anonymised account with the person's pseudonym, without name, e-mail address or login. Work recorded under a pseudonym keeps that pseudonym. When the matched account has another pseudonym, the work stays with a pseudonym-only person that is linked to the account, and the account gets the person's roles. A pseudonym-only person can be linked to an account later on the command line (see the [operations guide](../operations.md#move-a-project-to-another-server)).
+
+When someone here already has a pseudonym that the archived work carries, the import is refused. The same holds for work recorded under an annotator id without an account (for example from imported annotation files) when that id is a pseudonym here or names other work here. Tick **Give people new pseudonyms where theirs are taken here** to import anyway: such a person or annotator id gets a new pseudonym, and a person matched by e-mail gets the account's pseudonym, wherever the copied work records who did it. Texts, notes and guidelines are never changed.
+
 ## Practice projects
 
 What for: see and remove the private practice projects of annotators and translation reviewers, and switch the offer on or off.
@@ -225,3 +252,15 @@ Off hides the card on **My tasks** and **Start practice** in the profile. Existi
 
 A practice project freezes its translations like any project. A translation file uploaded later does not reach a practice project that is already in use, and the upload warning does not name practice projects. The owner gets the new file with **Reset…** in the profile.
 
+## API tokens
+
+What for: see every API token of the server, stop one, or create a system token for administration scripts.
+
+1. Click **Server settings** under **Administration**.
+2. Go to **API tokens**. The table shows each token's **Kind** (*Personal*, *Project* or *System*), **Owner**, **Project**, **Scopes**, expiry, last use and **Status**.
+3. To stop a token, click **Revoke…** in its row, then **Revoke token**. A token the server revoked by itself says why next to **Revoked**, for example *project role removed* or *password changed*.
+4. To create a system token, click **New system token…**, enter a **Token name**, tick its scopes and click **Create token**. Copy the token from the dialog; it is shown only once.
+
+Only a system token may hold the **System administration** scope, for ontology and translation uploads and user accounts. It acts as you and is revoked when you are no longer a system administrator, when you change your password and when your account is deactivated. Token creation, revocation and every change made with a token are in the audit trail.
+
+On the server, `ontotator admin tokens create`, `list` and `revoke` do the same from the command line.

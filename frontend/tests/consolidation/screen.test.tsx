@@ -270,6 +270,17 @@ describe("ConsolidationScreen", () => {
     expect(screen.getByText("Reason from the lead: Term and assertion differ")).toBeTruthy();
   });
 
+  it("says that annotator names are hidden and shows only the letters (#302)", async () => {
+    const base = exampleView();
+    const people = base.people.map((person, index) => ({ ...person, person_id: `annotator-${"abc"[index]}`, label: `Annotator ${"ABC"[index]}` }));
+    const ids = new Map(base.people.map((person, index) => [person.person_id, people[index].person_id]));
+    load({ ...base, annotators_hidden: true, people, groups: base.groups.map(g => ({ ...g, members: g.members.map(m => ({ ...m, person_id: ids.get(m.person_id) ?? m.person_id })) })) });
+    await renderScreen({ assignmentId: 42, lead: false });
+    expect(screen.getByText(/^Annotator names are hidden in this project\./)).toBeTruthy();
+    expect(screen.getAllByText(/Annotator A/).length).toBeGreaterThan(0);
+    for (const person of base.people) expect(document.body.textContent).not.toContain(person.label.replace(/\s+\(.*\)$/, ""));
+  });
+
   it("shows no reason line without a reason", async () => {
     load(exampleView());
     await renderScreen({ assignmentId: 42, lead: false });

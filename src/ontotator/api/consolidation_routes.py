@@ -32,8 +32,10 @@ class _View(BaseModel):
 class ConsolidationPersonView(_View):
     """An input author; display name for the assignee and leads only (U8)."""
 
-    person_id: str  # pseudonym, e.g. "ann-0004"
-    label: str  # "Luc Martin (ann-0004)" or the pseudonym
+    # pseudonym, e.g. "ann-0004"; "annotator-a" while names are hidden
+    person_id: str
+    # "Luc Martin (ann-0004)" or the pseudonym; "Annotator A" while hidden
+    label: str
     lane: int  # 1..4 (lane 4 also for every further person)
 
 
@@ -132,6 +134,9 @@ class ConsolidationView(_View):
     added_by: str | None = None
     # The consolidator's label, always (the read-only banner names them).
     consolidator: str | None = None
+    # The project hides annotator names (issue 302): ``people`` reads
+    # "Annotator A", "Annotator B", … and person ids are opaque.
+    annotators_hidden: bool = False
     # The lead's "Consolidation reason" from the start command (#146); None
     # when the lead gave none.
     consolidation_reason: str | None = None

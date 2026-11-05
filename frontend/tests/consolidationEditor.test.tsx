@@ -53,7 +53,7 @@ const member = (inputId: string, personId: string, annotationId: string, termId:
 });
 
 const consolidation: ConsolidationView = {
-  round_id: "round-c", workspace_id: "ws-c", read_only: false, read_only_reason: null, case_id: "case-107", language: "en",
+  round_id: "round-c", workspace_id: "ws-c", read_only: false, read_only_reason: null, annotators_hidden: false, case_id: "case-107", language: "en",
   document_version: 2, document_id: "doc-1", text: "The patient showed severe hypotonia and seizure activity.",
   people: [
     { person_id: "ann-0004", label: "Luc Martin (ann-0004)", lane: 1 },

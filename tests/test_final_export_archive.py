@@ -54,7 +54,7 @@ def test_archive_contains_hashed_readme_and_index(case_env):
     state, archive = _export(case_env)
     names = set(archive.namelist())
     assert {
-        "selected.t1.zip",
+        "selected-results.ontospan.zip",
         "source-texts.jsonl",
         "receipt.json",
         "README.txt",
@@ -78,7 +78,9 @@ def test_archive_contains_hashed_readme_and_index(case_env):
     selected_rows = [row for row in table if row["row_type"] == "selected"]
     assert [row["submission_id"] for row in selected_rows] == ["original"]
     assert selected_rows[0]["submitted_at"].endswith("Z")
-    with zipfile.ZipFile(io.BytesIO(archive.read("selected.t1.zip"))) as bundle:
+    with zipfile.ZipFile(
+        io.BytesIO(archive.read("selected-results.ontospan.zip"))
+    ) as bundle:
         for row in selected_rows:
             unit = json.loads(bundle.read(row["bundle_entry"]))
             assert (
