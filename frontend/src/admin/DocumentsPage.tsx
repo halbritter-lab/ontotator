@@ -33,7 +33,7 @@ import { leadSteps, rowActionLabel } from "../documents/nextStepLabels";
 import { TranslationCorrectionAction } from "../variants/TranslationCorrectionAction";
 import { DecisionBlock } from "../documents/FinalPanel";
 import { StageActions, type StageActionsProps } from "../documents/StageActions";
-import { TextCard } from "../documents/textCard/TextCard";
+import { TextCard, type CardStep } from "../documents/textCard/TextCard";
 import type { CardView, SegmentId } from "../documents/textCard/cardModel";
 import { CardPlanSelect, TextPlanDialog } from "../documents/PlanSteps";
 import { HandleTextChangeDialog } from "../documents/HandleTextChangeDialog";
@@ -76,6 +76,11 @@ export interface DocumentsPageProps {
 export const NARROW_DOCUMENTS_QUERY = "(max-width: 699px)";
 /** Lead steps the text card's parts offer themselves (Assign review…, + Person, the decision block, Change plan…). */
 const CARD_PART_ACTIONS: ReadonlySet<string> = new Set(["assign_translation_review", "assign_annotation", "choose_final", "review_changes", "plan"]);
+/** The row's first lead step is one the card places in a part or banner (issue 332): the card opens there, not on the decision block. */
+const firstStepPlaced = (row: DocumentRowView): boolean => {
+  const first = isActiveRow(row) ? leadSteps(row)[0] : undefined;
+  return !!first && !CARD_PART_ACTIONS.has(first.action ?? "");
+};
 
 export { ID_FILTER_DELAY_MS } from "../documents/DocumentsSearch";
 /** The table's eight columns; "Select" and "Action" headers are visually hidden. */
@@ -594,7 +599,8 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       case "choose_final":
       case "review_changes":
         setResolveOptions(null);
-        openCard({ key }, { opener: focusedElement(), focus: true });
+        // The decision is a later step of the row: open its part explicitly (the card opens on the first step's part).
+        openCard(firstStepPlaced(row) ? { key, stage: "final" } : { key }, { opener: focusedElement(), focus: true });
         return;
       // Text changes (V5): one dialog per old-version item; the "+n" menu lists one entry per person.
       case "handle_text_change": setTextChange({ kind: "handle", rowKey: key, step }); return;
@@ -752,16 +758,14 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     } else announce(direction > 0 ? "Last row" : "First row");
   };
   // The row shows one next-step button; the card offers every other lead step its parts do not cover.
-  const cardSteps = (row: DocumentRowView) => {
-    const steps = isActiveRow(row) ? leadSteps(row).filter(step => !CARD_PART_ACTIONS.has(step.action ?? "")) : [];
-    return steps.length ? steps.map((step, index) => <Button key={`${step.code}-${index}`} size="sm"
-      onClick={() => { closeCard(); onAction(row, step); }}>{rowActionLabel(step, row)}</Button>) : null;
-  };
+  // The card places each step where it acts (the report banner, its part; issue 332).
+  const cardSteps = (row: DocumentRowView): CardStep[] => (isActiveRow(row) ? leadSteps(row).filter(step => !CARD_PART_ACTIONS.has(step.action ?? "")) : [])
+    .map(step => ({ step, button: <Button size="sm" onClick={() => { closeCard(); onAction(row, step); }}>{rowActionLabel(step, row)}</Button> }));
   // U-4: the Translation column and filter group show once a translation exists or a language beyond the sources is set up.
   const translations = !inventory || inventory.cases.some(item => item.variants.some(variant => variant.origin !== "native")) || !settings
     || (settings.languages ?? []).some(language => !inventory.cases.some(item => item.variants.some(variant => variant.language === language)));
   const textCard = panelKey && panelRow ? <TextCard projectKey={projectKey} row={panelRow} rows={pageRows} query={query}
-    segment={panelStage ? SEGMENT_OF[panelStage] : decisionKey.current === panelKey ? "finalization" : undefined} view={VIEW_OF[panelTab]}
+    segment={panelStage ? SEGMENT_OF[panelStage] : decisionKey.current === panelKey && !firstStepPlaced(panelRow) ? "finalization" : undefined} view={VIEW_OF[panelTab]}
     onSegment={segment => openCard({ key: panelKey, stage: STAGE_OF[segment] })}
     onView={view => openCard({ key: panelKey, stage: panelStage, tab: view === "path" ? undefined : view })}
     onStep={stepCard} onClose={closeCard} onNavigate={route => onNavigate(route)}

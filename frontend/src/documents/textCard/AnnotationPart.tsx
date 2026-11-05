@@ -36,7 +36,7 @@ function ordered(people: readonly CardWorkItem[]): CardWorkItem[] {
  * "Assign annotators…" that opens the assign dialog (also for another person beside the current ones; the lead can
  * pick themselves there).
  */
-export function AnnotationPart({ row, projectKey, query, submissions, canManage, onAssign, onNavigate, onChanged, tools, now, planControl }: {
+export function AnnotationPart({ row, projectKey, query, submissions, canManage, onAssign, onNavigate, onChanged, tools, now, planControl, steps, actions }: {
   row: DocumentRowView;
   projectKey: string;
   query: ProjectDocumentsQuery;
@@ -51,6 +51,10 @@ export function AnnotationPart({ row, projectKey, query, submissions, canManage,
   now?: Date;
   /** The annotation plan control in the header (planned texts). */
   planControl?: ReactNode;
+  /** The lead's steps of this part ("Next step: …" with their buttons, issue 332). */
+  steps?: ReactNode;
+  /** The stage's admin actions (Assign a new review…, Change final…), joined to the part's action row. */
+  actions?: ReactNode;
 }): JSX.Element {
   const id = useId();
   // After a removal focus moves to the next person's first button, else "Assign annotators…".
@@ -89,6 +93,7 @@ export function AnnotationPart({ row, projectKey, query, submissions, canManage,
       <h3 id={`${id}-title`} className="text-card-part-title">Annotation</h3>
       {planControl}
     </div>
+    {steps}
     {/* Without the plan control (texts outside the plan, annotators) the mode is a line of its own. */}
     {!planControl && mode && <p>{annotationTaskName(mode.mode)}</p>}
     {!planControl && mode?.source === "no_proposals" && <p className="text-card-muted">{NO_PROPOSALS}</p>}
@@ -122,9 +127,10 @@ export function AnnotationPart({ row, projectKey, query, submissions, canManage,
         </PersonRow>;
       })}
     </PersonList>}
-    {canManage && annotating && <div className="text-card-actions">
-      <Button ref={assignButton} size="sm" variant="primary" aria-disabled={full ? "true" : undefined} aria-describedby={full ? `${id}-status` : undefined}
-        onClick={() => { if (!full) onAssign(row, "annotate"); }}>Assign annotators…</Button>
+    {((canManage && annotating) || actions) && <div className="text-card-actions">
+      {canManage && annotating && <Button ref={assignButton} size="sm" variant="primary" aria-disabled={full ? "true" : undefined} aria-describedby={full ? `${id}-status` : undefined}
+        onClick={() => { if (!full) onAssign(row, "annotate"); }}>Assign annotators…</Button>}
+      {actions}
     </div>}
   </section>;
 }

@@ -238,7 +238,8 @@ test('lead assigns the exact pending translation; ordinary reviewer corrects, su
     await reopenedLead.page.goto(documentsUrl(s));
     const original = await documentRow(reopenedLead.page, s.documents.target);
     await expect(original).toContainText('Reviewed'); await expect(await documentRow(reopenedLead.page, created.document_id)).toContainText('Accepted');
-    await original.getByRole('button', { name: 'Reopen', exact: true }).click();
+    // The reviewer's person row under the version: Reopen… (one label with the Annotation part, issue 329).
+    await original.getByRole('button', { name: /^Reopen .+’s translation review$/ }).click();
     const dialog = reopenedLead.page.getByRole('dialog', { name: `v1 of ${s.case_id} de` });
     await dialog.getByLabel('Reason (optional)', { exact: true }).fill('Inspect immutable review history');
     await dialog.getByRole('button', { name: 'Reopen assignment', exact: true }).click(); await expect(dialog).toHaveCount(0);

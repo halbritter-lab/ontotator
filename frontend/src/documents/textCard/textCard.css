@@ -48,6 +48,14 @@
 .text-card-subheading { margin-bottom: var(--space-2); }
 .text-card-muted { color: var(--text-muted); font-size: var(--size-sm); line-height: var(--leading-sm); }
 .text-card-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+/* A stage without admin actions renders nothing into its row: no empty block, no extra grid gap (issue 332). */
+.text-card-actions:empty { display: none; }
+/* "Open text" of the sheet and Other languages share one line (issue 332). */
+.text-card-topline { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); }
+.text-card-topline > .text-card-open-text { margin-inline-end: 0; }
+/* Text-like buttons (footer, "How is this counted?") put their label on the column edge, not 11 px in (issue 331). */
+.text-card-footer > .btn-quiet:first-child,
+.text-card .btn-quiet.btn-link { margin-inline-start: calc(-1 * (10px + 1px)); }
 /* The part's one next step (issue 129, U5): label and primary button, set apart from the secondary tools below. */
 .text-card-next {
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-3);
@@ -59,7 +67,9 @@
 .text-card-plan { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
 .text-card-plan-label { color: var(--text-muted); font-weight: var(--weight-strong); }
 .text-card-banners { display: grid; gap: var(--space-2); }
-.text-card-banner { padding: var(--space-2) var(--space-3); border: 1px solid var(--warning); border-radius: var(--radius-sm); background: var(--warning-light); }
+/* A banner is a notice: its title, then its button row (Open, Decide on report…; issue 332). */
+.text-card-banner { display: grid; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--warning); border-radius: var(--radius-sm); background: var(--warning-light); }
+.text-card-banner-title { font-weight: var(--weight-strong); overflow-wrap: anywhere; }
 .text-card-footer { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--border); }
 
 /* People of a step (person rows, mockup variant A): one row per person. Name and details on the left, the status pill in a
@@ -149,18 +159,22 @@
 .compare-chooser { display: flex; flex-wrap: wrap; align-items: end; gap: var(--space-2); }
 .compare-chooser .form-group { margin-bottom: 0; }
 
-.text-versions { gap: var(--space-3); }
-.text-version { display: grid; gap: var(--space-1); padding-left: var(--space-2); border-left: 2px solid var(--border); }
+/* Versions share the part's left edge (issue 329): a version is its head line, its records, its people as person rows
+   (status pill column, actions right) and its action row; versions are set apart by spacing, not a left rule. */
+.text-versions { gap: var(--space-4); }
+.text-version { display: grid; gap: var(--space-2); min-width: 0; }
 .text-version-head,
-.text-version-actions,
-.text-version-work > li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.text-version-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .text-version-head .form-group { margin-bottom: 0; }
 .text-version-name { font-weight: var(--weight-strong); }
 .text-version-origin,
 .text-version-chain { color: var(--text-muted); }
 .text-version-actions a { white-space: nowrap; }
 .text-version-older > details > summary { color: var(--text-muted); cursor: pointer; }
-.text-version-older > details > .text-versions { margin-top: var(--space-2); }
+.text-version-older > details > .text-versions,
+.text-version-group { margin-top: var(--space-3); }
+.text-version-group { display: grid; gap: var(--space-2); }
+.text-version-group-title { margin: 0; font-size: var(--size-base); line-height: var(--leading-base); font-weight: var(--weight-strong); }
 
 /* The text card's footer list only; editor <details class="technical-details"> stay blocks (R-5). */
 dl.technical-details { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--space-1) var(--space-3); margin: 0; }
@@ -169,6 +183,12 @@ dl.technical-details dd { margin: 0; overflow-wrap: anywhere; font-family: var(-
 
 /* Decision block (the former final-result panel, V6): choose, compare, review changes */
 .final-panel { display: grid; gap: var(--space-3); min-width: 0; padding: var(--space-3); border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); }
+/* In the card's Finalization part the decision block is part content: no box of its own, its text and the table's first and
+   last columns on the part's edges (issue 331). */
+.text-card-part .final-panel { padding: 0; border: 0; border-radius: 0; background: none; }
+.text-card-part .final-panel-table :is(th, td):first-child { padding-inline-start: 0; }
+.text-card-part .final-panel-table :is(th, td):last-child { padding-inline-end: 0; }
+.text-card-part .final-panel-table thead th { background: none; color: var(--text-muted); font-size: var(--size-sm); line-height: var(--leading-sm); }
 .final-panel p { margin: 0; }
 .text-card-decision-title { margin: 0; font-size: var(--size-md); line-height: var(--leading-md); font-weight: var(--weight-strong); }
 .final-panel-success .notice-content { display: grid; gap: var(--space-1); }
@@ -209,7 +229,6 @@ dl.technical-details dd { margin: 0; overflow-wrap: anywhere; font-family: var(-
   .segmented .segment[data-checked] { forced-color-adjust: none; background: Highlight; color: HighlightText; }
   .row-activity-line, .text-card-report { border-left-color: CanvasText; }
   .selection-notice { border-color: CanvasText; }
-  .text-version { border-left-color: CanvasText; }
   .final-panel-text-change { border-color: CanvasText; }
   .final-panel-agreement-bar { forced-color-adjust: auto; }
 }

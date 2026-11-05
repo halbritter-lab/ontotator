@@ -8,7 +8,7 @@ import { formatTime } from "../../src/app/submissionLabels";
 import { TextCard, type TextCardProps } from "../../src/documents/textCard/TextCard";
 import type { SegmentId } from "../../src/documents/textCard/cardModel";
 import { annotateItem, cardRow } from "./cardFixtures";
-import { final, submission, submissions, version, work } from "./fixtures";
+import { final, stepOf, submission, submissions, version, work } from "./fixtures";
 import { ana, cell, luc, tom } from "./tableFixtures";
 import type { TextVersionsTools } from "../../src/documents/TextVersions";
 
@@ -475,8 +475,116 @@ describe("problem reports (from the row panel)", () => {
   it("banners open reports above the path", () => {
     const { onNavigate } = renderCard({ row: assignRow({ problem_reports: [report({ report_id: "r-3" }), report({ report_id: "r-4", title: "Second" })] }) });
     const banner = card().querySelector<HTMLElement>(".text-card-banner")!;
-    expect(banner.textContent).toBe("2 open problem reports, Open");
+    // A notice: its title, then its button row (issue 332).
+    expect(banner.getAttribute("role")).toBe("group");
+    expect(within(banner).getByText("2 open problem reports").className).toBe("text-card-banner-title");
+    expect(banner.textContent).toBe("2 open problem reportsOpen");
     fireEvent.click(within(banner).getByRole("link", { name: "Open problem report, Text is cut off" }));
     expect(onNavigate).toHaveBeenCalledWith(reportRoute("r-3"));
+  });
+});
+
+describe("one layout for the parts (issues 329, 331, 332)", () => {
+  const versions = [
+    version({ document_id: "case-200-a1", origin: "machine_translation", derived_from: "case-200-en", translation_status: "reviewed", chain_name: "Provider A", is_newest_in_chain: false }),
+    version({ document_id: "case-200-a2", version: 2, origin: "correction", derived_from: "case-200-a1", chain_id: "case-200-a1", chain_name: "Provider A", translation_status: "accepted", is_newest_in_chain: false }),
+    version({ document_id: "case-200-a3", version: 3, origin: "correction", derived_from: "case-200-a2", chain_id: "case-200-a1", chain_name: "Provider A", translation_status: "accepted" }),
+    version({ document_id: "case-200-b1", origin: "machine_translation", derived_from: "case-200-en", chain_name: "Provider B", translation_status: "reviewed", is_newest_in_chain: false }),
+    version({ document_id: "case-200-b2", version: 2, origin: "correction", derived_from: "case-200-b1", chain_id: "case-200-b1", chain_name: "Provider B", translation_status: "ready_for_review" }),
+  ];
+  const reviewA = work({ assignment_id: 5, document_id: "case-200-a1", task: "translation_review", status: "submitted", author_label: "ann-0003", person: ana });
+  const reviewB = work({ assignment_id: 7, document_id: "case-200-b1", task: "translation_review", status: "submitted", author_label: "ann-0004", person: tom });
+  const annotation = work({ assignment_id: 8, document_id: "case-200-a1", task: "annotate", status: "submitted", author_label: "ann-0005", person: luc });
+
+  it("the version list shows each person as a person row with a status pill, Reopen… and Remove…, View text as a button; older versions by chain", () => {
+    const tools = textTools([toolAssignment(5, "submitted", { task: "translation_review", document_id: "case-200-a1", pseudonym: "ann-0003" }),
+      toolAssignment(7, "submitted", { task: "translation_review", document_id: "case-200-b1" }), toolAssignment(8, "submitted", { document_id: "case-200-a1", pseudonym: "ann-0005" })]);
+    renderCard({ row: assignRow({ versions, parallel_roots: true, work: [reviewA, reviewB, annotation] }), initialSegment: "translation", textVersionTools: tools });
+    const part = within(card()).getByRole("heading", { name: "Translation" }).closest("section")!;
+    const older = within(part).getByText("Older versions (3)").closest("details")!;
+    older.open = true;
+    const v1 = within(part).getByRole("list", { name: "Assignments on Provider A v1" });
+    const rows = within(v1).getAllByRole("listitem");
+    expect(rows.map(row => row.className)).toEqual(["person-row", "person-row"]);
+    expect(rows[0].querySelector(".person-row-name")!.textContent).toBe("Ana Weber");
+    expect(rows[0].querySelector(".person-row-details")!.textContent).toBe("Translation review");
+    expect(rows[0].querySelector(".person-row-status")!.textContent).toContain("Submitted");
+    expect(within(rows[0]).getAllByRole("button").map(button => [button.textContent, button.getAttribute("aria-label")])).toEqual([
+      ["Reopen…", "Reopen Ana Weber’s translation review"], ["Remove…", "Remove Ana Weber’s review assignment"]]);
+    // The annotation's actions are in the Annotation part.
+    expect(within(rows[1]).queryAllByRole("button")).toHaveLength(0);
+    // One remove label everywhere (issue 329).
+    const removes = within(card()).queryAllByRole("button").filter(button => /^Remove/.test(button.textContent ?? ""));
+    expect(removes.length).toBeGreaterThan(0);
+    expect(removes.every(button => button.textContent === "Remove…")).toBe(true);
+    const view = within(part).getByRole("link", { name: "View text Provider A v3 of case-200 de" });
+    expect(view.className).toBe("btn btn-secondary btn-sm");
+    // Older versions grouped by chain, each chain a heading; the newest ones stay outside.
+    expect(within(older).getAllByRole("heading").map(heading => [heading.tagName, heading.textContent])).toEqual([["H4", "Provider A"], ["H4", "Provider B"]]);
+    const groupA = within(older).getByRole("region", { name: "Provider A" });
+    expect([...groupA.querySelectorAll(".text-version-name")].map(name => name.textContent)).toEqual(["Provider A v1", "Provider A v2"]);
+    // The chain is in the name: no repeated chain column.
+    expect(part.querySelector(".text-version-chain")).toBeNull();
+  });
+
+  it("moved work is a plain person row saying where it went", () => {
+    const moved = work({ assignment_id: 9, document_id: "case-200-a3", task: "annotate", status: "in_progress", author_label: "ann-0005", person: luc, moved_to_version: 4 });
+    renderCard({ row: assignRow({ versions, parallel_roots: true, work: [], moved_work: [moved] }), initialSegment: "translation", textVersionTools: textTools([]) });
+    const v3 = within(card()).getByRole("list", { name: "Assignments on Provider A v3" });
+    expect(within(v3).getByRole("listitem").querySelector(".person-row-status")!.textContent).toContain("Moved to v4");
+    expect(within(v3).queryAllByRole("button")).toHaveLength(0);
+  });
+
+  it("each lead step sits in the banner or part it acts on, with its label; nothing stands between the banners and the path", () => {
+    const report = { report_id: "r-1", title: "Text is cut off", reporter_label: "ann-0004", created_at: "2026-10-19T08:00:00Z", state: "open" as const, active_hold_count: 1 };
+    const decide = stepOf("decide_report", { report_id: "r-1", stage: "annotation", assignment_id: 1 });
+    const resolve = stepOf("resolve_rejected", { stage: "translation_review", action: "resolve" });
+    const steps = [decide, resolve].map(step => ({ step, button: <button type="button" className="btn btn-secondary btn-sm">{step.action === "resolve" ? "Resolve…" : "Decide on report…"}</button> }));
+    const row = assignRow({ problem_reports: [report], steps: [decide, resolve] });
+    renderCard({ row, steps, initialSegment: "translation" });
+    const banner = card().querySelector<HTMLElement>(".text-card-banner")!;
+    expect(within(banner).getByRole("button", { name: "Decide on report…" })).toBeTruthy();
+    expect(banner.querySelector(".text-card-banner-title")!.textContent).toBe("1 open problem report: Text is cut off");
+    const part = within(card()).getByRole("heading", { name: "Translation" }).closest("section")!;
+    const next = within(part).getByRole("group", { name: "Next step: Resolve rejected translation" });
+    expect(within(next).getByRole("button", { name: "Resolve…" })).toBeTruthy();
+    // No loose action row in the card body: the banners, the path, the part.
+    const body = card().querySelector(".text-card-body")!;
+    expect([...body.children].map(child => child.className.split(" ")[0] || child.tagName)).toEqual(["text-card-banners", "NAV", "text-card-part"]);
+  });
+
+  it("the card opens on the part of the row's first lead step", () => {
+    const carry = stepOf("carry_text_change", { stage: "annotation", assignment_id: 1 });
+    const row = assignRow({ steps: [carry], stages: { review: cell("accepted", "done"), annotation: cell("submitted", "done", { submitted: 1, total: 1 }), final: cell("choose", "todo", { submitted: 1 }) } });
+    renderCard({ row, steps: [{ step: carry, button: <button type="button">Carry to v2…</button> }] });
+    expect(segmentButton("Annotation").getAttribute("aria-current")).toBe("step");
+    expect(within(card()).getByRole("group", { name: "Next step: Carry to v2" })).toBeTruthy();
+  });
+
+  it("Open result and the stage's Change final… share one action row; a stage without actions adds no block", () => {
+    const chosen = final({ case_id: "case-200", language: "de", document_id: "case-200-de", submission_id: "s-final" });
+    const row = assignRow({ final: chosen, stages: { review: cell("accepted", "done"), annotation: cell("submitted", "done", { submitted: 2, total: 2 }), final: cell("final", "done") } });
+    renderCard({ row, stageActions: stage => (stage === "final" ? <button type="button" className="btn btn-secondary btn-sm">Change final…</button> : null) });
+    const part = within(card()).getByRole("heading", { name: "Finalization" }).closest("section")!;
+    const rows = part.querySelectorAll(".text-card-actions");
+    expect(rows).toHaveLength(1);
+    expect([...rows[0].children].map(child => child.textContent)).toEqual(["Open result", "Change final…"]);
+    // The part is the last block of the body (no stage-actions sibling after it).
+    expect(card().querySelector(".text-card-body")!.lastElementChild).toBe(part);
+    fireEvent.click(segmentButton("Annotation"));
+    const annotationPart = within(card()).getByRole("heading", { name: "Annotation" }).closest("section")!;
+    expect([...annotationPart.querySelectorAll(".text-card-actions")].filter(actions => !actions.matches(":empty"))).toHaveLength(1);
+    expect(card().querySelector(".text-card-body")!.lastElementChild).toBe(annotationPart);
+  });
+
+  it("the sheet's Open text shares its line with Other languages", () => {
+    vi.stubGlobal("matchMedia", (media: string) => ({ matches: media === "(max-width: 699px)", media, addEventListener: vi.fn(), removeEventListener: vi.fn(), addListener: vi.fn(), removeListener: vi.fn() }));
+    const en = assignRow({ language: "en", is_source: true });
+    const row = assignRow();
+    const handlers = { onStep: vi.fn(), onClose: vi.fn(), onNavigate: vi.fn(), onAssign: vi.fn(), onChangePlan: vi.fn(), onChanged: vi.fn() };
+    render(<TextCard projectKey="p" row={row} rows={[row, en]} query={query} reportRoute={reportRoute} canManage now={now} onSegment={vi.fn()} onView={vi.fn()} onOpenText={vi.fn()} {...handlers} />);
+    const topline = card().querySelector<HTMLElement>(".text-card-topline")!;
+    expect(within(topline).getByRole("link", { name: "Open text, case-200 de" })).toBeTruthy();
+    expect(within(topline).getByRole("button", { name: "Show case-200 en" })).toBeTruthy();
   });
 });
