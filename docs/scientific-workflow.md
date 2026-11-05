@@ -262,7 +262,8 @@ by design. The complete selected results travel with it:
 
 Uncertain assertions are not included (ontospan's default). Each feature's
 evidence has a reference id of the form
-`ontospan:selected-<snapshot ID>:<set ID>:<annotation ID>`, which names its
+`urn:ontospan:selected-<snapshot ID>:<set ID>:<annotation ID>`, each part
+percent-encoded (`ontospan.parse_annotation_ref` decodes it), which names its
 finding (annotation set and annotation) in `selected-results.ontospan.zip` of
 the same ZIP.
 

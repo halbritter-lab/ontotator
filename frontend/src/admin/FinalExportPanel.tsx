@@ -199,15 +199,15 @@ function FinalExportContent({ projectKey }: { projectKey: string }): JSX.Element
           </>}
         {!state.selections.length && <InlineMessage tone="info"><span id="final-export-empty">No final results are selected yet. Accept submitted results in Documents to include them.</span>{" "}
           <a href={routeHref({ name: "projectDocuments", key: projectKey })}>Go to Documents</a></InlineMessage>}
-        {needsAck(state) && <Checkbox ref={acknowledgement} id="final-export-ack"
-          label={`Export ${state.selections.length === 1 ? "the 1 result as it is" : `the ${state.selections.length} results as they are`}${state.omissions.length ? `; leave out the other ${state.omissions.length === 1 ? "text" : `${state.omissions.length} texts`}` : ""}`}
-          checked={accepted} disabled={creating} onChange={event => setAccepted(event.target.checked)} />}
       </section>}
+      <Select id="final-export-format" label="Format" value={format} disabled={creating} onChange={event => setFormat(event.target.value as Format)}>
+        {(Object.keys(FORMATS) as Format[]).map(value => <option key={value} value={value}>{FORMATS[value].label}</option>)}
+      </Select>
+      {state && needsAck(state) && <Checkbox ref={acknowledgement} id="final-export-ack"
+        label={`Export ${state.selections.length === 1 ? "the 1 result as it is" : `the ${state.selections.length} results as they are`}${state.omissions.length ? `; leave out the other ${state.omissions.length === 1 ? "text" : `${state.omissions.length} texts`}` : ""}`}
+        checked={accepted} disabled={creating} onChange={event => setAccepted(event.target.checked)} />}
       {creating && <p id="final-export-creating-hint" className="field-hint">The export is being created.</p>}
       <div className="final-export-actions" role="group" aria-label="Final export actions">
-        <Select id="final-export-format" label="Format" value={format} disabled={creating} onChange={event => setFormat(event.target.value as Format)}>
-          {(Object.keys(FORMATS) as Format[]).map(value => <option key={value} value={value}>{FORMATS[value].label}</option>)}
-        </Select>
         <Button variant="primary" loading={creating} aria-disabled={blockedBy ? "true" : undefined} aria-describedby={blockedBy} onClick={() => { void start(); }}>Create final export</Button>
         {blockedBy === "final-export-ack-hint" && <span id="final-export-ack-hint" className="field-hint">Tick the box above to continue.</span>}
       </div>
@@ -228,8 +228,8 @@ function FinalExportContent({ projectKey }: { projectKey: string }): JSX.Element
       </div>
     </>}
     {phase === "check" && <details className="final-export-details"><summary>What is in the file?</summary>
-      <p className="cell-secondary">Results with receipt: a ZIP with one result file per text, a plain-language guide (README.txt) and a table of every result (index.csv).</p>
-      <p className="cell-secondary">Phenopackets: one Phenopacket per text, made from the same results for tools that read phenotypic features. They leave out what a Phenopacket cannot hold, such as findings about family members, uncertain findings and findings left unresolved; a report per text and a summary (report.json) count what was left out. The ZIP also holds the selected results as an Ontospan bundle, which each finding in a Phenopacket points to. Texts of the same patient are not grouped yet.</p></details>}
+      {format === "t1" && <p className="cell-secondary">A ZIP with one result file per text, a plain-language guide (README.txt) and a table of every result (index.csv).</p>}
+      {format === "phenopacket" && <p className="cell-secondary">One Phenopacket per text, made from the same results for tools that read phenotypic features. They leave out what a Phenopacket cannot hold, such as findings about family members, uncertain findings and findings left unresolved; a report per text and a summary (report.json) count what was left out. The ZIP also holds the selected results as an Ontospan bundle, which each finding in a Phenopacket points to. Texts of the same patient are not grouped yet.</p>}</details>}
   </section>;
 }
 

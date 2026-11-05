@@ -392,3 +392,7 @@ def test_selected_results_equal_the_final_export_of_the_same_snapshot(env, monke
     assert SELECTED_RESULTS_FILE in readme and "Ontospan bundle" in readme
     assert "T1" not in readme and "t1.zip" not in readme
     assert "onset" in readme and "temporality" in readme
+    # The README names the reference as it is written, prefix and encoding.
+    flat = " ".join(readme.split())
+    assert f"urn:ontospan:{bundle_id}:<annotation set id>:<annotation id>" in flat
+    assert "percent-encoded" in flat

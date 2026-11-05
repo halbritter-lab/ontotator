@@ -150,7 +150,8 @@ def _readme(
         "",
         *_heading("What is in this archive"),
         "README.txt            This guide.",
-        "phenopackets/N.json   One Phenopacket (schema v2, protobuf JSON) per text.",
+        "phenopackets/N.json   One Phenopacket (schema v2, protobuf JSON) per text;",
+        "                      report.json names the text of each file.",
         "reports/N.json        For the Phenopacket of the same number: what the",
         "                      conversion exported and left out, by category.",
         "report.json           All texts with their counts, and the totals.",
@@ -173,16 +174,28 @@ def _readme(
             "Every text is one Phenopacket. Its id and subject.id are the text's "
             "document_id. Texts of the same patient are not grouped into one "
             "Phenopacket: Ontotator does not know which texts belong to one "
-            "patient.",
+            "patient. metaData.resources names the HPO release of the terms.",
             "- ",
             "  ",
         ),
         *_wrap(
-            "Only findings of hpo-phenotype layers whose experiencer is the "
+            "Only findings of HPO phenotype layers (kind hpo-phenotype) whose "
+            "experiencer is the "
             "patient become features. Findings about family members or other "
             "persons, with an unknown experiencer, with assertion uncertain, or "
             "left unresolved in consolidation are left out; findings of other "
             "layers are skipped. reports/ and report.json count each category.",
+            "- ",
+            "  ",
+        ),
+        *_wrap(
+            "The counts: exported (features written); left out: omitted_family, "
+            "omitted_other_person, omitted_unknown_experiencer, omitted_uncertain "
+            "and left_out_unresolved; skipped_other_layers (findings of other "
+            "layers); exported with a loss: historical (see Time) and "
+            "frequency_modifiers (a frequency is a cohort concept, kept under "
+            '"modifiers"); uncertain_included is always 0, since uncertain '
+            "findings are left out.",
             "- ",
             "  ",
         ),
@@ -208,8 +221,10 @@ def _readme(
         *_wrap(
             "Each feature's evidence names ECO:0000218 (manual assertion) or, for "
             "a tool finding, ECO:0007636 (automatic assertion). Its reference id, "
-            f"ontospan:{bundle_id}:<annotation set>:<finding>, names the finding "
-            f"in {SELECTED_RESULTS_FILE}, whose bundle ID is {bundle_id}.",
+            f"urn:ontospan:{bundle_id}:<annotation set id>:<annotation id>, "
+            f"names the finding in {SELECTED_RESULTS_FILE}, whose bundle ID is "
+            f"{bundle_id}; each part is percent-encoded, so decode a part "
+            '(for example "%3A" to ":") before you look it up.',
             "- ",
             "  ",
         ),
