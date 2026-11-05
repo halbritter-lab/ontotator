@@ -14,6 +14,9 @@
 .text-card-body p { margin: 0; }
 .text-card-view { display: grid; justify-items: start; gap: var(--space-3); }
 .text-card-view > :not(button) { justify-self: stretch; }
+/* "Back" and the view's heading (History, Details) on one line (issue 335). */
+.text-card-view-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
+.text-card-view-title { margin: 0; font-size: var(--size-base); line-height: var(--leading-base); font-weight: var(--weight-strong); }
 .text-card-part { display: grid; gap: var(--space-2); min-width: 0; padding-top: var(--space-3); border-top: 1px solid var(--border); }
 /* Section header: the title, the step's plan control on the right (mockup variant A). */
 .text-card-part-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-3); }
@@ -79,6 +82,15 @@
   .person-row-actions { justify-content: flex-start; }
 }
 
+/* Issue 330: from 700 px the card hangs from a fixed top edge (where the tallest card would sit when centred), so
+   switching parts or opening History / Details never moves its heading, ‹ › and path; only its height changes. */
+@media (min-width: 700px) {
+  .text-card.ui-dialog { align-self: flex-start; margin-top: calc((100dvh - min(90vh, calc(100dvh - var(--space-6)))) / 2); }
+}
+@media (min-width: 1280px) {
+  .text-card.ui-dialog { max-width: min(960px, 90vw); }
+}
+
 /* V1: below 700 px a full-width sheet; long ids break, words do not. */
 @media (max-width: 699px) {
   .text-card.ui-dialog { position: fixed; inset: 0; width: 100%; max-width: none; max-height: 100dvh; border-radius: 0; }
@@ -103,6 +115,11 @@
 .row-activity-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); padding-top: var(--space-2); border-top: 1px solid var(--border); }
 /* One row per person: their name, then only their own actions. */
 .stage-actions-reassign { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2); }
+
+/* Problem reports under Details: title, a muted meta line, then Open report (issue 335). */
+.text-card-reports { display: grid; gap: var(--space-3); margin: 0; padding: 0; list-style: none; }
+.text-card-report { display: grid; justify-items: start; gap: var(--space-1); padding-left: var(--space-2); border-left: 2px solid var(--border); overflow-wrap: anywhere; }
+.text-card-report-title { font-weight: var(--weight-strong); }
 
 .text-version-record { margin: 0; color: var(--text-muted); font-size: var(--size-sm); line-height: var(--leading-sm); overflow-wrap: anywhere; }
 
@@ -173,6 +190,11 @@ dl.technical-details dd { margin: 0; overflow-wrap: anywhere; font-family: var(-
 .final-panel-table th[scope="row"] { font-weight: var(--weight-strong); }
 .final-panel-row-actions { white-space: nowrap; text-align: end; }
 .final-panel-row-actions > * { vertical-align: middle; }
+/* The sheet's submissions (issue 333): one item per submission, its buttons on their own line. */
+.final-panel-list { display: grid; gap: var(--space-3); min-width: 0; }
+.final-panel-list-group { display: grid; gap: var(--space-2); min-width: 0; }
+.final-panel-list-group-label { color: var(--text-muted); font-size: var(--size-sm); line-height: var(--leading-sm); font-weight: var(--weight-strong); }
+.final-panel-list .submissions-list-item { justify-items: start; }
 .final-panel-consolidate { display: grid; gap: var(--space-2); min-width: 0; }
 .final-panel-text-change { display: grid; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--warning); border-radius: var(--radius-sm); background: var(--warning-light); }
 @media (max-width: 699px) {
@@ -185,7 +207,7 @@ dl.technical-details dd { margin: 0; overflow-wrap: anywhere; font-family: var(-
   .text-card-banner { border-color: CanvasText; }
   .person-rows, .person-row { border-color: CanvasText; }
   .segmented .segment[data-checked] { forced-color-adjust: none; background: Highlight; color: HighlightText; }
-  .row-activity-line { border-left-color: CanvasText; }
+  .row-activity-line, .text-card-report { border-left-color: CanvasText; }
   .selection-notice { border-color: CanvasText; }
   .text-version { border-left-color: CanvasText; }
   .final-panel-text-change { border-color: CanvasText; }

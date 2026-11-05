@@ -1,4 +1,4 @@
-"""Migration 0032 (issue 320): ``edit_events.step_id`` and ``drafts.initial_state``."""
+"""Migration 0033 (issue 320): ``edit_events.step_id`` and ``drafts.initial_state``."""
 
 from __future__ import annotations
 
@@ -10,8 +10,8 @@ from sqlalchemy import Connection, create_engine, text
 
 from ontotator.storage.schema import alembic_config, upgrade
 
-REVISION = "0032"
-PREVIOUS = "0031"
+REVISION = "0033"
+PREVIOUS = "0032"
 S = "ontotator"
 
 

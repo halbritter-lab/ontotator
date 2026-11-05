@@ -12,15 +12,15 @@ Purely additive, two nullable columns, so no existing row changes:
 
 The downgrade drops both columns.
 
-Follows 0031 (annotation working time).
+Follows 0032 (empty proposal sets).
 """
 
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB
 
-revision = "0032"
-down_revision = "0031"
+revision = "0033"
+down_revision = "0032"
 branch_labels = None
 depends_on = None
 SCHEMA = "ontotator"
