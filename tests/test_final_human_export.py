@@ -249,9 +249,12 @@ _VOLATILE = [
 # also counts texts where a tool proposed nothing. #321 renamed the bundles
 # (selected.t1.zip -> selected-results.ontospan.zip, provenance.t1.zip ->
 # provenance-results.ontospan.zip): the names in README.txt and under
-# "files" in receipt.json changed, and README.txt says "Ontospan bundle".
+# "files" in receipt.json changed, and README.txt says "Ontospan bundle";
+# "How to read it" then explained the columns of findings.csv, the counts
+# of agreement.csv and the empty cells of agreement-summary.csv and
+# proposals.csv.
 CARRY_FORWARD_DIGEST = (
-    "b5fecbbcf976bbb19276c64f69ed5408a4ce510c54e9eda5217db35bec93ef6f"
+    "c7c40f8ea00fa15c58bd69f97b4146b7f3333af055916ceaf867423b6bb03ed0"
 )
 
 

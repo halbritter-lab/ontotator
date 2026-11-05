@@ -138,6 +138,8 @@ def test_archive_lists_and_hashes_the_tables(consolidated):
     readme = archive.read("README.txt").decode()
     assert all(name in readme for name in tables)
     assert "no kappa" in readme
+    # The empty count cells of macro_mean are explained, not a gap.
+    assert "count columns are empty on purpose" in " ".join(readme.split())
     # No proposal checks: the table has its header only.
     assert rows(archive.read("proposals.csv")) == []
 
@@ -280,7 +282,9 @@ def test_agreement_covers_consolidated_and_directly_accepted_texts(tmp_path):
     ) as bundle:
         unit = json.loads(bundle.read(index["sub-c2-ben"]["bundle_entry"]))
     assert unit["annotation_set"]["annotation_set_id"] == "submission-sub-c2-ben"
-    assert "compared-results.ontospan.zip" in archive.read("README.txt").decode()
+    readme = " ".join(archive.read("README.txt").decode().split())
+    assert "compared-results.ontospan.zip NOT final results" in readme
+    assert '"compared" rows are not final results' in readme
 
     pairs = {r["document_id"]: r for r in rows(archive.read("agreement.csv"))}
     assert set(pairs) == {"c1-en", "c2-en"}

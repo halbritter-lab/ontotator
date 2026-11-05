@@ -264,8 +264,9 @@ def build_readme(
     if compared_ids:
         out += [
             bundle_file("compared"),
-            "                    The other annotations of texts whose result was",
-            "                    accepted directly, for agreement. Not final results.",
+            "                    NOT final results: the other annotators' work on",
+            "                    texts whose result was accepted directly, kept only",
+            "                    to compute agreement.csv.",
         ]
     out += [
         "source-texts.jsonl  The exact text versions the results refer to, one JSON",
@@ -300,7 +301,8 @@ def build_readme(
         "",
         *_heading("How to read it"),
         *_wrap(
-            'Start with index.csv. Rows with row_type "selected" are the final results.',
+            'Start with index.csv. Only rows with row_type "selected" are final '
+            "results; the other row types are explained below.",
             "- ",
             "  ",
         ),
@@ -336,13 +338,46 @@ def build_readme(
             "  ",
         ),
         *_wrap(
+            "findings.csv has one row per finding of each submission in the "
+            "bundles, so a text with several submissions lists its findings "
+            'several times. row_type is that of index.csv: keep "selected" to '
+            'analyse the final results only. "pseudonym" is the person ("author" '
+            'in index.csv). Each "value_<axis>" column holds one value field, '
+            'for example value_assertion; "defaulted_values" names the value '
+            'fields nobody chose, "modifiers" the modifier term IDs, both joined '
+            'by ";". "unresolved" is "yes" when the finding still carries a '
+            "reviewer's uncertain flag.",
+            "- ",
+            "  ",
+        ),
+        *_wrap(
             "agreement.csv compares, per text, the annotations of every two "
             "people that the bundles hold, with ontospan's matching: strict needs "
             "the same passage, tolerant an overlapping one; term_f1 compares the "
             "terms with their values. Span annotation has no countable negatives, "
-            "so only F1 values are given, no kappa. agreement-summary.csv gives "
-            '"macro_mean" (mean over the texts) and "pooled" (from the summed '
-            "counts).",
+            "so only F1 values are given, no kappa. modifier_agreement is the "
+            "share of matched findings with the same modifiers.",
+            "- ",
+            "  ",
+        ),
+        *_wrap(
+            "The counts behind these values follow in agreement.csv: findings_a "
+            "and findings_b (findings of person a and b), equal (same term, "
+            "values and passage), compatible (same term and values, overlapping "
+            "passage), axis_conflicts (same term, other values), term_conflicts "
+            "(other term on overlapping text), a_only and b_only (no partner), "
+            "the same per passage (mentions_*) and per term (terms_*), and "
+            "modifiers_compared (matched findings) with modifiers_agreeing.",
+            "- ",
+            "  ",
+        ),
+        *_wrap(
+            'agreement-summary.csv has two rows. "macro_mean" averages each value '
+            "over the pairs of a text, then over the texts; its count columns are "
+            'empty on purpose, since a mean of counts means nothing. "pooled" '
+            "computes each value from the counts summed over all pairs and lists "
+            'those sums. Without any pair both rows have "pairs" 0 and empty '
+            "values.",
             "- ",
             "  ",
         ),
@@ -354,7 +389,9 @@ def build_readme(
             "precision = matched / proposals, recall = matched / final_findings. "
             "Recall counts every text with a selected result on which a proposal "
             "set naming the tool was imported, also where the tool proposed "
-            "nothing: there all final findings are misses.",
+            "nothing: there all final findings are misses. Columns a row type "
+            'does not use stay empty: "annotator" rows fill submissions to '
+            'added, "source" rows (one per tool) texts to recall.',
             "- ",
             "  ",
         ),
@@ -399,9 +436,11 @@ def build_readme(
         ),
         *(
             _wrap(
-                '"compared" rows are the other people\'s annotations of a text whose '
-                "result was accepted directly, without consolidation. They are in the "
-                "archive so that agreement.csv covers every text, not final results.",
+                '"compared" rows are not final results. They are the other '
+                "annotators' work on a text whose result was accepted directly, "
+                f"without consolidation, kept in {bundle_file('compared')} only to "
+                "compute agreement.csv. Leave them out when you analyse the final "
+                "results.",
                 "- ",
                 "  ",
             )
