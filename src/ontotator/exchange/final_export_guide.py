@@ -342,7 +342,10 @@ def build_readme(
             'recorded them. Rows "annotator" count the decisions of each person\'s '
             'proposal checks; rows "source" compare the tool\'s proposals with the '
             "selected final result of the same text (tolerant matching): "
-            "precision = matched / proposals, recall = matched / final_findings.",
+            "precision = matched / proposals, recall = matched / final_findings. "
+            "Recall counts every text with a selected result on which a proposal "
+            "set naming the tool was imported, also where the tool proposed "
+            "nothing: there all final findings are misses.",
             "- ",
             "  ",
         ),

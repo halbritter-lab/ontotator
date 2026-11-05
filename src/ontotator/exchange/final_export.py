@@ -19,7 +19,11 @@ from ontotator.domain.workspace import Submission
 from ontotator.exchange.final_content import thaw_content
 from ontotator.exchange.final_export_guide import guide_files, submission_kind
 from ontotator.exchange.final_tables import Proposal, read_units, table_files
-from ontotator.exchange.proposal_checks import proposal_check_records, proposal_sources
+from ontotator.exchange.proposal_checks import (
+    proposal_check_records,
+    proposal_set_chances,
+    proposal_sources,
+)
 from ontotator.exchange.t1 import _axes, _mentions, layers_for
 from ontotator.jobs.queue import Job, JobContext
 from ontotator.storage.final_tables import ExportSelectionSnapshotRow
@@ -197,6 +201,8 @@ def final_t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
         tool_sources = proposal_sources(
             conn, job.project_id, content.submissions, content.proposals
         )
+        # Which tool could have proposed on which text (recall, proposals.csv).
+        chances = proposal_set_chances(conn, job.project_id, content.documents)
     selected_ids = set(payload["selected_submission_ids"])
     overrides: dict[str, str] = {}
     input_receipt = []
@@ -306,6 +312,7 @@ def final_t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
             ),
             consolidations=consolidations,
             proposals=tool_proposals(content, tool_sources),
+            chances=chances,
             label=label,
         )
     )

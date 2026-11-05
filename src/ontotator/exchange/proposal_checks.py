@@ -173,3 +173,59 @@ def proposal_sources(
         )
         sources[key] = (actor.get("name") or actor_id, actor.get("version") or "")
     return sources
+
+
+def tool_chances(
+    sets: Iterable[tuple[str, Iterable[Mapping[str, Any]], Mapping[str, Any]]],
+) -> dict[tuple[str, str], dict[str, bool]]:
+    """Per tool (name and version as :func:`proposal_sources` names them) the
+    texts on which one of its proposal sets was imported, each with whether
+    the tool proposed anything there (proposals.csv, recall).
+
+    ``sets`` holds ``(document_id, actors, payload)`` of stored proposal sets.
+    A tool had the chance to propose on a text when it is a tool actor of a
+    set of that text, or the actor of one of the set's annotations."""
+    chances: dict[tuple[str, str], dict[str, bool]] = {}
+    for document_id, actors, payload in sets:
+        named = {
+            actor["actor_id"]: (
+                actor.get("name") or actor["actor_id"],
+                actor.get("version") or "",
+            )
+            for actor in actors
+            if actor.get("kind") == "tool" and actor.get("actor_id")
+        }
+        proposing = {
+            actor["actor_id"]
+            for annotation in payload.get("annotations", [])
+            if (actor := annotation.get("provenance", {}).get("actor", {}))
+            and actor.get("kind") == "tool"
+            and actor.get("actor_id")
+        }
+        for actor_id in sorted(named.keys() | proposing):
+            tool = named.get(actor_id, (actor_id, ""))
+            texts = chances.setdefault(tool, {})
+            texts[document_id] = texts.get(document_id, False) or (
+                actor_id in proposing
+            )
+    return chances
+
+
+def proposal_set_chances(
+    conn: Connection, project_id: int | None, document_ids: Iterable[str]
+) -> dict[tuple[str, str], dict[str, bool]]:
+    """:func:`tool_chances` of the proposal sets stored for these texts."""
+    wanted = set(document_ids)
+    if not wanted:
+        return {}
+    rows = conn.execute(
+        select(
+            ProposalSetRow.document_id, ProposalSetRow.actors, ProposalSetRow.payload
+        )
+        .where(
+            ProposalSetRow.project_id == project_id,
+            ProposalSetRow.document_id.in_(wanted),
+        )
+        .order_by(ProposalSetRow.id)
+    )
+    return tool_chances((r.document_id, r.actors or [], r.payload or {}) for r in rows)

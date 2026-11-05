@@ -7,7 +7,9 @@ from t1_fixtures import bundle as write_fixture_bundle
 from t1_fixtures import unit
 
 
-def native_unit(external_id, language, text, *, case_id=None, annotations=()):
+def native_unit(
+    external_id, language, text, *, case_id=None, annotations=(), extra_actors=()
+):
     document = ontospan.make_document(external_id, language, text).model_copy(
         update={"case_id": case_id}
     )
@@ -20,7 +22,8 @@ def native_unit(external_id, language, text, *, case_id=None, annotations=()):
                 "kind": "tool",
                 "name": "test-tool",
                 "version": "1",
-            }
+            },
+            *extra_actors,
         ],
     )
     aset = base.annotation_set.model_copy(

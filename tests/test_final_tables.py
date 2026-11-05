@@ -28,6 +28,7 @@ from ontotator.exchange.final_tables import (
     build_proposals_csv,
     finding_origin,
 )
+from ontotator.exchange.proposal_checks import tool_chances
 
 
 def rows(data: bytes) -> list[dict[str, str]]:
@@ -197,6 +198,45 @@ def test_proposals_count_decisions_per_tool_and_person_and_match_the_result(
     assert {pair["findings_a"], pair["findings_b"]} == {"1", "3"}
     assert pair["equal"] == "1"
     assert pair["annotation_strict_f1"] == "0.5000"
+
+
+def test_recall_counts_a_tool_that_proposed_nothing_on_a_text(tmp_path):
+    """A second tool of c1's imported set proposes nothing there: it had the
+    chance, so c1 counts for its recall, every final finding a miss."""
+    from proposal_check_support import proposal_env
+    from test_proposal_check_export import _proposal_check
+
+    silent = {
+        "actor_id": "quiet",
+        "kind": "tool",
+        "name": "quiet-tool",
+        "version": "0.1",
+    }
+    env = proposal_env(tmp_path, extra_tools=(silent,))
+    selected = _proposal_check(env, "anno", ["confirmed", "rejected", "uncertain"])
+    select_final(env, env.c1, selected)
+    archive = final_archive(env, "tables-silent")
+
+    sources = {
+        (r["tool"], r["tool_version"]): r
+        for r in rows(archive.read("proposals.csv"))
+        if r["row_type"] == "source"
+    }
+    assert set(sources) == {("test-tool", "1"), ("quiet-tool", "0.1")}
+    measured = ("texts", "proposals", "final_findings", "matched")
+    assert [sources[("test-tool", "1")][k] for k in (*measured, "recall")] == [
+        "1", "3", "1", "1", "1.0000",
+    ]  # fmt: skip
+    quiet = sources[("quiet-tool", "0.1")]
+    assert [quiet[k] for k in (*measured, "precision", "recall")] == [
+        "1", "0", "1", "0", "", "0.0000",
+    ]  # fmt: skip
+    # It decided nothing, so no person counts a proposal of it.
+    assert all(
+        r["tool"] != "quiet-tool"
+        for r in rows(archive.read("proposals.csv"))
+        if r["row_type"] == "annotator"
+    )
 
 
 def test_agreement_covers_consolidated_and_directly_accepted_texts(tmp_path):
@@ -481,3 +521,57 @@ def test_carried_findings_name_their_origin(env):
     assert {(r["origin"], r["text_version"]) for r in earlier} == {("scratch", "1")}
     # A carried result is no annotation of its own: nothing to compare.
     assert rows(archive.read("agreement.csv")) == []
+
+
+def test_tool_chances_name_tools_as_the_proposals_do():
+    tagger = {"actor_id": "t", "kind": "tool", "name": "tagger", "version": "2.0"}
+    quiet = {"actor_id": "q", "kind": "tool", "name": "quiet", "version": "1"}
+    person = {"actor_id": "p", "kind": "human"}
+    by_t = {"provenance": {"actor": {"actor_id": "t", "kind": "tool"}}}
+    unnamed = {"provenance": {"actor": {"actor_id": "loose", "kind": "tool"}}}
+    chances = tool_chances(
+        [
+            ("d1", [tagger, quiet, person], {"annotations": [by_t]}),
+            ("d2", [tagger], {"annotations": [by_t, unnamed]}),
+            ("d3", [tagger, quiet], {"annotations": [by_t]}),
+            # A later set of the same text where the tool proposed nothing
+            # does not undo that it proposed there.
+            ("d2", [tagger], {"annotations": []}),
+        ]
+    )
+    assert chances == {
+        ("tagger", "2.0"): {"d1": True, "d2": True, "d3": True},
+        ("quiet", "1"): {"d1": False, "d3": False},
+        # An annotation's actor that the set does not name: its id, no version.
+        ("loose", ""): {"d2": True},
+    }
+
+
+def test_silent_texts_count_only_with_a_selected_result():
+    from t1_fixtures import annotation, unit
+
+    selected = {
+        "submission_id": "s9",
+        "origin_key": {
+            "document_id": "d1",
+            "annotator_id": "reader-0001",
+            "mode": "annotate",
+        },
+        "snapshots": [],
+        "decisions": [],
+    }
+    payload = _payload([selected])
+    final = unit(
+        "d1", annotations=[annotation("f1", (6, 19)), annotation("f2", (63, 76))]
+    )
+    units = [ExportedUnit("s9", "selected", "x.zip", "documents/00000.json", final)]
+    chances = {
+        ("quiet", "1"): {"d1": False, "d2": False},
+        # Proposed on d1 without a proposal check: not compared.
+        ("busy", "3"): {"d1": True},
+    }
+    table = rows(build_proposals_csv(payload, units, [], chances))
+    assert [
+        (r["tool"], r["texts"], r["proposals"], r["final_findings"], r["recall"])
+        for r in table
+    ] == [("quiet", "1", "0", "2", "0.0000")]

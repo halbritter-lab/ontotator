@@ -224,11 +224,18 @@ round on a text without proposals counts its findings under an empty tool.
 
 Rows of `row_type` `source`, one per tool and version, compare the tool's
 proposals on each text with that text's selected final result, using the
-tolerant matching of `agreement.csv`: `texts` (texts with proposals and a
-selected result), `proposals`, `final_findings`, `matched`, `precision`
-(`matched / proposals`) and `recall` (`matched / final_findings`), pooled
-over the texts. Proposals on texts without a selected result in the export
-are not compared.
+tolerant matching of `agreement.csv`: `texts` (texts with a selected result
+on which the tool had the chance to propose), `proposals`, `final_findings`,
+`matched`, `precision` (`matched / proposals`) and `recall`
+(`matched / final_findings`), pooled over the texts. The tool had the chance
+on a text when an imported proposal set of that text names it as a tool
+actor. A text where it proposed nothing in that set still counts: with no
+proposals, all its final findings are misses, so recall is not overstated by
+leaving out the texts the tool was silent on. Proposals on texts without a
+selected result in the export are not compared, nor are texts where the tool
+did propose but no proposal check worked on its proposals. The import keeps
+no set for a unit without any finding, so a text on which no tool of the
+set proposed anything is not counted.
 
 Preserve uncertain targets and ambiguous branches for adjudication. Hashes
 establish content identity; the annotator ID is the logged-in user's

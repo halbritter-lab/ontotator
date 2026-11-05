@@ -242,9 +242,10 @@ _VOLATILE = [
 # the (here empty) "consolidations" record and the format string; #295-#297
 # the analysis tables (listed in README.txt and hashed in "files") and
 # the compared rows that index.csv may hold; the README line of agreement.csv
-# names the text versions.
+# names the text versions; the README line of proposals.csv says that recall
+# also counts texts where a tool proposed nothing.
 CARRY_FORWARD_DIGEST = (
-    "f437e31ca3983cc51cd2e76fb7d6439f7f64ab97a7da7559d8b89cca3054c939"
+    "c0636fd037a08d89f0171ecd84de34a45f9bda54ea005a172960ddc865379b53"
 )
 
 

@@ -600,9 +600,16 @@ def build_proposals_csv(
     payload: Mapping[str, Any],
     units: Sequence[ExportedUnit],
     proposals: Sequence[Proposal],
+    chances: Mapping[tuple[str, str], Mapping[str, bool]] | None = None,
 ) -> bytes:
     """Per tool and annotator what the proposal checks did with the proposals;
-    per tool its precision and recall against the selected final results."""
+    per tool its precision and recall against the selected final results.
+
+    ``chances`` (:func:`~ontotator.exchange.proposal_checks.tool_chances`):
+    per tool the texts on which one of its proposal sets was imported, and
+    whether it proposed anything there. A text with a selected result where
+    the tool proposed nothing counts for its recall: every final finding of
+    it is a miss."""
     context = SubmissionFacts(payload)
     source_of = {(p.submission_id, p.annotation.annotation_id): p for p in proposals}
     empty = dict.fromkeys(PROPOSALS_COLUMNS[4:11], 0)
@@ -669,20 +676,27 @@ def build_proposals_csv(
         by_source[(proposal.tool, proposal.tool_version)][document_id].append(
             proposal.annotation
         )
+    # The tool had the chance to propose on a text without proposing: it
+    # counts with no proposals, so all its final findings are misses.
+    for source, chance in (chances or {}).items():
+        for document_id, proposed in chance.items():
+            if not proposed and document_id in finals:
+                by_source[source].setdefault(document_id, [])
     for (tool, version), texts in sorted(by_source.items()):
         total = {"texts": 0, "proposals": 0, "final_findings": 0, "matched": 0}
-        for document_id, offered in texts.items():
+        for document_id, offered in sorted(texts.items()):
             final = finals.get(document_id)
             if final is None:
                 continue
             found_final = own_findings(context, final)
-            found = ontospan.agreement(
-                _on_base_layers(offered), found_final, final.unit.document.text
-            )
             total["texts"] += 1
             total["proposals"] += len(offered)
             total["final_findings"] += len(found_final)
-            total["matched"] += found.equal + found.compatible
+            if offered:
+                found = ontospan.agreement(
+                    _on_base_layers(offered), found_final, final.unit.document.text
+                )
+                total["matched"] += found.equal + found.compatible
         rows.append(
             {
                 "row_type": "source",
@@ -702,6 +716,7 @@ def table_files(
     *,
     consolidations: Mapping[str, Mapping[str, Any]],
     proposals: Sequence[Proposal],
+    chances: Mapping[tuple[str, str], Mapping[str, bool]] | None = None,
     label: Label,
 ) -> dict[str, bytes]:
     """findings.csv, agreement.csv, agreement-summary.csv and proposals.csv."""
@@ -710,5 +725,5 @@ def table_files(
             payload, units, consolidations=consolidations, label=label
         ),
         **build_agreement_csv(payload, units),
-        "proposals.csv": build_proposals_csv(payload, units, proposals),
+        "proposals.csv": build_proposals_csv(payload, units, proposals, chances),
     }
