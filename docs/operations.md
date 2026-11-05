@@ -10,7 +10,7 @@ Services use read-only roots, writable data volumes and bounded tmpfs, dropped c
 
 ## Build and verify an image
 
-The Dockerfile builds the frontend and embeds it in the Python environment. `ontospan` is pinned to a Git commit in `pyproject.toml` and `uv.lock`. The build needs a GitHub token with read access to that private repository. Pass it only as the BuildKit secret `github_token`, never as a build argument, dependency URL or committed file.
+The Dockerfile builds the frontend and embeds it in the Python environment. `ontospan` is pinned to a Git commit in `pyproject.toml` and `uv.lock`. The build fetches `ontospan`, a public MIT-licensed repository, from GitHub, so it needs network access; the running service does not. A GitHub token is optional and only avoids anonymous rate limits. If you use one, pass it only as the BuildKit secret `github_token`, never as a build argument, dependency URL or committed file.
 
 With an existing authenticated GitHub CLI session, capture its token in process memory. Do not enable shell tracing or print the token. Bash:
 

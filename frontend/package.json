@@ -1,6 +1,6 @@
 {
   "name": "ontotator-frontend",
-  "version": "0.8.1",
+  "version": "0.9.0",
   "private": true,
   "license": "MIT",
   "type": "module",
@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings 73",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "test:related": "vitest related --run --passWithNoTests",
     "api:generate": "openapi-typescript ../contracts/openapi.json -o src/api/generated.ts",
@@ -39,6 +40,7 @@
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
+    "@vitest/coverage-v8": "2.1.9",
     "eslint": "^9.39.5",
     "eslint-plugin-react-hooks": "^5.2.0",
     "jsdom": "^24.1.0",
