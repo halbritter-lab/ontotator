@@ -15,17 +15,25 @@ from ontotator_mcp.tools_status import rows
 
 Project = Annotated[str, Field(description="Project key, e.g. 'ward-7'.")]
 ExportKind = Literal[
-    "final", "annotations", "edit_log", "work_time", "translation_reviews"
+    "final",
+    "phenopackets",
+    "annotations",
+    "edit_log",
+    "work_time",
+    "translation_reviews",
 ]
 # Job kinds whose file /api/v1/jobs/{id}/download delivers.
 DOWNLOADABLE = {
     "final_t1_export": "final",
+    "final_phenopacket_export": "phenopackets",
     "t1_export": "annotations",
     "edit_log_export": "edit_log",
     "work_time_export": "work_time",
     "translation_review_export": "translation_reviews",
 }
 MAX_LISTED = 50
+# Project archives (system tokens only); their import needs a browser session.
+ARCHIVES = "/api/v1/admin/project-archives"
 
 
 def _listed(submissions: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -226,7 +234,10 @@ def register_results(server: MCPServer, api: OntotatorClient) -> None:
             Field(
                 description=(
                     "'final': accepted final results with index.csv and a"
-                    " README (ZIP). 'annotations': every submission as an"
+                    " README (ZIP). 'phenopackets': the same accepted results"
+                    " as one GA4GH Phenopacket per text, derived and lossy,"
+                    " with a report of what was left out (ZIP)."
+                    " 'annotations': every submission as an"
                     " Ontospan bundle (ZIP). 'edit_log': every edit (JSONL)."
                     " 'work_time': the recorded work intervals under"
                     " pseudonyms (JSONL)."
@@ -253,7 +264,7 @@ def register_results(server: MCPServer, api: OntotatorClient) -> None:
         warnings and omissions final_export_check lists must be
         acknowledged.
         """
-        if kind == "final":
+        if kind in ("final", "phenopackets"):
             state = await api.post(project_path(project, "exports/final/preflight"))
             warnings = state.get("warnings", [])
             omissions = state.get("omissions", [])
@@ -280,6 +291,7 @@ def register_results(server: MCPServer, api: OntotatorClient) -> None:
                         {"case_id": o["case_id"], "language": o["language"]}
                         for o in omissions
                     ],
+                    "format": "phenopacket" if kind == "phenopackets" else "t1",
                 },
             )
         elif kind == "translation_reviews":
@@ -352,4 +364,83 @@ def register_results(server: MCPServer, api: OntotatorClient) -> None:
             "bytes": written,
             "sha256": digest,
             "kind": kind,
+        }
+
+    @register(server, scopes="admin", effect="additive")
+    async def export_project_archive(
+        project: Project,
+        include_ontology_files: Annotated[
+            bool,
+            Field(description="Add the ontology and translation files of the pins."),
+        ] = True,
+        wait: Annotated[
+            bool, Field(description="Wait until the archive is ready (polls the job).")
+        ] = True,
+    ) -> dict[str, Any]:
+        """Start the archive of one complete project; fetch it with download_project_archive.
+
+        Needs a system token. The archive holds every table of the project,
+        the people it names (with the e-mail addresses of those who worked
+        in it) and its stored files, for an import on another server, which
+        is done in the web interface. Stores a new file on the server, which
+        deletes it after 24 hours; changes no project data. Each call starts
+        a new job.
+        """
+        created = await api.post(
+            f"{ARCHIVES}/export",
+            {"project_key": project, "include_ontology_files": include_ontology_files},
+        )
+        job_id = int(created["job_id"])
+        if not wait:
+            return {"job_id": job_id, "status": "queued"}
+        return await api.finished_job(
+            job_id, "The project archive", base=f"{ARCHIVES}/jobs"
+        )
+
+    @register(server, scopes="admin", effect="local")
+    async def download_project_archive(
+        job_id: int,
+        path: Annotated[
+            str,
+            Field(
+                description=(
+                    "Absolute local file to write (or starting with ~),"
+                    " inside the folders of ONTOTATOR_MCP_FILES_DIR,"
+                    " e.g. ~/ontotator/ward-7-archive.zip."
+                )
+            ),
+        ],
+        overwrite: bool = False,
+    ) -> dict[str, Any]:
+        """Download the ZIP of a finished project archive job to a local path.
+
+        WRITES A FILE ON THE USER'S COMPUTER; ``path`` in the result is the
+        absolute path written. Only inside the folders of
+        ONTOTATOR_MCP_FILES_DIR; without that variable it refuses. The file
+        is streamed to disk and checked against the SHA-256 the server
+        recorded; an existing file is replaced only with overwrite. The
+        archive contains personal data (e-mail addresses): keep it safe.
+        """
+        target = api.local_path(path)
+        job = await api.job(job_id, f"{ARCHIVES}/jobs")
+        if job.get("kind") != "project_archive_export":
+            raise OntotatorError(f"Job {job_id} is not a project archive export.")
+        if job.get("status") != "succeeded":
+            error = f": {job['error']}" if job.get("error") else ""
+            raise OntotatorError(
+                f"Project archive job {job_id} is '{job.get('status')}'{error}."
+            )
+        result = job.get("result") or {}
+        expected = result.get("sha256")
+        written, digest = await api.download(
+            f"{ARCHIVES}/jobs/{seg(job_id)}/download",
+            target,
+            overwrite=overwrite,
+            expected_sha256=expected if isinstance(expected, str) else None,
+        )
+        return {
+            "path": str(target.resolve()),
+            "bytes": written,
+            "sha256": digest,
+            "project": result.get("project"),
         }

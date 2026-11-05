@@ -845,3 +845,115 @@ async def test_case_ids_with_slashes_stay_one_segment(
         )
     [request] = fake.calls_to("GET", PANEL)
     assert b"/document-rows/a%2Fb/en/final-panel" in request.request.url.raw_path
+
+
+async def test_phenopackets_are_a_final_export_in_that_format(
+    fake: FakeApi, mcp_client: Client
+) -> None:
+    fake.on(
+        "POST",
+        f"{P}/exports/final/preflight",
+        build("FinalPreflight", warnings=[], omissions=[], state_digest="e" * 64),
+    )
+    fake.on("POST", f"{P}/exports/final", {"job_id": 91})
+    for kind, export_format in (("phenopackets", "phenopacket"), ("final", "t1")):
+        fake.calls.clear()
+        result = await call(
+            mcp_client, "start_export", {"project": "p", "kind": kind, "wait": False}
+        )
+        assert result == {"job_id": 91, "kind": kind, "status": "queued"}
+        [export] = fake.calls_to("POST", f"{P}/exports/final")
+        assert export.json()["format"] == export_format
+
+
+async def test_a_phenopacket_export_downloads_like_the_others(
+    fake: FakeApi, mcp_client: Client, tmp_path: Path
+) -> None:
+    _export_job(fake, b"pp", kind="final_phenopacket_export")
+    result = await call(
+        mcp_client, "download_export", {"job_id": 9, "path": str(tmp_path / "p.zip")}
+    )
+    assert result["kind"] == "phenopackets"
+
+
+ARCHIVES = "/api/v1/admin/project-archives"
+
+
+def _archive_job(fake: FakeApi, content: bytes, **job: Any) -> None:
+    fake.on(
+        "GET",
+        f"{ARCHIVES}/jobs/{{job_id}}",
+        build(
+            "ArchiveJobView",
+            id=4,
+            kind="project_archive_export",
+            status="succeeded",
+            result={"sha256": hashlib.sha256(content).hexdigest(), "project": "p"},
+            finished_at="2026-11-01T10:00:05Z",
+        )
+        | job,
+    )
+    fake.on("GET", f"{ARCHIVES}/jobs/{{job_id}}/download", content)
+
+
+async def test_a_project_archive_is_exported_and_downloaded(
+    fake: FakeApi, mcp_client: Client, tmp_path: Path
+) -> None:
+    fake.on("POST", f"{ARCHIVES}/export", {"job_id": 4})
+    _archive_job(fake, b"archive")
+    job = await call(
+        mcp_client,
+        "export_project_archive",
+        {"project": "p", "include_ontology_files": False},
+    )
+    assert job["status"] == "succeeded"
+    [started] = fake.calls_to("POST", f"{ARCHIVES}/export")
+    assert started.json() == {"project_key": "p", "include_ontology_files": False}
+    # Archive jobs have their own routes; the generic job routes are not used.
+    assert not fake.calls_to("GET", "/api/v1/jobs/{job_id}")
+    target = tmp_path / "archive.zip"
+    result = await call(
+        mcp_client, "download_project_archive", {"job_id": 4, "path": str(target)}
+    )
+    assert target.read_bytes() == b"archive"
+    assert result["project"] == "p" and result["bytes"] == 7
+
+
+async def test_a_project_archive_download_stays_in_files_dir(
+    fake: FakeApi, settings: Settings, tmp_path: Path
+) -> None:
+    allowed = tmp_path / "allowed"
+    allowed.mkdir()
+    _archive_job(fake, b"archive")
+    for files_dirs in ((allowed.resolve(),), ()):
+        limited = replace(settings, files_dirs=files_dirs)
+        server = build_server(limited, transport=httpx.MockTransport(fake))
+        async with Client(server) as client:
+            with pytest.raises(ToolFailed, match="ONTOTATOR_MCP_FILES_DIR"):
+                await call(
+                    client,
+                    "download_project_archive",
+                    {"job_id": 4, "path": str(tmp_path / "out.zip")},
+                )
+    assert not (tmp_path / "out.zip").exists()
+    assert not fake.calls_to("GET", f"{ARCHIVES}/jobs/{{job_id}}/download")
+
+
+async def test_only_a_finished_archive_export_is_downloaded(
+    fake: FakeApi, mcp_client: Client, tmp_path: Path
+) -> None:
+    _archive_job(fake, b"", kind="project_archive_import")
+    with pytest.raises(ToolFailed, match="not a project archive export"):
+        await call(
+            mcp_client,
+            "download_project_archive",
+            {"job_id": 4, "path": str(tmp_path / "a.zip")},
+        )
+    _archive_job(fake, b"", status="failed", error="boom", finished_at=None)
+    with pytest.raises(ToolFailed, match="'failed': boom"):
+        await call(
+            mcp_client,
+            "download_project_archive",
+            {"job_id": 4, "path": str(tmp_path / "a.zip")},
+        )
+    assert list(tmp_path.iterdir()) == []

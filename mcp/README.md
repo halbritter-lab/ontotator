@@ -38,7 +38,7 @@ The token is shown once. Store it like a password: the MCP client keeps it in it
 
 ### Local files
 
-Some tools read a file from your computer and upload it to Ontotator: `upload_texts`, `upload_ontology_files`, `publish_guideline`, and `create_project` and `set_task_profile` with `profile_path`. `download_export` writes a file on your computer. Their descriptions say so, paths must be absolute (or start with `~`), and each result names the absolute path it read or wrote (`local_files`, or `path` for a download).
+Some tools read a file from your computer and upload it to Ontotator: `upload_texts`, `upload_ontology_files`, `publish_guideline`, and `create_project` and `set_task_profile` with `profile_path`. `download_export` and `download_project_archive` write a file on your computer. Their descriptions say so, paths must be absolute (or start with `~`), and each result names the absolute path it read or wrote (`local_files`, or `path` for a download).
 
 These tools need `ONTOTATOR_MCP_FILES_DIR`, set to the folders that hold your Ontotator files, for example `~/ontotator`. Without it they refuse and name the variable; the tools without local files work as before. A model that follows instructions hidden in a text, a guideline or a web page could otherwise be talked into uploading a file you did not mean to share, such as a key or a password file. The server resolves each path (following symbolic links) and refuses any file outside these folders, for uploads and downloads alike. Keep only Ontotator files there, and check the paths in the client's tool calls before you approve them.
 
@@ -122,8 +122,10 @@ A token can do only what both its scopes and its owner's roles allow. Many tools
 | `start_export` | export | adds | Start an export job of the project; download it with download_export. |
 | `get_job` | read or import or export | reads | The state of an import or export job: queued, running, succeeded or failed. |
 | `download_export` | export | writes a local file | Download the file of a finished export job to a local path. |
+| `export_project_archive` | admin | adds | Start the archive of one complete project; fetch it with download_project_archive. |
+| `download_project_archive` | admin | writes a local file | Download the ZIP of a finished project archive job to a local path. |
 
-Useful token sets: a project token with `read`, `import`, `export` and `project-admin` covers everything a lead does; `read` is enough for status, `export` alone for exports and downloads; ontology uploads, new projects and the user list need a system token with `admin` (and `read`).
+Useful token sets: a project token with `read`, `import`, `export` and `project-admin` covers everything a lead does; `read` is enough for status, `export` alone for exports and downloads; ontology uploads, new projects, the user list and project archives need a system token with `admin` (and `read`).
 
 ### Resources
 
@@ -165,7 +167,7 @@ This example sets up an HPO annotation project in which annotators check the HPO
 6. **Annotation** happens in the browser: alice and bob confirm, change or reject each proposal.
 7. **Status.** *"How far is phentrieve-pilot, and where do alice and bob disagree?"* `project_overview`, `get_progress`, `agreement_summary`.
 8. **Results.** *"Accept every text where both agree; show me the list first. Start a consolidation by carla for the others."* `accept_agreeing_texts` (dry run, then `confirm`) and `start_consolidation` per text. Carla consolidates in the browser, and the lead accepts the consolidations on the Documents page.
-9. **Export.** *"Check the final export, then export it and save it to ~/ontotator/pilot/final.zip."* `final_export_check`, `start_export` (`kind: final`; warnings and texts without a result must be acknowledged), `download_export`. The archive holds `index.csv` and the selected results as Ontospan bundles. Its README is the resource `ontotator://jobs/{job_id}/readme`. The edit log (`kind: edit_log`), the working time (`kind: work_time`) and the translation reviews (`kind: translation_reviews`) export the same way.
+9. **Export.** *"Check the final export, then export it and save it to ~/ontotator/pilot/final.zip."* `final_export_check`, `start_export` (`kind: final`; warnings and texts without a result must be acknowledged), `download_export`. The archive holds `index.csv` and the selected results as Ontospan bundles. Its README is the resource `ontotator://jobs/{job_id}/readme`. The same accepted results as GA4GH Phenopackets (derived, lossy) are `kind: phenopackets`. The edit log (`kind: edit_log`), the working time (`kind: work_time`) and the translation reviews (`kind: translation_reviews`) export the same way.
 
 ## Not reachable with a token
 
@@ -174,6 +176,7 @@ Routes a token may not call (`session` in the contract), so no tool can offer th
 - Lead corrections of translations (`POST .../documents/{doc}/lead-correction`), and annotation, review and translation review work in general.
 - Marking a guideline version as read, a problem report as seen, and a visit of the Documents page.
 - Creating, listing and revoking tokens.
+- Undo, redo and reset in the editor, and importing a project archive (it creates a project and accounts).
 
 Limits of the token kinds:
 

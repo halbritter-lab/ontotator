@@ -117,6 +117,8 @@ def _arguments(folder: Path) -> dict[str, dict[str, Any]]:
         "start_export": {"project": "p", "kind": "final"},
         "get_job": {"job_id": 1, "wait": True},
         "download_export": {"job_id": 1, "path": str(folder / "out.zip")},
+        "export_project_archive": {"project": "p"},
+        "download_project_archive": {"job_id": 1, "path": str(folder / "a.zip")},
     }
 
 
@@ -143,6 +145,19 @@ def _flows(fake: FakeApi) -> None:
     )
     fake.on("POST", f"{P}/exports/final", {"job_id": 1})
     fake.on("GET", "/api/v1/jobs/{job_id}/download", b"data")
+    archives = "/api/v1/admin/project-archives/jobs/{job_id}"
+    fake.on(
+        "GET",
+        archives,
+        build(
+            "ArchiveJobView",
+            id=1,
+            kind="project_archive_export",
+            status="succeeded",
+            result={},
+        ),
+    )
+    fake.on("GET", f"{archives}/download", b"data")
 
 
 @pytest.mark.anyio
@@ -252,7 +267,14 @@ async def test_tools_that_create_something_new_each_call_are_not_idempotent(
         for tool in (await mcp_client.list_tools()).tools
         if tool.annotations is not None
     }
-    for name in ("upload_texts", "start_export", "download_export", "commit_upload"):
+    for name in (
+        "upload_texts",
+        "start_export",
+        "download_export",
+        "commit_upload",
+        "export_project_archive",
+        "download_project_archive",
+    ):
         assert hints[name].idempotent_hint is False, name
 
 
