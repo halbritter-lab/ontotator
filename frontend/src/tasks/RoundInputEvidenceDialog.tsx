@@ -7,6 +7,7 @@ import { AxisValue } from "../ui/AxisValue";
 import { quoteSegments } from "../editor/AnnotationPanel";
 import { Time } from "../app/Time";
 import "./workRounds.css";
+import { actorName } from "../editor/actorName";
 
 const DRAFT_SOURCE = "Draft before the text change";
 
@@ -37,7 +38,7 @@ export function RoundInputEvidenceDialog({ projectKey, input, onClose, labelFor,
   const drafted = input.source_submission_id == null;
   const meta: ReactNode[] = [drafted ? DRAFT_SOURCE : input.source_recorded_at ? <>Submitted <Time iso={input.source_recorded_at} /></> : "Submitted"];
   if (version) meta.push(version);
-  meta.push(annotation.provenance.actor.actor_id);
+  meta.push(actorName(annotation.provenance.actor));
   const evidence = (annotation.evidence_refs ?? []).flatMap(ref => snapshot.evidence.filter(value => value.mention.evidence_id === ref.evidence_id && value.version === ref.version));
   const spanless = evidence.length === 0;
   const quotes = text === null ? [] : evidence.map(value => quoteSegments(text, value.mention.segments)).filter(Boolean);

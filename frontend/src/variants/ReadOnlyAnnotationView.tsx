@@ -10,6 +10,7 @@ import { isNegated } from '../editor/negation';
 import { modifierMarks } from '../editor/modifiers';
 import type { MentionDisplay } from '../spans/adapter';
 import { Button } from '../ui';
+import { actorName } from "../editor/actorName";
 
 export interface ReadOnlyAnnotationViewProps {
   header?: import('react').ReactNode;
@@ -60,7 +61,7 @@ export function ReadOnlyAnnotationView({ header, text, annotations, evidence, la
         </Button>{' '}<AiBadge provenance={snapshot.annotation.provenance} source={sources[index]} />
         <ProposalSource source={sources[index]}/>
         <p>{snapshot.annotation.layer_id}, {snapshot.annotation.type_id}</p>
-        <p>{snapshot.annotation.provenance.actor.actor_id}, {snapshot.annotation.provenance.method}</p>
+        <p>{actorName(snapshot.annotation.provenance.actor)}, {snapshot.annotation.provenance.method}</p>
         <p>Version: {snapshot.version}</p>
         {!!snapshot.annotation.provenance.source_refs?.length && <details><summary>Source references</summary><ul>
           {snapshot.annotation.provenance.source_refs.map((ref, index) => <li key={index}>{ref}</li>)}

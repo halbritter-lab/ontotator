@@ -67,6 +67,7 @@ from ontotator.domain.workspace import (
     WorkspaceKey,
 )
 from ontotator.exchange.t1 import (
+    EmptyImportedSet,
     ImportCounts,
     ImportedDocument,
     ImportedSet,
@@ -96,6 +97,7 @@ from ontotator.storage.tables import (
     DraftEvidenceRow,
     DraftRow,
     EditEventRow,
+    EmptyProposalSetRow,
     EvidenceSnapshotRow,
     MutationReceiptRow,
     OntologyFileRow,
@@ -388,6 +390,47 @@ class ProjectExport:
 
 
 @dataclass(frozen=True)
+class _InitialContent:
+    """What a new draft starts with (``Repository._initial_content``)."""
+
+    annotations: list[AnnotationSnapshot]
+    evidence: list[EvidenceSnapshot]
+    decisions: list[ReviewDecision]
+    # The submission a resumed draft continues, else None.
+    submission: Submission | None
+
+    def state(self) -> DraftState:
+        latest = self.submission
+        return DraftState(
+            annotations=tuple(
+                sorted(
+                    (a.annotation.annotation_id, a.version) for a in self.annotations
+                )
+            ),
+            evidence=tuple(
+                sorted({(e.mention.evidence_id, e.version) for e in self.evidence})
+            ),
+            decisions=tuple(d.model_dump(mode="json") for d in self.decisions),
+            checked_layer_ids=tuple(latest.checked_layer_ids) if latest else (),
+            reanchor_inputs=tuple(
+                r.model_dump(mode="json") for r in latest.reanchor_inputs
+            )
+            if latest
+            else (),
+            reanchor_resolutions=tuple(
+                r.model_dump(mode="json") for r in latest.reanchor_resolutions
+            )
+            if latest
+            else (),
+            round_input_resolutions=tuple(
+                r.model_dump(mode="json") for r in latest.round_input_resolutions
+            )
+            if latest
+            else (),
+        )
+
+
+@dataclass(frozen=True)
 class EditEvent:
     """One row of the edit log (``edit_events``)."""
 
@@ -404,6 +447,7 @@ class EditEvent:
     revision_after: int
     state: dict[str, Any]
     submission_id: str | None
+    step_id: str | None = None
 
 
 class Repository:
@@ -1445,6 +1489,7 @@ class Repository:
         job_id: int | None = None,
         on_done: Callable[[Connection, int, ImportCounts], None] | None = None,
         snapshots_added: bool = False,
+        empty_sets: Sequence[EmptyImportedSet] = (),
     ) -> ImportCounts:
         """Add imported documents and sets in one transaction (T3 A1, T7 O1, O2).
 
@@ -1453,6 +1498,8 @@ class Repository:
         the same (bundle, set, document) is skipped, so a re-import adds
         nothing. ``on_done`` runs with the counts in the same transaction.
         With ``snapshots_added``, ``add_snapshots`` already stored the snapshots.
+        ``empty_sets`` records tool sets without any finding
+        (``empty_proposal_sets``), skipped the same way on a re-import.
         """
         texts: dict[str, ImportedDocument] = {}
         conflicts: set[str] = set()
@@ -1532,6 +1579,25 @@ class Repository:
                 )
             if new_documents:
                 conn.execute(insert(DocumentRow), new_documents)
+            if empty_sets:
+                _insert_rows(
+                    conn,
+                    EmptyProposalSetRow,
+                    [
+                        {
+                            "project_id": project_id,
+                            "document_id": item.document_id,
+                            "bundle_id": item.bundle_id,
+                            "manifest_sha256": item.manifest_sha256,
+                            "annotation_set_id": item.annotation_set_id,
+                            "set_kind": item.set_kind,
+                            "actors": item.actors,
+                            "imported_by": imported_by,
+                            "job_id": job_id,
+                        }
+                        for item in empty_sets
+                    ],
+                )
             counts: ImportCounts = {
                 "documents_added": len(new_documents),
                 "documents_skipped": len(texts) - len(new_documents),
@@ -1826,6 +1892,7 @@ class Repository:
                     EditEventRow.command,
                     EditEventRow.state,
                     EditEventRow.submission_id,
+                    EditEventRow.step_id,
                 )
                 .join(DraftRow, DraftRow.id == EditEventRow.draft_id)
                 .where(EditEventRow.project_id == project_id)
@@ -1844,6 +1911,8 @@ class Repository:
                 "command": row.command,
                 "state": row.state,
                 "submission_id": row.submission_id,
+                # Commands of one user action share it (issue 320).
+                **({"step_id": row.step_id} if row.step_id else {}),
             }
             for row in rows
         ]
@@ -2521,6 +2590,7 @@ class Repository:
                 DraftRow.round_input_resolutions,
                 DraftRow.reanchor_inputs_initialized_at,
                 DraftRow.targets,
+                DraftRow.initial_state,
             ).where(DraftRow.project_id == project_id, DraftRow.draft_key == key_string)
         ).one_or_none()
 
@@ -3153,8 +3223,44 @@ class Repository:
         ).scalar_one_or_none()
         if draft_id is None:
             return  # created by a concurrent request; the caller reads it
+        start = self._initial_content(conn, project_id, key)
+        self._insert_snapshots(conn, project_id, start.annotations, start.evidence)
+        self._write_draft_content(
+            conn, draft_id, start.annotations, start.evidence, start.decisions
+        )
+        values: dict[str, Any] = {"initial_state": start.state().to_json()}
+        latest = start.submission
+        if latest is not None:
+            values |= {
+                "reanchor_inputs": [
+                    r.model_dump(mode="json") for r in latest.reanchor_inputs
+                ],
+                "reanchor_resolutions": [
+                    r.model_dump(mode="json") for r in latest.reanchor_resolutions
+                ],
+                "reanchor_inputs_initialized_at": (
+                    datetime.now(UTC) if latest.reanchor_inputs else None
+                ),
+                "targets": latest.targets.model_dump(mode="json"),
+                "revision": latest.draft_revision,
+                "checked_layer_ids": list(latest.checked_layer_ids),
+                "round_input_resolutions": [
+                    r.model_dump(mode="json") for r in latest.round_input_resolutions
+                ],
+            }
+        conn.execute(update(DraftRow).where(DraftRow.id == draft_id).values(**values))
+
+    def _initial_content(
+        self, conn: Connection, project_id: int, key: WorkspaceKey
+    ) -> _InitialContent:
+        """The content a new draft of ``key`` starts with.
+
+        The latest submission of the key when there is one (a resumed draft),
+        else the carried findings of a carry-forward round, else nothing.
+        """
         submissions = self._submissions_for_workspace(conn, project_id, key)
         if not submissions:
+            seeds: list[AnnotationSnapshot] = []
             if key.round_id is not None and key.mode == "independent":
                 seeds = self.workspace_input_snapshots(key)
                 # An ordinary independent attempt never sees proposal seeds.
@@ -3163,10 +3269,8 @@ class Repository:
                     not in CARRY_ROUND_KINDS
                 ):
                     seeds = []
-                evidence = [ev for annotation in seeds for ev in annotation.evidence]
-                self._insert_snapshots(conn, project_id, seeds, evidence)
-                self._write_draft_content(conn, draft_id, seeds, evidence, [])
-            return
+            evidence = [ev for annotation in seeds for ev in annotation.evidence]
+            return _InitialContent(seeds, evidence, [], None)
         current = latest_submissions(submissions)
         if len(current) != 1:
             raise DomainError(
@@ -3200,29 +3304,23 @@ class Repository:
             )
             for d in latest.decisions
         ]
-        self._insert_snapshots(conn, project_id, annotations, evidence)
-        self._write_draft_content(conn, draft_id, annotations, evidence, decisions)
-        conn.execute(
-            update(DraftRow)
-            .where(DraftRow.id == draft_id)
-            .values(
-                reanchor_inputs=[
-                    r.model_dump(mode="json") for r in latest.reanchor_inputs
-                ],
-                reanchor_resolutions=[
-                    r.model_dump(mode="json") for r in latest.reanchor_resolutions
-                ],
-                reanchor_inputs_initialized_at=(
-                    datetime.now(UTC) if latest.reanchor_inputs else None
-                ),
-                targets=latest.targets.model_dump(mode="json"),
-                revision=latest.draft_revision,
-                checked_layer_ids=list(latest.checked_layer_ids),
-                round_input_resolutions=[
-                    r.model_dump(mode="json") for r in latest.round_input_resolutions
-                ],
-            )
-        )
+        return _InitialContent(annotations, evidence, decisions, latest)
+
+    def _draft_initial_state(self, conn: Connection, key: WorkspaceKey) -> DraftState:
+        """The content the current draft of ``key`` started with (issue 320).
+
+        Stored at creation since 0033; computed again for an older draft.
+
+        Raises:
+            DomainError: ``DRAFT_NOT_FOUND`` when the key has no draft.
+        """
+        project_id = self._require_project(conn, key.project_key)
+        row = self._draft_row(conn, project_id, _key_str(key))
+        if row is None:
+            raise DomainError("DRAFT_NOT_FOUND", _key_str(key))
+        if row.initial_state is not None:
+            return DraftState.from_json(row.initial_state)
+        return self._initial_content(conn, project_id, key).state()
 
     @staticmethod
     def _write_draft_content(
@@ -3308,7 +3406,8 @@ class Repository:
         and its round and assignment are advanced, before the receipt.
         """
         key_string = _key_str(key)
-        request_hash = canonical_hash(envelope.model_dump())
+        # Without an unset step ID, so receipts stored before 0033 still match.
+        request_hash = canonical_hash(envelope.model_dump(exclude_none=True))
         with self.db.transaction() as conn:
             self._before_workspace_locks(conn, key, exclusive=exclusive_project)
             # Shared across independent drafts, exclusive against structural
@@ -3596,6 +3695,7 @@ class Repository:
                     revision_after=revision_before + 1,
                     state=state.to_json(),
                     submission_id=submission_id,
+                    step_id=envelope.step_id,
                 )
                 .returning(EditEventRow.id)
             ).scalar_one()

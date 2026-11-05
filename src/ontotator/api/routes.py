@@ -23,6 +23,7 @@ from ontotator.api.identity import (
     own_key,
     principal_of,
 )
+from ontotator.application.draft_history import DraftHistoryService, DraftHistoryView
 from ontotator.application.editing import EditorService
 from ontotator.application.preferences import Preferences, PreferencesUpdate
 from ontotator.application.reanchor_resolutions import ReanchorResolutionService
@@ -530,6 +531,34 @@ def submit_workspace(
     key = own_key(principal, decode_workspace_id(workspace_id))
     require_mode(request, key.project_key, key.mode)
     return sub_svc.submit(key, envelope)
+
+
+@router.get("/workspaces/{workspace_id}/history")
+def read_history(
+    workspace_id: str, request: Request, principal: PrincipalDep
+) -> DraftHistoryView:
+    """What Undo, Redo and Reset all my changes would do now (issue 320)."""
+    key = own_key(principal, decode_workspace_id(workspace_id))
+    require_mode(request, key.project_key, key.mode)
+    return DraftHistoryService(get_repo(request)).view(key)
+
+
+@router.post("/workspaces/{workspace_id}/history")
+def apply_history(
+    workspace_id: str,
+    envelope: MutationEnvelope,
+    request: Request,
+    principal: PrincipalDep,
+) -> Draft:
+    """Undo or redo one step, or reset to the start of the round (issue 320).
+
+    The payload is ``{"command": "undo_step" | "redo_step", "step": n}`` (the
+    step's ``after_revision`` from the history) or ``{"command":
+    "reset_changes"}``. Each is saved as a new edit.
+    """
+    key = own_key(principal, decode_workspace_id(workspace_id))
+    require_mode(request, key.project_key, key.mode)
+    return DraftHistoryService(get_repo(request)).apply(key, envelope)
 
 
 @router.get("/workspaces/{workspace_id}/submissions/{submission_id}")

@@ -53,6 +53,8 @@ What for: start or continue your consolidation work.
 2. Click **Start**, **Continue** or **View**.
 3. The consolidation screen opens. Its heading reads, for example, *Consolidate CASE-1 en v1*. The path above it shows how many groups are still open.
 
+If the project hides annotator names, the screen says *Annotator names are hidden in this project.* The annotators are then *Annotator A*, *Annotator B* and so on, in the order they submitted, everywhere in this consolidation; their names are not shown to you. If the lead starts another consolidation round on the same task, each annotator keeps their letter and someone new gets the next one.
+
 If the lead gave a reason when starting the consolidation, it shows above the groups, for example *Reason from the lead: Term and assertion differ*, and under the task in **My tasks**.
 
 The header holds **Open in full editor**, **Report a text problem** and, if the project has guidelines, a button such as *Guidelines v2*. **More…** appears once you decided a group.
@@ -168,7 +170,7 @@ What happens next: the lead reads the result with your notes and flags, and acce
 What for: change text spans or add findings that the comparison table cannot express.
 
 1. Click **Open in full editor**.
-2. The editor shows the mode **Consolidate** and the list **Selected submitted findings** with each finding's author. *Replaced by* on a submitted finding shows which result finding took its place; point at it for a short explanation, click it to jump to that finding. The editor works as described in the [annotator reference](annotator.md), except that it has no submit button.
+2. The editor shows the mode **Consolidate** and the list **Selected submitted findings** with each finding's author, or *Annotator A*, *Annotator B* and so on if the project hides annotator names. *Replaced by* on a submitted finding shows which result finding took its place; point at it for a short explanation, click it to jump to that finding. The editor works as described in the [annotator reference](annotator.md), except that it has no submit button.
 3. Click **Back to consolidation** at the end of the toolbar to return. Next to it the editor says *Submit on the consolidation screen.*
 
 Groups you changed here are tagged **edited in editor** on the consolidation screen. You submit the consolidation only there, with **Submit consolidation** (see [Finish a consolidation](#finish-a-consolidation)).

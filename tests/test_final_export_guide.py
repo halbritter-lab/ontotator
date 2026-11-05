@@ -151,14 +151,14 @@ def test_index_has_one_row_per_selection_omission_and_provenance_in_order():
         "author": "reader-0001",
         "submitted_at": "2026-10-19T08:40:00.000000Z",
         "findings": "3",
-        "archive_file": "selected.t1.zip",
+        "archive_file": "selected-results.ontospan.zip",
         "bundle_entry": "documents/00000.json",
         "annotation_set_id": "submission-final",
         "source_text_line": "2",
         "warning_codes": "OPEN_PROBLEM_REPORT;SELECTED_ROUND_SUPERSEDED",
         "guideline_version": "",
     }
-    assert provenance["archive_file"] == "provenance.t1.zip"
+    assert provenance["archive_file"] == "provenance-results.ontospan.zip"
     assert provenance["bundle_entry"] == "documents/00000.json"
     assert provenance["submission_kind"] == "annotation"
     assert provenance["author"] == "reader-0002"
@@ -212,7 +212,7 @@ def test_readme_lists_everything_in_plain_text():
         "Omitted text and language pairs:   1",
         "Warnings acknowledged at export:   3",
         "Provenance-only submissions:       1",
-        "provenance.t1.zip",
+        "provenance-results.ontospan.zip",
         "case, two (en): no final result was selected. No other submission was",
         "case-µ (de)",
         "[OPEN_PROBLEM_REPORT]",
@@ -238,7 +238,7 @@ def test_readme_says_none_and_hides_provenance_when_empty():
         in text
     )
     assert "Omitted\n-------\nNone.\n" in text
-    assert "provenance.t1.zip" not in text
+    assert "provenance-results.ontospan.zip" not in text
 
 
 def test_guide_files_are_deterministic_and_follow_content_order():

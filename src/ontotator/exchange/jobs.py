@@ -372,17 +372,22 @@ def build_t1_units(
     final_snapshot_id: str | None = None,
     source_ref_overrides: Mapping[str, str] | None = None,
     round_kinds: Mapping[str, str] | None = None,
+    views: dict[str, ontospan.OntologyView] | None = None,
 ) -> T1Units:
-    """Build and validate one unit per supplied submission, in order."""
+    """Build and validate one unit per supplied submission, in order.
+
+    ``views`` caches the loaded ontology releases by digest; a caller that
+    needs them afterwards (the final export's term labels) passes its own.
+    """
     if not content.submissions:
         raise DomainError("EXPORT_EMPTY", f"Project '{project}' has no submissions.")
     layers = layers_for(content.profile, content.pins)
-    views: dict[str, ontospan.OntologyView] = {}
+    cache: dict[str, ontospan.OntologyView] = {} if views is None else views
 
     def view_of(digest: str) -> ontospan.OntologyView:
-        if digest not in views:
-            views[digest] = ontospan.ObographOntology.load(db.blobs.path(digest))
-        return views[digest]
+        if digest not in cache:
+            cache[digest] = ontospan.ObographOntology.load(db.blobs.path(digest))
+        return cache[digest]
 
     # Validate historical unresolved targets before serialization, which may
     # otherwise fail without the submission context or fill missing axes.
@@ -577,11 +582,14 @@ def serialize_t1_content(
     source_ref_overrides: Mapping[str, str] | None = None,
     round_kinds: Mapping[str, str] | None = None,
     created_at: datetime | None = None,
+    views: dict[str, ontospan.OntologyView] | None = None,
 ) -> dict[str, Any]:
     """Serialize exactly the supplied immutable input selection.
 
     ``created_at`` fixes the bundle's time (the final export passes the
     snapshot's), so the same input gives the same bytes; default is now.
+    ``views`` caches the loaded ontology releases by digest; a caller that
+    needs them afterwards (the final export's term labels) passes its own.
     """
     built = build_t1_units(
         db,
@@ -590,6 +598,7 @@ def serialize_t1_content(
         final_snapshot_id=final_snapshot_id,
         source_ref_overrides=source_ref_overrides,
         round_kinds=round_kinds,
+        views=views,
     )
     units, counts = built.units, built.counts
     now = datetime.now(UTC).replace(microsecond=0)

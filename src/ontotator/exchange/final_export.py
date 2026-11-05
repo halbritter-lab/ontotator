@@ -18,8 +18,18 @@ from ontotator.domain.consolidation_origins import finding_origins, origin_count
 from ontotator.domain.errors import DomainError
 from ontotator.domain.workspace import Submission
 from ontotator.exchange.final_content import thaw_content
-from ontotator.exchange.final_export_guide import guide_files, submission_kind
-from ontotator.exchange.proposal_checks import proposal_check_records
+from ontotator.exchange.final_export_guide import (
+    bundle_file,
+    guide_files,
+    submission_kind,
+)
+from ontotator.exchange.final_tables import Proposal, read_units, table_files
+from ontotator.exchange.proposal_checks import (
+    proposal_check_records,
+    proposal_set_chances,
+    proposal_sources,
+)
+from ontotator.exchange.t1 import _axes, _mentions, layers_for
 from ontotator.jobs.queue import Job, JobContext
 from ontotator.storage.final_tables import ExportSelectionSnapshotRow
 from ontotator.storage.repository import ProjectExport
@@ -66,6 +76,65 @@ def consolidation_records(
     return records
 
 
+def tool_proposals(
+    content: ProjectExport, sources: Mapping[tuple[str, str], tuple[str, str]]
+) -> list[Proposal]:
+    """The targets of every proposal check as T1 annotations, as the bundle
+    writes a finding (axes with the profile's defaults, mentions), with the
+    tool that proposed them (proposals.csv)."""
+    t1_profiles = {
+        layer.layer_id: layer.profile
+        for layer in layers_for(content.profile, content.pins)
+    }
+    proposals = []
+    for sub in content.submissions:
+        if sub.origin_key.mode != "proposal_check":
+            continue
+        for target in sub.targets.targets:
+            key = (target.annotation_id, target.version)
+            if key not in sources:
+                continue
+            snap = content.proposals[key]
+            item = snap.annotation
+            text = content.documents[item.document_id].document.text
+            mentions = _mentions(snap, text)
+            axes, _ = _axes(snap, t1_profiles.get(item.layer_id, "generic"))
+            tool, version = sources[key]
+            proposals.append(
+                Proposal(
+                    sub.submission_id,
+                    tool,
+                    version,
+                    ontospan.Annotation(
+                        annotation_id=item.annotation_id,
+                        layer_id=item.layer_id,
+                        term_id=item.term_id,
+                        axes=axes,
+                        mentions=mentions,
+                        document_level=not mentions,
+                        modifiers=tuple(
+                            ontospan.Modifier(
+                                term_id=m.term_id,
+                                segments=tuple(
+                                    ontospan.segment(text, s.start, s.end)
+                                    for s in m.segments
+                                ),
+                            )
+                            for m in item.modifiers
+                        ),
+                        provenance=ontospan.Provenance(
+                            actor=ontospan.Actor(
+                                actor_id=item.provenance.actor.actor_id,
+                                kind=item.provenance.actor.kind,
+                            ),
+                            method="tool",
+                        ),
+                    ),
+                )
+            )
+    return proposals
+
+
 @dataclass(frozen=True)
 class FrozenFinal:
     """A verified final-result snapshot, ready to serialize."""
@@ -80,6 +149,10 @@ class FrozenFinal:
     overrides: dict[str, str]
     input_receipt: list[dict[str, Any]]
     proposal_checks: dict[str, Any]
+    # The tool behind each proposal and which tool could have proposed on
+    # which text (proposals.csv).
+    tool_sources: dict[tuple[str, str], tuple[str, str]]
+    chances: dict[tuple[str, str], dict[str, bool]]
 
 
 def load_frozen_final(job: Job, ctx: JobContext) -> FrozenFinal:
@@ -148,6 +221,11 @@ def load_frozen_final(job: Job, ctx: JobContext) -> FrozenFinal:
         proposal_checks = proposal_check_records(
             conn, job.project_id, project, content.submissions
         )
+        tool_sources = proposal_sources(
+            conn, job.project_id, content.submissions, content.proposals
+        )
+        # Which tool could have proposed on which text (recall, proposals.csv).
+        chances = proposal_set_chances(conn, job.project_id, content.documents)
     selected_ids = set(payload["selected_submission_ids"])
     overrides: dict[str, str] = {}
     input_receipt = []
@@ -196,6 +274,8 @@ def load_frozen_final(job: Job, ctx: JobContext) -> FrozenFinal:
         overrides=overrides,
         input_receipt=input_receipt,
         proposal_checks=proposal_checks,
+        tool_sources=tool_sources,
+        chances=chances,
     )
 
 
@@ -215,41 +295,52 @@ def final_t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
         frozen.overrides,
     )
     input_receipt, proposal_checks = frozen.input_receipt, frozen.proposal_checks
+    tool_sources, chances = frozen.tool_sources, frozen.chances
+    selected_content = frozen.selected_content
+    views: dict[str, ontospan.OntologyView] = {}
     result = serialize_t1_content(
         ctx.db,
         actor,
         project,
-        frozen.selected_content,
+        selected_content,
         job.id,
         final_snapshot_id=row["snapshot_id"],
         source_ref_overrides=overrides,
         round_kinds=payload["round_kinds"],
         created_at=row["created_at"],
+        views=views,
     )
     selected = ctx.db.blobs.path(result["sha256"]).read_bytes()
     sources = b"".join(
         (json.dumps(entry, sort_keys=True, ensure_ascii=False) + "\n").encode()
         for entry in payload["content"]["documents"].values()
     )
-    files = {"selected.t1.zip": selected, "source-texts.jsonl": sources}
+    files = {bundle_file("selected"): selected, "source-texts.jsonl": sources}
+    compared_ids = set(payload.get("compared_submission_ids", []))
     closure = [
-        sub for sub in content.submissions if sub.submission_id not in selected_ids
+        sub
+        for sub in content.submissions
+        if sub.submission_id not in selected_ids | compared_ids
     ]
-    if closure:
-        provenance = serialize_t1_content(
+    compared = [sub for sub in content.submissions if sub.submission_id in compared_ids]
+    for bundle_kind, subs in (("provenance", closure), ("compared", compared)):
+        if not subs:
+            continue
+        written = serialize_t1_content(
             ctx.db,
             actor,
             project,
-            replace(content, submissions=closure),
+            replace(content, submissions=subs),
             job.id,
             final_snapshot_id=row["snapshot_id"],
-            final_bundle_kind="provenance",
+            final_bundle_kind=bundle_kind,
             source_ref_overrides=overrides,
             round_kinds=payload["round_kinds"],
             created_at=row["created_at"],
+            views=views,
         )
-        files["provenance.t1.zip"] = ctx.db.blobs.path(
-            provenance["sha256"]
+        files[bundle_file(bundle_kind)] = ctx.db.blobs.path(
+            written["sha256"]
         ).read_bytes()
     files.update(
         guide_files(
@@ -257,6 +348,31 @@ def final_t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
             snapshot_id=row["snapshot_id"],
             snapshot_sha256=row["sha256"],
             snapshot_created_at=row["created_at"],
+        )
+    )
+    consolidations = consolidation_records(content.submissions, payload["round_kinds"])
+
+    def label(layer: ontospan.Layer, term_id: str) -> str | None:
+        digest = layer.ontology.sha256
+        if digest is None:
+            return None
+        if digest not in views:
+            views[digest] = ontospan.ObographOntology.load(ctx.db.blobs.path(digest))
+        return views[digest].label(term_id)
+
+    files.update(
+        table_files(
+            payload,
+            read_units(
+                files,
+                [s.submission_id for s in selected_content.submissions],
+                [s.submission_id for s in closure],
+                [s.submission_id for s in compared],
+            ),
+            consolidations=consolidations,
+            proposals=tool_proposals(content, tool_sources),
+            chances=chances,
+            label=label,
         )
     )
     receipt = {
@@ -275,10 +391,14 @@ def final_t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
             for sub in content.submissions
         },
         "provenance_only_submission_ids": [sub.submission_id for sub in closure],
-        # v2: how each finding of a consolidation came about (#133).
-        "consolidations": consolidation_records(
-            content.submissions, payload["round_kinds"]
+        # Additive (#295); left out without them so older exports stay identical.
+        **(
+            {"compared_submission_ids": [sub.submission_id for sub in compared]}
+            if compared
+            else {}
         ),
+        # v2: how each finding of a consolidation came about (#133).
+        "consolidations": consolidations,
         # Additive; left out without proposal checks so older exports stay identical.
         **({"proposal_checks": proposal_checks} if proposal_checks else {}),
         "files": {

@@ -321,8 +321,8 @@ def test_final_export_with_draft_sourced_final(env):
         assert entry["source_draft_snapshot_id"] == moved["snapshot_id"]
         assert entry["exported_ref"].startswith("urn:")
     assert receipt["provenance_only_submission_ids"] == []
-    assert "provenance.t1.zip" not in archive.namelist()
-    [unit] = _units(archive, "selected.t1.zip")
+    assert "provenance-results.ontospan.zip" not in archive.namelist()
+    [unit] = _units(archive, "selected-results.ontospan.zip")
     assert unit["annotation_set"]["stage"] == "carry_forward"
     [row] = [
         r

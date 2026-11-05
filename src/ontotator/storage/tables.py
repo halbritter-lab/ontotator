@@ -45,6 +45,7 @@ APPEND_ONLY_TABLES = (
     "audit_events",
     "edit_events",
     "proposal_sets",
+    "empty_proposal_sets",
     "translation_reviews",
     "problem_reports",
     "task_holds",
@@ -146,6 +147,10 @@ class ProjectRow(Base):
         server_default=text("'review_and_annotate_translations'")
     )
     tool_proposal_mode: Mapped[str] = mapped_column(server_default=text("'proposals'"))
+    # Consolidators see "Annotator A, B, …" instead of names (issue 302).
+    blind_consolidation: Mapped[bool] = mapped_column(
+        Boolean, server_default=text("false")
+    )
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now())
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     # A private practice project of one person (issue 266, migration 0029):
@@ -370,6 +375,9 @@ class DraftRow(Base):
         server_default=text("'[]'::jsonb")
     )
     reanchor_inputs_initialized_at: Mapped[datetime | None]
+    # The content the draft started with, as a DraftState (0033, issue 320);
+    # NULL for drafts created before.
+    initial_state: Mapped[dict[str, Any] | None]
     updated_at: Mapped[datetime]
 
 
@@ -686,6 +694,8 @@ class EditEventRow(Base):
     revision_after: Mapped[int]
     state: Mapped[dict[str, Any]]
     submission_id: Mapped[str | None]
+    # Shared by the commands of one user action (0033, issue 320).
+    step_id: Mapped[str | None]
 
 
 # --- Ontologies and jobs (T2d, migration 0004) ----------------------------
@@ -802,6 +812,45 @@ class ProposalSetRow(Base):
     source_sha256: Mapped[str | None] = mapped_column(ForeignKey(StoredFileRow.sha256))
     origin: Mapped[str] = mapped_column(server_default=text("'import'"))
     pending_items: Mapped[list[Any]] = mapped_column(server_default=text("'[]'::jsonb"))
+    imported_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey(UserRow.id))
+    imported_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    job_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey(JobRow.id))
+
+
+class EmptyProposalSetRow(Base):
+    """An imported tool set without any finding on a text (migration 0032).
+
+    The import keeps no ``proposal_sets`` row for such a unit (its text is
+    imported documents-only), so this row records that the set's tools ran on
+    the text and proposed nothing there: the recall in ``proposals.csv`` counts
+    the text for them. Only sets with a tool actor are recorded. Identity as
+    ``proposal_sets``; a re-import of the same set is skipped. Append-only.
+    """
+
+    __tablename__ = "empty_proposal_sets"
+    __table_args__ = (
+        UniqueConstraint(
+            "project_id",
+            "bundle_id",
+            "annotation_set_id",
+            "document_id",
+            name="uq_empty_proposal_sets_identity",
+            postgresql_nulls_not_distinct=True,
+        ),
+        ForeignKeyConstraint(
+            ["project_id", "document_id"],
+            [f"{SCHEMA}.documents.project_id", f"{SCHEMA}.documents.document_id"],
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    project_id: Mapped[int] = mapped_column(BigInteger, ForeignKey(ProjectRow.id))
+    document_id: Mapped[str]
+    bundle_id: Mapped[str | None]
+    manifest_sha256: Mapped[str | None]
+    annotation_set_id: Mapped[str]
+    set_kind: Mapped[str]
+    actors: Mapped[list[Any]]
     imported_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey(UserRow.id))
     imported_at: Mapped[datetime] = mapped_column(server_default=func.now())
     job_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey(JobRow.id))

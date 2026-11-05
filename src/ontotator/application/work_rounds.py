@@ -1043,24 +1043,20 @@ class RoundInputResolutionService:
         just before that dismissal (the round's initial content at revision 0)
         and loaded from the content-addressed snapshot rows.
         """
+        from ontotator.application.draft_history import build_history
         from ontotator.domain.serialization import decode_snapshot
-        from ontotator.storage.repository import DraftState
-        from ontotator.storage.tables import (
-            AnnotationSnapshotRow,
-            EditEventRow,
-            EvidenceSnapshotRow,
-        )
+        from ontotator.storage.tables import AnnotationSnapshotRow, EvidenceSnapshotRow
 
         if key.round_id is None:
             return None
-        events = conn.execute(
-            self.repo._draft_events(key)
-            .where(
-                EditEventRow.kind == "edit",
-                EditEventRow.command["input_id"].astext == input_id,
-            )
-            .order_by(EditEventRow.id.desc())
-        ).all()
+        # Undone steps do not count (issue 320): an undone clear leaves the
+        # dismissal before it as the input's latest resolution.
+        history = build_history(self.repo, conn, key)
+        events = [
+            e
+            for e in reversed(history.effective_events())
+            if e.kind == "edit" and e.command.get("input_id") == input_id
+        ]
         latest = next(
             (
                 e
@@ -1093,19 +1089,10 @@ class RoundInputResolutionService:
         if latest.revision_before == 0:
             version = str(item["target_snapshot"]["version"])
         else:
-            before = conn.execute(
-                self.repo._draft_events(key)
-                .where(EditEventRow.revision_after == latest.revision_before)
-                .order_by(EditEventRow.id.desc())
-                .limit(1)
-            ).first()
+            before = history.state_at(latest.revision_before)
             if before is not None:
                 version = next(
-                    (
-                        v
-                        for i, v in DraftState.from_json(before.state).annotations
-                        if i == carried_id
-                    ),
+                    (v for i, v in before.annotations if i == carried_id),
                     None,
                 )
         if version is None:

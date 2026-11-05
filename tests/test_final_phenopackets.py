@@ -364,7 +364,7 @@ def test_selected_results_equal_the_final_export_of_the_same_snapshot(env, monke
     receipt = json.loads(archive.read("receipt.json"))
     assert receipt["snapshot_id"] == final_receipt["snapshot_id"]
     embedded = archive.read(SELECTED_RESULTS_FILE)
-    assert embedded == final_zip.read("selected.t1.zip")
+    assert embedded == final_zip.read("selected-results.ontospan.zip")
     assert receipt["files"][SELECTED_RESULTS_FILE] == (
         hashlib.sha256(embedded).hexdigest()
     )

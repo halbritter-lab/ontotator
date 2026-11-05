@@ -26,6 +26,7 @@ from ontotator.api.about_routes import router as about_router
 from ontotator.api.admin_routes import router as admin_router
 from ontotator.api.auth_routes import demo_router as demo_login_router
 from ontotator.api.auth_routes import router as auth_router
+from ontotator.api.blind_ids import BlindIdsMiddleware, instance_key
 from ontotator.api.body_limits import BodyLimitMiddleware
 from ontotator.api.document_row_routes import router as document_row_router
 from ontotator.api.final_result_routes import router as final_result_router
@@ -320,6 +321,10 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
             app.state.sessions = sessions
             app.state.preferences = UserPreferencesStore(db)
             app.state.runtime_lease = RuntimeLease(unlimited_db.engine)
+            # The secret of the opaque ids for blinded consolidators (issue
+            # 302), created on the first start.
+            with db.transaction() as conn:
+                app.state.blind_ids_key = instance_key(conn)
             app.state.secure_cookies = bool(
                 config.public_origin and config.public_origin.startswith("https://")
             )
@@ -331,6 +336,9 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
                 unlimited_db.close()
             raise
 
+        # Inside the session middleware, which it reads the principal from:
+        # opaque hash ids for consolidators of blinded projects (issue 302).
+        app.add_middleware(BlindIdsMiddleware)
         install_security(app, sessions, config.public_origin, config.trusted_hosts)
     else:
         # Schema export only: no sessions exist, so no API request is answered.
@@ -466,6 +474,10 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
                     "ROUND_INPUT_RESOLUTION_STALE": 409,
                     "ROUND_INPUT_CARRIED_FINDING_PRESENT": 409,
                     "ROUND_NOT_EDITABLE": 409,
+                    # Issue 320: refused, not stale; the editor keeps its queue.
+                    "HISTORY_STEP_UNAVAILABLE": 422,
+                    "HISTORY_NOTHING_TO_RESET": 422,
+                    "HISTORY_NOT_AVAILABLE": 422,
                     "ROUND_ACTIVE": 409,
                     "CONSOLIDATION_ACTIVE": 409,
                     "ROUND_ALREADY_EXISTS": 409,
