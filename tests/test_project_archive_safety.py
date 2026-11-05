@@ -44,7 +44,7 @@ from ontotator.auth.audit import Actor
 from ontotator.domain.errors import DomainError
 from ontotator.exchange import archive as project_archive
 from ontotator.exchange.jobs import HANDLERS, store_file
-from ontotator.jobs.queue import JobQueue
+from ontotator.jobs.queue import JobQueue, Worker
 from ontotator.storage.tables import (
     AssignmentRow,
     AuditEventRow,
@@ -56,6 +56,13 @@ from ontotator.storage.tables import (
     SubmissionRow,
     UserRow,
 )
+
+
+@pytest.fixture(autouse=True)
+def _no_server_worker(monkeypatch: pytest.MonkeyPatch) -> None:
+    """These tests run jobs inline; the app's worker would race them for a claim."""
+    monkeypatch.setattr(Worker, "start", lambda self: None)
+
 
 FULL = {"assertion": "present", "experiencer": "patient", "temporality": "current"}
 
