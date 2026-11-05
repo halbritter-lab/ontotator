@@ -216,4 +216,4 @@ The token was created without the scope the request needs, for example **Export*
 
 ### A script's API token suddenly stops working
 
-The token expired, was revoked, or its owner lost a project role, the administrator role or the account; each of these revokes the owner's tokens. Check its **Status** under **API tokens** and create a new one.
+The token expired or was revoked. A new password, a reset code and deactivation revoke all of the owner's tokens. Losing the lead role revokes the owner's project tokens for that project, and losing the administrator role the owner's system tokens (and project tokens of projects they do not lead). A personal token is not revoked when its owner loses a role, but it can no longer do what the role allowed: a project that disappears from its answers or a 403 means exactly that. Check its **Status** under **API tokens** and create a new one if needed.

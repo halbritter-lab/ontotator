@@ -362,6 +362,7 @@ def user_audit(
         user = accounts.get_by_username(username)
         if user is None:
             raise DomainError("USER_NOT_FOUND", "The user does not exist.")
-        return [
-            AuditEventView(**vars(event)) for event in read_audit(conn, user_id=user.id)
-        ]
+        # Token requests would crowd out account changes; the changes they made
+        # name the token themselves, and `ontotator admin audit` keeps them.
+        events = read_audit(conn, user_id=user.id, exclude_actions=("api_token.use",))
+        return [AuditEventView(**vars(event)) for event in events]

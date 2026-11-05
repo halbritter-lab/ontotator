@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
-from auth_harness import ORIGIN, logged_in
+from auth_harness import ORIGIN, PASSWORD, logged_in
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import select
@@ -23,6 +23,8 @@ from ontotator.api.token_scopes import (
 )
 from ontotator.auth.api_tokens import TOKEN_PREFIX
 from ontotator.auth.audit import Actor
+from ontotator.auth.passwords import hash_password
+from ontotator.auth.tokens import token_digest
 from ontotator.storage.tables import ApiTokenRow, AuditEventRow
 
 PROJECT = "phenotypes"
@@ -313,37 +315,216 @@ def test_a_revoked_token_stops_working_and_last_use_is_recorded(
     assert foreign.status_code == 404
 
 
-def test_losing_a_role_or_the_account_revokes_the_tokens(
+def _state(app: FastAPI, secret_of: dict[str, str]) -> dict[str, str]:
+    """``revoked_reason`` of each named token ("" while it is not revoked)."""
+    with app.state.repo.db.transaction() as conn:
+        rows = {
+            row.token_sha256: row.revoked_reason or ""
+            for row in conn.execute(select(ApiTokenRow))
+        }
+    return {name: rows[token_digest(secret)] for name, secret in secret_of.items()}
+
+
+def _reaches(app: FastAPI, secret: str, project: str) -> int:
+    client = _bearer(app, secret)
+    return client.get(f"/api/v1/projects/{project}/ontologies").status_code
+
+
+def test_losing_the_lead_role_revokes_only_that_projects_tokens(
     app: FastAPI, admin: TestClient
 ) -> None:
-    lead = logged_in(app, "lea", projects={PROJECT: ["lead", "annotator"]})
-    personal = _create(lead, ["read"])["secret"]
-    project = _create(lead, ["read"], f"/api/v1/projects/{PROJECT}/tokens")["secret"]
-    for secret in (personal, project):
-        assert (
-            _bearer(app, secret).get(f"/api/v1/projects/{PROJECT}/members").is_success
-        )
-    app.state.memberships.set_roles(Actor.cli(), PROJECT, "lea", ["annotator"])
-    for secret in (personal, project):
-        assert _bearer(app, secret).get("/api/v1/about").status_code == 401
-    with app.state.repo.db.transaction() as conn:
-        reasons = set(conn.execute(select(ApiTokenRow.revoked_reason)).scalars())
-    assert reasons == {"project.member_roles"}
+    create_project(app, admin, "other")
+    lead = logged_in(
+        app, "lea", projects={PROJECT: ["lead", "annotator"], "other": ["lead"]}
+    )
+    tokens = {
+        "personal": _create(lead, ["read"])["secret"],
+        "here": _create(lead, ["read"], f"/api/v1/projects/{PROJECT}/tokens")["secret"],
+        "other": _create(lead, ["read"], "/api/v1/projects/other/tokens")["secret"],
+    }
+    # A lost role no token depends on revokes nothing.
+    app.state.memberships.set_roles(
+        Actor.cli(), PROJECT, "lea", ["lead"], revoke_assignments=True
+    )
+    assert set(_state(app, tokens).values()) == {""}
+    assert _reaches(app, tokens["here"], PROJECT) == 200
 
-    log_in_again = logged_in(app, "lea")
-    secret = _create(log_in_again, ["read"])["secret"]
-    app.state.accounts.set_active(Actor.cli(), "lea", False)
-    assert _bearer(app, secret).get("/api/v1/about").status_code == 401
+    app.state.memberships.set_roles(
+        Actor.cli(), PROJECT, "lea", ["annotator"], revoke_assignments=True
+    )
+    assert _state(app, tokens) == {
+        "personal": "",
+        "here": "project.member_roles",
+        "other": "",
+    }
+    assert _reaches(app, tokens["here"], PROJECT) == 401
+    assert _reaches(app, tokens["other"], "other") == 200
+    # The personal token keeps what the annotator may still read here.
+    assert _reaches(app, tokens["personal"], PROJECT) == 200
+    removals = [event.details for event in _audit(app, "project.member_remove")]
+    assert removals[-1] == {"username": "lea", "roles": ["lead"], "tokens_revoked": 1}
+    assert "tokens_revoked" not in removals[0]
 
 
-def test_a_system_token_ends_with_the_admin_role(
+def test_a_personal_token_loses_a_project_at_once_but_keeps_the_others(
+    app: FastAPI, admin: TestClient
+) -> None:
+    create_project(app, admin, "other")
+    member = logged_in(
+        app, "ann", projects={PROJECT: ["annotator"], "other": ["annotator"]}
+    )
+    secret = _create(member, ["read"])["secret"]
+    assert _reaches(app, secret, PROJECT) == 200
+    assert _reaches(app, secret, "other") == 200
+    app.state.memberships.set_roles(
+        Actor.cli(), PROJECT, "ann", [], revoke_assignments=True
+    )
+    # Checked on the very next request: no stale right survives.
+    assert _reaches(app, secret, PROJECT) == 404
+    listed = _bearer(app, secret).get("/api/v1/projects").json()
+    assert [project["project_key"] for project in listed] == ["other"]
+    assert _reaches(app, secret, "other") == 200
+    assert _state(app, {"personal": secret}) == {"personal": ""}
+
+
+def test_a_project_token_survives_a_lost_lead_role_while_its_owner_is_an_admin(
     app: FastAPI, admin: TestClient
 ) -> None:
     logged_in(app, "second", system_admin=True)
-    secret = _create(admin, ["admin"], "/api/v1/admin/tokens")["secret"]
-    assert _bearer(app, secret).get("/api/v1/admin/users/").status_code == 200
+    app.state.memberships.set_roles(Actor.cli(), PROJECT, "second", ["lead"])
+    second = logged_in(app, "second")
+    secret = _create(second, ["read"], f"/api/v1/projects/{PROJECT}/tokens")["secret"]
+    app.state.memberships.set_roles(Actor.cli(), PROJECT, "second", [])
+    # A system admin may still manage the project, so the token still works ...
+    assert _reaches(app, secret, PROJECT) == 200
+    # ... until the admin role goes too.
+    app.state.accounts.set_system_admin(Actor.cli(), "second", False)
+    assert _state(app, {"token": secret}) == {"token": "user.system_admin"}
+    assert _reaches(app, secret, PROJECT) == 401
+
+
+def test_losing_the_admin_role_revokes_only_the_tokens_it_backed(
+    app: FastAPI, admin: TestClient
+) -> None:
+    create_project(app, admin, "other")
+    logged_in(app, "second", system_admin=True)
+    app.state.memberships.set_roles(Actor.cli(), PROJECT, "root", [])
+    app.state.memberships.set_roles(Actor.cli(), "other", "root", ["lead"])
+    root = logged_in(app, "root")
+    tokens = {
+        "system": _create(root, ["admin"], "/api/v1/admin/tokens")["secret"],
+        "personal": _create(root, ["read"])["secret"],
+        "unled": _create(root, ["read"], f"/api/v1/projects/{PROJECT}/tokens")[
+            "secret"
+        ],
+        "led": _create(root, ["read"], "/api/v1/projects/other/tokens")["secret"],
+    }
+    assert _reaches(app, tokens["personal"], PROJECT) == 200  # as an admin
     app.state.accounts.set_system_admin(Actor.cli(), "root", False)
-    assert _bearer(app, secret).get("/api/v1/admin/users/").status_code == 401
+    assert _state(app, tokens) == {
+        "system": "user.system_admin",
+        "personal": "",
+        "unled": "user.system_admin",
+        "led": "",
+    }
+    users = _bearer(app, tokens["system"]).get("/api/v1/admin/users/")
+    assert users.status_code == 401
+    assert _reaches(app, tokens["led"], "other") == 200
+    # The personal token now reads only what its owner may read.
+    assert _reaches(app, tokens["personal"], PROJECT) == 404
+    assert _reaches(app, tokens["personal"], "other") == 200
+    [event] = _audit(app, "user.system_admin")
+    assert event.details == {"is_system_admin": False, "tokens_revoked": 2}
+
+
+def test_gaining_the_admin_role_revokes_no_token(
+    app: FastAPI, admin: TestClient
+) -> None:
+    lead = logged_in(app, "lea", projects={PROJECT: ["lead"]})
+    tokens = {
+        "personal": _create(lead, ["read"])["secret"],
+        "project": _create(lead, ["read"], f"/api/v1/projects/{PROJECT}/tokens")[
+            "secret"
+        ],
+    }
+    app.state.accounts.set_system_admin(Actor.cli(), "lea", True)
+    assert set(_state(app, tokens).values()) == {""}
+    assert _reaches(app, tokens["project"], PROJECT) == 200
+    [event] = _audit(app, "user.system_admin")
+    assert event.details == {"is_system_admin": True}
+
+
+def test_changing_the_own_password_revokes_every_own_token(
+    app: FastAPI, admin: TestClient
+) -> None:
+    lead = logged_in(app, "lea", projects={PROJECT: ["lead"]})
+    other = logged_in(app, "ann", projects={PROJECT: ["annotator"]})
+    tokens = {
+        "personal": _create(lead, ["read"])["secret"],
+        "project": _create(lead, ["read"], f"/api/v1/projects/{PROJECT}/tokens")[
+            "secret"
+        ],
+        "system": _create(admin, ["admin"], "/api/v1/admin/tokens")["secret"],
+        "someone else's": _create(other, ["read"])["secret"],
+    }
+    new = {"current_password": PASSWORD, "new_password": "another long passphrase"}
+    changed = lead.post("/api/v1/me/password", json=new)
+    assert changed.status_code == 204, changed.text
+    assert lead.get("/api/v1/me/tokens").status_code == 200  # the session stays
+    assert _state(app, tokens) == {
+        "personal": "password_set",
+        "project": "password_set",
+        "system": "",
+        "someone else's": "",
+    }
+    for name in ("personal", "project"):
+        assert _reaches(app, tokens[name], PROJECT) == 401
+    assert _audit(app, "user.password_set")[-1].details == {"tokens_revoked": 2}
+
+    changed = admin.post("/api/v1/me/password", json=new)
+    assert changed.status_code == 204, changed.text
+    assert _state(app, {"system": tokens["system"]}) == {"system": "password_set"}
+
+
+@pytest.mark.parametrize("change", ["reset_code", "deactivate", "recover"])
+def test_new_credentials_or_a_lost_account_revoke_every_token(
+    app: FastAPI, admin: TestClient, change: str
+) -> None:
+    logged_in(app, "second", system_admin=True)
+    app.state.memberships.set_roles(Actor.cli(), PROJECT, "second", ["lead"])
+    owner = logged_in(app, "second")
+    tokens = {
+        "personal": _create(owner, ["read"])["secret"],
+        "project": _create(owner, ["read"], f"/api/v1/projects/{PROJECT}/tokens")[
+            "secret"
+        ],
+        "system": _create(owner, ["admin"], "/api/v1/admin/tokens")["secret"],
+    }
+    accounts = app.state.accounts
+    if change == "reset_code":
+        accounts.issue_reset_code(Actor.cli(), "second")
+        reason = "reset_code"
+        [event] = _audit(app, "user.reset_code")
+        assert event.details["tokens_revoked"] == 3
+    elif change == "deactivate":
+        accounts.set_active(Actor.cli(), "second", False)
+        reason = "user.active"
+    else:
+        hashed = hash_password("a recovered passphrase")
+        accounts.recover_admin("second", hashed, "ops", "lost laptop")
+        reason = "recovered"
+    assert set(_state(app, tokens).values()) == {reason}
+    for secret in tokens.values():
+        assert _bearer(app, secret).get("/api/v1/about").status_code == 401
+
+
+def test_anonymising_keeps_every_token_revoked(app: FastAPI, admin: TestClient) -> None:
+    owner = logged_in(app, "lea", projects={PROJECT: ["lead"]})
+    secret = _create(owner, ["read"])["secret"]
+    app.state.accounts.set_active(Actor.cli(), "lea", False)
+    app.state.accounts.anonymise(Actor.cli(), "lea")
+    assert _state(app, {"personal": secret}) == {"personal": "user.active"}
+    assert _bearer(app, secret).get("/api/v1/about").status_code == 401
 
 
 # Project tokens
@@ -421,6 +602,9 @@ def test_writes_with_a_token_are_audited_with_the_token(
     assert entries and all(
         entry["api_token"]["id"] == created["token"]["id"] for entry in entries
     )
+    # The user's History leaves the request entries out, not the changes.
+    actions = [e["action"] for e in admin.get("/api/v1/admin/users/root/audit").json()]
+    assert "api_token.use" not in actions and "project.update" in actions
 
 
 def test_the_admin_overview_lists_and_revokes_every_token(
@@ -490,7 +674,8 @@ def test_the_contract_names_each_operations_scope(app: FastAPI) -> None:
 def test_a_token_follows_up_on_the_work_its_scope_starts(
     app: FastAPI, admin: TestClient
 ) -> None:
-    exporter = _bearer(app, _create(admin, ["export"])["secret"], **ORIGIN)
+    export_token = _create(admin, ["export"])
+    exporter = _bearer(app, export_token["secret"], **ORIGIN)
     started = exporter.post(
         f"/api/v1/projects/{PROJECT}/exports", json={"kind": "edit_log"}
     )
@@ -500,6 +685,12 @@ def test_a_token_follows_up_on_the_work_its_scope_starts(
     assert polled.status_code == 200, polled.text
     job = app.state.jobs.claim(job_id, "token-test")
     assert app.state.jobs.run(job, "token-test").status == "succeeded"
+    # The job's own audit entry names the token that started it.
+    [exported] = _audit(app, "project.edit_log_export")
+    assert exported.details["api_token"] == {
+        "id": export_token["token"]["id"],
+        "name": "script",
+    }
     downloaded = exporter.get(f"/api/v1/jobs/{job_id}/download")
     assert downloaded.status_code == 200, downloaded.text
 
@@ -555,3 +746,99 @@ def test_path_parameters_match_like_the_routers() -> None:
     assert found.project_key == "p" and found.scope == "read"
     assert requirement("GET", "/api/v1/projects/p/unknown") is None
     assert requirement("DELETE", "/api/v1/projects") is None
+
+
+def _app_routes(app: FastAPI) -> tuple[set[tuple[str, str]], set[str]]:
+    """Every (method, path) under /api/ the app serves, and its other paths."""
+    from fastapi.routing import _IncludedRouter
+    from starlette.routing import Mount, Route
+
+    api: set[tuple[str, str]] = set()
+    other: set[str] = set()
+
+    def add(path: str, methods: set[str] | None) -> None:
+        if path.startswith("/api"):
+            api.update((method, path) for method in methods or {"*"})
+        else:
+            other.add(path)
+
+    for route in app.routes:
+        if isinstance(route, _IncludedRouter):
+            for context in route.effective_route_contexts():
+                add(context.path, set(context.methods))
+        elif isinstance(route, Route):
+            add(route.path, route.methods)
+        elif isinstance(route, Mount):
+            add(route.path or "/", None)
+        else:  # a new kind of route needs a decision here
+            raise AssertionError(f"unexpected route {route!r}")
+    return api, other
+
+
+def test_every_app_route_is_mapped_session_only_or_public(app: FastAPI) -> None:
+    api, other = _app_routes(app)
+    unmapped = api - set(ROUTE_SCOPES)
+    assert not unmapped, f"routes without a token scope: {sorted(unmapped)}"
+    # Outside /api/ the middleware asks for no credentials: only the schema,
+    # the development docs and the static frontend live there.
+    assert other <= {
+        "/openapi.json",
+        "/docs",
+        "/docs/oauth2-redirect",
+        "/redoc",
+        "/livez",
+        "/readyz",
+        "/",
+    }
+    # Token management, login, password and preferences are session-only, so
+    # no token can mint, list or revoke tokens or take over the account.
+    for (method, path), scope in ROUTE_SCOPES.items():
+        if (
+            "/tokens" in path
+            or (path.startswith("/api/v1/auth/") and path != "/api/v1/auth/me")
+            or path in ("/api/v1/me/password", "/api/v1/preferences")
+            or (method, path) == ("PATCH", "/api/v1/me/profile")
+        ):
+            assert scope == SESSION, (method, path)
+
+
+def test_an_unmapped_route_refuses_every_token(app: FastAPI, admin: TestClient) -> None:
+    secret = _create(admin, ["read", "import", "export", "project-admin"])["secret"]
+    system = _create(admin, ["read", "admin"], "/api/v1/admin/tokens")["secret"]
+
+    def probe() -> dict[str, bool]:
+        return {"ok": True}
+
+    from fastapi.routing import APIRoute
+
+    # Ahead of the static mount, which would answer the path otherwise.
+    app.router.routes.insert(
+        0, APIRoute("/api/v1/unmapped-probe", probe, methods=["GET", "POST"])
+    )
+    # A session reaches the new route; no token does, whatever its scopes.
+    assert admin.get("/api/v1/unmapped-probe").status_code == 200
+    for token in (secret, system):
+        client = _bearer(app, token, **ORIGIN)
+        for method in ("GET", "POST", "HEAD"):
+            response = client.request(method, "/api/v1/unmapped-probe")
+            assert response.status_code == 403, (method, response.text)
+            if method != "HEAD":
+                assert response.json()["code"] == "TOKEN_NOT_ALLOWED"
+
+
+def test_encoded_slashes_never_move_a_project_token_elsewhere(
+    app: FastAPI, admin: TestClient
+) -> None:
+    # Some routes match the raw path, the middleware the decoded one: the key
+    # such a route sees then holds a slash, which no project key has.
+    create_project(app, admin, "other")
+    secret = _create(admin, ["read"], f"/api/v1/projects/{PROJECT}/tokens")["secret"]
+    client = _bearer(app, secret)
+    for path in [
+        f"/api/v1/projects/{PROJECT}%2F..%2Fother/documents/x/translation-reviews",
+        f"/api/v1/projects/{PROJECT}%2Fother/documents/x/text",
+        f"/api/v1/projects/{PROJECT}%2F..%2Fother/document-rows",
+        f"/api/v1/projects/{PROJECT}%2F..%2Fother/members",
+    ]:
+        response = client.get(path)
+        assert response.status_code in (403, 404), (path, response.text)

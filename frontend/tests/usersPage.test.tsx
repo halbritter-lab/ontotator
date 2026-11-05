@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, ApiError, AuthError, type AdminUser, type CodeResponse, type CreatedUser, type CurrentUser } from "../src/api/client";
-import { auditActor, auditDetails, UsersPage } from "../src/admin/UsersPage";
+import { auditActor, auditDetails, auditTarget, UsersPage } from "../src/admin/UsersPage";
 import { formatDateTime, formatShortDateTime } from "../src/app/labels";
 
 const currentUser: CurrentUser = { username: "root", display_name: "Root", pseudonym: "ann-root", is_system_admin: true, csrf_token: "csrf" };
@@ -129,9 +129,19 @@ describe("users administration", () => {
     fireEvent.click(editForm().getByRole("button", { name: "Remove en" })); fireEvent.click(editForm().getByLabelText("System administrator"));
     fireEvent.click(editForm().getByRole("button", { name: "Save changes" }));
     const confirm = screen.getByRole("dialog", { name: "Change administrator role" }); expect(api.adminUpdateUser).not.toHaveBeenCalled();
+    expect(confirm.textContent).toContain("revokes their system tokens and their project tokens for projects they do not lead");
     fireEvent.click(within(confirm).getByRole("button", { name: "Save changes" }));
     await screen.findByText("Server name"); expect(api.adminUpdateUser).toHaveBeenCalledOnce();
     expect(api.adminUpdateUser).toHaveBeenCalledWith("alex", { display_name: "Edited name", email: null, languages: [], is_system_admin: false });
+  });
+
+  it("says that granting the administrator role keeps the API tokens (#305)", async () => {
+    vi.mocked(api.adminListUsers).mockResolvedValue([root, { ...alex, is_system_admin: false }]);
+    render(<UsersPage currentUser={currentUser} />); await load(); fireEvent.click(screen.getByRole("button", { name: "Edit alex" }));
+    fireEvent.click(editForm().getByLabelText("System administrator"));
+    fireEvent.click(editForm().getByRole("button", { name: "Save changes" }));
+    const confirm = screen.getByRole("dialog", { name: "Change administrator role" });
+    expect(confirm.textContent).toContain("This logs the user out everywhere. Their API tokens keep working.");
   });
 
   it("sends only edited fields and closes an unchanged edit without an API write", async () => {
@@ -339,6 +349,14 @@ describe("account status, projects at creation, history and erasure", () => {
     // A move to the newest translations names its files, not the kept conditions (issue 254).
     expect(auditDetails({ ...base, action: "project.translations_refresh", details: { added: ["hp-es.babelon.tsv"], replaced: [], removed: [], files_before: [{ filename: "hp-de.babelon.tsv" }], superseded_search_conditions: [{ condition_id: "a" }] } }))
       .toBe("Added: hp-es.babelon.tsv");
+    // API tokens (issue 305): kind, scopes and a formatted expiry; the name goes to Whom, the owner only if someone else acted.
+    const created = { ...base, actor: "user:root", action: "api_token.create", target_type: "api_token", target_id: "6", details: { name: "nightly", kind: "personal", owner: "lena", scopes: ["read", "project-admin"], expires_at: "2027-02-03T11:54:22.241326+00:00" } };
+    expect(auditDetails(created)).toBe(`Personal token; Scopes: Read, Project administration; Expires: ${formatDateTime("2027-02-03T11:54:22.241326+00:00")}; Owner: lena`);
+    expect(auditDetails({ ...created, actor: "user:lena", action: "api_token.revoke", details: { name: "nightly", kind: "personal", owner: "lena" } })).toBe("Personal token");
+    expect(auditTarget(created)).toBe("API token “nightly”");
+    expect(auditTarget({ ...created, details: {} })).toBe("API token 6");
+    expect(auditDetails({ ...base, details: { name: "N", api_token: { id: 6, name: "nightly" } } })).toBe("Name: N; Via API token: nightly");
+    expect(auditDetails({ ...base, details: { ends_at: "2027-02-03T11:54:22Z" } })).toBe(`Ends at: ${formatDateTime("2027-02-03T11:54:22Z")}`);
   });
 
   it("words audit actors", () => {

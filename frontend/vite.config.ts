@@ -9,5 +9,11 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     include: ["tests/**/*.test.{ts,tsx}", "tests/e2e/**/*.spec.tsx"],
+    coverage: {
+      provider: "v8",
+      include: ["src/**"],
+      exclude: ["src/api/generated.ts"],
+      reporter: ["text-summary", "html", "json-summary"],
+    },
   },
 });
