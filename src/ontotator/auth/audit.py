@@ -111,6 +111,7 @@ def read_audit(
     user_id: int | None = None,
     project_key: str | None = None,
     since: datetime | None = None,
+    exclude_actions: tuple[str, ...] = (),
     limit: int = 200,
 ) -> list[AuditEvent]:
     """The newest events first, at most ``limit``.
@@ -143,6 +144,8 @@ def read_audit(
         statement = statement.where(ProjectRow.project_key == project_key)
     if since is not None:
         statement = statement.where(AuditEventRow.at >= since)
+    if exclude_actions:
+        statement = statement.where(AuditEventRow.action.not_in(exclude_actions))
     return [
         AuditEvent(
             at=row.at,

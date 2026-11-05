@@ -107,7 +107,7 @@ What for: check what was changed on an account and by whom.
 
 1. On **Users**, click **More…** in the row and choose **History**. For anonymised accounts, click the **History** button in the row.
 2. Read the table: **When**, **By**, **What**, **Whom**, **Project**, **Details**. Research exports are listed too, for example *Edit log exported* or *Working time exported*.
-3. The dialog shows the newest 200 entries. For the whole trail, use the command `ontotator admin audit`, see [Server operations](../operations.md#users-ontologies-and-projects).
+3. Changes made with an API token name it under **Details** (*Via API token*); the single requests a token made are left out here. The dialog shows the newest 200 entries. For the whole trail, use the command `ontotator admin audit`, see [Server operations](../operations.md#users-ontologies-and-projects).
 
 ## Anonymise a deactivated account
 
@@ -231,7 +231,7 @@ What for: see every API token of the server, stop one, or create a system token 
 
 1. Click **Server settings** under **Administration**.
 2. Go to **API tokens**. The table shows each token's **Kind** (*Personal*, *Project* or *System*), **Owner**, **Project**, **Scopes**, expiry, last use and **Status**.
-3. To stop a token, click **Revoke…** in its row, then **Revoke token**.
+3. To stop a token, click **Revoke…** in its row, then **Revoke token**. A token the server revoked by itself says why next to **Revoked**, for example *project role removed* or *password changed*.
 4. To create a system token, click **New system token…**, enter a **Token name**, tick its scopes and click **Create token**. Copy the token from the dialog; it is shown only once.
 
 Only a system token may hold the **System administration** scope, for ontology and translation uploads and user accounts. It acts as you and is revoked when you are no longer a system administrator, when you change your password and when your account is deactivated. Token creation, revocation and every change made with a token are in the audit trail.

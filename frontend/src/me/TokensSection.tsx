@@ -21,10 +21,20 @@ const SCOPE_HINTS: Record<ApiTokenScope, string> = {
   "project-admin": "Change project settings, members and assignments, start consolidation.",
   admin: "Upload ontologies and translations, manage user accounts.",
 };
-const KIND_LABELS: Record<ApiToken["kind"], string> = { personal: "Personal", project: "Project", system: "System" };
+export const KIND_LABELS: Record<ApiToken["kind"], string> = { personal: "Personal", project: "Project", system: "System" };
 const DEFAULT_DAYS = 90;
 const MAX_DAYS = 365;
 
+/** Why the server revoked a token itself; "revoked" (by hand) needs no words. */
+const REVOKE_REASONS: Readonly<Record<string, string>> = {
+  password_set: "password changed",
+  reset_code: "new sign-in code issued",
+  recovered: "password recovered",
+  "user.active": "account deactivated",
+  "user.system_admin": "administrator role removed",
+  "user.anonymise": "personal data erased",
+  "project.member_roles": "project role removed",
+};
 type TokenState = "Active" | "Expired" | "Revoked";
 const STATE_TONES: Record<TokenState, StatusTone> = { Active: "success", Expired: "neutral", Revoked: "danger" };
 
@@ -42,7 +52,7 @@ function client(mode: TokensSectionMode) {
 }
 
 const INTRO: Record<TokensSectionMode["kind"], string> = {
-  personal: "A token lets a script or another program use Ontotator as you, without your password. It can do only what its scopes allow and what you may do yourself. Annotation work always needs the browser.",
+  personal: "A token lets a script or another program use Ontotator as you, without your password. It can do only what its scopes allow and what you may do yourself. Annotation work always needs the browser. If you do not use scripts, you do not need a token.",
   project: "A project token lets a script work in this project only, as the lead who created it. It stops working when that lead leaves the project or loses the lead role.",
   admin: "Every API token of this server. A system token belongs to an administrator and is the only kind that may hold the System administration scope.",
 };
@@ -108,7 +118,8 @@ export function TokensSection({ mode }: { mode: TokensSectionMode }): JSX.Elemen
     { id: "scopes", header: "Scopes", cell: token => token.scopes.map(scope => SCOPE_LABELS[scope]).join(", ") },
     { id: "expires", header: "Expires", cell: token => <time dateTime={token.expires_at}>{formatDateTime(token.expires_at)}</time> },
     { id: "used", header: "Last used", cell: token => token.last_used_at ? <time dateTime={token.last_used_at}>{formatDateTime(token.last_used_at)}</time> : <EmptyValue /> },
-    { id: "state", header: "Status", cell: token => { const state = tokenState(token); return <StatusBadge tone={STATE_TONES[state]}>{state}</StatusBadge>; } },
+    { id: "state", header: "Status", cell: token => { const state = tokenState(token); const reason = state === "Revoked" && token.revoked_reason && token.revoked_reason !== "revoked" ? REVOKE_REASONS[token.revoked_reason] ?? "automatically" : null;
+      return <><StatusBadge tone={STATE_TONES[state]}>{state}</StatusBadge>{reason && <span className="field-hint"> {reason}</span>}</>; } },
     { id: "actions", header: <span className="visually-hidden">Actions</span>, cell: token => tokenState(token) === "Active"
       ? <Button size="sm" disabled={busy} aria-label={`Revoke ${token.name}`} onClick={() => { setError(undefined); setRevoking(token); }}>Revoke…</Button> : null },
   ];
@@ -158,7 +169,7 @@ function NewTokenDialog({ created, onClose }: { created: CreatedApiToken; onClos
   return <Dialog open title={`New token ${created.token.name}`} size="sm" onClose={onClose}
     footer={<Button variant="primary" onClick={onClose}>Close</Button>}>
     <p>This token is shown only once. Store it now, for example in your password manager.</p>
-    <p className="code-once-value"><code>{created.secret}</code></p>
+    <p className="code-once-value code-once-value--token"><code>{created.secret}</code></p>
     <p>Send it as <code>Authorization: Bearer</code> followed by the token.</p>
     <Button onClick={() => { void copyToken(); }}>{copy === "copied" ? "Copied" : "Copy token"}</Button>
     {copy === "failed" && <InlineMessage tone="error">Could not copy to the clipboard. Select and copy the token manually.</InlineMessage>}

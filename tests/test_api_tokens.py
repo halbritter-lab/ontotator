@@ -602,6 +602,9 @@ def test_writes_with_a_token_are_audited_with_the_token(
     assert entries and all(
         entry["api_token"]["id"] == created["token"]["id"] for entry in entries
     )
+    # The user's History leaves the request entries out, not the changes.
+    actions = [e["action"] for e in admin.get("/api/v1/admin/users/root/audit").json()]
+    assert "api_token.use" not in actions and "project.update" in actions
 
 
 def test_the_admin_overview_lists_and_revokes_every_token(

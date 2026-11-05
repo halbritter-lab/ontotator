@@ -100,6 +100,17 @@ describe("API tokens", () => {
     expect(create).toHaveBeenCalledWith({ name: "ops", scopes: ["admin"], expires_in_days: 90 });
   });
 
+  it("says why the server revoked a token, not when its owner did", async () => {
+    vi.mocked(api.listMyTokens).mockResolvedValue([
+      token({ revoked_at: "2026-11-02T10:00:00Z", revoked_reason: "project.member_roles" }),
+      token({ id: 2, name: "by hand", revoked_at: "2026-11-02T10:00:00Z", revoked_reason: "revoked" }),
+    ]);
+    render(<TokensSection mode={{ kind: "personal" }} />);
+    const table = await screen.findByRole("table", { name: "API tokens" });
+    expect(within(table).getByText("nightly export").closest("tr")!.textContent).toContain("Revoked project role removed");
+    expect(within(table).getByText("by hand").closest("tr")!.textContent).toMatch(/Revoked$/);
+  });
+
   it("tells expired from revoked tokens", () => {
     expect(tokenState(token({ expires_at: "2020-01-01T00:00:00Z" }))).toBe("Expired");
     expect(tokenState(token({ revoked_at: "2020-01-01T00:00:00Z", expires_at: "2020-01-01T00:00:00Z" }))).toBe("Revoked");
