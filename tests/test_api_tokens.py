@@ -674,7 +674,8 @@ def test_the_contract_names_each_operations_scope(app: FastAPI) -> None:
 def test_a_token_follows_up_on_the_work_its_scope_starts(
     app: FastAPI, admin: TestClient
 ) -> None:
-    exporter = _bearer(app, _create(admin, ["export"])["secret"], **ORIGIN)
+    export_token = _create(admin, ["export"])
+    exporter = _bearer(app, export_token["secret"], **ORIGIN)
     started = exporter.post(
         f"/api/v1/projects/{PROJECT}/exports", json={"kind": "edit_log"}
     )
@@ -684,6 +685,12 @@ def test_a_token_follows_up_on_the_work_its_scope_starts(
     assert polled.status_code == 200, polled.text
     job = app.state.jobs.claim(job_id, "token-test")
     assert app.state.jobs.run(job, "token-test").status == "succeeded"
+    # The job's own audit entry names the token that started it.
+    [exported] = _audit(app, "project.edit_log_export")
+    assert exported.details["api_token"] == {
+        "id": export_token["token"]["id"],
+        "name": "script",
+    }
     downloaded = exporter.get(f"/api/v1/jobs/{job_id}/download")
     assert downloaded.status_code == 200, downloaded.text
 

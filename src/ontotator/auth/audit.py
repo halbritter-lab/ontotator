@@ -9,7 +9,7 @@ from typing import Any
 
 from sqlalchemy import Connection, insert, or_, select
 
-from ontotator.auth.context import current_principal
+from ontotator.auth.context import api_token_ref
 from ontotator.storage.tables import AuditEventRow, ProjectRow, UserRow
 
 
@@ -57,16 +57,13 @@ def record_audit(
     the trail and the change carry the same time. A ``user`` target also
     records the account's id, resolved from the username at this moment. An
     event in a practice project (issue 266) is marked ``details.practice``.
-    A change made with an API token (issue 305) names the token in
-    ``details.api_token``.
+    A change made with an API token (issue 305), also by a job it started,
+    names the token in ``details.api_token``.
     """
     details = dict(details or {})
-    principal = current_principal.get()
-    if principal is not None and principal.token is not None:
-        details.setdefault(
-            "api_token",
-            {"id": principal.token.token_id, "name": principal.token.name},
-        )
+    token = api_token_ref()
+    if token is not None:
+        details.setdefault("api_token", token)
     if (
         project_id is not None
         and conn.execute(
