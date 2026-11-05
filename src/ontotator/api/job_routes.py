@@ -22,15 +22,18 @@ router = APIRouter(prefix="/api/v1/jobs", tags=["jobs"])
 EXPORT_ACTIONS = {
     "t1": Action.EXPORT_ALL_WORK,
     "final": Action.EXPORT_ALL_WORK,
+    "final-phenopackets": Action.EXPORT_ALL_WORK,
     "edit_log": Action.EXPORT_EDIT_LOG,
     # Working time (issue 298): requested as ``work_time``, saved as ``work-time``.
     "work_time": Action.EXPORT_EDIT_LOG,
     "work-time": Action.EXPORT_EDIT_LOG,
     "translation-reviews": Action.EXPORT_ALL_WORK,
 }
+ARCHIVE_JOB_KINDS = frozenset({"project_archive_export", "project_archive_import"})
 EXPORT_KINDS = {
     "t1_export": ("t1", "zip", "application/zip"),
     "final_t1_export": ("final", "zip", "application/zip"),
+    "final_phenopacket_export": ("final-phenopackets", "zip", "application/zip"),
     "edit_log_export": ("edit_log", "jsonl", "application/x-ndjson"),
     "work_time_export": ("work-time", "jsonl", "application/x-ndjson"),
     "translation_review_export": (
@@ -125,7 +128,8 @@ def get_job(job_id: int, request: Request, principal: PrincipalDep) -> JobView:
             .mappings()
             .one_or_none()
         )
-        if row is None:
+        # Project archives are read on the admin route only (#306).
+        if row is None or row["kind"] in ARCHIVE_JOB_KINDS:
             raise _not_found()
         return JobView.model_validate(dict(row))
 

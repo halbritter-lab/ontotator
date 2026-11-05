@@ -728,6 +728,7 @@ a.shell-product { color: inherit; text-decoration: none; }
 .final-export-card .notice, .final-export-card .form-group { margin: 0; }
 .final-export-details, .export-research-details { font-size: var(--size-sm); }
 .final-export-details > p, .export-research-details > p { margin: var(--space-2) 0 0; }
+.final-export-details > ul { margin: var(--space-1) 0 0; padding-left: var(--space-5); }
 .final-export-table td, .export-research-table :is(th, td) { vertical-align: middle; }
 .final-export-table td:last-child, .export-research-table td:last-child { text-align: right; }
 .final-export-group th { text-align: left; font-size: var(--size-sm); }
@@ -1080,6 +1081,9 @@ ul.task-counts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space
 .ui-menu-item:hover,
 .ui-menu-item:focus-visible { background: var(--accent-light); }
 .ui-menu-item:focus-visible { outline: var(--focus-width) solid var(--focus-ring); outline-offset: calc(-1 * var(--focus-width)); }
+/* An unavailable item stays focusable so its reason is read; it does not look or act clickable. */
+.ui-menu-item[aria-disabled="true"] { color: var(--text-muted); cursor: default; }
+.ui-menu-item[aria-disabled="true"]:hover { background: transparent; }
 /* Side panel: a modal right panel (Dialog variant "side"); the page behind it is inert. */
 .modal-overlay--side { justify-content: flex-end; align-items: stretch; }
 .ui-dialog--side { width: 480px; max-width: 100vw; height: 100dvh; max-height: none; border-radius: 0; animation: ui-side-in 150ms ease-out; }
@@ -1155,8 +1159,17 @@ ul.task-counts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space
   clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%, 10px 50%);
 }
 .stage-path > li:first-child .stage-path-seg { padding-inline-start: var(--space-2); clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%); }
-button.stage-path-seg { cursor: pointer; }
-button.stage-path-seg:focus-visible { outline: var(--focus-width) solid var(--focus-ring); outline-offset: calc(-1 * var(--focus-width)); }
+button.stage-path-seg { position: relative; cursor: pointer; }
+/* Issue 334: the focus ring is an inner box, inset past the arrow tips so the clip-path cannot cut it; white on the
+   filled current segment (the accent ring would vanish there). */
+button.stage-path-seg:focus-visible { outline: none; }
+button.stage-path-seg:focus-visible::after {
+  content: ""; position: absolute; inset: 2px 12px; border: var(--focus-width) solid var(--focus-ring); border-radius: var(--radius-sm); pointer-events: none;
+}
+.stage-path > li:first-child button.stage-path-seg:focus-visible::after,
+button.stage-path-seg--optional:not(.stage-path-seg--current):focus-visible::after { inset-inline-start: 2px; }
+button.stage-path-seg--optional:not(.stage-path-seg--current):focus-visible::after { inset-inline-end: 2px; }
+button.stage-path-seg--current:focus-visible::after { border-color: var(--on-accent); }
 .stage-path-title { font-weight: var(--weight-strong); color: var(--text); }
 .stage-path-title, .stage-path-state { overflow-wrap: break-word; }
 .stage-path-seg--done { background: var(--success-light); box-shadow: inset 0 -2px 0 var(--success); }
@@ -1170,6 +1183,7 @@ button.stage-path-seg:focus-visible { outline: var(--focus-width) solid var(--fo
   .stage-path-seg, .stage-path > li:first-child .stage-path-seg { clip-path: none; border: 1px solid CanvasText; }
   .stage-path-seg--current { border-width: 3px; }
   button.stage-path-seg:focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }
+  button.stage-path-seg:focus-visible::after { content: none; }
 }
 
 /* SuggestInput (ui/SuggestInput.tsx): the suggestion list sits in the field's box, right under the input. */

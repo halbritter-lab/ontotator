@@ -28,7 +28,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy import text as sql_text
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 SCHEMA = "ontotator"
@@ -45,6 +45,7 @@ APPEND_ONLY_TABLES = (
     "audit_events",
     "edit_events",
     "proposal_sets",
+    "empty_proposal_sets",
     "translation_reviews",
     "problem_reports",
     "task_holds",
@@ -146,6 +147,10 @@ class ProjectRow(Base):
         server_default=text("'review_and_annotate_translations'")
     )
     tool_proposal_mode: Mapped[str] = mapped_column(server_default=text("'proposals'"))
+    # Consolidators see "Annotator A, B, …" instead of names (issue 302).
+    blind_consolidation: Mapped[bool] = mapped_column(
+        Boolean, server_default=text("false")
+    )
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now())
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     # A private practice project of one person (issue 266, migration 0029):
@@ -370,6 +375,9 @@ class DraftRow(Base):
         server_default=text("'[]'::jsonb")
     )
     reanchor_inputs_initialized_at: Mapped[datetime | None]
+    # The content the draft started with, as a DraftState (0033, issue 320);
+    # NULL for drafts created before.
+    initial_state: Mapped[dict[str, Any] | None]
     updated_at: Mapped[datetime]
 
 
@@ -588,6 +596,57 @@ class LoginAttemptRow(Base):
     at: Mapped[datetime]
 
 
+class ApiTokenRow(Base):
+    """An API token (issue 305); only the token's SHA-256 is stored.
+
+    ``personal`` and ``system`` tokens act as their owner everywhere their
+    scopes allow, a ``project`` token only in ``project_id``. Only a
+    ``system`` token may hold the ``admin`` scope.
+    """
+
+    __tablename__ = "api_tokens"
+    __table_args__ = (
+        CheckConstraint("kind IN ('personal', 'project', 'system')", name="kind"),
+        CheckConstraint(
+            "(kind = 'project') = (project_id IS NOT NULL)", name="project_kind"
+        ),
+        CheckConstraint(
+            "cardinality(scopes) > 0 AND scopes <@ ARRAY['read', 'import',"
+            " 'export', 'project-admin', 'admin']::text[]",
+            name="scopes",
+        ),
+        CheckConstraint(
+            "kind = 'system' OR NOT ('admin' = ANY (scopes))", name="admin_scope"
+        ),
+        CheckConstraint("char_length(name) BETWEEN 1 AND 100", name="name"),
+        CheckConstraint(
+            "expires_at > created_at"
+            " AND expires_at <= created_at + interval '366 days'",
+            name="lifetime",
+        ),
+        CheckConstraint(
+            "(revoked_at IS NULL) = (revoked_reason IS NULL)", name="revoked"
+        ),
+        Index("ix_api_tokens_owner_id_revoked_at", "owner_id", "revoked_at"),
+        Index("ix_api_tokens_project_id", "project_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    token_sha256: Mapped[str] = mapped_column(unique=True)
+    name: Mapped[str]
+    kind: Mapped[str]
+    owner_id: Mapped[int] = mapped_column(BigInteger, ForeignKey(UserRow.id))
+    project_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey(ProjectRow.id)
+    )
+    scopes: Mapped[list[str]] = mapped_column(ARRAY(Text))
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    expires_at: Mapped[datetime]
+    last_used_at: Mapped[datetime | None]
+    revoked_at: Mapped[datetime | None]
+    revoked_reason: Mapped[str | None]
+
+
 class AuditEventRow(Base):
     """An administrative or security event (append-only)."""
 
@@ -686,6 +745,8 @@ class EditEventRow(Base):
     revision_after: Mapped[int]
     state: Mapped[dict[str, Any]]
     submission_id: Mapped[str | None]
+    # Shared by the commands of one user action (0033, issue 320).
+    step_id: Mapped[str | None]
 
 
 # --- Ontologies and jobs (T2d, migration 0004) ----------------------------
@@ -802,6 +863,45 @@ class ProposalSetRow(Base):
     source_sha256: Mapped[str | None] = mapped_column(ForeignKey(StoredFileRow.sha256))
     origin: Mapped[str] = mapped_column(server_default=text("'import'"))
     pending_items: Mapped[list[Any]] = mapped_column(server_default=text("'[]'::jsonb"))
+    imported_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey(UserRow.id))
+    imported_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    job_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey(JobRow.id))
+
+
+class EmptyProposalSetRow(Base):
+    """An imported tool set without any finding on a text (migration 0032).
+
+    The import keeps no ``proposal_sets`` row for such a unit (its text is
+    imported documents-only), so this row records that the set's tools ran on
+    the text and proposed nothing there: the recall in ``proposals.csv`` counts
+    the text for them. Only sets with a tool actor are recorded. Identity as
+    ``proposal_sets``; a re-import of the same set is skipped. Append-only.
+    """
+
+    __tablename__ = "empty_proposal_sets"
+    __table_args__ = (
+        UniqueConstraint(
+            "project_id",
+            "bundle_id",
+            "annotation_set_id",
+            "document_id",
+            name="uq_empty_proposal_sets_identity",
+            postgresql_nulls_not_distinct=True,
+        ),
+        ForeignKeyConstraint(
+            ["project_id", "document_id"],
+            [f"{SCHEMA}.documents.project_id", f"{SCHEMA}.documents.document_id"],
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    project_id: Mapped[int] = mapped_column(BigInteger, ForeignKey(ProjectRow.id))
+    document_id: Mapped[str]
+    bundle_id: Mapped[str | None]
+    manifest_sha256: Mapped[str | None]
+    annotation_set_id: Mapped[str]
+    set_kind: Mapped[str]
+    actors: Mapped[list[Any]]
     imported_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey(UserRow.id))
     imported_at: Mapped[datetime] = mapped_column(server_default=func.now())
     job_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey(JobRow.id))
@@ -1002,3 +1102,37 @@ class PracticeProjectRow(Base):
     # Whether the project has the consolidation task (owner consolidates).
     consolidation: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class ImportedPersonRow(Base):
+    """A pseudonym-only person a project archive import created (#306).
+
+    The user row is an anonymised account (no name, e-mail or login) that
+    keeps the pseudonym the archive's work carries. ``linked_user_id`` is the
+    real account an administrator linked it to later; the link grants that
+    account the person's roles and never rewrites the recorded work.
+    """
+
+    __tablename__ = "imported_people"
+    __table_args__ = (
+        UniqueConstraint(
+            "source_instance", "source_user_id", name="uq_imported_people_source"
+        ),
+    )
+
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey(UserRow.id), primary_key=True
+    )
+    # The project whose import created the person.
+    project_id: Mapped[int] = mapped_column(BigInteger, ForeignKey(ProjectRow.id))
+    archive_sha256: Mapped[str]
+    # The person in the archive: the source server's instance id and user id,
+    # so a later archive of the same server finds the same person again.
+    source_instance: Mapped[str]
+    source_user_id: Mapped[int] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    linked_user_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey(UserRow.id)
+    )
+    linked_at: Mapped[datetime | None]
+    linked_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey(UserRow.id))

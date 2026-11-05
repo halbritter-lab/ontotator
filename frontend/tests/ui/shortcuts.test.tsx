@@ -52,6 +52,16 @@ it("alt_letter_bindings_fall_back_to_event_code", () => {
   expect(matches("Ctrl+m", new KeyboardEvent("keydown", { key: "µ", code: "KeyM", ctrlKey: true }))).toBe(false);
 });
 
+it("ctrl_and_meta_letter_bindings_require_exact_shift", () => {
+  // Issue 320: Ctrl+Shift+Z redoes, so it must not also match Ctrl+Z (undo).
+  expect(matches("Ctrl+z", new KeyboardEvent("keydown", { key: "z", ctrlKey: true }))).toBe(true);
+  expect(matches("Ctrl+z", new KeyboardEvent("keydown", { key: "Z", ctrlKey: true, shiftKey: true }))).toBe(false);
+  expect(matches("Ctrl+Shift+z", new KeyboardEvent("keydown", { key: "Z", ctrlKey: true, shiftKey: true }))).toBe(true);
+  expect(matches("Meta+Shift+z", new KeyboardEvent("keydown", { key: "z", metaKey: true }))).toBe(false);
+  // Plain letters keep ignoring Shift (a "?" binding is typed with Shift).
+  expect(matches("j", new KeyboardEvent("keydown", { key: "J", shiftKey: true }))).toBe(true);
+});
+
 it("named_control_keys_require_exact_shift_and_key_names", () => {
   expect(matches("Escape", new KeyboardEvent("keydown", { key: "Escape" }))).toBe(true);
   expect(matches("Escape", new KeyboardEvent("keydown", { key: "Escape", shiftKey: true }))).toBe(false);

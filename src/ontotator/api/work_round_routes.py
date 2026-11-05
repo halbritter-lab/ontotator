@@ -15,6 +15,7 @@ from ontotator.api.routes import (
     get_access,
     get_repo,
 )
+from ontotator.application.consolidation_blinding import round_blinding
 from ontotator.application.round_reads import (
     enrich_inputs,
     enrich_rounds,
@@ -148,14 +149,18 @@ def round_inputs(
 ) -> list[RoundInputView]:
     repo = get_repo(request)
     # One snapshot: the inventory and its facts show one committed state.
-    with repo.db.snapshot():
+    with repo.db.snapshot() as conn:
         # The visibility check answers every refusal alike; the scoped
         # inventory read repeats the owner-or-EXPORT_ALL_WORK check, and
         # enrichment only looks up the submissions these items name.
         project = _visible_round(repo, round_id).project_key
-        return enrich_inputs(
+        items = enrich_inputs(
             repo, project, repo.get_round_input_inventory(project, round_id)
         )
+        pid = repo._require_project(conn, project)
+        blinding = round_blinding(conn, get_access(request), pid, project, round_id)
+    # Issue 302: a consolidator does not see the input authors.
+    return [blinding.input_view(i) for i in items] if blinding else items
 
 
 @router.post("/workspaces/{workspace_id}/round-input-resolutions")

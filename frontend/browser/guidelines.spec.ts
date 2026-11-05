@@ -322,7 +322,7 @@ test("EMPTY: publish v1, read it in a task, publish v2, review under v2, export 
       }
     }
     expect(JSON.parse(archive.get("receipt.json")!.toString("utf8"))).not.toHaveProperty("guidelines");
-    const selected = annotationSets(archive.get("selected.t1.zip")!);
+    const selected = annotationSets(archive.get("selected-results.ontospan.zip")!);
     expect(refOf(selected, firstSubmission)).toBe(ref(1));
     expect(refOf(selected, secondSubmission)).toBe(ref(2));
     const index = archive.get("index.csv")!.toString("utf8").replace(/^\u{FEFF}/u, "").split(/\r?\n/)[0].split(",");

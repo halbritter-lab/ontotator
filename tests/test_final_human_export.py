@@ -175,10 +175,13 @@ def test_final_export_freezes_human_sources_notes_and_colliding_ids(
             s.submission_id for s in sources
         }
         assert len(receipt["human_inputs"]) == 2
-        for name in ("selected.t1.zip", "provenance.t1.zip"):
+        for name in (
+            "selected-results.ontospan.zip",
+            "provenance-results.ontospan.zip",
+        ):
             (tmp_path / name).write_bytes(artifact.read(name))
     _, [unit] = ontospan.read_bundle(
-        tmp_path / "selected.t1.zip",
+        tmp_path / "selected-results.ontospan.zip",
         {"hp": ontospan.ObographOntology.load(FIXTURE_PATH)},
     )
     assert unit.annotation_set.set_kind == "stage_result"
@@ -210,7 +213,7 @@ def test_final_export_freezes_human_sources_notes_and_colliding_ids(
         for a in unit.annotation_set.annotations
     )
     _, provenance = ontospan.read_bundle(
-        tmp_path / "provenance.t1.zip",
+        tmp_path / "provenance-results.ontospan.zip",
         {"hp": ontospan.ObographOntology.load(FIXTURE_PATH)},
     )
     assert len(provenance) == 2
@@ -239,9 +242,19 @@ _VOLATILE = [
 ]
 # receipt.json and README.txt of a carry-forward final (no draft-sourced
 # inputs): a change here changes every export of that kind. v2 (#133) added
-# the (here empty) "consolidations" record and the format string.
+# the (here empty) "consolidations" record and the format string; #295-#297
+# the analysis tables (listed in README.txt and hashed in "files") and
+# the compared rows that index.csv may hold; the README line of agreement.csv
+# names the text versions; the README line of proposals.csv says that recall
+# also counts texts where a tool proposed nothing. #321 renamed the bundles
+# (selected.t1.zip -> selected-results.ontospan.zip, provenance.t1.zip ->
+# provenance-results.ontospan.zip): the names in README.txt and under
+# "files" in receipt.json changed, and README.txt says "Ontospan bundle";
+# "How to read it" then explained the columns of findings.csv, the counts
+# of agreement.csv and the empty cells of agreement-summary.csv and
+# proposals.csv.
 CARRY_FORWARD_DIGEST = (
-    "458ac726c812a016de6e19093b22497e1b4cfa429804995266cca2624e5b1875"
+    "c7c40f8ea00fa15c58bd69f97b4146b7f3333af055916ceaf867423b6bb03ed0"
 )
 
 

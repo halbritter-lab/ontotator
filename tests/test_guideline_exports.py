@@ -225,7 +225,7 @@ def test_final_archive_carries_references_only(case_env) -> None:
             assert body.encode() not in data, name
     receipt = json.loads(archive.read("receipt.json"))
     assert "guidelines" not in receipt
-    sets = _units(archive.read("selected.t1.zip"))
+    sets = _units(archive.read("selected-results.ontospan.zip"))
     assert sets["submission-under-v1"]["guideline_ref"] == _ref(case_env, 1)
     assert sets["submission-under-v2"]["guideline_ref"] == _ref(case_env, 2)
     table = list(
@@ -312,7 +312,7 @@ def test_frozen_snapshot_keeps_references(review_env) -> None:
     job = queue.run(queue.claim(queued_export["job_id"], "test"), "test")
     assert job.status == "succeeded", job.error
     with zipfile.ZipFile(env.db.blobs.path(job.result["sha256"])) as archive:
-        sets = _units(archive.read("selected.t1.zip"))
+        sets = _units(archive.read("selected-results.ontospan.zip"))
         receipt = json.loads(archive.read("receipt.json"))
     assert sets["submission-translation-annotations"]["guideline_ref"] == first
     [review] = receipt["source_reviews"]

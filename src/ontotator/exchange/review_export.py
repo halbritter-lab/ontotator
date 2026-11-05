@@ -22,7 +22,7 @@ from ontotator.authz.project_authority import require_project_management
 from ontotator.domain.errors import DomainError
 from ontotator.domain.guidelines import guideline_ref
 from ontotator.domain.variants import VariantInfo, resolve_translation_lineage
-from ontotator.jobs.queue import Job, JobContext
+from ontotator.jobs.queue import Job, JobContext, handler_payload
 from ontotator.storage.guidelines import guideline_facts
 from ontotator.storage.repository import Repository, _lock_id
 from ontotator.storage.tables import JobRow, ProjectRow, TranslationReviewRow
@@ -203,12 +203,15 @@ def translation_review_export(job: Job, ctx: JobContext) -> dict[str, Any]:
             .join(ProjectRow, ProjectRow.id == JobRow.project_id)
             .where(JobRow.id == job.id)
         ).one_or_none()
+        # The queue keeps the API token that started the job in the stored
+        # payload and hands the handler the payload without it (issue 305).
+        stored = None if row is None else handler_payload(row.payload)
         if (
             row is None
             or row.kind != "translation_review_export"
             or row.project_id != job.project_id
-            or row.payload != job.payload
-            or row.payload != {"project": row.project_key}
+            or stored != job.payload
+            or stored != {"project": row.project_key}
         ):
             raise DomainError("PROJECT_NOT_FOUND")
         key, pid = row.project_key, row.project_id

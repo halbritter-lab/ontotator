@@ -590,3 +590,103 @@ def test_audit_lists_the_trail_as_text_and_json(tmp_path: Path) -> None:
     assert later.exit_code == 0 and later.output == ""
     bad = _admin(tmp_path, "audit", "--since", "yesterday")
     assert bad.exit_code == 1 and "SINCE_INVALID" in bad.output
+
+
+def test_tokens_create_list_and_revoke(tmp_path: Path) -> None:
+    """Issue 305: ``admin tokens`` prints the token once and revokes it."""
+    assert (
+        _admin(tmp_path, "users", "create", "ann", "--display-name", "Ann").exit_code
+        == 0
+    )
+    assert (
+        _admin(
+            tmp_path, "users", "create", "root", "--display-name", "R", "--system-admin"
+        ).exit_code
+        == 0
+    )
+
+    created = _admin(
+        tmp_path,
+        "tokens",
+        "create",
+        "ann",
+        "--name",
+        "nightly",
+        "--scope",
+        "read",
+        "--scope",
+        "export",
+        "--days",
+        "30",
+    )
+    assert created.exit_code == 0, created.output
+    match = re.search(
+        r"Created personal token (\d+) 'nightly' of 'ann' \(scopes read, export;"
+        r" valid until .* UTC\):\n  (ott_\S+)\nStore it now\. It is not shown again\.",
+        created.output,
+    )
+    assert match is not None, created.output
+    token_id, secret = match.groups()
+    db = database_for(tmp_path / "editor.db")
+    from ontotator.auth.api_tokens import ApiTokenService
+
+    assert ApiTokenService(db).resolve(secret) is not None
+
+    refused = _admin(
+        tmp_path, "tokens", "create", "ann", "--name", "x", "--scope", "admin"
+    )
+    assert refused.exit_code == 1
+    assert "TOKEN_SCOPES_INVALID" in refused.output
+    not_admin = _admin(
+        tmp_path,
+        "tokens",
+        "create",
+        "ann",
+        "--name",
+        "x",
+        "--scope",
+        "admin",
+        "--system",
+    )
+    assert "ADMIN_REQUIRED" in not_admin.output
+    system = _admin(
+        tmp_path,
+        "tokens",
+        "create",
+        "root",
+        "--name",
+        "ops",
+        "--scope",
+        "admin",
+        "--system",
+    )
+    assert system.exit_code == 0, system.output
+
+    listed = _admin(tmp_path, "tokens", "list", "--user", "ann")
+    assert listed.exit_code == 0, listed.output
+    [line] = listed.output.splitlines()
+    fields = line.split("\t")
+    assert fields[:6] == [token_id, "personal", "nightly", "ann", "-", "read,export"]
+    assert fields[-1] == "active"
+
+    revoked = _admin(tmp_path, "tokens", "revoke", token_id)
+    assert revoked.exit_code == 0, revoked.output
+    assert f"Token {token_id} 'nightly' of 'ann' is revoked." in revoked.output
+    assert ApiTokenService(db).resolve(secret) is None
+    assert _admin(tmp_path, "tokens", "list", "--user", "ann").output.endswith(
+        "revoked (revoked)\n"
+    )
+    with db.transaction() as conn:
+        actions = list(
+            conn.execute(
+                select(AuditEventRow.action).where(
+                    AuditEventRow.target_type == "api_token"
+                )
+            ).scalars()
+        )
+    assert sorted(actions) == [
+        "api_token.create",
+        "api_token.create",
+        "api_token.revoke",
+    ]
+    assert "TOKEN_NOT_FOUND" in _admin(tmp_path, "tokens", "revoke", "999").output

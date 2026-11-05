@@ -4,8 +4,16 @@ import { api, ApiError, NetworkError, type JobView } from "../api/client";
 /** A lost connection or a server error (5xx) may pass; a 4xx answer is final. */
 const transient = (error: unknown) => error instanceof NetworkError || (error instanceof ApiError && error.status >= 500);
 
-/** One request at a time. Each ID owns its timer and replies. */
-export function useJob(jobId: number | null, { intervalMs = 1000 }: { intervalMs?: number } = {}): { job: JobView | null; error: unknown } {
+const projectJob = (id: number): Promise<JobView> => api.getJob(id);
+
+/**
+ * One request at a time. Each ID owns its timer and replies. `get` reads the job (default: the project job route);
+ * pass a stable function, such as the admin route of project archives.
+ */
+export function useJob(
+  jobId: number | null,
+  { intervalMs = 1000, get = projectJob }: { intervalMs?: number; get?: (id: number) => Promise<JobView> } = {},
+): { job: JobView | null; error: unknown } {
   const [state, setState] = useState<{ id: number | null; job: JobView | null; error: unknown }>({ id: null, job: null, error: undefined });
   useEffect(() => {
     let active = true;
@@ -17,7 +25,7 @@ export function useJob(jobId: number | null, { intervalMs = 1000 }: { intervalMs
     const poll = async () => {
       if (jobId === null) return;
       try {
-        const job = await api.getJob(jobId);
+        const job = await get(jobId);
         if (!active) return;
         setState({ id: jobId, job, error: undefined });
         if (job.status !== "succeeded" && job.status !== "failed") schedule();
@@ -30,6 +38,6 @@ export function useJob(jobId: number | null, { intervalMs = 1000 }: { intervalMs
     };
     void poll();
     return () => { active = false; clearTimeout(timer); };
-  }, [jobId, intervalMs]);
+  }, [jobId, intervalMs, get]);
   return state.id === jobId ? { job: state.job, error: state.error } : { job: null, error: undefined };
 }
