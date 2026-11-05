@@ -8,8 +8,10 @@ a system admin (Q5).
 
 from __future__ import annotations
 
+import io
 import json
 import tempfile
+import zipfile
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -18,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 import ontospan
+from ontospan.bundle import MANIFEST as BUNDLE_MANIFEST
 from sqlalchemy import Connection, Text, cast, delete, exists, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
@@ -519,6 +522,49 @@ def build_t1_units(
     return T1Units(units, unit_views, counts, legacy_warnings, warning_counts)
 
 
+def t1_contributors(content: ProjectExport) -> list[ontospan.Contributor]:
+    return [
+        ontospan.Contributor(actor_id=pseudonym, name=name, orcid=orcid)
+        for pseudonym, name, orcid in content.contributors
+    ]
+
+
+def write_t1_bundle(
+    units: Sequence[ontospan.AnnotatedDocument],
+    *,
+    bundle_id: str,
+    created_at: datetime,
+    contributors: Sequence[ontospan.Contributor],
+) -> bytes:
+    """The bundle as a ZIP whose bytes depend only on its content.
+
+    ontospan stamps ZIP entries with the current time; this writes the same
+    files in the same order, stamped with ``created_at``.
+    """
+    created_at = created_at.astimezone(UTC).replace(microsecond=0)
+    stamp = created_at.timetuple()[:6]
+    with tempfile.TemporaryDirectory(prefix="ontotator-export-") as tmp:
+        target = Path(tmp) / bundle_id
+        try:
+            manifest = ontospan.write_bundle(
+                target,
+                units,
+                bundle_id=bundle_id,
+                created_at=created_at,
+                contributors=contributors,
+            )
+        except ontospan.FormatError as exc:
+            raise _invalid(exc.report) from None
+        output = io.BytesIO()
+        with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
+            for path in (BUNDLE_MANIFEST, *(entry.path for entry in manifest.files)):
+                info = zipfile.ZipInfo(path, date_time=stamp)
+                info.compress_type = zipfile.ZIP_DEFLATED
+                info.external_attr = 0o600 << 16
+                archive.writestr(info, (target / path).read_bytes())
+    return output.getvalue()
+
+
 def serialize_t1_content(
     db: Database,
     actor: Actor,
@@ -530,8 +576,13 @@ def serialize_t1_content(
     final_bundle_kind: str = "selected",
     source_ref_overrides: Mapping[str, str] | None = None,
     round_kinds: Mapping[str, str] | None = None,
+    created_at: datetime | None = None,
 ) -> dict[str, Any]:
-    """Serialize exactly the supplied immutable input selection."""
+    """Serialize exactly the supplied immutable input selection.
+
+    ``created_at`` fixes the bundle's time (the final export passes the
+    snapshot's), so the same input gives the same bytes; default is now.
+    """
     built = build_t1_units(
         db,
         project,
@@ -547,23 +598,16 @@ def serialize_t1_content(
         if final_snapshot_id
         else f"{project}-{now:%Y%m%dT%H%M%SZ}"
     )
-    contributors = [
-        ontospan.Contributor(actor_id=pseudonym, name=name, orcid=orcid)
-        for pseudonym, name, orcid in content.contributors
-    ]
-    with tempfile.TemporaryDirectory(prefix="ontotator-export-") as tmp:
-        target = Path(tmp) / f"{bundle_id}.zip"
-        try:
-            ontospan.write_bundle(
-                target,
-                units,
-                bundle_id=bundle_id,
-                created_at=now,
-                contributors=contributors,
-            )
-        except ontospan.FormatError as exc:
-            raise _invalid(exc.report) from None
-        sha = store_file(db, target.read_bytes())
+    contributors = t1_contributors(content)
+    sha = store_file(
+        db,
+        write_t1_bundle(
+            units,
+            bundle_id=bundle_id,
+            created_at=now if created_at is None else created_at,
+            contributors=contributors,
+        ),
+    )
     result = {
         "sha256": sha,
         "bundle_id": bundle_id,

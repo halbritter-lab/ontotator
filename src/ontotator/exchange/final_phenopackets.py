@@ -1,9 +1,11 @@
 """Phenopackets derived from a final-result snapshot (#308).
 
-The same frozen snapshot as the final T1 export, converted with
+The same frozen snapshot as the final export, converted with
 ``ontospan.phenopacket``: derived and lossy. Each text gets one Phenopacket
 v2; ontospan's report of what it left out goes next to it and into a
-summary. Ontotator adds no mapping of its own. Its one addition: findings
+summary. The ZIP also holds the selected results as an Ontospan bundle
+(``selected-results.ontospan.zip``), byte for byte the final export's bundle
+of the same snapshot, so every feature's evidence resolves inside the ZIP. Ontotator adds no mapping of its own. Its one addition: findings
 the consolidator left unresolved carry a reviewer resolution, which
 Phenopackets cannot hold (ontospan refuses the whole text), so they are left
 out before the conversion and counted as ``left_out_unresolved``.
@@ -26,6 +28,8 @@ from ontotator.exchange.final_export_guide import _heading, _utc, _wrap
 from ontotator.jobs.queue import Job, JobContext, StructuredJobError
 
 FINAL_PHENOPACKET_FORMAT = "ontotator-final-phenopackets/v1"
+# The selected results the evidence of every feature refers to.
+SELECTED_RESULTS_FILE = "selected-results.ontospan.zip"
 ONTOSPAN_COUNTERS = tuple(item.name for item in fields(ontospan.ExportReport))
 
 
@@ -150,12 +154,17 @@ def _readme(
         "reports/N.json        For the Phenopacket of the same number: what the",
         "                      conversion exported and left out, by category.",
         "report.json           All texts with their counts, and the totals.",
+        SELECTED_RESULTS_FILE,
+        "                      The selected final results as an Ontospan bundle:",
+        "                      every finding, with its place in the text.",
         "receipt.json          The snapshot and the SHA-256 of every other file.",
         "",
         *_heading("How to read it"),
         *_wrap(
-            "These files are derived from the final results and lossy. The final "
-            "export (T1 bundle) of the same snapshot is the complete record; "
+            "The Phenopackets are derived from the final results and lossy. The "
+            f"Ontospan bundle {SELECTED_RESULTS_FILE} holds the same results "
+            "completely; it is the same file as the selected results of the "
+            "final export (Results with receipt) of this snapshot. The "
             "Phenopackets are for tools that read phenotypic features.",
             "- ",
             "  ",
@@ -178,19 +187,29 @@ def _readme(
             "  ",
         ),
         *_wrap(
-            'Assertion absent becomes "excluded": true. A historical finding is '
-            'exported as a feature, since a Phenopacket cannot say "in the '
-            'past"; "historical" counts them. Severity and onset modifiers fill '
-            "the fields of the same name; other modifiers, frequency included, "
-            "are listed under modifiers.",
+            'Assertion absent becomes "excluded": true. Severity modifiers fill '
+            '"severity"; other modifiers, frequency included, are listed under '
+            '"modifiers".',
+            "- ",
+            "  ",
+        ),
+        *_wrap(
+            "Time: a feature has an onset only when its finding has an HPO onset "
+            'modifier (for example "Childhood onset"), which fills "onset"; '
+            "nothing else sets a time. The temporality of a finding is not "
+            "carried over: a current and a historical finding become the same "
+            'kind of feature, since a Phenopacket cannot say "in the past". '
+            '"historical" in reports/ and report.json counts the historical '
+            f"ones; {SELECTED_RESULTS_FILE} keeps the temporality of each "
+            "finding.",
             "- ",
             "  ",
         ),
         *_wrap(
             "Each feature's evidence names ECO:0000218 (manual assertion) or, for "
-            "a tool finding, ECO:0007636 (automatic assertion), and refers to the "
-            f"finding in the final export's bundle {bundle_id} "
-            "(selected.t1.zip of the same snapshot).",
+            "a tool finding, ECO:0007636 (automatic assertion). Its reference id, "
+            f"ontospan:{bundle_id}:<annotation set>:<finding>, names the finding "
+            f"in {SELECTED_RESULTS_FILE}, whose bundle ID is {bundle_id}.",
             "- ",
             "  ",
         ),
@@ -230,7 +249,13 @@ LEFT_OUT = (
 
 def final_phenopacket_export(job: Job, ctx: JobContext) -> dict[str, Any]:
     """Phenopackets of the selected final results of a frozen snapshot."""
-    from ontotator.exchange.jobs import _audit, build_t1_units, store_file
+    from ontotator.exchange.jobs import (
+        _audit,
+        build_t1_units,
+        store_file,
+        t1_contributors,
+        write_t1_bundle,
+    )
 
     frozen = load_frozen_final(job, ctx)
     row, payload = frozen.row, frozen.payload
@@ -242,8 +267,15 @@ def final_phenopacket_export(job: Job, ctx: JobContext) -> dict[str, Any]:
         source_ref_overrides=frozen.overrides,
         round_kinds=payload["round_kinds"],
     )
-    # Evidence refers to the findings in the final export's selected bundle.
+    # Evidence refers to the findings in the selected results, written as
+    # the final export writes them (same bundle id and time, same bytes).
     bundle_id = f"selected-{row['snapshot_id']}"
+    selected_results = write_t1_bundle(
+        built.units,
+        bundle_id=bundle_id,
+        created_at=row["created_at"],
+        contributors=t1_contributors(frozen.selected_content),
+    )
     packets = to_packets(
         built.units, built.views, bundle_id=bundle_id, created_at=row["created_at"]
     )
@@ -273,6 +305,7 @@ def final_phenopacket_export(job: Job, ctx: JobContext) -> dict[str, Any]:
         files[packet_entry(index)] = _dump(packet.packet)
         files[report_entry(index)] = _dump(record)
         documents.append(record)
+    files[SELECTED_RESULTS_FILE] = selected_results
     files["report.json"] = _dump(
         {
             "format": FINAL_PHENOPACKET_FORMAT,
@@ -294,6 +327,7 @@ def final_phenopacket_export(job: Job, ctx: JobContext) -> dict[str, Any]:
         "format": FINAL_PHENOPACKET_FORMAT,
         "snapshot_id": row["snapshot_id"],
         "snapshot_sha256": row["sha256"],
+        "selected_results": {"file": SELECTED_RESULTS_FILE, "bundle_id": bundle_id},
         "selections": payload["state"]["selections"],
         "omissions": payload["state"]["omissions"],
         "files": {

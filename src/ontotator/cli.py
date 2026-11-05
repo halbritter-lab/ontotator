@@ -1231,13 +1231,13 @@ def export_command(
         Literal["t1", "phenopacket"],
         typer.Option(
             "--format",
-            help="t1: the latest submissions as a T1 bundle. phenopacket: "
+            help="t1: the latest submissions as an Ontospan bundle. phenopacket: "
             "Phenopackets (derived, lossy) of the results of the newest final "
             "export, which a lead creates in the web app.",
         ),
     ] = "t1",
 ) -> None:
-    """Export the latest submissions as a T1 bundle (ZIP), or Phenopackets."""
+    """Export the latest submissions as an Ontospan bundle (ZIP), or Phenopackets."""
     kind = "t1_export" if export_format == "t1" else "final_phenopacket_export"
     _export(ctx, kind, project, out, wait=not no_wait)
 

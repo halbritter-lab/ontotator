@@ -202,10 +202,12 @@ Each text in an export names the ontology release its work was made under, which
 
 What for: hand the final results to tools that read GA4GH Phenopackets (schema v2).
 
-The Phenopackets come from the same check and the same accepted results as the results with receipt; nothing is selected again. The ZIP holds one Phenopacket per text, a report per text of what was left out, a summary (report.json) and a README.txt. They are derived and lossy: keep the results with receipt as the complete record.
+The Phenopackets come from the same check and the same accepted results as the results with receipt; nothing is selected again. The ZIP holds one Phenopacket per text, a report per text of what was left out, a summary (report.json), a README.txt and the selected results themselves as an Ontospan bundle (selected-results.ontospan.zip). The Phenopackets are derived and lossy; the Ontospan bundle is the complete record, the same file as the selected results in **Results with receipt** made from the same check.
 
 - Only findings about the patient on the HPO layer become phenotypic features. Findings about family members or other persons, with an unknown experiencer, with assertion *uncertain*, or left unresolved in consolidation are left out and counted in the reports. Findings of other layers are skipped.
-- Assertion *absent* becomes an excluded feature. A historical finding is exported as a feature, because a Phenopacket cannot say "in the past"; the reports count these.
+- Assertion *absent* becomes an excluded feature.
+- Time: a feature gets an onset only from an onset modifier of the finding, for example *Childhood onset*. A historical finding is exported like a current one, because a Phenopacket cannot say "in the past"; the reports count these, and the Ontospan bundle keeps the temporality.
+- Each feature points to its finding in the Ontospan bundle of the same ZIP, so you can look up the text passage it was found in.
 - Each Phenopacket is named after the text (its document ID), which is also the subject. Texts of the same patient are not grouped into one Phenopacket yet.
 
 An operator can create the Phenopackets of the newest final export on the command line, with `ontotator admin export PROJECT OUT.zip --format phenopacket`.

@@ -229,7 +229,7 @@ function FinalExportContent({ projectKey }: { projectKey: string }): JSX.Element
     </>}
     {phase === "check" && <details className="final-export-details"><summary>What is in the file?</summary>
       <p className="cell-secondary">Results with receipt: a ZIP with one result file per text, a plain-language guide (README.txt) and a table of every result (index.csv).</p>
-      <p className="cell-secondary">Phenopackets: one Phenopacket per text, made from the same results for tools that read phenotypic features. They leave out what a Phenopacket cannot hold, such as findings about family members, uncertain findings and findings left unresolved; a report per text and a summary (report.json) count what was left out. Texts of the same patient are not grouped yet.</p></details>}
+      <p className="cell-secondary">Phenopackets: one Phenopacket per text, made from the same results for tools that read phenotypic features. They leave out what a Phenopacket cannot hold, such as findings about family members, uncertain findings and findings left unresolved; a report per text and a summary (report.json) count what was left out. The ZIP also holds the selected results as an Ontospan bundle, which each finding in a Phenopacket points to. Texts of the same patient are not grouped yet.</p></details>}
   </section>;
 }
 

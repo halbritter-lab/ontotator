@@ -224,6 +224,7 @@ def final_t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
         final_snapshot_id=row["snapshot_id"],
         source_ref_overrides=overrides,
         round_kinds=payload["round_kinds"],
+        created_at=row["created_at"],
     )
     selected = ctx.db.blobs.path(result["sha256"]).read_bytes()
     sources = b"".join(
@@ -245,6 +246,7 @@ def final_t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
             final_bundle_kind="provenance",
             source_ref_overrides=overrides,
             round_kinds=payload["round_kinds"],
+            created_at=row["created_at"],
         )
         files["provenance.t1.zip"] = ctx.db.blobs.path(
             provenance["sha256"]

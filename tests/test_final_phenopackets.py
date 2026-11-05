@@ -30,7 +30,7 @@ from ontotator.domain.documents import (
 )
 from ontotator.domain.review import ReviewTargetSet
 from ontotator.domain.workspace import Submission, WorkspaceKey
-from ontotator.exchange.final_phenopackets import to_packets
+from ontotator.exchange.final_phenopackets import SELECTED_RESULTS_FILE, to_packets
 from ontotator.storage.final_tables import ExportSelectionSnapshotRow
 from ontotator.storage.repository import _key_str
 
@@ -252,6 +252,7 @@ def test_final_phenopacket_export_per_text_with_reports(env):
         "phenopackets/00000.json",
         "reports/00000.json",
         "report.json",
+        SELECTED_RESULTS_FILE,
         "receipt.json",
     }
     receipt = json.loads(archive.read("receipt.json"))
@@ -342,3 +343,52 @@ def test_t1_request_keeps_nested_fields(env):
             )
         ).scalar_one()["request"]
     assert stored == request
+
+
+def test_selected_results_equal_the_final_export_of_the_same_snapshot(env, monkeypatch):
+    """The embedded Ontospan bundle is byte for byte the final export's selected
+    results of the same snapshot, and every evidence reference resolves in it."""
+    monkeypatch.setenv("ONTOTATOR_DATA_DIR", str(env.db.data_dir))
+    queued = env.lead.post(f"{BASE}/exports/final", json=_request(env, "t1-same"))
+    job_id = queued.json()["job_id"]
+    _run(env, job_id)
+    final_zip = _archive(env.lead.get(f"/api/v1/jobs/{job_id}/download").content)
+    final_receipt = json.loads(final_zip.read("receipt.json"))
+    out = env.tmp_path / "same.zip"
+    args = ["--database-url", database_url_for(env.tmp_path / "auth.db")]
+    done = CliRunner().invoke(
+        cli_app, ["admin", *args, "export", "proj", str(out), "--format", "phenopacket"]
+    )
+    assert done.exit_code == 0, done.output
+    archive = _archive(out.read_bytes())
+    receipt = json.loads(archive.read("receipt.json"))
+    assert receipt["snapshot_id"] == final_receipt["snapshot_id"]
+    embedded = archive.read(SELECTED_RESULTS_FILE)
+    assert embedded == final_zip.read("selected.t1.zip")
+    assert receipt["files"][SELECTED_RESULTS_FILE] == (
+        hashlib.sha256(embedded).hexdigest()
+    )
+    bundle_id = f"selected-{receipt['snapshot_id']}"
+    assert receipt["selected_results"] == {
+        "file": SELECTED_RESULTS_FILE,
+        "bundle_id": bundle_id,
+    }
+    path = env.tmp_path / "embedded.zip"
+    path.write_bytes(embedded)
+    manifest, units = ontospan.read_bundle(path)
+    assert manifest.bundle_id == bundle_id
+    findings = {
+        (unit.annotation_set.annotation_set_id, a.annotation_id)
+        for unit in units
+        for a in unit.annotation_set.annotations
+    }
+    packet = json.loads(archive.read("phenopackets/00000.json"))
+    assert packet["phenotypicFeatures"]
+    for feature in packet["phenotypicFeatures"]:
+        ref = ontospan.parse_annotation_ref(feature["evidence"][0]["reference"]["id"])
+        assert ref.bundle_id == bundle_id
+        assert (ref.annotation_set_id, ref.annotation_id) in findings
+    readme = archive.read("README.txt").decode()
+    assert SELECTED_RESULTS_FILE in readme and "Ontospan bundle" in readme
+    assert "T1" not in readme and "t1.zip" not in readme
+    assert "onset" in readme and "temporality" in readme
