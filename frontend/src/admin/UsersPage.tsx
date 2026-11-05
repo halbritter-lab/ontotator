@@ -6,6 +6,7 @@ import { ErrorNotice } from "./ErrorNotice";
 import { fieldError } from "./errors";
 import { LanguagesField } from "./LanguagesField";
 import { formatDateTime, formatShortDateTime, humanize, labelFor, roleLabels, taskLabels } from "../app/labels";
+import { KIND_LABELS, SCOPE_LABELS } from "../me/TokensSection";
 
 export interface UsersPageProps {
   currentUser: CurrentUser;
@@ -50,6 +51,9 @@ const auditActions: Readonly<Record<string, string>> = {
   "project.final_phenopacket_export": "Phenopackets created",
   "project.final_selection": "Final selection changed",
   "project.translation_review_export": "Translation reviews exported",
+  "api_token.create": "API token created",
+  "api_token.revoke": "API token revoked",
+  "api_token.use": "Change made with an API token",
   "assignment.create": "Task assigned",
   "assignment.distribute": "Tasks distributed",
   "assignment.follow_correction": "Task followed a corrected text",
@@ -89,6 +93,7 @@ const isBlank = (value: unknown): boolean =>
   value === null || value === undefined || value === "" || (Array.isArray(value) ? value.length === 0 : typeof value === "object" && Object.keys(value).length === 0);
 const auditValue = (key: string, value: unknown): string =>
   key === "task" && typeof value === "string" ? labelFor(taskLabels, value)
+    : key.endsWith("_at") && typeof value === "string" ? formatDateTime(value)
     : Array.isArray(value) ? value.filter(item => !isBlank(item)).map(item => item !== null && typeof item === "object" && !Array.isArray(item) ? `(${auditValue(key, item)})` : auditValue(key, item)).join(", ")
       : typeof value === "boolean" ? (value ? "yes" : "no")
         : value !== null && typeof value === "object" ? auditEntries(value as Record<string, unknown>).join(", ") : String(value);
@@ -96,6 +101,7 @@ const auditValue = (key: string, value: unknown): string =>
 const auditEntries = (details: Record<string, unknown>, userNames?: ReadonlyMap<number, string>): string[] =>
   Object.entries(details).filter(([, value]) => !isBlank(value)).map(([key, value]) =>
     key === "user_id" && typeof value === "number" ? (userNames?.has(value) ? `User: ${userNames.get(value)}` : `User ${value}`)
+      : key === "api_token" && typeof (value as { name?: unknown }).name === "string" ? `Via API token: ${(value as { name: string }).name}`
       : `${humanize(key)}: ${auditValue(key, value)}`);
 /** Plain words for the audit details people need; any other details as "Key: value" text. */
 export function auditDetails(event: AuditEvent, userNames?: ReadonlyMap<number, string>): string {
@@ -107,7 +113,22 @@ export function auditDetails(event: AuditEvent, userNames?: ReadonlyMap<number, 
   // A move to the newest translations: the files, not the kept conditions (issue 254).
   if (event.action === "project.translations_refresh") return auditEntries({ added: details.added, replaced: details.replaced, removed: details.removed }).join("; ");
   if (typeof details.purpose === "string" && Object.keys(details).length === 1) return `${humanize(details.purpose)} code`;
+  // A token's name is in Whom; its owner only when someone else acted.
+  if (event.action === "api_token.create" || event.action === "api_token.revoke") return [
+    `${labelFor(KIND_LABELS, String(details.kind))} token`,
+    Array.isArray(details.scopes) && `Scopes: ${details.scopes.map(scope => labelFor(SCOPE_LABELS, String(scope))).join(", ")}`,
+    typeof details.expires_at === "string" && `Expires: ${formatDateTime(details.expires_at)}`,
+    typeof details.owner === "string" && details.owner !== auditActor(event.actor) && `Owner: ${details.owner}`,
+  ].filter(Boolean).join("; ");
   return auditEntries(details, userNames).join("; ");
+}
+/** Whom: the account's username, a token by its name, anything else as "Kind id". */
+export function auditTarget(event: AuditEvent): string {
+  if (event.target_type === "user") return event.target_id;
+  const details = event.details as { name?: unknown; api_token?: { name?: unknown } };
+  const name = details.name ?? details.api_token?.name;
+  if (event.target_type === "api_token" && typeof name === "string") return `API token “${name}”`;
+  return `${event.target_type === "api_token" ? "API token" : humanize(event.target_type)} ${event.target_id}`;
 }
 /** "user:lena" is the person; "cli:operator" is an operator on the server's command line. */
 export function auditActor(actor: string): string {
@@ -384,7 +405,9 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
         <Toolbar label="Edit actions"><Button disabled={busy || !!confirmation} onClick={() => setEditing(null)}>Cancel</Button><Button type="submit" variant="primary" disabled={busy || !!confirmation}>Save changes</Button></Toolbar>
       </form>
     </Dialog>}
-    {confirmation && <ConfirmDialog open title={confirmation.kind === "admin" ? "Change administrator role" : `Deactivate ${confirmation.username}`} message="This logs the user out everywhere." confirmLabel={confirmation.kind === "admin" ? "Save changes" : "Deactivate"} tone={confirmation.kind === "deactivate" ? "danger" : "primary"} busy={busy} onCancel={() => setConfirmation(null)} onConfirm={() => { void update(confirmation.username, confirmation.change, confirmation.fromEdit); }} />}
+    {confirmation && <ConfirmDialog open title={confirmation.kind === "admin" ? "Change administrator role" : `Deactivate ${confirmation.username}`} message={confirmation.kind === "deactivate" ? "This logs the user out everywhere and revokes their API tokens."
+      : confirmation.change.is_system_admin ? "This logs the user out everywhere. Their API tokens keep working."
+      : "This logs the user out everywhere and revokes their system tokens and their project tokens for projects they do not lead. Their personal tokens keep working with their remaining roles."} confirmLabel={confirmation.kind === "admin" ? "Save changes" : "Deactivate"} tone={confirmation.kind === "deactivate" ? "danger" : "primary"} busy={busy} onCancel={() => setConfirmation(null)} onConfirm={() => { void update(confirmation.username, confirmation.change, confirmation.fromEdit); }} />}
     {reissue && <ConfirmDialog open title={`Issue a new ${reissue.setup_pending ? "setup" : "reset"} code for ${reissue.display_name || reissue.username}?`} message={reissue.setup_pending ? "The current setup code stops working." : "Any unused code stops working. The current password keeps working until the new code is used."} confirmLabel={codeLabel(reissue)} busy={busy} onCancel={() => setReissue(null)} onConfirm={() => { void issueReset(reissue); }} />}
     {code && <CodeOnceDialog open {...code} onClose={closeCode} />}
     {history && <Dialog open title={`History of ${history.username}`} size="lg" className="audit-history-dialog" onClose={() => setHistory(null)} closeOnBackdrop>
@@ -393,11 +416,11 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
           { id: "at", header: "When", cell: event => <time className="audit-when" dateTime={event.at} title={formatDateTime(event.at)}>{formatShortDateTime(event.at)}</time> },
           { id: "actor", header: "By", cell: event => auditActor(event.actor) },
           { id: "action", header: "What", cell: event => labelFor(auditActions, event.action) },
-          { id: "target", header: "Whom", cell: event => event.target_type === "user" ? event.target_id : `${humanize(event.target_type)} ${event.target_id}` },
+          { id: "target", header: "Whom", cell: auditTarget },
           { id: "project", header: "Project", cell: event => event.project_key ?? "" },
           { id: "details", header: "Details", cell: event => <span className="audit-details">{auditDetails(event, userNames)}</span> },
         ]} />}
-      <p className="field-hint">Newest first, at most 200 entries. The CLI command <code>ontotator admin audit</code> exports the whole trail.</p>
+      <p className="field-hint">Newest first, at most 200 entries. Requests made with an API token show only as the changes they made. The CLI command <code>ontotator admin audit</code> exports the whole trail.</p>
     </Dialog>}
     {erase && <Dialog open title={`Anonymise ${erase.username}`} size="sm" onClose={busy ? undefined : () => setErase(null)}
       returnFocus={() => anonymised.current === null ? null : [...document.querySelectorAll<HTMLElement>("button[aria-label]")].find(button => button.getAttribute("aria-label") === `History of ${anonymised.current}`)}

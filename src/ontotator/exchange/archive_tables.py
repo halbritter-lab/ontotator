@@ -143,6 +143,10 @@ EXCLUDED: dict[str, str] = {
     "imported_people": (
         "server record of the pseudonym-only people an archive import created"
     ),
+    "api_tokens": (
+        "credentials of the source server (project tokens); a credential never"
+        " travels in an archive"
+    ),
 }
 
 EXTRA_REFERENCES: tuple[ExtraReference, ...] = (

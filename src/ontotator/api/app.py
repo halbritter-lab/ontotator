@@ -11,6 +11,7 @@ import socket
 import threading
 from collections.abc import AsyncIterator
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
@@ -48,12 +49,17 @@ from ontotator.api.security import (
 from ontotator.api.submission_history_routes import (
     router as submission_history_router,
 )
+from ontotator.api.token_routes import admin_router as admin_token_router
+from ontotator.api.token_routes import me_router as my_token_router
+from ontotator.api.token_routes import project_router as project_token_router
+from ontotator.api.token_scopes import annotate_openapi
 from ontotator.api.translation_workflow_routes import (
     router as translation_workflow_router,
 )
 from ontotator.api.tree_routes import router as tree_router
 from ontotator.api.upload_routes import router as upload_router
 from ontotator.auth.accounts import AccountService
+from ontotator.auth.api_tokens import ApiTokenService
 from ontotator.auth.preferences import UserPreferencesStore
 from ontotator.auth.sessions import SessionService
 from ontotator.authz.memberships import MembershipService
@@ -101,6 +107,7 @@ NOT_FOUND_CODES = frozenset(
         "GUIDELINE_NOT_FOUND",
         "MODE_CHANGE_NOT_FOUND",
         "TECHNICAL_REPORT_NOT_FOUND",
+        "TOKEN_NOT_FOUND",
     }
 )
 
@@ -212,6 +219,7 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
             repo = Repository(db)
             accounts = AccountService(db)
             sessions = SessionService(db)
+            api_tokens = ApiTokenService(db)
             bootstrap = accounts.bootstrap_admin(config.admin_password_hash)
             if bootstrap == "already_done" and config.admin_password_hash is not None:
                 logger.warning(
@@ -326,6 +334,7 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
             app.state.accounts = accounts
             app.state.memberships = MembershipService(db)
             app.state.sessions = sessions
+            app.state.api_tokens = api_tokens
             app.state.preferences = UserPreferencesStore(db)
             app.state.runtime_lease = RuntimeLease(unlimited_db.engine)
             # The secret of the opaque ids for blinded consolidators (issue
@@ -346,7 +355,13 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
         # Inside the session middleware, which it reads the principal from:
         # opaque hash ids for consolidators of blinded projects (issue 302).
         app.add_middleware(BlindIdsMiddleware)
-        install_security(app, sessions, config.public_origin, config.trusted_hosts)
+        install_security(
+            app,
+            sessions,
+            config.public_origin,
+            config.trusted_hosts,
+            tokens=api_tokens,
+        )
     else:
         # Schema export only: no sessions exist, so no API request is answered.
         install_security(app, None, None)
@@ -606,6 +621,9 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
     app.include_router(project_router)
     app.include_router(job_router)
     app.include_router(upload_router)
+    app.include_router(my_token_router)
+    app.include_router(project_token_router)
+    app.include_router(admin_token_router)
     app.include_router(me_router)
     app.include_router(practice_router)
     app.include_router(about_router)
@@ -623,6 +641,14 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
     app.include_router(router)
     app.include_router(tree_router)
     app.include_router(health_router)
+
+    # Each operation names the API token scope it needs (issue 305).
+    openapi = app.openapi
+
+    def openapi_with_scopes() -> dict[str, Any]:
+        return annotate_openapi(openapi())
+
+    app.openapi = openapi_with_scopes  # type: ignore[method-assign]
 
     # Mount static assets if provided or embedded
     web_path: Path | None = None

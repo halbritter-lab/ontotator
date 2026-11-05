@@ -6,7 +6,7 @@ import { api, ApiError, AuthError, type Profile } from "../src/api/client";
 import { ProfilePage } from "../src/me/ProfilePage";
 
 const profile: Profile = { qualification: null, username: "long-username-123", pseudonym: "ann-0042", display_name: "Alex", email: "alex@example.org", orcid: "0000-0002-1825-0097", orcid_consent: true, languages: ["en"] };
-beforeEach(() => { vi.spyOn(api, "getProfile").mockResolvedValue(profile); vi.spyOn(api, "getPreferences").mockResolvedValue({}); });
+beforeEach(() => { vi.spyOn(api, "getProfile").mockResolvedValue(profile); vi.spyOn(api, "getPreferences").mockResolvedValue({}); vi.spyOn(api, "listMyTokens").mockResolvedValue([]); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 const loaded = async () => { await screen.findByText("ann-0042"); };
 const passwordForm = () => screen.getByRole("form", { name: "Change password" });
@@ -147,7 +147,7 @@ describe("ProfilePage component", () => {
     passwordValues(next);
     await userEvent.setup().click(within(passwordForm()).getByRole("button", { name: "Change password" }));
     expect(change).toHaveBeenCalledWith("current-password", next);
-    expect(screen.getByText("Password changed. Other sessions were logged out.")).toBeDefined();
+    expect(screen.getByText("Password changed. Other sessions were logged out and your API tokens were revoked.")).toBeDefined();
   });
 
   it.each(["\u0085", "\u001C", "\u001D", "\u001E", "\u001F"])("rejects Python-strip whitespace %j around the username before sending", async (space) => {
@@ -165,9 +165,19 @@ describe("ProfilePage component", () => {
     const next = "😀".repeat(128);
     passwordValues(next);
     await userEvent.setup().click(within(passwordForm()).getByRole("button", { name: "Change password" }));
-    await screen.findByText("Password changed. Other sessions were logged out.");
+    await screen.findByText("Password changed. Other sessions were logged out and your API tokens were revoked.");
     expect(change).toHaveBeenCalledWith("current-password", next);
     for (const label of ["Current password", "New password", "Repeat new password"]) expect((screen.getByLabelText(`${label} (required)`) as HTMLInputElement).value).toBe("");
+  });
+
+  it("reloads the API tokens after a password change, which revoked them (#305)", async () => {
+    vi.spyOn(api, "changePassword").mockResolvedValue();
+    render(<ProfilePage />); await loaded();
+    await waitFor(() => expect(api.listMyTokens).toHaveBeenCalledTimes(1));
+    passwordValues("new-password-123");
+    await userEvent.setup().click(within(passwordForm()).getByRole("button", { name: "Change password" }));
+    await screen.findByText("Password changed. Other sessions were logged out and your API tokens were revoked.");
+    await waitFor(() => expect(api.listMyTokens).toHaveBeenCalledTimes(2));
   });
 
   it("ignores a save result after unmount instead of updating caller identity", async () => {

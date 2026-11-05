@@ -6,6 +6,7 @@ from sqlalchemy import Connection, and_, select
 
 from ontotator.auth.audit import Actor
 from ontotator.auth.authority import lock_user_authority
+from ontotator.auth.context import current_principal
 from ontotator.authz.policy import Access, Action, Role, can
 from ontotator.domain.errors import AccessDenied, DomainError, NotAuthenticated
 from ontotator.storage.tables import ProjectMembershipRow, ProjectRow
@@ -24,7 +25,15 @@ def require_project_management(
 
     HTTP callers always have a user ID. Process actors remain trusted internal
     callers; only explicit CLI actors receive the last-lead admin exception.
+    A request with a project API token (issue 305) sees no other project.
     """
+    principal = current_principal.get()
+    if (
+        principal is not None
+        and principal.token is not None
+        and principal.token.project_key not in (None, key)
+    ):
+        raise DomainError("PROJECT_NOT_FOUND", f"There is no project '{key}'.")
     if actor.user_id is None:
         return
     user = lock_user_authority(conn, actor.user_id, target_user_id=target_user_id)

@@ -29,6 +29,20 @@ def principal_of(request: Request) -> Principal:
 PrincipalDep = Annotated[Principal, Depends(principal_of)]
 
 
+def session_id_of(principal: Principal) -> int:
+    """The browser session of ``principal``; an API token has none.
+
+    The security middleware keeps tokens away from session-only routes, so
+    this refuses only what cannot pass it.
+
+    Raises:
+        NotAuthenticated: for a token principal.
+    """
+    if principal.session_id is None:
+        raise NotAuthenticated()
+    return principal.session_id
+
+
 def _mismatch() -> AccessDenied:
     return AccessDenied(
         "IDENTITY_MISMATCH", "You can only work under your own pseudonym."

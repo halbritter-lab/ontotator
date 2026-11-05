@@ -16,7 +16,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from ontotator.auth.accounts import normalize_username
 from ontotator.auth.audit import Actor, record_audit
-from ontotator.auth.tokens import revoke_user_sessions
+from ontotator.auth.tokens import revoke_unbacked_tokens, revoke_user_sessions
 from ontotator.authz.policy import ROLES, Access, Action, Role
 from ontotator.authz.project_authority import require_project_management
 from ontotator.domain.errors import DomainError
@@ -322,6 +322,21 @@ class MembershipService:
                         ProjectMembershipRow.role.in_(removed),
                     )
                 )
+                # Only a privilege reduction ends sessions; adding a role (e.g. a
+                # lead adding themself as annotator) must not log the target out.
+                # Of the API tokens only those the lost role backed end: a
+                # project token once its owner no longer leads its project
+                # (issue 305). Personal tokens shrink with the roles instead.
+                revoke_user_sessions(conn, user.id, "project.member_roles", now)
+                tokens = revoke_unbacked_tokens(
+                    conn, user.id, "project.member_roles", now
+                )
+                details: dict[str, object] = {
+                    "username": user.username,
+                    "roles": sorted(removed),
+                }
+                if tokens:
+                    details["tokens_revoked"] = tokens
                 record_audit(
                     conn,
                     actor,
@@ -329,16 +344,12 @@ class MembershipService:
                     target_type="user",
                     target_id=user.username,
                     project_id=project_id,
-                    details={"username": user.username, "roles": sorted(removed)},
+                    details=details,
                     at=now,
                 )
             grant_roles(
                 conn, actor, project_id, user.id, user.username, wanted - current, now
             )
-            # Only a privilege reduction ends sessions; adding a role (e.g. a lead
-            # adding themself as annotator) must not log the target out.
-            if removed:
-                revoke_user_sessions(conn, user.id, "project.member_roles", now)
             return wanted
 
     def members(self, project_key: str) -> list[tuple[str, str, frozenset[Role]]]:

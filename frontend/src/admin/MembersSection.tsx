@@ -27,7 +27,8 @@ export function roleChangeText(name: string, before: readonly string[], after: r
 }
 type Affected = { id: number; document_id: string; case_id?: string | null; language?: string | null; task: string };
 type Pending = { username: string; roles: string[]; assignments: Affected[]; fromAdd: boolean };
-type Removal = { username: string; name: string; roles: string[]; removed: string };
+/** ``lead``: the person loses the lead role, which their project API tokens need (issue 305). */
+type Removal = { username: string; name: string; roles: string[]; removed: string; lead: boolean };
 function affectedAssignments(error: unknown): Affected[] | null {
   if (!(error instanceof ApiError) || error.code !== "MEMBER_HAS_ASSIGNMENTS" || !error.details || typeof error.details !== "object") return null;
   const assignments = error.details.assignments;
@@ -118,11 +119,11 @@ function MemberEditor({ projectKey }: MembersSectionProps): JSX.Element {
       if (event.target.checked) { void change(member.username, [...member.roles, role], false); return; }
       // Taking a role away ends the person's sessions, so it is never a silent single click.
       setError(undefined);
-      setRemoval({ username: member.username, name: memberName(member), roles: member.roles.filter(item => item !== role), removed: role });
+      setRemoval({ username: member.username, name: memberName(member), roles: member.roles.filter(item => item !== role), removed: role, lead: role === "lead" });
     }} /> })),
     { id: "actions", header: <span className="visually-hidden">Actions</span>, cell: member => <Button size="sm" disabled={blocked} aria-label={`Remove ${memberName(member)} from the project`} onClick={() => {
       setError(undefined);
-      setRemoval({ username: member.username, name: memberName(member), roles: [], removed: "" });
+      setRemoval({ username: member.username, name: memberName(member), roles: [], removed: "", lead: member.roles.includes("lead") });
     }}>Remove…</Button> },
   ];
   return <section aria-label="Members" className="settings-card"><h2 className="settings-card-title">Members</h2>
@@ -151,7 +152,7 @@ function MemberEditor({ projectKey }: MembersSectionProps): JSX.Element {
     <ConfirmDialog open={removal !== null} tone="danger" busy={busy}
       title={removal ? (removal.roles.length ? `Remove the ${labelFor(roleLabels, removal.removed)} role from ${removal.name}?` : `Remove ${removal.name} from the project?`) : ""}
       confirmLabel={removal?.roles.length ? "Remove role" : "Remove from project"}
-      message={removal && <><p>{removal.roles.length ? `${removal.name} keeps the other roles in this project.` : `${removal.name} loses access to this project.`} This logs {removal.name} out of Ontotator on all devices; they can log in again right away.</p></>}
+      message={removal && <><p>{removal.roles.length ? `${removal.name} keeps the other roles in this project.` : `${removal.name} loses access to this project.`} This logs {removal.name} out of Ontotator on all devices; they can log in again right away.{removal.lead && ` The project API tokens ${removal.name} created for this project are revoked, unless ${removal.name} is a system administrator.`}</p></>}
       onCancel={() => { if (!writing.current) { setRemoval(null); setError(undefined); } }}
       onConfirm={() => { if (removal) void change(removal.username, removal.roles, false); }} />
     <ConfirmDialog open={pending !== null} title="Revoke affected assignments?" busy={busy} confirmLabel="Remove and revoke their open assignments"

@@ -280,6 +280,30 @@ def test_final_phenopacket_export_per_text_with_reports(env):
     assert "not grouped" in readme
 
 
+@pytest.mark.parametrize("token_url", ["/api/v1/me/tokens", f"{BASE}/tokens"])
+def test_final_exports_a_token_starts_run(env, token_url):
+    # The queue stores the token behind a job in its payload and hands the
+    # handler the payload without it (issue 305).
+    from fastapi.testclient import TestClient
+
+    created = env.lead.post(token_url, json={"name": "exporter", "scopes": ["export"]})
+    assert created.status_code == 201, created.text
+    client = TestClient(
+        env.app, headers={"Authorization": f"Bearer {created.json()['secret']}"}
+    )
+    for request_id, export_format in (("tok-t1", "t1"), ("tok-pp", "phenopacket")):
+        state = client.post(f"{BASE}/exports/final/preflight")
+        assert state.status_code == 200, state.text
+        queued = client.post(
+            f"{BASE}/exports/final",
+            json=_request(env, request_id, format=export_format),
+        )
+        assert queued.status_code == 200, queued.text
+        job_id = queued.json()["job_id"]
+        _run(env, job_id)
+        assert client.get(f"/api/v1/jobs/{job_id}/download").status_code == 200
+
+
 def test_t1_request_is_stored_as_before(env):
     """A request without format is the T1 export; its stored request is unchanged."""
     request = _request(env, "t1-1")

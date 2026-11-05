@@ -7,6 +7,7 @@ import { GuidelinesSection } from "./GuidelinesSection";
 import { hiddenCount, HiddenAxisValuesField } from "./HiddenAxisValuesField";
 import { LanguagesField } from "./LanguagesField";
 import { MembersSection } from "./MembersSection";
+import { TokensSection } from "../me/TokensSection";
 import { SettingsCard, SettingsHint } from "./SettingsCard";
 import { draftPins, PinFields, ProfileUpload, ReleaseFields, serializePins, ANNOTATION_SCHEME_LABELS, TaskProfileHelp, WorkflowFields, workflowOf, type UploadedProfile } from "./projectFields";
 import { RepinReportPanel } from "./RepinReport";
@@ -231,7 +232,7 @@ function SettingsEditor({ initial, ontologies, projectKey, onSaved, section = DE
 
   let content: JSX.Element;
   switch (section) {
-    case "people": content = <div ref={bindSection} tabIndex={-1} className="settings-section"><MembersSection projectKey={projectKey} /></div>; break;
+    case "people": content = <div ref={bindSection} tabIndex={-1} className="settings-section"><MembersSection projectKey={projectKey} /><TokensSection mode={{ kind: "project", projectKey }} /></div>; break;
     case "workflow": content = <form ref={bindSection} tabIndex={-1} className="settings-section" aria-label="Workflow" onSubmit={event => submit(event, "Workflow")}>
       <fieldset disabled={busy !== null}><legend className="visually-hidden">Workflow</legend>
         <WorkflowFields projectKey={projectKey} value={workflow} saved={workflowOf(model)} disabled={busy !== null} onChange={value => { setWorkflow(value); setSaved(null); }} />

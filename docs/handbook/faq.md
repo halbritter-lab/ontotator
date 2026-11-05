@@ -217,3 +217,11 @@ Open **Administration** › **Technical reports**. Mark it as done when it is ha
 ### The administrator lost the password
 
 This is fixed on the server, not in the app. See [Lost admin password](../operations.md#lost-admin-password) in the server operations guide.
+
+### A script with an API token gets "The API token lacks the scope this needs."
+
+The token was created without the scope the request needs, for example **Export** to start an export. Tokens cannot be changed: create a new one with the scope and revoke the old one. A token can also never do more than its owner may, and never annotation work. See [Create an API token](getting-started.md#create-an-api-token).
+
+### A script's API token suddenly stops working
+
+The token expired or was revoked. A new password, a reset code and deactivation revoke all of the owner's tokens. Losing the lead role revokes the owner's project tokens for that project, and losing the administrator role the owner's system tokens (and project tokens of projects they do not lead). A personal token is not revoked when its owner loses a role, but it can no longer do what the role allowed: a project that disappears from its answers or a 403 means exactly that. Check its **Status** under **API tokens** and create a new one if needed.

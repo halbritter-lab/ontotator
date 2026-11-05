@@ -218,6 +218,23 @@ What for: replace your password with a new one.
 3. Enter your **Current password**.
 4. Enter a **New password** with 12 to 256 characters. It must differ from your username.
 5. Enter it again in **Repeat new password**.
-6. Click **Change password**. You see **Password changed. Other sessions were logged out.**
+6. Click **Change password**. You see **Password changed. Other sessions were logged out and your API tokens were revoked.**
+
+A new password also revokes all your API tokens, the project tokens you created included: a script that used one needs a new token.
 
 If you forgot your password, ask an administrator for a reset code and follow [Set your password with a setup or reset code](#set-your-password-with-a-setup-or-reset-code).
+
+## Create an API token
+
+What for: let a script or another program read or export your projects without your password.
+
+1. Click **Profile** in the sidebar.
+2. Go to **API tokens** and click **New token…**.
+3. Enter a **Token name** that says what uses it.
+4. Tick the scopes the program needs: **Read**, **Import**, **Export** or **Project administration**.
+5. Set **Valid for (days)**: 1 to 365, 90 by default.
+6. Click **Create token**. The dialog shows the token once. Click **Copy token** and store it, for example in your password manager, then click **Close**.
+
+The program sends the token in the header `Authorization: Bearer <token>`. It acts as you: it can do only what its scopes allow and what you may do yourself. Annotation, review and translation review work always needs the browser, and a token cannot create other tokens. Every change made with a token is in the audit trail with the token's name.
+
+To stop a token, click **Revoke…** in its row, then **Revoke token**. Every program that uses it stops working at once. All your tokens are also revoked when you change your password, when an administrator issues you a reset code and when your account is deactivated. Losing a project role does not revoke a personal token, but the token at once loses what the role allowed: it can only ever do what you may do yourself right now.
