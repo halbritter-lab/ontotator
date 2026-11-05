@@ -88,6 +88,7 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   ASSIGNEE_ROLE_MISSING: "This user needs the matching project role before assignment.",
   ASSIGNMENT_EXISTS: "This task already exists for the document: this person has it, or a lead is correcting the translation.",
   ASSIGNMENT_NOT_SUBMITTED: "Only submitted work can be reopened.",
+  ASSIGNMENT_ALREADY_SUBMITTED: "This person already submitted this review. To let them review it again, use Reopen.",
   ASSIGNMENT_REVOKED: "This assignment has been revoked.",
   ASSIGNMENT_SUBMITTED: "This assignment is submitted. A lead must reopen it before further changes.",
   CODE_INVALID: "This code is invalid or expired. Ask an administrator for a new code.",

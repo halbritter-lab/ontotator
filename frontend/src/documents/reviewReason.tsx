@@ -58,3 +58,19 @@ export function ReviewReason({ record, lead }: { record: TranslationReviewRecord
     {!record.rationale && !categories && <p className="cell-secondary">No reason given.</p>}
   </div>;
 }
+
+/**
+ * Issue 340: submitted translation reviews the lead can reopen so the same person reviews again: ordinary
+ * (not a lead correction), not moved, on a newest version that is not discarded. Optionally only of `documentId`.
+ */
+export function reopenableReviews(row: Pick<DocumentRowView, "work" | "versions" | "plan_row">, documentId?: string | null): DocumentRowView["work"] {
+  if (row.plan_row?.discarded) return [];
+  const newest = new Set(row.versions.filter(version => version.is_newest_in_chain && !(version as { discarded?: boolean }).discarded).map(version => version.document_id));
+  return row.work.filter(item => item.task === "translation_review" && item.status === "submitted" && !item.lead_correction
+    && item.moved_to_version == null && newest.has(item.document_id) && (documentId == null || item.document_id === documentId));
+}
+
+/** "Ana Weber", or the pseudonym without a display name. */
+export function workPersonName(item: Pick<DocumentRowView["work"][number], "person" | "author_label">): string {
+  return item.person?.display_name?.trim() || item.person?.pseudonym || item.author_label;
+}

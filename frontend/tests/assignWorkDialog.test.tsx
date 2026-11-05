@@ -465,6 +465,40 @@ it("one text: the person who holds the review shows Already assigned instead of 
   } finally { ana.already_assigned = 0; }
 });
 
+it("one text: the reviewer who already submitted gets Reopen their review… instead of Already assigned (#340)", async () => {
+  const ana = people.find(item => item.username === "ana")!;
+  ana.already_assigned = 1;
+  const reopen = vi.spyOn(api, "reopenAssignment").mockResolvedValue({ ...assignment, id: 12, status: "reopened" });
+  const onAssigned = vi.fn();
+  const rejected = {
+    ...row,
+    versions: row.versions.map(version => ({ ...version, translation_status: "reviewed", latest_review_decision: "rejected" })),
+    work: [{ ...row.work[0], assignment_id: 12, task: "translation_review", status: "submitted", lead_correction: false, moved_to_version: null }],
+  } as DocumentRowView;
+  try {
+    render(<AssignWorkDialog mode="row" projectKey="p/key" row={rejected} task="translation_review" onClose={vi.fn()} onAssigned={onAssigned} />);
+    await ready();
+    expect(screen.queryByText("Already assigned")).toBeNull();
+    expect(screen.getByText("Ana Weber (ann-0004) already submitted a review of case-0101 de. To let them review it again, reopen their review; or assign it to someone else.")).toBeDefined();
+    const held = screen.getByText("Review submitted").closest("tr")!;
+    expect(within(held).queryByRole("radio")).toBeNull();
+    fireEvent.click(within(held).getByRole("button", { name: "Reopen their review…" }));
+    const confirm = screen.getByRole("group", { name: "Reopen Ana Weber's review of case-0101 de" });
+    expect(within(confirm).getByText("Ana Weber reviews v1 again, starting from its current text. The earlier decision stays in the history.")).toBeDefined();
+    fireEvent.change(within(confirm).getByLabelText("Reason (optional)"), { target: { value: "Check the dosage" } });
+    fireEvent.click(within(confirm).getByRole("button", { name: "Reopen review" }));
+    await waitFor(() => expect(onAssigned).toHaveBeenCalledWith("Ana Weber's review of case-0101 de was reopened."));
+    expect(reopen).toHaveBeenCalledWith(12, "Check the dosage");
+    // A holder whose review is still open keeps Already assigned.
+    cleanup();
+    const open = { ...rejected, work: [{ ...rejected.work[0], status: "in_progress" }] } as DocumentRowView;
+    render(<AssignWorkDialog mode="row" projectKey="p/key" row={open} task="translation_review" onClose={vi.fn()} onAssigned={vi.fn()} />);
+    await ready();
+    expect(screen.getByText("Already assigned")).toBeDefined();
+    expect(screen.queryByRole("button", { name: "Reopen their review…" })).toBeNull();
+  } finally { ana.already_assigned = 0; }
+});
+
 it("offers Distribute evenly… as a secondary button", async () => {
   vi.spyOn(api, "listMembers").mockResolvedValue([]);
   vi.spyOn(api, "listCases").mockResolvedValue([]);

@@ -164,6 +164,10 @@ The check names, per text, what the bundle uses, what the project uses and who c
 
 The text is not in the work plan. Plan it first. See [Add a text to the plan](lead-documents.md#add-a-text-to-the-plan).
 
+### "This person already submitted this review. To let them review it again, use Reopen."
+
+You assigned a translation review to someone who already reviewed this version, for example after they rejected it. A second assignment is not possible; reopen their review instead: **Resolve…**, then the reopen item, for example *Reopen Ana Weber's review…*. See [Resolve a rejected or queried translation](lead-results.md#resolve-a-rejected-or-queried-translation).
+
 ### A task is still paused after I closed the report
 
 Closing a report does not always release the pause. The row shows **Resume task…**; click it and release the pause. See [Decide on a problem report](lead-results.md#decide-on-a-problem-report).

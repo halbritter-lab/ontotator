@@ -82,6 +82,8 @@ ASSIGN_STEPS: dict[Task, str] = {
     "translation_review": "assign_translation_review",
     "annotate": "assign_annotation",
 }
+# Rule 4: a rejected or queried translation the lead resolves.
+RESOLVE_STEPS = frozenset({"resolve_rejected", "resolve_queried"})
 # Steps of a row whose translation review still runs or is still to come
 # (also Progress "Waiting for review").
 WAITING_FOR_REVIEW_STEPS = frozenset(
@@ -344,12 +346,16 @@ class _Rows:
                 # is not a translation review.
                 reason: SkipReason = "step_differs" if row["in_plan"] else "not_in_plan"
                 return _Match((), reason, holders)
-            if review and ASSIGN_STEPS[task] in codes:
+            # Rule 4 (issue 340): "Resolve…" > "Assign a new review…" of a
+            # rejected or queried version (status ``reviewed``, no open review).
+            resolving = review and bool(codes & RESOLVE_STEPS)
+            if review and (ASSIGN_STEPS[task] in codes or resolving):
                 candidates = [
                     self._target(v, task)
                     for v in newest
                     if v.translation_status is None
                     or v.translation_status in REVIEWER_NEEDED_STATUSES
+                    or (resolving and v.translation_status == "reviewed")
                 ]
             candidates += external
             known = {t.document_id for t in candidates}

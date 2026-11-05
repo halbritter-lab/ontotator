@@ -68,6 +68,7 @@ from ontotator.storage.tables import (
     DocumentRow,
     ProjectMembershipRow,
     ProjectRow,
+    TranslationReviewDraftRow,
     UserLanguageRow,
     UserRow,
 )
@@ -877,6 +878,17 @@ class AssignmentService:
         if existing is not None and existing.lead_correction:
             # The target's own lead correction (FD1) is not this ordinary task.
             raise DomainError("ASSIGNMENT_EXISTS")
+        if (
+            existing is not None
+            and task == "translation_review"
+            and existing.status == "submitted"
+        ):
+            # Issue 340: never hand back submitted work as if it were a new
+            # review; the lead reopens it (``reopen``) instead.
+            raise DomainError(
+                "ASSIGNMENT_ALREADY_SUBMITTED",
+                {"assignment_id": existing.id, "hint": "reopen"},
+            )
         if existing is not None:
             self._require_target(conn, project, target, task)
             return existing
@@ -1015,6 +1027,8 @@ class AssignmentService:
                 .where(AssignmentRow.id == assignment_id)
                 .values(status="reopened", updated_at=now)
             )
+            if old["task"] == "translation_review":
+                self._restart_review_draft(conn, project["id"], old, now)
             if old["active_round_id"] is not None:
                 from ontotator.storage.workflow_tables import WorkRoundStateRow
 
@@ -1039,6 +1053,34 @@ class AssignmentService:
                 at=now,
             )
             return self._get(conn, assignment_id)
+
+    @staticmethod
+    def _restart_review_draft(
+        conn: Connection, project_id: int, old: RowMapping, now: datetime
+    ) -> None:
+        """A reopened translation review starts from the version's current text.
+
+        As ``assign_correction`` does (issue 340): the submitted decision and
+        edits stay in the review record; the draft's revision moves on, so a
+        save or submit from before the reopen conflicts.
+        """
+        text = conn.execute(
+            select(DocumentRow.text).where(
+                DocumentRow.project_id == project_id,
+                DocumentRow.document_id == old["document_id"],
+            )
+        ).scalar_one()
+        conn.execute(
+            update(TranslationReviewDraftRow)
+            .where(TranslationReviewDraftRow.assignment_id == old["id"])
+            .values(
+                text=text,
+                form={},
+                revision=TranslationReviewDraftRow.revision + 1,
+                updated_at=now,
+                updated_by=old["user_id"],
+            )
+        )
 
     def revoke(
         self, actor: Actor, assignment_id: int, reason: str | None = None
