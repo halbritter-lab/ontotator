@@ -233,6 +233,62 @@ async def test_without_files_dir_local_files_are_refused(
         assert me["user"]["username"] == "lead"
 
 
+async def test_symbolic_links_never_leave_files_dir(
+    fake: FakeApi, settings: Settings, tmp_path: Path
+) -> None:
+    allowed = tmp_path / "allowed"
+    allowed.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "secret.md").write_text("SECRET")
+    (outside / "keep.zip").write_bytes(b"KEEP")
+    # A linked folder, a link to a file and a dangling link, all inside.
+    (allowed / "linked").symlink_to(outside, target_is_directory=True)
+    (allowed / "out.zip").symlink_to(outside / "keep.zip")
+    (allowed / "new.zip").symlink_to(outside / "new.zip")
+    fake.on("POST", f"{P}/guidelines", build("GuidelineSummary"))
+    _export_job(fake, b"zip-bytes")
+    limited = replace(settings, files_dirs=(allowed.resolve(),))
+    server = build_server(limited, transport=httpx.MockTransport(fake))
+    async with Client(server) as client:
+        with pytest.raises(ToolFailed, match="outside the folders"):
+            await call(
+                client,
+                "publish_guideline",
+                {"project": "p", "path": str(allowed / "linked" / "secret.md")},
+            )
+        for target in ("linked/new.zip", "out.zip", "new.zip"):
+            with pytest.raises(ToolFailed, match="outside the folders"):
+                await call(
+                    client,
+                    "download_export",
+                    {"job_id": 9, "path": str(allowed / target), "overwrite": True},
+                )
+    assert not fake.calls_to("POST", f"{P}/guidelines")
+    assert sorted(path.name for path in outside.iterdir()) == ["keep.zip", "secret.md"]
+    assert (outside / "keep.zip").read_bytes() == b"KEEP"
+
+
+@pytest.mark.parametrize("name", [".", ".."])
+async def test_dot_segments_stay_one_segment(
+    fake: FakeApi, mcp_client: Client, name: str
+) -> None:
+    # httpx drops dot segments: unencoded, ".." would reach another route.
+    fake.on("GET", f"{P}/members", [])
+    fake.on("PUT", MEMBER, _member("ann", ["annotator"]))
+    await call(mcp_client, "list_people", {"project": name})
+    [listed] = fake.calls_to("GET", f"{P}/members")
+    encoded = name.replace(".", "%2E").encode()
+    assert listed.request.url.raw_path == b"/api/v1/projects/" + encoded + b"/members"
+    await call(
+        mcp_client,
+        "set_member_roles",
+        {"project": "p", "username": name, "roles": ["annotator"]},
+    )
+    [put] = fake.calls_to("PUT", MEMBER)
+    assert put.request.url.raw_path == b"/api/v1/projects/p/members/" + encoded
+
+
 def _member(username: str, roles: list[str]) -> dict[str, Any]:
     return build("Member", username=username, roles=roles)
 

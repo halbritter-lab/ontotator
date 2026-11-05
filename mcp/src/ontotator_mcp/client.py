@@ -32,8 +32,16 @@ def _megabytes(size: int) -> str:
 
 
 def seg(value: str | int) -> str:
-    """One path segment, percent-encoded (case IDs may hold slashes)."""
-    return quote(str(value), safe="")
+    """One path segment, percent-encoded (case IDs may hold slashes).
+
+    ``.`` and ``..`` are encoded too: httpx removes dot segments, so a
+    project key or user name of ``..`` would otherwise send the request to
+    another route than the tool names.
+    """
+    encoded = quote(str(value), safe="")
+    if encoded in (".", ".."):
+        return encoded.replace(".", "%2E")
+    return encoded
 
 
 def project_path(project: str, *rest: str) -> str:
