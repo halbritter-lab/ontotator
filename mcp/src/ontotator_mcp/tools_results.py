@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import uuid
-from pathlib import Path
 from typing import Annotated, Any, Literal
 
 from mcp.server.mcpserver import MCPServer
@@ -317,18 +316,26 @@ def register_results(server: MCPServer, api: OntotatorClient) -> None:
     async def download_export(
         job_id: int,
         path: Annotated[
-            str, Field(description="Local file to write, e.g. ~/exports/ward-7.zip.")
+            str,
+            Field(
+                description=(
+                    "Absolute local file to write (or starting with ~),"
+                    " e.g. ~/exports/ward-7.zip."
+                )
+            ),
         ],
         overwrite: bool = False,
     ) -> dict[str, Any]:
         """Download the file of a finished export job to a local path.
 
-        The file is streamed to disk and checked against the SHA-256 the
-        server recorded. An existing file is replaced only with overwrite.
+        WRITES A FILE ON THE USER'S COMPUTER; ``path`` in the result is the
+        absolute path written. The file is streamed to disk and checked
+        against the SHA-256 the server recorded. An existing file is
+        replaced only with overwrite.
         """
         job = await api.job(job_id)
         kind = export_target(job)
-        target = Path(path).expanduser()
+        target = api.local_path(path)
         written, digest = await api.download(
             f"/api/v1/jobs/{seg(job_id)}/download", target, overwrite=overwrite
         )

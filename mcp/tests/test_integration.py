@@ -115,9 +115,11 @@ async def test_setup_import_status_and_export(
         me = await call(client, "whoami", {})
         assert me["user"]["username"] == "root"
 
-        [uploaded] = await call(
+        uploads = await call(
             client, "upload_ontology_files", {"paths": [str(FIXTURES / "hp.json")]}
         )
+        assert uploads["local_files"] == [str((FIXTURES / "hp.json").resolve())]
+        [uploaded] = uploads["files"]
         sha = uploaded["ontology"]["sha256"]
         assert uploaded["status"] == "added"
 

@@ -36,9 +36,31 @@ def project_path(project: str, *rest: str) -> str:
     return f"{base}/{tail}" if tail else base
 
 
-def local_file(path: str) -> Path:
-    """An existing regular file the caller named, with ``~`` expanded."""
-    resolved = Path(path).expanduser()
+def local_path(path: str, folders: Sequence[Path] = ()) -> Path:
+    """The absolute path the caller named, symlinks resolved, inside ``folders``.
+
+    ``~`` is expanded; a relative path is refused, because the MCP server's
+    working folder is not one the user chose. With ``folders`` (from
+    ``ONTOTATOR_MCP_FILES_DIR``) the resolved path must lie in one of them.
+    """
+    given = Path(path).expanduser()
+    if not given.is_absolute():
+        raise OntotatorError(
+            f"Give an absolute path, or one starting with ~, not {path!r}."
+        )
+    resolved = given.resolve()
+    if folders and not any(resolved.is_relative_to(folder) for folder in folders):
+        allowed = ", ".join(str(folder) for folder in folders)
+        raise OntotatorError(
+            f"{resolved} is outside the folders this MCP server may use"
+            f" (ONTOTATOR_MCP_FILES_DIR: {allowed})."
+        )
+    return resolved
+
+
+def local_file(path: str, folders: Sequence[Path] = ()) -> Path:
+    """An existing regular file the caller named; see ``local_path``."""
+    resolved = local_path(path, folders)
     if not resolved.is_file():
         raise OntotatorError(f"No such file: {resolved}")
     return resolved
@@ -46,15 +68,14 @@ def local_file(path: str) -> Path:
 
 @contextlib.contextmanager
 def open_files(
-    field: str, paths: Sequence[str]
+    field: str, files: Sequence[Path]
 ) -> Iterator[list[tuple[str, tuple[str, IO[bytes], str]]]]:
-    """Multipart parts for ``paths``; the files stream, they are not read whole."""
-    if not paths:
+    """Multipart parts for ``files``; they stream, they are not read whole."""
+    if not files:
         raise OntotatorError("Name at least one file.")
     with ExitStack() as stack:
         parts: list[tuple[str, tuple[str, IO[bytes], str]]] = []
-        for path in paths:
-            file = local_file(path)
+        for file in files:
             handle = stack.enter_context(file.open("rb"))
             parts.append((field, (file.name, handle, "application/octet-stream")))
         yield parts
@@ -160,14 +181,22 @@ class OntotatorClient:
     async def patch(self, path: str, body: Any) -> Any:
         return await self.request("PATCH", path, json=body)
 
+    def local_path(self, path: str) -> Path:
+        """``path`` resolved and checked against ONTOTATOR_MCP_FILES_DIR."""
+        return local_path(path, self.settings.files_dirs)
+
+    def local_files(self, paths: Sequence[str]) -> list[Path]:
+        """The existing files ``paths`` names, resolved and checked."""
+        return [local_file(path, self.settings.files_dirs) for path in paths]
+
     async def upload(
         self,
         path: str,
         field: str,
-        files: Sequence[str],
+        files: Sequence[Path],
         data: Mapping[str, Any] | None = None,
     ) -> Any:
-        """POST ``files`` as multipart ``field``, streamed from disk."""
+        """POST ``files`` (from ``local_files``) as multipart ``field``, streamed."""
         with open_files(field, files) as parts:
             return await self.request("POST", path, files=parts, data=data)
 

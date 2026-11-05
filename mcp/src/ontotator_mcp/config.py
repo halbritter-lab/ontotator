@@ -7,6 +7,7 @@ import math
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from pathlib import Path
 from urllib.parse import urlsplit
 
 URL_VARIABLE = "ONTOTATOR_URL"
@@ -14,6 +15,7 @@ TOKEN_VARIABLE = "ONTOTATOR_TOKEN"
 ALLOW_HTTP_VARIABLE = "ONTOTATOR_ALLOW_HTTP"
 TIMEOUT_VARIABLE = "ONTOTATOR_TIMEOUT"
 JOB_TIMEOUT_VARIABLE = "ONTOTATOR_JOB_TIMEOUT"
+FILES_DIR_VARIABLE = "ONTOTATOR_MCP_FILES_DIR"
 
 
 class ConfigError(ValueError):
@@ -42,6 +44,26 @@ def _seconds(env: Mapping[str, str], name: str, default: float) -> float:
     return value
 
 
+def _folders(env: Mapping[str, str]) -> tuple[Path, ...]:
+    """The folders named in ``ONTOTATOR_MCP_FILES_DIR``, resolved; none if unset."""
+    raw = env.get(FILES_DIR_VARIABLE, "")
+    folders: list[Path] = []
+    for entry in raw.split(os.pathsep):
+        entry = entry.strip()
+        if not entry:
+            continue
+        folder = Path(entry).expanduser()
+        if not folder.is_absolute():
+            raise ConfigError(
+                f"{FILES_DIR_VARIABLE} must name absolute folders (or start with"
+                f" ~); got {entry!r}."
+            )
+        if not folder.is_dir():
+            raise ConfigError(f"{FILES_DIR_VARIABLE}: {folder} is not a folder.")
+        folders.append(folder.resolve())
+    return tuple(folders)
+
+
 @dataclass(frozen=True)
 class Settings:
     """Where the Ontotator instance is and the API token to use there.
@@ -54,6 +76,8 @@ class Settings:
     timeout: float = 60.0
     job_timeout: float = 900.0
     poll_interval: float = 1.0
+    # Folders the tools may read and write local files in; empty means anywhere.
+    files_dirs: tuple[Path, ...] = ()
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> Settings:
@@ -100,4 +124,5 @@ class Settings:
             token=token,
             timeout=_seconds(env, TIMEOUT_VARIABLE, 60.0),
             job_timeout=_seconds(env, JOB_TIMEOUT_VARIABLE, 900.0),
+            files_dirs=_folders(env),
         )

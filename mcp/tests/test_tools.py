@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import io
+import os
 import zipfile
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +14,9 @@ from conftest import ToolFailed, call
 from fake_api import FakeApi, refusal
 from mcp import Client
 from shapes import build, page, panel, row, submission, work
+
+from ontotator_mcp.config import ConfigError, Settings
+from ontotator_mcp.server import build_server
 
 P = "/api/v1/projects/{key}"
 ROWS = f"{P}/document-rows"
@@ -84,6 +89,7 @@ async def test_upload_texts_streams_files_and_returns_the_check(
     assert result["kind"] == "ontospan"
     assert result["committable"] is True
     assert result["counts"] == {"cases": 2, "proposals": 5}
+    assert result["local_files"] == [str(bundle.resolve())]
     [upload] = fake.calls_to("POST", f"{P}/uploads")
     body = upload.request.content
     assert b'name="kind"\r\n\r\nt1' in body
@@ -110,6 +116,90 @@ async def test_a_missing_file_is_named(mcp_client: Client, tmp_path: Path) -> No
             "upload_texts",
             {"project": "p", "paths": [str(tmp_path / "x.zip")], "format": "ontospan"},
         )
+
+
+async def test_a_relative_path_is_refused(fake: FakeApi, mcp_client: Client) -> None:
+    with pytest.raises(ToolFailed, match="absolute path"):
+        await call(
+            mcp_client,
+            "upload_texts",
+            {"project": "p", "paths": ["texts.zip"], "format": "ontospan"},
+        )
+    with pytest.raises(ToolFailed, match="absolute path"):
+        await call(mcp_client, "download_export", {"job_id": 1, "path": "out.zip"})
+    assert not fake.calls_to("POST", f"{P}/uploads")
+
+
+async def test_files_dir_limits_what_is_read_and_written(
+    fake: FakeApi, settings: Settings, tmp_path: Path
+) -> None:
+    allowed = tmp_path / "allowed"
+    allowed.mkdir()
+    inside = allowed / "guide.md"
+    inside.write_text("# Guide")
+    secret = tmp_path / "secret.txt"
+    secret.write_text("SECRET")
+    (allowed / "link.md").symlink_to(secret)
+    fake.on("POST", f"{P}/guidelines", build("GuidelineSummary"))
+    _export_job(fake, b"zip-bytes")
+    limited = replace(settings, files_dirs=(allowed.resolve(),))
+    server = build_server(limited, transport=httpx.MockTransport(fake))
+    async with Client(server) as client:
+        for path in (
+            str(secret),
+            str(allowed / "link.md"),
+            str(allowed / ".." / "secret.txt"),
+        ):
+            with pytest.raises(ToolFailed, match="ONTOTATOR_MCP_FILES_DIR"):
+                await call(client, "publish_guideline", {"project": "p", "path": path})
+        for name in ("set_task_profile", "create_project"):
+            args: dict[str, Any] = {"project": "p", "profile_path": str(secret)}
+            if name == "create_project":
+                args = {
+                    "key": "k",
+                    "name": "K",
+                    "pins": [],
+                    "profile_path": str(secret),
+                }
+            with pytest.raises(ToolFailed, match="ONTOTATOR_MCP_FILES_DIR"):
+                await call(client, name, args)
+        assert not fake.calls_to("POST", f"{P}/guidelines")
+        assert b"SECRET" not in b"".join(c.request.content for c in fake.calls)
+
+        published = await call(
+            client, "publish_guideline", {"project": "p", "path": str(inside)}
+        )
+        assert published["local_files"] == [str(inside.resolve())]
+
+        with pytest.raises(ToolFailed, match="ONTOTATOR_MCP_FILES_DIR"):
+            await call(
+                client,
+                "download_export",
+                {"job_id": 9, "path": str(tmp_path / "out.zip")},
+            )
+        assert not (tmp_path / "out.zip").exists()
+        done = await call(
+            client, "download_export", {"job_id": 9, "path": str(allowed / "out.zip")}
+        )
+        assert done["path"] == str((allowed / "out.zip").resolve())
+
+
+def test_files_dir_comes_from_the_environment(tmp_path: Path) -> None:
+    env = {
+        "ONTOTATOR_URL": "https://o.test",
+        "ONTOTATOR_TOKEN": "t",
+        "ONTOTATOR_MCP_FILES_DIR": f"{tmp_path}{os.pathsep}{tmp_path / 'b'}",
+    }
+    with pytest.raises(ConfigError, match="not a folder"):
+        Settings.from_env(env)
+    (tmp_path / "b").mkdir()
+    assert Settings.from_env(env).files_dirs == (
+        tmp_path.resolve(),
+        (tmp_path / "b").resolve(),
+    )
+    with pytest.raises(ConfigError, match="absolute"):
+        Settings.from_env(env | {"ONTOTATOR_MCP_FILES_DIR": "relative/dir"})
+    assert Settings.from_env(env | {"ONTOTATOR_MCP_FILES_DIR": ""}).files_dirs == ()
 
 
 async def test_commit_upload_sends_the_checked_plan(

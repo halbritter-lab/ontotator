@@ -34,6 +34,13 @@ The token is shown once. Store it like a password: the MCP client keeps it in it
 | `ONTOTATOR_ALLOW_HTTP` | `1` allows plain `http` to another host, for a trusted network only. |
 | `ONTOTATOR_TIMEOUT` | Seconds per HTTP request (default 60). |
 | `ONTOTATOR_JOB_TIMEOUT` | Seconds a tool waits for an import or export job (default 900). |
+| `ONTOTATOR_MCP_FILES_DIR` | Recommended. The folders the tools may read local files from and write downloads to, as absolute paths (or starting with `~`), several separated by `:` (`;` on Windows). Unset, any file you can read can be uploaded. |
+
+### Local files
+
+Some tools read a file from your computer and upload it to Ontotator: `upload_texts`, `upload_ontology_files`, `publish_guideline`, and `create_project` and `set_task_profile` with `profile_path`. `download_export` writes a file on your computer. Their descriptions say so, paths must be absolute (or start with `~`), and each result names the absolute path it read or wrote (`local_files`, or `path` for a download).
+
+A model that follows instructions hidden in a text, a guideline or a web page could be talked into uploading a file you did not mean to share, such as a key or a password file. Set `ONTOTATOR_MCP_FILES_DIR` to the folders that hold your Ontotator files, for example `~/ontotator`: the server then resolves each path (following symbolic links) and refuses any file outside these folders, for uploads and downloads alike. Check the paths in the client's tool calls before you approve them.
 
 ### Claude Code
 
@@ -41,6 +48,7 @@ The token is shown once. Store it like a password: the MCP client keeps it in it
 claude mcp add ontotator \
   --env ONTOTATOR_URL=https://ontotator.example.org \
   --env ONTOTATOR_TOKEN=ott_your_token \
+  --env ONTOTATOR_MCP_FILES_DIR="$HOME/ontotator" \
   -- ontotator-mcp
 ```
 
@@ -57,7 +65,8 @@ Add the server to `claude_desktop_config.json` (Settings › Developer › **Edi
       "command": "ontotator-mcp",
       "env": {
         "ONTOTATOR_URL": "https://ontotator.example.org",
-        "ONTOTATOR_TOKEN": "ott_your_token"
+        "ONTOTATOR_TOKEN": "ott_your_token",
+        "ONTOTATOR_MCP_FILES_DIR": "/Users/you/ontotator"
       }
     }
   }

@@ -8,7 +8,7 @@ from typing import Annotated, Any, Literal
 from mcp.server.mcpserver import MCPServer
 from pydantic import Field
 
-from ontotator_mcp.client import OntotatorClient, local_file, project_path, seg
+from ontotator_mcp.client import OntotatorClient, project_path, seg
 from ontotator_mcp.errors import OntotatorError
 from ontotator_mcp.models import (
     AssignmentRow,
@@ -70,19 +70,21 @@ async def all_case_ids(api: OntotatorClient, project: str) -> list[str]:
 
 
 def _profile(
-    profile: dict[str, Any] | None, profile_path: str | None
-) -> dict[str, Any] | None:
+    api: OntotatorClient, profile: dict[str, Any] | None, profile_path: str | None
+) -> tuple[dict[str, Any] | None, list[str]]:
+    """The task profile, and the local file it was read from (if any)."""
     if profile is not None and profile_path is not None:
         raise OntotatorError("Give either profile or profile_path, not both.")
     if profile_path is None:
-        return profile
+        return profile, []
+    [file] = api.local_files([profile_path])
     try:
-        loaded = json.loads(local_file(profile_path).read_text(encoding="utf-8"))
+        loaded = json.loads(file.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
-        raise OntotatorError(f"Cannot read the task profile: {exc}") from None
+        raise OntotatorError(f"Cannot read the task profile {file}: {exc}") from None
     if not isinstance(loaded, dict):
-        raise OntotatorError("The task profile file must hold a JSON object.")
-    return loaded
+        raise OntotatorError(f"The task profile file {file} must hold a JSON object.")
+    return loaded, [str(file)]
 
 
 def register_setup(server: MCPServer, api: OntotatorClient) -> None:
@@ -137,18 +139,21 @@ def register_setup(server: MCPServer, api: OntotatorClient) -> None:
         return listed
 
     @register(server, scopes="admin", effect="additive", idempotent=True)
-    async def upload_ontology_files(paths: Paths) -> list[dict[str, Any]]:
+    async def upload_ontology_files(paths: Paths) -> dict[str, Any]:
         """Upload ontology releases (obographs JSON) or Babelon translation files (.tsv).
 
-        Each file is added once; a file the server already has is reported as
-        ``already_present``. Add translations before anyone works in a
-        project: its first term search freezes the translations it uses.
-        Needs a system token.
+        UPLOADS FILES FROM THE USER'S COMPUTER: it reads the named local
+        files and sends them to Ontotator; ``local_files`` in the result
+        names the absolute paths read. Each file is added once; a file the
+        server already has is reported as ``already_present``. Add
+        translations before anyone works in a project: its first term
+        search freezes the translations it uses. Needs a system token.
         """
+        files = api.local_files(paths)
         result: list[dict[str, Any]] = await api.upload(
-            "/api/v1/admin/ontologies/upload-results", "files[]", paths
+            "/api/v1/admin/ontologies/upload-results", "files[]", files
         )
-        return result
+        return {"local_files": [str(file) for file in files], "files": result}
 
     @register(server, scopes="read", effect="read")
     async def list_project_templates() -> list[dict[str, Any]]:
@@ -179,9 +184,12 @@ def register_setup(server: MCPServer, api: OntotatorClient) -> None:
         """Create a project from a template or a task profile.
 
         Give exactly one of template, profile and profile_path. The token's
-        owner becomes the project's lead. Needs a system token.
+        owner becomes the project's lead. Needs a system token. With
+        profile_path it READS A FILE FROM THE USER'S COMPUTER and sends its
+        content to Ontotator; ``local_files`` in the result names the
+        absolute path read.
         """
-        chosen = _profile(profile, profile_path)
+        chosen, read = _profile(api, profile, profile_path)
         if (template is None) == (chosen is None):
             raise OntotatorError("Give exactly one of template, profile, profile_path.")
         body: dict[str, Any] = {
@@ -196,7 +204,7 @@ def register_setup(server: MCPServer, api: OntotatorClient) -> None:
         else:
             body["profile"] = chosen
         created: dict[str, Any] = await api.post("/api/v1/projects/", body)
-        return created
+        return created | ({"local_files": read} if read else {})
 
     @register(server, scopes="read", effect="read")
     async def get_project_settings(project: Project) -> dict[str, Any]:
@@ -240,14 +248,17 @@ def register_setup(server: MCPServer, api: OntotatorClient) -> None:
         """Replace the project's task profile (layers, annotation types, value axes).
 
         The server refuses a change that would not fit work already done.
+        With profile_path it READS A FILE FROM THE USER'S COMPUTER and sends
+        its content to Ontotator; ``local_files`` in the result names the
+        absolute path read.
         """
-        chosen = _profile(profile, profile_path)
+        chosen, read = _profile(api, profile, profile_path)
         if chosen is None:
             raise OntotatorError("Give profile or profile_path.")
         settings: dict[str, Any] = await api.put(
             project_path(project, "profile"), chosen
         )
-        return settings
+        return settings | ({"local_files": read} if read else {})
 
     @register(server, scopes="project-admin", effect="destructive")
     async def set_ontology_pins(
@@ -298,15 +309,19 @@ def register_setup(server: MCPServer, api: OntotatorClient) -> None:
     ) -> dict[str, Any]:
         """Publish a new version of the project's annotation guideline.
 
-        Earlier versions stay; annotators are asked to read the new one.
+        UPLOADS A FILE FROM THE USER'S COMPUTER: it reads the named local
+        file and sends it to Ontotator; ``local_files`` in the result names
+        the absolute path read. Earlier versions stay; annotators are asked
+        to read the new one.
         """
+        files = api.local_files([path])
         summary: dict[str, Any] = await api.upload(
             project_path(project, "guidelines"),
             "file",
-            [path],
+            files,
             data={"change_note": change_note},
         )
-        return summary
+        return summary | {"local_files": [str(file) for file in files]}
 
     @register(server, scopes=("read", "import"), effect="additive", idempotent=True)
     async def upload_texts(
@@ -332,16 +347,19 @@ def register_setup(server: MCPServer, api: OntotatorClient) -> None:
 
         Returns the check: counts of cases, texts and proposals, problems,
         the planned work per language and the upload_id. Then call
-        commit_upload to import, or discard_upload. The files stream from
-        disk.
+        commit_upload to import, or discard_upload. UPLOADS FILES FROM THE
+        USER'S COMPUTER: it reads the named local files (streamed from disk)
+        and sends them to Ontotator; ``local_files`` in the result names the
+        absolute paths read.
         """
         if format == "text" and not language:
             raise OntotatorError("Plain text needs the language of the texts.")
+        files = api.local_files(paths)
         data: dict[str, Any] = {"kind": UPLOAD_KINDS[format]}
         if language:
             data["language"] = language
         created = await api.upload(
-            project_path(project, "uploads"), "files[]", paths, data=data
+            project_path(project, "uploads"), "files[]", files, data=data
         )
         upload_id = created["upload_id"]
         if wait:
@@ -349,7 +367,7 @@ def register_setup(server: MCPServer, api: OntotatorClient) -> None:
                 created["job_id"], f"The check of upload {upload_id}"
             )
         view = await api.get(project_path(project, "uploads", seg(upload_id)))
-        return upload_summary(view)
+        return upload_summary(view) | {"local_files": [str(file) for file in files]}
 
     @register(server, scopes="import", effect="read")
     async def get_upload(project: Project, upload_id: int) -> dict[str, Any]:
