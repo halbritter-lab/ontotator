@@ -218,7 +218,7 @@ def register_results(server: MCPServer, api: OntotatorClient) -> None:
             "not_in_plan": len(state.get("not_in_plan") or []),
         }
 
-    @register(server, scopes=("read", "export"), effect="additive", idempotent=True)
+    @register(server, scopes=("read", "export"), effect="additive")
     async def start_export(
         project: Project,
         kind: Annotated[
@@ -248,6 +248,7 @@ def register_results(server: MCPServer, api: OntotatorClient) -> None:
         """Start an export job of the project; download it with download_export.
 
         Stores a new export file on the server; changes no project data.
+        Each call starts a new job.
         A final export freezes the accepted results as they are now; the
         warnings and omissions final_export_check lists must be
         acknowledged.
@@ -312,7 +313,7 @@ def register_results(server: MCPServer, api: OntotatorClient) -> None:
             return await api.wait_job(job_id, timeout_seconds)
         return await api.job(job_id)
 
-    @register(server, scopes=("read", "export"), effect="local", idempotent=True)
+    @register(server, scopes=("read", "export"), effect="local")
     async def download_export(
         job_id: int,
         path: Annotated[
@@ -331,21 +332,19 @@ def register_results(server: MCPServer, api: OntotatorClient) -> None:
         WRITES A FILE ON THE USER'S COMPUTER; ``path`` in the result is the
         absolute path written. The file is streamed to disk and checked
         against the SHA-256 the server recorded. An existing file is
-        replaced only with overwrite.
+        replaced only with overwrite, and only by a complete download that
+        matches. Calling it again downloads the file again.
         """
         job = await api.job(job_id)
         kind = export_target(job)
         target = api.local_path(path)
-        written, digest = await api.download(
-            f"/api/v1/jobs/{seg(job_id)}/download", target, overwrite=overwrite
-        )
         expected = (job.get("result") or {}).get("sha256")
-        if isinstance(expected, str) and expected != digest:
-            target.unlink(missing_ok=True)
-            raise OntotatorError(
-                f"The download of job {job_id} does not match the recorded"
-                " SHA-256 and was removed. Try again."
-            )
+        written, digest = await api.download(
+            f"/api/v1/jobs/{seg(job_id)}/download",
+            target,
+            overwrite=overwrite,
+            expected_sha256=expected if isinstance(expected, str) else None,
+        )
         return {
             "path": str(target.resolve()),
             "bytes": written,

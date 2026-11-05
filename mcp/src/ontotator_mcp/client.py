@@ -257,12 +257,19 @@ class OntotatorClient:
         return job
 
     async def download(
-        self, path: str, target: Path, *, overwrite: bool
+        self,
+        path: str,
+        target: Path,
+        *,
+        overwrite: bool,
+        expected_sha256: str | None = None,
     ) -> tuple[int, str]:
         """Stream ``path`` into ``target``; the bytes written and their SHA-256.
 
-        The file appears only when complete (written next to it, then
-        renamed), and an existing file is replaced only with ``overwrite``.
+        The file appears only when complete and, given ``expected_sha256``,
+        only when it matches: it is written next to the target and renamed.
+        An existing file is replaced only with ``overwrite``, and never by a
+        download that failed or does not match.
         """
         if target.exists() and not overwrite:
             raise OntotatorError(
@@ -284,12 +291,23 @@ class OntotatorClient:
                         if response.is_error:
                             await response.aread()
                             raise api_error(response)
+                        if response.is_redirect:
+                            raise OntotatorError(
+                                f"Ontotator answered GET {path} with a redirect."
+                                " Set ONTOTATOR_URL to the final address."
+                            )
                         async for chunk in response.aiter_bytes(CHUNK):
                             out.write(chunk)
                             digest.update(chunk)
                             written += len(chunk)
                 except httpx.HTTPError as exc:
                     raise self._unreachable(exc) from None
+            if expected_sha256 is not None and digest.hexdigest() != expected_sha256:
+                raise OntotatorError(
+                    f"The download of {path} does not match the SHA-256 the server"
+                    f" recorded and was discarded; {target} was not written."
+                    " Try again."
+                )
             os.replace(partial, target)
         except BaseException:
             with contextlib.suppress(OSError):

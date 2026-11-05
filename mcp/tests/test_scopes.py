@@ -152,6 +152,22 @@ async def test_annotations_match_what_a_tool_does(mcp_client: Client) -> None:
             assert "CHANGES DATA" in (tool.description or ""), tool.name
         if info.effect == "read":
             assert "Read only" in (tool.description or ""), tool.name
+        if info.effect == "local":
+            assert hints.destructive_hint is True, tool.name
+            assert "WRITES A FILE ON THIS COMPUTER" in (tool.description or "")
+
+
+@pytest.mark.anyio
+async def test_tools_that_create_something_new_each_call_are_not_idempotent(
+    mcp_client: Client,
+) -> None:
+    hints = {
+        tool.name: tool.annotations
+        for tool in (await mcp_client.list_tools()).tools
+        if tool.annotations is not None
+    }
+    for name in ("upload_texts", "start_export", "download_export", "commit_upload"):
+        assert hints[name].idempotent_hint is False, name
 
 
 def test_tools_never_reach_annotation_work_routes() -> None:

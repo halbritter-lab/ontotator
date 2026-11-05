@@ -564,6 +564,22 @@ async def test_a_corrupt_download_is_removed(
     assert list(tmp_path.iterdir()) == []
 
 
+async def test_a_corrupt_download_keeps_the_file_it_would_replace(
+    fake: FakeApi, mcp_client: Client, tmp_path: Path
+) -> None:
+    _export_job(fake, b"corrupt", result={"sha256": "0" * 64})
+    target = tmp_path / "final.zip"
+    target.write_bytes(b"the previous good export")
+    with pytest.raises(ToolFailed, match="does not match"):
+        await call(
+            mcp_client,
+            "download_export",
+            {"job_id": 9, "path": str(target), "overwrite": True},
+        )
+    assert target.read_bytes() == b"the previous good export"
+    assert [p.name for p in tmp_path.iterdir()] == ["final.zip"]
+
+
 async def test_an_unfinished_job_is_not_downloaded(
     fake: FakeApi, mcp_client: Client, tmp_path: Path
 ) -> None:

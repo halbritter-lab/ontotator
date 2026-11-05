@@ -28,7 +28,10 @@ EFFECT_TEXT: dict[Effect, str] = {
         "CHANGES DATA in Ontotator and may remove or withdraw existing work;"
         " read the dry run first."
     ),
-    "local": "Changes nothing in Ontotator; writes a file on this computer.",
+    "local": (
+        "Changes nothing in Ontotator; WRITES A FILE ON THIS COMPUTER and, with"
+        " overwrite, replaces an existing one."
+    ),
 }
 
 
@@ -67,9 +70,10 @@ def register(
         annotations = ToolAnnotations(
             title=title,
             read_only_hint=read_only,
+            # A local download may replace an existing file (with overwrite).
             destructive_hint=None
             if read_only
-            else effect in ("changes", "destructive"),
+            else effect in ("changes", "destructive", "local"),
             idempotent_hint=True if read_only else idempotent,
             open_world_hint=False,
         )

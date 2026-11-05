@@ -323,7 +323,7 @@ def register_setup(server: MCPServer, api: OntotatorClient) -> None:
         )
         return summary | {"local_files": [str(file) for file in files]}
 
-    @register(server, scopes=("read", "import"), effect="additive", idempotent=True)
+    @register(server, scopes=("read", "import"), effect="additive")
     async def upload_texts(
         project: Project,
         paths: Paths,
@@ -345,6 +345,7 @@ def register_setup(server: MCPServer, api: OntotatorClient) -> None:
     ) -> dict[str, Any]:
         """Stage texts or a proposal bundle and check them; imports nothing yet.
 
+        Each call stages a new upload; discard the ones not imported.
         Returns the check: counts of cases, texts and proposals, problems,
         the planned work per language and the upload_id. Then call
         commit_upload to import, or discard_upload. UPLOADS FILES FROM THE
