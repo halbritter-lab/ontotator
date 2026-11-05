@@ -15,6 +15,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - README and `docs/operations.md`: releases are tagged `vX.Y.Z` from `v0.1.0` on and follow Semantic Versioning; the image build fetches the public `ontospan` repository from GitHub, a token is optional, and only the build needs network access (#300).
 
+### Fixed
+
+- Text card: the card no longer jumps up and down when you switch between **Translation**, **Annotation** and **Finalization** or open **History** or **Details**. From 700 px it hangs from a fixed top edge and only its height changes; from 1280 px it is up to 960 px wide instead of 760 px (#330).
+- Text card at phone width: **Final result** lists the submissions one under the other, with **Open submission** and **Use as final** on their own line, instead of a table wider than the screen that hid both buttons (#333).
+- Text card: the keyboard focus ring of the path segments is drawn inside the arrow, so the chevrons no longer cut it, and in white on the current (filled) segment, where it was invisible (#334).
+- Text card: **History** and **Details** show their name as a heading next to **Back**, and a problem report under **Details** reads as its title, a line with who reported it, when, its state and the paused tasks, and **Open report**, instead of one comma-joined line (#335).
+
 ## [0.9.0] - 2026-11-04
 
 ### Added
