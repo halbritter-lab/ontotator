@@ -78,5 +78,40 @@ it("shows why an import was refused", async () => {
   await userEvent.upload(screen.getByLabelText("Archive file (.zip)"), new File(["zip"], "neuro.zip"));
   await userEvent.click(screen.getByRole("button", { name: "Import archive" }));
   expect(await screen.findByText("Import failed")).toBeTruthy();
-  expect(screen.getByText(/\[ARCHIVE_TAMPERED\] The archive does not match its manifest/)).toBeTruthy();
+  expect(screen.getByText("The archive does not match its manifest.")).toBeTruthy();
+});
+
+it("names the checkbox and the pseudonyms when pseudonyms are taken", async () => {
+  vi.mocked(api.adminGetArchiveJob).mockResolvedValue(job(6, "project_archive_import",
+    { error: { code: "ARCHIVE_PSEUDONYM_TAKEN", details: { pseudonyms: ["ann-0005"], message: "... (--rename-pseudonyms) ..." } } }, "failed",
+    "StructuredJobError: [ARCHIVE_PSEUDONYM_TAKEN] {'pseudonyms': ['ann-0005']}"));
+  render(<ProjectArchives projects={projects} />);
+  await userEvent.upload(screen.getByLabelText("Archive file (.zip)"), new File(["zip"], "neuro.zip"));
+  await userEvent.click(screen.getByRole("button", { name: "Import archive" }));
+  await screen.findByText("Import failed");
+  const text = screen.getByText(/Tick “Give people new pseudonyms where theirs are taken here”/).textContent ?? "";
+  expect(text).toMatch(/Pseudonyms: ann-0005\.$/);
+  expect(document.body.textContent).not.toMatch(/rename-pseudonyms|\[ARCHIVE_|\{'/);
+});
+
+it("lists renamed pseudonyms after an import", async () => {
+  vi.mocked(api.adminGetArchiveJob).mockResolvedValue(job(6, "project_archive_import", {
+    project: "neuro-demo", name: "Neurology demo", renamed: false, archived_project: "neuro-demo", rows: 1,
+    renamed_pseudonyms: { "ann-0005": "ann-0007" },
+    people: { mapped: [], pseudonym_only: [{ pseudonym: "ann-0007", archived_pseudonym: "ann-0005" }] },
+    verification: { ok: true, rows_checked: 1, files_checked: 1 },
+  }));
+  render(<ProjectArchives projects={projects} />);
+  await userEvent.upload(screen.getByLabelText("Archive file (.zip)"), new File(["zip"], "neuro.zip"));
+  await userEvent.click(screen.getByRole("button", { name: "Import archive" }));
+  expect(await screen.findByText("New pseudonyms in the copied work: ann-0005 → ann-0007.")).toBeTruthy();
+});
+
+it("points to the command line when the archive is larger than an upload may be", async () => {
+  vi.mocked(api.adminGetArchiveJob).mockResolvedValue(job(5, "project_archive_export",
+    { sha256: "a".repeat(64), rows: 1, blobs: 1, project: "neuro-demo", size: 400 * 1024 * 1024, upload_limit: 300 * 1024 * 1024 }));
+  render(<ProjectArchives projects={projects} />);
+  await userEvent.click(screen.getByRole("button", { name: "Export archive" }));
+  expect(await screen.findByText(/larger than the 300 MiB this page accepts/)).toBeTruthy();
+  expect(screen.getByText("ontotator admin projects import-archive")).toBeTruthy();
 });
