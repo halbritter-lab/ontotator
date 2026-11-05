@@ -77,6 +77,7 @@ it("shows the counts and the grouped table without moving focus", async () => {
   vi.spyOn(api, "finalExportPreflight").mockResolvedValue({ ...preflight, omissions: [{ case_id: "other", language: "de" }] });
   render(<FinalExportPanel projectKey="p" username="lead" />);
   expect(screen.getByText(/one result file per text, a plain-language guide \(README\.txt\)/)).toBeDefined();
+  expect(screen.getByText(/the agreement between annotators \(agreement\.csv, agreement-summary\.csv\)/)).toBeDefined();
   const check = await screen.findByRole("region", { name: "Export check" });
   expect(check.contains(document.activeElement)).toBe(false);
   const counts = [...check.querySelectorAll(".stat-row > div")].map(item => item.textContent);

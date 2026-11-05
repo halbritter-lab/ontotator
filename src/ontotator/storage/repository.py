@@ -67,6 +67,7 @@ from ontotator.domain.workspace import (
     WorkspaceKey,
 )
 from ontotator.exchange.t1 import (
+    EmptyImportedSet,
     ImportCounts,
     ImportedDocument,
     ImportedSet,
@@ -96,6 +97,7 @@ from ontotator.storage.tables import (
     DraftEvidenceRow,
     DraftRow,
     EditEventRow,
+    EmptyProposalSetRow,
     EvidenceSnapshotRow,
     MutationReceiptRow,
     OntologyFileRow,
@@ -1445,6 +1447,7 @@ class Repository:
         job_id: int | None = None,
         on_done: Callable[[Connection, int, ImportCounts], None] | None = None,
         snapshots_added: bool = False,
+        empty_sets: Sequence[EmptyImportedSet] = (),
     ) -> ImportCounts:
         """Add imported documents and sets in one transaction (T3 A1, T7 O1, O2).
 
@@ -1453,6 +1456,8 @@ class Repository:
         the same (bundle, set, document) is skipped, so a re-import adds
         nothing. ``on_done`` runs with the counts in the same transaction.
         With ``snapshots_added``, ``add_snapshots`` already stored the snapshots.
+        ``empty_sets`` records tool sets without any finding
+        (``empty_proposal_sets``), skipped the same way on a re-import.
         """
         texts: dict[str, ImportedDocument] = {}
         conflicts: set[str] = set()
@@ -1532,6 +1537,25 @@ class Repository:
                 )
             if new_documents:
                 conn.execute(insert(DocumentRow), new_documents)
+            if empty_sets:
+                _insert_rows(
+                    conn,
+                    EmptyProposalSetRow,
+                    [
+                        {
+                            "project_id": project_id,
+                            "document_id": item.document_id,
+                            "bundle_id": item.bundle_id,
+                            "manifest_sha256": item.manifest_sha256,
+                            "annotation_set_id": item.annotation_set_id,
+                            "set_kind": item.set_kind,
+                            "actors": item.actors,
+                            "imported_by": imported_by,
+                            "job_id": job_id,
+                        }
+                        for item in empty_sets
+                    ],
+                )
             counts: ImportCounts = {
                 "documents_added": len(new_documents),
                 "documents_skipped": len(texts) - len(new_documents),

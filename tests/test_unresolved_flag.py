@@ -289,9 +289,9 @@ def _final_export(
     queue = JobQueue(db, HANDLERS)
     job = queue.run(queue.claim(queued["job_id"], "test"), "test")
     assert job.status == "succeeded", job.error
-    bundle = tmp_path / "selected.t1.zip"
+    bundle = tmp_path / "selected-results.ontospan.zip"
     with zipfile.ZipFile(db.blobs.path(job.result["sha256"])) as artifact:
-        bundle.write_bytes(artifact.read("selected.t1.zip"))
+        bundle.write_bytes(artifact.read("selected-results.ontospan.zip"))
     return bundle
 
 
