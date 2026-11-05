@@ -72,6 +72,10 @@ HINTS: dict[str, str] = {
     ),
     "ASSIGNMENT_EXISTS": "The new person already has this task on this text.",
     "USERNAME_TAKEN": "An account with this username exists already.",
+    "GUIDELINE_VERSION_CONFLICT": (
+        "Another guideline version was published meanwhile; check the guideline"
+        " and repeat."
+    ),
 }
 
 

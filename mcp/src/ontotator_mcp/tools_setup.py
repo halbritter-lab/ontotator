@@ -427,7 +427,7 @@ def register_setup(server: MCPServer, api: OntotatorClient) -> None:
 
         The version stays in the history, marked withdrawn; annotators are
         shown the newest version that is not withdrawn. Refused with
-        REVISION_CONFLICT if another version was published meanwhile.
+        GUIDELINE_VERSION_CONFLICT if another version was published meanwhile.
         """
         listing = await api.get(project_path(project, "guidelines"))
         summary: dict[str, Any] = await api.post(

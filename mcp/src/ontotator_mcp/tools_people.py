@@ -525,12 +525,14 @@ def register_people(server: MCPServer, api: OntotatorClient) -> None:
         already has that text) is reported and the others go on. Submitted
         work stays with its author.
         """
-        if from_username in to_usernames:
+        # The server keeps usernames trimmed and in lower case.
+        leaving = from_username.strip().lower()
+        if leaving in {name.strip().lower() for name in to_usernames}:
             raise OntotatorError("The person leaving cannot take their own tasks.")
         assigned: list[dict[str, Any]] = await api.get(
-            project_path(project, "assignments"), username=from_username
+            project_path(project, "assignments"), username=leaving
         )
-        assigned = [a for a in assigned if a.get("username") == from_username]
+        assigned = [a for a in assigned if a.get("username") == leaving]
         moves, kept = handover_plan(
             assigned, to_usernames, include_started=include_started
         )

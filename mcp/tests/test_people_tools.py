@@ -249,7 +249,7 @@ async def test_hand_over_open_tasks_plans_then_reassigns_in_turn(
     fake.on("POST", REASSIGN, _moved)
     args: dict[str, Any] = {
         "project": "ward-7",
-        "from_username": "leaving",
+        "from_username": " Leaving",  # as typed: the server's name is "leaving"
         "to_usernames": ["ann", "bob"],
     }
     dry = await call(mcp_client, "hand_over_open_tasks", args)
@@ -293,7 +293,7 @@ async def test_hand_over_refuses_the_leaving_person_as_successor(
         await call(
             mcp_client,
             "hand_over_open_tasks",
-            {"project": "p", "from_username": "a", "to_usernames": ["a"]},
+            {"project": "p", "from_username": "a", "to_usernames": ["A"]},
         )
 
 
