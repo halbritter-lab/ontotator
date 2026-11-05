@@ -42,19 +42,25 @@ CODE_COLUMNS = ("username", "display_name", "email", "code", "expires_at")
 HANDOVER_TASKS = ("annotate", "translation_review")
 
 
-def write_codes(
-    api: OntotatorClient, path: str, rows: list[dict[str, Any]], overwrite: bool
-) -> str:
-    """Write ``rows`` as CSV readable by the user only; the absolute path."""
+def codes_target(api: OntotatorClient, path: str, overwrite: bool) -> Path:
+    """The checked codes file; called before any code is issued, so none is lost."""
     target = api.local_path(path)
+    if target.is_dir():
+        raise OntotatorError(f"{target} is a directory; name a file.")
     if target.exists() and not overwrite:
         raise OntotatorError(
             f"{target} exists already. Choose another path or pass overwrite."
         )
-    if target.is_dir():
-        raise OntotatorError(f"{target} is a directory; name a file.")
     if not target.parent.is_dir():
         raise OntotatorError(f"The folder {target.parent} does not exist.")
+    return target
+
+
+def write_codes(
+    api: OntotatorClient, path: str, rows: list[dict[str, Any]], overwrite: bool
+) -> str:
+    """Write ``rows`` as CSV readable by the user only; the absolute path."""
+    target = codes_target(api, path, overwrite)
     buffer = io.StringIO()
     writer = csv.DictWriter(buffer, fieldnames=CODE_COLUMNS, extrasaction="ignore")
     writer.writeheader()
@@ -182,7 +188,8 @@ def register_people(server: MCPServer, api: OntotatorClient) -> None:
             for item in await api.get("/api/v1/admin/users/")
         }
         if codes_path is not None:
-            api.local_path(codes_path)  # Refuse a bad path before creating anyone.
+            # Refuse a bad path before creating anyone.
+            codes_target(api, codes_path, overwrite)
         existing: list[str] = []
         created: list[dict[str, Any]] = []
         refused: list[dict[str, Any]] = []
@@ -263,7 +270,7 @@ def register_people(server: MCPServer, api: OntotatorClient) -> None:
             for item in await api.get("/api/v1/admin/users/")
         }
         if codes_path is not None:
-            api.local_path(codes_path)
+            codes_target(api, codes_path, overwrite)
         skipped: list[dict[str, Any]] = []
         refused: list[dict[str, Any]] = []
         issued: list[dict[str, Any]] = []

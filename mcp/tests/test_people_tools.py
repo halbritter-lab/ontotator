@@ -138,6 +138,24 @@ async def test_create_users_refuses_a_codes_file_outside_the_folders(
     assert not fake.calls_to("POST", USERS)
 
 
+async def test_an_existing_codes_file_is_refused_before_any_code_is_issued(
+    fake: FakeApi, mcp_client: Client, tmp_path: Path
+) -> None:
+    fake.on("GET", USERS, [_account("pending", setup_pending=True)])
+    codes = tmp_path / "codes.csv"
+    codes.write_text("earlier codes", encoding="utf-8")
+    for tool, arguments in (
+        ("create_users", {"users": [{"username": "eve", "display_name": "Eve"}]}),
+        ("issue_setup_codes", {"usernames": ["pending"]}),
+    ):
+        with pytest.raises(ToolFailed) as refused:
+            await call(mcp_client, tool, arguments | {"codes_path": str(codes)})
+        assert "exists already" in str(refused.value)
+    assert not fake.calls_to("POST", USERS)
+    assert not fake.calls_to("POST", RESET)
+    assert codes.read_text(encoding="utf-8") == "earlier codes"
+
+
 async def test_issue_setup_codes_renews_only_pending_invitations(
     fake: FakeApi, mcp_client: Client
 ) -> None:
