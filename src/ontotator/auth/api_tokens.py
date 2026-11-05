@@ -367,6 +367,12 @@ class ApiTokenService:
         with self.db.transaction() as conn:
             return _views(conn, *conditions)
 
+    def get(self, token_id: int) -> ApiToken | None:
+        """One token by its id (no secret), or None."""
+        with self.db.transaction() as conn:
+            found = _views(conn, ApiTokenRow.id == token_id)
+        return found[0] if found else None
+
     # Revocation
 
     def revoke(

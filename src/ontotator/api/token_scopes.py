@@ -58,6 +58,14 @@ ROUTE_SCOPES: Mapping[tuple[str, str], RouteScope] = {
     ("GET", "/api/v1/preferences"): SESSION,
     ("PUT", "/api/v1/preferences"): SESSION,
     ("POST", "/api/v1/technical-reports"): SESSION,
+    # A token reads its own record (expiry, scopes) with whatever scope it has.
+    ("GET", "/api/v1/auth/token"): (
+        "read",
+        "import",
+        "export",
+        "project-admin",
+        "admin",
+    ),
     # API tokens: never with a token
     ("GET", "/api/v1/me/tokens"): SESSION,
     ("POST", "/api/v1/me/tokens"): SESSION,
@@ -252,6 +260,16 @@ PROJECT_RESOLVED: frozenset[tuple[str, str]] = frozenset(
     {
         ("GET", "/api/v1/jobs/{job_id}"),
         ("GET", "/api/v1/jobs/{job_id}/download"),
+        # The request's own token: a project token reads itself.
+        ("GET", "/api/v1/auth/token"),
+        # Work handed on, withdrawn or reopened: AssignmentService finds the
+        # assignment's project and refuses one that is not the token's
+        # (require_project_management), so a project token may rebalance
+        # the work of its own project.
+        ("POST", "/api/v1/assignments/{assignment_id}/reassign"),
+        ("POST", "/api/v1/assignments/{assignment_id}/reopen"),
+        ("POST", "/api/v1/assignments/{assignment_id}/remove"),
+        ("POST", "/api/v1/assignments/{assignment_id}/revoke"),
     }
 )
 # Path parameters that name the project.

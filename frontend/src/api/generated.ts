@@ -2171,6 +2171,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Current Token
+         * @description The API token this request was sent with, without its secret.
+         *
+         *     Any scope reads it, a project token included: a script checks its
+         *     expiry and scopes before it has to be replaced. A browser session has
+         *     no token here (``TOKEN_NOT_FOUND``).
+         */
+        get: operations["current_token_api_v1_auth_token_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{key}/tokens": {
         parameters: {
             query?: never;
@@ -14063,6 +14087,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    current_token_api_v1_auth_token_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenView"];
                 };
             };
         };

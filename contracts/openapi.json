@@ -380,7 +380,8 @@
             }
           }
         },
-        "x-ontotator-scope": "project-admin"
+        "x-ontotator-scope": "project-admin",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/assignments/{assignment_id}/reopen": {
@@ -433,7 +434,8 @@
             }
           }
         },
-        "x-ontotator-scope": "project-admin"
+        "x-ontotator-scope": "project-admin",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/assignments/{assignment_id}/remove": {
@@ -477,7 +479,8 @@
             }
           }
         },
-        "x-ontotator-scope": "project-admin"
+        "x-ontotator-scope": "project-admin",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/assignments/{assignment_id}/revoke": {
@@ -530,7 +533,8 @@
             }
           }
         },
-        "x-ontotator-scope": "project-admin"
+        "x-ontotator-scope": "project-admin",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/assignments/batch/preview": {
@@ -7826,6 +7830,36 @@
           }
         },
         "x-ontotator-scope": "session"
+      }
+    },
+    "/api/v1/auth/token": {
+      "get": {
+        "tags": [
+          "api-tokens"
+        ],
+        "summary": "Current Token",
+        "description": "The API token this request was sent with, without its secret.\n\nAny scope reads it, a project token included: a script checks its\nexpiry and scopes before it has to be replaced. A browser session has\nno token here (``TOKEN_NOT_FOUND``).",
+        "operationId": "current_token_api_v1_auth_token_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenView"
+                }
+              }
+            }
+          }
+        },
+        "x-ontotator-scope": [
+          "read",
+          "import",
+          "export",
+          "project-admin",
+          "admin"
+        ],
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/projects/{key}/tokens": {
