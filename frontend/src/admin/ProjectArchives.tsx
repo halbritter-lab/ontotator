@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api, type JobView, type ProjectSummary } from "../api/client";
 import { saveDownload } from "../api/download";
 import { Button, Checkbox, InlineMessage, Select, TextInput } from "../ui";
@@ -26,7 +26,11 @@ const failure = (job: JobView) => (job.error ?? "The job failed.").replace(/^\w+
  * Projects page, administrators only (issue 306): export one project as a project archive for another server, and import
  * an archive as a new project. Both run as jobs; the import checks every table against the archive's manifest.
  */
-export function ProjectArchives({ projects }: { projects: readonly ProjectSummary[] }): JSX.Element {
+export function ProjectArchives({ projects, onImported }: {
+  projects: readonly ProjectSummary[];
+  /** After a successful import, so the project list shows the new project. */
+  onImported?: () => void;
+}): JSX.Element {
   const [projectKey, setProjectKey] = useState("");
   const [withOntologies, setWithOntologies] = useState(true);
   const [exportId, setExportId] = useState<number | null>(null);
@@ -46,10 +50,12 @@ export function ProjectArchives({ projects }: { projects: readonly ProjectSummar
     try { setExportId((await api.adminExportArchive(chosen, withOntologies)).job_id); }
     catch (cause) { setError(cause); } finally { setBusy(false); }
   };
+  // The exported project's key, not the one chosen since.
+  const exportedKey = typeof exported.job?.result?.project === "string" ? exported.job.result.project : "project";
   const download = async () => {
     if (exportId === null) return;
     setError(null);
-    try { saveDownload(await api.adminDownloadArchive(exportId), `${chosen}-archive.zip`); } catch (cause) { setError(cause); }
+    try { saveDownload(await api.adminDownloadArchive(exportId), `${exportedKey}-archive.zip`); } catch (cause) { setError(cause); }
   };
   const startImport = async () => {
     if (!file) return;
@@ -60,10 +66,12 @@ export function ProjectArchives({ projects }: { projects: readonly ProjectSummar
     } catch (cause) { setError(cause); } finally { setBusy(false); }
   };
   const result = imported.job?.status === "succeeded" ? imported.job.result as unknown as ImportResult : null;
+  const importedKey = result?.project;
+  useEffect(() => { if (importedKey) onImported?.(); }, [importedKey, onImported]);
 
   return <section className="project-archives" aria-labelledby="project-archives-heading">
     <h2 id="project-archives-heading">Project archives</h2>
-    <p>A project archive holds one complete project with its people and files, to move it to another server. It names people with their e-mail addresses: keep it private.</p>
+    <p>A project archive holds one complete project with its people and files, to move it to another server. It names the people who worked in the project with their e-mail addresses: keep it private. This server deletes an exported archive after 24 hours, and an uploaded one once it is imported.</p>
     {error != null && <ErrorNotice error={error} />}
     <h3>Export a project</h3>
     {projects.length === 0 ? <p>There is no project to export.</p> : <>
@@ -78,7 +86,7 @@ export function ProjectArchives({ projects }: { projects: readonly ProjectSummar
     {exported.error != null && <ErrorNotice error={exported.error} />}
     {exported.job?.status === "failed" && <InlineMessage tone="error" title="Export failed">{failure(exported.job)}</InlineMessage>}
     {exported.job?.status === "succeeded" && <InlineMessage tone="success" title="Archive ready">
-      <p>{String(exported.job.result?.rows ?? 0)} rows and {String(exported.job.result?.blobs ?? 0)} files.</p>
+      <p>{exportedKey}: {String(exported.job.result?.rows ?? 0)} rows and {String(exported.job.result?.blobs ?? 0)} files. Download it within 24 hours.</p>
       <Button size="sm" onClick={() => { void download(); }}>Download archive</Button>
     </InlineMessage>}
     <h3>Import an archive</h3>

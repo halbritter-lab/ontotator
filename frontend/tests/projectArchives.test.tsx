@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { api, type ArchiveJobView, type ProjectSummary } from "../src/api/client";
+import * as downloads from "../src/api/download";
 import { ProjectArchives } from "../src/admin/ProjectArchives";
 
 const at = "2026-11-03T10:00:00Z";
@@ -32,8 +33,29 @@ it("exports the chosen project with or without its ontology files", async () => 
   await userEvent.click(screen.getByRole("button", { name: "Export archive" }));
   expect(api.adminExportArchive).toHaveBeenCalledWith("neuro-demo", false);
   expect(await screen.findByText("Archive ready")).toBeTruthy();
-  expect(screen.getByText("120 rows and 3 files.")).toBeTruthy();
+  expect(screen.getByText(/neuro-demo: 120 rows and 3 files/)).toBeTruthy();
   expect(screen.getByRole("button", { name: "Download archive" })).toBeTruthy();
+});
+
+it("names the download after the exported project, not the one chosen since", async () => {
+  vi.spyOn(api, "adminDownloadArchive").mockResolvedValue({ blob: new Blob(["zip"]), filename: null });
+  vi.spyOn(downloads, "saveDownload").mockImplementation(() => {});
+  render(<ProjectArchives projects={projects} />);
+  fireEvent.change(screen.getByLabelText("Project"), { target: { value: "neuro-demo" } });
+  await userEvent.click(screen.getByRole("button", { name: "Export archive" }));
+  await screen.findByText("Archive ready");
+  fireEvent.change(screen.getByLabelText("Project"), { target: { value: "ward-7" } });
+  await userEvent.click(screen.getByRole("button", { name: "Download archive" }));
+  await vi.waitFor(() => expect(downloads.saveDownload).toHaveBeenCalledWith(expect.anything(), "neuro-demo-archive.zip"));
+});
+
+it("reloads the project list after an import", async () => {
+  const onImported = vi.fn();
+  render(<ProjectArchives projects={projects} onImported={onImported} />);
+  await userEvent.upload(screen.getByLabelText("Archive file (.zip)"), new File(["zip"], "neuro.zip"));
+  await userEvent.click(screen.getByRole("button", { name: "Import archive" }));
+  expect(await screen.findByText("Project imported")).toBeTruthy();
+  expect(onImported).toHaveBeenCalledTimes(1);
 });
 
 it("imports an archive and reports the new key, the verification and the people", async () => {

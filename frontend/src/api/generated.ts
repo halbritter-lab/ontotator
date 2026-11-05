@@ -1275,6 +1275,9 @@ export interface paths {
         /**
          * Download Archive
          * @description The ZIP of a finished export job; audited as ``project.export_download``.
+         *
+         *     410 once the archive was deleted (``ARCHIVE_RETENTION`` after the export,
+         *     or at an account erasure).
          */
         get: operations["download_archive_api_v1_admin_project_archives_jobs__job_id__download_get"];
         put?: never;

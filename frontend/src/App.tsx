@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { api, type CurrentUser, type Profile, type ProjectSummary, type TaskSummary } from "./api/client";
 import { routeTitle, taskCrumbLabel } from "./app/labels";
 import { CaseViewer } from "./variants/CaseViewer";
@@ -197,6 +197,13 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
     // Only a navigation reloads; the first load is the effect above.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigationRoute]);
+  // A project archive import (issue 306) adds a project: reload the list in place.
+  const reloadProjects = useCallback(() => {
+    const identity = projectIdentity;
+    api.listProjects().then(next => {
+      if (alive.current) setProjectContext(context => context?.identity === identity ? { identity, projects: next } : context);
+    }, () => { /* The loaded list stays; the next navigation tries again. */ });
+  }, [projectIdentity]);
   useSessionRestored(() => { if (projectError) setRetry(value => value + 1); });
   // A navigation that left focus nowhere (the next task after a submit) starts at the page's main region (#18).
   const shownRoute = useRef(route);
@@ -310,7 +317,7 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
       user={user} onNavigate={go} routeLeaveRef={routeLeaveRef} leaveGuardRef={logoutGuardRef} showToast={appToast.show}
       onProjectContext={key => setTaskProject({ identity: taskIdentity, key })} /></PracticeFrame>; break;
     case "projects": content = projectError ? <></> : projectContext?.identity !== projectIdentity ? <InlineMessage tone="info">Loading your projects…</InlineMessage>
-      : <ProjectsPage projects={projects} currentKey={landingProject(user.username, projects)} onNavigate={go} isAdmin={user.is_system_admin} />; break;
+      : <ProjectsPage projects={projects} currentKey={landingProject(user.username, projects)} onNavigate={go} isAdmin={user.is_system_admin} onProjectsChanged={reloadProjects} />; break;
     case "adminUsers": content = <UsersPage currentUser={user} routeLeaveRef={routeLeaveRef} />; break;
     case "adminOntologies": content = user.is_system_admin ? <OntologiesPage onNavigate={go} />
       : notice("Ontologies", "Only system administrators can upload and manage ontology files. Ask an administrator if a project needs another version."); break;
