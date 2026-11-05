@@ -746,3 +746,99 @@ def test_path_parameters_match_like_the_routers() -> None:
     assert found.project_key == "p" and found.scope == "read"
     assert requirement("GET", "/api/v1/projects/p/unknown") is None
     assert requirement("DELETE", "/api/v1/projects") is None
+
+
+def _app_routes(app: FastAPI) -> tuple[set[tuple[str, str]], set[str]]:
+    """Every (method, path) under /api/ the app serves, and its other paths."""
+    from fastapi.routing import _IncludedRouter
+    from starlette.routing import Mount, Route
+
+    api: set[tuple[str, str]] = set()
+    other: set[str] = set()
+
+    def add(path: str, methods: set[str] | None) -> None:
+        if path.startswith("/api"):
+            api.update((method, path) for method in methods or {"*"})
+        else:
+            other.add(path)
+
+    for route in app.routes:
+        if isinstance(route, _IncludedRouter):
+            for context in route.effective_route_contexts():
+                add(context.path, set(context.methods))
+        elif isinstance(route, Route):
+            add(route.path, route.methods)
+        elif isinstance(route, Mount):
+            add(route.path or "/", None)
+        else:  # a new kind of route needs a decision here
+            raise AssertionError(f"unexpected route {route!r}")
+    return api, other
+
+
+def test_every_app_route_is_mapped_session_only_or_public(app: FastAPI) -> None:
+    api, other = _app_routes(app)
+    unmapped = api - set(ROUTE_SCOPES)
+    assert not unmapped, f"routes without a token scope: {sorted(unmapped)}"
+    # Outside /api/ the middleware asks for no credentials: only the schema,
+    # the development docs and the static frontend live there.
+    assert other <= {
+        "/openapi.json",
+        "/docs",
+        "/docs/oauth2-redirect",
+        "/redoc",
+        "/livez",
+        "/readyz",
+        "/",
+    }
+    # Token management, login, password and preferences are session-only, so
+    # no token can mint, list or revoke tokens or take over the account.
+    for (method, path), scope in ROUTE_SCOPES.items():
+        if (
+            "/tokens" in path
+            or (path.startswith("/api/v1/auth/") and path != "/api/v1/auth/me")
+            or path in ("/api/v1/me/password", "/api/v1/preferences")
+            or (method, path) == ("PATCH", "/api/v1/me/profile")
+        ):
+            assert scope == SESSION, (method, path)
+
+
+def test_an_unmapped_route_refuses_every_token(app: FastAPI, admin: TestClient) -> None:
+    secret = _create(admin, ["read", "import", "export", "project-admin"])["secret"]
+    system = _create(admin, ["read", "admin"], "/api/v1/admin/tokens")["secret"]
+
+    def probe() -> dict[str, bool]:
+        return {"ok": True}
+
+    from fastapi.routing import APIRoute
+
+    # Ahead of the static mount, which would answer the path otherwise.
+    app.router.routes.insert(
+        0, APIRoute("/api/v1/unmapped-probe", probe, methods=["GET", "POST"])
+    )
+    # A session reaches the new route; no token does, whatever its scopes.
+    assert admin.get("/api/v1/unmapped-probe").status_code == 200
+    for token in (secret, system):
+        client = _bearer(app, token, **ORIGIN)
+        for method in ("GET", "POST", "HEAD"):
+            response = client.request(method, "/api/v1/unmapped-probe")
+            assert response.status_code == 403, (method, response.text)
+            if method != "HEAD":
+                assert response.json()["code"] == "TOKEN_NOT_ALLOWED"
+
+
+def test_encoded_slashes_never_move_a_project_token_elsewhere(
+    app: FastAPI, admin: TestClient
+) -> None:
+    # Some routes match the raw path, the middleware the decoded one: the key
+    # such a route sees then holds a slash, which no project key has.
+    create_project(app, admin, "other")
+    secret = _create(admin, ["read"], f"/api/v1/projects/{PROJECT}/tokens")["secret"]
+    client = _bearer(app, secret)
+    for path in [
+        f"/api/v1/projects/{PROJECT}%2F..%2Fother/documents/x/translation-reviews",
+        f"/api/v1/projects/{PROJECT}%2Fother/documents/x/text",
+        f"/api/v1/projects/{PROJECT}%2F..%2Fother/document-rows",
+        f"/api/v1/projects/{PROJECT}%2F..%2Fother/members",
+    ]:
+        response = client.get(path)
+        assert response.status_code in (403, 404), (path, response.text)
