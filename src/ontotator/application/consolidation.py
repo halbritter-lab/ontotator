@@ -41,8 +41,7 @@ from sqlalchemy import Connection, select, tuple_
 from ontotator.application.consolidation_blinding import (
     Blinding,
     blinds,
-    build_blinding,
-    recorded_at,
+    task_blinding,
 )
 from ontotator.application.document_row_panel import (
     AxisDefaults,
@@ -447,14 +446,7 @@ class ConsolidationReader:
             )
             # Issue 302: "Annotator A, B, …" for a consolidator, names for leads.
             blinding = (
-                build_blinding(
-                    access.pseudonym,
-                    order,
-                    found.authors,
-                    recorded_at(
-                        conn, pid, [s for s in order if not s.startswith("draft-")]
-                    ),
-                )
+                task_blinding(conn, access.pseudonym, pid, item.round_id)
                 if blinds(conn, access, pid, item.project_key)
                 else None
             )

@@ -53,7 +53,7 @@ What for: start or continue your consolidation work.
 2. Click **Start**, **Continue** or **View**.
 3. The consolidation screen opens. Its heading reads, for example, *Consolidate CASE-1 en v1*. The path above it shows how many groups are still open.
 
-If the project hides annotator names, the screen says *Annotator names are hidden in this project.* The annotators are then *Annotator A*, *Annotator B* and so on, in the order they submitted, everywhere in this consolidation; their names are not shown to you.
+If the project hides annotator names, the screen says *Annotator names are hidden in this project.* The annotators are then *Annotator A*, *Annotator B* and so on, in the order they submitted, everywhere in this consolidation; their names are not shown to you. If the lead starts another consolidation round on the same task, each annotator keeps their letter and someone new gets the next one.
 
 If the lead gave a reason when starting the consolidation, it shows above the groups, for example *Reason from the lead: Term and assertion differ*, and under the task in **My tasks**.
 

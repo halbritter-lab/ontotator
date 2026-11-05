@@ -2,14 +2,16 @@
 
 With the project setting ``blind_consolidation`` on, a consolidator sees the
 authors of a consolidation round's inputs as "Annotator A", "Annotator B", …
-instead of names or pseudonyms. The letters follow the time each author's
-first input submission was recorded (frozen drafts after them, in the
-round's order), so they stay the same for the whole round. Every payload a
-consolidator reads about the round's inputs carries the opaque id
-``annotator-a``, … in place of the pseudonym: the consolidation view, the
-round's inputs, the workspace's available inputs and the input submissions'
-history. Tool proposals keep their tool actor. Leads (and system admins)
-always see names; exports do not change.
+instead of names or pseudonyms. The letters follow the first consolidation
+round of the task (on that text) an author appears in, and within it the
+time their first input submission was recorded (frozen drafts after them,
+in the round's order), so a person keeps their letter across the rounds of
+one task. Every payload a consolidator reads about the round's inputs
+carries the opaque id ``annotator-a``, … in place of the pseudonym: the
+consolidation view, the round's inputs, the workspace's available inputs and
+the input submissions' history (re-anchor reviewers included). Tool
+proposals keep their tool actor. Leads (and system admins) always see names;
+exports do not change.
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ from sqlalchemy import Connection, select
 
 from ontotator.authz.policy import Access, Action, can
 from ontotator.domain.annotations import AnnotationSnapshot
+from ontotator.domain.reanchor_resolution import ReanchorResolution
 from ontotator.domain.review import ReviewDecision
 from ontotator.storage.tables import (
     AssignmentRow,
@@ -101,6 +104,11 @@ class Blinding:
             update={"reviewer_id": self.person(decision.reviewer_id)}
         )
 
+    def reanchor(self, resolution: ReanchorResolution) -> ReanchorResolution:
+        return resolution.model_copy(
+            update={"reviewer_id": self.person(resolution.reviewer_id)}
+        )
+
     def input_view(self, item: Any) -> Any:
         """A ``RoundInputView`` with hidden source and target authors."""
         return item.model_copy(
@@ -113,23 +121,32 @@ class Blinding:
         )
 
 
-def build_blinding(
-    viewer: str,
-    order: Sequence[str],
-    authors: Mapping[str, str],
-    recorded: Mapping[str, datetime],
-) -> Blinding:
-    """Letters by each author's first recorded source submission; authors of
-    frozen drafts (no recording time) after them, in source order."""
-    first: dict[str, tuple[bool, float, int]] = {}
-    for position, source in enumerate(order):
-        author = authors.get(source)
-        if author is None or author == viewer:
-            continue
-        at = recorded.get(source)
-        key = (at is None, at.timestamp() if at is not None else 0.0, position)
-        if author not in first or key < first[author]:
-            first[author] = key
+Sources = tuple[Sequence[str], Mapping[str, str], Mapping[str, datetime]]
+
+
+def build_blinding(viewer: str, rounds: Sequence[Sources]) -> Blinding:
+    """Letters for the input authors of ``rounds`` (each its sources in
+    order, their authors and recording times), oldest round first.
+
+    An author's letter follows the first round they appear in, and within it
+    their first recorded source submission; authors of frozen drafts (no
+    recording time) after them, in source order. A later round only adds
+    letters, so a person keeps theirs across the rounds of one task."""
+    first: dict[str, tuple[int, bool, float, int]] = {}
+    for index, (order, authors, recorded) in enumerate(rounds):
+        for position, source in enumerate(order):
+            author = authors.get(source)
+            if author is None or author == viewer:
+                continue
+            at = recorded.get(source)
+            key = (
+                index,
+                at is None,
+                at.timestamp() if at is not None else 0.0,
+                position,
+            )
+            if author not in first or key < first[author]:
+                first[author] = key
     ranked = sorted(first, key=first.__getitem__)
     return Blinding(
         viewer=viewer,
@@ -137,6 +154,33 @@ def build_blinding(
         labels={a: f"Annotator {letters(i)}" for i, a in enumerate(ranked)},
         order=ranked,
     )
+
+
+def task_blinding(conn: Connection, viewer: str, pid: int, round_id: str) -> Blinding:
+    """The blinding of every consolidation round of ``round_id``'s task (its
+    assignment) on the same text: one letter per person across the rounds."""
+    row = conn.execute(
+        select(WorkRoundRow.assignment_id, WorkRoundRow.document_id).where(
+            WorkRoundRow.project_id == pid, WorkRoundRow.round_id == round_id
+        )
+    ).one()
+    rounds: list[Sources] = []
+    for rid in conn.execute(
+        select(WorkRoundRow.round_id)
+        .where(
+            WorkRoundRow.project_id == pid,
+            WorkRoundRow.assignment_id == row.assignment_id,
+            WorkRoundRow.document_id == row.document_id,
+            WorkRoundRow.kind == "consolidation",
+        )
+        .order_by(WorkRoundRow.created_at, WorkRoundRow.round_id)
+    ).scalars():
+        order, authors = round_authors(conn, pid, rid)
+        recorded = recorded_at(
+            conn, pid, [s for s in order if not s.startswith("draft-")]
+        )
+        rounds.append((order, authors, recorded))
+    return build_blinding(viewer, rounds)
 
 
 def recorded_at(
@@ -179,13 +223,7 @@ def round_blinding(
     ).scalar_one_or_none()
     if kind != "consolidation" or not blinds(conn, access, pid, project_key):
         return None
-    order, authors = round_authors(conn, pid, round_id)
-    return build_blinding(
-        access.pseudonym,
-        order,
-        authors,
-        recorded_at(conn, pid, [s for s in order if not s.startswith("draft-")]),
-    )
+    return task_blinding(conn, access.pseudonym, pid, round_id)
 
 
 def round_authors(

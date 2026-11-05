@@ -175,7 +175,9 @@ def _history(
             checked_layer_ids=submission.checked_layer_ids,
             document_checked=submission.document_checked,
             reanchor_inputs=submission.reanchor_inputs,
-            reanchor_resolutions=submission.reanchor_resolutions,
+            reanchor_resolutions=[
+                blinding.reanchor(r) for r in submission.reanchor_resolutions
+            ],
             round_inputs=[blinding.input_view(i) for i in round_inputs],
             round_input_resolutions=submission.round_input_resolutions,
         )
