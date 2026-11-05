@@ -12,6 +12,7 @@ from ontotator_mcp import __version__
 from ontotator_mcp.client import OntotatorClient
 from ontotator_mcp.config import Settings
 from ontotator_mcp.resources import register_resources
+from ontotator_mcp.tools_people import register_people
 from ontotator_mcp.tools_results import register_results
 from ontotator_mcp.tools_setup import register_setup
 from ontotator_mcp.tools_status import register_status
@@ -21,9 +22,11 @@ Tools for one Ontotator instance (collaborative annotation of ontology terms
 in clinical texts), acting as the owner of the configured API token.
 
 Covers project setup (ontologies, projects, settings, guidelines, text and
-machine-proposal imports, people, assignments, work plan), status (progress,
-agreement) and results (consolidation start, accepting agreeing texts,
-exports and downloads). Annotation, review and translation review work stay
+machine-proposal imports, accounts, people, assignments, work plan), changes
+while a project runs (reassigning, withdrawing or reopening tasks, handing a
+leaving person's tasks on), status (progress, agreement, problem reports)
+and results (consolidation start, accepting agreeing texts, exports and
+downloads). Annotation, review and translation review work stay
 in the web interface; no tool reads or writes them.
 
 Every tool description names the token scope it needs and whether it
@@ -57,6 +60,7 @@ def build_server(
         lifespan=lifespan,
     )
     register_setup(server, api)
+    register_people(server, api)
     register_status(server, api)
     register_results(server, api)
     register_resources(server, api)

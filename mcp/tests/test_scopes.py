@@ -16,7 +16,7 @@ import httpx
 import pytest
 from conftest import call
 from contract import scope, spec
-from fake_api import FakeApi
+from fake_api import FakeApi, token_view
 from mcp import Client
 from shapes import build, page, panel, row, submission, work
 
@@ -119,6 +119,27 @@ def _arguments(folder: Path) -> dict[str, dict[str, Any]]:
         "download_export": {"job_id": 1, "path": str(folder / "out.zip")},
         "export_project_archive": {"project": "p"},
         "download_project_archive": {"job_id": 1, "path": str(folder / "a.zip")},
+        "create_users": {
+            "users": [{"username": "new", "display_name": "New"}],
+            "project": "p",
+            "codes_path": str(folder / "codes.csv"),
+        },
+        "issue_setup_codes": {"usernames": ["old"], "include_active_accounts": True},
+        "update_user": {"username": "old", "active": False},
+        "find_people": {"project": "p", "query": "ann"},
+        "list_assignments": {"project": "p"},
+        "reassign_task": {"assignment_id": 3, "username": "u"},
+        "withdraw_task": {"assignment_id": 3},
+        "remove_task": {"assignment_id": 3},
+        "reopen_task": {"assignment_id": 3},
+        "hand_over_open_tasks": {
+            "project": "p",
+            "from_username": "leaving",
+            "to_usernames": ["u"],
+            "confirm": True,
+        },
+        "list_problem_reports": {"project": "p"},
+        "withdraw_guideline": {"project": "p", "version": 2},
     }
 
 
@@ -158,6 +179,24 @@ def _flows(fake: FakeApi) -> None:
         ),
     )
     fake.on("GET", f"{archives}/download", b"data")
+    # whoami reads the user only with the read scope; any scope reads the token.
+    fake.on("GET", "/api/v1/me/token", token_view(scopes=["export"]))
+    fake.on("GET", "/api/v1/admin/users/", [build("AdminUser", username="old")])
+    fake.on(
+        "GET",
+        f"{P}/assignments",
+        [
+            build(
+                "AssignmentView",
+                id=3,
+                username="leaving",
+                task="annotate",
+                status="open",
+                revoked_at=None,
+                lead_correction=False,
+            )
+        ],
+    )
 
 
 @pytest.mark.anyio
