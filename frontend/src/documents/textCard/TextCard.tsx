@@ -161,17 +161,21 @@ export function TextCard(props: TextCardProps): JSX.Element {
   const proposals = row.proposal_count ?? row.annotation_mode?.proposal_count ?? 0;
   const openText = <RouteLink route={textViewRoute(projectKey, row.case_id, row.open.document_id, query, proposals > 0 ? { show: "proposals" } : {})} onNavigate={onNavigate}
     className="btn btn-secondary btn-sm text-card-open-text" aria-label={`Open text, ${row.case_id} ${row.language}`}>Open text</RouteLink>;
-  const back = <Button size="sm" onClick={() => onView("path")}>Back</Button>;
+  // History and Details name themselves with a level-3 heading next to Back (issue 335).
+  const viewHead = (title: string) => <div className="text-card-view-head">
+    <Button size="sm" onClick={() => onView("path")}>Back</Button>
+    <h3 className="text-card-view-title">{title}</h3>
+  </div>;
 
   let body: ReactNode;
   if (view === "history") {
     body = <div className="text-card-view">
-      {back}
+      {viewHead("History")}
       <RowActivity row={row} projectKey={projectKey} submissions={list} changes={submissions.data?.changes} reportRoute={props.reportRoute} onNavigate={onNavigate} me={props.me?.pseudonym ?? null} now={now} />
     </div>;
   } else if (view === "details") {
     body = <div className="text-card-view">
-      {back}
+      {viewHead("Details")}
       <TextDetails row={row} data={submissions.data} plan={props.plan} planRevision={props.planRevision} reportRoute={props.reportRoute} onRoute={onNavigate} members={props.textVersionTools?.members} now={now} />
     </div>;
   } else {
