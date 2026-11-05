@@ -44,7 +44,7 @@ async def test_whoami_with_a_project_token_names_its_project(
 ) -> None:
     fake.on(
         "GET",
-        "/api/v1/auth/token",
+        "/api/v1/me/token",
         token_view(kind="project", project_key="ward-7", scopes=["read", "export"]),
     )
     result = await call(mcp_client, "whoami", {})
@@ -52,14 +52,14 @@ async def test_whoami_with_a_project_token_names_its_project(
     assert result["token"]["project_key"] == "ward-7"
     assert "ward-7" in result["note"]
     # A project token cannot read /auth/me; whoami does not try.
-    assert fake.templates() == [("GET", "/api/v1/auth/token")]
+    assert fake.templates() == [("GET", "/api/v1/me/token")]
 
 
 async def test_whoami_reports_the_token_and_warns_before_it_expires(
     fake: FakeApi, mcp_client: Client
 ) -> None:
     soon = (datetime.now(UTC) + timedelta(days=3)).isoformat()
-    fake.on("GET", "/api/v1/auth/token", token_view(expires_at=soon, scopes=["export"]))
+    fake.on("GET", "/api/v1/me/token", token_view(expires_at=soon, scopes=["export"]))
     result = await call(mcp_client, "whoami", {})
     token = result["token"]
     assert token["scopes"] == ["export"]
@@ -68,7 +68,7 @@ async def test_whoami_reports_the_token_and_warns_before_it_expires(
     assert "secret" not in token
     # Without the read scope only the token itself is read.
     assert result["user"] is None
-    assert fake.templates() == [("GET", "/api/v1/auth/token")]
+    assert fake.templates() == [("GET", "/api/v1/me/token")]
 
 
 async def test_upload_texts_streams_files_and_returns_the_check(

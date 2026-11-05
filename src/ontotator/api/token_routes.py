@@ -2,7 +2,7 @@
 
 Every route here needs a browser session (``ontotator.api.token_scopes``):
 a token cannot create, list or revoke tokens. A new token's secret is in
-the creation response only. The one exception is ``GET /api/v1/auth/token``:
+the creation response only. The one exception is ``GET /api/v1/me/token``:
 a token reads its own record (name, kind, scopes, project, expiry), so a
 script or the MCP server can see when it must be replaced.
 """
@@ -34,7 +34,7 @@ from ontotator.domain.errors import DomainError
 me_router = APIRouter(prefix="/api/v1/me/tokens", tags=["api-tokens"])
 project_router = APIRouter(prefix="/api/v1/projects/{key}/tokens", tags=["api-tokens"])
 admin_router = APIRouter(prefix="/api/v1/admin/tokens", tags=["api-tokens"])
-current_router = APIRouter(prefix="/api/v1/auth", tags=["api-tokens"])
+current_router = APIRouter(prefix="/api/v1/me", tags=["api-tokens"])
 
 
 class TokenView(BaseModel):
@@ -122,8 +122,9 @@ def _create(
 def current_token(principal: PrincipalDep, request: Request) -> TokenView:
     """The API token this request was sent with, without its secret.
 
-    Any scope reads it, a project token included: a script checks its
-    expiry and scopes before it has to be replaced. A browser session has
+    Any of the scopes ``read``, ``import``, ``export`` and ``project-admin``
+    reads it, a project token included: a script checks its expiry and
+    scopes before it has to be replaced. A browser session has
     no token here (``TOKEN_NOT_FOUND``).
     """
     grant = principal.token

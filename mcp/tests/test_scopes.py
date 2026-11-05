@@ -165,7 +165,7 @@ def _flows(fake: FakeApi) -> None:
     fake.on("POST", f"{P}/exports/final", {"job_id": 1})
     fake.on("GET", "/api/v1/jobs/{job_id}/download", b"data")
     # whoami reads the user only with the read scope; any scope reads the token.
-    fake.on("GET", "/api/v1/auth/token", token_view(scopes=["export"]))
+    fake.on("GET", "/api/v1/me/token", token_view(scopes=["export"]))
     fake.on("GET", "/api/v1/admin/users/", [build("AdminUser", username="old")])
     fake.on(
         "GET",

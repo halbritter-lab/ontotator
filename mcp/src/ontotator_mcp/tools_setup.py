@@ -37,7 +37,7 @@ PROFILE_PATH = (
     " inside the folders of ONTOTATOR_MCP_FILES_DIR."
 )
 UPLOAD_KINDS = {"text": "text", "ontospan": "t1"}
-ANY_SCOPE: tuple[Scope, ...] = ("read", "import", "export", "project-admin", "admin")
+ANY_SCOPE: tuple[Scope, ...] = ("read", "import", "export", "project-admin")
 # A token closer than this to its expiry is reported for replacement.
 EXPIRY_WARNING_DAYS = 14
 MAX_LISTED = 50
@@ -174,11 +174,11 @@ def register_setup(server: MCPServer, api: OntotatorClient) -> None:
         """The API token in use (kind, scopes, project, expiry) and who it acts as.
 
         Call this first to check that ONTOTATOR_URL and ONTOTATOR_TOKEN work.
-        Any scope reads the token itself; ``expires_in_days`` and a warning
+        Any scope but admin alone reads the token itself; ``expires_in_days`` and a warning
         tell when to replace it. With the read scope and a token that is not
         a project token it also names the user and the server's version.
         """
-        token = token_summary(await api.get("/api/v1/auth/token"), now=utc_now())
+        token = token_summary(await api.get("/api/v1/me/token"), now=utc_now())
         result: dict[str, Any] = {"token": token, "url": api.settings.url}
         if "read" not in token["scopes"] or token["project_key"] is not None:
             result["user"] = None

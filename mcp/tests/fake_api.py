@@ -20,7 +20,7 @@ Handler = Callable[[httpx.Request], Any]
 
 
 def token_view(**fields: Any) -> dict[str, Any]:
-    """``GET /api/v1/auth/token``: the token's own record (never its secret)."""
+    """``GET /api/v1/me/token``: the token's own record (never its secret)."""
     body = {
         "id": 1,
         "name": "mcp",
@@ -58,7 +58,7 @@ class FakeApi:
         # Jobs finish at once unless a test says otherwise.
         self.on("GET", "/api/v1/jobs/{job_id}", self._job)
         # A personal token with every scope but admin, far from its expiry.
-        self.on("GET", "/api/v1/auth/token", token_view())
+        self.on("GET", "/api/v1/me/token", token_view())
 
     @staticmethod
     def _job(request: httpx.Request) -> dict[str, Any]:

@@ -2171,7 +2171,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/token": {
+    "/api/v1/me/token": {
         parameters: {
             query?: never;
             header?: never;
@@ -2182,11 +2182,12 @@ export interface paths {
          * Current Token
          * @description The API token this request was sent with, without its secret.
          *
-         *     Any scope reads it, a project token included: a script checks its
-         *     expiry and scopes before it has to be replaced. A browser session has
+         *     Any of the scopes ``read``, ``import``, ``export`` and ``project-admin``
+         *     reads it, a project token included: a script checks its expiry and
+         *     scopes before it has to be replaced. A browser session has
          *     no token here (``TOKEN_NOT_FOUND``).
          */
-        get: operations["current_token_api_v1_auth_token_get"];
+        get: operations["current_token_api_v1_me_token_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -14091,7 +14092,7 @@ export interface operations {
             };
         };
     };
-    current_token_api_v1_auth_token_get: {
+    current_token_api_v1_me_token_get: {
         parameters: {
             query?: never;
             header?: never;

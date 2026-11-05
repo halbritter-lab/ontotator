@@ -27,7 +27,7 @@ Dr. Weber sets up `nephro-2027`: HPO with German translations, a guideline, five
 
 | Step | Route | Scope | MCP tool | Status |
 | --- | --- | --- | --- | --- |
-| Check the token and its expiry | `GET /auth/token`, `GET /auth/me`, `GET /about` | any; `read` | `whoami` | added (token record and expiry warning) |
+| Check the token and its expiry | `GET /me/token`, `GET /auth/me`, `GET /about` | any but `admin` alone; `read` | `whoami` | added (token record and expiry warning) |
 | Upload the HPO release and the Babelon translation | `POST /admin/ontologies/upload-results` | `admin` | `upload_ontology_files` | covered |
 | See the releases and their SHA-256 | `GET /ontologies` | `read` | `list_ontologies` | covered |
 | Choose a template | `GET /projects/templates` | `read` | `list_project_templates` | covered |
@@ -135,7 +135,7 @@ Tokens last at most 365 days. The CI tokens are project tokens with one or two s
 | Step | Route | Scope | MCP tool | Status |
 | --- | --- | --- | --- | --- |
 | Create a project token for CI | `POST P/tokens` | session only | none (web interface, or `ontotator admin tokens create --project`) | covered by design: a token cannot mint tokens |
-| CI checks how long its token lasts and alerts two weeks ahead | `GET /auth/token` | any scope, project tokens included | `whoami` (`expires_in_days`, `warning`) | added |
+| CI checks how long its token lasts and alerts two weeks ahead | `GET /me/token` | `read`, `import`, `export` or `project-admin`; project tokens included | `whoami` (`expires_in_days`, `warning`) | added |
 | A project token works only in its project | middleware, `PROJECT_RESOLVED` routes check the project themselves | | | covered; the task routes are added to that list |
 | Rotation: create the successor, install it, revoke the old one | `POST P/tokens`, `POST P/tokens/{id}/revoke` | session only | none | covered by design (no rotation in place) |
 | Revoke a leaked token at once | `POST /admin/tokens/{id}/revoke` | session only | none (web interface or `ontotator admin tokens revoke`) | covered by design |

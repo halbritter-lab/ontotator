@@ -40,7 +40,7 @@ def test_a_token_reads_its_own_record_with_any_scope(tmp_path) -> None:
         (personal, "personal", None),
         (project, "project", "proj"),
     ):
-        response = _bearer(env.app, created["secret"]).get("/api/v1/auth/token")
+        response = _bearer(env.app, created["secret"]).get("/api/v1/me/token")
         assert response.status_code == 200, response.text
         body = response.json()
         assert body["id"] == created["token"]["id"]
@@ -51,7 +51,7 @@ def test_a_token_reads_its_own_record_with_any_scope(tmp_path) -> None:
         assert "secret" not in body
         assert created["secret"] not in response.text
     # A browser session has no token to read.
-    response = env.lead.get("/api/v1/auth/token")
+    response = env.lead.get("/api/v1/me/token")
     assert response.status_code == 404
     assert response.json()["code"] == "TOKEN_NOT_FOUND"
 
@@ -61,7 +61,7 @@ def test_a_revoked_token_cannot_read_itself(tmp_path) -> None:
     created = _token(env.lead, ["read"])
     revoked = env.lead.post(f"/api/v1/me/tokens/{created['token']['id']}/revoke")
     assert revoked.status_code == 200, revoked.text
-    response = _bearer(env.app, created["secret"]).get("/api/v1/auth/token")
+    response = _bearer(env.app, created["secret"]).get("/api/v1/me/token")
     assert response.status_code == 401
     assert response.json()["code"] == "TOKEN_INVALID"
 

@@ -83,11 +83,11 @@ Every tool description names the token scope it needs and whether it changes dat
 
 ### Scopes
 
-A token can do only what both its scopes and its owner's roles allow. Many tools also need `read`, because they read the project before they act. Polling a job (`get_job`, and the tools that wait for their import or export) works with any of `read`, `import` and `export`, so `import` alone can stage and import texts and `export` alone can start and download exports. `whoami` works with any scope: it reads the token's own record (`GET /api/v1/auth/token`), and the user only with `read`.
+A token can do only what both its scopes and its owner's roles allow. Many tools also need `read`, because they read the project before they act. Polling a job (`get_job`, and the tools that wait for their import or export) works with any of `read`, `import` and `export`, so `import` alone can stage and import texts and `export` alone can start and download exports. `whoami` works with any of `read`, `import`, `export` and `project-admin`: it reads the token's own record (`GET /api/v1/me/token`), and the user only with `read`.
 
 | Tool | Token scopes | Effect | What it does |
 | --- | --- | --- | --- |
-| `whoami` | read or import or export or project-admin or admin | reads | The API token in use (kind, scopes, project, expiry) and who it acts as. |
+| `whoami` | read or import or export or project-admin | reads | The API token in use (kind, scopes, project, expiry) and who it acts as. |
 | `list_projects` | read | reads | The projects the token's owner is a member of, with roles and text counts. |
 | `list_ontologies` | read | reads | Ontology releases on the server with their SHA-256 and translations. |
 | `list_ontology_files` | admin | reads | Every uploaded ontology and translation file, with the projects using it. |
