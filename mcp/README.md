@@ -183,6 +183,10 @@ This example sets up an HPO annotation project in which annotators check the HPO
 8. **Results.** *"Accept every text where both agree; show me the list first. Start a consolidation by carla for the others."* `accept_agreeing_texts` (dry run, then `confirm`) and `start_consolidation` per text. Carla consolidates in the browser, and the lead accepts the consolidations on the Documents page.
 9. **Export.** *"Check the final export, then export it and save it to ~/ontotator/pilot/final.zip."* `final_export_check`, `start_export` (`kind: final`; warnings and texts without a result must be acknowledged), `download_export`. The archive holds `index.csv` and the selected results as Ontospan bundles. Its README is the resource `ontotator://jobs/{job_id}/readme`. The edit log (`kind: edit_log`), the working time (`kind: work_time`) and the translation reviews (`kind: translation_reviews`) export the same way.
 
+## Case studies
+
+[API and MCP case studies](../docs/operations/api-mcp-case-studies.md) follow a lab from a new project through a cohort of annotators, changes while the project runs, an ontology upgrade, nightly exports and token rotation, with the route, scope and tool of each step and the gaps that remain.
+
 ## Not reachable with a token
 
 Routes a token may not call (`session` in the contract), so no tool can offer them:
