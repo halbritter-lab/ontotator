@@ -6,6 +6,7 @@ import { Dialog } from "../ui/Dialog";
 import { InlineMessage } from "../ui/InlineMessage";
 import { reanchorKey } from "../variants/ReanchorPanel";
 import { CarriedChecksReadOnly } from "./carried/CarriedChecksReadOnly";
+import { actorName } from "./actorName";
 import { evidenceOf, type HistoricalSubmissionView } from "./historicalSubmission";
 import { TermName } from "./TermName";
 import { quoteOf } from "./modifiers";
@@ -86,7 +87,7 @@ export function HistoricalSubmissionDialog({ view, documentText, currentDocument
           {view.reanchorInputs.map(item=>{
             const resolution=view.reanchorResolutions.find(value=>reanchorKey(value.item)===reanchorKey(item));
             return <p key={reanchorKey(item)}>{item.source_ref.annotation_id} ({item.source_ref.version}): {resolution ?
-              `${resolution.outcome === "dismissed" ? "Dismissed" : "Re-created"} by ${resolution.reviewer_id}${resolution.reason ? `: ${resolution.reason}` : ""}${resolution.replacement ? `, Replacement: ${resolution.replacement.annotation_id} (${resolution.replacement.version})` : ""}` : "Pending"}</p>;
+              `${resolution.outcome === "dismissed" ? "Dismissed" : "Re-created"} by ${actorName({ actor_id: resolution.reviewer_id, kind: "human" })}${resolution.reason ? `: ${resolution.reason}` : ""}${resolution.replacement ? `, Replacement: ${resolution.replacement.annotation_id} (${resolution.replacement.version})` : ""}` : "Pending"}</p>;
           })}
         </section>}
     </Dialog>

@@ -25,6 +25,7 @@ def proposal_env(
     per_text: int = 2,
     mode: str = "proposals",
     proposal_term: str = "HP:0001250",
+    extra_tools: tuple[dict[str, Any], ...] = (),
 ) -> SimpleNamespace:
     from auth_harness import grant, logged_in
     from t1_builders import bundle, native_unit
@@ -54,7 +55,15 @@ def proposal_env(
             "p3", (second, second + len("Krampfanfälle")), text=TEXT, assertion="absent"
         ),
     ]
-    c1 = native_unit(doc("c1"), "en", TEXT, case_id="c1", annotations=proposals)
+    # ``extra_tools``: further tool actors of c1's set that propose nothing.
+    c1 = native_unit(
+        doc("c1"),
+        "en",
+        TEXT,
+        case_id="c1",
+        annotations=proposals,
+        extra_actors=extra_tools,
+    )
     units = [c1, native_unit(doc("c2"), "en", f"{TEXT} c2", case_id="c2")]
     job = run_import(db, bundle(tmp_path, units))
     assert job.status == "succeeded", job.error

@@ -3751,6 +3751,172 @@
         "x-ontotator-scope": "admin"
       }
     },
+    "/api/v1/admin/project-archives/export": {
+      "post": {
+        "tags": [
+          "admin-project-archives"
+        ],
+        "summary": "Export Archive",
+        "description": "Queue the archive of one project (``project_archive_export``).",
+        "operationId": "export_archive_api_v1_admin_project_archives_export_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArchiveExportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArchiveJobQueued"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-ontotator-scope": "admin"
+      }
+    },
+    "/api/v1/admin/project-archives/import": {
+      "post": {
+        "tags": [
+          "admin-project-archives"
+        ],
+        "summary": "Import Archive",
+        "description": "Store an uploaded archive and queue its import (``project_archive_import``).\n\n``rename_pseudonyms``: a person whose pseudonym is taken here gets a new\none, and a person matched by e-mail keeps the account's pseudonym.",
+        "operationId": "import_archive_api_v1_admin_project_archives_import_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_archive_api_v1_admin_project_archives_import_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArchiveJobQueued"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-ontotator-scope": "session"
+      }
+    },
+    "/api/v1/admin/project-archives/jobs/{job_id}": {
+      "get": {
+        "tags": [
+          "admin-project-archives"
+        ],
+        "summary": "Get Archive Job",
+        "operationId": "get_archive_job_api_v1_admin_project_archives_jobs__job_id__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArchiveJobView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-ontotator-scope": "admin"
+      }
+    },
+    "/api/v1/admin/project-archives/jobs/{job_id}/download": {
+      "get": {
+        "tags": [
+          "admin-project-archives"
+        ],
+        "summary": "Download Archive",
+        "description": "The ZIP of a finished export job; audited as ``project.export_download``.\n\n410 once the archive was deleted (``ARCHIVE_RETENTION`` after the export,\nor at an account erasure).",
+        "operationId": "download_archive_api_v1_admin_project_archives_jobs__job_id__download_get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-ontotator-scope": "admin"
+      }
+    },
     "/api/v1/projects/{key}/final-selections": {
       "put": {
         "tags": [
@@ -9250,6 +9416,96 @@
         "x-ontotator-scope": "session"
       }
     },
+    "/api/v1/workspaces/{workspace_id}/history": {
+      "get": {
+        "summary": "Read History",
+        "description": "What Undo, Redo and Reset all my changes would do now (issue 320).",
+        "operationId": "read_history_api_v1_workspaces__workspace_id__history_get",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftHistoryView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-ontotator-scope": "session"
+      },
+      "post": {
+        "summary": "Apply History",
+        "description": "Undo or redo one step, or reset to the start of the round (issue 320).\n\nThe payload is ``{\"command\": \"undo_step\" | \"redo_step\", \"step\": n}`` (the\nstep's ``after_revision`` from the history) or ``{\"command\":\n\"reset_changes\"}``. Each is saved as a new edit.",
+        "operationId": "apply_history_api_v1_workspaces__workspace_id__history_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MutationEnvelope"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Draft"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-ontotator-scope": "session"
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/submissions/{submission_id}": {
       "get": {
         "summary": "Read Submission",
@@ -10238,6 +10494,115 @@
           "confirm_username"
         ],
         "title": "AnonymiseRequest"
+      },
+      "ArchiveExportRequest": {
+        "properties": {
+          "project_key": {
+            "type": "string",
+            "title": "Project Key"
+          },
+          "include_ontology_files": {
+            "type": "boolean",
+            "title": "Include Ontology Files",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "project_key"
+        ],
+        "title": "ArchiveExportRequest"
+      },
+      "ArchiveJobQueued": {
+        "properties": {
+          "job_id": {
+            "type": "integer",
+            "title": "Job Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id"
+        ],
+        "title": "ArchiveJobQueued"
+      },
+      "ArchiveJobView": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "project_archive_export",
+              "project_archive_import"
+            ],
+            "title": "Kind"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "status",
+          "result",
+          "error",
+          "created_at",
+          "finished_at"
+        ],
+        "title": "ArchiveJobView"
       },
       "AssignRequest": {
         "properties": {
@@ -11537,6 +11902,25 @@
           "files[]"
         ],
         "title": "Body_create_upload_api_v1_projects__key__uploads_post"
+      },
+      "Body_import_archive_api_v1_admin_project_archives_import_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          },
+          "rename_pseudonyms": {
+            "type": "boolean",
+            "title": "Rename Pseudonyms",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_import_archive_api_v1_admin_project_archives_import_post"
       },
       "Body_publish_guideline_api_v1_projects__key__guidelines_post": {
         "properties": {
@@ -12984,6 +13368,11 @@
               }
             ],
             "title": "Consolidator"
+          },
+          "annotators_hidden": {
+            "type": "boolean",
+            "title": "Annotators Hidden",
+            "default": false
           },
           "consolidation_reason": {
             "anyOf": [
@@ -15026,6 +15415,61 @@
         "title": "Draft",
         "description": "Mutable, revisioned working state of a workspace."
       },
+      "DraftHistoryView": {
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "undo": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HistoryStepView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "redo": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HistoryStepView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "undo_count": {
+            "type": "integer",
+            "title": "Undo Count",
+            "default": 0
+          },
+          "redo_count": {
+            "type": "integer",
+            "title": "Redo Count",
+            "default": 0
+          },
+          "changed": {
+            "type": "boolean",
+            "title": "Changed",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "available",
+          "revision"
+        ],
+        "title": "DraftHistoryView",
+        "description": "What undo, redo and reset would do now."
+      },
       "DraftRequest": {
         "properties": {
           "expected_revision": {
@@ -15355,6 +15799,15 @@
             },
             "type": "array",
             "title": "Accepted Omissions"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "t1",
+              "phenopacket"
+            ],
+            "title": "Format",
+            "default": "t1"
           }
         },
         "additionalProperties": false,
@@ -16621,6 +17074,80 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "HistoryStepView": {
+        "properties": {
+          "before_revision": {
+            "type": "integer",
+            "title": "Before Revision"
+          },
+          "after_revision": {
+            "type": "integer",
+            "title": "After Revision"
+          },
+          "action": {
+            "type": "string",
+            "title": "Action"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "annotation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annotation Id"
+          },
+          "layer_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Layer Id"
+          },
+          "term_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Term Id"
+          },
+          "commands": {
+            "type": "integer",
+            "title": "Commands",
+            "default": 1
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "before_revision",
+          "after_revision",
+          "action"
+        ],
+        "title": "HistoryStepView",
+        "description": "One step as the editor names it (\"Undo: delete finding Seizure\")."
+      },
       "ImportAcceptance": {
         "properties": {
           "languages": {
@@ -17865,6 +18392,19 @@
             "additionalProperties": true,
             "type": "object",
             "title": "Payload"
+          },
+          "step_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step Id"
           }
         },
         "additionalProperties": false,
@@ -20808,6 +21348,11 @@
             "title": "Adjudicator Not Annotator",
             "default": false
           },
+          "blind_consolidation": {
+            "type": "boolean",
+            "title": "Blind Consolidation",
+            "default": false
+          },
           "contiguous_mentions_only": {
             "type": "boolean",
             "title": "Contiguous Mentions Only",
@@ -20968,6 +21513,11 @@
           "adjudicator_not_annotator": {
             "type": "boolean",
             "title": "Adjudicator Not Annotator",
+            "default": false
+          },
+          "blind_consolidation": {
+            "type": "boolean",
+            "title": "Blind Consolidation",
             "default": false
           },
           "contiguous_mentions_only": {
