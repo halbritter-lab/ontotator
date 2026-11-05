@@ -14,8 +14,8 @@ Three kinds:
   the ``admin`` scope. It stops working when its owner is no longer one.
 
 What a request with a token may do is the intersection of the token's
-scopes (``ontotator.api.token_scopes`` maps every route to one) and the
-owner's own rights. A token never reaches the token routes, so it cannot
+scopes (``ontotator.api.token_scopes`` maps every route to one, or to
+several any one of which is enough) and the owner's own rights. A token never reaches the token routes, so it cannot
 create, list or revoke tokens. Ending the owner's sessions for a security
 reason (fewer roles, deactivation, a reset code) also revokes the owner's
 tokens (``ontotator.auth.tokens.revoke_user_sessions``).

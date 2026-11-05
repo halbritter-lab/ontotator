@@ -8,7 +8,10 @@ two routes that have no session yet, login and code redemption, accept a
 write only when the browser says it comes from this site (``Origin`` or
 ``Sec-Fetch-Site``); a request that says nothing is refused.
 
-A bearer request skips only the CSRF check: a browser never adds the
+Only the ``Bearer`` scheme (in any case) selects a token; a request with
+another ``Authorization`` scheme, such as the HTTP Basic auth of a proxy in
+front, is a session request like one without the header. A bearer request
+skips only the CSRF check: a browser never adds the
 header by itself, so a cross-site page cannot make one. It is refused when
 it also carries the session cookie, when the browser says it comes from
 another site, and on every route whose scope in
@@ -156,6 +159,19 @@ def project_busy(request: Request, cause: str) -> JSONResponse:
     return response
 
 
+def bearer_secret(authorization: str | None) -> str | None:
+    """The token of an ``Authorization: Bearer`` header ("" if it has none).
+
+    None for no header and for any other scheme: a proxy in front of the
+    server may use HTTP Basic auth, whose header the browser then sends on
+    every request, and such a request still uses the session cookie.
+    """
+    parts = (authorization or "").split(None, 1)
+    if not parts or parts[0].lower() != "bearer":
+        return None
+    return parts[1].strip() if len(parts) > 1 else ""
+
+
 def _token_refusal(
     principal: Principal, needed: token_scopes.Requirement | None
 ) -> JSONResponse | None:
@@ -168,11 +184,13 @@ def _token_refusal(
             "TOKEN_NOT_ALLOWED",
             "This route needs a browser session; an API token cannot use it.",
         )
-    if needed.scope not in grant.scopes:
+    accepted = token_scopes.accepted_scopes(needed.scope)
+    if not set(accepted) & set(grant.scopes):
+        names = " or ".join(f"'{scope}'" for scope in accepted)
         return _error(
             403,
             "TOKEN_SCOPE_MISSING",
-            f"The API token needs the '{needed.scope}' scope for this route.",
+            f"The API token needs the {names} scope for this route.",
         )
     if grant.project_key is not None and not (
         needed.project_token and needed.project_key in (None, grant.project_key)
@@ -201,11 +219,9 @@ def install_security(
     """
 
     async def bearer(
-        request: Request, call_next: RequestResponseEndpoint, authorization: str
+        request: Request, call_next: RequestResponseEndpoint, secret: str
     ) -> Response:
-        scheme, _, secret = authorization.strip().partition(" ")
-        secret = secret.strip()
-        if scheme.lower() != "bearer" or not secret or tokens is None:
+        if not secret or tokens is None:
             return _error(401, "TOKEN_INVALID", TOKEN_INVALID_MESSAGE)
         if SESSION_COOKIE in request.cookies:
             return _error(
@@ -231,7 +247,11 @@ def install_security(
         refusal = _token_refusal(principal, needed)
         if refusal is not None:
             return refusal
-        if unsafe and needed is not None and needed.scope != "read":
+        if (
+            unsafe
+            and needed is not None
+            and token_scopes.accepted_scopes(needed.scope) != ("read",)
+        ):
             try:
                 await run_in_threadpool(
                     tokens.record_use, principal, request.method, path
@@ -266,9 +286,11 @@ def install_security(
             return await call_next(request)
         if sessions is None:
             return _error(401, "NOT_AUTHENTICATED", "Log in to continue.")
-        authorization = request.headers.get("authorization")
-        if authorization is not None:
-            return await bearer(request, call_next, authorization)
+        # Only the Bearer scheme names a token: a proxy in front may use HTTP
+        # Basic auth, whose header the browser then sends on every request.
+        secret = bearer_secret(request.headers.get("authorization"))
+        if secret is not None:
+            return await bearer(request, call_next, secret)
         unsafe = request.method in UNSAFE_METHODS
         if path in PUBLIC_PATHS:  # no session yet
             if unsafe and cross_site(request, public_origin, fail_closed=True):
