@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import Connection, select, tuple_
+from sqlalchemy import Connection, and_, func, not_, or_, select, tuple_
 
 from ontotator.domain.annotations import AnnotationSnapshot
 from ontotator.domain.documents import EvidenceSnapshot
@@ -138,7 +138,6 @@ class _Event:
     command: dict[str, Any]
     revision_before: int
     revision_after: int
-    state: dict[str, Any]
     step_id: str | None
 
 
@@ -161,26 +160,92 @@ class _Step:
         return step if isinstance(step, int) else None
 
 
+_EVENT_COLUMNS = (
+    EditEventRow.id,
+    EditEventRow.kind,
+    EditEventRow.command,
+    EditEventRow.revision_before,
+    EditEventRow.revision_after,
+    EditEventRow.step_id,
+)
+
+
 @dataclass
 class DraftHistory:
-    """The undo and redo stacks of the current draft of a key."""
+    """The undo and redo stacks of the current draft of a key.
+
+    Only the events after the base are read; a logged state (``state_at``)
+    and the events before the base (``effective_events``) are read when
+    asked for, from the connection the history was built on.
+    """
 
     base_revision: int
     base_state: DraftState
     events: list[_Event]
-    # Events before the base (earlier rounds of the same draft), oldest first.
-    earlier: list[_Event] = field(default_factory=list)
     done: list[_Step] = field(default_factory=list)
     undone: list[_Step] = field(default_factory=list)
+    conn: Connection | None = None
+    project_id: int = 0
+    draft_id: int = 0
+    # The id of the base event (the last submit or server-side rewrite).
+    barrier_id: int | None = None
+    _states: dict[int, DraftState | None] = field(default_factory=dict)
+    _earlier: list[_Event] | None = None
+
+    def _where(self) -> tuple[Any, ...]:
+        return (
+            EditEventRow.project_id == self.project_id,
+            EditEventRow.draft_id == self.draft_id,
+        )
 
     def state_at(self, revision: int) -> DraftState | None:
-        """The logged content after ``revision``; None when it is not logged."""
+        """The logged content after ``revision``; None when it is not logged.
+
+        The newest event that left ``revision`` counts, as in the log.
+        """
         if revision == self.base_revision:
             return self.base_state
-        for event in reversed([*self.earlier, *self.events]):
-            if event.revision_after == revision:
-                return DraftState.from_json(event.state)
-        return None
+        if revision in self._states:
+            return self._states[revision]
+        query = select(EditEventRow.state).where(*self._where())
+        event_id = next(
+            (e.id for e in reversed(self.events) if e.revision_after == revision),
+            None,
+        )
+        if event_id is not None:
+            query = query.where(EditEventRow.id == event_id)
+        elif self.barrier_id is not None:
+            # Before the base: the newest earlier event that left it.
+            query = (
+                query.where(
+                    EditEventRow.id <= self.barrier_id,
+                    EditEventRow.revision_after == revision,
+                )
+                .order_by(EditEventRow.id.desc())
+                .limit(1)
+            )
+        raw = (
+            self.conn.execute(query).scalar()
+            if self.conn is not None
+            and (event_id is not None or self.barrier_id is not None)
+            else None
+        )
+        state = None if raw is None else DraftState.from_json(raw)
+        self._states[revision] = state
+        return state
+
+    def earlier(self) -> list[_Event]:
+        """Events before the base (earlier rounds of the same draft), oldest first."""
+        if self._earlier is None:
+            self._earlier = []
+            if self.conn is not None and self.barrier_id is not None:
+                rows = self.conn.execute(
+                    select(*_EVENT_COLUMNS)
+                    .where(*self._where(), EditEventRow.id <= self.barrier_id)
+                    .order_by(EditEventRow.id)
+                ).all()
+                self._earlier = [_Event(**r._asdict()) for r in rows]
+        return self._earlier
 
     def effective_events(self) -> list[_Event]:
         """The events whose effect the current content still has, oldest first.
@@ -188,7 +253,7 @@ class DraftHistory:
         Earlier events, then the events of the steps on the undo stack.
         Undone steps and the undo and redo commands themselves are left out.
         """
-        return [*self.earlier, *(e for step in self.done for e in step.events)]
+        return [*self.earlier(), *(e for step in self.done for e in step.events)]
 
 
 def _same(a: DraftState, b: DraftState) -> bool:
@@ -199,46 +264,67 @@ def _same(a: DraftState, b: DraftState) -> bool:
     return left == right
 
 
+def _history_command() -> Any:
+    """SQL: the logged command is part of the history (``action_of`` or undo/redo)."""
+    command = EditEventRow.command
+    name = command["command"].astext
+    return or_(
+        # NULL-safe: a command without a name is no step by its name.
+        func.coalesce(name, "").in_(sorted({*EDIT_COMMANDS, UNDO, REDO})),
+        and_(
+            name.is_(None),
+            or_(
+                command.has_key("target"),
+                and_(command.has_key("input_id"), command.has_key("outcome")),
+                and_(command.has_key("item"), command.has_key("outcome")),
+            ),
+        ),
+    )
+
+
 def build_history(
     repo: Repository, conn: Connection, key: WorkspaceKey
 ) -> DraftHistory:
-    """Read the edit log of the current draft of ``key`` and replay its steps."""
+    """Read the edit log of the current draft of ``key`` and replay its steps.
+
+    Only the events after the last barrier (a submit, or a command that is no
+    step: a server-side rewrite) are read, without their logged states.
+    """
     project_id = repo._require_project(conn, key.project_key)
     row = repo._draft_row(conn, project_id, _key_str(key))
     if row is None:
         return DraftHistory(0, DraftState(), [])
-    rows = conn.execute(
-        select(
-            EditEventRow.id,
-            EditEventRow.kind,
-            EditEventRow.command,
-            EditEventRow.revision_before,
-            EditEventRow.revision_after,
-            EditEventRow.state,
-            EditEventRow.step_id,
+    draft_id = int(row.id)
+    where = (EditEventRow.project_id == project_id, EditEventRow.draft_id == draft_id)
+    barrier_id = conn.execute(
+        select(func.max(EditEventRow.id)).where(
+            *where, or_(EditEventRow.kind != "edit", not_(_history_command()))
         )
-        .where(EditEventRow.project_id == project_id, EditEventRow.draft_id == row.id)
-        .order_by(EditEventRow.id)
-    ).all()
-    events = [_Event(**r._asdict()) for r in rows]
-    barrier = None
-    for index, event in enumerate(events):
-        name = event.command.get("command")
-        if event.kind != "edit" or (
-            name not in (UNDO, REDO) and action_of(event.command) is None
-        ):
-            barrier = index
-    if barrier is None:
+    ).scalar()
+    query = select(*_EVENT_COLUMNS).where(*where).order_by(EditEventRow.id)
+    if barrier_id is not None:
+        query = query.where(EditEventRow.id > barrier_id)
+    segment = [_Event(**r._asdict()) for r in conn.execute(query).all()]
+    if barrier_id is None:
         base_state = repo._draft_initial_state(conn, key)
-        segment = events
         base_revision = segment[0].revision_before if segment else int(row.revision)
-        earlier: list[_Event] = []
     else:
-        base_state = DraftState.from_json(events[barrier].state)
-        base_revision = events[barrier].revision_after
-        segment = events[barrier + 1 :]
-        earlier = events[: barrier + 1]
-    history = DraftHistory(base_revision, base_state, segment, earlier)
+        barrier = conn.execute(
+            select(EditEventRow.state, EditEventRow.revision_after).where(
+                EditEventRow.id == barrier_id
+            )
+        ).one()
+        base_state = DraftState.from_json(barrier.state)
+        base_revision = int(barrier.revision_after)
+    history = DraftHistory(
+        base_revision,
+        base_state,
+        segment,
+        conn=conn,
+        project_id=project_id,
+        draft_id=draft_id,
+        barrier_id=barrier_id,
+    )
     for step in _steps(segment):
         if step.kind == "edit":
             history.done.append(step)
@@ -381,16 +467,27 @@ class DraftHistoryService:
             commands=len(step.events),
             layer_id=command.get("layer_id"),
         )
+        # The outcome names what the step did where the action alone does not.
+        if action == "check_layer":
+            view.outcome = "checked" if command.get("checked") else "unchecked"
+        elif action == "create_annotation" and command.get("source_annotation_id"):
+            view.outcome = "copy"  # Edit & Replace: a copy of a proposal
         ref: tuple[str, str | None] | None = None
         if action == "decision":
             target = command.get("target") or {}
             ref = (str(target.get("annotation_id")), target.get("version"))
         elif action in ("resolve_round_input", "clear_round_input_resolution"):
-            source = self._round_input_source(key, str(command.get("input_id")))
+            input_id = str(command.get("input_id"))
+            source = self._round_input_source(key, input_id)
             if source is not None:
                 view.annotation_id = source.get("annotation_id")
                 view.layer_id = source.get("layer_id")
                 view.term_id = source.get("term_id")
+            if (
+                action == "resolve_round_input"
+                and command.get("outcome") == "completed"
+            ):
+                view.outcome = _completion(history, step, command, source)
             return view
         elif action == "resolve_reanchor":
             source_ref = (command.get("item") or {}).get("source_ref") or {}
@@ -440,12 +537,41 @@ class DraftHistoryService:
             if item.get("input_id") == input_id:
                 source = item.get("source_snapshot") or {}
                 annotation = source.get("annotation") or {}
+                target = (item.get("target_snapshot") or {}).get("annotation") or {}
                 return {
                     "annotation_id": annotation.get("annotation_id"),
                     "layer_id": annotation.get("layer_id"),
                     "term_id": annotation.get("term_id"),
+                    "carried_id": target.get("annotation_id"),
                 }
         return None
+
+
+def _completion(
+    history: DraftHistory,
+    step: _Step,
+    command: dict[str, Any],
+    source: dict[str, Any] | None,
+) -> str:
+    """``checked`` or ``linked``: what completing a carried finding did.
+
+    Linked: the input now names another finding than the carried one and than
+    the finding it named before the step. Otherwise the finding was checked.
+    """
+    ref = (command.get("annotation_ref") or {}).get("annotation_id")
+    if ref is None or (source is not None and ref == source.get("carried_id")):
+        return "checked"
+    before = history.state_at(step.before)
+    earlier = next(
+        (
+            r
+            for r in (before.round_input_resolutions if before else ())
+            if r.get("input_id") == command.get("input_id")
+        ),
+        None,
+    )
+    named = ((earlier or {}).get("annotation_ref") or {}).get("annotation_id")
+    return "checked" if named == ref else "linked"
 
 
 @dataclass(frozen=True)

@@ -10,7 +10,7 @@ import pytest
 from auth_harness import logged_in
 from layered_fixtures import make_layered_package
 from pg_harness import database_url_for
-from test_round_input_resolution_contract import _clear, _ctx, _dismiss
+from test_round_input_resolution_contract import _apply, _clear, _ctx, _dismiss
 from test_round_inputs_access_api import carried_round  # noqa: F401
 from test_work_rounds import rounds  # noqa: F401
 
@@ -323,6 +323,100 @@ def test_clearing_a_dismissal_after_an_undone_clear_restores_the_finding(rounds)
     assert [s.annotation.annotation_id for s in draft.annotations] == [carried_id]
 
 
+def _complete(input_id: str, annotation_id: str, version: str, revision: int) -> Any:
+    return MutationEnvelope(
+        mutation_id=f"c-{revision}",
+        expected_revision=revision,
+        payload={
+            "input_id": input_id,
+            "outcome": "completed",
+            "annotation_ref": {"annotation_id": annotation_id, "version": version},
+        },
+    )
+
+
+def test_a_step_on_a_carried_finding_says_check_or_link(rounds):  # noqa: F811
+    _repo, scoped, ontology, key, item = _ctx(rounds)
+    carried = item["target_snapshot"]["annotation"]
+    resolutions = RoundInputResolutionService(scoped)
+    service = DraftHistoryService(scoped)
+    version = item["target_snapshot"]["version"]
+    draft = resolutions.resolve(
+        key, _complete(item["input_id"], carried["annotation_id"], version, 0)
+    )
+    view = service.view(key)
+    assert view.undo is not None and view.undo.action == "resolve_round_input"
+    assert view.undo.outcome == "checked"
+
+    draft = _apply(
+        scoped,
+        ontology,
+        key,
+        draft.revision,
+        {
+            "command": "create_annotation",
+            "annotation_id": "other",
+            "layer_id": carried["layer_id"],
+            "type_id": carried["type_id"],
+            "term_id": carried["term_id"],
+            "evidence_id": "other-ev",
+            "segments": [{"start": 26, "end": 35}],
+        },
+    )
+    other = next(s for s in draft.annotations if s.annotation.annotation_id == "other")
+    draft = resolutions.resolve(
+        key, _complete(item["input_id"], "other", other.version, draft.revision)
+    )
+    view = service.view(key)
+    assert view.undo is not None and view.undo.outcome == "linked"
+    # Checking the linked finding again is a check, not another link.
+    resolutions.resolve(
+        key, _complete(item["input_id"], "other", other.version, draft.revision)
+    )
+    view = service.view(key)
+    assert view.undo is not None and view.undo.outcome == "checked"
+
+
+def test_a_layer_step_says_checked_or_not_checked(alice: Any) -> None:
+    editor = Editor(alice)
+    editor.send({"command": "check_layer", "layer_id": "hpo-layer", "checked": True})
+    assert editor.history()["undo"]["outcome"] == "checked"
+    editor.send({"command": "check_layer", "layer_id": "hpo-layer", "checked": False})
+    assert editor.history()["undo"]["outcome"] == "unchecked"
+
+
+def test_the_history_reads_no_states_it_does_not_need(app: Any, alice: Any) -> None:
+    """Issue 320 review: a long round is read without every logged state."""
+    from sqlalchemy import event
+
+    editor = Editor(alice)
+    editor.send(_create("a1", 30, 44))
+    for index in range(30):
+        editor.send(
+            {
+                "command": "set_annotation_note",
+                "annotation_id": "a1",
+                "note": f"n{index}",
+            }
+        )
+    states: list[int] = []
+
+    def count(conn: Any, cursor: Any, statement: str, *_args: Any) -> None:
+        if "edit_events.state" in statement:
+            states.append(cursor.rowcount)
+
+    engine = app.state.repo.db.engine
+    event.listen(engine, "after_cursor_execute", count)
+    try:
+        history = editor.history()
+        editor.undo()
+    finally:
+        event.remove(engine, "after_cursor_execute", count)
+    assert history["undo_count"] == 31
+    # A handful of single states (current, before and after the top step), not one per edit.
+    assert sum(states) <= 8, states
+
+
 def test_a_consolidation_has_no_history(rounds):  # noqa: F811
     _repo, scoped, _o, key, _item = _ctx(rounds)
     review = key.model_copy(update={"mode": "review"})
@@ -360,3 +454,32 @@ def test_reset_of_a_proposal_check_opens_every_proposal_again(tmp_path: Path) ->
     assert len(reset["targets"]["targets"]) == len(anne.targets)
     view = anne.client.get(f"/api/v1/workspaces/{anne.id}/history").json()
     assert view["undo"]["action"] == "reset_changes" and view["redo"] is None
+
+
+def test_an_edit_and_replace_copy_is_named_as_one(tmp_path: Path) -> None:
+    from proposal_check_support import proposal_env
+    from test_consolidation_tool_proposals import FIRST_SEIZURE, Workspace
+
+    env = proposal_env(tmp_path)
+    anne = Workspace(env, "anno")
+    first = anne.targets[0]
+    anne.post(
+        "commands",
+        {
+            "command": "create_annotation",
+            "annotation_id": "copy1",
+            "evidence_id": "ev-copy1",
+            "term_id": "HP:0001250",
+            "layer_id": "hpo",
+            "type_id": "phenotype",
+            "segments": [
+                {"start": FIRST_SEIZURE, "end": FIRST_SEIZURE + len("Krampfanfälle")}
+            ],
+            "source_annotation_id": first["annotation_id"],
+            "source_version": first["version"],
+        },
+        step_id="edit-replace",
+    )
+    view = anne.client.get(f"/api/v1/workspaces/{anne.id}/history").json()
+    assert view["undo"]["action"] == "create_annotation"
+    assert view["undo"]["outcome"] == "copy"
