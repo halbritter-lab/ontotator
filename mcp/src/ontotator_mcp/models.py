@@ -60,3 +60,26 @@ class ExternalReview(_Model):
 
     languages: list[str] = Field(min_length=1)
     reason: str = Field(min_length=1, max_length=2000)
+
+
+class NewUser(_Model):
+    """One account to create (``CreateUserRequest``)."""
+
+    username: str = Field(min_length=1, max_length=256, description="Login name.")
+    display_name: str = Field(min_length=1)
+    email: str | None = None
+    languages: list[str] = Field(
+        default_factory=list, description="Working languages, e.g. ['en','de']."
+    )
+    qualification: str | None = Field(
+        default=None,
+        max_length=200,
+        description="Needed for translation reviewers, e.g. 'MD, native speaker'.",
+    )
+    roles: list[Literal["lead", "annotator", "adjudicator"]] = Field(
+        default_factory=list,
+        description=(
+            "Roles in the tool's project; empty means annotator. 'adjudicator'"
+            " is the consolidator."
+        ),
+    )

@@ -75,19 +75,19 @@ Add the server to `claude_desktop_config.json` (Settings › Developer › **Edi
 
 If the client cannot find the command, give its full path (`which ontotator-mcp`), or use `"command": "uvx"` with `"args": ["--from", "git+https://github.com/halbritter-lab/ontotator#subdirectory=mcp", "ontotator-mcp"]`.
 
-Ask the client to call `whoami` first: it shows who the token acts as and the server's version.
+Ask the client to call `whoami` first: it shows the token's kind, scopes, project and expiry (with a warning two weeks before), who it acts as and the server's version.
 
 ## Tools
 
-Every tool description names the token scope it needs and whether it changes data; the MCP annotations say the same (`readOnlyHint`, `destructiveHint`, `idempotentHint`). Tools with a `confirm` argument (`set_ontology_pins`, `distribute_texts`, `update_work_plan`, `accept_agreeing_texts`, `set_member_roles`) only do a dry run without it (`set_member_roles` needs `confirm` only to take roles away or remove a person, which logs the person out, revokes their tokens and, with `revoke_assignments`, withdraws their open tasks; adding roles is applied at once); the client should show you the dry run before it confirms. Imports and exports are server jobs: the tools wait for them by default, and `get_job` polls one.
+Every tool description names the token scope it needs and whether it changes data; the MCP annotations say the same (`readOnlyHint`, `destructiveHint`, `idempotentHint`). Tools with a `confirm` argument (`set_ontology_pins`, `distribute_texts`, `update_work_plan`, `accept_agreeing_texts`, `set_member_roles`, `hand_over_open_tasks`) only do a dry run without it (`set_member_roles` needs `confirm` only to take roles away or remove a person, which logs the person out, revokes their tokens and, with `revoke_assignments`, withdraws their open tasks; adding roles is applied at once); the client should show you the dry run before it confirms. Imports and exports are server jobs: the tools wait for them by default, and `get_job` polls one.
 
 ### Scopes
 
-A token can do only what both its scopes and its owner's roles allow. Many tools also need `read`, because they read the project before they act. Polling a job (`get_job`, and the tools that wait for their import or export) works with any of `read`, `import` and `export`, so `import` alone can stage and import texts and `export` alone can start and download exports.
+A token can do only what both its scopes and its owner's roles allow. Many tools also need `read`, because they read the project before they act. Polling a job (`get_job`, and the tools that wait for their import or export) works with any of `read`, `import` and `export`, so `import` alone can stage and import texts and `export` alone can start and download exports. `whoami` works with any scope: it reads the token's own record (`GET /api/v1/auth/token`), and the user only with `read`.
 
 | Tool | Token scopes | Effect | What it does |
 | --- | --- | --- | --- |
-| `whoami` | read | reads | Who the API token acts as, and the server's version and address. |
+| `whoami` | read or import or export or project-admin or admin | reads | The API token in use (kind, scopes, project, expiry) and who it acts as. |
 | `list_projects` | read | reads | The projects the token's owner is a member of, with roles and text counts. |
 | `list_ontologies` | read | reads | Ontology releases on the server with their SHA-256 and translations. |
 | `list_ontology_files` | admin | reads | Every uploaded ontology and translation file, with the projects using it. |
@@ -110,6 +110,17 @@ A token can do only what both its scopes and its owner's roles allow. Many tools
 | `set_member_roles` | read, project-admin | may remove or withdraw | Set a person's roles in the project (adds the person if new). |
 | `assign_texts` | project-admin | adds | Assign text versions to people, one task per row. |
 | `distribute_texts` | read, project-admin | adds | Assign many texts of one language at once, after a dry run. |
+| `create_users` | admin | adds | Create accounts for a cohort, each with a one-time setup code. |
+| `issue_setup_codes` | admin | overwrites | New one-time codes for people whose setup code lapsed. |
+| `update_user` | admin | overwrites | Change an account: deactivate or activate it, or its name, e-mail, languages. |
+| `find_people` | project-admin | reads | Active accounts outside the project that set_member_roles can add. |
+| `list_assignments` | read | reads | The project's tasks with their IDs, person, text version and state. |
+| `reassign_task` | project-admin | overwrites | Hand one task to another project member; the old task is withdrawn. |
+| `withdraw_task` | project-admin | may remove or withdraw | Withdraw a task: it leaves the person's list; submitted work stays. |
+| `remove_task` | project-admin | may remove or withdraw | Remove an unsubmitted annotation task AND DISCARD ITS DRAFT. |
+| `reopen_task` | project-admin | overwrites | Reopen a submitted task so its person can change the submission. |
+| `hand_over_open_tasks` | read, project-admin | may remove or withdraw | Hand a person's open tasks to others in turn, after a dry run. |
+| `list_problem_reports` | read | reads | Problem reports annotators filed in the project. |
 | `update_work_plan` | read, project-admin | may remove or withdraw | Turn translation review and annotation on or off and set the annotation mode. |
 | `project_overview` | read | reads | Where a project stands: settings, totals per stage, people and open decisions. |
 | `get_progress` | read | reads | Assignment progress per text version and per person (open, in progress, submitted). |
@@ -123,7 +134,11 @@ A token can do only what both its scopes and its owner's roles allow. Many tools
 | `get_job` | read or import or export | reads | The state of an import or export job: queued, running, succeeded or failed. |
 | `download_export` | export | writes a local file | Download the file of a finished export job to a local path. |
 
-Useful token sets: a project token with `read`, `import`, `export` and `project-admin` covers everything a lead does; `read` is enough for status, `export` alone for exports and downloads; ontology uploads, new projects and the user list need a system token with `admin` (and `read`).
+Useful token sets: a project token with `read`, `import`, `export` and `project-admin` covers everything a lead does, handing tasks on included; `read` is enough for status, `export` alone for exports and downloads; ontology uploads, new projects and accounts (`list_users`, `create_users`, `issue_setup_codes`, `update_user`) need a system token with `admin` (and `read`).
+
+### Setup codes
+
+`create_users` and `issue_setup_codes` return one-time codes with which a person sets a password on the login page. The codes are credentials. With `codes_path` they are written to a CSV file (`username`, `display_name`, `email`, `code`, `expires_at`) inside `ONTOTATOR_MCP_FILES_DIR`, readable by you only, and the result names only who got one; without it the codes are part of the tool result, and so of the conversation with the model. `create_users` skips usernames the server already has, so a repeated call adds only the missing people. `issue_setup_codes` renews only codes of people who never set a password, unless `include_active_accounts` (which ends the person's sessions and revokes their API tokens).
 
 ### Resources
 
@@ -173,15 +188,15 @@ Routes a token may not call (`session` in the contract), so no tool can offer th
 
 - Lead corrections of translations (`POST .../documents/{doc}/lead-correction`), and annotation, review and translation review work in general.
 - Marking a guideline version as read, a problem report as seen, and a visit of the Documents page.
-- Creating, listing and revoking tokens.
+- Creating, listing and revoking tokens: a person does that in the web interface or with `ontotator admin tokens` on the server. A token reads only its own record.
 
 Limits of the token kinds:
 
-- A project token reaches only routes with its project in the path (and the job routes), so `whoami`, `list_projects`, `list_ontologies` and `list_project_templates` need a personal or system token.
+- A project token reaches only routes with its project in the path, plus the job routes, its own record and the routes that reassign, withdraw, remove or reopen a task (they refuse tasks of other projects). So `list_projects`, `list_ontologies` and `list_project_templates` need a personal or system token; `whoami` reports a project token's project instead of its user.
 - Creating a project needs the `admin` scope, so a system token: a lead cannot create a project with a token.
 - The API gives agreement per text (the lead's comparison panel) but no project-wide figure; `agreement_summary` sums the panels.
 
-Left to the web interface on purpose, although a token could call the route: choosing a final result among differing submissions or confirming one after a change (`PUT .../final-selections`; `accept_agreeing_texts` covers full agreement only), handling problem reports, reopening, reassigning and revoking single tasks, and changing the annotation mode of a text that already has work, which discards its submissions.
+Left to the web interface on purpose, although a token could call the route: choosing a final result among differing submissions or confirming one after a change (`PUT .../final-selections`; `accept_agreeing_texts` covers full agreement only), deciding on problem reports (`list_problem_reports` only lists them), anonymising an account, and changing the annotation mode of a text that already has work, which discards its submissions.
 
 ## Development
 

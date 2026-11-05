@@ -120,6 +120,9 @@ async def test_setup_import_status_and_export(
     async with Client(_server(live, live["admin_token"], *files)) as client:
         me = await call(client, "whoami", {})
         assert me["user"]["username"] == "root"
+        assert me["token"]["kind"] == "system"
+        assert me["token"]["expires_in_days"] <= 1
+        assert "warning" in me["token"]
 
         uploads = await call(
             client, "upload_ontology_files", {"paths": [str(FIXTURES / "hp.json")]}
@@ -195,6 +198,64 @@ async def test_setup_import_status_and_export(
 
         overview = await call(client, "project_overview", {"project": PROJECT})
         assert overview["name"] == "MCP smoke"
+
+        # A cohort joins: accounts, codes in a private file, roles and work.
+        codes = tmp_path / "codes.csv"
+        joined = await call(
+            client,
+            "create_users",
+            {
+                "users": [
+                    {"username": "cohort1", "display_name": "Cohort One"},
+                    {"username": "ann2", "display_name": "Ann Two"},
+                ],
+                "project": PROJECT,
+                "codes_path": str(codes),
+            },
+        )
+        assert joined["existing"] == ["ann2"]
+        assert [u["username"] for u in joined["created"]] == ["cohort1"]
+        assert "cohort1" in codes.read_text(encoding="utf-8")
+        assert "code" not in json.dumps(joined["codes"][0]).replace("codes", "")
+        await call(
+            client,
+            "set_member_roles",
+            {"project": PROJECT, "username": "ann2", "roles": ["annotator"]},
+        )
+        documents = [t["document_id"] for t in texts["texts"]]
+        assigned = await call(
+            client,
+            "assign_texts",
+            {
+                "project": PROJECT,
+                "assignments": [
+                    {"document_id": d, "username": "cohort1"} for d in documents
+                ],
+                "confirm_language": True,
+            },
+        )
+        assert len(assigned["created"]) == 2, assigned
+
+        # cohort1 leaves: the open tasks go to ann2, then the account closes.
+        handover = {
+            "project": PROJECT,
+            "from_username": "cohort1",
+            "to_usernames": ["ann2"],
+        }
+        dry = await call(client, "hand_over_open_tasks", handover)
+        assert dry["plan"]["move_count"] == 2
+        moved = await call(client, "hand_over_open_tasks", handover | {"confirm": True})
+        assert moved["reassigned_count"] == 2, moved
+        tasks = await call(
+            client, "list_assignments", {"project": PROJECT, "username": "ann2"}
+        )
+        assert sorted(t["document_id"] for t in tasks["assignments"]) == sorted(
+            documents
+        )
+        closed = await call(
+            client, "update_user", {"username": "cohort1", "active": False}
+        )
+        assert closed["active"] is False
 
         # Submissions come only from annotators in the browser.
         with pytest.raises(ToolFailed, match="EXPORT_EMPTY"):

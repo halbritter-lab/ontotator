@@ -63,9 +63,15 @@ HINTS: dict[str, str] = {
     ),
     "MEMBER_HAS_ASSIGNMENTS": (
         "Open tasks rest on the roles being removed. Pass revoke_assignments to"
-        " withdraw them, or reassign them in the web interface first."
+        " withdraw them, or hand them on first with hand_over_open_tasks."
     ),
     "PAYLOAD_TOO_LARGE": "The file exceeds the server's configured upload limit.",
+    "REASSIGN_CONFIRMATION_REQUIRED": (
+        "The task was already started; pass confirm_started (the new person starts"
+        " from the beginning)."
+    ),
+    "ASSIGNMENT_EXISTS": "The new person already has this task on this text.",
+    "USERNAME_TAKEN": "An account with this username exists already.",
 }
 
 

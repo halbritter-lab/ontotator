@@ -5,13 +5,14 @@ import io
 import os
 import zipfile
 from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import httpx
 import pytest
 from conftest import ToolFailed, call
-from fake_api import FakeApi, refusal
+from fake_api import FakeApi, refusal, token_view
 from mcp import Client
 from shapes import build, page, panel, row, submission, work
 
@@ -34,6 +35,8 @@ async def test_whoami_drops_the_csrf_token(fake: FakeApi, mcp_client: Client) ->
     assert result["user"]["username"] == "lead"
     assert "csrf_token" not in result["user"]
     assert result["url"] == "https://ontotator.test"
+    assert result["token"]["kind"] == "personal"
+    assert "warning" not in result["token"]
 
 
 async def test_whoami_with_a_project_token_names_its_project(
@@ -41,18 +44,31 @@ async def test_whoami_with_a_project_token_names_its_project(
 ) -> None:
     fake.on(
         "GET",
-        "/api/v1/auth/me",
-        refusal(
-            403,
-            "TOKEN_NOT_ALLOWED",
-            "This project token works only in project 'ward-7'.",
-        ),
+        "/api/v1/auth/token",
+        token_view(kind="project", project_key="ward-7", scopes=["read", "export"]),
     )
     result = await call(mcp_client, "whoami", {})
-    assert result["project_token"] is True
-    assert result["note"].startswith(
-        "This project token works only in project 'ward-7'"
-    )
+    assert result["user"] is None
+    assert result["token"]["project_key"] == "ward-7"
+    assert "ward-7" in result["note"]
+    # A project token cannot read /auth/me; whoami does not try.
+    assert fake.templates() == [("GET", "/api/v1/auth/token")]
+
+
+async def test_whoami_reports_the_token_and_warns_before_it_expires(
+    fake: FakeApi, mcp_client: Client
+) -> None:
+    soon = (datetime.now(UTC) + timedelta(days=3)).isoformat()
+    fake.on("GET", "/api/v1/auth/token", token_view(expires_at=soon, scopes=["export"]))
+    result = await call(mcp_client, "whoami", {})
+    token = result["token"]
+    assert token["scopes"] == ["export"]
+    assert 2 < token["expires_in_days"] <= 3
+    assert "expires soon" in token["warning"]
+    assert "secret" not in token
+    # Without the read scope only the token itself is read.
+    assert result["user"] is None
+    assert fake.templates() == [("GET", "/api/v1/auth/token")]
 
 
 async def test_upload_texts_streams_files_and_returns_the_check(
