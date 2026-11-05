@@ -204,7 +204,7 @@ The file could not be read, is too large, or is an incomplete HPO release. Read 
 
 ### A project archive import is refused
 
-The message says why, and nothing was imported. A changed, incomplete or damaged file (*does not match its manifest*): export the archive again and copy it unchanged. An archive from a newer Ontotator: upgrade this server first. Missing ontology files: upload them on **Ontologies**, or export the archive with **Include ontology files**. Pseudonyms that are taken here: tick **Give people new pseudonyms where theirs are taken here**, or give each person the same e-mail address on both servers. See [Move a project to another server](admin.md#move-a-project-to-another-server).
+The message says why, and nothing was imported. An incomplete or damaged file (*damaged or incomplete*): export the archive again and copy it unchanged. A file that expands too far (*refused*): ask the operator, who can raise the limit. An archive from a newer Ontotator: upgrade this server first. Missing ontology files: upload them on **Ontologies**, or export the archive with **Include ontology files**. Pseudonyms that are taken here: tick **Give people new pseudonyms where theirs are taken here**, or give each person the same e-mail address on both servers. See [Move a project to another server](admin.md#move-a-project-to-another-server).
 
 ### A user sent a technical report
 

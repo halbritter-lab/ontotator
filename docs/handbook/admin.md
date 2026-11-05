@@ -203,7 +203,7 @@ What for: as system administrator you can manage every project, also without a p
 
 What for: copy one complete project, with its texts, work, history, guidelines and people, to another Ontotator server, or keep a copy of it.
 
-A project archive is a ZIP file. It holds every record of the project, the stored files it uses and, for each person it names, the username, pseudonym and e-mail address. Keep it as private as the project itself.
+A project archive is a ZIP file. It holds every record of the project, the stored files it uses and, for each person it names, the username and pseudonym, and the e-mail address of each person who worked in the project. Keep it as private as the project itself.
 
 To export a project:
 
@@ -212,7 +212,7 @@ To export a project:
 3. Keep **Include ontology files** ticked, unless the other server already has the same ontology and translation files.
 4. Click **Export archive**. When **Archive ready** appears, click **Download archive**.
 
-An export is refused while an import or export of the project is still running.
+An export is refused while an import or export of the project is still running. Download the archive within 24 hours: the server then deletes it, and at once when an account is erased. Export again to get a new one. The server also deletes an uploaded archive once its import has finished.
 
 To import an archive on the other server:
 
@@ -220,11 +220,11 @@ To import an archive on the other server:
 2. Under **Import an archive**, choose the file in **Archive file (.zip)**.
 3. Click **Import archive**. When **Project imported** appears, it names the new project, the people matched to accounts here and the pseudonym-only people.
 
-The import checks every file against the archive's manifest first and refuses a changed, incomplete or newer archive. It then reads the imported project back and compares every table with the archive; a difference undoes the whole import. When the project key is taken here, the copy gets a suffix such as `-2`, and the name a suffix such as *(2)*.
+The import checks every file against the archive's manifest first and refuses a damaged, incomplete or newer archive, and one that would expand to far more than its size. The manifest is not signed, so the check finds damage, not a deliberate change: only import archives from a source you trust. It then reads the imported project back and compares every table with the archive; a difference undoes the whole import. When the project key is taken here, the copy gets a suffix such as `-2`, and the name a suffix such as *(2)*.
 
 People are matched by e-mail address. A person with an account of the same e-mail address keeps the roles in the project. A person without such an account becomes a pseudonym-only person: an anonymised account with the person's pseudonym, without name, e-mail address or login. Work recorded under a pseudonym keeps that pseudonym. When the matched account has another pseudonym, the work stays with a pseudonym-only person that is linked to the account, and the account gets the person's roles. A pseudonym-only person can be linked to an account later on the command line (see the [operations guide](../operations.md#move-a-project-to-another-server)).
 
-When someone here already has a pseudonym that the archived work carries, the import is refused. Tick **Give people new pseudonyms where theirs are taken here** to import anyway: such a person gets a new pseudonym, and a person matched by e-mail gets the account's pseudonym, in all copied work.
+When someone here already has a pseudonym that the archived work carries, the import is refused. The same holds for work recorded under an annotator id without an account (for example from imported annotation files) when that id is a pseudonym here or names other work here. Tick **Give people new pseudonyms where theirs are taken here** to import anyway: such a person or annotator id gets a new pseudonym, and a person matched by e-mail gets the account's pseudonym, wherever the copied work records who did it. Texts, notes and guidelines are never changed.
 
 ## Practice projects
 
