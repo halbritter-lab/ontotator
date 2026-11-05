@@ -24,7 +24,7 @@ const state = (change: Partial<PracticeState> = {}): PracticeState => ({
   offered: true, available: true, show_card: true, card_hidden: false, reads_german: true, project: null, ...change,
 });
 const summary = (id: number, status: TaskSummary["status"], practice: boolean): TaskSummary => ({
-  assignment_id: id, workflow_revision: 0, held: false, report_answered: false, waiting_for_translation_review: false, waiting_for_lead: false,
+  assignment_id: id, workflow_revision: 0, held: false, report_answered: false, waiting_for_translation_review: false, waiting_for_lead: false, translation_finished: false,
   project_key: practice ? "practice-7-abc123" : "real", project_name: practice ? "Practice · Ann" : "Real project", document_id: `doc-${id}`,
   case_id: `CASE-${id}`, language: "de", task: "annotate", status, updated_at: "2026-11-01T10:30:00Z", practice,
 });

@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- After a translation review, the next task is your own annotation of the same text when the review finished its translation: accepted (after **Accepted with corrections** on the corrected version), every parallel translation of the text accepted and no further translation review open. The message then reads *… submitted. Annotate this text now.* (the review screen without the task flow offers **Annotate this text now**). Otherwise, for example after **Query** or **Rejected**, the next translation review comes first as before. **My tasks** (`GET /api/v1/me/tasks`) gives annotation tasks the new field `translation_finished`.
 - README and `docs/operations.md`: releases are tagged `vX.Y.Z` from `v0.1.0` on and follow Semantic Versioning; the image build fetches the public `ontospan` repository from GitHub, a token is optional, and only the build needs network access (#300).
 
 ## [0.9.0] - 2026-11-04

@@ -153,6 +153,12 @@ class TaskSummary:
     # Closed on a version the text moved on from: the lead decides, no review
     # opens it.
     waiting_for_lead: bool = False
+    # An open annotation task whose text's translation is finished for
+    # annotation (``text_targets.finished_translation_documents``): the task
+    # is on an accepted target version, every parallel translation of the text
+    # is accepted and no translation review of the text is open. False for
+    # other tasks and for source texts.
+    translation_finished: bool = False
     # A task of the user's practice project (issue 266): listed apart.
     practice: bool | None = None
 
@@ -1329,6 +1335,43 @@ class AssignmentService:
                             conn, ruled[project_key], versions.values()
                         )
                     }
+            # Annotation tasks on a finished translation: the next task after
+            # a translation review of the same text.
+            annotating = [
+                r
+                for r in rows
+                if r["task"] == "annotate" and r["status"] != "submitted"
+            ]
+            finished: set[tuple[str, str]] = set()
+            if annotating:
+                from ontotator.application.text_targets import (
+                    finished_translation_documents,
+                )
+
+                project_ids: dict[str, int] = dict(
+                    conn.execute(
+                        select(ProjectRow.project_key, ProjectRow.id).where(
+                            ProjectRow.project_key.in_(
+                                {r["project_key"] for r in annotating}
+                            )
+                        )
+                    )
+                    .tuples()
+                    .all()
+                )
+                for project_key, project_id in project_ids.items():
+                    finished |= {
+                        (project_key, document_id)
+                        for document_id in finished_translation_documents(
+                            conn,
+                            project_id,
+                            {
+                                r["case_id"]
+                                for r in annotating
+                                if r["project_key"] == project_key
+                            },
+                        )
+                    }
             result = []
             for row in rows:
                 source = target = None
@@ -1353,6 +1396,9 @@ class AssignmentService:
                         **row,
                         waiting_for_translation_review=waiting and not for_lead,
                         waiting_for_lead=waiting and for_lead,
+                        translation_finished=row["task"] == "annotate"
+                        and row["status"] != "submitted"
+                        and (row["project_key"], row["document_id"]) in finished,
                         source_language=source,
                         target_language=target,
                         failed_check_count=failed,

@@ -63,18 +63,27 @@ export function orderTasks(
 
 /**
  * Unsubmitted tasks of the same project in My tasks (server) order, without the current one (spec A.5), without
- * waiting tasks (issue 213) and without paused ones (nothing can be done in them). The next task is the first one of the current task's type
- * (a translation review leads to the next translation review, issue 198), else the first open one.
+ * waiting tasks (issue 213) and without paused ones (nothing can be done in them). After a translation review, an
+ * annotation task on the same text (case and language) comes first, but only once the server reports the text's
+ * translation finished for annotation (`translation_finished`: accepted, no other translation or review pending);
+ * `sameText` then says so. Otherwise the next task is the first one of the current task's type (a translation review
+ * leads to the next translation review, issue 198), else the first open one.
  */
 export function nextOpenTask(
   tasks: readonly TaskSummary[],
   currentAssignmentId: number,
   projectKey: string,
-): { next: TaskSummary | null; remaining: number } {
+): { next: TaskSummary | null; remaining: number; sameText: boolean } {
   const open = tasks.filter((task) =>
     task.project_key === projectKey && task.assignment_id !== currentAssignmentId && task.status !== "submitted"
     && !task.waiting_for_translation_review && !task.waiting_for_lead && !task.held);
-  const kind = tasks.find(task => task.assignment_id === currentAssignmentId)?.task;
+  const current = tasks.find(task => task.assignment_id === currentAssignmentId);
+  const annotation = current?.task === "translation_review" && current.case_id
+    ? open.find(task => task.task === "annotate" && task.translation_finished
+      && task.case_id === current.case_id && task.language === current.language)
+    : undefined;
+  if (annotation) return { next: annotation, remaining: open.length, sameText: true };
+  const kind = current?.task;
   const next = (kind !== undefined ? open.find(task => task.task === kind) : undefined) ?? open[0] ?? null;
-  return { next, remaining: open.length };
+  return { next, remaining: open.length, sameText: false };
 }

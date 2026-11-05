@@ -36,6 +36,13 @@ it("names the submitted review in a toast and opens the next open task", async (
   expect(onNavigate).toHaveBeenLastCalledWith({ name: "task", assignmentId: 17 });
 });
 
+it("opens the annotation of the same text and says so in the toast", async () => {
+  const { onNavigate, showToast, onSubmitted } = await renderReviewTask();
+  act(() => onSubmitted({ label: "case-1 de", assignmentId: 17, next: 18, sameText: true }));
+  expect(showToast).toHaveBeenCalledWith(expect.objectContaining({ message: "case-1 de submitted. Annotate this text now.", actionLabel: "View result" }));
+  expect(onNavigate).toHaveBeenLastCalledWith({ name: "task", assignmentId: 18 });
+});
+
 it("opens My tasks after the last task", async () => {
   const { onNavigate, onSubmitted } = await renderReviewTask();
   act(() => onSubmitted({ label: "case-1 de", assignmentId: 17 }));

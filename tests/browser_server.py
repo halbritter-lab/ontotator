@@ -843,6 +843,7 @@ def register_translation_review_scenario_route(app: FastAPI) -> None:
         source_update: bool = False,
         single: bool = False,
         waiting_proposal_task: bool = False,
+        reviewer_annotates: bool = False,
     ) -> dict[str, object]:
         from t1_builders import bundle as variant_bundle
         from t1_builders import correction_unit, native_unit, translation_unit
@@ -981,6 +982,11 @@ def register_translation_review_scenario_route(app: FastAPI) -> None:
                     "translation_review",
                 )
                 .id
+            )
+        if reviewer_annotates:
+            # The reviewer also annotates the text: it waits for their review.
+            AssignmentService(db).assign(
+                Actor.cli(), key, documents["target"], users["reviewer"], "annotate"
             )
         if waiting_proposal_task:
             # A waiting annotation from proposals: no correction takes it along.

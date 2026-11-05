@@ -24489,6 +24489,11 @@
             "title": "Waiting For Lead",
             "default": false
           },
+          "translation_finished": {
+            "type": "boolean",
+            "title": "Translation Finished",
+            "default": false
+          },
           "practice": {
             "anyOf": [
               {
