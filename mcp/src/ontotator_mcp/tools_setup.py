@@ -353,7 +353,7 @@ def register_setup(server: MCPServer, api: OntotatorClient) -> None:
         )
         return summary | {"local_files": [str(file) for file in files]}
 
-    @register(server, scopes=("read", "import"), effect="additive")
+    @register(server, scopes="import", effect="additive")
     async def upload_texts(
         project: Project,
         paths: Paths,
@@ -425,7 +425,7 @@ def register_setup(server: MCPServer, api: OntotatorClient) -> None:
             for item in listed
         ]
 
-    @register(server, scopes=("read", "import"), effect="additive")
+    @register(server, scopes="import", effect="additive")
     async def commit_upload(
         project: Project,
         upload_id: int,

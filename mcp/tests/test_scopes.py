@@ -31,6 +31,29 @@ from ontotator_mcp.server import build_server
 from ontotator_mcp.tooling import TOOL_SCOPES, scope_text
 
 P = "/api/v1/projects/{key}"
+
+
+def declared_exactly(
+    used: set[str | frozenset[str]],
+    scopes: tuple[str, ...],
+    any_of: tuple[str, ...] = (),
+) -> bool:
+    """Whether the declaration is what the routes called need, no more, no less.
+
+    A route with one scope needs it; a route open to any of several
+    (``frozenset``) is covered by a declared scope among them, or else must
+    be the tool's own ``any_of``.
+    """
+    single = {item for item in used if isinstance(item, str)}
+    either = [item for item in used if isinstance(item, frozenset)]
+    if single != set(scopes):
+        return False
+    uncovered = [item for item in either if not item & set(scopes)]
+    if any_of:
+        return not scopes and uncovered == [frozenset(any_of)]
+    return not uncovered
+
+
 PIN = {"ontology_id": "HP", "sha256": "a" * 64}
 
 
@@ -137,9 +160,10 @@ async def test_every_tool_names_the_scopes_of_its_routes(
             fake.calls.clear()
             await call(client, name, args)
             used = {scope(method, template) for method, template in fake.templates()}
-            if used != set(TOOL_SCOPES[name].scopes):
-                wrong[name] = sorted(used)
-            assert scope_text(TOOL_SCOPES[name].scopes) in (
+            info = TOOL_SCOPES[name]
+            if not declared_exactly(used, info.scopes, info.any_of):
+                wrong[name] = sorted(map(str, used))
+            assert scope_text(info.scopes, info.any_of) in (
                 listed[name].description or ""
             )
         assert wrong == {}, wrong
@@ -181,8 +205,8 @@ async def test_every_resource_names_the_scopes_of_its_routes(
             fake.calls.clear()
             await client.read_resource(uri)
             used = {scope(method, path) for method, path in fake.templates()}
-            if used != set(RESOURCE_SCOPES[template]):
-                wrong[template] = sorted(used)
+            if not declared_exactly(used, RESOURCE_SCOPES[template]):
+                wrong[template] = sorted(map(str, used))
             description = templates[template].description or ""
             assert scope_text(RESOURCE_SCOPES[template]) in description, template
         assert wrong == {}, wrong
@@ -246,4 +270,4 @@ def test_the_readme_lists_every_tool_with_its_scopes() -> None:
     readme = (Path(__file__).resolve().parents[1] / "README.md").read_text()
     build_server(Settings(url="https://o.test", token="t"))
     for info in TOOL_SCOPES.values():
-        assert f"| `{info.name}` | {', '.join(info.scopes)} |" in readme, info.name
+        assert f"| `{info.name}` | {info.label} |" in readme, info.name

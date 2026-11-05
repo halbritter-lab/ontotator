@@ -218,7 +218,7 @@ def register_results(server: MCPServer, api: OntotatorClient) -> None:
             "not_in_plan": len(state.get("not_in_plan") or []),
         }
 
-    @register(server, scopes=("read", "export"), effect="additive")
+    @register(server, scopes="export", effect="additive")
     async def start_export(
         project: Project,
         kind: Annotated[
@@ -300,7 +300,7 @@ def register_results(server: MCPServer, api: OntotatorClient) -> None:
             return {"job_id": job_id, "kind": kind, "status": "queued"}
         return await api.finished_job(job_id, f"The {kind} export")
 
-    @register(server, scopes="read", effect="read")
+    @register(server, any_of=("read", "import", "export"), effect="read")
     async def get_job(
         job_id: int,
         wait: Annotated[
@@ -313,7 +313,7 @@ def register_results(server: MCPServer, api: OntotatorClient) -> None:
             return await api.wait_job(job_id, timeout_seconds)
         return await api.job(job_id)
 
-    @register(server, scopes=("read", "export"), effect="local")
+    @register(server, scopes="export", effect="local")
     async def download_export(
         job_id: int,
         path: Annotated[

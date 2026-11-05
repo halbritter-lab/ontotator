@@ -83,7 +83,7 @@ Every tool description names the token scope it needs and whether it changes dat
 
 ### Scopes
 
-A token can do only what both its scopes and its owner's roles allow. Most tools also need `read`, because they read the project or poll a job before they act.
+A token can do only what both its scopes and its owner's roles allow. Many tools also need `read`, because they read the project before they act. Polling a job (`get_job`, and the tools that wait for their import or export) works with any of `read`, `import` and `export`, so `import` alone can stage and import texts and `export` alone can start and download exports.
 
 | Tool | Token scopes | Effect | What it does |
 | --- | --- | --- | --- |
@@ -100,10 +100,10 @@ A token can do only what both its scopes and its owner's roles allow. Most tools
 | `set_ontology_pins` | project-admin | may remove or withdraw | Pin the project to ontology releases, after a dry run. |
 | `refresh_translations` | project-admin | overwrites | Move the project to the newest translation files on the server. |
 | `publish_guideline` | project-admin | adds | Publish a new version of the project's annotation guideline. |
-| `upload_texts` | read, import | adds | Stage texts or a proposal bundle and check them; imports nothing yet. |
+| `upload_texts` | import | adds | Stage texts or a proposal bundle and check them; imports nothing yet. |
 | `get_upload` | import | reads | The state and check of one staged upload. |
 | `list_uploads` | import | reads | The project's staged and committed uploads. |
-| `commit_upload` | read, import | adds | Import a checked upload: texts, translations and proposals enter the project. |
+| `commit_upload` | import | adds | Import a checked upload: texts, translations and proposals enter the project. |
 | `discard_upload` | import | may remove or withdraw | Drop a staged upload that was not imported; imported texts stay. |
 | `list_people` | read | reads | Project members with roles, languages and open tasks. |
 | `list_users` | admin | reads | Every user account of the server with projects and languages. |
@@ -119,11 +119,11 @@ A token can do only what both its scopes and its owner's roles allow. Most tools
 | `start_consolidation` | read, project-admin | adds | Start a consolidation of a text's submissions by a consolidator. |
 | `accept_agreeing_texts` | read, project-admin | adds | Accept the result of every text whose annotations agree in full. |
 | `final_export_check` | read | reads | What a final export would contain now: accepted results, warnings, omissions. |
-| `start_export` | read, export | adds | Start an export job of the project; download it with download_export. |
-| `get_job` | read | reads | The state of an import or export job: queued, running, succeeded or failed. |
-| `download_export` | read, export | writes a local file | Download the file of a finished export job to a local path. |
+| `start_export` | export | adds | Start an export job of the project; download it with download_export. |
+| `get_job` | read or import or export | reads | The state of an import or export job: queued, running, succeeded or failed. |
+| `download_export` | export | writes a local file | Download the file of a finished export job to a local path. |
 
-Useful token sets: a project token with `read`, `import`, `export` and `project-admin` covers everything a lead does; `read` and `export` are enough for status and downloads; ontology uploads, new projects and the user list need a system token with `admin` (and `read`).
+Useful token sets: a project token with `read`, `import`, `export` and `project-admin` covers everything a lead does; `read` is enough for status, `export` alone for exports and downloads; ontology uploads, new projects and the user list need a system token with `admin` (and `read`).
 
 ### Resources
 
@@ -131,7 +131,7 @@ Useful token sets: a project token with `read`, `import`, `export` and `project-
 | --- | --- | --- |
 | `ontotator://projects/{project}/settings` | The project's settings, task profile and pins (JSON). | read |
 | `ontotator://projects/{project}/guideline` | The text of the current annotation guideline. | read |
-| `ontotator://jobs/{job_id}/readme` | `README.txt` of a finished final export, which explains every file and column. | read, export |
+| `ontotator://jobs/{job_id}/readme` | `README.txt` of a finished final export, which explains every file and column. | export |
 
 ### Errors
 

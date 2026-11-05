@@ -25,7 +25,7 @@ README_URI = "ontotator://jobs/{job_id}/readme"
 RESOURCE_SCOPES: dict[str, tuple[Scope, ...]] = {
     SETTINGS_URI: ("read",),
     GUIDELINE_URI: ("read",),
-    README_URI: ("read", "export"),
+    README_URI: ("export",),
 }
 
 

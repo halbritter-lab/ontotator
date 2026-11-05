@@ -38,15 +38,27 @@ EFFECT_TEXT: dict[Effect, str] = {
 @dataclass(frozen=True)
 class ToolInfo:
     name: str
+    # Every one of ``scopes`` is needed; of ``any_of``, one is enough.
     scopes: tuple[Scope, ...]
     effect: Effect
     summary: str
+    any_of: tuple[Scope, ...] = ()
+
+    @property
+    def label(self) -> str:
+        """The scopes as the README's table names them."""
+        if self.any_of:
+            return " or ".join(self.any_of)
+        return ", ".join(self.scopes)
 
 
 TOOL_SCOPES: dict[str, ToolInfo] = {}
 
 
-def scope_text(scopes: tuple[Scope, ...]) -> str:
+def scope_text(scopes: tuple[Scope, ...], any_of: tuple[Scope, ...] = ()) -> str:
+    if any_of:
+        names = " or ".join(f"'{scope}'" for scope in any_of)
+        return f"Token scope: any one of {names}."
     names = " + ".join(f"'{scope}'" for scope in scopes)
     return f"Token scope: {names}."
 
@@ -54,18 +66,21 @@ def scope_text(scopes: tuple[Scope, ...]) -> str:
 def register(
     server: MCPServer,
     *,
-    scopes: Scope | tuple[Scope, ...],
+    scopes: Scope | tuple[Scope, ...] = (),
+    any_of: tuple[Scope, ...] = (),
     effect: Effect,
     idempotent: bool = False,
     title: str | None = None,
 ) -> Callable[[F], F]:
     """``@register(server, scopes=..., effect=...)`` on an async tool function."""
     needed = (scopes,) if isinstance(scopes, str) else scopes
+    if bool(needed) == bool(any_of):
+        raise ValueError("Give either scopes or any_of.")
 
     def decorator(fn: F) -> F:
         doc = inspect.cleandoc(fn.__doc__ or "")
         summary = doc.split("\n\n", 1)[0].replace("\n", " ")
-        description = f"{doc}\n\n{scope_text(needed)} {EFFECT_TEXT[effect]}"
+        description = f"{doc}\n\n{scope_text(needed, any_of)} {EFFECT_TEXT[effect]}"
         read_only = effect == "read"
         annotations = ToolAnnotations(
             title=title,
@@ -77,7 +92,9 @@ def register(
             idempotent_hint=True if read_only else idempotent,
             open_world_hint=False,
         )
-        TOOL_SCOPES[fn.__name__] = ToolInfo(fn.__name__, needed, effect, summary)
+        TOOL_SCOPES[fn.__name__] = ToolInfo(
+            fn.__name__, needed, effect, summary, any_of
+        )
         server.add_tool(
             fn, name=fn.__name__, description=description, annotations=annotations
         )

@@ -50,8 +50,12 @@ def operation(method: str, template: str) -> dict[str, Any]:
     return op
 
 
-def scope(method: str, template: str) -> str:
-    return str(operation(method, template)["x-ontotator-scope"])
+def scope(method: str, template: str) -> str | frozenset[str]:
+    """The route's scope; a set when any one of several is enough."""
+    value = operation(method, template)["x-ontotator-scope"]
+    if isinstance(value, list):
+        return frozenset(str(item) for item in value)
+    return str(value)
 
 
 def response_schema(method: str, template: str) -> dict[str, Any] | None:
