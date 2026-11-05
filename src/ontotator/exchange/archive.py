@@ -51,7 +51,6 @@ from pathlib import Path
 from typing import IO, Any
 from uuid import uuid4
 
-from alembic.script import ScriptDirectory
 from sqlalchemy import (
     JSON,
     ColumnElement,
@@ -105,7 +104,7 @@ from ontotator.jobs.queue import Job, JobContext, StructuredJobError
 from ontotator.settings import ARCHIVE_MAX_EXPANDED_ENV, archive_max_expanded_bytes
 from ontotator.storage.database import Database
 from ontotator.storage.repository import _decode_key_str, _key_str, _lock_id
-from ontotator.storage.schema import alembic_config, current_revision
+from ontotator.storage.schema import current_revision
 from ontotator.storage.tables import (
     AnnotationSnapshotRow,
     AuditEventRow,
@@ -144,6 +143,10 @@ _FILE_NAME = re.compile(
 MAX_RATIO = 200
 RATIO_FROM_BYTES = 1024 * 1024
 MAX_MANIFEST_BYTES = 64 * 1024 * 1024
+# The table, people and ontology-file entries together: the import holds
+# their rows in memory, so they get a limit of their own (stored files are
+# streamed to disk and only count towards the total).
+MAX_ROWS_BYTES = 1024**3
 _CHUNK_BYTES = 1024 * 1024
 # An exported archive is kept this long after its job finished, then deleted
 # (and at once when an account is erased); an uploaded archive goes when its
@@ -161,12 +164,11 @@ _ONTOLOGY_FILE_COLUMNS = (
     "uploaded_at",
 )
 # Upgrade functions of older archive schema versions: version -> function
-# returning the manifest and the (non-blob) files of the next version. None yet.
+# returning the manifest and the (non-blob) files of the next version, by
+# name, as files on disk. None yet.
 UPGRADES: dict[
     int,
-    Callable[
-        [dict[str, Any], dict[str, bytes]], tuple[dict[str, Any], dict[str, bytes]]
-    ],
+    Callable[[dict[str, Any], dict[str, Path]], tuple[dict[str, Any], dict[str, Path]]],
 ] = {}
 
 
@@ -197,14 +199,23 @@ def jsonl(rows: Iterable[Mapping[str, Any]]) -> bytes:
     return "".join(f"{line}\n" for line in lines).encode("utf-8")
 
 
-def _read_jsonl(data: bytes) -> list[dict[str, Any]]:
+def _read_jsonl(path: Path) -> list[dict[str, Any]]:
+    """The rows of a JSON-lines file, read line by line."""
     rows = []
-    for line in data.decode("utf-8").splitlines():
-        if line.strip():
-            value = json.loads(line)
-            if not isinstance(value, dict):
-                raise DomainError("ARCHIVE_INVALID", "A table line is not an object.")
-            rows.append(value)
+    try:
+        with path.open(encoding="utf-8", newline="\n") as handle:
+            for line in handle:
+                if line.strip():
+                    value = json.loads(line)
+                    if not isinstance(value, dict):
+                        raise DomainError(
+                            "ARCHIVE_INVALID", "A table line is not an object."
+                        )
+                    rows.append(value)
+    except ValueError:
+        raise DomainError(
+            "ARCHIVE_INVALID", "A table file is not UTF-8 JSON lines."
+        ) from None
     return rows
 
 
@@ -585,6 +596,11 @@ def build_archive(
         revision = current_revision(conn)
         found = {entry.name: _rows(conn, entry, project.id) for entry in ARCHIVED}
         _with_jobs_referred_to(conn, found, project.id, project_key)
+        for job in found["jobs"]:
+            # Export results are never archived, so no job names its file:
+            # the copy has nothing to download (an import refuses one that does).
+            if isinstance(job["result"], dict):
+                job["result"].pop("sha256", None)
         rows: dict[str, int] = {}
         columns: dict[str, list[str]] = {}
         people: set[int] = set()
@@ -869,9 +885,20 @@ def _read_archive(path: Path, folder: Path, limit: int) -> Archive:
             extra = sorted(names - set(listed))
             missing = sorted(set(listed) - names)
             raise _damaged(f"extra files {extra}, missing files {missing}")
-        contents: dict[str, bytes] = {}
+        rows_size = sum(
+            info.file_size for n, info in by_name.items() if not n.startswith("blobs/")
+        )
+        if rows_size > MAX_ROWS_BYTES:
+            raise _too_large(
+                f"its tables expand to {rows_size} bytes, more than the"
+                f" {MAX_ROWS_BYTES} allowed"
+            )
+        # Every file is streamed to disk (sizes capped by the headers above);
+        # tables are then read line by line.
+        contents: dict[str, Path] = {}
         blobs: dict[str, Path] = {}
         (folder / "blobs").mkdir(exist_ok=True)
+        (folder / "rows").mkdir(exist_ok=True)
         for name, expected in sorted(listed.items()):
             info = by_name[name]
             if not isinstance(expected, dict) or info.file_size != expected.get("size"):
@@ -879,14 +906,16 @@ def _read_archive(path: Path, folder: Path, limit: int) -> Archive:
             if name.startswith("blobs/"):
                 digest_name = name.removeprefix("blobs/")
                 target = folder / "blobs" / digest_name
-                with target.open("wb") as out:
-                    digest = _copy_entry(archive, info, out)
+            else:
+                target = folder / "rows" / f"{len(contents)}.jsonl"
+            with target.open("wb") as out:
+                digest = _copy_entry(archive, info, out)
+            if name.startswith("blobs/"):
                 if digest != digest_name:
                     raise _damaged(f"{name} is not named by its SHA-256")
                 blobs[digest] = target
             else:
-                content, digest = _read_entry(archive, info)
-                contents[name] = content
+                contents[name] = target
             if digest != expected.get("sha256"):
                 raise _damaged(f"{name} has another SHA-256")
     while version < SCHEMA_VERSION:
@@ -922,19 +951,21 @@ def _read_archive(path: Path, folder: Path, limit: int) -> Archive:
     )
 
 
-def check_revision(revision: Any) -> None:
-    """Refuse an archive written by a database revision this server lacks.
+def check_revision(revision: Any, here: str | None) -> None:
+    """Refuse an archive written at another database revision than this
+    server's: rows are inserted as they are, and there is no data migration
+    of archived rows (an older archive would skip the migrations since).
 
     Raises:
-        DomainError: ``ARCHIVE_SCHEMA_NEWER``.
+        DomainError: ``ARCHIVE_SCHEMA_MISMATCH``.
     """
-    scripts = ScriptDirectory.from_config(alembic_config())
-    known = {item.revision for item in scripts.walk_revisions()}
-    if revision not in known:
+    if revision != here:
         raise DomainError(
-            "ARCHIVE_SCHEMA_NEWER",
-            f"The archive was written at database revision {revision}, which this"
-            " server does not have. Upgrade this server first.",
+            "ARCHIVE_SCHEMA_MISMATCH",
+            f"The archive was written at database revision {revision}, this server"
+            f" is at {here}. Export and import need the same Ontotator version:"
+            " upgrade the older server, export again and import that archive."
+            " Nothing was imported.",
         )
 
 
@@ -1176,15 +1207,16 @@ def _resolve_people(
         in_use.add(new)
         plan.pseudonyms[annotator_id] = new
     if conflicts:
-        raise DomainError(
+        raise StructuredJobError(
             "ARCHIVE_PSEUDONYM_TAKEN",
             {
                 "pseudonyms": sorted(conflicts),
                 "message": (
                     "People or work on this server already use pseudonyms (annotator"
                     " ids) the archived work carries. Import with new pseudonyms for"
-                    " them (--rename-pseudonyms), or give each person the same"
-                    " e-mail address on both servers."
+                    " them (--rename-pseudonyms; on the Projects page: Give people"
+                    " new pseudonyms where theirs are taken here), or give each"
+                    " person the same e-mail address on both servers."
                 ),
             },
         )
@@ -1345,7 +1377,7 @@ class Mapper:
         out: dict[str, Any] = {}
         for column, value in row.items():
             role = roles[column]
-            if value is None or role.kind in {"plain", "identity", "session"}:
+            if value is None or role.kind in {"plain", "key", "identity", "session"}:
                 out[column] = value
             elif role.kind == "project":
                 out[column] = self.project_id
@@ -1368,13 +1400,13 @@ class Mapper:
                 out["target_id"] = str(self.row_id(target, int(value), orphans=True))
         if self.ids:
             for column, value in list(out.items()):
-                if roles[column].kind == "plain":
+                if roles[column].kind in {"plain", "key"}:
                     out[column] = _replace_ids(value, self._id_pattern, self.ids)
         if self.pseudonyms:
             out = _people_in_row(name, out, self._pseudonym)
         if self.key != self.archive_key and name != "audit_events":
             for column, value in list(out.items()):
-                if roles[column].kind == "plain":
+                if roles[column].kind in {"plain", "key"}:
                     out[column] = _rekey(value, self.archive_key, self.key)
             if name == "jobs":
                 for column in ("payload", "result"):
@@ -1507,21 +1539,32 @@ def _insert(
 
 
 def _free_key_and_name(conn: Connection, key: str, name: str) -> tuple[str, str]:
-    """The archived key and name, or the first free ``-N`` / `` (N)`` suffix."""
+    """The archived key and name, or the first free ``-N`` / `` (N)`` suffix.
+
+    A copy of a copy continues the series (``x-2`` gives ``x-3``, not
+    ``x-2-2``) when the unsuffixed original is here too.
+    """
     keys = set(conn.execute(select(ProjectRow.project_key)).scalars())
     names = set(conn.execute(select(ProjectRow.name)).scalars())
-    new_key = key
+    return (
+        _free(
+            key, keys, r"(.+)-\d+", lambda base, n: f"{base[: 62 - len(str(n))]}-{n}"
+        ),
+        _free(name, names, r"(.+) \(\d+\)", lambda base, n: f"{base} ({n})"),
+    )
+
+
+def _free(
+    value: str, taken: set[str], suffixed: str, numbered: Callable[[str, int], str]
+) -> str:
+    if value not in taken:
+        return value
+    match = re.fullmatch(suffixed, value)
+    base = match.group(1) if match and match.group(1) in taken else value
     number = 2
-    while new_key in keys:
-        suffix = f"-{number}"
-        new_key = f"{key[: 63 - len(suffix)]}{suffix}"
+    while numbered(base, number) in taken:
         number += 1
-    new_name = name
-    number = 2
-    while new_name in names:
-        new_name = f"{name} ({number})"
-        number += 1
-    return new_key, new_name
+    return numbered(base, number)
 
 
 def _check_ontology_files(conn: Connection, archive: Archive) -> None:
@@ -1545,7 +1588,7 @@ def _check_ontology_files(conn: Connection, archive: Archive) -> None:
         if row["sha256"] not in have and row["sha256"] not in archive.blobs
     ]
     if missing:
-        raise DomainError(
+        raise StructuredJobError(
             "ARCHIVE_ONTOLOGY_MISSING",
             {
                 "files": missing,
@@ -1599,6 +1642,66 @@ def _check_columns(archive: Archive) -> None:
                 "ARCHIVE_FORMAT_UNSUPPORTED",
                 f"Table {name} has columns this server lacks: {sorted(unknown)}.",
             )
+
+
+def _invalid_reference(detail: str) -> DomainError:
+    return DomainError(
+        "ARCHIVE_INVALID",
+        f"{detail}: an archive refers only to its own rows and files."
+        " Nothing was imported.",
+    )
+
+
+def _check_references(archive: Archive) -> None:
+    """Every text key a row refers to (``key`` columns) is a row of the
+    archive, and no job result names a file (export results are never
+    archived): the copy cannot reach another project's rows or files here.
+
+    Raises:
+        DomainError: ``ARCHIVE_INVALID``.
+    """
+    keys: dict[tuple[str, str], set[Any]] = {}
+    for name, rows in archive.tables.items():
+        for column, role in column_roles(name).items():
+            if role.kind != "key":
+                continue
+            assert role.target is not None and role.column is not None
+            referred = (role.target, role.column)
+            if referred not in keys:
+                keys[referred] = {
+                    row.get(role.column) for row in archive.tables.get(role.target, [])
+                }
+            for row in rows:
+                value = row.get(column)
+                if value is not None and value not in keys[referred]:
+                    raise _invalid_reference(
+                        f"{name}.{column} names {role.target} {value!r},"
+                        " which is not archived"
+                    )
+    for row in archive.tables.get("jobs", []):
+        result = row.get("result")
+        if isinstance(result, dict) and "sha256" in result:
+            raise _invalid_reference(f"job {row.get('id')} names a result file")
+
+
+def _check_blob_references(conn: Connection, archive: Archive) -> None:
+    """A stored file the rows name (``BLOB_REFERENCES``) is in the archive,
+    an ontology file of its pins, or not on this server either (a file the
+    source had deleted).
+
+    Raises:
+        DomainError: ``ARCHIVE_INVALID``.
+    """
+    outside = sorted(
+        _blob_refs(archive.tables)
+        - set(archive.blobs)
+        - {str(row.get("sha256")) for row in archive.ontology_files}
+    )
+    found = conn.execute(
+        select(StoredFileRow.sha256).where(StoredFileRow.sha256.in_(outside))
+    ).first()
+    if found is not None:
+        raise _invalid_reference(f"a row names the stored file {found[0]}")
 
 
 def verify(conn: Connection, archive: Archive, mapper: Mapper) -> dict[str, Any]:
@@ -1770,8 +1873,10 @@ def _import(
     rename_pseudonyms: bool,
     now: datetime | None,
 ) -> dict[str, Any]:
-    check_revision(archive.manifest.get("alembic_revision"))
+    with db.snapshot() as conn:
+        check_revision(archive.manifest.get("alembic_revision"), current_revision(conn))
     _check_columns(archive)
+    _check_references(archive)
     at = now or datetime.now(UTC)
     source = archive.tables[PROJECTS][0]
     source_instance = str(archive.manifest.get("instance_id") or "")
@@ -1782,6 +1887,7 @@ def _import(
         key, name = _free_key_and_name(conn, source["project_key"], source["name"])
         conn.execute(select(func.pg_advisory_xact_lock(_lock_id("project", key))))
         _check_ontology_files(conn, archive)
+        _check_blob_references(conn, archive)
         plan = _resolve_people(
             conn,
             archive,
@@ -2054,7 +2160,10 @@ def discard_archive_files(
     ).all()
     for job_id, result in exports:
         digest = str(result["sha256"])
-        if delete_unreferenced_file(conn, digest, ignore_job_kinds=ARCHIVE_JOB_KINDS):
+        Database.lock_blob(conn, digest)
+        if not _archive_in_use(conn, digest, job_id) and delete_unreferenced_file(
+            conn, digest, ignore_job_kinds=ARCHIVE_JOB_KINDS
+        ):
             deleted.append(digest)
         conn.execute(
             update(JobRow)
@@ -2072,7 +2181,7 @@ def discard_archive_files(
     ).scalars()
     for digest in sorted({str(d) for d in uploads}):
         Database.lock_blob(conn, digest)
-        if _import_waits_for(conn, digest):
+        if _archive_in_use(conn, digest):
             continue
         if delete_unreferenced_file(conn, digest, ignore_job_kinds=ARCHIVE_JOB_KINDS):
             deleted.append(digest)
@@ -2098,15 +2207,25 @@ def release_archive_file(db: Database, job_id: int) -> None:
         unlink_after_commit(db, deleted)
 
 
-def _import_waits_for(conn: Connection, digest: str, job_id: int = 0) -> bool:
-    """Whether another import job, queued or running, needs the file."""
+def _archive_in_use(conn: Connection, digest: str, job_id: int = 0) -> bool:
+    """Whether another archive job still needs the file: an import, queued or
+    running, or an export within its retention (an archive imported on its
+    own server is the export's file)."""
     return (
         conn.execute(
             select(JobRow.id).where(
-                JobRow.kind == IMPORT_KIND,
-                JobRow.status.in_(("queued", "running")),
                 JobRow.id != job_id,
-                JobRow.payload["blob_sha256"].astext == digest,
+                (
+                    (JobRow.kind == IMPORT_KIND)
+                    & JobRow.status.in_(("queued", "running"))
+                    & (JobRow.payload["blob_sha256"].astext == digest)
+                )
+                | (
+                    (JobRow.kind == EXPORT_KIND)
+                    & (JobRow.status == "succeeded")
+                    & (JobRow.result["sha256"].astext == digest)
+                    & JobRow.result["file_deleted_at"].astext.is_(None)
+                ),
             )
         ).first()
         is not None
@@ -2119,7 +2238,7 @@ def _release_upload(db: Database, digest: str, job_id: int) -> None:
 
     with db.transaction() as conn:
         Database.lock_blob(conn, digest)
-        if _import_waits_for(conn, digest, job_id):
+        if _archive_in_use(conn, digest, job_id):
             return
         if delete_unreferenced_file(conn, digest, ignore_job_kinds=ARCHIVE_JOB_KINDS):
             unlink_after_commit(db, [digest])
@@ -2131,7 +2250,7 @@ def project_archive_export(job: Job, ctx: JobContext) -> dict[str, Any]:
     ``payload.include_ontology_files`` (default true) adds the ontology and
     translation files of the pins. The ZIP is kept ``ARCHIVE_RETENTION``.
     """
-    from ontotator.exchange.jobs import store_file
+    from ontotator.exchange.jobs import store_path
 
     db = ctx.db
     actor = _require_admin(db, job)
@@ -2146,7 +2265,7 @@ def project_archive_export(job: Job, ctx: JobContext) -> dict[str, Any]:
             include_ontology_files=include,
             job_id=job.id,
         )
-        sha = store_file(db, built.path.read_bytes())
+        sha = store_path(db, built.path)
     manifest = built.manifest
     result = {
         "sha256": sha,
@@ -2159,6 +2278,9 @@ def project_archive_export(job: Job, ctx: JobContext) -> dict[str, Any]:
         "ontology_files_included": include,
         "created_at": manifest["created_at"],
         "expires_at": (datetime.now(UTC) + ARCHIVE_RETENTION).isoformat(),
+        # The upload limit of the Projects page (None from the command line),
+        # so the page can say when an archive must be imported on the CLI.
+        "upload_limit": job.payload.get("upload_limit"),
     }
     with db.transaction() as conn:
         record_audit(

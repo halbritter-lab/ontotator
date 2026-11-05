@@ -16,12 +16,15 @@ from ontotator.exchange.archive_tables import (
     EXCLUDED,
     EXTRA_REFERENCES,
     PLAIN_INTEGER_COLUMNS,
+    PLAIN_TEXT_ID_COLUMNS,
     PSEUDONYM_COLUMNS,
     PSEUDONYM_LABEL_COLUMNS,
+    TEXT_REFERENCES,
     WORKSPACE_KEY_COLUMNS,
     all_tables,
     archived_names,
     column_roles,
+    global_ids,
     insert_order,
     project_scoped,
     table,
@@ -125,6 +128,42 @@ def test_every_integer_reference_column_has_a_role() -> None:
             ):
                 unclassified.append(f"{name}.{column.name}")
     assert unclassified == []
+
+
+def test_every_text_reference_must_name_a_row_of_the_archive() -> None:
+    """A text id that can name a row of another project here (a foreign key
+    without the project, or a column named like a server-wide id) has the
+    ``key`` role, which the import checks against the archive, or is declared
+    plain: a new reference is not copied blindly (#325 review)."""
+    archived = set(archived_names())
+    server_wide = {column for _, column in global_ids()}
+    unclassified = []
+    for name in archived_names():
+        roles = column_roles(name)
+        own_key = {c.name for c in table(name).primary_key.columns}
+        for column in table(name).columns:
+            if (name, column.name) in PLAIN_TEXT_ID_COLUMNS:
+                continue
+            scoped = {
+                "project_id" in {c.name for c in fk.constraint.columns}
+                for fk in column.foreign_keys
+                if fk.column.table.name in archived
+            }
+            named_like = column.name not in own_key and any(
+                column.name == key or column.name.endswith(f"_{key}")
+                for key in server_wide
+            )
+            # A foreign key with the project: the database keeps it inside.
+            if (False in scoped or (named_like and True not in scoped)) and roles[
+                column.name
+            ].kind not in {"key", "row"}:
+                unclassified.append(f"{name}.{column.name}")
+    assert unclassified == []
+    for (name, column), (target, referred) in TEXT_REFERENCES.items():
+        assert column_roles(name)[column].kind == "key"
+        assert referred in {c.name for c in table(target).columns}
+    assert column_roles("problem_report_events")["report_id"].kind == "key"
+    assert column_roles("task_hold_state")["release_event_id"].kind == "key"
 
 
 def test_extra_references_name_archived_columns() -> None:

@@ -210,7 +210,7 @@ To export a project:
 1. Click **Projects** in the sidebar.
 2. Under **Project archives**, **Export a project**, choose the **Project**.
 3. Keep **Include ontology files** ticked, unless the other server already has the same ontology and translation files.
-4. Click **Export archive**. When **Archive ready** appears, click **Download archive**.
+4. Click **Export archive**. When **Archive ready** appears, click **Download archive**. When the archive is larger than this page accepts as an upload (300 MiB unless the operator changed it), the message says so: the operator then imports it on the other server on the command line.
 
 An export is refused while an import or export of the project is still running. Download the archive within 24 hours: the server then deletes it, and at once when an account is erased. Export again to get a new one. The server also deletes an uploaded archive once its import has finished.
 
@@ -218,9 +218,9 @@ To import an archive on the other server:
 
 1. Click **Projects** in the sidebar.
 2. Under **Import an archive**, choose the file in **Archive file (.zip)**.
-3. Click **Import archive**. When **Project imported** appears, it names the new project, the people matched to accounts here and the pseudonym-only people.
+3. Click **Import archive**. When **Project imported** appears, it names the new project, the people matched to accounts here, the pseudonym-only people and any new pseudonyms in the copied work (for example `ann-0005 → ann-0007`).
 
-The import checks every file against the archive's manifest first and refuses a damaged, incomplete or newer archive, and one that would expand to far more than its size. The manifest is not signed, so the check finds damage, not a deliberate change: only import archives from a source you trust. It then reads the imported project back and compares every table with the archive; a difference undoes the whole import. When the project key is taken here, the copy gets a suffix such as `-2`, and the name a suffix such as *(2)*.
+Both servers must run the same Ontotator version: an archive from another version is refused. The import checks every file against the archive's manifest first and refuses a damaged or incomplete archive, one that would expand to far more than its size, and one whose records point to another project here. The manifest is not signed, so the check finds damage, not a deliberate change: only import archives from a source you trust. It then reads the imported project back and compares every table with the archive; a difference undoes the whole import. When the project key is taken here, the copy gets a suffix such as `-2`, and the name a suffix such as *(2)*; a copy of such a copy gets the next number (`-3`, *(3)*).
 
 People are matched by e-mail address. A person with an account of the same e-mail address keeps the roles in the project. A person without such an account becomes a pseudonym-only person: an anonymised account with the person's pseudonym, without name, e-mail address or login. Work recorded under a pseudonym keeps that pseudonym. When the matched account has another pseudonym, the work stays with a pseudonym-only person that is linked to the account, and the account gets the person's roles. A pseudonym-only person can be linked to an account later on the command line (see the [operations guide](../operations.md#move-a-project-to-another-server)).
 

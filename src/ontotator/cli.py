@@ -7,6 +7,7 @@ import hashlib
 import ipaddress
 import json
 import os
+import shutil
 import stat
 import sys
 from collections.abc import Iterator
@@ -841,10 +842,12 @@ def projects_export_archive(
         )
         if job is None:
             return
-        data = db.blobs.get(job.result["sha256"])
         try:
-            with out.open("xb") as handle:
-                handle.write(data)
+            with (
+                db.blobs.path(job.result["sha256"]).open("rb") as stored,
+                out.open("xb") as handle,
+            ):
+                shutil.copyfileobj(stored, handle, 1024 * 1024)
         except FileExistsError:
             _fail("OUTPUT_EXISTS", f"{out} exists; choose another file.")
         # The file is out: the server keeps no copy (#306).
@@ -889,11 +892,10 @@ def projects_import_archive(
     people without login (link them later with 'admin users link-person').
     A taken project key gets a suffix such as '-2'.
     """
-    from ontotator.exchange.jobs import store_file
+    from ontotator.exchange.jobs import store_path
 
-    data = path.read_bytes()
     with _open_database(ctx) as db:
-        sha = store_file(db, data)
+        sha = store_path(db, path)
         job = _run_job(
             db,
             "project_archive_import",

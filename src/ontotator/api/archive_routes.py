@@ -7,7 +7,8 @@ uploaded one is deleted when its import job ends.
 """
 
 from datetime import UTC, datetime
-from tempfile import TemporaryFile
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
@@ -25,7 +26,7 @@ from ontotator.exchange.archive import (
     expire_archive_files,
 )
 from ontotator.exchange.archive_tables import ARCHIVE_JOB_KINDS
-from ontotator.exchange.jobs import store_file
+from ontotator.exchange.jobs import store_path
 from ontotator.storage.repository import Repository
 from ontotator.storage.tables import JobRow, ProjectRow
 
@@ -82,6 +83,7 @@ def export_archive(
         {
             "project": body.project_key,
             "include_ontology_files": body.include_ontology_files,
+            "upload_limit": request.app.state.config.max_ontology_bytes,
         },
         project_id=project_id,
         actor=_actor(principal),
@@ -104,21 +106,22 @@ async def import_archive(
     require_system_admin(principal)
     limit: int = request.app.state.config.max_ontology_bytes
     total = 0
+    db = request.app.state.repo.db
+    # Spooled to disk and stored from there, never held in memory.
     try:
-        with TemporaryFile() as handle:
-            while chunk := await file.read(min(1024 * 1024, limit - total + 1)):
-                total += len(chunk)
-                if total > limit:
-                    raise PayloadTooLarge(
-                        "The archive exceeds the configured byte limit."
-                    )
-                handle.write(chunk)
-            handle.seek(0)
-            data = handle.read()
+        with TemporaryDirectory(prefix="ontotator-upload-") as tmp:
+            path = Path(tmp) / "archive.zip"
+            with path.open("wb") as handle:
+                while chunk := await file.read(min(1024 * 1024, limit - total + 1)):
+                    total += len(chunk)
+                    if total > limit:
+                        raise PayloadTooLarge(
+                            "The archive exceeds the configured byte limit."
+                        )
+                    handle.write(chunk)
+            sha = await run_in_threadpool(store_path, db, path)
     finally:
         await file.close()
-    db = request.app.state.repo.db
-    sha = await run_in_threadpool(store_file, db, data)
     job_id = request.app.state.jobs.enqueue(
         IMPORT_KIND,
         {

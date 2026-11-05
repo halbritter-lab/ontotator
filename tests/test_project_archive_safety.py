@@ -43,7 +43,7 @@ from ontotator.auth.accounts import AccountService
 from ontotator.auth.audit import Actor
 from ontotator.domain.errors import DomainError
 from ontotator.exchange import archive as project_archive
-from ontotator.exchange.jobs import HANDLERS
+from ontotator.exchange.jobs import HANDLERS, store_file
 from ontotator.jobs.queue import JobQueue
 from ontotator.storage.tables import (
     AssignmentRow,
@@ -612,3 +612,169 @@ def test_people_outside_the_work_are_named_without_email(tmp_path: Path) -> None
             }
         assert people["auditor"]["email"] is None
         assert people[scenario.users["ann-0001"]]["email"] == "annie@example.org"
+
+
+# 12. Fix round of the #325 review ------------------------------------------
+
+
+def _craft(data: bytes, table_name: str, change: Any) -> bytes:
+    """The archive with ``change(rows)`` applied to one table, the manifest
+    made to match: a deliberate change, not damage."""
+
+    def apply(files: dict[str, bytes]) -> None:
+        name = f"tables/{table_name}.jsonl"
+        rows = change([json.loads(line) for line in files[name].splitlines()])
+        files[name] = project_archive.jsonl(rows)
+        manifest = json.loads(files["manifest.json"])
+        manifest["rows"][table_name] = len(rows)
+        manifest["files"][name] = {
+            "sha256": hashlib.sha256(files[name]).hexdigest(),
+            "size": len(files[name]),
+        }
+        files["manifest.json"] = json.dumps(manifest).encode()
+
+    return _rewrite(data, apply)
+
+
+def _set_first(column: str, value: Any) -> Any:
+    def change(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        assert rows
+        rows[0][column] = value
+        return rows
+
+    return change
+
+
+def test_references_out_of_the_archive_are_refused(tmp_path: Path) -> None:
+    """A text id naming another project's row (a round, a report, ...) or a
+    job result naming a stored file: the import refuses the archive."""
+    with (
+        TestClient(_app(tmp_path / "s")) as source,
+        TestClient(_app(tmp_path / "t")) as target,
+    ):
+        scenario = _simple_project(source.app)  # type: ignore[arg-type]
+        db = _db(source)
+        # An export job of the project: the archive keeps it, not its file.
+        _run_job(
+            db,
+            "edit_log_export",
+            {"project": scenario.key},
+            project_id=_project_id(db, scenario.key),
+        )
+        data = _export(source, scenario.key, tmp_path)
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            jobs = [
+                json.loads(line)
+                for line in archive.read("tables/jobs.jsonl").splitlines()
+            ]
+        assert any(job["kind"] == "edit_log_export" for job in jobs)
+        assert not any("sha256" in (job["result"] or {}) for job in jobs)
+        foreign = "round-" + "f" * 32
+        crafted = {
+            "predecessor": _craft(
+                data, "work_rounds", _set_first("predecessor_round_id", foreign)
+            ),
+            "active round": _craft(
+                data, "assignments", _set_first("active_round_id", foreign)
+            ),
+            "job result": _craft(
+                data,
+                "jobs",
+                lambda rows: [
+                    {**row, "result": {**(row["result"] or {}), "sha256": "a" * 64}}
+                    if row["kind"] == "edit_log_export"
+                    else row
+                    for row in rows
+                ],
+            ),
+        }
+        stored = store_file(_db(target), b"another project's file")
+        crafted["stored file"] = _craft(
+            data,
+            "uploads",
+            # Refused before any row is written: the other columns do not matter.
+            lambda rows: [*rows, {"id": 999999, "files": [{"sha256": stored}]}],
+        )
+        for label, archive_data in crafted.items():
+            with pytest.raises(DomainError) as error:
+                project_archive.import_archive(_db(target), OPERATOR, archive_data)
+            assert error.value.code == "ARCHIVE_INVALID", label
+        with _db(target).snapshot() as conn:
+            assert conn.execute(select(ProjectRow.id)).first() is None
+        assert project_archive.import_archive(_db(target), OPERATOR, data)[
+            "verification"
+        ]["ok"]
+
+
+def test_tables_beyond_their_own_limit_are_refused_before_reading(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with (
+        TestClient(_app(tmp_path / "s")) as source,
+        TestClient(_app(tmp_path / "t")) as target,
+    ):
+        scenario = _simple_project(source.app)  # type: ignore[arg-type]
+        data = _export(source, scenario.key, tmp_path)
+        monkeypatch.setattr(project_archive, "MAX_ROWS_BYTES", 1024)
+        read = project_archive._copy_entry
+        names: list[str] = []
+        monkeypatch.setattr(
+            project_archive,
+            "_copy_entry",
+            lambda archive, info, out: (
+                names.append(info.filename) or read(archive, info, out)
+            ),
+        )
+        with pytest.raises(DomainError) as error:
+            project_archive.import_archive(_db(target), OPERATOR, data)
+        assert error.value.code == "ARCHIVE_TOO_LARGE"
+        assert "tables expand" in str(error.value)
+        assert names == ["manifest.json"]
+
+
+def test_an_import_on_the_same_server_keeps_the_export_file(tmp_path: Path) -> None:
+    """The export's file is the upload: it stays for the export's 24 hours,
+    and an export expiring keeps the file a queued import still needs."""
+    with TestClient(_app(tmp_path / "s")) as source:
+        scenario = _simple_project(source.app)  # type: ignore[arg-type]
+        db = _db(source)
+        export = _export_job(db, scenario.key)
+        sha = export.result["sha256"]
+        stored = store_file(db, db.blobs.get(sha))
+        assert stored == sha
+        job = _run_job(
+            db, "project_archive_import", {"blob_sha256": sha, "filename": "a.zip"}
+        )
+        assert job.status == "succeeded", job.error
+        assert db.blobs.path(sha).exists()
+
+        queue = JobQueue(db, HANDLERS)
+        queued = queue.enqueue(
+            "project_archive_import",
+            {"blob_sha256": sha, "filename": "a.zip"},
+            actor=OPERATOR,
+        )
+        later = datetime.now(UTC) + project_archive.ARCHIVE_RETENTION + timedelta(1)
+        project_archive.expire_archive_files(db, later)
+        assert db.blobs.path(sha).exists()
+        claimed = queue.claim(queued, "test")
+        assert claimed is not None
+        assert queue.run(claimed, "test").status == "succeeded"
+        assert not db.blobs.path(sha).exists()
+
+
+def test_copies_of_copies_continue_the_series(tmp_path: Path) -> None:
+    """No "-2-2" or "(2) (2)": a copy of a copy takes the next free number."""
+    with (
+        TestClient(_app(tmp_path / "s")) as source,
+        TestClient(_app(tmp_path / "t")) as target,
+    ):
+        scenario = _simple_project(source.app)  # type: ignore[arg-type]
+        data = _export(source, scenario.key, tmp_path)
+        first = project_archive.import_archive(_db(target), OPERATOR, data)
+        second = project_archive.import_archive(_db(target), OPERATOR, data)
+        assert second["project"] == f"{scenario.key}-2"
+        copy = _export(target, second["project"], tmp_path)
+        third = project_archive.import_archive(_db(target), OPERATOR, copy)
+        assert third["project"] == f"{scenario.key}-3"
+        assert third["name"] == f"{first['name']} (3)"

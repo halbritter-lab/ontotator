@@ -546,15 +546,24 @@ def _newer_format(files: dict[str, bytes]) -> None:
     files["manifest.json"] = json.dumps(manifest).encode()
 
 
+def _older_revision(files: dict[str, bytes]) -> None:
+    manifest = _manifest(files)
+    manifest["alembic_revision"] = "0030"
+    files["manifest.json"] = json.dumps(manifest).encode()
+
+
 @pytest.mark.parametrize(
     ("change", "code"),
     [
-        (_newer_revision, "ARCHIVE_SCHEMA_NEWER"),
+        # Rows are inserted as archived: export and import need the same
+        # revision, older ones too (no data migration of archived rows).
+        (_newer_revision, "ARCHIVE_SCHEMA_MISMATCH"),
+        (_older_revision, "ARCHIVE_SCHEMA_MISMATCH"),
         (_newer_format, "ARCHIVE_FORMAT_UNSUPPORTED"),
         (lambda files: files.clear(), "ARCHIVE_INVALID"),
     ],
 )
-def test_newer_schemas_and_other_files_are_refused(
+def test_other_schemas_and_other_files_are_refused(
     servers: tuple[TestClient, TestClient], tmp_path: Path, change: Any, code: str
 ) -> None:
     source, target = servers
@@ -563,22 +572,8 @@ def test_newer_schemas_and_other_files_are_refused(
     with pytest.raises(DomainError) as error:
         project_archive.import_archive(_db(target), OPERATOR, data)
     assert error.value.code == code
-
-
-def test_an_older_revision_is_accepted(
-    servers: tuple[TestClient, TestClient], tmp_path: Path
-) -> None:
-    source, target = servers
-    scenario = _simple_project(source.app)  # type: ignore[arg-type]
-
-    def older(files: dict[str, bytes]) -> None:
-        manifest = _manifest(files)
-        manifest["alembic_revision"] = "0030"
-        files["manifest.json"] = json.dumps(manifest).encode()
-
-    data = _rewrite(_export(source, scenario.key, tmp_path), older)
-    result = project_archive.import_archive(_db(target), OPERATOR, data)
-    assert result["verification"]["ok"]
+    if code == "ARCHIVE_SCHEMA_MISMATCH":
+        assert "same Ontotator version" in str(error.value)
 
 
 def test_without_ontology_files_the_target_needs_them(
@@ -774,7 +769,9 @@ def test_admin_api_exports_downloads_and_imports(
     )
     job = _wait(target_admin, imported.json()["job_id"])
     assert job["status"] == "failed" and "ARCHIVE_PSEUDONYM_TAKEN" in job["error"]
-    assert job["result"] is None
+    # Structured, so the Projects page can name the pseudonyms and its checkbox.
+    assert job["result"]["error"]["code"] == "ARCHIVE_PSEUDONYM_TAKEN"
+    assert job["result"]["error"]["details"]["pseudonyms"] == [taken]
     imported = target_admin.post(
         "/api/v1/admin/project-archives/import",
         files={"file": ("archive.zip", download.content, "application/zip")},

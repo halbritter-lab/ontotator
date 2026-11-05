@@ -8,6 +8,7 @@ a system admin (Q5).
 
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 from collections import Counter
@@ -74,6 +75,24 @@ def store_file(db: Database, data: bytes) -> str:
             .on_conflict_do_nothing()
         )
     return digest
+
+
+def store_path(db: Database, path: Path) -> str:
+    """``store_file`` of a file on disk, streamed rather than read into memory."""
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        while chunk := handle.read(1024 * 1024):
+            digest.update(chunk)
+    sha = digest.hexdigest()
+    with db.transaction() as conn:
+        Database.lock_blob(conn, sha)
+        db.blobs.put_file(path, sha)
+        conn.execute(
+            pg_insert(StoredFileRow)
+            .values(sha256=sha, size=path.stat().st_size)
+            .on_conflict_do_nothing()
+        )
+    return sha
 
 
 def delete_unreferenced_file(

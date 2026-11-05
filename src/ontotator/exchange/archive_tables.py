@@ -11,8 +11,10 @@ Everything else is read from the mapped schema: a column named ``project_id``
 holds the project, a foreign key to ``users.id`` a person, a foreign key to
 the identity column of an archived table one of that table's rows (the
 import renumbers it), a foreign key to ``sessions.id`` a login session of the
-source server (left out). ``EXTRA_REFERENCES`` adds the few integer
-references without a foreign key, in plain columns or inside JSON.
+source server (left out), a foreign key to another text key of an archived
+table that does not include the project a row the archive must hold.
+``EXTRA_REFERENCES`` adds the few integer references without a foreign key,
+in plain columns or inside JSON, ``TEXT_REFERENCES`` the text ones.
 """
 
 from __future__ import annotations
@@ -21,7 +23,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from functools import cache
 
-from sqlalchemy import Column, String, Table
+from sqlalchemy import Column, ForeignKey, String, Table
 
 from ontotator.storage.tables import Base
 
@@ -242,6 +244,17 @@ PSEUDONYM_JSON_KEYS: frozenset[str] = frozenset(
 # Integer columns named like references that are plain values.
 PLAIN_INTEGER_COLUMNS: frozenset[tuple[str, str]] = frozenset()
 
+# Text references to a server-wide id (``global_ids``) without a foreign key:
+# (table, column) -> (table, column) referred to. Like a single-column foreign
+# key into an archived table's text key, the value must name a row of the
+# archive, never one of another project here.
+TEXT_REFERENCES: dict[tuple[str, str], tuple[str, str]] = {
+    ("assignments", "active_round_id"): ("work_rounds", "round_id"),
+    ("problem_reports", "round_id"): ("work_rounds", "round_id"),
+}
+# Text columns named like a server-wide id that are not references to one.
+PLAIN_TEXT_ID_COLUMNS: frozenset[tuple[str, str]] = frozenset()
+
 
 def archived_names() -> tuple[str, ...]:
     return tuple(entry.name for entry in ARCHIVED)
@@ -282,12 +295,19 @@ def identity_column(t: Table) -> Column[int] | None:
     return None
 
 
+def _columns_of(fk: ForeignKey) -> set[str]:
+    """The columns of the foreign key's constraint (several: a composite key)."""
+    return {c.name for c in fk.constraint.columns} if fk.constraint else set()
+
+
 @dataclass(frozen=True)
 class ColumnRole:
     """How the import treats one column."""
 
-    kind: str  # project, person, session, row, identity, plain
+    kind: str  # project, person, session, row, key, identity, plain
     target: str | None = None
+    # ``key``: the referred column of ``target`` (a text id the archive must hold).
+    column: str | None = None
 
 
 @cache
@@ -318,10 +338,17 @@ def column_roles(name: str) -> dict[str, ColumnRole]:
                     fk.column.name == ident.name
                 ):
                     role = ColumnRole("row", target)
+                elif target in archived and "project_id" not in _columns_of(fk):
+                    # A key without the project: it could name another
+                    # project's row (a composite key with project_id cannot).
+                    role = ColumnRole("key", target, fk.column.name)
         roles[column.name] = role
     for extra in EXTRA_REFERENCES:
         if extra.table == name and not extra.path:
             roles[extra.column] = ColumnRole("row", extra.target)
+    for (owner, column_name), (target, referred) in TEXT_REFERENCES.items():
+        if owner == name:
+            roles[column_name] = ColumnRole("key", target, referred)
     return roles
 
 
