@@ -203,8 +203,8 @@ def translation_review_export(job: Job, ctx: JobContext) -> dict[str, Any]:
             .join(ProjectRow, ProjectRow.id == JobRow.project_id)
             .where(JobRow.id == job.id)
         ).one_or_none()
-        # A job a token started names the token in its stored payload for the
-        # audit; the queue hands the handler the payload without it.
+        # The queue keeps the API token that started the job in the stored
+        # payload and hands the handler the payload without it (issue 305).
         stored = (
             None
             if row is None
