@@ -28,7 +28,11 @@ from typing import Any
 
 import ontospan
 
-from ontotator.exchange.final_export_guide import bundle_entry, submission_kind
+from ontotator.exchange.final_export_guide import (
+    bundle_entry,
+    bundle_file,
+    submission_kind,
+)
 
 FINDINGS_COLUMNS = (
     "row_type",
@@ -127,7 +131,7 @@ Label = Callable[[ontospan.Layer, str], str | None]
 
 @dataclass(frozen=True)
 class ExportedUnit:
-    """One submission as a T1 unit of ``selected.t1.zip`` or ``provenance.t1.zip``."""
+    """One submission as a unit of an Ontospan bundle of the archive."""
 
     submission_id: str
     row_type: str
@@ -159,9 +163,9 @@ def read_units(
     """The units of the bundles, in the order the worker wrote them."""
     units = []
     for row_type, archive, order in (
-        ("selected", "selected.t1.zip", selected_order),
-        ("provenance", "provenance.t1.zip", provenance_order),
-        ("compared", "compared.t1.zip", compared_order),
+        ("selected", bundle_file("selected"), selected_order),
+        ("provenance", bundle_file("provenance"), provenance_order),
+        ("compared", bundle_file("compared"), compared_order),
     ):
         if not order:
             continue

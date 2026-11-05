@@ -17,7 +17,11 @@ from ontotator.domain.consolidation_origins import finding_origins, origin_count
 from ontotator.domain.errors import DomainError
 from ontotator.domain.workspace import Submission
 from ontotator.exchange.final_content import thaw_content
-from ontotator.exchange.final_export_guide import guide_files, submission_kind
+from ontotator.exchange.final_export_guide import (
+    bundle_file,
+    guide_files,
+    submission_kind,
+)
 from ontotator.exchange.final_tables import Proposal, read_units, table_files
 from ontotator.exchange.proposal_checks import (
     proposal_check_records,
@@ -257,7 +261,7 @@ def final_t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
         (json.dumps(entry, sort_keys=True, ensure_ascii=False) + "\n").encode()
         for entry in payload["content"]["documents"].values()
     )
-    files = {"selected.t1.zip": selected, "source-texts.jsonl": sources}
+    files = {bundle_file("selected"): selected, "source-texts.jsonl": sources}
     compared_ids = set(payload.get("compared_submission_ids", []))
     closure = [
         sub
@@ -280,7 +284,7 @@ def final_t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
             round_kinds=payload["round_kinds"],
             views=views,
         )
-        files[f"{bundle_kind}.t1.zip"] = ctx.db.blobs.path(
+        files[bundle_file(bundle_kind)] = ctx.db.blobs.path(
             written["sha256"]
         ).read_bytes()
     files.update(

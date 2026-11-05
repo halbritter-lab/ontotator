@@ -104,9 +104,9 @@ People appear as pseudonyms in every export.
 |---|---|
 | `README.txt` | Plain-language guide to the archive, with the left-out texts and the warnings acknowledged at export. |
 | `index.csv` | One row per selected result (`row_type` `selected`), left-out text (`omitted`), earlier submission the results refer to (`provenance`) and other annotation of a text accepted directly (`compared`), naming the bundle file and entry that holds it. |
-| `selected.t1.zip` | The final results as a T1 (ontospan) bundle, one unit per result. |
-| `provenance.t1.zip` | The submissions the final results were consolidated or carried from. Not final results. |
-| `compared.t1.zip` | For a text whose result was accepted directly, without consolidation: the other people's latest annotations of it, so that the agreement covers every text. Not final results. |
+| `selected-results.ontospan.zip` | The final results as an Ontospan bundle, one unit per result. |
+| `provenance-results.ontospan.zip` | The submissions the final results were consolidated or carried from. Not final results. |
+| `compared-results.ontospan.zip` | For a text whose result was accepted directly, without consolidation: the other people's latest annotations of it, so that the agreement covers every text. Not final results. |
 | `source-texts.jsonl` | The exact text versions, one per line; `source_text_line` in the tables names the line. |
 | `findings.csv` | One row per finding of every submission in the two bundles. |
 | `agreement.csv` | The agreement of every two annotators on each text. |
@@ -119,15 +119,15 @@ positions are Unicode code points into the canonical text of the line of
 `source-texts.jsonl` named in `source_text_line`. The tables are computed
 from the two bundles, so each row describes what the bundles hold.
 
-A T1 bundle names, per text, the ontology release recorded with its submission,
+An Ontospan bundle of the final export names, per text, the ontology release recorded with its submission,
 which can be older than the project's current release. If its texts were made
 under different releases, the newest keeps the layer ID and each older release
 gets a layer of its own, `<layer id>@<digest prefix>`, with its release and digest.
 
 ### findings.csv
 
-One row per finding (annotation) of each unit of `selected.t1.zip`,
-`compared.t1.zip` and `provenance.t1.zip`, in the order of `index.csv`:
+One row per finding (annotation) of each unit of `selected-results.ontospan.zip`,
+`compared-results.ontospan.zip` and `provenance-results.ontospan.zip`, in the order of `index.csv`:
 
 - the text: `case_id`, `language`, `document_id`, `text_version`,
   `source_text_line`;
@@ -168,7 +168,7 @@ the consolidation merged, and only those: work submitted on the text after
 the consolidation is not compared. For a text whose result was accepted
 directly (the selected result is an annotation from scratch or a proposal
 check), the export adds the other people's latest live annotations of it
-(`compared.t1.zip`), chosen when the export is prepared as the annotation
+(`compared-results.ontospan.zip`), chosen when the export is prepared as the annotation
 results export chooses them, so that texts accepted because everyone agreed
 are not left out. A result carried to a new text version gets no compared
 annotations; its agreement is that of the earlier work it was carried from.
@@ -311,7 +311,7 @@ precision. Added findings are what the tool missed. The precision in
 
 Since export format `ontotator-final-export/v2` (the `format` field of
 `receipt.json`), the receipt tells how each finding of a consolidation came
-about. In the T1 bundle every such finding has provenance method `merged`, so
+about. In the Ontospan bundle every such finding has provenance method `merged`, so
 the bundle alone cannot tell an automatically taken-over match from a
 consolidator's decision. `receipt.json` holds `consolidations`, keyed by the
 submission ID of every consolidation in the archive (selected and

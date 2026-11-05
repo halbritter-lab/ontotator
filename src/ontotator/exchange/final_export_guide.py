@@ -3,8 +3,8 @@
 The analysis tables (findings.csv and the others) are in ``final_tables``.
 
 Both are derived only from the frozen snapshot payload and the snapshot row, so
-the same snapshot always yields byte-identical files. Nothing inside the T1
-bundles is renamed; the README explains the ontospan names instead.
+the same snapshot always yields byte-identical files. Nothing inside the
+Ontospan bundles is renamed; the README explains the ontospan names instead.
 """
 
 import csv
@@ -37,6 +37,12 @@ INDEX_COLUMNS = (
 )
 _ROW_ORDER = {"selected": 0, "omitted": 1, "compared": 2, "provenance": 3}
 _WIDTH = 76
+
+
+def bundle_file(row_type: str) -> str:
+    """The archive file of the Ontospan bundle of ``row_type`` (``selected``,
+    ``provenance`` or ``compared``). Until #321 these were ``<row type>.t1.zip``."""
+    return f"{row_type}-results.ontospan.zip"
 
 
 def bundle_entry(index: int) -> str:
@@ -129,7 +135,7 @@ def build_index_csv(
                 selection["language"],
                 selection["document_id"],
                 sid,
-                "selected.t1.zip",
+                bundle_file("selected"),
                 selected_index[sid],
             )
         )
@@ -159,7 +165,7 @@ def build_index_csv(
                     language,
                     document_id,
                     sid,
-                    f"{row_type}.t1.zip",
+                    bundle_file(row_type),
                     index,
                 )
             )
@@ -246,16 +252,19 @@ def build_readme(
         "index.csv           One row per selected result, omission and provenance",
         "                    or compared submission, with the file and entry that",
         "                    holds it.",
-        "selected.t1.zip     The selected final results as a T1 (ontospan) bundle.",
+        bundle_file("selected"),
+        "                    The selected final results as an Ontospan bundle.",
     ]
     if provenance_ids:
         out += [
-            "provenance.t1.zip   Earlier submissions that selected results refer to",
+            bundle_file("provenance"),
+            "                    Earlier submissions that selected results refer to",
             "                    through carried or merged findings. Not final results.",
         ]
     if compared_ids:
         out += [
-            "compared.t1.zip     The other annotations of texts whose result was",
+            bundle_file("compared"),
+            "                    The other annotations of texts whose result was",
             "                    accepted directly, for agreement. Not final results.",
         ]
     out += [
@@ -296,7 +305,7 @@ def build_readme(
             "  ",
         ),
         *_wrap(
-            "A T1 bundle is a ZIP with manifest.json and documents/NNNNN.json, one file "
+            "An Ontospan bundle is a ZIP with manifest.json and documents/NNNNN.json, one file "
             'per submission. index.csv names the file in "bundle_entry".',
             "- ",
             "  ",

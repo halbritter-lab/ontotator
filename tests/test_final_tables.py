@@ -158,7 +158,7 @@ def test_proposals_count_decisions_per_tool_and_person_and_match_the_result(
     # The second check was not selected: it is in the archive for comparison.
     assert (index[other]["row_type"], index[other]["archive_file"]) == (
         "compared",
-        "compared.t1.zip",
+        "compared-results.ontospan.zip",
     )
 
     table = rows(archive.read("proposals.csv"))
@@ -275,10 +275,12 @@ def test_agreement_covers_consolidated_and_directly_accepted_texts(tmp_path):
     assert set(receipt["provenance_only_submission_ids"]) == {FIRST, SECOND}
     index = {r["submission_id"]: r for r in rows(archive.read("index.csv"))}
     assert index["sub-c2-ben"]["row_type"] == "compared"
-    with zipfile.ZipFile(io.BytesIO(archive.read("compared.t1.zip"))) as bundle:
+    with zipfile.ZipFile(
+        io.BytesIO(archive.read("compared-results.ontospan.zip"))
+    ) as bundle:
         unit = json.loads(bundle.read(index["sub-c2-ben"]["bundle_entry"]))
     assert unit["annotation_set"]["annotation_set_id"] == "submission-sub-c2-ben"
-    assert "compared.t1.zip" in archive.read("README.txt").decode()
+    assert "compared-results.ontospan.zip" in archive.read("README.txt").decode()
 
     pairs = {r["document_id"]: r for r in rows(archive.read("agreement.csv"))}
     assert set(pairs) == {"c1-en", "c2-en"}
@@ -324,7 +326,7 @@ def test_work_after_a_consolidation_is_not_compared(tmp_path):
 
     receipt = json.loads(archive.read("receipt.json"))
     assert receipt.get("compared_submission_ids", []) == []
-    assert "compared.t1.zip" not in archive.namelist()
+    assert "compared-results.ontospan.zip" not in archive.namelist()
     assert "sub-c1-ana" not in {
         r["submission_id"] for r in rows(archive.read("index.csv"))
     }
@@ -446,10 +448,18 @@ def test_changed_and_added_findings_are_counted_per_person():
     )
     units = [
         ExportedUnit(
-            "s1", "provenance", "provenance.t1.zip", "documents/00000.json", None
+            "s1",
+            "provenance",
+            "provenance-results.ontospan.zip",
+            "documents/00000.json",
+            None,
         ),  # type: ignore[arg-type]
         ExportedUnit(
-            "s2", "provenance", "provenance.t1.zip", "documents/00001.json", None
+            "s2",
+            "provenance",
+            "provenance-results.ontospan.zip",
+            "documents/00001.json",
+            None,
         ),  # type: ignore[arg-type]
     ]
     proposals = [_proposal("s1", p) for p in ("p1", "p2", "p3", "p4")]
