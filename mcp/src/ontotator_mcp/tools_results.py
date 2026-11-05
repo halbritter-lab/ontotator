@@ -233,8 +233,9 @@ def register_results(server: MCPServer, api: OntotatorClient) -> None:
             ExportKind,
             Field(
                 description=(
-                    "'final': accepted final results with index.csv and a"
-                    " README (ZIP). 'phenopackets': the same accepted results"
+                    "'final': accepted final results with index.csv,"
+                    " findings.csv, agreement.csv, agreement-summary.csv,"
+                    " proposals.csv and a README (ZIP). 'phenopackets': the same accepted results"
                     " as one GA4GH Phenopacket per text, derived and lossy,"
                     " with a report of what was left out (ZIP)."
                     " 'annotations': every submission as an"
