@@ -7,6 +7,8 @@ description names. No tool may call a browser-only route.
 
 from __future__ import annotations
 
+import io
+import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +21,12 @@ from mcp import Client
 from shapes import build, page, panel, row, submission, work
 
 from ontotator_mcp.config import Settings
+from ontotator_mcp.resources import (
+    GUIDELINE_URI,
+    README_URI,
+    RESOURCE_SCOPES,
+    SETTINGS_URI,
+)
 from ontotator_mcp.server import build_server
 from ontotator_mcp.tooling import TOOL_SCOPES, scope_text
 
@@ -135,6 +143,60 @@ async def test_every_tool_names_the_scopes_of_its_routes(
                 listed[name].description or ""
             )
         assert wrong == {}, wrong
+
+
+RESOURCE_URIS = {
+    SETTINGS_URI: "ontotator://projects/p/settings",
+    GUIDELINE_URI: "ontotator://projects/p/guideline",
+    README_URI: "ontotator://jobs/1/readme",
+}
+
+
+@pytest.mark.anyio
+async def test_every_resource_names_the_scopes_of_its_routes(
+    fake: FakeApi, settings: Settings
+) -> None:
+    current = build("GuidelineSummary", version=1)
+    fake.on(
+        "GET",
+        f"{P}/guidelines",
+        build(
+            "GuidelineListing", current=current, latest_version=1, versions=[current]
+        ),
+    )
+    fake.on("GET", f"{P}/guidelines/{{version}}", build("GuidelineDocument", body="x"))
+    archive = io.BytesIO()
+    with zipfile.ZipFile(archive, "w") as bundle:
+        bundle.writestr("README.txt", "readme")
+    fake.on("GET", "/api/v1/jobs/{job_id}/download", archive.getvalue())
+    server = build_server(settings, transport=httpx.MockTransport(fake))
+    async with Client(server) as client:
+        templates = {
+            t.uri_template: t
+            for t in (await client.list_resource_templates()).resource_templates
+        }
+        assert set(templates) == set(RESOURCE_SCOPES) == set(RESOURCE_URIS)
+        wrong = {}
+        for template, uri in RESOURCE_URIS.items():
+            fake.calls.clear()
+            await client.read_resource(uri)
+            used = {scope(method, path) for method, path in fake.templates()}
+            if used != set(RESOURCE_SCOPES[template]):
+                wrong[template] = sorted(used)
+            description = templates[template].description or ""
+            assert scope_text(RESOURCE_SCOPES[template]) in description, template
+        assert wrong == {}, wrong
+
+
+def test_the_readme_lists_every_resource_with_its_scopes() -> None:
+    readme = (Path(__file__).resolve().parents[1] / "README.md").read_text()
+    rows = {
+        line.split(" | ")[0].removeprefix("| `").rstrip("`"): line
+        for line in readme.splitlines()
+        if line.startswith("| `ontotator://")
+    }
+    for uri, scopes in RESOURCE_SCOPES.items():
+        assert rows[uri].endswith(f"| {', '.join(scopes)} |"), uri
 
 
 @pytest.mark.anyio
