@@ -773,6 +773,32 @@ def test_only_a_system_token_exports_a_project_archive(
     assert imported.json()["code"] == "TOKEN_NOT_ALLOWED"
 
 
+@pytest.mark.parametrize("kind", ["system", "personal", "project"])
+def test_no_token_imports_a_project_archive(
+    app: FastAPI, admin: TestClient, kind: str
+) -> None:
+    """Issue 350: an import writes historical rows (audit events included) and
+    links people by e-mail, so it stays with a browser session and the CLI."""
+    url, scopes = {
+        "system": ("/api/v1/admin/tokens", ["read", "admin"]),
+        "personal": ("/api/v1/me/tokens", ["read", "import", "project-admin"]),
+        "project": (
+            f"/api/v1/projects/{PROJECT}/tokens",
+            ["read", "import", "export", "project-admin"],
+        ),
+    }[kind]
+    client = _bearer(app, _create(admin, scopes, url)["secret"], **ORIGIN)
+    imported = client.post(
+        "/api/v1/admin/project-archives/import",
+        files=[("file", ("a.zip", b"PK\x05\x06" + bytes(18)))],
+        data={"rename_pseudonyms": "true"},
+    )
+    assert imported.status_code == 403, imported.text
+    assert imported.json()["code"] == "TOKEN_NOT_ALLOWED"
+    assert requirement("POST", "/api/v1/admin/project-archives/import") is not None
+    assert ROUTE_SCOPES[("POST", "/api/v1/admin/project-archives/import")] == SESSION
+
+
 @pytest.mark.parametrize("kind", ["personal", "project"])
 def test_workspace_history_is_session_only(
     app: FastAPI, admin: TestClient, kind: str

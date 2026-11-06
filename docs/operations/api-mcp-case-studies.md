@@ -106,10 +106,10 @@ HPO publishes a new release in month four. The data warehouse later also wants t
 | Close the project: take the roles away | `PUT P/members/{username}` | `read`, `project-admin` | `set_member_roles` with `revoke_assignments` | covered |
 | Final export as the record of the project | `POST P/exports/final/preflight`, `POST P/exports/final` | `export` | `start_export` (`kind: final`) | covered |
 | Archive the whole project as one file | `POST /admin/project-archives/export`, `GET /admin/project-archives/jobs/{id}`, `GET /admin/project-archives/jobs/{id}/download` | `admin` (system token only) | `export_project_archive`, `download_project_archive` | covered (#325) |
-| Import the archive on the long-term server | `POST /admin/project-archives/import` | session only | none | covered by design (#325): an import creates a project and accounts, so a person does it in the browser |
+| Import the archive on the long-term server | `POST /admin/project-archives/import` | session only | none | covered by design (#325, #350): an import writes historical rows, audit entries included, and links people by e-mail, so it refuses every token; an administrator runs `ontotator admin projects import-archive` on the host or uses the Projects page |
 | Mark the project closed or read-only, or delete it | none | | | remaining gap |
 
-Verdict: **sufficient, one gap remains**. Ontology upgrades are fully covered with a dry run, Phenopackets are an export kind, and a system token archives a whole project into one file that an administrator imports on another server in the browser. There is still no project state such as closed or read-only; a project ends by withdrawing its work and its people, and by archiving it.
+Verdict: **sufficient, one gap remains**. Ontology upgrades are fully covered with a dry run, Phenopackets are an export kind, and a system token archives a whole project into one file that an administrator imports on another server with `ontotator admin projects import-archive` or in the browser; the server keeps the exported file for 24 hours. There is still no project state such as closed or read-only; a project ends by withdrawing its work and its people, and by archiving it.
 
 ## 5. Monitoring and the nightly export to a data warehouse
 
@@ -169,8 +169,8 @@ Verdict: **sufficient after this work**.
 | --- | --- |
 | Creating, listing and revoking tokens with a token | On purpose: a leaked token must not be able to mint successors. A person uses the web interface or `ontotator admin tokens`. |
 | Rotation in place | Creating the successor first and then revoking keeps a pipeline working without a moment without a token; an in-place rotation would need the token-minting route above. |
-| Annotation, review, translation review and lead corrections; undo, redo and reset in the editor (`/workspaces/{id}/history`) | Browser only on purpose: the work of people, not of scripts. |
-| Importing a project archive | Session only on purpose: an import creates a project and accounts on the target server. Exporting one is open to a system token. |
+| Annotation, review and translation review (its draft and decision, `PUT /translation-reviews/{id}/draft`, `POST /translation-reviews/{id}/submit`); undo, redo and reset in the editor (`/workspaces/{id}/history`) | Browser only on purpose: the work of people, not of scripts. Starting a lead correction, moving work to a new text version and handling a text change are the lead's steps and take `project-admin` (#345). |
+| Importing a project archive | Session and command line only on purpose (#350): an import writes historical rows, audit entries included, and links people by e-mail address, so a stolen token could plant work or audit history. `ontotator admin projects import-archive` on the host does a scripted move. Exporting one is open to a system token. If a real need appears, a separate `archive-import` scope with a dry run. |
 | Annotation mode change of texts with work (`P/annotation-mode-changes`) | The route is open to `project-admin`, but it discards submissions; it stays in the web interface, where the person sees what goes. |
 | Choosing a final result among differing submissions | Open to `project-admin`; a judgement on content that the web interface supports with the comparison. `accept_agreeing_texts` covers full agreement. |
 | Deciding on problem reports | Listing is a tool now. Deciding pauses or resumes work after reading the text. The action route is open to project tokens with `project-admin` since #351, but there is no MCP tool for it. |

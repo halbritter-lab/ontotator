@@ -143,6 +143,19 @@ Useful token sets: a project token with `read`, `import`, `export` and `project-
 
 `create_users` and `issue_setup_codes` return one-time codes with which a person sets a password on the login page. The codes are credentials. With `codes_path` they are written to a CSV file (`username`, `display_name`, `email`, `code`, `expires_at`) inside `ONTOTATOR_MCP_FILES_DIR`, readable by you only, and the result names only who got one; without it the codes are part of the tool result, and so of the conversation with the model. `create_users` skips usernames the server already has, so a repeated call adds only the missing people. `issue_setup_codes` renews only codes of people who never set a password, unless `include_active_accounts` (which ends the person's sessions and revokes their API tokens).
 
+### Project archives
+
+`export_project_archive` and `download_project_archive` (system token with `admin`) write one complete project, with the e-mail addresses of its people, as a ZIP for another server. The server keeps an exported archive for **24 hours** after its job finished (`expires_at` in the job result) and then deletes it; a download after that answers 410 and the job result records `file_deleted_at`, so download it within the day or export again.
+
+There is no import tool, on purpose: an import writes historical rows, audit entries included, and links people by e-mail address, so a stolen token could plant work or audit history. The import route refuses every token. A scripted move imports on the target server's host with the command line (`--rename-pseudonyms` when a pseudonym is taken there), or a system administrator uses the Projects page:
+
+```bash
+stage_file ./ward-7-archive.zip /tmp/ward-7-archive.zip   # see the operations guide
+docker compose exec ontotator_app ontotator admin projects import-archive /tmp/ward-7-archive.zip
+```
+
+[Move a project to another server](../docs/operations.md#move-a-project-to-another-server) describes `stage_file`, the checks of the import and how people are matched.
+
 ### Resources
 
 | URI | Content | Scope |
@@ -193,10 +206,11 @@ This example sets up an HPO annotation project in which annotators check the HPO
 
 Routes a token may not call (`session` in the contract), so no tool can offer them:
 
-- Lead corrections of translations (`POST .../documents/{doc}/lead-correction`), and annotation, review and translation review work in general.
+- Annotation, review and translation review work: the draft and the decision of a translation review (`PUT .../draft`, `POST .../submit`) are a person's own work, as an annotation is. Starting a lead correction, moving work to a new text version and handling a text change take `project-admin` (#345).
 - Marking a guideline version as read, a problem report as seen, and a visit of the Documents page.
 - Creating, listing and revoking tokens: a person does that in the web interface or with `ontotator admin tokens` on the server. A token reads only its own record.
-- Undo, redo and reset in the editor, and importing a project archive (it creates a project and accounts).
+- Undo, redo and reset in the editor.
+- Importing a project archive: use `ontotator admin projects import-archive` on the host or the Projects page (see [Project archives](#project-archives)).
 
 Limits of the token kinds:
 

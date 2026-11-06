@@ -4,7 +4,8 @@ from datetime import UTC, datetime
 from typing import Any
 
 import pytest
-from auth_harness import HARNESS, logged_in
+from auth_harness import HARNESS, ORIGIN, logged_in
+from fastapi.testclient import TestClient
 from sqlalchemy import delete, insert, select, update
 from test_translation_review_service import review_env as review_env
 from test_translation_review_service import save
@@ -721,3 +722,31 @@ def test_ordinary_review_is_not_reopened_while_a_correction_is_open(rejected):
         AssignmentService(env.db).reopen(HARNESS, env.ids["alice"])
     assert caught.value.code == "ASSIGNMENT_EXISTS"
     assert caught.value.details == {"reason": "lead_correction_open"}
+
+
+def test_a_project_token_starts_the_lead_correction(rejected):
+    """Issue 345: ``project-admin`` reaches the route; the audit names the token."""
+    env = rejected
+    session = logged_in(env.app, "leader")
+    tokens = {}
+    for name, scopes in (("read", ["read"]), ("admin", ["read", "project-admin"])):
+        created = session.post(
+            f"{BASE}/tokens", json={"name": "pipeline", "scopes": scopes}
+        )
+        assert created.status_code == 201, created.text
+        secret = created.json()["secret"]
+        tokens[name] = TestClient(
+            env.app, headers={"Authorization": f"Bearer {secret}", **ORIGIN}
+        )
+    body = {"expected_text_sha256": target_hash(env), "confirm_language": True}
+    path = f"{BASE}/documents/target/lead-correction"
+    refused = tokens["read"].post(path, json=body)
+    assert refused.status_code == 403, refused.text
+    assert refused.json()["code"] == "TOKEN_SCOPE_MISSING"
+    started = tokens["admin"].post(path, json=body)
+    assert started.status_code == 200, started.text
+    assert started.json()["lead_correction"] is True
+    assert started.json()["username"] == "leader"
+    (audit,) = audits(env, "translation.lead_correction_started")
+    token_id = tokens["admin"].get("/api/v1/me/token").json()["id"]
+    assert audit["api_token"]["id"] == token_id

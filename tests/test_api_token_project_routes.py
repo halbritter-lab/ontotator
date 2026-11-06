@@ -81,6 +81,9 @@ def test_the_resolved_routes_are_open_to_project_tokens() -> None:
         ("GET", "/api/v1/assignments/7/rounds"),
         ("POST", "/api/v1/assignments/7/rounds"),
         ("GET", "/api/v1/assignments/7/round-sources"),
+        # Issue 345: the text-change routes.
+        ("POST", "/api/v1/assignments/7/move-to-version"),
+        ("POST", "/api/v1/assignments/7/text-change-resolution"),
         ("GET", "/api/v1/problem-reports/r-1"),
         ("GET", "/api/v1/problem-reports/r-1/pause-candidates"),
         ("POST", "/api/v1/problem-reports/r-1/actions"),
@@ -100,6 +103,8 @@ def test_the_resolved_routes_are_open_to_project_tokens() -> None:
         ("POST", "/api/v1/problem-reports/r-1/seen"),
         ("POST", "/api/v1/rounds/r-1/open"),
         ("PUT", "/api/v1/translation-reviews/7/draft"),
+        # Issue 345: a translation review is personal work.
+        ("POST", "/api/v1/translation-reviews/7/submit"),
     ]:
         needed = requirement(method, path)
         assert needed is not None and needed.project_token is False, path
