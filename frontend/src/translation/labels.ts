@@ -92,6 +92,12 @@ export function nextTaskLabel(task: Pick<TaskSummary, "case_id" | "external_id" 
   return `Next task: ${taskText(task)}`;
 }
 
+/**
+ * The next task after a translation review when it is the reviewer's own annotation task on the same text, whose
+ * translation is finished for annotation (accepted, nothing else pending).
+ */
+export const annotateThisTextLabel = "Annotate this text now";
+
 /** Open tasks left in the project after submitting, besides the one just submitted. */
 export function remainingTasksText(count: number): string {
   if (count <= 0) return "No more open tasks in this project.";

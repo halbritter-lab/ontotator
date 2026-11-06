@@ -10,6 +10,7 @@ import { MY_TASKS, routeHref, type Route, type RouteLeaveGuard } from "../app/ro
 import { isNotAvailable, NotFound, TASK_UNAVAILABLE, TASK_UNAVAILABLE_REASON } from "../app/NotFound";
 import { useVersionAccess } from "../variants/useVersionAccess";
 import { TranslationReviewScreen } from "../translation/TranslationReviewScreen";
+import { annotateThisTextLabel } from "../translation/labels";
 import { WorkRoundsDialog } from "./WorkRoundsDialog";
 import { TaskProblemActions } from "./TaskProblemActions";
 import { TaskGuidelines } from "./TaskGuidelines";
@@ -37,11 +38,13 @@ interface TaskEditorProps {
 
 /**
  * M2 M-6, for annotations and translation reviews alike (issue 125): no second modal; a toast names the submission
- * ("View result" reopens it read-only) and the next open task of the project opens, else My tasks.
+ * ("View result" reopens it read-only) and the next open task of the project opens, else My tasks. After a translation
+ * review that is the reviewer's annotation of the same text once its translation is finished (`sameText`), and the
+ * toast says so.
  */
 function afterSubmit({ onNavigate, showToast }: Pick<TaskEditorProps, "onNavigate" | "showToast">) {
-  return ({ label, assignmentId, next }: { label: string; assignmentId: number; next?: number }) => {
-    showToast?.({ message: `${label} submitted.`, actionLabel: "View result", onAction: () => onNavigate({ name: "task", assignmentId }) });
+  return ({ label, assignmentId, next, sameText }: { label: string; assignmentId: number; next?: number; sameText?: true }) => {
+    showToast?.({ message: `${label} submitted.${sameText && next !== undefined ? ` ${annotateThisTextLabel}.` : ""}`, actionLabel: "View result", onAction: () => onNavigate({ name: "task", assignmentId }) });
     // The submitted task no longer counts in "My tasks (n)".
     notifyTasksChanged();
     onNavigate(next !== undefined ? { name: "task", assignmentId: next } : MY_TASKS);
@@ -201,7 +204,7 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
     assignment_id: assignment.id, project_key: assignment.project_key, project_name: assignment.project_key,
     document_id: assignment.document_id, task: assignment.task, status: assignment.status,
     language: workspace.view.document.language, updated_at: assignment.updated_at,
-    workflow_revision: assignment.workflow_revision, held: assignment.held, hold_reason: assignment.hold_reason, report_answered: false, waiting_for_translation_review: false, waiting_for_lead: false,
+    workflow_revision: assignment.workflow_revision, held: assignment.held, hold_reason: assignment.hold_reason, report_answered: false, waiting_for_translation_review: false, waiting_for_lead: false, translation_finished: false,
   };
   // Toolbar identity (spec section 7): short badge, full identity line as its title.
   const roundBadge = roundBadgeOf(roundInfo);

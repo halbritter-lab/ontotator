@@ -394,7 +394,7 @@ Steps:
    - **Accepted with corrections**: tick **Clinically relevant change** if your correction changes the clinical meaning; then a category and a **Rationale** are required.
    - **Accepted unchanged** after a failed automatic check: say in the **Rationale** why the flagged difference is correct.
 7. Click **Submit review…** (or press `Ctrl+Enter`), read what will happen, then click **Submit review**.
-8. A message confirms the review, with **View result**. Your next open task opens on its own, another translation review first, or **My tasks** if none is left.
+8. A message confirms the review, with **View result**. Your next open task opens on its own, another translation review first, or **My tasks** if none is left. If you also annotate this text and your review finished its translation, your annotation of the text opens instead and the message adds *Annotate this text now*. Finished means: the translation is accepted (with corrections, on the corrected version), every other translation of the text is accepted too, and no further review or decision of the lead is pending. After **Query** or **Rejected** it does not come first.
 
 If the source text was updated, **Source updates to review** appears. Open it, compare **Original source** and **Updated source**, and click **Submit review and resolve source update**.
 

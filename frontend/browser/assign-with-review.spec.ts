@@ -119,3 +119,40 @@ test("a task from proposals after a correction waits for the lead, who withdraws
   await annotator.reload();
   await expect(annotator.getByText("Waiting for the project lead")).toHaveCount(0);
 });
+
+/** The reviewer annotates the same text too: the task waits for their own review (rule on). */
+async function reviewerAnnotates(page: Page): Promise<Scenario> {
+  const response = await page.request.post("/__test_translation_review__?assignment=target&single=true&reviewer_annotates=true", { timeout: 60_000 });
+  expect(response.ok(), await response.text()).toBeTruthy();
+  return await response.json() as Scenario;
+}
+
+/** The decision is saved as the draft, then submitted in the review screen (the post-submit flow under test). */
+async function submitInScreen(reviewer: Page, s: Scenario, form: Record<string, unknown>) {
+  const url = `/api/v1/translation-reviews/${s.assignment_id}`;
+  const opened = await (await authenticatedRequest(reviewer, url)).json() as { draft: { revision: number; text: string } };
+  const saved = await authenticatedRequest(reviewer, `${url}/draft`, "PUT", { expected_revision: opened.draft.revision, text: opened.draft.text, form });
+  expect(saved.ok(), await saved.text()).toBeTruthy();
+  await reviewer.goto(`/#/tasks/${s.assignment_id}`);
+  await reviewer.getByRole("button", { name: "Submit review…", exact: true }).click();
+  await reviewer.getByRole("dialog", { name: "Submit this review?", exact: true }).getByRole("button", { name: "Submit review", exact: true }).click();
+}
+
+test("an accepted review opens the reviewer's annotation of the same text next", async ({ page, browser }) => {
+  const s = await reviewerAnnotates(page);
+  const reviewer = await session(browser, s.users.reviewer);
+  await submitInScreen(reviewer, s, { decision: "accepted_unchanged", clinical_change: false, categories: [], rationale: null });
+  await expect(reviewer.getByText(/ submitted\. Annotate this text now\.$/)).toBeVisible();
+  await expect(reviewer.getByRole("button", { name: "Finish & submit text", exact: true })).toBeVisible();
+  await shot(reviewer, "9-review-then-annotate");
+});
+
+test("a rejected review offers no annotation of the text: it still waits", async ({ page, browser }) => {
+  const s = await reviewerAnnotates(page);
+  const reviewer = await session(browser, s.users.reviewer);
+  await submitInScreen(reviewer, s, { decision: "rejected", clinical_change: true, categories: ["omission"], rationale: "A paragraph is missing." });
+  await expect(reviewer.getByText(/ submitted\.$/)).toBeVisible();
+  await expect(reviewer.getByText("Annotate this text now")).toHaveCount(0);
+  await expect(reviewer.getByTestId("task-row").filter({ hasText: "Waiting for translation review" })).toBeVisible();
+  await expect(reviewer.getByRole("button", { name: "Finish & submit text", exact: true })).toHaveCount(0);
+});

@@ -666,3 +666,103 @@ def test_a_paused_waiting_task_is_not_moved(env):
         )
     decide(env, review, "accepted_corrected", text="Korrigiert")
     assert my_task(env.alice, task)["document_id"] == TARGET
+
+
+# The next task after a translation review: the annotation of the same text is
+# offered only once its translation is finished (``translation_finished``).
+
+
+def finished(env, assignment_id):
+    return my_task(env.alice, assignment_id)["translation_finished"]
+
+
+def test_an_accepted_review_finishes_the_translation_of_the_waiting_task(env):
+    review, task = with_open_review(env)
+    assert finished(env, task) is False
+    decide(env, review, "accepted_unchanged")
+    # Visible in the very next My tasks list after the submit.
+    assert finished(env, task) is True
+    assert my_task(env.reviewer, review)["translation_finished"] is False
+
+
+def test_a_correction_finishes_the_translation_on_the_version_the_task_moved_to(
+    env,
+):
+    review, task = with_open_review(env)
+    record = decide(env, review, "accepted_corrected", text="Korrigierter Zieltext")
+    summary = my_task(env.alice, task)
+    assert summary["document_id"] == record["created_variant_id"]
+    assert summary["translation_finished"] is True
+
+
+@pytest.mark.parametrize("decision", ["rejected", "query"])
+def test_a_rejected_or_queried_translation_is_not_finished(env, decision):
+    review, task = with_open_review(env)
+    decide(env, review, decision)
+    assert finished(env, task) is False
+
+
+@pytest.mark.parametrize(
+    ("decision", "done"),
+    [("accepted_unchanged", True), ("rejected", False), ("accepted_corrected", False)],
+)
+def test_with_the_rule_off_only_an_accepted_target_version_is_finished(
+    env, decision, done
+):
+    set_rule(env.db, False)
+    review = assigned(env, "translation_review", "rev")
+    task = env.lead.post(
+        f"{BASE}/assignments",
+        json={
+            "rows": [{"document_id": TARGET, "username": "alice"}],
+            "task": "annotate",
+            "confirm_language": True,
+            "confirm_unreviewed_translation": True,
+        },
+    ).json()["created"][0]["id"]
+    assert finished(env, task) is False
+    corrected = decision == "accepted_corrected"
+    decide(env, review["id"], decision, text="Korrigiert" if corrected else "Zieltext")
+    # Rule off: a correction leaves the task on v1, which is no target any more.
+    assert my_task(env.alice, task)["document_id"] == TARGET
+    assert finished(env, task) is done
+
+
+def test_a_second_open_review_keeps_the_translation_unfinished(env):
+    review, task = with_open_review(env)
+    decide(env, review, "accepted_unchanged")
+    with env.db.transaction() as conn:
+        sha = conn.execute(
+            select(DocumentRow.text_sha256).where(DocumentRow.document_id == TARGET)
+        ).scalar_one()
+    second = env.lead.post(
+        f"{BASE}/documents/{TARGET}/translation-correction-assignment",
+        json={
+            "username": "bob",
+            "expected_text_sha256": sha,
+            "reason": "Second opinion",
+            "confirm_language": True,
+        },
+    )
+    assert second.status_code == 200, second.text
+    assert finished(env, task) is False
+    revoked = env.lead.post(
+        f"/api/v1/assignments/{second.json()['id']}/revoke", json={}
+    )
+    assert revoked.is_success, revoked.text
+    assert finished(env, task) is True
+
+
+def test_a_parallel_translation_not_yet_accepted_keeps_the_text_unfinished(env):
+    with_parallel_root(env)
+    review, task = with_open_review(env)
+    decide(env, review, "accepted_unchanged")
+    assert my_task(env.alice, task)["waiting_for_translation_review"] is False
+    assert finished(env, task) is False
+    set_status(env, OTHER_ROOT, "accepted")
+    assert finished(env, task) is True
+
+
+def test_a_source_text_is_never_a_finished_translation(env):
+    task = assigned(env, "annotate", document=SOURCE)
+    assert finished(env, task["id"]) is False

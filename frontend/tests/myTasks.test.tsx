@@ -8,7 +8,7 @@ const project = (key: string, name: string, can_manage = false): ProjectSummary 
   project_key: key, name, description: null, roles: [], allowed_modes: [], document_count: 0, can_manage,
 });
 const task = (id: number, status: TaskSummary["status"], key = "p", name = "Project P"): TaskSummary => ({
-  assignment_id: id, workflow_revision: 0, held: false, report_answered: false, waiting_for_translation_review: false, waiting_for_lead: false, project_key: key, project_name: name, document_id: `doc-${id}`, language: "de", task: id === 2 ? "review" : "annotate", status, updated_at: "2026-10-15T10:30:00Z",
+  assignment_id: id, workflow_revision: 0, held: false, report_answered: false, waiting_for_translation_review: false, waiting_for_lead: false, translation_finished: false, project_key: key, project_name: name, document_id: `doc-${id}`, language: "de", task: id === 2 ? "review" : "annotate", status, updated_at: "2026-10-15T10:30:00Z",
 });
 const tasks = [task(4, "reopened"), task(2, "in_progress", "q", "Project Q"), task(3, "open"), task(1, "submitted")];
 /** Accessible names of the status tabs ("To do, 3"), in order. */

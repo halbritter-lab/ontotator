@@ -8819,6 +8819,11 @@ export interface components {
              * @default false
              */
             waiting_for_lead: boolean;
+            /**
+             * Translation Finished
+             * @default false
+             */
+            translation_finished: boolean;
             /** Practice */
             practice?: boolean | null;
         };

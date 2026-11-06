@@ -1,6 +1,6 @@
 import { StrictMode } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { api, ApiError, type TaskSummary } from "../src/api/client";
 import type { RouteLeaveGuard } from "../src/app/router";
 import { TranslationReviewScreen } from "../src/translation/TranslationReviewScreen";
@@ -1121,7 +1121,7 @@ it("measures the bands and the pinned bar into inline custom properties", async 
 });
 
 const taskSummary = (assignment_id: number, overrides: Partial<TaskSummary> = {}): TaskSummary => ({
-  assignment_id, workflow_revision: 0, held: false, report_answered: false, waiting_for_translation_review: false, waiting_for_lead: false, project_key: "proj", project_name: "Project",
+  assignment_id, workflow_revision: 0, held: false, report_answered: false, waiting_for_translation_review: false, waiting_for_lead: false, translation_finished: false, project_key: "proj", project_name: "Project",
   document_id: `document-${assignment_id}`, language: "de", task: "translation_review", status: "open",
   updated_at: "2026-10-20T12:00:00Z", ...overrides,
 });
@@ -1186,6 +1186,39 @@ it("hands a submitted review to the task flow with the next open task of the pro
   expect(onSubmitted).toHaveBeenCalledWith({ label: heading, assignmentId: 17, next: 18 });
   // The flow leaves the page: no in-page next-task block meanwhile.
   expect(screen.queryByRole("button", { name: /^Next task/ })).toBeNull();
+});
+describe("the annotation of the same text after the review", () => {
+  const reviewed = taskSummary(17, { status: "submitted", case_id: "case", external_id: "EN 1/7" });
+  const nextReview = taskSummary(19, { case_id: "case-2", external_id: "case-2" });
+  const annotation = (finished: boolean) => taskSummary(18, { task: "annotate", case_id: "case", external_id: "EN 1/7", version: 4, translation_finished: finished });
+
+  it("is offered as Annotate this text now once the translation is finished", async () => {
+    const { navigate } = setup();
+    vi.spyOn(api, "listMyTasks").mockResolvedValue([reviewed, nextReview, annotation(true)]);
+    await submitAcceptedUnchanged();
+    const next = screen.getByRole("button", { name: "Annotate this text now" });
+    expect(document.activeElement).toBe(next);
+    expect(screen.queryByRole("button", { name: /^Next task/ })).toBeNull();
+    fireEvent.click(next);
+    expect(navigate).toHaveBeenCalledWith({ name: "task", assignmentId: 18 });
+  });
+
+  it("is not offered while the translation is not finished: the next review comes first", async () => {
+    setup();
+    vi.spyOn(api, "listMyTasks").mockResolvedValue([reviewed, nextReview, annotation(false)]);
+    await submitAcceptedUnchanged();
+    expect(screen.getByRole("button", { name: "Next task: case-2 de" })).toBeDefined();
+    expect(screen.queryByRole("button", { name: "Annotate this text now" })).toBeNull();
+  });
+
+  it("is handed to the task flow as the next task, marked as the same text", async () => {
+    const onSubmitted = vi.fn();
+    setup(undefined, false, undefined, undefined, undefined, onSubmitted);
+    vi.spyOn(api, "listMyTasks").mockResolvedValue([reviewed, nextReview, annotation(true)]);
+    const heading = (await screen.findByRole("heading", { level: 1 })).textContent;
+    await submitAcceptedUnchanged();
+    expect(onSubmitted).toHaveBeenCalledWith({ label: heading, assignmentId: 17, next: 18, sameText: true });
+  });
 });
 it("hands over without a next task when none is left or the list cannot load (My tasks)", async () => {
   const onSubmitted = vi.fn();

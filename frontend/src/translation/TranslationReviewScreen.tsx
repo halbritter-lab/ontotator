@@ -18,7 +18,7 @@ import { ChecksSummary, ReviewSummary, SubmitSummary } from "./ReviewParts";
 import { ReviewForm } from "./ReviewForm";
 import { taskText } from "../app/identity";
 import { autoNoteText, chooseDecision, reactToTextEdit, USER_ORIGIN, type DecisionState } from "./decisionOrigin";
-import { categoryLabels, comparisonCountsDiffer, couplingEditingNote, couplingNote, decisionKeyHint, decisionLabels, decisionOutcomes, formatReviewDate, issueMessages, languageName, leadCorrectionKeyHint, leadCorrectionNote, matchingParagraphStatus, nextTaskLabel, paragraphCountChanged, paragraphCountsDiffer, remainingTasksText, reviewIssueMessage, showMatchingLabel, showMatchingShortcut, showMatchingTitle } from "./labels";
+import { annotateThisTextLabel, categoryLabels, comparisonCountsDiffer, couplingEditingNote, couplingNote, decisionKeyHint, decisionLabels, decisionOutcomes, formatReviewDate, issueMessages, languageName, leadCorrectionKeyHint, leadCorrectionNote, matchingParagraphStatus, nextTaskLabel, paragraphCountChanged, paragraphCountsDiffer, remainingTasksText, reviewIssueMessage, showMatchingLabel, showMatchingShortcut, showMatchingTitle } from "./labels";
 import { checkReview, type ClinicalCategory, type ReviewDecisionCode, type ReviewForm as FormValue } from "./reviewRules";
 import { LanguageTag } from "../ui/LanguageTag";
 import { SentenceCount, SentenceView } from "./SentenceMarks";
@@ -41,7 +41,7 @@ export interface TranslationReviewScreenProps {
    * names the submission and opens the next open task of the project (`next`), else My tasks. Without it the screen
    * stays on the submitted review and offers the next task itself.
    */
-  onSubmitted?: (result: { label: string; assignmentId: number; next?: number }) => void;
+  onSubmitted?: (result: { label: string; assignmentId: number; next?: number; sameText?: true }) => void;
   /** The working time control (issue 298), shown in the review bar while the review is editable. */
   headerTimer?: ReactNode;
   /** Called on every edit of the review; the working time resumes on it. */
@@ -49,7 +49,7 @@ export interface TranslationReviewScreenProps {
 }
 type RawDraft = { text: string; form: Record<string, unknown> };
 /** The reviewer's next open task after submitting (spec A.5). */
-type NextTask = { kind: "loading" } | { kind: "ready"; next: TaskSummary | null; remaining: number } | { kind: "error"; error: unknown };
+type NextTask = { kind: "loading" } | { kind: "ready"; next: TaskSummary | null; remaining: number; sameText: boolean } | { kind: "error"; error: unknown };
 const has = (object: object, key: string): boolean => Object.prototype.hasOwnProperty.call(object, key);
 const decision = (value: unknown): value is ReviewDecisionCode => typeof value === "string" && has(decisionLabels, value);
 const category = (value: unknown): value is ClinicalCategory => typeof value === "string" && has(categoryLabels, value);
@@ -475,17 +475,18 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
     if (!submitted || leadCorrection || busy) return;
     let active = true;
     setNextTask({ kind: "loading" });
-    const handOver = (next?: number) => {
+    const handOver = (next?: number, sameText = false) => {
       const done = afterSubmit.current;
       if (!done || handedOver.current) return false;
       handedOver.current = true; setNextTask(null);
-      done({ label, assignmentId: props.assignmentId, next });
+      // The reviewer's annotation of this same text comes first (sameText), see nextOpenTask.
+      done({ label, assignmentId: props.assignmentId, next, ...(sameText ? { sameText: true as const } : {}) });
       return true;
     };
     api.listMyTasks().then(tasks => {
       if (!active) return;
       const ready = nextOpenTask(tasks, props.assignmentId, projectKey);
-      if (!handOver(ready.next?.assignment_id)) setNextTask({ kind: "ready", ...ready });
+      if (!handOver(ready.next?.assignment_id, ready.sameText)) setNextTask({ kind: "ready", ...ready });
     }, failure => { if (active && !handOver()) setNextTask({ kind: "error", error: failure }); });
     return () => { active = false; };
   }, [submitted, busy, nextTaskLoad, props.assignmentId, projectKey, leadCorrection, label]);
@@ -768,7 +769,7 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
           {submitted && !leadCorrection && nextTask && <div className="translation-next-task">
             {nextTask.kind === "loading" && <Button variant="primary" loading>Next task</Button>}
             {nextTask.kind === "ready" && nextTask.next && <Button ref={nextTaskButton} variant="primary"
-              onClick={() => props.onNavigate({ name: "task", assignmentId: nextTask.next!.assignment_id })}>{nextTaskLabel(nextTask.next)}</Button>}
+              onClick={() => props.onNavigate({ name: "task", assignmentId: nextTask.next!.assignment_id })}>{nextTask.sameText ? annotateThisTextLabel : nextTaskLabel(nextTask.next)}</Button>}
             {nextTask.kind === "ready" && !nextTask.next
               ? <Button variant="primary" onClick={() => props.onNavigate(MY_TASKS)}>Back to my tasks</Button>
               : navigateLink(MY_TASKS, "Back to my tasks", "btn btn-secondary")}
