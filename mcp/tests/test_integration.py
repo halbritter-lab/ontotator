@@ -273,6 +273,19 @@ async def test_setup_import_status_and_export(
             assert downloaded["bytes"] == target.stat().st_size
             assert downloaded["kind"] == kind
 
+        # The exports above are in the project's job list and its audit.
+        jobs = await call(
+            client, "list_jobs", {"project": PROJECT, "status": ["succeeded"]}
+        )
+        exports = [job for job in jobs["jobs"] if job["kind"].endswith("_export")]
+        kinds = {job["kind"] for job in exports}
+        assert {"edit_log_export", "translation_review_export"} <= kinds
+        assert all(job["download_path"] for job in exports)
+        audit = await call(
+            client, "project_audit", {"project": PROJECT, "action": ["project.*"]}
+        )
+        assert "project.edit_log_export" in {e["action"] for e in audit["events"]}
+
         check = await call(client, "final_export_check", {"project": PROJECT})
         assert check["final_results"] == 0
         with pytest.raises(ToolFailed, match="EXPORT_EMPTY"):
