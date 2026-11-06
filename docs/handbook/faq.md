@@ -68,6 +68,10 @@ A problem report pauses the task, yours or the lead's. A one-line banner *Task p
 
 A submission cannot be edited. To change your work, open the task, choose **More** › **Work rounds** and click **Continue from this submission**. Your findings are carried into a new round; check them, make your changes and submit again. See [Start a new work round](annotator.md#start-a-new-work-round). A lead can also reopen your task; it then shows **Reopened** with the lead's reason.
 
+### A project cannot be deleted: "This project has work …"
+
+Only a project nobody has worked in can be deleted, so that no texts, tasks or results are lost. A project with texts, tasks, a guideline or other work stays. See [Delete a project without work](admin.md#delete-a-project-without-work).
+
 ### I cannot open project settings, Ontologies or New project
 
 Project settings are for project leads. **Ontologies**, **Users**, **Technical reports** and **New project** are for system administrators. The page tells you whom to ask. See [Roles](README.md#roles).

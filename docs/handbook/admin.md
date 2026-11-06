@@ -189,7 +189,7 @@ You are now a member of the project with the Lead role only, so you can manage i
 
 The template fits only Ontospan bundles that use its ontology ID (`hp` or `HP`), its layer `hpo-layer`, exactly the branch `HP:0000118` and its values; for other bundles upload the matching profile. See [What must match a bundle](lead-settings.md#what-must-match-a-bundle).
 
-The project key and the ontology of the task profile cannot be changed later. Everything else, such as name, workflow and members, is set in the [project settings](lead-settings.md).
+The project key and the ontology of the task profile cannot be changed later. A project created by mistake can be [deleted](#delete-a-project-without-work) as long as nobody has worked in it. Everything else, such as name, workflow and members, is set in the [project settings](lead-settings.md).
 
 ## Open and manage any project
 
@@ -198,6 +198,18 @@ What for: as system administrator you can manage every project, also without a p
 1. Click **Projects** in the sidebar, or **All projects** in the project switcher.
 2. In the project's row, click **Open** to go to its documents, or **Settings** to change it.
 3. Work as a lead would; see the [lead overview](lead.md).
+
+## Delete a project without work
+
+What for: remove a project that was created by mistake, for example with a wrong key, so it leaves every list and its key can be used again.
+
+Only a project nobody has worked in can be deleted. Work is anything beyond the project's settings and members: texts, tool proposals, tasks, drafts and submissions, a guideline, a work plan, problem reports, final results and working time, and an upload that was committed. An upload that was only checked or discarded is not work.
+
+1. Click **Projects** in the sidebar.
+2. In the project's row, click **Delete project…**. Only projects without texts show it.
+3. Read the dialog and click **Delete project**.
+
+The project goes with its settings, members, ontology pins, project API tokens and uncommitted uploads, and the next project may use its key. Its audit entries stay and name it by key; the deletion itself is recorded as well. A project that has work is refused with *This project has work …* and stays as it was. A practice project is deleted under [Practice projects](#practice-projects).
 
 ## Move a project to another server
 

@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { api, type ProjectSummary, type TaskSummary } from "../src/api/client";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { api, ApiError, type ProjectSummary, type TaskSummary } from "../src/api/client";
 import { ProjectsPage } from "../src/app/ProjectsPage";
 
 const project = (key: string, roles: ProjectSummary["roles"], name = `Project ${key}`): ProjectSummary => ({
@@ -112,4 +112,47 @@ it("shows the project description under its name (M2 D4)", () => {
   render(<ProjectsPage projects={[{ ...project("p1", ["annotator"]), description: "E3C clinical cases, tool proposals by phentrieve." }, project("p2", ["annotator"])]} currentKey="p1" onNavigate={vi.fn()} />);
   expect(within(rowOf("Project p1")).getByText("E3C clinical cases, tool proposals by phentrieve.")).toBeDefined();
   expect(rowOf("Project p2").querySelector(".projects-page__description")).toBeNull();
+});
+
+describe("Delete project… for administrators (issue 191)", () => {
+  const withTexts = { ...project("full", ["lead"], "Full study"), document_count: 3 };
+  const empty = project("mistake", ["lead"], "Created by mistake");
+  beforeEach(() => { vi.spyOn(api, "adminListPracticeProjects").mockResolvedValue([]); });
+
+  it("offers it only to administrators and only for projects without texts", () => {
+    const { unmount } = render(<ProjectsPage projects={[withTexts, empty]} onNavigate={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: "Delete project…" })).toBeNull();
+    unmount();
+    render(<ProjectsPage projects={[withTexts, empty]} onNavigate={vi.fn()} isAdmin />);
+    expect(within(rowOf("Full study")).queryByRole("button", { name: "Delete project…" })).toBeNull();
+    expect(within(rowOf("Created by mistake")).getByRole("button", { name: "Delete project…" })).toBeDefined();
+  });
+
+  it("deletes after the confirmation and reloads the projects", async () => {
+    const remove = vi.spyOn(api, "adminDeleteProject").mockResolvedValue(undefined);
+    const changed = vi.fn();
+    render(<ProjectsPage projects={[empty]} onNavigate={vi.fn()} isAdmin onProjectsChanged={changed} />);
+    fireEvent.click(within(rowOf("Created by mistake")).getByRole("button", { name: "Delete project…" }));
+    const dialog = await screen.findByRole("dialog", { name: "Delete project?" });
+    expect(dialog.textContent).toContain("Created by mistake (mistake) is deleted with its settings and members.");
+    expect(dialog.textContent).toContain("Its key can be used again.");
+    expect(remove).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete project" }));
+    await waitFor(() => expect(remove).toHaveBeenCalledWith("mistake"));
+    await waitFor(() => expect(changed).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole("dialog", { name: "Delete project?" })).toBeNull();
+  });
+
+  it("keeps the dialog open with the reason when the project has work", async () => {
+    vi.spyOn(api, "adminDeleteProject").mockRejectedValue(new ApiError(409, "refused", "PROJECT_HAS_WORK", { work: ["guideline_versions"] }));
+    const changed = vi.fn();
+    render(<ProjectsPage projects={[empty]} onNavigate={vi.fn()} isAdmin onProjectsChanged={changed} />);
+    fireEvent.click(within(rowOf("Created by mistake")).getByRole("button", { name: "Delete project…" }));
+    const dialog = await screen.findByRole("dialog", { name: "Delete project?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete project" }));
+    expect(await within(dialog).findByText(/This project has work, such as texts, tasks or a guideline/)).toBeDefined();
+    expect(changed).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog", { name: "Delete project?" })).toBeNull();
+  });
 });

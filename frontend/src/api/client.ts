@@ -762,6 +762,11 @@ export class ApiClient {
     return this.request<void>(`/api/v1/admin/practice-projects/${encodeURIComponent(key)}`, { method: "DELETE" });
   }
 
+  /** Delete a project without work (issue 191); refused with PROJECT_HAS_WORK otherwise. */
+  async adminDeleteProject(key: string): Promise<void> {
+    return this.request<void>(`/api/v1/admin/projects/${encodeURIComponent(key)}`, { method: "DELETE" });
+  }
+
   /** API tokens (issue 305): the user's own, a project's (leads) and all (admins). */
   async listMyTokens(): Promise<ApiToken[]> {
     return this.request<ApiToken[]>("/api/v1/me/tokens", { method: "GET" });

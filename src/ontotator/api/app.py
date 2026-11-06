@@ -24,6 +24,7 @@ from starlette.concurrency import run_in_threadpool
 
 from ontotator import __version__, settings
 from ontotator.api.about_routes import router as about_router
+from ontotator.api.admin_project_routes import router as admin_project_router
 from ontotator.api.admin_routes import router as admin_router
 from ontotator.api.archive_routes import router as archive_router
 from ontotator.api.auth_routes import demo_router as demo_login_router
@@ -550,6 +551,8 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
                     "GUIDELINE_ALREADY_WITHDRAWN": 409,
                     "PRACTICE_UNAVAILABLE": 409,
                     "NOT_A_PRACTICE_PROJECT": 409,
+                    "IS_A_PRACTICE_PROJECT": 409,
+                    "PROJECT_HAS_WORK": 409,
                     "PRACTICE_IMPORT_FAILED": 503,
                     "TECHNICAL_REPORT_LIMIT": 429,
                 }.get(exc.code, 422)
@@ -629,6 +632,7 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
     app.include_router(admin_token_router)
     app.include_router(me_router)
     app.include_router(practice_router)
+    app.include_router(admin_project_router)
     app.include_router(about_router)
     app.include_router(auth_router)
     if config is not None and config.demo_logins:
