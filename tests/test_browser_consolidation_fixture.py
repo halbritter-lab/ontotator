@@ -137,3 +137,35 @@ def test_modifiers_scenario_has_the_designed_kinds(client: TestClient) -> None:
     ]
     # Modifiers is the only conflicting row of S4.
     assert focal["differing_axes"] == [] and focal["span_conflict"] is False
+
+
+def test_standalone_modifier_is_a_group_of_its_own(client: TestClient) -> None:
+    response = client.post(
+        "/__test_consolidation__",
+        params={"started": "true", "scenario": "modifiers", "standalone": "true"},
+    )
+    assert response.status_code == 200, response.text
+    built = response.json()
+    login(client, built["users"]["lead"])
+    view = client.get(f"/api/v1/rounds/{built['round_id']}/consolidation").json()
+    (standalone,) = [g for g in view["groups"] if "modifier_as_finding" in g["kinds"]]
+    assert standalone["state"] == "open"
+    assert [m["term_id"] for m in standalone["members"]] == ["HP:0003623"]
+    assert len(view["groups"]) == 6
+
+
+def test_adjudicator_consolidator_does_not_lead(client: TestClient) -> None:
+    response = client.post(
+        "/__test_consolidation__", params={"started": "true", "consolidator": "adj"}
+    )
+    assert response.status_code == 200, response.text
+    built = response.json()
+    login(client, built["users"]["adj"])
+    projects = client.get("/api/v1/projects").json()
+    project = next(p for p in projects if p["project_key"] == built["project"])
+    assert project["can_manage"] is False
+    assert "lead" not in project["roles"]
+    response = client.get(f"/api/v1/rounds/{built['round_id']}/consolidation")
+    assert response.status_code == 200, response.text
+    assert response.json()["read_only"] is False
+    assert response.json()["annotators_hidden"] is False

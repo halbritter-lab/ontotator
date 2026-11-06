@@ -16,6 +16,13 @@ spanless Severe: Modifiers is its only conflicting row), S9 on the second
 sentence's "seizures" and "hypotonia" (Severe on "Severe" on the other
 finding each), S1 on "hearing loss" (both Bilateral on "Bilateral", kept
 automatically) and S13 on "Reduced reflexes" (Ana only, spanless Bilateral).
+``standalone=true`` adds Ben's onset modifier Neonatal onset on "since birth"
+as a finding of its own (S18: "Attach to a finding…" offers the decided
+Hypotonia and Seizure of that sentence).
+
+``consolidator=adj`` (default scenario) adds "adj" with the Adjudicator role
+only and starts the consolidation for them: a consolidator who does not lead
+the project (``blind=true`` implies it).
 """
 
 from __future__ import annotations
@@ -89,6 +96,7 @@ MOD_TEXT = (
 SEVERE = "HP:0012828"
 RECURRENT = "HP:0031796"
 BILATERAL = "HP:0012832"
+NEONATAL_ONSET = "HP:0003623"
 # (term, (words, nth), axis changes, [(modifier term, its words or None)]).
 MOD_FINDINGS: dict[str, list[Any]] = {
     "ana": [
@@ -171,7 +179,7 @@ def _annotate(
                     payload=payload,
                 ),
             )
-    return finish_round(scenario, name, key)
+    return finish_round(scenario, name, key, acknowledge_warnings=True)
 
 
 def start_as_lead(
@@ -236,7 +244,9 @@ def _modifier_project(app: FastAPI) -> Scenario:
     return Scenario(app, key, {})
 
 
-def build_modifiers(app: FastAPI, started: bool) -> dict[str, Any]:
+def build_modifiers(
+    app: FastAPI, started: bool, standalone: bool = False
+) -> dict[str, Any]:
     """The ``modifiers`` scenario (module docstring)."""
     from browser_lead_workflow_scenarios import person
     from modifier_fixtures import MOD_PIN, modifier_profile
@@ -256,9 +266,15 @@ def build_modifiers(app: FastAPI, started: bool) -> dict[str, Any]:
     person(scenario, "lead", ["lead"])
     person(scenario, "ana", ["annotator"])
     person(scenario, "ben", ["annotator"])
+    findings = dict(MOD_FINDINGS)
+    if standalone:
+        findings["ben"] = [
+            *findings["ben"],
+            (NEONATAL_ONSET, ("since birth", 0), {}, []),
+        ]
     sources = [
         _annotate(scenario, name, document_id, items, MOD_TEXT)
-        for name, items in MOD_FINDINGS.items()
+        for name, items in findings.items()
     ]
     ids: dict[str, Any] = {}
     if started:
@@ -279,7 +295,11 @@ def build_modifiers(app: FastAPI, started: bool) -> dict[str, Any]:
 
 
 def build(
-    app: FastAPI, started: bool, people: int = 2, blind: bool = False
+    app: FastAPI,
+    started: bool,
+    people: int = 2,
+    blind: bool = False,
+    consolidator: Literal["lead", "adj"] = "lead",
 ) -> dict[str, Any]:
     from t1_builders import native_unit
 
@@ -305,7 +325,10 @@ def build(
     ]
     ids: dict[str, Any] = {}
     if blind:
+        consolidator = "adj"
+    if consolidator == "adj":
         add_user(scenario, "adj", ["adjudicator"])
+    if blind:
         with scenario.db.transaction() as conn:
             conn.execute(
                 update(ProjectRow)
@@ -314,7 +337,7 @@ def build(
             )
     if started:
         round_view = start_as_lead(
-            scenario, document_id, sources, reviewer="adj" if blind else "lead"
+            scenario, document_id, sources, reviewer=consolidator
         )
         ids = {
             "round_id": round_view.round_id,
@@ -344,9 +367,11 @@ def register_consolidation_scenario_route(app: FastAPI) -> None:
         people: int = Query(2, ge=2, le=3),
         scenario: Literal["default", "modifiers"] = Query("default"),
         blind: bool = Query(False),
+        standalone: bool = Query(False),
+        consolidator: Literal["lead", "adj"] = Query("lead"),
     ) -> dict[str, Any]:
         if scenario == "modifiers":
-            return build_modifiers(app, started)
-        return build(app, started, people, blind)
+            return build_modifiers(app, started, standalone)
+        return build(app, started, people, blind, consolidator)
 
     app.router.routes.insert(0, app.router.routes.pop())
