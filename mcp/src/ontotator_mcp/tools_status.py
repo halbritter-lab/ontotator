@@ -1,4 +1,4 @@
-"""Status tools: overview, progress per text and person, agreement per text."""
+"""Status tools: overview, progress per text and person, project agreement."""
 
 from __future__ import annotations
 
@@ -7,12 +7,11 @@ from typing import Annotated, Any, Literal
 from mcp.server.mcpserver import MCPServer
 from pydantic import Field
 
-from ontotator_mcp.client import OntotatorClient, project_path, seg
+from ontotator_mcp.client import OntotatorClient, project_path
 from ontotator_mcp.tooling import register
 
 Project = Annotated[str, Field(description="Project key, e.g. 'ward-7'.")]
 Stage = Literal["translation_review", "annotation", "final", "done"]
-MAX_AGREEMENT_TEXTS = 200
 
 
 def _newest(row: dict[str, Any]) -> dict[str, Any] | None:
@@ -178,64 +177,34 @@ def register_status(server: MCPServer, api: OntotatorClient) -> None:
         project: Project,
         case_ids: Annotated[
             list[str] | None,
-            Field(description="Only these cases; None: every text with results."),
+            Field(description="Only these cases in 'texts' and 'pairs'."),
         ] = None,
-        limit: Annotated[int, Field(ge=1, le=MAX_AGREEMENT_TEXTS)] = 50,
+        include_pairs: Annotated[
+            bool,
+            Field(description="Also every pair of annotators per text (long)."),
+        ] = False,
     ) -> dict[str, Any]:
-        """Agreement of the submitted annotations per text, as the lead's panel shows it.
+        """Agreement of the annotations behind the final results, project-wide.
 
-        For each text with at least two submissions: findings compared,
-        matching, differing in context or in details, and whether all match
-        (then accept_agreeing_texts can accept it).
+        The figures a final export would write now to agreement.csv and
+        agreement-summary.csv, in one call: the summary (macro mean over
+        texts and pooled F1 of the summed counts), per pair of annotators
+        and per text. Only texts with a final result count; the summary
+        always covers all of them. Leads only, as the final export.
         """
-        found, _ = await rows(api, project, stage=["final", "done"])
+        found: dict[str, Any] = await api.get(project_path(project, "agreement"))
+        texts = found.get("texts", [])
+        pairs = found.get("pairs", [])
         if case_ids is not None:
             wanted = set(case_ids)
-            found = [row for row in found if row.get("case_id") in wanted]
-        texts: list[dict[str, Any]] = []
-        for row in found:
-            if len(texts) >= limit:
-                break
-            panel = await api.get(
-                project_path(
-                    project,
-                    "document-rows",
-                    seg(row["case_id"]),
-                    seg(row["language"]),
-                    "final-panel",
-                )
-            )
-            submissions = [
-                item
-                for item in panel.get("submissions", [])
-                if item.get("is_latest_in_round") is not False
-            ]
-            if len(submissions) < 2:
-                continue
-            agreement = panel.get("agreement") or {}
-            texts.append(
-                {
-                    "case_id": row["case_id"],
-                    "language": row["language"],
-                    "submissions": len(submissions),
-                    "all_match": panel.get("all_match", False),
-                    "findings": agreement.get("total"),
-                    "matching": agreement.get("matching"),
-                    "context_differences": agreement.get("context_differences"),
-                    "detail_differences": len(
-                        agreement.get("detail_differences") or []
-                    ),
-                    "unresolved": len(panel.get("unresolved", [])),
-                    "final": (row.get("final") or {}).get("submission_id"),
-                }
-            )
-        matching = sum(t["matching"] or 0 for t in texts)
-        total = sum(t["findings"] or 0 for t in texts)
-        return {
+            texts = [t for t in texts if t.get("case_id") in wanted]
+            pairs = [p for p in pairs if p.get("case_id") in wanted]
+        result = {
+            "selected_texts": found.get("selected_texts"),
+            "summary": found.get("summary"),
+            "annotator_pairs": found.get("annotator_pairs", []),
             "texts": texts,
-            "texts_compared": len(texts),
-            "texts_all_match": sum(1 for t in texts if t["all_match"]),
-            "findings_matching": matching,
-            "findings_total": total,
-            "truncated": len(texts) >= limit,
         }
+        if include_pairs:
+            result["pairs"] = pairs
+        return result

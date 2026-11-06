@@ -395,3 +395,22 @@ def test_discarded_work_is_no_consolidation_input(tmp_path):
     )
     assert started.status_code == 409, started.text
     assert started.json()["code"] == "ROUND_INPUT_STALE"
+
+
+def test_the_list_filters_by_case_and_language_or_covers_the_project(tmp_path):
+    """Without filters the list holds every change of the project (#352)."""
+    env = submitted_text(tmp_path)
+    change_id = change(env).json()["change"]["change_id"]
+    every = env.lead.get(CHANGES)
+    assert every.status_code == 200, every.text
+    assert (every.json()["case_id"], every.json()["language"]) == (None, None)
+    assert [c["change_id"] for c in every.json()["changes"]] == [change_id]
+    for params, found in (
+        ({"case_id": "c1"}, [change_id]),
+        ({"language": "en"}, [change_id]),
+        ({"case_id": "c2"}, []),
+        ({"case_id": "c1", "language": "de"}, []),
+    ):
+        listed = env.lead.get(CHANGES, params=params).json()
+        assert [c["change_id"] for c in listed["changes"]] == found, params
+    assert client(env, "anno").get(CHANGES).status_code == 403

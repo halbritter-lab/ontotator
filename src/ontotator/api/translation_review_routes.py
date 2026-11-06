@@ -90,3 +90,11 @@ def review_records(
     key: str, doc: str, request: Request, principal: PrincipalDep
 ) -> list[TranslationReviewRecord]:
     return _service(request).records(get_access(request), key, doc)
+
+
+@router.get("/projects/{key}/translation-reviews")
+def project_review_records(
+    key: str, request: Request, principal: PrincipalDep
+) -> list[TranslationReviewRecord]:
+    """Every submitted translation review of the project, oldest first."""
+    return _service(request).project_records(get_access(request), key)

@@ -120,16 +120,22 @@ The data warehouse loads the final results every night with `ci-export`, and Dr.
 | Overview: settings, totals per stage, workload, open decisions, export warnings | `GET P/settings`, `GET P/progress`, `GET P/documents/summary`, `GET P/workflow-warnings` | `read` | `project_overview` | covered |
 | Texts by language, stage, query or proposals, page by page | `GET P/document-rows` (paged, filtered) | `read` | `list_texts` | covered |
 | Progress per text and person | `GET P/progress` | `read` | `get_progress` | covered (not paged: one large answer for big projects) |
-| Agreement per text | `GET P/document-rows/{case}/{language}/final-panel` per text | `read` | `agreement_summary` (one call per text, at most 200) | covered; project-wide agreement only in the final export's `agreement.csv` (remaining gap: no route) |
+| Agreement over the project: summary (macro mean, pooled), per pair of annotators, per text | `GET P/agreement` (leads, like the final export: it names the annotators) | `read` | `agreement_summary` | covered: the figures of the final export's `agreement.csv` and `agreement-summary.csv` for the current final results, in one call |
+| Agreement of one text before a result is chosen | `GET P/document-rows/{case}/{language}/final-panel` | `read` | `accept_agreeing_texts` (dry run) | covered |
 | Working time | `GET P/work-time` | `read` | `working_time_summary` | covered |
 | Problem reports that would block or warn the export | `GET P/problem-reports` (paged) | `read` | `list_problem_reports` | added in this PR |
+| One problem report with its events and holds | `GET /problem-reports/{id}` | `read` | `get_problem_report` | covered (personal token; project tokens with #351) |
+| Guideline versions and who has read them | `GET P/guidelines` | `read` | `list_guidelines` | covered |
+| Annotation mode changes, per text or for the whole project | `GET P/annotation-mode-changes` (`case_id` and `language` optional) | `read` | `list_mode_changes` | covered |
+| One text's tasks, rounds, submissions and translation reviews | `GET P/assignments?document_id=`, `GET /assignments/{id}/rounds`, `GET P/documents/{doc}/submissions`, `GET P/documents/{doc}/translation-reviews` | `read` | `get_text_detail` | covered (rounds: personal token; project tokens with #351) |
+| Every translation review of the project | `GET P/translation-reviews` | `read` | `list_translation_reviews` | covered |
 | Accept texts whose annotations agree in full | `PUT P/final-selections` | `read`, `project-admin` | `accept_agreeing_texts` | covered (choosing among differing results stays in the web interface) |
 | Check the final export | `GET P/workflow-warnings` | `read` | `final_export_check` | covered |
 | Start the nightly export; a retry must not create a second one | `POST P/exports/final` (`request_id`) | `export` | `start_export` with `request_id` | added in this PR (the route already accepted it; the tool always sent a new one) |
 | Wait, download, verify the SHA-256 | `GET /jobs/{id}`, `GET /jobs/{id}/download` | `export` | `get_job`, `download_export` | covered |
 | Be told when something changed instead of polling | none | | | remaining gap |
 
-Verdict: **sufficient for nightly batches**. Remaining: no change feed or webhook, progress is not paged, and agreement over the whole project is only in the final export.
+Verdict: **sufficient for nightly batches**. Remaining: no change feed or webhook, and progress is not paged.
 
 ## 6. Token lifecycle
 
@@ -180,5 +186,4 @@ Verdict: **sufficient after this work**.
 | Project state closed or read-only; deleting a project | A new domain feature with its own rules for running tasks. The project archive (#325) keeps a finished project as one file, but the project stays open on the server. |
 | Change feed or webhooks | A new delivery mechanism; nightly polling of `project_overview` and the paged `list_texts` is enough for batch pipelines. |
 | Paging of `P/progress`, `P/assignments` and `/admin/users/` | The answers are complete lists; `list_assignments` filters and caps on the client. Paging changes the API's shape and the web interface that uses it. |
-| Project-wide agreement route | Agreement over the whole project is computed for the final export (`agreement.csv`, `agreement-summary.csv`); `agreement_summary` reads the per-text panels. |
 | Project audit through the API | Only `/admin/users/{username}/audit` exists (per user, without token use); the full trail is `ontotator admin audit` on the server. |

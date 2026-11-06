@@ -2595,6 +2595,55 @@
         "x-ontotator-project-token": true
       }
     },
+    "/api/v1/projects/{key}/translation-reviews": {
+      "get": {
+        "tags": [
+          "translation-reviews"
+        ],
+        "summary": "Project Review Records",
+        "description": "Every submitted translation review of the project, oldest first.",
+        "operationId": "project_review_records_api_v1_projects__key__translation_reviews_get",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TranslationReviewRecord"
+                  },
+                  "title": "Response Project Review Records Api V1 Projects  Key  Translation Reviews Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
+      }
+    },
     "/api/v1/assignments/{assignment_id}/work-time": {
       "get": {
         "tags": [
@@ -4044,6 +4093,51 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/FinalPreflight"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
+      }
+    },
+    "/api/v1/projects/{key}/agreement": {
+      "get": {
+        "tags": [
+          "final-results"
+        ],
+        "summary": "Project Agreement",
+        "description": "Agreement of the annotations behind the final results, project-wide.",
+        "operationId": "project_agreement_api_v1_projects__key__agreement_get",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectAgreement"
                 }
               }
             }
@@ -5966,6 +6060,7 @@
           "annotation-mode-changes"
         ],
         "summary": "List Mode Changes",
+        "description": "Mode changes, newest first: of one text, or of every text that matches\nthe filters given (the whole project without filters).",
         "operationId": "list_mode_changes_api_v1_projects__key__annotation_mode_changes_get",
         "parameters": [
           {
@@ -5980,22 +6075,36 @@
           {
             "name": "case_id",
             "in": "query",
-            "required": true,
+            "required": false,
             "schema": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 512,
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 512
+                },
+                {
+                  "type": "null"
+                }
+              ],
               "title": "Case Id"
             }
           },
           {
             "name": "language",
             "in": "query",
-            "required": true,
+            "required": false,
             "schema": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 64,
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ],
               "title": "Language"
             }
           }
@@ -10184,6 +10293,289 @@
         "title": "AgreementDetailView",
         "description": "A matching finding whose note, text span or modifier text differs\n(issue 230); ``term_label`` is the term's name, else its id."
       },
+      "AgreementMacroMean": {
+        "properties": {
+          "annotation_strict_f1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annotation Strict F1"
+          },
+          "annotation_tolerant_f1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annotation Tolerant F1"
+          },
+          "mention_strict_f1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mention Strict F1"
+          },
+          "mention_tolerant_f1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mention Tolerant F1"
+          },
+          "term_f1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Term F1"
+          },
+          "modifier_agreement": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modifier Agreement"
+          },
+          "texts": {
+            "type": "integer",
+            "title": "Texts"
+          },
+          "pairs": {
+            "type": "integer",
+            "title": "Pairs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "annotation_strict_f1",
+          "annotation_tolerant_f1",
+          "mention_strict_f1",
+          "mention_tolerant_f1",
+          "term_f1",
+          "modifier_agreement",
+          "texts",
+          "pairs"
+        ],
+        "title": "AgreementMacroMean",
+        "description": "Mean over texts of each text's mean over its pairs."
+      },
+      "AgreementPooled": {
+        "properties": {
+          "annotation_strict_f1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annotation Strict F1"
+          },
+          "annotation_tolerant_f1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annotation Tolerant F1"
+          },
+          "mention_strict_f1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mention Strict F1"
+          },
+          "mention_tolerant_f1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mention Tolerant F1"
+          },
+          "term_f1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Term F1"
+          },
+          "modifier_agreement": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modifier Agreement"
+          },
+          "findings_a": {
+            "type": "integer",
+            "title": "Findings A"
+          },
+          "findings_b": {
+            "type": "integer",
+            "title": "Findings B"
+          },
+          "equal": {
+            "type": "integer",
+            "title": "Equal"
+          },
+          "compatible": {
+            "type": "integer",
+            "title": "Compatible"
+          },
+          "axis_conflicts": {
+            "type": "integer",
+            "title": "Axis Conflicts"
+          },
+          "term_conflicts": {
+            "type": "integer",
+            "title": "Term Conflicts"
+          },
+          "a_only": {
+            "type": "integer",
+            "title": "A Only"
+          },
+          "b_only": {
+            "type": "integer",
+            "title": "B Only"
+          },
+          "mentions_a": {
+            "type": "integer",
+            "title": "Mentions A"
+          },
+          "mentions_b": {
+            "type": "integer",
+            "title": "Mentions B"
+          },
+          "mentions_equal": {
+            "type": "integer",
+            "title": "Mentions Equal"
+          },
+          "mentions_compatible": {
+            "type": "integer",
+            "title": "Mentions Compatible"
+          },
+          "terms_a": {
+            "type": "integer",
+            "title": "Terms A"
+          },
+          "terms_b": {
+            "type": "integer",
+            "title": "Terms B"
+          },
+          "terms_equal": {
+            "type": "integer",
+            "title": "Terms Equal"
+          },
+          "modifiers_compared": {
+            "type": "integer",
+            "title": "Modifiers Compared"
+          },
+          "modifiers_agreeing": {
+            "type": "integer",
+            "title": "Modifiers Agreeing"
+          },
+          "texts": {
+            "type": "integer",
+            "title": "Texts"
+          },
+          "pairs": {
+            "type": "integer",
+            "title": "Pairs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "annotation_strict_f1",
+          "annotation_tolerant_f1",
+          "mention_strict_f1",
+          "mention_tolerant_f1",
+          "term_f1",
+          "modifier_agreement",
+          "findings_a",
+          "findings_b",
+          "equal",
+          "compatible",
+          "axis_conflicts",
+          "term_conflicts",
+          "a_only",
+          "b_only",
+          "mentions_a",
+          "mentions_b",
+          "mentions_equal",
+          "mentions_compatible",
+          "terms_a",
+          "terms_b",
+          "terms_equal",
+          "modifiers_compared",
+          "modifiers_agreeing",
+          "texts",
+          "pairs"
+        ],
+        "title": "AgreementPooled",
+        "description": "F1 of the counts summed over every pair (micro average)."
+      },
+      "AgreementSummary": {
+        "properties": {
+          "macro_mean": {
+            "$ref": "#/components/schemas/AgreementMacroMean"
+          },
+          "pooled": {
+            "$ref": "#/components/schemas/AgreementPooled"
+          }
+        },
+        "type": "object",
+        "required": [
+          "macro_mean",
+          "pooled"
+        ],
+        "title": "AgreementSummary"
+      },
       "AgreementView": {
         "properties": {
           "compared_version": {
@@ -10513,6 +10905,33 @@
           "evidence"
         ],
         "title": "AnnotationVersion"
+      },
+      "AnnotatorPairAgreement": {
+        "properties": {
+          "macro_mean": {
+            "$ref": "#/components/schemas/AgreementMacroMean"
+          },
+          "pooled": {
+            "$ref": "#/components/schemas/AgreementPooled"
+          },
+          "pseudonym_a": {
+            "type": "string",
+            "title": "Pseudonym A"
+          },
+          "pseudonym_b": {
+            "type": "string",
+            "title": "Pseudonym B"
+          }
+        },
+        "type": "object",
+        "required": [
+          "macro_mean",
+          "pooled",
+          "pseudonym_a",
+          "pseudonym_b"
+        ],
+        "title": "AnnotatorPairAgreement",
+        "description": "Every text the two people both annotated."
       },
       "AnonymiseRequest": {
         "properties": {
@@ -17965,11 +18384,25 @@
       "ModeChangeList": {
         "properties": {
           "case_id": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Case Id"
           },
           "language": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Language"
           },
           "changes": {
@@ -19168,6 +19601,212 @@
           "report_id"
         ],
         "title": "OtherActiveHold"
+      },
+      "PairAgreement": {
+        "properties": {
+          "annotation_strict_f1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annotation Strict F1"
+          },
+          "annotation_tolerant_f1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annotation Tolerant F1"
+          },
+          "mention_strict_f1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mention Strict F1"
+          },
+          "mention_tolerant_f1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mention Tolerant F1"
+          },
+          "term_f1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Term F1"
+          },
+          "modifier_agreement": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modifier Agreement"
+          },
+          "findings_a": {
+            "type": "integer",
+            "title": "Findings A"
+          },
+          "findings_b": {
+            "type": "integer",
+            "title": "Findings B"
+          },
+          "equal": {
+            "type": "integer",
+            "title": "Equal"
+          },
+          "compatible": {
+            "type": "integer",
+            "title": "Compatible"
+          },
+          "axis_conflicts": {
+            "type": "integer",
+            "title": "Axis Conflicts"
+          },
+          "term_conflicts": {
+            "type": "integer",
+            "title": "Term Conflicts"
+          },
+          "a_only": {
+            "type": "integer",
+            "title": "A Only"
+          },
+          "b_only": {
+            "type": "integer",
+            "title": "B Only"
+          },
+          "mentions_a": {
+            "type": "integer",
+            "title": "Mentions A"
+          },
+          "mentions_b": {
+            "type": "integer",
+            "title": "Mentions B"
+          },
+          "mentions_equal": {
+            "type": "integer",
+            "title": "Mentions Equal"
+          },
+          "mentions_compatible": {
+            "type": "integer",
+            "title": "Mentions Compatible"
+          },
+          "terms_a": {
+            "type": "integer",
+            "title": "Terms A"
+          },
+          "terms_b": {
+            "type": "integer",
+            "title": "Terms B"
+          },
+          "terms_equal": {
+            "type": "integer",
+            "title": "Terms Equal"
+          },
+          "modifiers_compared": {
+            "type": "integer",
+            "title": "Modifiers Compared"
+          },
+          "modifiers_agreeing": {
+            "type": "integer",
+            "title": "Modifiers Agreeing"
+          },
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "text_version": {
+            "type": "string",
+            "title": "Text Version"
+          },
+          "submission_a": {
+            "type": "string",
+            "title": "Submission A"
+          },
+          "pseudonym_a": {
+            "type": "string",
+            "title": "Pseudonym A"
+          },
+          "submission_b": {
+            "type": "string",
+            "title": "Submission B"
+          },
+          "pseudonym_b": {
+            "type": "string",
+            "title": "Pseudonym B"
+          }
+        },
+        "type": "object",
+        "required": [
+          "annotation_strict_f1",
+          "annotation_tolerant_f1",
+          "mention_strict_f1",
+          "mention_tolerant_f1",
+          "term_f1",
+          "modifier_agreement",
+          "findings_a",
+          "findings_b",
+          "equal",
+          "compatible",
+          "axis_conflicts",
+          "term_conflicts",
+          "a_only",
+          "b_only",
+          "mentions_a",
+          "mentions_b",
+          "mentions_equal",
+          "mentions_compatible",
+          "terms_a",
+          "terms_b",
+          "terms_equal",
+          "modifiers_compared",
+          "modifiers_agreeing",
+          "case_id",
+          "language",
+          "document_id",
+          "text_version",
+          "submission_a",
+          "pseudonym_a",
+          "submission_b",
+          "pseudonym_b"
+        ],
+        "title": "PairAgreement",
+        "description": "Two people's annotations of one text: a row of agreement.csv."
       },
       "PasswordChange": {
         "properties": {
@@ -21112,6 +21751,58 @@
           "username"
         ],
         "title": "ProgressWorkloadView"
+      },
+      "ProjectAgreement": {
+        "properties": {
+          "project": {
+            "type": "string",
+            "title": "Project"
+          },
+          "state_digest": {
+            "type": "string",
+            "title": "State Digest"
+          },
+          "selected_texts": {
+            "type": "integer",
+            "title": "Selected Texts"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/AgreementSummary"
+          },
+          "annotator_pairs": {
+            "items": {
+              "$ref": "#/components/schemas/AnnotatorPairAgreement"
+            },
+            "type": "array",
+            "title": "Annotator Pairs"
+          },
+          "texts": {
+            "items": {
+              "$ref": "#/components/schemas/TextAgreement"
+            },
+            "type": "array",
+            "title": "Texts"
+          },
+          "pairs": {
+            "items": {
+              "$ref": "#/components/schemas/PairAgreement"
+            },
+            "type": "array",
+            "title": "Pairs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "project",
+          "state_digest",
+          "selected_texts",
+          "summary",
+          "annotator_pairs",
+          "texts",
+          "pairs"
+        ],
+        "title": "ProjectAgreement",
+        "description": "The agreement a final export would write now (agreement.csv and\nagreement-summary.csv), for the texts with a final result."
       },
       "ProjectDocumentSummary": {
         "properties": {
@@ -26518,6 +27209,43 @@
         ],
         "title": "TermRewrite",
         "description": "A draft term the move rewrites."
+      },
+      "TextAgreement": {
+        "properties": {
+          "macro_mean": {
+            "$ref": "#/components/schemas/AgreementMacroMean"
+          },
+          "pooled": {
+            "$ref": "#/components/schemas/AgreementPooled"
+          },
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "text_version": {
+            "type": "string",
+            "title": "Text Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "macro_mean",
+          "pooled",
+          "case_id",
+          "language",
+          "document_id",
+          "text_version"
+        ],
+        "title": "TextAgreement",
+        "description": "Every pair of annotators of one text."
       },
       "TextChangePreview": {
         "properties": {

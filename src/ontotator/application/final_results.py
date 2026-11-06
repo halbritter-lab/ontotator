@@ -21,8 +21,9 @@ from ontotator.domain.results import latest_submissions
 from ontotator.domain.work_plans import RowKey
 from ontotator.domain.workspace import Submission
 from ontotator.exchange.final_content import freeze_content
+from ontotator.exchange.final_export import agreement_units
 from ontotator.exchange.final_export_guide import submission_kind
-from ontotator.exchange.final_tables import ANNOTATION_KINDS
+from ontotator.exchange.final_tables import ANNOTATION_KINDS, agreement_report
 from ontotator.exchange.human_inputs import human_input_closure
 from ontotator.storage import work_plan_store
 from ontotator.storage.database import Database
@@ -313,6 +314,115 @@ class FinalResultService:
         round_kinds.update({sid: kinds[sid] for sid in compared if sid in kinds})
         return compared
 
+    def _selection_inputs(
+        self, conn: Connection, key: str, pid: int, state: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Everything a final export freezes for the selections of ``state``:
+        their submissions and provenance closure, the other annotations of
+        texts accepted directly, the immutable content and the source reviews.
+        The final export (``freeze``) and the project agreement read the same
+        selection through this one method."""
+        selected_ids = [item["submission_id"] for item in state["selections"]]
+        closure_ids, round_inputs, round_kinds = human_input_closure(
+            self.repo, key, selected_ids
+        )
+        compared_ids = self._compared(
+            conn,
+            pid,
+            key,
+            state["selections"],
+            closure_ids,
+            round_kinds,
+        )
+        content = self.repo.t1_export_content_exact(key, [*closure_ids, *compared_ids])
+        immutable = [
+            {
+                "submission_id": sub.submission_id,
+                "sha256": state_digest(sub.model_dump(mode="json")),
+            }
+            for sub in content.submissions
+        ]
+        review_records = {
+            review["id"]: TranslationReviewRecord.model_validate(review).model_dump(
+                mode="json",
+                exclude={"project_id", "reviewer_user_id", "guideline_withdrawn"},
+            )
+            for review in conn.execute(
+                select(TranslationReviewRow).where(
+                    TranslationReviewRow.project_id == pid
+                )
+            ).mappings()
+        }
+        source_reviews = []
+        for resolution in conn.execute(
+            select(ReviewObligationResolutionRow).where(
+                ReviewObligationResolutionRow.project_id == pid
+            )
+        ).mappings():
+            record = review_records.get(resolution["payload"]["review_id"])
+            if record is None:
+                raise DomainError(
+                    "INVALID_EXPORT_SNAPSHOT",
+                    "An immutable source review is unavailable.",
+                )
+            source_reviews.append(
+                {
+                    "cause_id": resolution["cause_id"],
+                    "payload": resolution["payload"],
+                    "review_record": record,
+                    "created_at": resolution["created_at"].isoformat(),
+                }
+            )
+        recorded_at = {
+            sid: at.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+            for sid, at in conn.execute(
+                select(SubmissionRow.submission_id, SubmissionRow.recorded_at).where(
+                    SubmissionRow.project_id == pid,
+                    SubmissionRow.submission_id.in_([*closure_ids, *compared_ids]),
+                )
+            ).all()
+        }
+        project_name = conn.execute(
+            select(ProjectRow.name).where(ProjectRow.id == pid)
+        ).scalar_one()
+        return {
+            "state": state,
+            "immutable_submissions": immutable,
+            "content": freeze_content(content, source_reviews=source_reviews),
+            "round_inputs": round_inputs,
+            "round_kinds": round_kinds,
+            "selected_submission_ids": selected_ids,
+            # Additive (#295): other annotations of the selected texts.
+            "compared_submission_ids": compared_ids,
+            "project_name": project_name,
+            "submission_recorded_at": recorded_at,
+        }
+
+    def agreement(self, key: str) -> dict[str, Any]:
+        """Project-wide agreement of the annotations behind the current final
+        selections (#353): the figures a final export would write now to
+        agreement.csv and agreement-summary.csv, computed by the same code.
+
+        Leads only, like the final export: the answer names the annotators'
+        pseudonyms, which a consolidator of a project with
+        ``blind_consolidation`` must not learn.
+        """
+        with self.db.transaction() as conn:
+            pid = self._authorize(conn, key, exclusive=False)
+            state = self._projection(conn, key, pid)
+            inputs = (
+                self._selection_inputs(conn, key, pid, state)
+                if state["selections"]
+                else None
+            )
+        units = [] if inputs is None else agreement_units(self.db, key, inputs)
+        return {
+            "project": key,
+            "state_digest": state["state_digest"],
+            "selected_texts": len(state["selections"]),
+            **agreement_report(inputs or {}, units),
+        }
+
     def freeze(self, key: str, request: dict[str, Any]) -> dict[str, int]:
         with self.db.transaction() as conn:
             pid = self._authorize(conn, key, exclusive=True)
@@ -369,87 +479,11 @@ class FinalResultService:
                     "EXPORT_EMPTY",
                     "Select at least one exact submitted result before final export.",
                 )
-            selected_ids = [item["submission_id"] for item in state["selections"]]
-            closure_ids, round_inputs, round_kinds = human_input_closure(
-                self.repo, key, selected_ids
-            )
-            compared_ids = self._compared(
-                conn,
-                pid,
-                key,
-                state["selections"],
-                closure_ids,
-                round_kinds,
-            )
-            content = self.repo.t1_export_content_exact(
-                key, [*closure_ids, *compared_ids]
-            )
-            immutable = [
-                {
-                    "submission_id": sub.submission_id,
-                    "sha256": state_digest(sub.model_dump(mode="json")),
-                }
-                for sub in content.submissions
-            ]
-            review_records = {
-                review["id"]: TranslationReviewRecord.model_validate(review).model_dump(
-                    mode="json",
-                    exclude={"project_id", "reviewer_user_id", "guideline_withdrawn"},
-                )
-                for review in conn.execute(
-                    select(TranslationReviewRow).where(
-                        TranslationReviewRow.project_id == pid
-                    )
-                ).mappings()
-            }
-            source_reviews = []
-            for resolution in conn.execute(
-                select(ReviewObligationResolutionRow).where(
-                    ReviewObligationResolutionRow.project_id == pid
-                )
-            ).mappings():
-                record = review_records.get(resolution["payload"]["review_id"])
-                if record is None:
-                    raise DomainError(
-                        "INVALID_EXPORT_SNAPSHOT",
-                        "An immutable source review is unavailable.",
-                    )
-                source_reviews.append(
-                    {
-                        "cause_id": resolution["cause_id"],
-                        "payload": resolution["payload"],
-                        "review_record": record,
-                        "created_at": resolution["created_at"].isoformat(),
-                    }
-                )
-            recorded_at = {
-                sid: at.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-                for sid, at in conn.execute(
-                    select(
-                        SubmissionRow.submission_id, SubmissionRow.recorded_at
-                    ).where(
-                        SubmissionRow.project_id == pid,
-                        SubmissionRow.submission_id.in_([*closure_ids, *compared_ids]),
-                    )
-                ).all()
-            }
-            project_name = conn.execute(
-                select(ProjectRow.name).where(ProjectRow.id == pid)
-            ).scalar_one()
             payload = {
                 "format": "ontotator-final-selection/v1",
                 "project": key,
                 "request": request,
-                "state": state,
-                "immutable_submissions": immutable,
-                "content": freeze_content(content, source_reviews=source_reviews),
-                "round_inputs": round_inputs,
-                "round_kinds": round_kinds,
-                "selected_submission_ids": selected_ids,
-                # Additive (#295): other annotations of the selected texts.
-                "compared_submission_ids": compared_ids,
-                "project_name": project_name,
-                "submission_recorded_at": recorded_at,
+                **self._selection_inputs(conn, key, pid, state),
             }
             sid = str(uuid4())
             digest = state_digest(payload)

@@ -2,7 +2,7 @@
 
 `ontotator-mcp` lets an MCP client, such as Claude Desktop or Claude Code, set up and run an [Ontotator](../README.md) project for you: upload ontologies, create a project, import texts and machine proposals, assign people, follow progress and agreement, accept agreeing results and download exports. It runs on your computer, speaks MCP over stdio and calls the HTTP API of your Ontotator instance with an [API token](../docs/operations.md#api-tokens).
 
-What it does not do: annotation, review and translation review stay in the web interface. No tool reads or writes annotators' drafts or submissions, and the server refuses such routes to every API token anyway.
+What it does not do: annotation, review and translation review stay in the web interface. No tool reads or writes annotators' drafts or the findings of their submissions (`get_text_detail` lists submissions by author, time and mode only), and the server refuses the annotation routes to every API token anyway.
 
 ## Install
 
@@ -122,12 +122,17 @@ A token can do only what both its scopes and its owner's roles allow. Many tools
 | `reopen_task` | project-admin | overwrites | Reopen a submitted task so its person can change the submission. |
 | `hand_over_open_tasks` | read, project-admin | may remove or withdraw | Hand a person's open tasks to others in turn, after a dry run. |
 | `list_problem_reports` | read | reads | Problem reports annotators filed in the project. |
+| `get_problem_report` | read | reads | One problem report with its events, holds and resolution. |
+| `list_guidelines` | read | reads | The project's guideline versions and who has read them. |
+| `list_mode_changes` | read | reads | Changes of a text's annotation mode, newest first. |
+| `get_text_detail` | read | reads | One text version's history: tasks, rounds, submissions and translation reviews. |
+| `list_translation_reviews` | read | reads | Submitted translation reviews: decision, clinical change, categories, reviewer. |
 | `update_work_plan` | read, project-admin | may remove or withdraw | Turn translation review and annotation on or off and set the annotation mode. |
 | `project_overview` | read | reads | Where a project stands: settings, totals per stage, people and open decisions. |
 | `get_progress` | read | reads | Assignment progress per text version and per person (open, in progress, submitted). |
 | `working_time_summary` | read | reads | Recorded working time per annotation mode: texts, total and median per text. |
 | `list_texts` | read | reads | The project's texts with IDs, stage, assigned people and final result. |
-| `agreement_summary` | read | reads | Agreement of the submitted annotations per text, as the lead's panel shows it. |
+| `agreement_summary` | read | reads | Agreement of the annotations behind the final results, project-wide. |
 | `start_consolidation` | read, project-admin | adds | Start a consolidation of a text's submissions by a consolidator. |
 | `accept_agreeing_texts` | read, project-admin | adds | Accept the result of every text whose annotations agree in full. |
 | `final_export_check` | read | reads | What a final export would contain now: accepted results, warnings, omissions. |
@@ -181,7 +186,7 @@ This example sets up an HPO annotation project in which annotators check the HPO
    *"Annotate the English texts from the proposals and give every text to alice and bob. Show me the dry run first."*
    `update_work_plan` (`annotation_mode: proposals`) and `distribute_texts` (`mode: each`), each first without and then with `confirm`.
 6. **Annotation** happens in the browser: alice and bob confirm, change or reject each proposal.
-7. **Status.** *"How far is phentrieve-pilot, and where do alice and bob disagree?"* `project_overview`, `get_progress`, `agreement_summary`.
+7. **Status.** *"How far is phentrieve-pilot, and where do alice and bob disagree?"* `project_overview`, `get_progress`, `list_texts`; `agreement_summary` once texts have a final result (it gives the agreement the final export will hold, per pair of annotators and per text).
 8. **Results.** *"Accept every text where both agree; show me the list first. Start a consolidation by carla for the others."* `accept_agreeing_texts` (dry run, then `confirm`) and `start_consolidation` per text. Carla consolidates in the browser, and the lead accepts the consolidations on the Documents page.
 9. **Export.** *"Check the final export, then export it and save it to ~/ontotator/pilot/final.zip."* `final_export_check`, `start_export` (`kind: final`; warnings and texts without a result must be acknowledged), `download_export`. The archive holds `index.csv`, the selected results as Ontospan bundles and the tables `findings.csv`, `agreement.csv` (agreement of every two annotators per text), `agreement-summary.csv` and `proposals.csv` (how each tool's proposals fared). Its README is the resource `ontotator://jobs/{job_id}/readme`. The same accepted results as GA4GH Phenopackets (derived, lossy) are `kind: phenopackets`. The edit log (`kind: edit_log`), the working time (`kind: work_time`) and the translation reviews (`kind: translation_reviews`) export the same way.
 
@@ -202,7 +207,7 @@ Limits of the token kinds:
 
 - A project token reaches only routes with its project in the path, plus the job routes, its own record and the routes that reassign, withdraw, remove or reopen a task (they refuse tasks of other projects). So `list_projects`, `list_ontologies` and `list_project_templates` need a personal or system token; `whoami` reports a project token's project instead of its user.
 - Creating a project needs the `admin` scope, so a system token: a lead cannot create a project with a token.
-- The API gives agreement per text (the lead's comparison panel) but no project-wide figure; `agreement_summary` sums the panels.
+- `get_problem_report` and the rounds in `get_text_detail` use routes addressed by a report or task ID, which a project token cannot reach yet; use a personal token for them.
 
 Left to the web interface on purpose, although a token could call the route: choosing a final result among differing submissions or confirming one after a change (`PUT .../final-selections`; `accept_agreeing_texts` covers full agreement only), deciding on problem reports (`list_problem_reports` only lists them), anonymising an account, and changing the annotation mode of a text that already has work, which discards its submissions.
 

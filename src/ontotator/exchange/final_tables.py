@@ -600,6 +600,57 @@ def build_agreement_csv(
     }
 
 
+def agreement_report(
+    payload: Mapping[str, Any], units: Sequence[ExportedUnit]
+) -> dict[str, Any]:
+    """The agreement tables as data (the project agreement route, #353).
+
+    ``pairs`` are the rows of agreement.csv and ``summary`` those of
+    agreement-summary.csv, unrounded; ``annotator_pairs`` and ``texts`` apply
+    the same summary to the pairs of two people and to the pairs of one text.
+    """
+    pairs = agreement_pairs(payload, units) if units else []
+    context = SubmissionFacts(payload) if pairs else None
+
+    def text(pair: AgreementPair) -> dict[str, str]:
+        assert context is not None
+        facts = context.text(pair.document_id)
+        del facts["source_text_line"]  # a line of the export's source-texts.jsonl
+        return facts
+
+    def people(pair: AgreementPair) -> tuple[str, str]:
+        assert context is not None
+        return context.author(pair.submission_a), context.author(pair.submission_b)
+
+    by_people: dict[tuple[str, str], list[AgreementPair]] = defaultdict(list)
+    by_text: dict[str, list[AgreementPair]] = defaultdict(list)
+    for pair in pairs:
+        by_people[people(pair)].append(pair)
+        by_text[pair.document_id].append(pair)
+    return {
+        "summary": agreement_summary(pairs),
+        "annotator_pairs": [
+            {"pseudonym_a": a, "pseudonym_b": b, **agreement_summary(group)}
+            for (a, b), group in sorted(by_people.items())
+        ],
+        "texts": [
+            {**text(group[0]), **agreement_summary(group)} for group in by_text.values()
+        ],
+        "pairs": [
+            {
+                **text(pair),
+                "submission_a": pair.submission_a,
+                "pseudonym_a": people(pair)[0],
+                "submission_b": pair.submission_b,
+                "pseudonym_b": people(pair)[1],
+                **pair.values,
+                **pair.counts,
+            }
+            for pair in pairs
+        ],
+    }
+
+
 def build_proposals_csv(
     payload: Mapping[str, Any],
     units: Sequence[ExportedUnit],

@@ -139,6 +139,11 @@ def _arguments(folder: Path) -> dict[str, dict[str, Any]]:
             "confirm": True,
         },
         "list_problem_reports": {"project": "p"},
+        "get_problem_report": {"report_id": "r7"},
+        "list_guidelines": {"project": "p"},
+        "list_mode_changes": {"project": "p"},
+        "get_text_detail": {"project": "p", "document_id": "c-en-v1"},
+        "list_translation_reviews": {"project": "p"},
         "withdraw_guideline": {"project": "p", "version": 2},
     }
 
