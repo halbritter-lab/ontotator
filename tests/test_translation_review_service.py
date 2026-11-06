@@ -292,12 +292,14 @@ def test_submitted_open_does_not_create_or_reset_draft_and_consumed_revision_sur
             )
         )
     AssignmentService(env.db).reopen(HARNESS, env.ids["alice"])
-    with pytest.raises(DomainError, match="REVISION_CONFLICT"):
-        env.service.submit(
-            env.accesses["alice"], env.ids["alice"], expected_revision=rev
-        )
+    # Reopening restarts the draft (issue 340): tokens from before conflict.
+    for stale in (rev, rev + 1):
+        with pytest.raises(DomainError, match="REVISION_CONFLICT"):
+            env.service.submit(
+                env.accesses["alice"], env.ids["alice"], expected_revision=stale
+            )
     second = env.service.submit(
-        env.accesses["alice"], env.ids["alice"], expected_revision=rev + 1
+        env.accesses["alice"], env.ids["alice"], expected_revision=save(env)
     )
     assert second.id > first.id and count(env, TranslationReviewRow) == 2
 

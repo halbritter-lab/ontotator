@@ -36,7 +36,8 @@ def test_stylesheet_requests_only_local_files() -> None:
 
 def test_instance_appears_only_as_the_sign_in_link() -> None:
     html = _html()
-    assert html.lower().count("phentrieve") == 2
+    # The repository lives in the phentrieve GitHub org; only instance mentions count.
+    assert html.lower().replace("github.com/phentrieve/", "").count("phentrieve") == 2
     assert (
         len(
             re.findall(

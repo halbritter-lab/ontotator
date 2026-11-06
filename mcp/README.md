@@ -9,11 +9,11 @@ What it does not do: annotation, review and translation review stay in the web i
 You need [uv](https://docs.astral.sh/uv/). Install the command from the repository:
 
 ```bash
-uv tool install "git+https://github.com/halbritter-lab/ontotator#subdirectory=mcp"
+uv tool install "git+https://github.com/phentrieve/ontotator#subdirectory=mcp"
 which ontotator-mcp
 ```
 
-From a checkout, `uv tool install ./mcp` does the same. Without installing, `uvx --from "git+https://github.com/halbritter-lab/ontotator#subdirectory=mcp" ontotator-mcp` runs it directly.
+From a checkout, `uv tool install ./mcp` does the same. Without installing, `uvx --from "git+https://github.com/phentrieve/ontotator#subdirectory=mcp" ontotator-mcp` runs it directly.
 
 ## Create a token
 
@@ -73,7 +73,7 @@ Add the server to `claude_desktop_config.json` (Settings › Developer › **Edi
 }
 ```
 
-If the client cannot find the command, give its full path (`which ontotator-mcp`), or use `"command": "uvx"` with `"args": ["--from", "git+https://github.com/halbritter-lab/ontotator#subdirectory=mcp", "ontotator-mcp"]`.
+If the client cannot find the command, give its full path (`which ontotator-mcp`), or use `"command": "uvx"` with `"args": ["--from", "git+https://github.com/phentrieve/ontotator#subdirectory=mcp", "ontotator-mcp"]`.
 
 Ask the client to call `whoami` first: it shows the token's kind, scopes, project and expiry (with a warning two weeks before), who it acts as and the server's version.
 
@@ -166,7 +166,7 @@ A refusal of the API becomes a tool error with the HTTP status, the API's code a
 
 ## Worked example: a Phentrieve proposals project
 
-This example sets up an HPO annotation project in which annotators check the HPO terms that [Phentrieve](https://github.com/halbritter-lab/phentrieve) proposed for a set of clinical texts. It assumes an Ontotator instance at `https://ontotator.example.org`, an Ontospan bundle `phentrieve-bundle.zip` holding the texts and Phentrieve's proposals (written with the Ontospan tools), and an HPO release `hp.json` with its German translation `hp-de.babelon.tsv`, all in `~/ontotator` with `ONTOTATOR_MCP_FILES_DIR=~/ontotator`. The prompts are what you type into the client; the tools it calls are named after each.
+This example sets up an HPO annotation project in which annotators check the HPO terms that [Phentrieve](https://github.com/phentrieve/phentrieve) proposed for a set of clinical texts. It assumes an Ontotator instance at `https://ontotator.example.org`, an Ontospan bundle `phentrieve-bundle.zip` holding the texts and Phentrieve's proposals (written with the Ontospan tools), and an HPO release `hp.json` with its German translation `hp-de.babelon.tsv`, all in `~/ontotator` with `ONTOTATOR_MCP_FILES_DIR=~/ontotator`. The prompts are what you type into the client; the tools it calls are named after each.
 
 1. **Ontology and project** (system token with `read` and `admin`).
    *"Upload ~/ontotator/hpo/hp.json and ~/ontotator/hpo/hp-de.babelon.tsv to Ontotator, then create the project `phentrieve-pilot` named 'Phentrieve pilot' with the HPO template, languages en and de, pinned to the HP release you just uploaded."*

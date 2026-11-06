@@ -41,6 +41,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Text card, **Translation**: the people of each version are person rows with the name, the task, a status pill in one column and **Reopen…** / **Remove…** on the right, as in **Annotation**, instead of a sentence with a remove button that wrapped onto its own line. **View text** is a button, the versions share the part's left edge without a second left rule, and **Older versions** groups parallel versions by chain (#329).
 - Text card, **Finalization** and footer: the decision block is no longer a box inside the part, the table's first column, **How is this counted?** and **History** / **Details** sit on the part's edge, and **Remove…** in the warning about open annotations is a button instead of grey text. The part now has one edge plus the warning's inset instead of seven different left edges (#331).
 - Text card: a stage without actions no longer leaves an empty block and an extra 16 px gap before the footer, and at phone width **Open text** and **Other languages** share one line, so the path starts about 50 px higher (#332).
+- After a reviewer rejected or queried a translation, the lead can let the same person review it again: **Resolve…** offers *Reopen Ana Weber's review…* (with an optional reason), and in **Assign a new review…** the person shows *Review submitted* with **Reopen their review…** instead of a dead *Already assigned*. The stage actions under **Translation** offer **Reopen…** for a submitted translation review of the newest version, like for an annotation; the version list no longer offers **Reopen** for a submitted lead correction, which the server refuses. A reopened review starts from the version's current text with an empty form; the earlier decision stays in the history, and submitting **Accepted with corrections** creates the next version as usual. Assigning a translation review to someone whose review of that version is already submitted is refused with `ASSIGNMENT_ALREADY_SUBMITTED` (hint: reopen) instead of silently returning the old assignment; a still open assignment stays idempotent, and a batch skips the person as *already assigned*. **Assign a new review…** from **Resolve…** now assigns another reviewer to the rejected or queried version; before, its preview skipped the text for everyone (#340).
 
 ## [0.9.0] - 2026-11-04
 
@@ -275,15 +276,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 First public release.
 
-[Unreleased]: https://github.com/halbritter-lab/ontotator/compare/v0.9.0...HEAD
-[0.9.0]: https://github.com/halbritter-lab/ontotator/compare/v0.8.1...v0.9.0
-[0.8.1]: https://github.com/halbritter-lab/ontotator/compare/v0.8.0...v0.8.1
-[0.8.0]: https://github.com/halbritter-lab/ontotator/compare/v0.7.0...v0.8.0
-[0.7.0]: https://github.com/halbritter-lab/ontotator/compare/v0.6.1...v0.7.0
-[0.6.1]: https://github.com/halbritter-lab/ontotator/compare/v0.6.0...v0.6.1
-[0.6.0]: https://github.com/halbritter-lab/ontotator/compare/v0.5.0...v0.6.0
-[0.5.0]: https://github.com/halbritter-lab/ontotator/compare/v0.4.0...v0.5.0
-[0.4.0]: https://github.com/halbritter-lab/ontotator/compare/v0.3.0...v0.4.0
-[0.3.0]: https://github.com/halbritter-lab/ontotator/compare/v0.2.0...v0.3.0
-[0.2.0]: https://github.com/halbritter-lab/ontotator/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/halbritter-lab/ontotator/releases/tag/v0.1.0
+[Unreleased]: https://github.com/phentrieve/ontotator/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/phentrieve/ontotator/compare/v0.8.1...v0.9.0
+[0.8.1]: https://github.com/phentrieve/ontotator/compare/v0.8.0...v0.8.1
+[0.8.0]: https://github.com/phentrieve/ontotator/compare/v0.7.0...v0.8.0
+[0.7.0]: https://github.com/phentrieve/ontotator/compare/v0.6.1...v0.7.0
+[0.6.1]: https://github.com/phentrieve/ontotator/compare/v0.6.0...v0.6.1
+[0.6.0]: https://github.com/phentrieve/ontotator/compare/v0.5.0...v0.6.0
+[0.5.0]: https://github.com/phentrieve/ontotator/compare/v0.4.0...v0.5.0
+[0.4.0]: https://github.com/phentrieve/ontotator/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/phentrieve/ontotator/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/phentrieve/ontotator/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/phentrieve/ontotator/releases/tag/v0.1.0

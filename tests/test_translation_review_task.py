@@ -360,7 +360,19 @@ def test_review_http_round_trip_qualification_history_reopen_and_current_metadat
         "de",
         "submitted",
     )
-    assert assigned(env)["id"] == row["id"]
+    # Issue 340: assigning the submitted review again is refused; reopen it.
+    again = env.lead.post(
+        f"{BASE}/assignments",
+        json={
+            "rows": [{"document_id": TARGET, "username": "alice"}],
+            "task": "translation_review",
+            "confirm_language": True,
+        },
+    ).json()
+    assert again["created"] == []
+    assert [item["code"] for item in again["refused"]] == [
+        "ASSIGNMENT_ALREADY_SUBMITTED"
+    ]
     assert (
         env.lead.post(f"/api/v1/assignments/{row['id']}/reopen", json={}).status_code
         == 200

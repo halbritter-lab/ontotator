@@ -326,7 +326,7 @@ If a text is still without anyone after you close the proposal, the assign dialo
 
 ### Remove, reassign or reopen an assignment
 
-What for: change who works on a text, or let someone change a submitted annotation.
+What for: change who works on a text, or let someone change a submitted annotation or translation review.
 
 Warning: removing unsubmitted work deletes the draft for good. Submitted work stays in the history.
 
@@ -335,7 +335,7 @@ A task that waits for the translation review shows **Waiting for review** in the
 1. Open the text card and click **Annotation** (or **Translation** for reviews).
 2. In the person's row, click one of these:
    - **Reassign…**: choose the **New assignee** and click **Reassign**. If work has started, confirm with **Reassign started work**. The new person starts from the document's inputs. The previous draft stays stored, but nobody can open it, its author included.
-   - **Reopen…**: optional **Reason (optional)**, then **Reopen assignment**.
+   - **Reopen…**: optional **Reason (optional)**, then **Reopen assignment**. For a submitted translation review (in **Translation**, or **Reopen** at the review in the text's versions), the same person reviews the newest version again, starting from its current text. To have a rejected or queried translation reviewed again by the same reviewer, reopen their review: assigning it to them again is not possible.
    - **Remove…**: confirm with **Remove** or **Confirm removal**.
 
 Consolidations cannot be reassigned. Annotators can also continue from their own submission themselves ([Start a new work round](annotator.md#start-a-new-work-round)).

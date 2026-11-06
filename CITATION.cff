@@ -4,8 +4,8 @@ title: Ontotator
 abstract: Self-hosted web service for collaborative annotation of ontology terms, such as Human Phenotype Ontology concepts, in texts.
 type: software
 license: MIT
-repository-code: https://github.com/halbritter-lab/ontotator
-url: https://halbritter-lab.github.io/ontotator/
+repository-code: https://github.com/phentrieve/ontotator
+url: https://phentrieve.github.io/ontotator/
 keywords:
   - Human Phenotype Ontology
   - text annotation

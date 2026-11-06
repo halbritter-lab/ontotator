@@ -59,3 +59,11 @@ it("shows Reassign… and Remove… plainly, without the Assignment actions disc
   fireEvent.click(screen.getByRole("button", { name: "Remove…" }));
   expect(screen.getByRole("button", { name: "Confirm removal" })).toBeDefined();
 });
+it("offers Reopen for a submitted translation review, but not for a lead correction (#340)", () => {
+  const review = { ...assignment, task: "translation_review" as const, status: "submitted" as const };
+  render(<AssignmentActions assignment={review} members={members} onChanged={vi.fn()} />);
+  expect(screen.getByRole("button", { name: "Reopen" })).toBeDefined();
+  cleanup();
+  render(<AssignmentActions assignment={{ ...review, lead_correction: true }} members={members} onChanged={vi.fn()} />);
+  expect(screen.queryByRole("button", { name: "Reopen" })).toBeNull();
+});
