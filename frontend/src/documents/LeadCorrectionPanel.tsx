@@ -28,7 +28,7 @@ const strings = (value: unknown): string[] => (Array.isArray(value) ? value.filt
 const NOT_AVAILABLE: Readonly<Record<string, string>> = {
   not_newest: "A newer version of this translation exists. Reload the row to see it.",
   not_rejected_or_queried: "This version is no longer rejected or queried. Reload the row to see its current state.",
-  review_open: "A translation review of this version is open. Withdraw it with Remove assignment in the version list before you correct the translation yourself.",
+  review_open: "A translation review of this version is open. Withdraw it with Remove… in the reviewer’s row of the Translation part before you correct the translation yourself.",
 };
 
 /** Refusals whose generic admin message does not fit starting a correction. */

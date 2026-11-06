@@ -34,8 +34,8 @@ it("offers reopen only for submitted work and sends its optional reason", async 
 });
 it("requires confirmation for removal, supports cancelling and shows actual server refusals", async () => {
   vi.mocked(api.revokeAssignment).mockRejectedValue(new ApiError(403, "refused", "NOT_ALLOWED")); render(<AssignmentActions assignment={assignment} members={members} onChanged={vi.fn()} />);
-  fireEvent.click(screen.getByRole("button", { name: "Remove assignment" })); expect(api.revokeAssignment).not.toHaveBeenCalled(); fireEvent.click(screen.getByRole("button", { name: "Cancel" })); expect(api.revokeAssignment).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "Remove assignment" })); fireEvent.click(screen.getByRole("button", { name: "Confirm removal" })); expect(await screen.findByRole("alert")).toBeDefined();
+  fireEvent.click(screen.getByRole("button", { name: "Remove…" })); expect(api.revokeAssignment).not.toHaveBeenCalled(); fireEvent.click(screen.getByRole("button", { name: "Cancel" })); expect(api.revokeAssignment).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Remove…" })); fireEvent.click(screen.getByRole("button", { name: "Confirm removal" })); expect(await screen.findByRole("alert")).toBeDefined();
 });
 it("blocks duplicate mutations and ignores completion for a replaced assignment identity", async () => {
   const pending = deferred<typeof assignment>(); vi.mocked(api.reopenAssignment).mockReturnValue(pending.promise); const changed = vi.fn();
@@ -50,12 +50,20 @@ it("lists other members in the identity format with open tasks", () => {
 it("offers no reassign for a consolidation task", () => {
   render(<><AssignmentActions assignment={{ ...assignment, task: "review" }} members={members} onChanged={vi.fn()} /><AssignmentActions assignment={{ ...assignment, id: 4, task: "review" }} members={members} onChanged={vi.fn()} /></>);
   expect(screen.queryByRole("button", { name: /^Reassign/ })).toBeNull();
-  expect(screen.getAllByRole("button", { name: "Remove assignment", hidden: true })).toHaveLength(2);
+  expect(screen.getAllByRole("button", { name: "Remove…", hidden: true })).toHaveLength(2);
 });
-it("shows Reassign… and Remove assignment plainly, without the Assignment actions disclosure (B8-1)", () => {
+it("shows Reassign… and Remove… plainly, without the Assignment actions disclosure (B8-1)", () => {
   render(<AssignmentActions assignment={{ ...assignment, status: "in_progress" }} members={members} onChanged={vi.fn()} />);
   expect(screen.queryByText("Assignment actions")).toBeNull();
   expect(screen.getByRole("button", { name: "Reassign…" })).toBeDefined();
-  fireEvent.click(screen.getByRole("button", { name: "Remove assignment" }));
+  fireEvent.click(screen.getByRole("button", { name: "Remove…" }));
   expect(screen.getByRole("button", { name: "Confirm removal" })).toBeDefined();
+});
+it("offers Reopen for a submitted translation review, but not for a lead correction (#340)", () => {
+  const review = { ...assignment, task: "translation_review" as const, status: "submitted" as const };
+  render(<AssignmentActions assignment={review} members={members} onChanged={vi.fn()} />);
+  expect(screen.getByRole("button", { name: "Reopen" })).toBeDefined();
+  cleanup();
+  render(<AssignmentActions assignment={{ ...review, lead_correction: true }} members={members} onChanged={vi.fn()} />);
+  expect(screen.queryByRole("button", { name: "Reopen" })).toBeNull();
 });

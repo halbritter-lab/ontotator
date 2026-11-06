@@ -149,7 +149,7 @@ The text card shows everything about one text and lets you act on it.
 ### Open the text card
 
 1. Double-click a row, or focus the text name and press Enter.
-2. The card shows the path **Translation**, **Annotation**, **Finalization**. Click a part to see it.
+2. The card shows the path **Translation**, **Annotation**, **Finalization**. Click a part to see it. The card opens on the part that needs work now, or on the part with your next step.
 
 ![The text card with its three parts. The Annotation part is open and lists the annotators.](images/lead-text-card.png)
 
@@ -157,7 +157,9 @@ In the card:
 
 - **Open text** opens the [text view](#read-a-text-and-other-peoples-work-in-the-text-view).
 - **Previous text** and **Next text** walk through the table (keys `K` and `J`).
-- **Other languages** switches to another language of the same case.
+- **Other languages** switches to another language of the same case. Below 700 px width it shares a line with **Open text**.
+- Your steps stand where they act. An open problem report is a notice above the path with **Open** and **Decide on report…**. Other steps stand at the top of their part under *Next step*, for example **Resolve…** in **Translation** or **Carry to v2…** in **Annotation**. A part's other actions share its action row, for example **Open result** and **Change final…** in **Finalization**.
+- Every person's remove action is **Remove…**. Its dialog says what happens: an unsubmitted annotation is removed with its draft; other work is revoked and stays in the history.
 - In **Finalization**, **Open consolidation** opens your own running consolidation as your task; a submitted one opens read-only.
 - ✕ or Esc closes the card.
 
@@ -187,8 +189,8 @@ What for: read a text with other people's findings or the final result, and comp
 What for: see each version of a translation, its reviews and its origin.
 
 1. Open the text card and click **Translation**.
-2. The list shows each version with its origin and status. Older ones are under **Older versions**.
-3. Click **View text** to read a version, or **Translation reviews** to see every review decision.
+2. The list shows each version with its origin and status, then one row per person who worked on it: the name, the task and the status. Older ones are under **Older versions**; with parallel versions they are grouped by version chain.
+3. Click **View text** to read a version, or **Translation reviews** to see every review decision. In a reviewer's row, **Reopen…** lets them review the version again and **Remove…** removes their assignment.
 4. Click **Compare with source** to compare the translation with the source text.
 
 ### Request a translation correction
@@ -324,7 +326,7 @@ If a text is still without anyone after you close the proposal, the assign dialo
 
 ### Remove, reassign or reopen an assignment
 
-What for: change who works on a text, or let someone change a submitted annotation.
+What for: change who works on a text, or let someone change a submitted annotation or translation review.
 
 Warning: removing unsubmitted work deletes the draft for good. Submitted work stays in the history.
 
@@ -333,7 +335,7 @@ A task that waits for the translation review shows **Waiting for review** in the
 1. Open the text card and click **Annotation** (or **Translation** for reviews).
 2. In the person's row, click one of these:
    - **Reassign…**: choose the **New assignee** and click **Reassign**. If work has started, confirm with **Reassign started work**. The new person starts from the document's inputs. The previous draft stays stored, but nobody can open it, its author included.
-   - **Reopen…**: optional **Reason (optional)**, then **Reopen assignment**.
+   - **Reopen…**: optional **Reason (optional)**, then **Reopen assignment**. For a submitted translation review (in **Translation**, or **Reopen** at the review in the text's versions), the same person reviews the newest version again, starting from its current text. To have a rejected or queried translation reviewed again by the same reviewer, reopen their review: assigning it to them again is not possible.
    - **Remove…**: confirm with **Remove** or **Confirm removal**.
 
 Consolidations cannot be reassigned. Annotators can also continue from their own submission themselves ([Start a new work round](annotator.md#start-a-new-work-round)).

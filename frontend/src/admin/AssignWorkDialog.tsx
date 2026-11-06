@@ -4,7 +4,8 @@ import { personLabel, textLabel } from "../app/identity";
 import { assignedText } from "../app/assignedDate";
 import { plural } from "../app/labels";
 import { versionName } from "../documents/labels";
-import { Button, Checkbox, Dialog, IconButton, Popover, Select, StatusBadge } from "../ui";
+import { reopenableReviews, workPersonName } from "../documents/reviewReason";
+import { Button, Checkbox, Dialog, IconButton, InlineConfirm, Popover, Select, StatusBadge, Textarea } from "../ui";
 import { IconInfo } from "../ui/icons";
 import { DistributionDialog } from "./DistributionDialog";
 import { ErrorNotice } from "./ErrorNotice";
@@ -172,6 +173,9 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
   const [acknowledged, setAcknowledged] = useState(false);
   const [limitSaved, setLimitSaved] = useState<string | null>(null);
   const [allTexts, setAllTexts] = useState(false);
+  const [reopening, setReopening] = useState<DocumentRowView["work"][number] | null>(null);
+  const [reopenReason, setReopenReason] = useState("");
+  const [reopenError, setReopenError] = useState<unknown>();
   /** Cases mode walks through the selection's steps (issues 195, 218): what earlier steps of this dialog assigned. */
   const [done, setDone] = useState<Walked>({ steps: [], passed: [], messages: [], assigned: [], skipped: [] });
   const randomChanged = useRef(false);
@@ -211,7 +215,13 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
   const people = shown ? sortMembers(shown.people.filter(person => person.username !== me?.username)) : [];
   /** One text: people who already hold this task show a status instead of a choice (F24). */
   const holds = (person: BatchPersonView) => isRow && person.already_assigned > 0;
+  /** Issue 340: a holder whose translation review is submitted gets "Reopen their review…", not a new assignment. */
+  const submittedReview = (person: BatchPersonView) => props.mode === "row" && task === "translation_review" && holds(person)
+    && !props.row.work.some(item => item.task === task && item.status !== "submitted" && item.moved_to_version == null && item.person?.pseudonym === person.person.pseudonym)
+    ? reopenableReviews(props.row).find(item => item.person?.pseudonym === person.person.pseudonym) : undefined;
   const heldBy = people.filter(holds);
+  const submittedBy = heldBy.filter(person => submittedReview(person));
+  const openBy = heldBy.filter(person => !submittedReview(person));
   const order = people.map(person => person.username);
   const usernames = order.filter(name => chosen.includes(name));
   const picked = usernames.length + (self ? 1 : 0);
@@ -365,6 +375,16 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
       } else setFailure(errorMessage(error));
     } finally { if (alive.current) { writing.current = false; setBusy(false); } }
   };
+  const reopenReview = async () => {
+    if (writing.current || !reopening || props.mode !== "row") return;
+    writing.current = true; setBusy(true); setReopenError(undefined);
+    try {
+      await api.reopenAssignment(reopening.assignment_id, reopenReason.trim() || undefined);
+      if (alive.current) props.onAssigned(`${workPersonName(reopening)}'s review of ${textLabel(props.row)} was reopened.`);
+    } catch (error: unknown) {
+      if (alive.current) setReopenError(error);
+    } finally { if (alive.current) { writing.current = false; setBusy(false); } }
+  };
   const mismatched = chosenPeople.filter(person => person.language_mismatch && person.gets > 0);
   const assign = () => {
     if (reason || busy) return;
@@ -476,7 +496,8 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
     <div className="assign-dialog">
       {props.mode === "row" && <div className="assign-context">
         <p><strong>{textLabel({ case_id: props.row.case_id, language: props.row.language, version: newest?.version }, { withVersion: (newest?.version ?? 1) > 1 })}</strong></p>
-        {task === "translation_review" && heldBy.length > 0 && <p>{`${stepName(task)} of ${textLabel(props.row)} is assigned to ${heldBy.map(person => personLabel(person.person)).join(", ")}. Assign it to someone else?`}</p>}
+        {task === "translation_review" && openBy.length > 0 && <p>{`${stepName(task)} of ${textLabel(props.row)} is assigned to ${openBy.map(person => personLabel(person.person)).join(", ")}. Assign it to someone else?`}</p>}
+        {task === "translation_review" && submittedBy.length > 0 && <p>{`${submittedBy.map(person => personLabel(person.person)).join(", ")} already submitted ${submittedBy.length === 1 ? "a review" : "reviews"} of ${textLabel(props.row)}. To let them review it again, reopen their review; or assign it to someone else.`}</p>}
         <p id={limitId} className="assign-muted">{status}</p>
       </div>}
 
@@ -534,8 +555,12 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
           const atLimit = !radios && !checked && picked >= limit;
           const inputId = `${id}-member-${index}`;
           const addMe = person.unavailable === "role_missing" && person.username === props.me?.username;
+          const submitted = submittedReview(person);
           if (holds(person)) return <tr key={person.username}>
-            <td><span className="assign-member">{personLabel(person.person)} <StatusBadge tone="success">Already assigned</StatusBadge></span></td>
+            <td><span className="assign-member">{personLabel(person.person)} {submitted
+              ? <><StatusBadge tone="neutral">Review submitted</StatusBadge><Button size="sm" disabled={busy} aria-expanded={reopening?.assignment_id === submitted.assignment_id}
+                onClick={() => { setReopenReason(""); setReopenError(undefined); setReopening(submitted); }}>Reopen their review…</Button></>
+              : <StatusBadge tone="success">Already assigned</StatusBadge>}</span></td>
             <td className="assign-reads"><span className="assign-narrow-label">Reads </span>{person.reads.join(", ") || "None listed"}</td>
             <td className="assign-open"><span className="assign-narrow-label">Open </span>{person.open_before}</td>
           </tr>;
@@ -577,6 +602,13 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
         })()}
         </tbody>
       </table>}
+      {reopening && props.mode === "row" && <InlineConfirm headingLevel={3} busy={busy} confirmLabel="Reopen review"
+        title={`Reopen ${workPersonName(reopening)}'s review of ${textLabel(props.row)}`}
+        message={<p>{`${workPersonName(reopening)} reviews v${reopening.version} again, starting from its current text. The earlier decision stays in the history.`}</p>}
+        onConfirm={() => { void reopenReview(); }} onCancel={() => { if (!writing.current) { setReopening(null); setReopenError(undefined); } }}>
+        <Textarea id={`${id}-reopen-reason`} label="Reason (optional)" maxLength={2000} value={reopenReason} disabled={busy} onChange={event => setReopenReason(event.target.value)} />
+        {reopenError !== undefined && <ErrorNotice error={reopenError} />}
+      </InlineConfirm>}
       {me && rowMulti && props.mode === "row" && props.consolidatorRule && <p id={`${id}-rule`} className="assign-muted">If you annotate this text yourself, you cannot consolidate it afterwards (project rule "the consolidator is not an annotator").</p>}
 
       <div className="assign-summary" role="status" aria-live="polite" aria-label="Summary">{summaryLines.map(line => <p key={line}>{line}</p>)}</div>

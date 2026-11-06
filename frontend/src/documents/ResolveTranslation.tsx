@@ -1,7 +1,8 @@
 /**
  * Lead options for a translation that blocks the plan, shown inline under the Documents row; focus
  * goes to their heading (F5; documents overview Change 13).
- * - `resolve` (rule 4, D5): exactly "Assign a new review…", "Correct the translation…" (the lead's own
+ * - `resolve` (rule 4, D5): "Reopen {reviewer}'s review…" (issue 340: the same person reviews again, one per
+ *   submitted review of the version), "Assign a new review…", "Correct the translation…" (the lead's own
  *   correction, F1; "Continue your correction" while the lead holds one) and
  *   "Discard the {language} translation…" (reason required, consequences confirmed inline).
  * - `not_accepted` (rule 4a, D24): "Turn translation review on" or the external-review acceptance with a reason.
@@ -15,7 +16,7 @@ import { Button, Checkbox, InlineConfirm, InlineMessage, Textarea } from "../ui"
 import { correctionDocumentId, LeadCorrectionPanel, openLeadCorrection } from "./LeadCorrectionPanel";
 import { stepLabel } from "./nextStepLabels";
 import { shortName } from "./stageLabels";
-import { reasonDocumentId, reasonLead, ReviewReason, useReviewReason } from "./reviewReason";
+import { reasonDocumentId, reasonLead, reopenableReviews, ReviewReason, useReviewReason, workPersonName } from "./reviewReason";
 import { ACCEPT_EXTERNAL_LABEL, ACCEPTANCE_RECORDED, consequenceLines, PLAN_CHANGED_MESSAGE, WITHDRAW_CHECKBOX } from "./PlanChips";
 
 export interface ResolveTranslationProps {
@@ -88,9 +89,11 @@ function ResolveOptions(props: ResolveTranslationProps): JSX.Element {
   const heading = useHeadingFocus();
   const discardButton = useRef<HTMLButtonElement>(null);
   const correctButton = useRef<HTMLButtonElement>(null);
+  const reopenButtons = useRef(new Map<number, HTMLButtonElement>());
   const [discarding, setDiscarding] = useState(false);
   const [correcting, setCorrecting] = useState(false);
-  const [backToOptions, setBackToOptions] = useState<"discard" | "correct" | null>(null);
+  const [reopening, setReopening] = useState<DocumentRowView["work"][number] | null>(null);
+  const [backToOptions, setBackToOptions] = useState<"discard" | "correct" | number | null>(null);
   const [reason, setReason] = useState("");
   const [consequences, setConsequences] = useState<ConsequencesView | null>(null);
   const [understood, setUnderstood] = useState(false);
@@ -102,13 +105,35 @@ function ResolveOptions(props: ResolveTranslationProps): JSX.Element {
 
   const own = openLeadCorrection(row);
   const reviewReason = useReviewReason(projectKey, reasonDocumentId(row));
+  // Issue 340: the person who rejected or queried the version may review it again (Reopen, not a new assignment).
+  const reviewers = reopenableReviews(row, reasonDocumentId(row));
 
-  // Cancel in the discard or correction step returns to the three options with focus on its option.
+  // Cancel in the discard, correction or reopen step returns to the options with focus on its option.
   useEffect(() => {
-    if (!backToOptions || discarding || correcting) return;
+    if (backToOptions === null || discarding || correcting || reopening) return;
     setBackToOptions(null);
-    (backToOptions === "discard" ? discardButton : correctButton).current?.focus();
-  }, [backToOptions, discarding, correcting]);
+    if (typeof backToOptions === "number") reopenButtons.current.get(backToOptions)?.focus();
+    else (backToOptions === "discard" ? discardButton : correctButton).current?.focus();
+  }, [backToOptions, discarding, correcting, reopening]);
+
+  const reopen = async () => {
+    if (busy || !reopening) return;
+    const name = workPersonName(reopening);
+    setBusy(true); setError(undefined);
+    onAnnounce("Saving…");
+    try {
+      await api.reopenAssignment(reopening.assignment_id, reason.trim() || undefined);
+      onDone(`${name}'s review of ${textLabel(row)} was reopened.`, { caseId: row.case_id, revision: props.revision });
+    } catch (failure: unknown) {
+      onAnnounce("");
+      setError(failure);
+    } finally { setBusy(false); }
+  };
+  const backFromReopen = () => {
+    const id = reopening?.assignment_id ?? null;
+    setReopening(null); setReason(""); setError(undefined);
+    setBackToOptions(id);
+  };
 
   const discard = async () => {
     if (busy || !reason.trim()) return;
@@ -151,6 +176,18 @@ function ResolveOptions(props: ResolveTranslationProps): JSX.Element {
       </InlineConfirm>
     </div>;
   }
+  if (reopening) {
+    const name = workPersonName(reopening);
+    return <div className="documents-resolve">
+      <InlineConfirm title={`Reopen ${name}'s review of ${textLabel(row)}`} busy={busy} confirmLabel="Reopen review"
+        message={<p>{`${name} reviews v${reopening.version} again, starting from its current text. The earlier decision stays in the history.`}</p>}
+        onConfirm={() => { void reopen(); }} onCancel={backFromReopen}>
+        <Textarea id={`${id}-reopen-reason`} label="Reason (optional)" maxLength={2000} value={reason} disabled={busy}
+          onChange={event => setReason(event.target.value)} />
+        {error !== undefined && <ErrorNotice error={error} />}
+      </InlineConfirm>
+    </div>;
+  }
   if (correcting) {
     return <LeadCorrectionPanel row={row} projectKey={projectKey} onNavigate={onNavigate} headingLevel={headingLevel}
       onCancel={() => { setCorrecting(false); setBackToOptions("correct"); }} />;
@@ -160,6 +197,9 @@ function ResolveOptions(props: ResolveTranslationProps): JSX.Element {
     {reviewReason && <ReviewReason record={reviewReason} lead={reasonLead(row, reviewReason)} />}
     {waitingLine(row) && <p className="documents-resolve-waiting">{waitingLine(row)}</p>}
     <div className="documents-resolve-actions">
+      {reviewers.map(item => <Button key={item.assignment_id} size="sm"
+        ref={element => { if (element) reopenButtons.current.set(item.assignment_id, element); else reopenButtons.current.delete(item.assignment_id); }}
+        onClick={() => { setReason(""); setError(undefined); setReopening(item); }}>{`Reopen ${workPersonName(item)}'s review…`}</Button>)}
       <Button size="sm" onClick={onAssignReview}>Assign a new review…</Button>
       {own
         ? <Button ref={correctButton} size="sm" onClick={() => onNavigate({ name: "task", assignmentId: own.assignment_id })}>Continue your correction</Button>

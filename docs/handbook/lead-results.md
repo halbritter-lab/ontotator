@@ -33,7 +33,7 @@ If the project rule says the consolidator may not be an annotator, you cannot ac
 What for: accept a result before everyone has submitted.
 
 1. Open the text card at **Finalization**. It lists the annotations still open.
-2. Optional: remove open work with **Remove assignment…**.
+2. Optional: remove open work with **Remove…** in the warning.
 3. Choose the result as in [Accept a result or compare results](#accept-a-result-or-compare-results).
 
 Open work stays assigned unless you remove it.
@@ -95,7 +95,7 @@ What for: confirm a final result after something changed, for example a newer su
 What for: pick another result after you already chose one.
 
 1. Open the text card at **Finalization**.
-2. Click **Change final…**.
+2. Click **Change final…** next to **Open result**.
 3. Click **Use as final** in the row of the result you want.
 
 ## Translation and text-change decisions
@@ -106,7 +106,8 @@ What for: decide what happens after a reviewer rejected or queried a translation
 
 1. In the row, click **Resolve…**. The options open below the row with the reviewer's rationale. When someone holds an annotation that waits for this translation, a line names them, for example *Ana Weber is waiting for this decision to start the annotation.*
 2. Choose one:
-   - **Assign a new review…**: someone reviews it again.
+   - The reopen item, for example *Reopen Ana Weber's review…*: the same person reviews it again. Enter an optional **Reason (optional)** and click **Reopen review**. Their task shows **Reopened** with your reason and starts from the version's current text; their earlier decision stays in the history. If they then accept it with corrections, the corrected text becomes the next version.
+   - **Assign a new review…**: someone else reviews it. The person who already reviewed it shows *Review submitted* with **Reopen their review…**; a new assignment for them is not possible, reopen their review instead.
    - **Correct the translation…**: you correct it yourself ([Correct a translation yourself](#correct-a-translation-yourself)).
    - The discard item, for example *Discard the de translation…*: enter a **Reason** and click **Discard**. Nothing is deleted; the versions are marked as discarded.
 3. Or click **Cancel**. Changing a filter, the tab, the order or the page also closes the options; nothing is saved until you choose.
@@ -163,7 +164,7 @@ Annotators and reviewers can report a problem with a text. This pauses their tas
 
 What for: answer a report and let the work go on.
 
-1. On **Documents**, click **Decide on report…** in the row. Or click **Open report** in the text card.
+1. On **Documents**, click **Decide on report…** in the row. Or click **Decide on report…** in the problem report's notice of the text card.
 2. Read the report: who reported it, the reason and the history.
 3. In the common case, write an optional answer and click the close-and-resume button, for example *Close and resume the annotation of CASE-1 de by Ana Weber (ann-0004)*. The page names a task by its kind, text and owner, not by a number.
 4. For other cases, open **Other decisions** and choose one:

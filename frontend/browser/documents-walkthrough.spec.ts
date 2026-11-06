@@ -225,8 +225,13 @@ test("step 7: Handle text change… → Move to v2 (preselected) → Apply", asy
   if ((await translation.getAttribute("aria-current")) !== "step") await translation.click();
   await openOlderVersions(area);
   const v1 = area.getByRole("list", { name: "Assignments on v1", exact: true });
-  await expect(v1.getByRole("listitem").filter({ hasText: LUC })).toContainText(/Annotation\W+moved to v2/);
-  await expect(v1.getByRole("listitem").filter({ hasText: TOM })).toContainText(/Annotation\W+Submitted/);
+  // Person rows (issue 329): the task under the name, the state in the status pill.
+  const lucRow = v1.getByRole("listitem").filter({ hasText: LUC });
+  await expect(lucRow.locator(".person-row-details")).toHaveText("Annotation");
+  await expect(lucRow.locator(".person-row-status")).toHaveText("Moved to v2");
+  const tomRow = v1.getByRole("listitem").filter({ hasText: TOM });
+  await expect(tomRow.locator(".person-row-details")).toHaveText("Annotation");
+  await expect(tomRow.locator(".person-row-status")).toContainText("Submitted");
   // The card is modal: close it before the next row action.
   await area.getByRole("button", { name: "Close", exact: true }).click();
   await expect(area).toHaveCount(0);

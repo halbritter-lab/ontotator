@@ -10,7 +10,7 @@ import { RouteLink } from "../RowCells";
 import { shortName } from "../stageLabels";
 import type { TextVersionsTools } from "../TextVersions";
 import { finalizationState, textViewRoute } from "./cardModel";
-import { PersonList, useFocusAfterRemoval } from "./PersonRow";
+import { PersonList, possessive, useFocusAfterRemoval } from "./PersonRow";
 import { assignedLine, workerName, WorkPersonRow } from "./WorkPersonRow";
 
 type WorkItem = DocumentRowView["work"][number];
@@ -21,9 +21,11 @@ function workName(item: WorkItem): string {
   return item.person ? shortName(item.person) : item.author_label;
 }
 
-function nameOf(items: readonly WorkItem[], assignmentId: number): string {
+/** "Remove Tom Reis’s assignment", "Remove your assignment": the accessible name of a warning's "Remove…" (like the person rows). */
+function removeName(items: readonly WorkItem[], assignmentId: number): string {
   const item = items.find(entry => entry.assignment_id === assignmentId);
-  return item ? workName(item) : String(assignmentId);
+  if (item?.is_me) return "Remove your assignment";
+  return `Remove ${possessive(item ? workName(item) : String(assignmentId))} assignment`;
 }
 
 /**
@@ -31,7 +33,7 @@ function nameOf(items: readonly WorkItem[], assignmentId: number): string {
  * runs: one row per consolidator with the open groups, "Open consolidation" (their task) for the consolidator and, for the
  * lead, "Remove…", which frees the text for "Consolidate…" with someone else (no Reassign, D1).
  */
-export function FinalizationPart({ row, projectKey, query, decision, onNavigate, now, canManage = false, tools, onChanged }: {
+export function FinalizationPart({ row, projectKey, query, decision, onNavigate, now, canManage = false, tools, onChanged, steps, actions }: {
   row: DocumentRowView;
   projectKey: string;
   query: ProjectDocumentsQuery;
@@ -43,6 +45,10 @@ export function FinalizationPart({ row, projectKey, query, decision, onNavigate,
   /** Assignments for the consolidator's "Remove…". */
   tools?: TextVersionsTools;
   onChanged?: () => void;
+  /** The lead's steps of this part ("Next step: …" with their buttons, issue 332). */
+  steps?: ReactNode;
+  /** The stage's admin actions (Assign a new review…, Change final…), joined to the part's action row. */
+  actions?: ReactNode;
 }): JSX.Element {
   const id = useId();
   const detail = row.stages?.annotation.detail;
@@ -64,21 +70,22 @@ export function FinalizationPart({ row, projectKey, query, decision, onNavigate,
     onNavigate={onNavigate} className="btn btn-secondary btn-sm" aria-label={label}>Open consolidation</RouteLink>;
   const groups = progress ? `${progress.open} of ${progress.total} groups open` : null;
   // "Annotators per text" is an upper limit (issue 123): with one annotation submitted the lead may decide now; the
-  // open annotations are a warning, each with "Remove assignment…", or are left to run.
+  // open annotations are a warning, each with "Remove…" (a button like every remove, issue 331), or are left to run.
   const early = earlyFinal(row);
   const open = early ? openAnnotateWork(row) : [];
   const openAssignments = early && canManage ? open.flatMap(item => tools?.assignments.find(entry => entry.id === item.assignment_id && !entry.revoked_at) ?? []) : [];
   const [revoking, setRevoking] = useState<AssignmentView | null>(null);
   return <section className="text-card-part" aria-labelledby={`${id}-title`}>
     <h3 id={`${id}-title`} className="text-card-part-title">Finalization</h3>
+    {steps}
     {waiting && !early && <p className="text-card-muted">
       {`Starts once an annotation is submitted${target && target > 1 ? ` (up to ${target} per text, fewer is fine)` : ""}: compare the results, consolidate the differences, then accept the result.`}
     </p>}
     {early && <InlineMessage tone="warning" live={false}>
       <p>{`${plural(open.length, "annotation")} still open: ${open.map(workName).join(", ")}. You can accept a result now; open work stays assigned unless you remove it.`}</p>
       {openAssignments.length > 0 && <div className="text-card-actions">
-        {openAssignments.map(assignment => <Button key={assignment.id} size="sm" variant="quiet" aria-label={`Remove assignment…, ${nameOf(open, assignment.id)}`}
-          onClick={() => setRevoking(assignment)}>Remove assignment…</Button>)}
+        {openAssignments.map(assignment => <Button key={assignment.id} size="sm" aria-label={removeName(open, assignment.id)}
+          onClick={() => setRevoking(assignment)}>Remove…</Button>)}
       </div>}
     </InlineMessage>}
     {running.length > 0 ? <PersonList label="Consolidators">
@@ -96,9 +103,11 @@ export function FinalizationPart({ row, projectKey, query, decision, onNavigate,
     {revoking && tools && <AssignmentActions assignment={revoking} textName={textLabel(row)} members={tools.members} open="revoke"
       onChanged={() => { tools.onAssignmentsChanged(); onChanged?.(); }} onClose={() => setRevoking(null)} />}
     {decision}
-    {row.final && <p>
-      <RouteLink route={textViewRoute(projectKey, row.case_id, row.final.document_id, query, { show: `final:${row.final.submission_id}` })} onNavigate={onNavigate}
-        className="btn btn-secondary btn-sm">Open result</RouteLink>
-    </p>}
+    {/* "Open result" and the stage's "Change final…" in one action row (issue 332). */}
+    {(row.final || actions) && <div className="text-card-actions">
+      {row.final && <RouteLink route={textViewRoute(projectKey, row.case_id, row.final.document_id, query, { show: `final:${row.final.submission_id}` })} onNavigate={onNavigate}
+        className="btn btn-secondary btn-sm">Open result</RouteLink>}
+      {actions}
+    </div>}
   </section>;
 }

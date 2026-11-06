@@ -1,15 +1,17 @@
-import { forwardRef, type ReactNode } from "react";
+import { forwardRef, useId, type ReactNode } from "react";
 import type { AssignmentView, DocumentRowView, DocumentVersionView, Member, VariantSummary } from "../api/client";
-import { AssignmentActions } from "../admin/AssignmentActions";
-import { assignmentStatusLabels, labelFor, taskLabels } from "../app/labels";
-import { routeHref, type ProjectDocumentsQuery, type Route } from "../app/router";
+import { labelFor, taskLabels } from "../app/labels";
+import type { ProjectDocumentsQuery, Route } from "../app/router";
 import { personLabel as identityLabel, type PersonRef } from "../app/identity";
-import { formatTime, personLabel } from "../app/submissionLabels";
+import { formatTime } from "../app/submissionLabels";
 import { Button, StatusBadge, type StatusTone } from "../ui";
 import { TranslationCorrectionAction } from "../variants/TranslationCorrectionAction";
 import { originLabels } from "../admin/variantMetadata";
 import { statusBadgeText, versionName } from "./labels";
-import { isPlainClick, rowName } from "./RowCells";
+import { RouteLink, rowName } from "./RowCells";
+import type { CardWorkItem } from "./textCard/cardModel";
+import { PersonList, PersonRow, useFocusAfterRemoval } from "./textCard/PersonRow";
+import { workerName, WorkPersonRow, workStatus } from "./textCard/WorkPersonRow";
 
 /** Page-level data the version actions need; without it Text versions is read-only. */
 export interface TextVersionsTools {
@@ -109,20 +111,40 @@ export interface TextVersionsProps {
   query: ProjectDocumentsQuery;
   onNavigate: (route: Route) => void;
   tools?: TextVersionsTools;
+  /** The lead: Reopen… and Remove… on the people of a version (default: with `tools`). */
+  canManage?: boolean;
   /** Reference time for the current-year rule (tests). */
   now?: Date;
   /** Text card: its person rows show open work with its actions and carry every annotation's actions; list only submitted and moved work, annotations without actions. */
   hideOpenWork?: boolean;
-  /** Text card: the newest version of each chain stays visible, older ones sit in a closed "Older versions (n)". */
+  /** Text card: the newest version of each chain stays visible, older ones sit in a closed "Older versions (n)", grouped by chain. */
   collapseOlder?: boolean;
 }
 
-/** Child rows per text version of a row: origin, status with review decision, chain name, work and version actions. */
-export const TextVersions = forwardRef<HTMLUListElement, TextVersionsProps>(function TextVersions({ row, projectKey, query, onNavigate, tools, now, hideOpenWork = false, collapseOlder = false }, ref) {
+/** The status pill of a person on a version: moved work says where it went, else the work item's status. */
+function versionWorkStatus(item: CardWorkItem): { tone: StatusTone; label: string } {
+  if (item.moved_to_version != null) return { tone: "neutral", label: `Moved to v${item.moved_to_version}` };
+  return workStatus(item);
+}
+
+/** Older versions by chain (several chains: one group per chain, in the order the chains first appear), each by version. */
+function chainGroups(versions: readonly DocumentVersionView[]): { chain: string; versions: DocumentVersionView[] }[] {
+  const groups = new Map<string, DocumentVersionView[]>();
+  for (const version of versions) groups.set(version.chain_name, [...(groups.get(version.chain_name) ?? []), version]);
+  return [...groups].map(([chain, items]) => ({ chain, versions: [...items].sort((a, b) => a.version - b.version) }));
+}
+
+/**
+ * Child rows per text version of a row: origin, status with review decision, chain name, then the people who worked on
+ * it as person rows (name, task, status pill, the lead's Reopen… / Remove…; issue 329), then the version's actions.
+ */
+export const TextVersions = forwardRef<HTMLUListElement, TextVersionsProps>(function TextVersions({ row, projectKey, query, onNavigate, tools, canManage = !!tools, now, hideOpenWork = false, collapseOlder = false }, ref) {
+  const id = useId();
   const documents = Object.keys(query).length ? { documents: query } : {};
   const newest = collapseOlder ? row.versions.filter(version => version.is_newest_in_chain) : [];
   const current = newest.length ? newest : row.versions;
   const older = newest.length ? row.versions.filter(version => !version.is_newest_in_chain) : [];
+  const focusAfterRemoval = useFocusAfterRemoval();
   const renderVersion = (version: DocumentVersionView): JSX.Element => {
       const name = versionName(version.version, version.chain_name, row.parallel_roots);
       const badge = statusBadgeText(version.translation_status, version.latest_review_decision, version.accepted_without_review);
@@ -149,35 +171,42 @@ export const TextVersions = forwardRef<HTMLUListElement, TextVersionsProps>(func
           <span className="text-version-origin">{originText(version, row)}</span>
           {badge && <StatusBadge tone={badgeTone(version)}>{badge}</StatusBadge>}
           {discarded && <StatusBadge tone="neutral">Discarded</StatusBadge>}
-          <span className="text-version-chain">{version.chain_name}</span>
+          {/* With several chains the name already carries the chain. */}
+          {!row.parallel_roots && <span className="text-version-chain">{version.chain_name}</span>}
           {!version.matches_filter && <span className="cell-secondary">Does not match the filters</span>}
         </div>
         {acceptance && <p className="text-version-record">{acceptanceLabel(acceptance, now)}</p>}
         {discarded && discardLabel(version, now) !== "Discarded" && <p className="text-version-record">{discardLabel(version, now)}</p>}
-        {work.length > 0 && <ul className="text-version-work" aria-label={`Assignments on ${name}`}>
+        {work.length > 0 && <PersonList label={`Assignments on ${name}`}>
           {work.map(item => {
-            const moved = item.moved_to_version ?? null;
-            const assignment = moved == null ? tools?.assignments.find(entry => entry.id === item.assignment_id && entry.document_id === version.document_id && !entry.revoked_at) : undefined;
-            return <li key={item.assignment_id}>
-              <span>{personLabel(item.author_label, item.is_me, item.person)}, {labelFor(taskLabels, item.task)}, {moved != null ? `moved to v${moved}` : labelFor(assignmentStatusLabels, item.status)}</span>
-              {item.held && <> <StatusBadge tone="warning">Paused</StatusBadge></>}
-              {assignment && tools && !(hideOpenWork && item.task === "annotate") && <AssignmentActions assignment={assignment} textName={fullName} members={tools.members} onChanged={tools.onAssignmentsChanged} />}
-            </li>;
+            const details = <>{labelFor(taskLabels, item.task)}{item.held && " · Paused"}</>;
+            // Moved work is history; annotations carry their actions in the Annotation part (text card).
+            const plain = item.moved_to_version != null || (hideOpenWork && item.task === "annotate");
+            return plain
+              ? <PersonRow key={`${item.assignment_id}-${item.moved_to_version ?? ""}`} name={workerName(item)} pseudonym={item.person?.pseudonym ?? item.author_label} details={details} status={versionWorkStatus(item)} />
+              : <WorkPersonRow key={item.assignment_id} item={item} caseId={row.case_id} textName={fullName} details={details} canManage={canManage} tools={tools}
+                onChanged={() => tools?.onAssignmentsChanged()} onRemoved={focusAfterRemoval} />;
           })}
-        </ul>}
+        </PersonList>}
         <div className="text-version-actions">
-          <a href={routeHref(view)} aria-label={`View text ${fullName}`} onClick={event => {
-            if (!isPlainClick(event)) return;
-            event.preventDefault(); onNavigate(view);
-          }}>View text</a>
+          <RouteLink route={view} onNavigate={onNavigate} className="btn btn-secondary btn-sm" aria-label={`View text ${fullName}`}>View text</RouteLink>
           {actions}
         </div>
       </li>;
   };
+  const groups = row.parallel_roots ? chainGroups(older) : [{ chain: "", versions: older }];
   return <ul ref={ref} className="text-versions">
     {current.map(renderVersion)}
     {older.length > 0 && <li className="text-version-older">
-      <details><summary>{`Older versions (${older.length})`}</summary><ul className="text-versions">{older.map(renderVersion)}</ul></details>
+      <details>
+        <summary>{`Older versions (${older.length})`}</summary>
+        {groups.map(({ chain, versions }, index) => chain
+          ? <section key={chain} className="text-version-group" aria-labelledby={`${id}-chain-${index}`}>
+            <h4 id={`${id}-chain-${index}`} className="text-version-group-title">{chain}</h4>
+            <ul className="text-versions">{versions.map(renderVersion)}</ul>
+          </section>
+          : <ul key="all" className="text-versions">{versions.map(renderVersion)}</ul>)}
+      </details>
     </li>}
   </ul>;
 });
