@@ -35,7 +35,20 @@ bundle.zip
 
 Ontospan bundles are written by the Ontospan tools that produce the translations and proposals. Ask whoever runs those tools for a bundle.
 
+Only proposal sets of kind `tool_output`, whose every author is a tool, can be imported. A newly imported proposal set is used only by annotation rounds that start after the import; tasks keep the proposals their round started with. See [Work from new tool proposals](lead-change-course.md#work-from-new-tool-proposals).
+
 A bundle fits a project only if its ontology ID, layer IDs, ontology release, branches, annotation scheme and values match the project's [task profile](lead-settings.md#task-profiles) and ontology settings. The built-in template *HPO phenotype* fits only bundles with ontology `hp`, layer `hpo-layer` and exactly the branch `HP:0000118`. See [What must match a bundle](lead-settings.md#what-must-match-a-bundle).
+
+### Corrections and parallel translations in a bundle
+
+A bundle can also bring a new version of a translation the project already has, or a second translation of the same source. Each text file names its version in `document.variant`:
+
+| What you bring | `document_id` and `language` | `variant` | `translation` |
+| --- | --- | --- | --- |
+| A new version (correction) of a translation | The same as the translation it corrects | `version` one higher than the newest version, `origin`: `correction`, `derived_from`: the `text_sha256` of the version it corrects | Not allowed: the bundle is refused with `translation_unexpected`. The provider or model cannot be recorded. |
+| A parallel translation of the same source | A new `document_id`, the same `case_id` and `language` | `version`: 1, `origin`: `machine_translation` or `human_translation`, `derived_from`: the `text_sha256` of the source text | The run that produced it: `provider`, optionally `model` and the automatic checks. |
+
+From format 1.3, a new translation can carry `translation.review` with `status`: `reviewed` (and optionally `reviewer`, `reviewed_at` and `note`). Ontotator then accepts it at import as *marked as reviewed in the package*. A correction cannot carry it, as it has no `translation` part; accept it after the import ([Use another translation of a text](lead-change-course.md#use-another-translation-of-a-text)).
 
 ### Upload texts
 
@@ -47,9 +60,9 @@ Before you start: [prepare the files](#prepare-files-for-upload). Check the [lan
 2. Choose the **Format**. For plain text, also choose the **Upload language**.
 3. Click **Choose files…** and select your files.
 4. Click **Check**. Nothing is imported yet; the dialog shows *Checking 2 files …*.
-5. Read the preview: the number of cases, proposals and texts already in the project, and any **Notes**. For plain text, the first note shows which text ID each file name became. A note says what, if anything, you need to do; **Show** lists the texts and proposals it concerns.
+5. Read the preview: the number of cases, proposals and texts already in the project, and any **Notes**. **Texts in this upload** lists every text; under **Show**, choose for example **Corrections** to see only new versions of translations. For plain text, the first note shows which text ID each file name became. A note says what, if anything, you need to do; **Show** lists the texts and proposals it concerns.
 6. Check the **Work plan** before you import: it decides which tasks the imported texts get. For each language, click a chip to turn the **Translation review** or the annotation on or off. Sources marked *only cases without a translation* are annotated only where a case has no translation. Click **Adjust per case…** for exceptions. The line next to the import button repeats the plan, for example *Work plan: translation review de; annotate de*.
-7. Optional: if translations are not marked as reviewed and you want them annotated without review, tick **These translations were reviewed outside Ontotator — accept them as they are** and enter a **Reason**.
+7. Optional: if translations are not marked as reviewed and you want them annotated without review, tick **These translations were reviewed outside Ontotator — accept them as they are** and enter a **Reason**. This applies only to texts new to the project, not to a new version of a text already in it.
 8. Click the import button, for example *Import 20 cases*.
 
 ![The Upload texts dialog after the check, with the summary and the work plan](images/lead-upload-preview.png)
@@ -198,11 +211,11 @@ What for: see each version of a translation, its reviews and its origin.
 What for: have a translation corrected by a reviewer.
 
 1. Open the text card and click **Translation**.
-2. At the version, click **Request correction…**.
+2. At the version, click **Request correction…**. It is offered only at an accepted version; for a rejected or queried one, use **Resolve…** ([Resolve a rejected or queried translation](lead-results.md#resolve-a-rejected-or-queried-translation)).
 3. Choose the **Translation reviewer** and enter the **Reason for another review**.
 4. Click **Assign correction review**, then **Close**.
 
-The corrected text becomes a new text version.
+If the reviewer submits **Accepted with corrections**, the corrected text becomes a new text version.
 
 ## Work plans and assignments
 
@@ -254,7 +267,7 @@ What for: set the work plan for a selection.
 
 ![The Work plan dialog with the quick choice and one row per language](images/lead-work-plan.png)
 
-**Undo** in the message restores the plan, not withdrawn tasks.
+**Undo** in the message restores the plan and the final results as they were, without asking you to confirm them again. It does not restore withdrawn tasks; assign them again. Withdrawn tasks keep their drafts.
 
 ### Change the annotation mode of one text
 
@@ -267,6 +280,8 @@ Once someone is assigned, started or submitted work, a line *Fixed: …* says wh
 
 - While the work is not submitted, remove the assignment ([Remove, reassign or reopen an assignment](#remove-reassign-or-reopen-an-assignment)), then choose.
 - To change it anyway, click **Change mode…** next to the line. The dialog names whose work is affected. Enter the **Reason**, then click **Change mode**, or **Discard work and change mode** if submitted work is discarded. Their assignments are removed. Discarded work is kept, not deleted: it no longer counts for progress, consolidation, the final result or exports.
+- The mode change always discards the work of the whole text, never of single people.
+- Once a final result is chosen, the mode stays: the dialog says *A final result was chosen for this text, so its annotation mode stays.* A final result can be changed but not withdrawn ([Change a final result](lead-results.md#change-a-final-result)).
 - **Restore…** in the text card brings the discarded work back while no new annotation has started.
 
 **History** in the text card shows the change and its reason.
@@ -282,6 +297,8 @@ What for: give translation reviews or annotations to people.
 5. Click the assign button, for example *Assign 20*.
 
 ![The assign dialog with members, their languages and open tasks](images/lead-assign.png)
+
+Texts that already have a final result are left out, also when you assign one text: the dialog says *This text is at another step of the plan.* See [More annotators on finished texts](lead-change-course.md#more-annotators-on-finished-texts).
 
 **Reads** shows the languages in each person's profile. If someone's profile lists languages but not one the task needs, the dialog asks again; click **Assign anyway** or **Back**. A person with no languages listed counts as unknown and gets no warning. Ontotator sends no e-mail; the work appears in each person's **My tasks**.
 
@@ -328,7 +345,7 @@ If a text is still without anyone after you close the proposal, the assign dialo
 
 What for: change who works on a text, or let someone change a submitted annotation or translation review.
 
-Warning: removing unsubmitted work deletes the draft for good. Submitted work stays in the history.
+Warning: **Remove…** on an unsubmitted annotation in **Annotation** deletes the draft for good. Submitted work stays in the history. Removing a translation review, reassigning, or withdrawing a task through the plan keeps the draft.
 
 A task that waits for the translation review shows **Waiting for review** in the person's row and can be reassigned or removed like any open task.
 

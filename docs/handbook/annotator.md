@@ -247,7 +247,7 @@ To drop your copy, click **Discard copy**, in the copy's details or in the propo
 
 ## Review carried findings
 
-What for: check findings that were carried over from an earlier round, for example after you continued from your submission, a lead reopened your work, or the text changed.
+What for: check findings that were carried over from an earlier round, for example after you continued from your submission, or after the text changed and your work moved to the new version. When a lead reopens your submission, nothing is carried: you continue on your submitted work as it was.
 
 1. The toolbar names the round, for example *Round 2, continued from Round 1*, or reads **Review carried findings**. The progress line counts checked findings.
 2. Click **Next unchecked** (or press `n`) to select the next finding marked **Check needed**.
@@ -264,7 +264,7 @@ A row **Not on this text** means the finding could not be placed in this text. S
 
 ## Re-create findings after a text correction
 
-What for: move your findings to the corrected text after a lead changed it. The toolbar reads **Check after text change**.
+What for: move your findings to the corrected text after the text got a new version, for example from a translation review, a lead's correction or an upload, and your task moved to it. The toolbar reads **Check after text change**.
 
 1. The panel **Needs review after the text change** lists the findings to place again.
 2. For each item, click **Re-create here** and mark the supporting text in the corrected version.
@@ -319,7 +319,7 @@ What for: change your work after you submitted it, or start over. A submission i
 2. The table **Rounds** lists each round with its state and submission. **You are here** marks the current one; **Open** opens another.
 3. Under **Start a new round**, choose one:
    - To continue from your work: choose the submission under **Continue from**, read what the dialog says will happen, and click **Continue from this submission**. Your findings are carried into the new round, and each must be checked again ([Review carried findings](#review-carried-findings)). You can do this yourself; you do not need the lead.
-   - To start over: click **Start empty round**. The new round has no findings.
+   - To start over: click **Start empty round**. The new round has no findings. This button is there only while the task has no round and no submission yet. After a submission, only your lead can restart it empty: [report a text problem](#report-a-text-problem) and ask for an empty restart.
 4. Click **Close**, make your changes and [submit the text](#submit-the-text) again.
 
 What happens to your earlier work:
