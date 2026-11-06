@@ -6700,6 +6700,357 @@
         "x-ontotator-scope": "session"
       }
     },
+    "/api/v1/projects/{key}/audit": {
+      "get": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Project Audit",
+        "description": "The project's audit trail, newest first (leads and system admins).",
+        "operationId": "project_audit_api_v1_projects__key__audit_get",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "action",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Action names, e.g. 'work_plan.update'; 'assignment.*'.",
+              "title": "Action"
+            },
+            "description": "Action names, e.g. 'work_plan.update'; 'assignment.*'."
+          },
+          {
+            "name": "person",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A person's pseudonym or login: what they did or got.",
+              "title": "Person"
+            },
+            "description": "A person's pseudonym or login: what they did or got."
+          },
+          {
+            "name": "api_token_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only changes made with this API token.",
+              "title": "Api Token Id"
+            },
+            "description": "Only changes made with this API token."
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "From this time.",
+              "title": "Since"
+            },
+            "description": "From this time."
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Before this time (exclusive).",
+              "title": "Until"
+            },
+            "description": "Before this time (exclusive)."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectAuditPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
+      }
+    },
+    "/api/v1/projects/{key}/jobs": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Project Jobs",
+        "description": "The project's import and export jobs, newest first (leads and system admins).",
+        "operationId": "project_jobs_api_v1_projects__key__jobs_get",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Job kinds, e.g. 'final_t1_export'.",
+              "title": "Kind"
+            },
+            "description": "Job kinds, e.g. 'final_t1_export'."
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "queued",
+                      "running",
+                      "succeeded",
+                      "failed"
+                    ],
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "requester",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The requester's pseudonym or login.",
+              "title": "Requester"
+            },
+            "description": "The requester's pseudonym or login."
+          },
+          {
+            "name": "error_code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only failed jobs with this code.",
+              "title": "Error Code"
+            },
+            "description": "Only failed jobs with this code."
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Created from.",
+              "title": "Since"
+            },
+            "description": "Created from."
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Created before (exclusive).",
+              "title": "Until"
+            },
+            "description": "Created before (exclusive)."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectJobPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
+      }
+    },
     "/api/v1/projects/{key}/progress": {
       "get": {
         "tags": [
@@ -11402,6 +11753,25 @@
           "details"
         ],
         "title": "AuditEventView"
+      },
+      "AuditTokenRef": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "AuditTokenRef",
+        "description": "The API token a change was made with."
       },
       "AxisDefinition": {
         "properties": {
@@ -21113,6 +21483,135 @@
         ],
         "title": "ProgressWorkloadView"
       },
+      "ProjectAuditEvent": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "action": {
+            "type": "string",
+            "title": "Action"
+          },
+          "actor_kind": {
+            "type": "string",
+            "enum": [
+              "person",
+              "command_line",
+              "system"
+            ],
+            "title": "Actor Kind"
+          },
+          "actor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonRefView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "actor_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Label"
+          },
+          "target_type": {
+            "type": "string",
+            "title": "Target Type"
+          },
+          "target_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Id"
+          },
+          "target_person": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonRefView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "api_token": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AuditTokenRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "details": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Details"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "at",
+          "action",
+          "actor_kind",
+          "target_type",
+          "details"
+        ],
+        "title": "ProjectAuditEvent",
+        "description": "One audited change in the project, newest first.\n\n``actor_kind``: ``person`` (an account, ``actor``), ``command_line``\n(the admin command line on the server) or ``system`` (start-up and\nrecovery). ``target_id`` is left out (null) for a person target unless\nthe caller is a system administrator. ``target_person`` is the person\nthe event concerns: the target, or the person a task was made for\n(``details.user_id``). ``actor_label`` only for system administrators."
+      },
+      "ProjectAuditPage": {
+        "properties": {
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/ProjectAuditEvent"
+            },
+            "type": "array",
+            "title": "Events"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "events",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "ProjectAuditPage"
+      },
       "ProjectDocumentSummary": {
         "properties": {
           "document_id": {
@@ -21245,6 +21744,149 @@
           "accepted_without_review"
         ],
         "title": "ProjectDocumentSummary"
+      },
+      "ProjectJobPage": {
+        "properties": {
+          "jobs": {
+            "items": {
+              "$ref": "#/components/schemas/ProjectJobView"
+            },
+            "type": "array",
+            "title": "Jobs"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "jobs",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "ProjectJobPage"
+      },
+      "ProjectJobView": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "requested_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonRefView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "requested_by_command_line": {
+            "type": "boolean",
+            "title": "Requested By Command Line",
+            "default": false
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "download_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Download Path"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "status",
+          "created_at",
+          "started_at",
+          "finished_at",
+          "error",
+          "error_code"
+        ],
+        "title": "ProjectJobView",
+        "description": "One job of the project.\n\n``requested_by``: the person who started it; ``requested_by_command_line``\nwhen the admin command line did. ``error_code``: the failure's code, from\nthe job's structured error or its error text (``JOB_INTERRUPTED`` when the\nserver stopped while it ran, ``INTERNAL_ERROR`` for an unexpected error).\n``download_path``: where to download the file of a finished export, when\nthe file is there and the caller may download it (the ``export`` scope\nfor a token)."
       },
       "ProjectPin": {
         "properties": {
