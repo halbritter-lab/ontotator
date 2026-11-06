@@ -30,6 +30,7 @@ from ontotator.assignments.service import (
 )
 from ontotator.auth.audit import Actor
 from ontotator.authz.policy import Action, AssignableTask, Task, can
+from ontotator.authz.project_authority import hidden_from_token
 from ontotator.authz.visibility import qualifying_assignment
 from ontotator.domain.annotation_modes import workspace_mode
 from ontotator.domain.errors import AccessDenied, DomainError
@@ -466,7 +467,11 @@ def _owned_assignment(request: Request, user_id: int, assignment_id: int) -> Ass
         ).first()
         if valid is None:
             raise DomainError("ASSIGNMENT_NOT_FOUND")
-        return AssignmentService._get(conn, assignment_id)
+        assignment = AssignmentService._get(conn, assignment_id)
+    # A project token sees no task of another project (issue 351).
+    if hidden_from_token(assignment.project_key):
+        raise DomainError("ASSIGNMENT_NOT_FOUND")
+    return assignment
 
 
 @router.get("/assignments/{assignment_id}")

@@ -79,7 +79,7 @@ Ask the client to call `whoami` first: it shows the token's kind, scopes, projec
 
 ## Tools
 
-Every tool description names the token scope it needs and whether it changes data; the MCP annotations say the same (`readOnlyHint`, `destructiveHint`, `idempotentHint`). Tools with a `confirm` argument (`set_ontology_pins`, `distribute_texts`, `update_work_plan`, `accept_agreeing_texts`, `set_member_roles`, `hand_over_open_tasks`) only do a dry run without it (`set_member_roles` needs `confirm` only to take roles away or remove a person, which logs the person out, revokes their tokens and, with `revoke_assignments`, withdraws their open tasks; adding roles is applied at once); the client should show you the dry run before it confirms. Imports and exports are server jobs: the tools wait for them by default, and `get_job` polls one.
+Every tool description names the token scope it needs and whether it changes data; the MCP annotations say the same (`readOnlyHint`, `destructiveHint`, `idempotentHint`). Tools with a `confirm` argument (`set_ontology_pins`, `distribute_texts`, `update_work_plan`, `accept_agreeing_texts`, `set_member_roles`, `hand_over_open_tasks` and the lead tools below) only do a dry run without it (`set_member_roles` needs `confirm` only to take roles away or remove a person, which logs the person out, revokes their tokens and, with `revoke_assignments`, withdraws their open tasks; adding roles is applied at once); the client should show you the dry run before it confirms. Imports and exports are server jobs: the tools wait for them by default, and `get_job` polls one.
 
 ### Scopes
 
@@ -123,6 +123,20 @@ A token can do only what both its scopes and its owner's roles allow. Many tools
 | `hand_over_open_tasks` | read, project-admin | may remove or withdraw | Hand a person's open tasks to others in turn, after a dry run. |
 | `list_problem_reports` | read | reads | Problem reports annotators filed in the project. |
 | `update_work_plan` | read, project-admin | may remove or withdraw | Turn translation review and annotation on or off and set the annotation mode. |
+| `start_new_round` | read, project-admin | may remove or withdraw | Give an annotation task a new round, after a dry run. |
+| `change_annotation_mode` | project-admin | may remove or withdraw | Change the annotation mode of a text that already has work, after a preview. |
+| `list_annotation_mode_changes` | read | reads | Annotation mode changes of one text, with what each discarded. |
+| `restore_annotation_mode` | read, project-admin | overwrites | Undo an annotation mode change, after a preview. |
+| `set_final_result` | read, project-admin | overwrites | Choose or change the final result of one text, after a dry run. |
+| `request_translation_correction` | read, project-admin | overwrites | Ask a translation reviewer to correct a rejected or queried translation. |
+| `start_lead_correction` | read, project-admin | overwrites | Take over the correction of a rejected or queried translation as the lead. |
+| `discard_translation` | read, project-admin | may remove or withdraw | Discard a translation version, after a dry run. |
+| `undo_work_plan` | project-admin | may remove or withdraw | Undo a work plan change of update_work_plan, after a dry run. |
+| `annotation_target_preview` | read | reads | How many texts already have more annotation tasks than a new target. |
+| `move_task_to_version` | read, project-admin | may remove or withdraw | Move open annotation work to a new version of its text, after a dry run. |
+| `handle_text_change` | read, project-admin | may remove or withdraw | Decide on open work on an old text version, after a dry run. |
+| `carry_submission` | project-admin | adds | Carry a submitted annotation to a new version of its text, after a dry run. |
+| `act_on_problem_report` | read, project-admin | may remove or withdraw | Decide on a problem report: pause, release, restart or resolve, after a dry run. |
 | `project_overview` | read | reads | Where a project stands: settings, totals per stage, people and open decisions. |
 | `get_progress` | read | reads | Assignment progress per text version and per person (open, in progress, submitted). |
 | `working_time_summary` | read | reads | Recorded working time per annotation mode: texts, total and median per text. |
@@ -139,9 +153,36 @@ A token can do only what both its scopes and its owner's roles allow. Many tools
 
 Useful token sets: a project token with `read`, `import`, `export` and `project-admin` covers everything a lead does, handing tasks on included; `read` is enough for status, `export` alone for exports and downloads; ontology uploads, new projects, accounts (`list_users`, `create_users`, `issue_setup_codes`, `update_user`) and project archives need a system token with `admin` (and `read`).
 
+### Changes while a project runs
+
+Every one of these that removes or replaces work takes `confirm`: without it the tool reads the state, returns what would happen and changes nothing; with it the tool sends exactly what the dry run read (a revision, the submissions to discard), so the server refuses the write if the project changed in between. Run the dry run again then.
+
+- **New round of a task** (`start_new_round`): `carry_forward` lets the person continue from one of their submissions (the dry run lists them), `clean_restart` abandons the current round with its draft and starts it again from the beginning (needs a reason).
+- **Annotation mode of a text with work** (`change_annotation_mode`): the preview names every submission that is discarded and every task that is withdrawn; `restore_annotation_mode` (with the `change_id` from `list_annotation_mode_changes`) brings them back while no new work started.
+- **Final result of one text** (`set_final_result`): choose any eligible submission, also when it differs from the others, or change an existing final result; naming the current final result confirms it after a change and acknowledges the causes the dry run lists. `accept_agreeing_texts` remains the bulk tool for full agreement.
+- **Translations**: `request_translation_correction` gives a translation reviewer the correction of a rejected or queried version, `start_lead_correction` gives it to the token's owner as lead (the review itself is done in the browser), `discard_translation` discards a version. `assign_texts` with `task: review_accepted_translation` asks for a new review of a version already accepted.
+- **Work plan**: `update_work_plan` and `distribute_texts` select every case when given no IDs, at most 2000 (the API's selection limit); a larger project needs `case_ids` in parts. The `result.undo` of an applied `update_work_plan` is what `undo_work_plan` takes to restore the earlier plan exactly. `annotation_target_preview` counts the texts that already have more annotation tasks than a lower `annotations_per_text` would give.
+- **Text changes** (a new version of a text that has work): `move_task_to_version` moves open work to the new version with the findings that can be placed, `handle_text_change` lets the person finish on the old version (`finish_then_carry`) or withdraws the task (`withdrawn`, draft kept), and `carry_submission` carries a submitted annotation to the new version. Each dry run counts the findings that can be placed and those in changed passages. `list_texts` shows the versions.
+- **Problem reports** (`act_on_problem_report`, report IDs from `list_problem_reports`): `resume` releases paused tasks, `extend_hold` pauses more tasks (from the dry run's pause candidates), `restart` releases the reporter's task and starts it again empty, `resolve` closes the report and `reopen` opens a closed one. Withdrawing a report is its reporter's own step in the browser.
+
+Writes with a token are audited with the token (`details.api_token`), as in the browser.
+
 ### Setup codes
 
 `create_users` and `issue_setup_codes` return one-time codes with which a person sets a password on the login page. The codes are credentials. With `codes_path` they are written to a CSV file (`username`, `display_name`, `email`, `code`, `expires_at`) inside `ONTOTATOR_MCP_FILES_DIR`, readable by you only, and the result names only who got one; without it the codes are part of the tool result, and so of the conversation with the model. `create_users` skips usernames the server already has, so a repeated call adds only the missing people. `issue_setup_codes` renews only codes of people who never set a password, unless `include_active_accounts` (which ends the person's sessions and revokes their API tokens).
+
+### Project archives
+
+`export_project_archive` and `download_project_archive` (system token with `admin`) write one complete project, with the e-mail addresses of its people, as a ZIP for another server. The server keeps an exported archive for **24 hours** after its job finished (`expires_at` in the job result) and then deletes it; a download after that answers 410 and the job result records `file_deleted_at`, so download it within the day or export again.
+
+There is no import tool, on purpose: an import writes historical rows, audit entries included, and links people by e-mail address, so a stolen token could plant work or audit history. The import route refuses every token. A scripted move imports on the target server's host with the command line (`--rename-pseudonyms` when a pseudonym is taken there), or a system administrator uses the Projects page:
+
+```bash
+stage_file ./ward-7-archive.zip /tmp/ward-7-archive.zip   # see the operations guide
+docker compose exec ontotator_app ontotator admin projects import-archive /tmp/ward-7-archive.zip
+```
+
+[Move a project to another server](../docs/operations.md#move-a-project-to-another-server) describes `stage_file`, the checks of the import and how people are matched.
 
 ### Resources
 
@@ -193,18 +234,19 @@ This example sets up an HPO annotation project in which annotators check the HPO
 
 Routes a token may not call (`session` in the contract), so no tool can offer them:
 
-- Lead corrections of translations (`POST .../documents/{doc}/lead-correction`), and annotation, review and translation review work in general.
+- Annotation, review and translation review work: the draft and the decision of a translation review (`PUT .../draft`, `POST .../submit`) are a person's own work, as an annotation is. Starting a lead correction, moving work to a new text version and handling a text change take `project-admin` (#345).
 - Marking a guideline version as read, a problem report as seen, and a visit of the Documents page.
 - Creating, listing and revoking tokens: a person does that in the web interface or with `ontotator admin tokens` on the server. A token reads only its own record.
-- Undo, redo and reset in the editor, and importing a project archive (it creates a project and accounts).
+- Undo, redo and reset in the editor.
+- Importing a project archive: use `ontotator admin projects import-archive` on the host or the Projects page (see [Project archives](#project-archives)).
 
 Limits of the token kinds:
 
-- A project token reaches only routes with its project in the path, plus the job routes, its own record and the routes that reassign, withdraw, remove or reopen a task (they refuse tasks of other projects). So `list_projects`, `list_ontologies` and `list_project_templates` need a personal or system token; `whoami` reports a project token's project instead of its user.
+- A project token reaches only routes with its project in the path, plus the job routes, its own record, the server's version, its user, and the routes that name a task, round, problem report or translation review of its project by id (reassigning, withdrawing, removing and reopening a task among them; an id of another project answers 404 as if unknown). So `list_projects`, `list_ontologies` and `list_project_templates` need a personal or system token; `whoami` reports a project token's project instead of its user.
 - Creating a project needs the `admin` scope, so a system token: a lead cannot create a project with a token.
 - The API gives agreement per text (the lead's comparison panel) but no project-wide figure; `agreement_summary` sums the panels.
 
-Left to the web interface on purpose, although a token could call the route: choosing a final result among differing submissions or confirming one after a change (`PUT .../final-selections`; `accept_agreeing_texts` covers full agreement only), deciding on problem reports (`list_problem_reports` only lists them), anonymising an account, and changing the annotation mode of a text that already has work, which discards its submissions.
+Left to the web interface on purpose, although a token could call the route: anonymising an account (irreversible; the web interface asks for the typed username), and `status_overrides` of an upload's commit (`POST .../uploads/{id}/commit`), which the web interface does not use either: `accept_external_review` of `commit_upload` accepts translations reviewed outside Ontotator instead.
 
 ## Development
 

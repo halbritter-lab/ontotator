@@ -12,6 +12,21 @@ from ontotator.domain.errors import AccessDenied, DomainError, NotAuthenticated
 from ontotator.storage.tables import ProjectMembershipRow, ProjectRow
 
 
+def hidden_from_token(key: str) -> bool:
+    """Whether the request's project API token (issue 305) belongs elsewhere.
+
+    A project token sees no other project: a route that finds the project of
+    the id it names answers its own "not found" for ``key`` then, exactly as
+    for an unknown id, so the id's existence and its project stay hidden.
+    """
+    principal = current_principal.get()
+    return (
+        principal is not None
+        and principal.token is not None
+        and principal.token.project_key not in (None, key)
+    )
+
+
 def require_project_management(
     conn: Connection,
     actor: Actor,
@@ -27,12 +42,7 @@ def require_project_management(
     callers; only explicit CLI actors receive the last-lead admin exception.
     A request with a project API token (issue 305) sees no other project.
     """
-    principal = current_principal.get()
-    if (
-        principal is not None
-        and principal.token is not None
-        and principal.token.project_key not in (None, key)
-    ):
+    if hidden_from_token(key):
         raise DomainError("PROJECT_NOT_FOUND", f"There is no project '{key}'.")
     if actor.user_id is None:
         return

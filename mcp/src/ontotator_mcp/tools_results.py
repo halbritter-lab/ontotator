@@ -32,7 +32,7 @@ DOWNLOADABLE = {
     "translation_review_export": "translation_reviews",
 }
 MAX_LISTED = 50
-# Project archives (system tokens only); their import needs a browser session.
+# Project archives (system tokens only); their import refuses every token.
 ARCHIVES = "/api/v1/admin/project-archives"
 
 
@@ -401,10 +401,12 @@ def register_results(server: MCPServer, api: OntotatorClient) -> None:
 
         Needs a system token. The archive holds every table of the project,
         the people it names (with the e-mail addresses of those who worked
-        in it) and its stored files, for an import on another server, which
-        is done in the web interface. Stores a new file on the server, which
-        deletes it after 24 hours; changes no project data. Each call starts
-        a new job.
+        in it) and its stored files, for an import on another server. No
+        tool imports it: a system administrator runs 'ontotator admin
+        projects import-archive' on the target host or uses the Projects
+        page. Stores a new file on the server, which deletes it 24 hours
+        after the job finished: download it before. Changes no project data.
+        Each call starts a new job.
         """
         created = await api.post(
             f"{ARCHIVES}/export",

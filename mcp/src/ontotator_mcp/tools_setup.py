@@ -674,21 +674,32 @@ def register_setup(server: MCPServer, api: OntotatorClient) -> None:
     async def assign_texts(
         project: Project,
         assignments: Annotated[list[AssignmentRow], Field(min_length=1)],
-        task: Literal["annotate", "translation_review"] = "annotate",
+        task: Annotated[
+            Literal["annotate", "translation_review", "review_accepted_translation"],
+            Field(
+                description=(
+                    "'review_accepted_translation': a new translation review of"
+                    " a version already accepted (by a lead, or as reviewed"
+                    " outside with accept_external_review of commit_upload)."
+                )
+            ),
+        ] = "annotate",
         confirm_language: Annotated[
             bool, Field(description="Assign even if the profile lacks the language.")
         ] = False,
         confirm_unreviewed_translation: bool = False,
     ) -> dict[str, Any]:
         """Assign text versions to people, one task per row."""
+        body: dict[str, Any] = {
+            "rows": [row.model_dump() for row in assignments],
+            "task": task,
+            "confirm_language": confirm_language,
+            "confirm_unreviewed_translation": confirm_unreviewed_translation,
+        }
+        if task == "review_accepted_translation":
+            body |= {"task": "translation_review", "review_accepted_translation": True}
         result: dict[str, Any] = await api.post(
-            project_path(project, "assignments"),
-            {
-                "rows": [row.model_dump() for row in assignments],
-                "task": task,
-                "confirm_language": confirm_language,
-                "confirm_unreviewed_translation": confirm_unreviewed_translation,
-            },
+            project_path(project, "assignments"), body
         )
         return result
 
@@ -718,7 +729,9 @@ def register_setup(server: MCPServer, api: OntotatorClient) -> None:
 
         The dry run lists the targets per person and the texts skipped with
         the reason; with confirm the same selection is assigned, or refused
-        if the project changed in between.
+        if the project changed in between. Without case_ids it selects
+        every case, at most 2000 (the API's selection limit); a larger
+        project is refused and needs case_ids.
         """
         body: dict[str, Any] = {
             "task": task,
@@ -776,8 +789,12 @@ def register_setup(server: MCPServer, api: OntotatorClient) -> None:
 
         The dry run counts the changes and their consequences (tasks
         withdrawn, final results leaving); with confirm the change is saved,
-        withdrawing those tasks. Texts that already have work keep their
-        mode (``mode_locked``); change those in the web interface.
+        withdrawing those tasks. Without case_ids and texts it selects every
+        case, at most 2000 (the API's selection limit); a larger project is
+        refused and needs case_ids or texts, in parts. Texts that already
+        have work keep their mode (``mode_locked``); change_annotation_mode
+        changes one of those. The result's ``result.undo`` is what
+        undo_work_plan takes to restore the earlier plan.
         """
         if case_ids and texts:
             raise OntotatorError("Select either case_ids or texts, not both.")

@@ -12,7 +12,8 @@ from browser_documents_scenarios import add_user, assign
 from browser_server import ONTOLOGY, TEST_PASSWORD
 from fastapi.testclient import TestClient
 from pg_harness import database_url_for
-from sqlalchemy import update
+from sqlalchemy import select, update
+from t1_fixtures import create_project
 from test_text_change_service import (
     THIRD_DE,
     Env,
@@ -24,8 +25,9 @@ from test_text_change_service import (
 )
 
 from ontotator.api.app import create_app
+from ontotator.auth.audit import Actor
 from ontotator.config import AppConfig
-from ontotator.storage.tables import AssignmentRow
+from ontotator.storage.tables import AssignmentRow, AuditEventRow
 
 
 @pytest.fixture
@@ -241,3 +243,81 @@ def test_generic_round_creation_does_not_offer_text_change_kinds(client, kind):
         },
     )
     assert refused.status_code == 422, refused.text
+
+
+def _project_token(client: TestClient, key: str) -> TestClient:
+    """A bearer client with a project token of ``key`` (the session's user)."""
+    created = client.post(
+        f"/api/v1/projects/{key}/tokens",
+        json={"name": "pipeline", "scopes": ["read", "project-admin"]},
+    )
+    assert created.status_code == 201, created.text
+    return TestClient(
+        _app(client),
+        headers={
+            "Authorization": f"Bearer {created.json()['secret']}",
+            "Origin": str(client.base_url).rstrip("/"),
+        },
+    )
+
+
+def _audit_details(env: Env, action: str) -> list[dict[str, Any]]:
+    with env.db.transaction() as conn:
+        return [
+            dict(details)
+            for details in conn.execute(
+                select(AuditEventRow.details).where(AuditEventRow.action == action)
+            ).scalars()
+        ]
+
+
+def test_a_project_token_moves_and_resolves_text_changes(client):
+    """Issue 345: the text-change routes take ``project-admin`` tokens.
+
+    A token of another project the lead also leads gets the 404 of an
+    unknown task, and the audit entry names the token.
+    """
+    env = _env(_app(client))
+    _per_text(env, 2)
+    moved = _started(env, "tom")
+    withdrawn = _started(env, "eva")
+    other = f"{env.key}-other"
+    create_project(env.db, other)
+    _app(client).state.memberships.add(Actor.cli(), other, env.user("lead"), ["lead"])
+    _login(client, env, "lead")
+    own = _project_token(client, env.key)
+    foreign = _project_token(client, other)
+    resolution = {
+        "resolution": "withdrawn",
+        "target_document_id": env.docs[1],
+        "expected_workflow_revision": _revision(env, withdrawn["assignment_id"]),
+    }
+    resolve_path = (
+        f"/api/v1/assignments/{withdrawn['assignment_id']}/text-change-resolution"
+    )
+    for response in (
+        _move(foreign, env, moved["assignment_id"]),
+        foreign.post(resolve_path, json=resolution),
+    ):
+        assert _code(response) == (404, "ASSIGNMENT_NOT_FOUND"), response.text
+
+    # The dry run opens to project-admin as well (issue 346).
+    preview = own.post(
+        f"/api/v1/projects/{env.key}/text-changes/preview",
+        json={
+            "assignment_id": moved["assignment_id"],
+            "target_document_id": env.docs[1],
+        },
+    )
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["findings"] == 2
+    done = _move(own, env, moved["assignment_id"])
+    assert done.status_code == 200, done.text
+    assert done.json()["assignment"]["document_id"] == env.docs[1]
+    resolved = own.post(resolve_path, json=resolution)
+    assert resolved.status_code == 200, resolved.text
+    assert resolved.json()["revoked_at"] is not None
+    token_id = own.get("/api/v1/me/token").json()["id"]
+    for action in ("text_change.move", "text_change.resolve"):
+        [entry] = _audit_details(env, action)
+        assert entry["api_token"]["id"] == token_id, action

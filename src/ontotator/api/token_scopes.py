@@ -13,7 +13,8 @@ import ``ROUTE_SCOPES`` directly.
 A project token reaches only routes whose ``{key}`` (or ``{project_key}``)
 is its project, plus the ``PROJECT_RESOLVED`` routes, which resolve their
 project themselves and check it against the token
-(``ontotator.authz.project_authority``).
+(``ontotator.authz.project_authority``), and the ``PROJECT_FREE`` routes,
+which show nothing of any project.
 
 The scope only opens the route; the owner's roles still decide the action
 (the effective right is the intersection of both).
@@ -38,12 +39,13 @@ RouteScope = TokenScope | Literal["session"] | AnyScope
 
 P = "/api/v1/projects/{key}"
 ROUTE_SCOPES: Mapping[tuple[str, str], RouteScope] = {
-    # About, identity and the user's own pages
-    ("GET", "/api/v1/about"): "read",
+    # About, identity and the user's own pages. The version and who a token
+    # acts as are open to every token (issue 351).
+    ("GET", "/api/v1/about"): ("read", "import", "export", "project-admin"),
     ("POST", "/api/v1/auth/login"): SESSION,
     ("POST", "/api/v1/auth/redeem-code"): SESSION,
     ("POST", "/api/v1/auth/logout"): SESSION,
-    ("GET", "/api/v1/auth/me"): "read",
+    ("GET", "/api/v1/auth/me"): ("read", "import", "export", "project-admin"),
     ("GET", "/api/v1/auth/session"): SESSION,
     ("GET", "/api/v1/auth/demo-logins"): SESSION,
     ("GET", "/api/v1/me/tasks"): "read",
@@ -126,7 +128,9 @@ ROUTE_SCOPES: Mapping[tuple[str, str], RouteScope] = {
     ("POST", f"{P}/documents/{{doc:path}}/translation-correction-assignment"): (
         "project-admin"
     ),
-    ("POST", f"{P}/documents/{{doc:path}}/lead-correction"): SESSION,
+    # The lead takes a rejected translation over (issue 345): project work of
+    # the lead, as the correction assignment above.
+    ("POST", f"{P}/documents/{{doc:path}}/lead-correction"): "project-admin",
     ("POST", f"{P}/variants/{{document_id:path}}/discard"): "project-admin",
     ("GET", f"{P}/proposal-sets/{{set_id}}"): "read",
     ("GET", f"{P}/workflow-warnings"): "read",
@@ -136,7 +140,9 @@ ROUTE_SCOPES: Mapping[tuple[str, str], RouteScope] = {
     ("GET", f"{P}/uploads/{{upload_id}}"): "import",
     ("POST", f"{P}/uploads/{{upload_id}}/commit"): "import",
     ("POST", f"{P}/uploads/{{upload_id}}/discard"): "import",
-    ("POST", f"{P}/text-changes/preview"): "import",
+    # The dry run of a new text version's import, and of the lead's move of
+    # work to it (move-to-version, text-change-resolution, carry; issue 346).
+    ("POST", f"{P}/text-changes/preview"): ("import", "project-admin"),
     # Export
     ("POST", f"{P}/exports"): "export",
     ("POST", f"{P}/exports/translation-reviews"): "export",
@@ -176,6 +182,12 @@ ROUTE_SCOPES: Mapping[tuple[str, str], RouteScope] = {
     ("POST", f"{P}/annotation-mode-changes/{{change_id}}/restore"): "project-admin",
     ("POST", f"{P}/consolidations"): "project-admin",
     ("POST", f"{P}/submissions/{{submission_id:path}}/carry"): "project-admin",
+    # Text changes after annotation (issue 345): the lead moves open work to
+    # the new text version, or lets it finish or withdraws it.
+    ("POST", "/api/v1/assignments/{assignment_id}/move-to-version"): "project-admin",
+    ("POST", "/api/v1/assignments/{assignment_id}/text-change-resolution"): (
+        "project-admin"
+    ),
     ("PUT", f"{P}/final-selections"): "project-admin",
     # Problem reports
     ("GET", f"{P}/problem-reports"): "read",
@@ -186,8 +198,6 @@ ROUTE_SCOPES: Mapping[tuple[str, str], RouteScope] = {
     ("POST", "/api/v1/assignments/{assignment_id}/problem-reports"): SESSION,
     # Annotation, review and translation review work: browser only
     ("POST", "/api/v1/assignments/{assignment_id}/open"): SESSION,
-    ("POST", "/api/v1/assignments/{assignment_id}/move-to-version"): SESSION,
-    ("POST", "/api/v1/assignments/{assignment_id}/text-change-resolution"): SESSION,
     ("POST", "/api/v1/rounds/{round_id}/open"): SESSION,
     ("GET", "/api/v1/rounds/{round_id}/inputs"): "read",
     ("GET", "/api/v1/rounds/{round_id}/consolidation"): "read",
@@ -223,6 +233,9 @@ ROUTE_SCOPES: Mapping[tuple[str, str], RouteScope] = {
         "/api/v1/workspaces/{workspace_id}/consolidation-groups/undo-reopen-all",
     ): SESSION,
     ("GET", "/api/v1/translation-reviews/{assignment_id}"): "read",
+    # A translation review is personal work, like a workspace submit: its
+    # draft and its decision are made by the person it is assigned to, never
+    # by a machine acting as them (issue 345), so these stay with the session.
     ("PUT", "/api/v1/translation-reviews/{assignment_id}/draft"): SESSION,
     ("PUT", "/api/v1/translation-reviews/{assignment_id}/checked-sentences"): SESSION,
     ("POST", "/api/v1/translation-reviews/{assignment_id}/submit"): SESSION,
@@ -258,14 +271,24 @@ ROUTE_SCOPES: Mapping[tuple[str, str], RouteScope] = {
     ("POST", "/api/v1/admin/project-archives/import"): SESSION,
 }
 
+# Routes without a project that every token may call: the server's version,
+# the token's owner and the token itself (issue 351).
+PROJECT_FREE: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("GET", "/api/v1/about"),
+        ("GET", "/api/v1/auth/me"),
+        ("GET", "/api/v1/me/token"),
+    }
+)
 # Routes without a project in the path that a project token may call: they
-# find their project themselves and refuse one that is not the token's.
+# find their project themselves and refuse one that is not the token's with
+# the same 404 as for an unknown id (``hidden_from_token`` in
+# ``ontotator.authz.project_authority``). A route belongs here only if its
+# handler really makes that check.
 PROJECT_RESOLVED: frozenset[tuple[str, str]] = frozenset(
     {
         ("GET", "/api/v1/jobs/{job_id}"),
         ("GET", "/api/v1/jobs/{job_id}/download"),
-        # The request's own token: a project token reads itself.
-        ("GET", "/api/v1/me/token"),
         # Work handed on, withdrawn or reopened: AssignmentService finds the
         # assignment's project and refuses one that is not the token's
         # (require_project_management), so a project token may rebalance
@@ -274,6 +297,28 @@ PROJECT_RESOLVED: frozenset[tuple[str, str]] = frozenset(
         ("POST", "/api/v1/assignments/{assignment_id}/reopen"),
         ("POST", "/api/v1/assignments/{assignment_id}/remove"),
         ("POST", "/api/v1/assignments/{assignment_id}/revoke"),
+        # Text changes (issue 345): TextChangeService finds the assignment's
+        # project with AssignmentService._locate.
+        ("POST", "/api/v1/assignments/{assignment_id}/move-to-version"),
+        ("POST", "/api/v1/assignments/{assignment_id}/text-change-resolution"),
+        # Issue 351: the task itself, its submissions and rounds. The task's
+        # project is found by AssignmentService (readable, _locate) or the
+        # owner check of the route (_owned_assignment).
+        ("GET", "/api/v1/assignments/{assignment_id}"),
+        ("GET", "/api/v1/assignments/{assignment_id}/submissions"),
+        ("GET", "/api/v1/assignments/{assignment_id}/rounds"),
+        ("POST", "/api/v1/assignments/{assignment_id}/rounds"),
+        ("GET", "/api/v1/assignments/{assignment_id}/round-sources"),
+        # Problem reports: ProblemReportService._readable.
+        ("GET", "/api/v1/problem-reports/{report_id}"),
+        ("GET", "/api/v1/problem-reports/{report_id}/pause-candidates"),
+        ("POST", "/api/v1/problem-reports/{report_id}/actions"),
+        # Rounds: _visible_round (api.work_round_routes).
+        ("GET", "/api/v1/rounds/{round_id}/inputs"),
+        ("GET", "/api/v1/rounds/{round_id}/consolidation"),
+        # Translation reviews: TranslationReviewService._authority.
+        ("GET", "/api/v1/translation-reviews/{assignment_id}"),
+        ("GET", "/api/v1/translation-reviews/{assignment_id}/source-obligations"),
     }
 )
 # Path parameters that name the project.
@@ -307,7 +352,7 @@ def project_token_allowed(method: str, path: str) -> bool:
     # of work (a practice project).
     if ROUTE_SCOPES.get((method, path)) in (None, SESSION, "admin"):
         return False
-    return (method, path) in PROJECT_RESOLVED or any(
+    return (method, path) in PROJECT_RESOLVED | PROJECT_FREE or any(
         f"{{{name}}}" in path for name in PROJECT_PARAMETERS
     )
 

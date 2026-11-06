@@ -27,7 +27,7 @@ Dr. Weber sets up `nephro-2027`: HPO with German translations, a guideline, five
 
 | Step | Route | Scope | MCP tool | Status |
 | --- | --- | --- | --- | --- |
-| Check the token and its expiry | `GET /me/token`, `GET /auth/me`, `GET /about` | any but `admin` alone; `read` | `whoami` | added in this PR (token record and expiry warning) |
+| Check the token and its expiry | `GET /me/token`, `GET /auth/me`, `GET /about` | any but `admin` alone, project tokens included (#351) | `whoami` | added in this PR (token record and expiry warning) |
 | Upload the HPO release and the Babelon translation | `POST /admin/ontologies/upload-results` | `admin` | `upload_ontology_files` | covered |
 | See the releases and their SHA-256 | `GET /ontologies` | `read` | `list_ontologies` | covered |
 | Choose a template | `GET /projects/templates` | `read` | `list_project_templates` | covered |
@@ -71,11 +71,11 @@ In week six, 80 new letters arrive, one student leaves for a clinical rotation, 
 | Step | Route | Scope | MCP tool | Status |
 | --- | --- | --- | --- | --- |
 | Nightly import of new letters (project token `ci-import`) | `POST P/uploads`, `POST P/uploads/{id}/commit`, `GET /jobs/{id}` | `import` | `upload_texts`, `commit_upload` | covered |
-| A letter that changed: new version of an existing text | `POST P/uploads` (collisions in the check), `POST P/text-changes/preview` | `import` | `upload_texts` shows `collisions` | covered |
+| A letter that changed: new version of an existing text | `POST P/uploads` (collisions in the check), `POST P/text-changes/preview` | `import` (the preview also `project-admin`) | `upload_texts` shows `collisions` | covered |
 | Distribute the new texts only | `POST P/assignments/batch` with `case_ids` | `read`, `project-admin` | `distribute_texts` with `case_ids` | covered |
 | List the leaving person's tasks | `GET P/assignments?username=` | `read` | `list_assignments` | added in this PR |
 | Hand the open tasks to two others in turn, dry run first | `GET P/assignments`, `POST /assignments/{id}/reassign` | `read`, `project-admin` | `hand_over_open_tasks` | added in this PR |
-| Same with a project token | `POST /assignments/{id}/reassign` | `project-admin` (project token now allowed; another project's task gets `PROJECT_NOT_FOUND`) | `reassign_task` | added in this PR (route rule and tool) |
+| Same with a project token | `POST /assignments/{id}/reassign` | `project-admin` (project token now allowed; another project's task gets `ASSIGNMENT_NOT_FOUND`, #351) | `reassign_task` | added in this PR (route rule and tool) |
 | Withdraw, remove or reopen a single task | `POST /assignments/{id}/revoke`, `/remove`, `/reopen` | `project-admin` | `withdraw_task`, `remove_task`, `reopen_task` | added in this PR |
 | Deactivate the account afterwards (sessions end, tokens revoked) | `PATCH /admin/users/{username}` | `admin` | `update_user` | added in this PR |
 | Add a consolidator | `PUT P/members/{username}` (`adjudicator`) | `read`, `project-admin` | `set_member_roles` | covered |
@@ -84,8 +84,15 @@ In week six, 80 new letters arrive, one student leaves for a clinical rotation, 
 | Three annotators per text from now on | `PATCH P/settings` (`annotations_per_text`) | `project-admin` | `update_project_settings` | covered |
 | Start a consolidation by the new consolidator | `GET P/document-rows/.../final-panel`, `POST P/consolidations` | `read`, `project-admin` | `start_consolidation` | covered |
 | A translation reviewer for the English versions | `POST /admin/users/` (`qualification`), `POST P/assignments` (`task: translation_review`) | `admin`; `project-admin` | `create_users`, `assign_texts` | added in this PR / covered |
-| Switch texts that already have work from proposals to scratch | `POST P/annotation-mode-changes/preview`, `POST P/annotation-mode-changes` | `project-admin` | none | remaining gap (left to the web interface: discards submissions) |
-| Problem reports filed by annotators | `GET P/problem-reports` | `read` | `list_problem_reports` | added in this PR (listing); deciding stays in the web interface |
+| Switch texts that already have work from proposals to scratch | `POST P/annotation-mode-changes/preview`, `POST P/annotation-mode-changes` | `project-admin` | `change_annotation_mode` (preview names the discarded submissions; `confirm`) | covered (#346) |
+| Undo that mode change | `GET P/annotation-mode-changes`, `POST P/work-plans/bulk/preview`, `POST P/annotation-mode-changes/{id}/restore` | `read`, `project-admin` | `list_annotation_mode_changes`, `restore_annotation_mode` | covered (#346) |
+| Undo a work plan change | `PUT P/work-plans/rows` (`undo`) | `project-admin` | `undo_work_plan` with the `undo` of `update_work_plan` | covered (#346) |
+| A text gets a new version while it is being annotated | `POST P/text-changes/preview`, `POST /assignments/{id}/move-to-version`, `/text-change-resolution`, `POST P/submissions/{id}/carry` | `read`, `project-admin` (the preview also opens to `project-admin` now; project tokens reach the task routes, #345) | `move_task_to_version`, `handle_text_change`, `carry_submission` | covered (#345, #346) |
+| Start a task's round again: carry forward or clean restart | `GET /assignments/{id}/rounds`, `/round-sources`, `POST /assignments/{id}/rounds` | `read`, `project-admin` | `start_new_round` | covered (#346) |
+| Problem reports filed by annotators | `GET P/problem-reports` | `read` | `list_problem_reports` | added in this PR (listing) |
+| Pause more tasks, release, restart empty or resolve a report | `GET /problem-reports/{id}`, `/pause-candidates`, `POST /problem-reports/{id}/actions` | `read`, `project-admin` | `act_on_problem_report` | covered (#346) |
+| A translation reviewer or the lead corrects a rejected translation; discard a translation | `POST P/documents/{doc}/translation-correction-assignment`, `/lead-correction`, `POST P/variants/{doc}/discard` | `read`, `project-admin` (lead correction no longer session only, #345) | `request_translation_correction`, `start_lead_correction`, `discard_translation` | covered (#345, #346) |
+| Choose or change the final result of one text | `GET P/document-rows/{case}/{language}/final-panel`, `PUT P/final-selections` | `read`, `project-admin` | `set_final_result` (dry run, `expected_revision`) | covered (#346) |
 
 Verdict: **sufficient after this work**. Before it, the most common change of a running project, a person leaving, needed the web interface for every task, and a project token could not reassign at all because the task routes have no project in their path.
 
@@ -106,10 +113,10 @@ HPO publishes a new release in month four. The data warehouse later also wants t
 | Close the project: take the roles away | `PUT P/members/{username}` | `read`, `project-admin` | `set_member_roles` with `revoke_assignments` | covered |
 | Final export as the record of the project | `POST P/exports/final/preflight`, `POST P/exports/final` | `export` | `start_export` (`kind: final`) | covered |
 | Archive the whole project as one file | `POST /admin/project-archives/export`, `GET /admin/project-archives/jobs/{id}`, `GET /admin/project-archives/jobs/{id}/download` | `admin` (system token only) | `export_project_archive`, `download_project_archive` | covered (#325) |
-| Import the archive on the long-term server | `POST /admin/project-archives/import` | session only | none | covered by design (#325): an import creates a project and accounts, so a person does it in the browser |
+| Import the archive on the long-term server | `POST /admin/project-archives/import` | session only | none | covered by design (#325, #350): an import writes historical rows, audit entries included, and links people by e-mail, so it refuses every token; an administrator runs `ontotator admin projects import-archive` on the host or uses the Projects page |
 | Mark the project closed or read-only, or delete it | none | | | remaining gap |
 
-Verdict: **sufficient, one gap remains**. Ontology upgrades are fully covered with a dry run, Phenopackets are an export kind, and a system token archives a whole project into one file that an administrator imports on another server in the browser. There is still no project state such as closed or read-only; a project ends by withdrawing its work and its people, and by archiving it.
+Verdict: **sufficient, one gap remains**. Ontology upgrades are fully covered with a dry run, Phenopackets are an export kind, and a system token archives a whole project into one file that an administrator imports on another server with `ontotator admin projects import-archive` or in the browser; the server keeps the exported file for 24 hours. There is still no project state such as closed or read-only; a project ends by withdrawing its work and its people, and by archiving it.
 
 ## 5. Monitoring and the nightly export to a data warehouse
 
@@ -139,7 +146,7 @@ Tokens last at most 365 days. The CI tokens are project tokens with one or two s
 | --- | --- | --- | --- | --- |
 | Create a project token for CI | `POST P/tokens` | session only | none (web interface, or `ontotator admin tokens create --project`) | covered by design: a token cannot mint tokens |
 | CI checks how long its token lasts and alerts two weeks ahead | `GET /me/token` | `read`, `import`, `export` or `project-admin`; project tokens included | `whoami` (`expires_in_days`, `warning`) | added in this PR |
-| A project token works only in its project | middleware, `PROJECT_RESOLVED` routes check the project themselves | | | covered; the task routes are added to that list in this PR |
+| A project token works only in its project | middleware, `PROJECT_RESOLVED` routes check the project themselves | | | covered; the task routes are added to that list in this PR, the round, problem report and translation review routes in #351 |
 | Rotation: create the successor, install it, revoke the old one | `POST P/tokens`, `POST P/tokens/{id}/revoke` | session only | none | covered by design (no rotation in place) |
 | Revoke a leaked token at once | `POST /admin/tokens/{id}/revoke` | session only | none (web interface or `ontotator admin tokens revoke`) | covered by design |
 | A person leaves: all their tokens end | `PATCH /admin/users/{username}` (`active: false`) | `admin` | `update_user` | added in this PR (tool) |
@@ -169,12 +176,10 @@ Verdict: **sufficient after this work**.
 | --- | --- |
 | Creating, listing and revoking tokens with a token | On purpose: a leaked token must not be able to mint successors. A person uses the web interface or `ontotator admin tokens`. |
 | Rotation in place | Creating the successor first and then revoking keeps a pipeline working without a moment without a token; an in-place rotation would need the token-minting route above. |
-| Annotation, review, translation review and lead corrections; undo, redo and reset in the editor (`/workspaces/{id}/history`) | Browser only on purpose: the work of people, not of scripts. |
-| Importing a project archive | Session only on purpose: an import creates a project and accounts on the target server. Exporting one is open to a system token. |
-| Annotation mode change of texts with work (`P/annotation-mode-changes`) | The route is open to `project-admin`, but it discards submissions; it stays in the web interface, where the person sees what goes. |
-| Choosing a final result among differing submissions | Open to `project-admin`; a judgement on content that the web interface supports with the comparison. `accept_agreeing_texts` covers full agreement. |
-| Deciding on problem reports | Listing is a tool now. Deciding pauses or resumes work after reading the text, and the action route is not among the routes open to project tokens. |
+| Annotation, review and translation review (its draft and decision, `PUT /translation-reviews/{id}/draft`, `POST /translation-reviews/{id}/submit`); undo, redo and reset in the editor (`/workspaces/{id}/history`) | Browser only on purpose: the work of people, not of scripts. Starting a lead correction, moving work to a new text version and handling a text change are the lead's steps and take `project-admin` (#345). |
+| Importing a project archive | Session and command line only on purpose (#350): an import writes historical rows, audit entries included, and links people by e-mail address, so a stolen token could plant work or audit history. `ontotator admin projects import-archive` on the host does a scripted move. Exporting one is open to a system token. If a real need appears, a separate `archive-import` scope with a dry run. |
 | Anonymising an account | Irreversible; the web interface asks for the typed username. |
+| `status_overrides` of an upload commit | The web interface does not use it either; `accept_external_review` of `commit_upload` accepts translations reviewed outside Ontotator. |
 | Sending setup codes by mail | The server has no mail delivery. `create_users` writes the codes to a private local file for a mail merge. |
 | Bulk role changes for existing accounts | One `set_member_roles` call per person is enough for cohorts of tens. A bulk route would need its own dry run. |
 | Project state closed or read-only; deleting a project | A new domain feature with its own rules for running tasks. The project archive (#325) keeps a finished project as one file, but the project stays open on the server. |
