@@ -1811,6 +1811,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{key}/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Project Audit
+         * @description The project's audit trail, newest first (leads and system admins).
+         */
+        get: operations["project_audit_api_v1_projects__key__audit_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{key}/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Project Jobs
+         * @description The project's import and export jobs, newest first (leads and system admins).
+         */
+        get: operations["project_jobs_api_v1_projects__key__jobs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{key}/progress": {
         parameters: {
             query?: never;
@@ -3685,6 +3725,16 @@ export interface components {
             details: {
                 [key: string]: unknown;
             };
+        };
+        /**
+         * AuditTokenRef
+         * @description The API token a change was made with.
+         */
+        AuditTokenRef: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
         };
         /**
          * AxisDefinition
@@ -7191,6 +7241,57 @@ export interface components {
              */
             submitted: number;
         };
+        /**
+         * ProjectAuditEvent
+         * @description One audited change in the project, newest first.
+         *
+         *     ``actor_kind``: ``person`` (an account, ``actor``), ``command_line``
+         *     (the admin command line on the server) or ``system`` (start-up and
+         *     recovery). ``target_id`` is left out (null) for a person target unless
+         *     the caller is a system administrator. ``target_person`` is the person
+         *     the event concerns: the target, or the person a task was made for
+         *     (``details.user_id``). ``actor_label`` only for system administrators.
+         */
+        ProjectAuditEvent: {
+            /** Id */
+            id: number;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Action */
+            action: string;
+            /**
+             * Actor Kind
+             * @enum {string}
+             */
+            actor_kind: "person" | "command_line" | "system";
+            actor?: components["schemas"]["PersonRefView"] | null;
+            /** Actor Label */
+            actor_label?: string | null;
+            /** Target Type */
+            target_type: string;
+            /** Target Id */
+            target_id?: string | null;
+            target_person?: components["schemas"]["PersonRefView"] | null;
+            api_token?: components["schemas"]["AuditTokenRef"] | null;
+            /** Details */
+            details: {
+                [key: string]: unknown;
+            };
+        };
+        /** ProjectAuditPage */
+        ProjectAuditPage: {
+            /** Events */
+            events: components["schemas"]["ProjectAuditEvent"][];
+            /** Total */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+        };
         /** ProjectDocumentSummary */
         ProjectDocumentSummary: {
             /** Document Id */
@@ -7228,6 +7329,61 @@ export interface components {
             has_review_inputs?: boolean | null;
             /** Assignees */
             assignees?: components["schemas"]["Assignee"][] | null;
+        };
+        /** ProjectJobPage */
+        ProjectJobPage: {
+            /** Jobs */
+            jobs: components["schemas"]["ProjectJobView"][];
+            /** Total */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+        };
+        /**
+         * ProjectJobView
+         * @description One job of the project.
+         *
+         *     ``requested_by``: the person who started it; ``requested_by_command_line``
+         *     when the admin command line did. ``error_code``: the failure's code, from
+         *     the job's structured error or its error text (``JOB_INTERRUPTED`` when the
+         *     server stopped while it ran, ``INTERNAL_ERROR`` for an unexpected error).
+         *     ``download_path``: where to download the file of a finished export, when
+         *     the file is there and the caller may download it (the ``export`` scope
+         *     for a token).
+         */
+        ProjectJobView: {
+            /** Id */
+            id: number;
+            /** Kind */
+            kind: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "succeeded" | "failed";
+            requested_by?: components["schemas"]["PersonRefView"] | null;
+            /**
+             * Requested By Command Line
+             * @default false
+             */
+            requested_by_command_line: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Started At */
+            started_at: string | null;
+            /** Finished At */
+            finished_at: string | null;
+            /** Error */
+            error: string | null;
+            /** Error Code */
+            error_code: string | null;
+            /** Download Path */
+            download_path?: string | null;
         };
         /** ProjectPin */
         ProjectPin: {
@@ -13618,6 +13774,95 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    project_audit_api_v1_projects__key__audit_get: {
+        parameters: {
+            query?: {
+                /** @description Action names, e.g. 'work_plan.update'; 'assignment.*'. */
+                action?: string[] | null;
+                /** @description A person's pseudonym or login: what they did or got. */
+                person?: string | null;
+                /** @description Only changes made with this API token. */
+                api_token_id?: number | null;
+                /** @description From this time. */
+                since?: string | null;
+                /** @description Before this time (exclusive). */
+                until?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectAuditPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    project_jobs_api_v1_projects__key__jobs_get: {
+        parameters: {
+            query?: {
+                /** @description Job kinds, e.g. 'final_t1_export'. */
+                kind?: string[] | null;
+                status?: ("queued" | "running" | "succeeded" | "failed")[] | null;
+                /** @description The requester's pseudonym or login. */
+                requester?: string | null;
+                /** @description Only failed jobs with this code. */
+                error_code?: string | null;
+                /** @description Created from. */
+                since?: string | null;
+                /** @description Created before (exclusive). */
+                until?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectJobPage"];
+                };
             };
             /** @description Validation Error */
             422: {

@@ -620,6 +620,11 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
     from ontotator.api.guideline_routes import router as guideline_router
 
     app.include_router(guideline_router)
+    from ontotator.api.project_audit_routes import router as project_audit_router
+    from ontotator.api.project_job_routes import router as project_job_router
+
+    app.include_router(project_audit_router)
+    app.include_router(project_job_router)
     app.include_router(project_router)
     app.include_router(job_router)
     app.include_router(upload_router)

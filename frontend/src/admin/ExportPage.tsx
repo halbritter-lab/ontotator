@@ -1,5 +1,5 @@
 import { FinalExportPanel } from "./FinalExportPanel";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, type CurrentUser, type ExportKind } from "../api/client";
 import { saveDownload } from "../api/download";
 import { Button, EmptyState, InlineMessage } from "../ui";
@@ -7,6 +7,7 @@ import { RouteLink } from "../documents/RowCells";
 import type { Route } from "../app/router";
 import { ErrorNotice } from "./ErrorNotice";
 import { ExportFailure } from "./ExportFailure";
+import { ExportHistory } from "./ExportHistory";
 import { useJob } from "./useJob";
 import { Time } from "../app/Time";
 
@@ -42,6 +43,13 @@ export function ExportPage({ projectKey, currentUser, documentCount, onNavigate 
   if (documentCount === 0) return <section><h1>Export</h1><EmptyState title="Nothing to export yet" action={
     <RouteLink route={{ name: "projectDocuments", key: projectKey }} className="btn btn-secondary" onNavigate={onNavigate}>Go to Documents</RouteLink>
   }>Exports become available once the project has texts and submitted results.</EmptyState></section>;
+  return <ExportSections projectKey={projectKey} currentUser={currentUser} />;
+}
+
+function ExportSections({ projectKey, currentUser }: { projectKey: string; currentUser: CurrentUser }): JSX.Element {
+  // A research export that starts or ends reloads the history; a final export shows there after Refresh history.
+  const [historyRevision, setHistoryRevision] = useState(0);
+  const changed = useCallback(() => setHistoryRevision(value => value + 1), []);
   return <section className="export-page"><h1>Export</h1><FinalExportPanel projectKey={projectKey} username={currentUser.username} />
     <section className="export-research" aria-labelledby="export-research-heading">
       <h2 id="export-research-heading">Research data</h2>
@@ -50,18 +58,19 @@ export function ExportPage({ projectKey, currentUser, documentCount, onNavigate 
         <thead><tr><th scope="col">Export</th><th scope="col">Contains</th><th scope="col">Format</th><th scope="col"><span className="visually-hidden">Action</span></th></tr></thead>
         <tbody>{definitions.map((definition) => {
           const storageKey = `ontotator:export:${JSON.stringify([currentUser.username, projectKey, definition.kind])}`;
-          return <ExportRow key={storageKey} projectKey={projectKey} storageKey={storageKey} {...definition} />;
+          return <ExportRow key={storageKey} projectKey={projectKey} storageKey={storageKey} onChanged={changed} {...definition} />;
         })}</tbody>
       </table>
       <details className="export-research-details"><summary>Details and limits</summary>
         <p className="cell-secondary">Unresolved proposals are included with a reviewer flag and note; clinical values are unchanged. Files with reviewer flags cannot be imported back as proposals.</p>
       </details>
     </section>
+    <ExportHistory projectKey={projectKey} revision={historyRevision} />
   </section>;
 }
 
 // The final export above is the primary action; research exports stay secondary, one table row each.
-function ExportRow({ projectKey, storageKey, kind, title, format, description }: { projectKey: string; storageKey: string; kind: CardKind; title: string; format: string; description: string }): JSX.Element {
+function ExportRow({ projectKey, storageKey, kind, title, format, description, onChanged }: { projectKey: string; storageKey: string; kind: CardKind; title: string; format: string; description: string; onChanged?: () => void }): JSX.Element {
   const [remembered] = useState(() => readRemembered(storageKey));
   const [jobId, setJobId] = useState<number | null>(remembered.id);
   const [storageError, setStorageError] = useState(remembered.storageError);
@@ -77,6 +86,15 @@ function ExportRow({ projectKey, storageKey, kind, title, format, description }:
   const downloadable = correctKind && job.status === "succeeded";
   const polling = jobId !== null && !pollError && (!job || (job.status !== "failed" && job.status !== "succeeded"));
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  // The history below lists the job once it exists and again when it ended.
+  const settled = correctKind && (job.status === "succeeded" || job.status === "failed");
+  const seen = useRef<string | null>(null);
+  useEffect(() => {
+    const state = `${jobId}:${settled}`;
+    // The history loads on its own when the page opens; only later changes reload it.
+    if (seen.current !== null && seen.current !== state && jobId !== null) onChanged?.();
+    seen.current = state;
+  }, [jobId, settled, onChanged]);
   const remember = (id: number | null) => {
     try { if (id === null) sessionStorage.removeItem(storageKey); else sessionStorage.setItem(storageKey, String(id)); }
     catch { setStorageError(true); }

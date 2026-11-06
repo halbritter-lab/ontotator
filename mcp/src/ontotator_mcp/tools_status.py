@@ -1,7 +1,8 @@
-"""Status tools: overview, progress per text and person, agreement per text."""
+"""Status tools: overview, progress, agreement, the project's audit and jobs."""
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Annotated, Any, Literal
 
 from mcp.server.mcpserver import MCPServer
@@ -12,6 +13,7 @@ from ontotator_mcp.tooling import register
 
 Project = Annotated[str, Field(description="Project key, e.g. 'ward-7'.")]
 Stage = Literal["translation_review", "annotation", "final", "done"]
+JobState = Literal["queued", "running", "succeeded", "failed"]
 MAX_AGREEMENT_TEXTS = 200
 
 
@@ -239,3 +241,90 @@ def register_status(server: MCPServer, api: OntotatorClient) -> None:
             "findings_total": total,
             "truncated": len(texts) >= limit,
         }
+
+    @register(server, scopes="read", effect="read")
+    async def project_audit(
+        project: Project,
+        action: Annotated[
+            list[str] | None,
+            Field(
+                description=(
+                    "Action names, e.g. 'work_plan.update'; 'assignment.*'"
+                    " matches every assignment action."
+                )
+            ),
+        ] = None,
+        person: Annotated[
+            str | None,
+            Field(description="Pseudonym or login: what the person did or got."),
+        ] = None,
+        api_token_id: Annotated[
+            int | None, Field(description="Only changes made with this API token.")
+        ] = None,
+        since: Annotated[datetime | None, Field(description="From this time.")] = None,
+        until: Annotated[
+            datetime | None, Field(description="Before this time (exclusive).")
+        ] = None,
+        limit: Annotated[int, Field(ge=1, le=500)] = 100,
+        offset: Annotated[int, Field(ge=0)] = 0,
+    ) -> dict[str, Any]:
+        """The project's audit trail: who changed what and with which token, newest first.
+
+        Work plan, assignments, members, settings, imports, exports and
+        final results; leads only. People are pseudonyms (with display
+        names); 'api_token' names the token a change was made with. 'total'
+        counts every matching event; page with limit and offset.
+        """
+        page: dict[str, Any] = await api.get(
+            project_path(project, "audit"),
+            action=action,
+            person=person,
+            api_token_id=api_token_id,
+            since=since.isoformat() if since else None,
+            until=until.isoformat() if until else None,
+            limit=limit,
+            offset=offset,
+        )
+        return page
+
+    @register(server, scopes="read", effect="read")
+    async def list_jobs(
+        project: Project,
+        kind: Annotated[
+            list[str] | None,
+            Field(description="Job kinds, e.g. 'final_t1_export', 't1_import'."),
+        ] = None,
+        status: list[JobState] | None = None,
+        requester: Annotated[
+            str | None, Field(description="Pseudonym or login of who started it.")
+        ] = None,
+        error_code: Annotated[
+            str | None, Field(description="Only failed jobs with this error code.")
+        ] = None,
+        since: Annotated[
+            datetime | None, Field(description="Created from this time.")
+        ] = None,
+        until: Annotated[
+            datetime | None, Field(description="Created before this time.")
+        ] = None,
+        limit: Annotated[int, Field(ge=1, le=500)] = 50,
+        offset: Annotated[int, Field(ge=0)] = 0,
+    ) -> dict[str, Any]:
+        """The project's import and export jobs, newest first, with state and error code.
+
+        Finds a lost job ID and failed exports again; leads only. A job with
+        a 'download_path' is a finished export that download_export can
+        save (that needs the 'export' scope).
+        """
+        page: dict[str, Any] = await api.get(
+            project_path(project, "jobs"),
+            kind=kind,
+            status=status,
+            requester=requester,
+            error_code=error_code,
+            since=since.isoformat() if since else None,
+            until=until.isoformat() if until else None,
+            limit=limit,
+            offset=offset,
+        )
+        return page

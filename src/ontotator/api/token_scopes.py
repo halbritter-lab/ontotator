@@ -146,6 +146,9 @@ ROUTE_SCOPES: Mapping[tuple[str, str], RouteScope] = {
     ("GET", "/api/v1/assignments/{assignment_id}/work-time"): SESSION,
     ("POST", "/api/v1/assignments/{assignment_id}/work-time"): SESSION,
     ("GET", f"{P}/work-time"): "read",
+    # The project's audit trail (issue 356) and its jobs (issue 355), for leads.
+    ("GET", f"{P}/audit"): "read",
+    ("GET", f"{P}/jobs"): "read",
     # Imports and exports run as jobs: the scope that started one may poll it.
     # Only export jobs have a download.
     ("GET", "/api/v1/jobs/{job_id}"): ("read", "import", "export"),

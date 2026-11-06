@@ -370,10 +370,22 @@ test.describe("Administration through real accounts and jobs", () => {
     const lines = readFileSync(logPath!, "utf8").trim().split("\n");
     expect(lines.length).toBeGreaterThan(0);
     for (const line of lines) expect(typeof JSON.parse(line)).toBe("object");
+    // Both exports are in the history, newest first, made by the lead (#355).
+    const history = page.getByRole("region", { name: "Export history", exact: true });
+    const rows = history.getByRole("row", { name: /^(Edit log|Annotation results) \d+$/ });
+    await expect(rows).toHaveCount(2);
+    await expect(rows.first()).toHaveAccessibleName(/^Edit log \d+$/);
+    await expect(rows.first()).toContainText("Ready");
+    await expect(rows.first()).toContainText("you)");
+    const [again] = await Promise.all([
+      page.waitForEvent("download"), rows.nth(1).getByRole("button", { name: "Download", exact: true }).click(),
+    ]);
+    expect(await again.failure()).toBeNull();
     await logout(page);
     await loginExisting(page, setup.annotator);
     await page.goto(`/#/projects/${setup.key}/export`);
     await expect(page.getByRole("button", { name: "Download", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "Export history", exact: true })).toHaveCount(0);
     const [denied] = await Promise.all([
       page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith(`/projects/${setup.key}/exports`)),
       bundle.getByRole("button", { name: "Create", exact: true }).click(),

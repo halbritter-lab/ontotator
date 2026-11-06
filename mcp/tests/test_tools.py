@@ -711,6 +711,58 @@ async def test_working_time_summary_reads_the_project_sums(
     assert await call(mcp_client, "working_time_summary", {"project": "p"}) == sums
 
 
+async def test_project_audit_passes_its_filters(
+    fake: FakeApi, mcp_client: Client
+) -> None:
+    events = {"events": [], "total": 0, "limit": 20, "offset": 40}
+    fake.on("GET", f"{P}/audit", events)
+    result = await call(
+        mcp_client,
+        "project_audit",
+        {
+            "project": "p",
+            "action": ["work_plan.update", "assignment.*"],
+            "person": "ann-0001",
+            "api_token_id": 7,
+            "since": "2026-11-01T00:00:00Z",
+            "limit": 20,
+            "offset": 40,
+        },
+    )
+    assert result == events
+    [request] = fake.calls_to("GET", f"{P}/audit")
+    params = request.request.url.params
+    assert params.get_list("action") == ["work_plan.update", "assignment.*"]
+    assert params["person"] == "ann-0001"
+    assert params["api_token_id"] == "7"
+    assert params["since"] == "2026-11-01T00:00:00+00:00"
+    assert "until" not in params
+    assert (params["limit"], params["offset"]) == ("20", "40")
+
+
+async def test_list_jobs_passes_its_filters(fake: FakeApi, mcp_client: Client) -> None:
+    jobs = {"jobs": [], "total": 0, "limit": 50, "offset": 0}
+    fake.on("GET", f"{P}/jobs", jobs)
+    result = await call(
+        mcp_client,
+        "list_jobs",
+        {
+            "project": "p",
+            "kind": ["final_t1_export"],
+            "status": ["failed", "succeeded"],
+            "requester": "ann-0004",
+            "error_code": "EXPORT_FAILED",
+        },
+    )
+    assert result == jobs
+    [request] = fake.calls_to("GET", f"{P}/jobs")
+    params = request.request.url.params
+    assert params.get_list("kind") == ["final_t1_export"]
+    assert params.get_list("status") == ["failed", "succeeded"]
+    assert params["requester"] == "ann-0004"
+    assert params["error_code"] == "EXPORT_FAILED"
+
+
 def _export_job(fake: FakeApi, content: bytes, **job: Any) -> None:
     fake.on(
         "GET",

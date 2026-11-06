@@ -18,6 +18,7 @@ beforeEach(() => {
   vi.spyOn(api, "getJob").mockImplementation(async id => job(id, id === 22 ? "edit_log_export" : "t1_export"));
   vi.spyOn(api, "downloadJob").mockResolvedValue({ blob: new Blob(["result"]), filename: "actual-server.zip" });
   vi.spyOn(downloads, "saveDownload").mockImplementation(() => {});
+  vi.spyOn(api, "listProjectJobs").mockResolvedValue({ jobs: [], total: 0, limit: 20, offset: 0 });
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); sessionStorage.clear(); });
 it("starts actual export kinds, remembers namespaced IDs and downloads freshly authorized binary payloads", async () => {
@@ -262,4 +263,13 @@ it("asks for the format before the tick box and describes only the chosen format
   fireEvent.change(format, { target: { value: "phenopacket" } });
   expect(finals().getByText(/^One Phenopacket per text/)).toBeTruthy();
   expect(finals().queryByText(/^A ZIP with one result file per text/)).toBeNull();
+});
+it("lists the export history below and reloads it when a research export starts and ends", async () => {
+  render(<ExportPage projectKey="p" currentUser={user} />);
+  await screen.findByRole("region", { name: "Export history" });
+  expect(api.listProjectJobs).toHaveBeenCalledTimes(1);
+  fireEvent.click(card().getByRole("button", { name: "Create" }));
+  await card().findByRole("button", { name: "Download" });
+  await waitFor(() => expect(vi.mocked(api.listProjectJobs).mock.calls.length).toBeGreaterThanOrEqual(2));
+  expect(vi.mocked(api.listProjectJobs).mock.calls.every(([key, filters]) => key === "p" && filters?.offset === 0)).toBe(true);
 });

@@ -144,7 +144,7 @@ Tokens last at most 365 days. The CI tokens are project tokens with one or two s
 | Revoke a leaked token at once | `POST /admin/tokens/{id}/revoke` | session only | none (web interface or `ontotator admin tokens revoke`) | covered by design |
 | A person leaves: all their tokens end | `PATCH /admin/users/{username}` (`active: false`) | `admin` | `update_user` | added in this PR (tool) |
 | A lead loses the lead role: the project tokens they created end | `PUT P/members/{username}` | `read`, `project-admin` | `set_member_roles` | covered |
-| What a token did | audit entries `api_token.use` with token id and name | | `ontotator admin audit` on the server | covered on the server; remaining gap: no API route for a project's audit |
+| What a token did | audit entries `api_token.use` with token id and name; the changes name the token (`GET P/audit`, filter `api_token_id`) | `read` (lead) | `project_audit`; `ontotator admin audit` on the server for the requests themselves | covered (#356) |
 | A missing scope, a revoked token, a foreign project | `401 TOKEN_INVALID`, `403 TOKEN_SCOPE_MISSING`, `403 TOKEN_NOT_ALLOWED`, `404 PROJECT_NOT_FOUND` | | tool errors with a remedy | covered |
 
 Verdict: **sufficient**. Creating and revoking tokens needs a person on purpose; what was missing was a way for a token to see its own expiry, which a project token could not see at all.
@@ -181,4 +181,3 @@ Verdict: **sufficient after this work**.
 | Change feed or webhooks | A new delivery mechanism; nightly polling of `project_overview` and the paged `list_texts` is enough for batch pipelines. |
 | Paging of `P/progress`, `P/assignments` and `/admin/users/` | The answers are complete lists; `list_assignments` filters and caps on the client. Paging changes the API's shape and the web interface that uses it. |
 | Project-wide agreement route | Agreement over the whole project is computed for the final export (`agreement.csv`, `agreement-summary.csv`); `agreement_summary` reads the per-text panels. |
-| Project audit through the API | Only `/admin/users/{username}/audit` exists (per user, without token use); the full trail is `ontotator admin audit` on the server. |

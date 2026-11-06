@@ -18,6 +18,9 @@ export type UploadCreated = components["schemas"]["UploadCreated"];
 export type UploadStatus = NonNullable<NonNullable<operations["list_uploads_api_v1_projects__key__uploads_get"]["parameters"]["query"]>["status"]>[number];
 export type ImportPlan = components["schemas"]["ImportPlan"];
 export type JobView = components["schemas"]["JobView"];
+export type ProjectJobView = components["schemas"]["ProjectJobView"];
+export type ProjectJobPage = components["schemas"]["ProjectJobPage"];
+export interface ProjectJobFilters { kind?: readonly string[]; status?: readonly ProjectJobView["status"][]; limit?: number; offset?: number }
 export type ArchiveJobView = components["schemas"]["ArchiveJobView"];
 export type ArchiveJobQueued = components["schemas"]["ArchiveJobQueued"];
 export type ProjectProgress = components["schemas"]["ProjectProgress"];
@@ -644,6 +647,17 @@ export class ApiClient {
 
   async getJob(id: number): Promise<JobView> {
     return this.request<JobView>(`/api/v1/jobs/${id}`, { method: "GET" });
+  }
+
+  /** The project's jobs, newest first (leads and system admins). */
+  async listProjectJobs(key: string, filters: ProjectJobFilters = {}): Promise<ProjectJobPage> {
+    const query = new URLSearchParams();
+    for (const kind of filters.kind ?? []) query.append("kind", kind);
+    for (const status of filters.status ?? []) query.append("status", status);
+    if (filters.limit !== undefined) query.set("limit", String(filters.limit));
+    if (filters.offset !== undefined) query.set("offset", String(filters.offset));
+    const search = query.toString();
+    return this.request<ProjectJobPage>(`/api/v1/projects/${encodeURIComponent(key)}/jobs${search ? `?${search}` : ""}`, { method: "GET" });
   }
 
   async getProgress(key: string): Promise<ProjectProgress> {
