@@ -234,6 +234,7 @@ function FinalExportContent({ projectKey }: { projectKey: string }): JSX.Element
           <li>every finding (findings.csv)</li>
           <li>the agreement between annotators (agreement.csv, agreement-summary.csv)</li>
           <li>what became of tool proposals (proposals.csv)</li>
+          <li>the texts taken out of the work plan, with the reason (planned-out.csv)</li>
         </ul>
       </>}
       {format === "phenopacket" && <p className="cell-secondary">One Phenopacket per text, made from the same results for tools that read phenotypic features. They leave out what a Phenopacket cannot hold, such as findings about family members, uncertain findings and findings left unresolved; a report per text and a summary (report.json) count what was left out. The ZIP also holds the selected results as an Ontospan bundle, which each finding in a Phenopacket points to. Texts of the same patient are not grouped yet.</p>}</details>}

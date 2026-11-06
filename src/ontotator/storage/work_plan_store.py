@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
+from datetime import UTC
 from typing import Any, cast
 
 from sqlalchemy import Connection, and_, case, exists, func, select, tuple_, update
@@ -32,6 +33,7 @@ from ontotator.storage.plan_tables import (
 )
 from ontotator.storage.tables import (
     AssignmentRow,
+    AuditEventRow,
     DocumentRow,
     ProjectRow,
     TranslationReviewRow,
@@ -58,6 +60,7 @@ __all__ = [
     "open_tasks",
     "plan_modes",
     "plan_rows",
+    "planned_out",
     "project_revisions",
     "restored",
     "revisions",
@@ -721,3 +724,46 @@ def discarded(conn: Connection, project_id: int) -> dict[str, dict[str, Any]]:
         ).where(DiscardedVariantRow.project_id == project_id)
     ).mappings()
     return {row["document_id"]: dict(row) for row in rows}
+
+
+def planned_out(
+    conn: Connection, project_id: int, plan: Mapping[RowKey, PlanFlags]
+) -> list[dict[str, Any]]:
+    """Texts a plan change took out of annotation and that stay out (#338).
+
+    A text counts when Annotate is off in ``plan`` (the caller's
+    ``effective_plan``) and a ``work_plan.update`` turned it from on to off.
+    The latest such change gives the case's plan revision it wrote, its time
+    (UTC, as the final export writes times) and the reason entered with it
+    (None without one). Texts never in the plan are not listed. Sorted by
+    case ID and language.
+    """
+    off = {key for key, flags in plan.items() if not flags.annotate}
+    if not off:
+        return []
+    found: dict[RowKey, dict[str, Any]] = {}
+    events = conn.execute(
+        select(AuditEventRow.at, AuditEventRow.details)
+        .where(
+            AuditEventRow.project_id == project_id,
+            AuditEventRow.action == "work_plan.update",
+        )
+        .order_by(AuditEventRow.id)
+    )
+    for at, details in events:
+        case_id = details.get("case_id")
+        for row in details.get("rows", []):
+            key = RowKey(case_id, row["language"])
+            if key not in off or not row["old"]["annotate"] or row["new"]["annotate"]:
+                continue
+            moment = at.replace(tzinfo=UTC) if at.tzinfo is None else at
+            found[key] = {
+                "case_id": key.case_id,
+                "language": key.language,
+                "revision": details["revision"],
+                "planned_out_at": moment.astimezone(UTC).strftime(
+                    "%Y-%m-%dT%H:%M:%S.%fZ"
+                ),
+                "reason": details.get("reason"),
+            }
+    return [found[key] for key in sorted(found, key=lambda k: (k.case_id, k.language))]

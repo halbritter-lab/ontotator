@@ -24,6 +24,9 @@ type LanguagePreview = BulkPreview["languages"][number];
 const DEBOUNCE_MS = 250;
 const CHANGED_MESSAGE = "This plan changed. Reloaded the current plan.";
 const CHECKING = "Checking consequences…";
+/** The reason is kept with the plan change; the final export names it for texts taken out of the plan. */
+const REASON_HINT = "Kept with the change. The final export names it for texts you take out of the plan.";
+const REASON_HINT_ACCEPTANCE = "Kept with the acceptance and the change. The final export names it for texts you take out of the plan.";
 
 const hasConsequences = (c: ConsequencesView): boolean => !!(c.withdrawn.length || c.finals_leaving.length || c.restored.length || c.open_reports?.length);
 /** "Leave as is (now on for 12, off for 8)" / "Leave as is (now off for 2 texts)": the current values in the selection (M2 F27, B1-2). */
@@ -193,6 +196,7 @@ export function PlanDialog({ projectKey, caseIds, rows, initial, onClose, onSave
       ...selection,
       languages: requestLanguages,
       ...(acceptLanguages.length ? { accept_external_review: { languages: acceptLanguages, reason: reason.trim() } } : {}),
+      ...(reason.trim() ? { reason: reason.trim() } : {}),
       expected_revisions: preview.data.revisions,
       confirm,
     };
@@ -286,7 +290,8 @@ export function PlanDialog({ projectKey, caseIds, rows, initial, onClose, onSave
           <p className="field-hint">The acceptance is recorded with your name, the reason and the time.</p>
         </div>;
       })}
-      {!confirming && acceptLanguages.length > 0 && <Textarea id={`${ids}-reason`} label="Reason" required maxLength={2000} value={reason} onChange={event => setReason(event.target.value)} />}
+      {!confirming && <Textarea id={`${ids}-reason`} label={acceptLanguages.length ? "Reason" : "Reason (optional)"} required={acceptLanguages.length > 0} maxLength={2000} value={reason} onChange={event => setReason(event.target.value)}
+        hint={acceptLanguages.length ? REASON_HINT_ACCEPTANCE : REASON_HINT} />}
       {confirming && <div className="work-plan-confirm">
         {groups.map(group => <div key={group.language} className="work-plan-warning">
           <strong>{group.language} has work in {group.cases} of these cases.</strong>

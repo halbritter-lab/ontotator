@@ -155,9 +155,11 @@ def _audit_cases(
     now: datetime | None = None,
     old_modes: Mapping[RowKey, str | None] | None = None,
     new_modes: Mapping[RowKey, str | None] | None = None,
+    reason: str | None = None,
 ) -> None:
     """One ``work_plan.update`` per case: old/new flags (and the annotation-mode
-    override of rows whose override changed), withdrawn, acceptances."""
+    override of rows whose override changed), withdrawn, acceptances, and the
+    lead's ``reason`` when one was given (the final export names it, #338)."""
     old_modes, new_modes = old_modes or {}, new_modes or {}
     by_case: dict[str, list[RowKey]] = defaultdict(list)
     for key in sorted(new, key=_row_order):
@@ -199,7 +201,8 @@ def _audit_cases(
                     for document_id, case in (accepted or {}).items()
                     if case == case_id
                 ),
-            },
+            }
+            | ({"reason": reason} if reason else {}),
             at=now,
         )
 
@@ -614,10 +617,13 @@ class WorkPlanService:
         reason: str | None = None,
         restored: Mapping[RowKey, int | None] | None = None,
         decided: Mapping[RowKey, bool] | None = None,
+        plan_reason: str | None = None,
     ) -> dict[str, Any]:
         """Acceptances, revocations, flags and audit of an evaluated plan.
 
-        ``decided`` (Undo only) restores the rows' earlier undecided state.
+        ``reason`` is the acceptance reason; ``plan_reason`` the optional
+        reason of the plan change, kept in its audit. ``decided`` (Undo only)
+        restores the rows' earlier undecided state.
         """
         now = datetime.now(UTC)
         accepted = self._accept(conn, key, plan, reason, now)
@@ -650,6 +656,7 @@ class WorkPlanService:
             now=now,
             old_modes=old_modes,
             new_modes=plan.modes.new,
+            reason=(plan_reason or "").strip() or None,
         )
         return {
             "revisions": revisions,
@@ -1000,6 +1007,7 @@ class WorkPlanService:
                 reason=request.accept_external_review.reason
                 if request.accept_external_review is not None
                 else None,
+                plan_reason=request.reason,
             )
             return {
                 "changed_rows": len(plan.new),
@@ -1314,6 +1322,7 @@ class WorkPlanService:
                     written,
                     withdrawn=result.withdrawn,
                     now=now,
+                    reason=reason,
                 )
             record_audit(
                 conn,

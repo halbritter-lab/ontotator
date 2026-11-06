@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 
 from ontotator.exchange.final_export_guide import (
     INDEX_COLUMNS,
+    PLANNED_OUT_COLUMNS,
     build_index_csv,
     build_readme,
     guide_files,
@@ -265,3 +266,110 @@ def test_project_name_falls_back_to_key():
         provenance_ids=[],
     ).decode()
     assert "Project:          t5\n" in text
+
+
+PLANNED_OUT = [
+    {
+        "case_id": "case, two",
+        "language": "de",
+        "revision": 3,
+        "planned_out_at": "2026-10-18T09:15:02.123456Z",
+        "reason": "Out of scope: adult cases only.",
+        "final_result_kept": True,
+    },
+    {
+        "case_id": "case-µ",
+        "language": "fr",
+        "revision": 2,
+        "planned_out_at": "2026-10-17T07:00:00.000000Z",
+        "reason": None,
+        "final_result_kept": False,
+    },
+]
+
+
+def test_planned_out_texts_have_index_rows_and_their_own_table():
+    files = guide_files(
+        payload(planned_out=PLANNED_OUT),
+        snapshot_id="s",
+        snapshot_sha256="0" * 64,
+        snapshot_created_at=AT,
+    )
+    assert set(files) == {"README.txt", "index.csv", "planned-out.csv"}
+    table = rows(files["index.csv"])
+    assert [(r["case_id"], r["language"], r["row_type"]) for r in table] == [
+        ("case, two", "de", "planned_out"),
+        ("case, two", "en", "omitted"),
+        ("case-µ", "de", "selected"),
+        ("case-µ", "de", "provenance"),
+        ("case-µ", "fr", "planned_out"),
+    ]
+    assert {name for name, value in table[0].items() if value} == {
+        "row_type",
+        "case_id",
+        "language",
+    }
+    planned = rows(files["planned-out.csv"])
+    assert tuple(planned[0].keys()) == PLANNED_OUT_COLUMNS
+    assert planned == [
+        {
+            "case_id": "case, two",
+            "language": "de",
+            "plan_revision": "3",
+            "planned_out_at": "2026-10-18T09:15:02.123456Z",
+            "reason": "Out of scope: adult cases only.",
+            "final_result_kept": "yes",
+        },
+        {
+            "case_id": "case-µ",
+            "language": "fr",
+            "plan_revision": "2",
+            "planned_out_at": "2026-10-17T07:00:00.000000Z",
+            "reason": "",
+            "final_result_kept": "",
+        },
+    ]
+    text = files["README.txt"].decode()
+    assert "Taken out of the work plan:        2\n" in text
+    assert "\nplanned-out.csv     The texts taken out of the work plan" in text
+    assert "Taken out of the work plan\n--------------------------\n" in text
+    flat = " ".join(text.split())
+    for sentence in [
+        "case, two (de): taken out in plan revision 3 on 2026-10-18 09:15:02 UTC. "
+        "Reason: Out of scope: adult cases only. Its final result stays in "
+        "Ontotator and is not exported.",
+        "case-µ (fr): taken out in plan revision 2 on 2026-10-17 07:00:00 UTC. "
+        "No reason was given.",
+        '"planned_out" rows are texts a lead took out of the work plan',
+    ]:
+        assert sentence in flat, sentence
+    again = guide_files(
+        payload(planned_out=PLANNED_OUT),
+        snapshot_id="s",
+        snapshot_sha256="0" * 64,
+        snapshot_created_at=AT,
+    )
+    assert again == files
+
+
+def test_no_planned_out_texts_say_none_and_add_no_file():
+    files = guide_files(
+        payload(planned_out=[]),
+        snapshot_id="s",
+        snapshot_sha256="0" * 64,
+        snapshot_created_at=AT,
+    )
+    assert set(files) == {"README.txt", "index.csv"}
+    text = files["README.txt"].decode()
+    assert "Taken out of the work plan:        0" in text
+    assert "Taken out of the work plan\n--------------------------\nNone.\n" in text
+    assert "planned-out.csv" not in text
+
+
+def test_snapshots_before_planned_out_keep_their_files():
+    """A snapshot frozen before #338 has no "planned_out": nothing changes."""
+    old = guide_files(
+        payload(), snapshot_id="s", snapshot_sha256="0" * 64, snapshot_created_at=AT
+    )
+    assert "work plan" not in old["README.txt"].decode()
+    assert "planned_out" not in old["index.csv"].decode("utf-8-sig")

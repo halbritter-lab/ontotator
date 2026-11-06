@@ -12107,6 +12107,18 @@
             "type": "boolean",
             "title": "Confirm",
             "default": false
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
           }
         },
         "additionalProperties": false,

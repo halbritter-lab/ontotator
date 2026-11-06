@@ -102,8 +102,9 @@ People appear as pseudonyms in every export.
 
 | File | Content |
 |---|---|
-| `README.txt` | Plain-language guide to the archive, with the left-out texts and the warnings acknowledged at export. |
-| `index.csv` | One row per selected result (`row_type` `selected`), left-out text (`omitted`), earlier submission the results refer to (`provenance`) and other annotation of a text accepted directly (`compared`), naming the bundle file and entry that holds it. |
+| `README.txt` | Plain-language guide to the archive, with the left-out texts, the texts taken out of the work plan and the warnings acknowledged at export. |
+| `index.csv` | One row per selected result (`row_type` `selected`), left-out text (`omitted`), earlier submission the results refer to (`provenance`), other annotation of a text accepted directly (`compared`) and text taken out of the work plan (`planned_out`), naming the bundle file and entry that holds it. |
+| `planned-out.csv` | Only when texts were taken out of the work plan: one row per such text with its plan revision, time and reason. |
 | `selected-results.ontospan.zip` | The final results as an Ontospan bundle, one unit per result. |
 | `provenance-results.ontospan.zip` | The submissions the final results were consolidated or carried from. Not final results. |
 | `compared-results.ontospan.zip` | For a text whose result was accepted directly, without consolidation: the other people's latest annotations of it, so that the agreement covers every text. Not final results. |
@@ -112,7 +113,7 @@ People appear as pseudonyms in every export.
 | `agreement.csv` | The agreement of every two annotators on each text. |
 | `agreement-summary.csv` | The agreement over the project. |
 | `proposals.csv` | Per tool and annotator what became of the tool's proposals, and per tool its precision and recall. |
-| `receipt.json` | Audit receipt: selections, warnings, omissions, review decisions, proposal checks, consolidations and the SHA-256 of every other file. |
+| `receipt.json` | Audit receipt: selections, warnings, omissions, texts taken out of the work plan (`planned_out`), review decisions, proposal checks, consolidations and the SHA-256 of every other file. |
 
 The CSV files are UTF-8 with a byte order mark and CRLF line ends. Text
 positions are Unicode code points into the canonical text of the line of
@@ -123,6 +124,31 @@ An Ontospan bundle of the final export names, per text, the ontology release rec
 which can be older than the project's current release. If its texts were made
 under different releases, the newest keeps the layer ID and each older release
 gets a layer of its own, `<layer id>@<digest prefix>`, with its release and digest.
+
+### Texts taken out of the work plan
+
+A text a lead took out of the work plan, that is, whose annotation was on
+and was turned off and stays off at export, is not part of the final
+results. So that the exported subset stays documented, the export names it:
+`README.txt` lists it under *Taken out of the work plan*, `index.csv` has a
+row with `row_type` `planned_out` that fills only `case_id` and `language`,
+and `planned-out.csv` (UTF-8 with byte order mark, CRLF) has one row per text
+in case and language order:
+
+- `case_id`, `language`: the text;
+- `plan_revision`: the revision of the case's work plan the change wrote;
+- `planned_out_at`: the time of the change in UTC, for example
+  `2026-11-05T10:44:01.000000Z`;
+- `reason`: the reason the lead entered in **Plan…**, or the discard reason
+  when discarding a translation took it out; empty without one;
+- `final_result_kept`: `yes` when the text had a final result. It stays in
+  Ontotator and is not exported.
+
+When a text was taken out more than once, the latest change counts. Texts
+that were never in the plan are not listed. The same entries are under
+`planned_out` in `receipt.json`. The file is left out when no text was taken
+out; an export of a snapshot frozen before this record existed has neither
+the rows nor the README section, so its files stay byte-identical.
 
 ### findings.csv
 

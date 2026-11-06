@@ -151,6 +151,9 @@ class BulkPlanRequest(BaseModel):
     accept_external_review: BulkAcceptance | None = None
     expected_revisions: dict[str, int] | None = None
     confirm: bool = False
+    # Optional: why the plan changes. Kept in the audit of each case; the
+    # final export names it for texts taken out of the plan (#338).
+    reason: str | None = Field(default=None, max_length=2000)
 
     @model_validator(mode="after")
     def _one_selection(self) -> Self:

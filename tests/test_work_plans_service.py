@@ -787,6 +787,8 @@ def test_discard_sets_flags_off_and_never_deletes(env):
     assert result["flags"]["discarded"] is True
     assert flags_of(env, "c1", "de") == PlanFlags(False, False)
     assert revoked(env, aid)
+    # The plan change carries the discard reason (the final export names it).
+    assert audits(env, "work_plan.update")[-1]["reason"] == "Wrong text"
     with env.db.transaction() as conn:
         assert (
             conn.execute(select(func.count()).select_from(DocumentRow)).scalar_one()
