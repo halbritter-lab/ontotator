@@ -72,6 +72,13 @@ HINTS: dict[str, str] = {
     ),
     "ASSIGNMENT_EXISTS": "The new person already has this task on this text.",
     "USERNAME_TAKEN": "An account with this username exists already.",
+    "WORK_PLAN_CONFIRMATION_REQUIRED": (
+        "The change withdraws tasks or final results (listed above); pass"
+        " withdraw_tasks to apply it anyway."
+    ),
+    "WORKFLOW_REVISION_CONFLICT": (
+        "The task or report changed in the meantime. Run the dry run again and repeat."
+    ),
     "GUIDELINE_VERSION_CONFLICT": (
         "Another guideline version was published meanwhile; check the guideline"
         " and repeat."
@@ -83,11 +90,18 @@ class OntotatorError(ToolError):
     """A failed Ontotator call, with the API's status and code when it gave one."""
 
     def __init__(
-        self, message: str, *, status: int | None = None, code: str | None = None
+        self,
+        message: str,
+        *,
+        status: int | None = None,
+        code: str | None = None,
+        details: Any = None,
     ) -> None:
         super().__init__(message)
         self.status = status
         self.code = code
+        # The API's ``details``, for a tool that reports them as a dry run.
+        self.details = details
 
 
 def _text(value: Any) -> str:
@@ -162,7 +176,9 @@ def api_error(response: httpx.Response) -> OntotatorError:
     if hint:
         parts.append(hint)
     message = redact(sentences(parts), _bearer(request))
-    return OntotatorError(message, status=response.status_code, code=code)
+    return OntotatorError(
+        message, status=response.status_code, code=code, details=details
+    )
 
 
 def transport_error(

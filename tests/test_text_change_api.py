@@ -301,6 +301,16 @@ def test_a_project_token_moves_and_resolves_text_changes(client):
     ):
         assert _code(response) == (404, "ASSIGNMENT_NOT_FOUND"), response.text
 
+    # The dry run opens to project-admin as well (issue 346).
+    preview = own.post(
+        f"/api/v1/projects/{env.key}/text-changes/preview",
+        json={
+            "assignment_id": moved["assignment_id"],
+            "target_document_id": env.docs[1],
+        },
+    )
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["findings"] == 2
     done = _move(own, env, moved["assignment_id"])
     assert done.status_code == 200, done.text
     assert done.json()["assignment"]["document_id"] == env.docs[1]

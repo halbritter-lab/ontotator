@@ -140,7 +140,9 @@ ROUTE_SCOPES: Mapping[tuple[str, str], RouteScope] = {
     ("GET", f"{P}/uploads/{{upload_id}}"): "import",
     ("POST", f"{P}/uploads/{{upload_id}}/commit"): "import",
     ("POST", f"{P}/uploads/{{upload_id}}/discard"): "import",
-    ("POST", f"{P}/text-changes/preview"): "import",
+    # The dry run of a new text version's import, and of the lead's move of
+    # work to it (move-to-version, text-change-resolution, carry; issue 346).
+    ("POST", f"{P}/text-changes/preview"): ("import", "project-admin"),
     # Export
     ("POST", f"{P}/exports"): "export",
     ("POST", f"{P}/exports/translation-reviews"): "export",

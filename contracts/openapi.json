@@ -1577,7 +1577,10 @@
             }
           }
         },
-        "x-ontotator-scope": "import",
+        "x-ontotator-scope": [
+          "import",
+          "project-admin"
+        ],
         "x-ontotator-project-token": true
       }
     },

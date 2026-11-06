@@ -140,6 +140,93 @@ def _arguments(folder: Path) -> dict[str, dict[str, Any]]:
         },
         "list_problem_reports": {"project": "p"},
         "withdraw_guideline": {"project": "p", "version": 2},
+        "start_new_round": {
+            "project": "p",
+            "assignment_id": 3,
+            "kind": "carry_forward",
+            "confirm": True,
+        },
+        "change_annotation_mode": {
+            "project": "p",
+            "case_id": "c",
+            "language": "en",
+            "mode": "scratch",
+            "reason": "Proposals were wrong",
+            "confirm": True,
+        },
+        "list_annotation_mode_changes": {
+            "project": "p",
+            "case_id": "c",
+            "language": "en",
+        },
+        "restore_annotation_mode": {
+            "project": "p",
+            "case_id": "c",
+            "language": "en",
+            "change_id": 1,
+            "confirm": True,
+        },
+        "set_final_result": {
+            "project": "p",
+            "case_id": "c",
+            "language": "en",
+            "submission_id": "s1",
+            "confirm": True,
+        },
+        "request_translation_correction": {
+            "project": "p",
+            "document_id": "d",
+            "username": "u",
+            "reason": "Dose missing",
+        },
+        "start_lead_correction": {"project": "p", "document_id": "d"},
+        "discard_translation": {
+            "project": "p",
+            "document_id": "d",
+            "reason": "Wrong source",
+            "confirm": True,
+        },
+        "undo_work_plan": {
+            "project": "p",
+            "undo": {
+                "rows": [
+                    {
+                        "case_id": "c",
+                        "language": "en",
+                        "review": False,
+                        "annotate": True,
+                    }
+                ],
+                "revisions": {"c": 2},
+            },
+            "confirm": True,
+        },
+        "annotation_target_preview": {"project": "p", "annotations_per_text": 2},
+        "move_task_to_version": {
+            "project": "p",
+            "assignment_id": 3,
+            "target_document_id": "d2",
+            "confirm": True,
+        },
+        "handle_text_change": {
+            "project": "p",
+            "assignment_id": 3,
+            "target_document_id": "d2",
+            "resolution": "withdrawn",
+            "confirm": True,
+        },
+        "carry_submission": {
+            "project": "p",
+            "submission_id": "s1",
+            "target_document_id": "d2",
+            "confirm": True,
+        },
+        "act_on_problem_report": {
+            "report_id": "r1",
+            "action": "resolve",
+            "reason": "Text replaced",
+            "confirm": True,
+        },
     }
 
 
@@ -194,8 +281,23 @@ def _flows(fake: FakeApi) -> None:
                 status="open",
                 revoked_at=None,
                 lead_correction=False,
+                workflow_revision=1,
             )
         ],
+    )
+    fake.on(
+        "GET",
+        "/api/v1/assignments/{assignment_id}/round-sources",
+        [build("RoundSourceView", submission_id="s1")],
+    )
+    fake.on(
+        "POST", f"{P}/work-plans/bulk/preview", build("BulkPreview", revisions={"c": 1})
+    )
+    change = build("ModeChangeView", change_id=1, restorable=True)
+    fake.on(
+        "GET",
+        f"{P}/annotation-mode-changes",
+        build("ModeChangeList", case_id="c", language="en", changes=[change]),
     )
 
 
