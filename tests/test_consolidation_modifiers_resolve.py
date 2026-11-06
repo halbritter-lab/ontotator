@@ -268,7 +268,8 @@ def test_term_choice_and_modifier_choice_are_independent(tmp_path):
         },
     )
     item = group_of(two, SEIZURE)
-    assert {"term_differs", "modifiers_differ"} <= set(item["kinds"])
+    # Focal-onset seizure is a Seizure: related terms (#303), still a choice.
+    assert {"term_related", "modifiers_differ"} <= set(item["kinds"])
     draft = ok(mutate(two, "resolve", choose(item, SEVERE_TEXT, term_id=FOCAL)))
     chosen = result(two, item, draft)
     assert (chosen.term_id, dumped(chosen)) == (FOCAL, SEVERE_TEXT)

@@ -18,7 +18,7 @@ import { ConsolidationLauncher, type ConsolidationStarted } from "../variants/Co
 import { refKey } from "../variants/versionState";
 import { failureOf, keepRequest, selectionPayload, selectRequest, type FinalConfirmFailure, type FinalConfirmRequest } from "./FinalConfirm";
 import {
-  acceptQuestion, AGREEMENT_EXPLANATION, agreementText, allMatchText, detailDifferenceLines, remainingText, changedPassagesText, compareSummary, consolidateHint, unresolvedLines,
+  acceptQuestion, AGREEMENT_EXPLANATION, agreementText, allMatchText, detailDifferenceLines, relatedTermLines, remainingText, changedPassagesText, compareSummary, consolidateHint, unresolvedLines,
   consolidationInputs, decidedLine, decisionKind, earlyFinal, keepLabel, listedSubmissions, nextFinalDecision, nextOtherDecision, onlyHereText, panelMode, panelStep,
   consolidationBreakdown, personName, savedText, submissionLine, submissionName, submissionWhen, textChangedLine, type NextRow,
   noMoreFinalsText,
@@ -438,6 +438,9 @@ function CompareContent(props: ContentProps): JSX.Element {
       <meter aria-hidden="true" className="final-panel-agreement-bar" min={0} max={Math.max(agreement.total, 1)} value={agreement.matching} />
       {detailDifferenceLines(agreement).length > 0 && <ul className="final-panel-agreement-details" aria-label="Differences of matching findings">
         {detailDifferenceLines(agreement).map(line => <li key={line}>{line}</li>)}
+      </ul>}
+      {relatedTermLines(agreement).length > 0 && <ul className="final-panel-agreement-details" aria-label="Findings with related terms">
+        {relatedTermLines(agreement).map((line, index) => <li key={`${index}-${line}`}>{line}</li>)}
       </ul>}
       <Button size="sm" variant="quiet" className="btn-link" aria-expanded={explain} aria-controls={explanationId} onClick={() => setExplain(value => !value)}>How is this counted?</Button>
       {explain && <p id={explanationId} className="cell-secondary">{AGREEMENT_EXPLANATION}</p>}

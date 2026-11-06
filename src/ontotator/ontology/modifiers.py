@@ -203,6 +203,40 @@ def term_roles(profile: TaskProfile, pins: Mapping[str, _PinLike]) -> TermRoles:
     return TermRoles(by_layer)
 
 
+def term_ancestors(
+    profile: TaskProfile, pins: Mapping[str, _PinLike]
+) -> Callable[[str, str], frozenset[str]]:
+    """``(layer_id, term_id)`` -> the term's ancestors in the layer's pinned
+    ontology, loaded through the installed source and cached per term (#303,
+    related terms in consolidation groups). A layer whose ontology is not
+    loaded, or an unknown term, has no ancestors: the group then reads
+    ``term_differs``, which needs the same decision."""
+    ontology_of = {layer.layer_id: layer.ontology_id for layer in profile.layers}
+    services: dict[str, OntologyService | None] = {}
+    cache: dict[tuple[str, str], frozenset[str]] = {}
+
+    def service(layer_id: str) -> OntologyService | None:
+        if layer_id not in services:
+            pin = pins.get(ontology_of.get(layer_id, ""))
+            services[layer_id] = (
+                _source(pin.sha256) if pin is not None and _source is not None else None
+            )
+        return services[layer_id]
+
+    def ancestors(layer_id: str, term_id: str) -> frozenset[str]:
+        key = (layer_id, term_id)
+        if key not in cache:
+            found = service(layer_id)
+            cache[key] = (
+                frozenset(found.all_ancestors_of(term_id))
+                if found is not None
+                else frozenset()
+            )
+        return cache[key]
+
+    return ancestors
+
+
 def term_roles_for_services(
     profile: TaskProfile,
     pins: Mapping[str, _PinLike],

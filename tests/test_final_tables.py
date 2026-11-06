@@ -122,6 +122,8 @@ def test_agreement_compares_the_two_annotations_behind_the_result(consolidated):
         pair["axis_conflicts"],
     ) == ("3", "4", "1", "0", "1", "1")
     assert pair["a_only"] == "0" and pair["b_only"] == "1"
+    # Status epilepticus and Dialeptic seizure are siblings, not related (#303).
+    assert pair["related_term_conflicts"] == "0"
     assert pair["annotation_strict_f1"] == f"{2 / 7:.4f}"
     summary = {row["scope"]: row for row in rows(archive.read("agreement-summary.csv"))}
     assert set(summary) == {"macro_mean", "pooled"}
@@ -599,3 +601,48 @@ def test_silent_texts_count_only_with_a_selected_result():
         (r["tool"], r["texts"], r["proposals"], r["final_findings"], r["recall"])
         for r in table
     ] == [("quiet", "1", "0", "2", "0.0000")]
+
+
+def _spanned(annotation_id: str, term_id: str, text: str, word: str) -> Any:
+    start = text.index(word)
+    return ontospan.Annotation(
+        annotation_id=annotation_id,
+        layer_id="hpo",
+        term_id=term_id,
+        mentions=(
+            ontospan.Mention(
+                segments=(
+                    ontospan.Segment(start=start, end=start + len(word), text=word),
+                ),
+            ),
+        ),
+        provenance=ontospan.Provenance(
+            actor=ontospan.Actor(actor_id="p", kind="human"), method="manual"
+        ),
+    )
+
+
+def test_related_term_conflicts_flag_parent_and_child_terms_only():
+    """#303: of two term conflicts, Seizure / Status epilepticus are related,
+    Hypotonia / Areflexia are siblings. The F1 values stay as they are."""
+    from t1_fixtures import HP_PATH
+
+    from ontotator.exchange.final_tables import _related_term_conflicts
+
+    text = "Seizures and weak tone."
+    a = [
+        _spanned("a1", "HP:0001250", text, "Seizures"),
+        _spanned("a2", "HP:0001252", text, "weak tone"),
+    ]
+    b = [
+        _spanned("b1", "HP:0002133", text, "Seizures"),
+        _spanned("b2", "HP:0001284", text, "weak tone"),
+    ]
+    view = ontospan.ObographOntology.load(HP_PATH)
+    layers: Any = {"hpo": object()}
+    assert ontospan.agreement(a, b, text).term_conflicts == 2
+    assert _related_term_conflicts(a, b, text, layers, lambda _layer: view) == 1
+    # Without an ontology nothing is flagged.
+    assert _related_term_conflicts(a, b, text, layers, None) == 0
+    assert _related_term_conflicts(a, b, text, layers, lambda _layer: None) == 0
+    assert "related_term_conflicts" in COUNT_COLUMNS

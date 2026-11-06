@@ -286,7 +286,7 @@ class _Group:
 # "Keep" takes the default member as it is; a group whose members differ in
 # term or values (or whose spans conflict) needs a decision per differing
 # field ("choose").
-_UNSETTLED_BY_KEEP = frozenset({"term_differs", "values_differ"})
+_UNSETTLED_BY_KEEP = frozenset({"term_differs", "term_related", "values_differ"})
 
 
 def _invalid(message: str) -> DomainError:

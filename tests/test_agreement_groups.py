@@ -499,3 +499,81 @@ def test_span_shift_is_described_but_no_conflict() -> None:
     )
     assert g.kinds == frozenset({"span_differs", "notes_differ"})
     assert g.span_conflict is False
+
+
+# Related terms (#303): HP:2 is a child of HP:1, HP:3 a child of HP:2, HP:9
+# unrelated to both.
+PARENTS = {"HP:2": {"HP:1"}, "HP:3": {"HP:2", "HP:1"}}
+
+
+def ancestors(layer_id: str, term_id: str) -> set[str]:
+    assert layer_id == "hpo-layer"
+    return PARENTS.get(term_id, set())
+
+
+def test_parent_and_child_terms_are_related_not_different() -> None:
+    data = {
+        "s1": [f("a", 0, "HP:1", ((0, 7),))],
+        "s2": [f("b", 0, "HP:2", ((0, 7),))],
+    }
+    related = one(groups(data, AB, ancestors=ancestors))
+    plain = one(groups(data, AB))
+    assert related.kinds == frozenset({"term_related"})
+    assert plain.kinds == frozenset({"term_differs"})
+    # Only the kind changes: the same members, terms and default.
+    assert related.members == plain.members and related.terms == plain.terms
+
+
+def test_unrelated_terms_still_differ_with_the_lookup() -> None:
+    g = one(
+        groups(
+            {
+                "s1": [f("a", 0, "HP:1", ((0, 7),))],
+                "s2": [f("b", 0, "HP:9", ((0, 7),))],
+            },
+            AB,
+            ancestors=ancestors,
+        )
+    )
+    assert g.kinds == frozenset({"term_differs"})
+
+
+def test_three_terms_are_related_only_on_one_line() -> None:
+    line = one(
+        groups(
+            {
+                "s1": [f("a", 0, "HP:1", ((0, 7),))],
+                "s2": [f("b", 0, "HP:2", ((0, 7),))],
+                "s3": [f("c", 0, "HP:3", ((0, 7),))],
+            },
+            ABC,
+            ancestors=ancestors,
+        )
+    )
+    assert line.kinds == frozenset({"term_related"})
+    mixed = one(
+        groups(
+            {
+                "s1": [f("a", 0, "HP:2", ((0, 7),))],
+                "s2": [f("b", 0, "HP:3", ((0, 7),))],
+                "s3": [f("c", 0, "HP:9", ((0, 7),))],
+            },
+            ABC,
+            ancestors=ancestors,
+        )
+    )
+    assert mixed.kinds == frozenset({"term_differs"})
+
+
+def test_related_terms_keep_their_other_differences() -> None:
+    g = one(
+        groups(
+            {
+                "s1": [f("a", 0, "HP:1", ((0, 7),), {"assertion": "present"})],
+                "s2": [f("b", 0, "HP:2", ((0, 5),), {"assertion": "absent"})],
+            },
+            AB,
+            ancestors=ancestors,
+        )
+    )
+    assert g.kinds == frozenset({"term_related", "values_differ", "span_differs"})

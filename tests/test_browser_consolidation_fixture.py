@@ -62,10 +62,11 @@ def test_started_scenario_has_the_eight_designed_groups(client: TestClient) -> N
     assert len(groups) == 8
     assert sorted(g["state"] for g in groups).count("auto") == 4
     open_kinds = sorted(g["kinds"][0] for g in groups if g["state"] == "open")
-    assert open_kinds == ["partial", "span_differs", "term_differs", "values_differ"]
+    # Status epilepticus is a Seizure: the term group reads related (#303).
+    assert open_kinds == ["partial", "span_differs", "term_related", "values_differ"]
     open_groups = [g for g in groups if g["state"] == "open"]
     assert [g["kinds"] for g in open_groups if len(g["kinds"]) > 1] == [
-        ["term_differs", "values_differ"]
+        ["term_related", "values_differ"]
     ]
     # Overlapping reflex spans and one shared span in the term group: no text decision.
     assert [g["span_conflict"] for g in open_groups] == [False] * 4
@@ -103,7 +104,8 @@ def test_three_people_hypotonia_group(client: TestClient) -> None:
         if m["term_id"] == "HP:0001252" and m["axes"]["assertion"] == "absent"
     )
     assert hypotonia["state"] == "open"
-    assert "term_differs" in hypotonia["kinds"]
+    # Hypotonia lies under "Abnormality of the nervous system" (#303).
+    assert "term_related" in hypotonia["kinds"]
     assert "assertion" in hypotonia["differing_axes"]
     assert len(hypotonia["members"]) == 3
     assert len({m["person_id"] for m in hypotonia["members"]}) == 3

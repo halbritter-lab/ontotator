@@ -38,6 +38,7 @@ Ontotator puts the findings that different people marked on overlapping passages
 | **to decide**, or *2 fields to decide* | Still open. The number counts the highlighted rows that need your choice. |
 | **Conflict** mark | People chose different terms or values. |
 | **to decide** without **Conflict** | Only the passage differs, not everyone marked the finding, or an annotator left it unresolved. |
+| **Related terms** tag | The people chose a term and its parent or child, for example *Seizure* and *Status epilepticus*. A smaller difference than two unrelated terms, but still a choice: pick the term that fits the text. |
 | **Unresolved** tag | An annotator could not decide this finding. It is not agreed, even if everyone marked the same: read the note in the **Unresolved** row of the table, then decide. |
 | **decided** | You decided it. |
 | **not in result** | You left it out. |

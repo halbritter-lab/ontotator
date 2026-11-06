@@ -196,8 +196,11 @@ an optimal assignment:
 The counts behind them follow: `findings_a`, `findings_b`, `equal`,
 `compatible`, `axis_conflicts` (same term, other values), `term_conflicts`
 (other term on overlapping text), `a_only`, `b_only`, the mention and term
-counts, `modifiers_compared` and `modifiers_agreeing`. Two submissions
-without findings agree (F1 1).
+counts, `modifiers_compared`, `modifiers_agreeing` and
+`related_term_conflicts`: those `term_conflicts` whose terms are ancestor
+and descendant in the layer's ontology ("Seizure" and "Focal seizure"). It
+only flags the smaller disagreement; every F1 value counts such a pair as a
+term conflict, as before. Two submissions without findings agree (F1 1).
 
 `agreement-summary.csv` has two rows. `macro_mean` averages each value over
 the pairs of a text, then over the texts. `pooled` computes each value from
@@ -209,7 +212,8 @@ Only F1 values are given. Span annotation has no countable negatives (every
 place in a text where nobody marked anything would be one), so chance-corrected
 coefficients such as Cohen's kappa are not defined for it. Define in the study
 protocol which value is the primary measure; ontology-aware matching (an
-ancestor term as a partial match) is not part of these values.
+ancestor term as a partial match) is not part of these values;
+`related_term_conflicts` counts such pairs without changing them.
 
 ### proposals.csv
 

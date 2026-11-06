@@ -68,6 +68,8 @@ SEIZURE = "HP:0001250"
 HYPOTONIA = "HP:0001252"
 FEVER = "HP:0001945"
 ATAXIA = "HP:0001251"
+STATUS = "HP:0002133"  # a Seizure in the test ontology
+AREFLEXIA = "HP:0001284"
 
 
 @pytest.fixture
@@ -272,6 +274,7 @@ def test_several_is_compare_with_agreement(env):
         "context_differences": 1,
         # The seizures match with shifted spans: named as a text difference (issue 230).
         "detail_differences": [{"kind": "text", "layer_id": "hpo", "term_id": SEIZURE}],
+        "related_terms": [],
     }
     subs = by_id(result)
     assert [s["submission_id"] for s in result["submissions"]] == ["s1", "s2"]
@@ -311,6 +314,7 @@ def test_other_version_submissions_not_compared_but_eligible(env):
         "matching": 1,
         "context_differences": 0,
         "detail_differences": [],
+        "related_terms": [],
     }
     assert (subs["s1"]["only_here"], subs["s2"]["only_here"]) == (0, 0)
     assert result["label_rule"] == "compare"
@@ -485,6 +489,7 @@ def test_consolidation_of_all_others_is_accept(rounds):
         "matching": 1,
         "context_differences": 0,
         "detail_differences": [],
+        "related_terms": [],
     }
     assert [subs[sid]["only_here"] for sid in [*inputs, consolidation]] == [0, 0, 1]
     # The Final cell shows "3 submissions" without a match count (accept).
@@ -904,6 +909,35 @@ def test_note_difference_on_a_matching_finding_is_named(env):
     details = response.json()["agreement"]["detail_differences"]
     assert [(item["kind"], item["term_id"]) for item in details] == [("note", SEIZURE)]
     assert details[0]["term_label"]
+
+
+def test_related_terms_are_named_and_still_counted_as_differences(env):
+    """#303: Status epilepticus is a Seizure; Areflexia and Hypotonia are
+    siblings. Only the first pair is named related, both stay differences."""
+    target = doc("c1", "en")
+    seizure = span_of(env, target, "Neonatalzeit")
+    heavy = span_of(env, target, "schwere")
+    submit_findings(
+        env,
+        assign(env, target, "anno", "annotate"),
+        "s1",
+        [finding("x1", SEIZURE, seizure), finding("x2", HYPOTONIA, heavy)],
+    )
+    submit_findings(
+        env,
+        assign(env, target, "anno2", "annotate"),
+        "s2",
+        [finding("y1", STATUS, seizure), finding("y2", AREFLEXIA, heavy)],
+    )
+    result = panel(env)
+    assert (result["agreement"]["matching"], result["agreement"]["total"]) == (0, 4)
+    assert result["agreement"]["related_terms"] == [
+        {"layer_id": "hpo", "term_ids": [SEIZURE, STATUS]}
+    ]
+    response = env.lead.get(f"{BASE}/document-rows/c1/en/final-panel")
+    assert response.status_code == 200, response.text
+    [related] = response.json()["agreement"]["related_terms"]
+    assert related["term_labels"] == ["Seizure", "Status epilepticus"]
 
 
 def test_no_detail_differences_when_everything_matches(env):

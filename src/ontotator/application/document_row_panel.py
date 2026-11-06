@@ -47,6 +47,7 @@ from ontotator.application.text_changes import (
 from ontotator.domain import document_rows as rules
 from ontotator.domain.agreement import (
     Agreement,
+    Ancestors,
     Finding,
     compare,
     groups,
@@ -59,7 +60,12 @@ from ontotator.domain.profiles import TaskProfile
 from ontotator.domain.project_rules import ModifierRoles
 from ontotator.domain.review import ReviewDecision
 from ontotator.domain.workspace import Submission
-from ontotator.ontology.modifiers import NO_TERM_ROLES, TermRoles, term_roles
+from ontotator.ontology.modifiers import (
+    NO_TERM_ROLES,
+    TermRoles,
+    term_ancestors,
+    term_roles,
+)
 from ontotator.projects.service import axis_defaults
 from ontotator.storage.repository import Repository
 from ontotator.storage.tables import DocumentRow, ProjectRow, SubmissionRow
@@ -382,7 +388,9 @@ _DETAIL_KINDS: dict[str, str] = {
     "span_differs": "text",
     "modifiers_differ": "modifiers",
 }
-_CONTEXT_KINDS = frozenset({"partial", "term_differs", "values_differ", "unresolved"})
+_CONTEXT_KINDS = frozenset(
+    {"partial", "term_differs", "term_related", "values_differ", "unresolved"}
+)
 
 
 def _detail_differences(
@@ -426,6 +434,47 @@ def _detail_differences(
                     {"kind": name, "layer_id": first.layer_id, "term_id": first.term_id}
                 )
     return result
+
+
+def _related_terms(
+    comparable: Sequence[Candidate],
+    recorded_at: Mapping[str, datetime],
+    payloads: Mapping[str, Submission],
+    profile: TaskProfile,
+    defaults: AxisDefaults,
+    ancestors: Ancestors,
+    roles: ModifierRoles = NO_TERM_ROLES,
+) -> list[dict[str, Any]]:
+    """Groups of the compared submissions whose terms are ancestor and
+    descendant (``term_related``, #303), in reading order: ``{"layer_id",
+    "term_ids"}`` with the terms in order of their first member. Empty with
+    fewer than two compared submissions or a payload that does not decode.
+
+    The agreement counts such a group as a difference like any other term
+    difference; this only names it, since it is a smaller one.
+    """
+    if len(comparable) < 2 or any(
+        item.submission_id not in payloads for item in comparable
+    ):
+        return []
+    order = sorted(
+        (item.submission_id for item in comparable),
+        key=lambda sid: (recorded_at[sid], sid),
+    )
+    findings = {
+        sid: findings_of(payloads[sid], profile, defaults, roles) for sid in order
+    }
+    by_key = {
+        (sid, finding.key): finding for sid, own in findings.items() for finding in own
+    }
+    return [
+        {
+            "layer_id": by_key[(group.keep, group.members[group.keep])].layer_id,
+            "term_ids": list(group.terms),
+        }
+        for group in groups(findings, order, ancestors=ancestors)
+        if "term_related" in group.kinds
+    ]
 
 
 def _all_match(
@@ -658,6 +707,19 @@ def final_panel(
         if roles is not None and agreement is not None
         else []
     )
+    related = (
+        _related_terms(
+            comparable,
+            recorded_at,
+            payloads,
+            profile,
+            defaults,
+            term_ancestors(profile, Repository._pins(conn, pid)),
+            roles,
+        )
+        if roles is not None and agreement is not None
+        else []
+    )
     # What the panel offers as final, and a consolidation's inputs: the flags
     # stay visible to the lead accepting it.
     listed = [
@@ -698,6 +760,7 @@ def final_panel(
                 "matching": agreement.matching,
                 "context_differences": agreement.context_differences,
                 "detail_differences": details,
+                "related_terms": related,
             }
         ),
         "label_rule": rule,
