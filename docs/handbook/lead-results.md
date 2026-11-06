@@ -98,6 +98,8 @@ What for: pick another result after you already chose one.
 2. Click **Change final…** next to **Open result**.
 3. Click **Use as final** in the row of the result you want.
 
+A final result can only be replaced, never withdrawn. While a text has one, its annotation mode cannot be changed ([Change the annotation mode of one text](lead-documents.md#change-the-annotation-mode-of-one-text)).
+
 ## Translation and text-change decisions
 
 ### Resolve a rejected or queried translation
@@ -131,7 +133,7 @@ What for: annotate a translation that was reviewed outside Ontotator. The row's 
    - Click **Turn translation review on**, then assign a review.
    - Tick **This translation was reviewed outside Ontotator — accept it as it is**, enter a **Reason** and click **Accept and annotate**.
 
-Ontotator records the acceptance with your name, the reason and the time. To have an accepted translation reviewed after all, click **Assign a new review…** in the **Translation** part of the text card.
+Ontotator records the acceptance with your name, the reason and the time. It accepts the newest version of every translation of the text, parallel translations included. To have an accepted translation reviewed after all, click **Assign a new review…** in the **Translation** part of the text card.
 
 ### Handle a text change for open annotation work
 
@@ -187,9 +189,9 @@ A final result is never changed here. If a task is still paused after the report
 What for: download the accepted final results.
 
 1. In the sidebar, click **Export**. Or click **Export final results…** on **Documents** or **Progress**.
-2. The card **Final results** checks every text. It lists texts that need your decision and texts left out because they have no final result.
+2. The card **Final results** checks every text. It lists texts that need your decision and texts left out because they have no final result. Texts with annotation off in the work plan are listed under **Not planned, not exported**, for information only; they are not exported and the README.txt does not name them.
 3. Under **Format**, keep **Results with receipt (ontospan)**, or choose **Phenopackets (derived, lossy)**; see [Phenopackets](#phenopackets).
-4. If texts need your decision or are left out, a tick box names how many results are exported and how many texts are left out, for example *Export the 3 results as they are; leave out the other 243 texts*. Tick it to export now anyway. Without the tick, **Create final export** does not start. The export's README.txt lists the left-out texts and the warnings you acknowledged with this tick.
+4. If texts need your decision or are left out, a tick box names how many results are exported and how many texts are left out, for example *Export the 3 results as they are; leave out the other 243 texts*. Tick it to export now anyway. Without the tick, **Create final export** does not start. The export's README.txt lists the left-out texts and the warnings you acknowledged with this tick. Left out here means planned for annotation but without a final result.
 5. Click **Create final export**.
 6. When it is ready, click **Download (ZIP)**.
 

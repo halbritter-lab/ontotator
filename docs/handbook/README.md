@@ -9,7 +9,7 @@ This handbook explains how to work with Ontotator in the browser. It is for ever
 | New to Ontotator, any role | [Getting started](getting-started.md) | the chapter for your role |
 | Annotator or translation reviewer | [Your first task, start to finish](first-task.md) | [Annotator reference](annotator.md) |
 | Consolidator | [Typical consolidation, start to finish](consolidator.md#typical-consolidation-start-to-finish) | [Consolidator chapter](consolidator.md) |
-| Project lead | [Lead overview and typical project](lead.md) | [Settings](lead-settings.md), [Documents](lead-documents.md), [Results and export](lead-results.md) |
+| Project lead | [Lead overview and typical project](lead.md) | [Settings](lead-settings.md), [Documents](lead-documents.md), [Results and export](lead-results.md), [Change course](lead-change-course.md) |
 | System administrator | [Administration](admin.md) | |
 
 Stuck? See the [frequently asked questions](faq.md).
@@ -106,7 +106,7 @@ Words you meet in the app, in alphabetical order. The handbook uses one word per
 2. [Your first task, start to finish](first-task.md): one annotation task from login to submission.
 3. [Annotator reference](annotator.md): the editor, findings, values, tool proposals, carried findings, submitting, problem reports, translation review.
 4. [Consolidator chapter](consolidator.md): how to decide, the groups, finishing a consolidation.
-5. [Lead overview](lead.md): the typical project, with [Settings](lead-settings.md), [Documents](lead-documents.md) and [Results and export](lead-results.md).
+5. [Lead overview](lead.md): the typical project, with [Settings](lead-settings.md), [Documents](lead-documents.md), [Results and export](lead-results.md) and [Change course in a running project](lead-change-course.md): another translation, annotating again, fewer texts.
 6. [Administration](admin.md): user accounts, ontology releases, projects.
 7. [FAQ](faq.md): typical problems and what to do.
 

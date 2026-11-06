@@ -377,3 +377,25 @@ chapter = "lead-documents.md"
 [[map]]
 glob = "frontend/src/admin/ProjectArchives.tsx"
 chapter = "admin.md"
+
+# Changing course in a running project (#347): translations by file or review,
+# re-annotation (reopen, rounds, mode change), narrowing the plan.
+[[map]]
+glob = "frontend/src/documents/ChangeModeDialog.tsx"
+chapter = "lead-change-course.md"
+
+[[map]]
+glob = "frontend/src/documents/PlanDialog.tsx"
+chapter = "lead-change-course.md"
+
+[[map]]
+glob = "frontend/src/documents/TextVersions.tsx"
+chapter = "lead-change-course.md"
+
+[[map]]
+glob = "frontend/src/admin/UploadTextList.tsx"
+chapter = "lead-change-course.md"
+
+[[map]]
+glob = "frontend/src/tasks/WorkRoundActions.tsx"
+chapter = "lead-change-course.md"
