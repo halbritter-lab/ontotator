@@ -352,13 +352,17 @@ def final_t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
     )
     consolidations = consolidation_records(content.submissions, payload["round_kinds"])
 
-    def label(layer: ontospan.Layer, term_id: str) -> str | None:
+    def ontology_of(layer: ontospan.Layer) -> ontospan.OntologyView | None:
         digest = layer.ontology.sha256
         if digest is None:
             return None
         if digest not in views:
             views[digest] = ontospan.ObographOntology.load(ctx.db.blobs.path(digest))
-        return views[digest].label(term_id)
+        return views[digest]
+
+    def label(layer: ontospan.Layer, term_id: str) -> str | None:
+        view = ontology_of(layer)
+        return view.label(term_id) if view is not None else None
 
     files.update(
         table_files(
@@ -373,6 +377,7 @@ def final_t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
             proposals=tool_proposals(content, tool_sources),
             chances=chances,
             label=label,
+            ontology_of=ontology_of,
         )
     )
     receipt = {

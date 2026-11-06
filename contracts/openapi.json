@@ -10184,6 +10184,37 @@
         "title": "AgreementDetailView",
         "description": "A matching finding whose note, text span or modifier text differs\n(issue 230); ``term_label`` is the term's name, else its id."
       },
+      "AgreementRelatedView": {
+        "properties": {
+          "layer_id": {
+            "type": "string",
+            "title": "Layer Id"
+          },
+          "term_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Term Ids"
+          },
+          "term_labels": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Term Labels"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "layer_id",
+          "term_ids",
+          "term_labels"
+        ],
+        "title": "AgreementRelatedView",
+        "description": "Findings on overlapping text whose terms are ancestor and descendant\n(\"Seizure\" / \"Focal seizure\", #303): a term difference all the same.\n``term_labels`` are the terms' names (else their ids), as ``term_ids``."
+      },
       "AgreementView": {
         "properties": {
           "compared_version": {
@@ -10208,6 +10239,13 @@
             },
             "type": "array",
             "title": "Detail Differences"
+          },
+          "related_terms": {
+            "items": {
+              "$ref": "#/components/schemas/AgreementRelatedView"
+            },
+            "type": "array",
+            "title": "Related Terms"
           }
         },
         "additionalProperties": false,

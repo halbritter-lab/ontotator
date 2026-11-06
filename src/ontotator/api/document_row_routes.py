@@ -617,12 +617,23 @@ class UnresolvedFindingView(_View):
     note: str | None = None
 
 
+class AgreementRelatedView(_View):
+    """Findings on overlapping text whose terms are ancestor and descendant
+    ("Seizure" / "Focal seizure", #303): a term difference all the same.
+    ``term_labels`` are the terms' names (else their ids), as ``term_ids``."""
+
+    layer_id: str
+    term_ids: list[str]
+    term_labels: list[str]
+
+
 class AgreementView(_View):
     compared_version: int
     total: int
     matching: int
     context_differences: int
     detail_differences: list[AgreementDetailView] = Field(default_factory=list)
+    related_terms: list[AgreementRelatedView] = Field(default_factory=list)
 
 
 class FinalPanelView(_View):
@@ -792,17 +803,24 @@ def row_final_panel(
         *((data.get("agreement") or {}).get("detail_differences") or []),
         *data["unresolved"],
     ]
-    if details:
+    related = (data.get("agreement") or {}).get("related_terms") or []
+    if details or related:
         repo, ontology = request.app.state.repo, get_ontology(request)
         labels: dict[tuple[str, str], str] = {}
-        for item in details:
-            term = (item["layer_id"], item["term_id"])
+
+        def label(layer_id: str, term_id: str) -> str:
+            term = (layer_id, term_id)
             if term not in labels:
-                status = ontology.for_package_layer(repo, key, term[0]).validate_term(
-                    term[1]
+                status = ontology.for_package_layer(repo, key, layer_id).validate_term(
+                    term_id
                 )
-                labels[term] = status.label or term[1]
-            item["term_label"] = labels[term]
+                labels[term] = status.label or term_id
+            return labels[term]
+
+        for item in details:
+            item["term_label"] = label(item["layer_id"], item["term_id"])
+        for item in related:
+            item["term_labels"] = [label(item["layer_id"], t) for t in item["term_ids"]]
     return data
 
 

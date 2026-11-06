@@ -73,6 +73,12 @@ describe("comparison model", () => {
     expect(rowOf(rows, "term").cells.map(cell => cell.display)).toEqual(["Hypotonia", "Hypotonia", "Axial hypotonia"]);
   });
 
+  it("related terms (#303) are a term decision like other terms", () => {
+    const related = hypotoniaThree();
+    const rows = comparisonRows({ ...related, kinds: related.kinds.map(kind => kind === "term_differs" ? "term_related" : kind) }, THREE, TEXT, {});
+    expect(rowOf(rows, "term").conflict).toBe(true);
+  });
+
   it("text is information unless spans conflict", () => {
     const text = rowOf(comparisonRows(hypotoniaThree(), THREE, TEXT, {}), "text");
     expect(text).toMatchObject({ conflict: false, agreed: null, info: "(overlapping, comes with the chosen finding)" });

@@ -89,6 +89,9 @@ COUNT_COLUMNS = (
     "terms_equal",
     "modifiers_compared",
     "modifiers_agreeing",
+    # Of ``term_conflicts``: the terms are ancestor and descendant (#303).
+    # A flag only; no F1 value uses it.
+    "related_term_conflicts",
 )
 AGREEMENT_COLUMNS = (
     "case_id",
@@ -127,6 +130,8 @@ ANNOTATION_KINDS = frozenset({"annotation", "proposal_check"})
 _OLDER_RELEASE = re.compile(r"^(?P<layer>.+)@[0-9a-f]{12}$")
 
 Label = Callable[[ontospan.Layer, str], str | None]
+# The ontology of a bundle layer, for related terms (#303); None: not loaded.
+OntologyOf = Callable[[ontospan.Layer], ontospan.OntologyView | None]
 
 
 @dataclass(frozen=True)
@@ -417,8 +422,47 @@ def own_findings(
     )
 
 
+def _related_term_conflicts(
+    a: Sequence[ontospan.Annotation],
+    b: Sequence[ontospan.Annotation],
+    text: str,
+    layers: Mapping[str, ontospan.Layer],
+    ontology_of: OntologyOf | None,
+) -> int:
+    """Term conflicts of the pairing ``ontospan.agreement`` makes whose terms
+    are ancestor and descendant in the layer's ontology (#303). The pairing is
+    per layer, so matching per layer with its ontology gives the same pairs."""
+    if ontology_of is None:
+        return 0
+    related = 0
+    for layer_id in sorted({x.layer_id for x in a} & {y.layer_id for y in b}):
+        layer = layers.get(layer_id)
+        ontology = ontology_of(layer) if layer is not None else None
+        if ontology is None:
+            continue
+        related += sum(
+            group.ancestor
+            for group in ontospan.match_annotations(
+                [x for x in a if x.layer_id == layer_id],
+                [y for y in b if y.layer_id == layer_id],
+                text,
+                ontology,
+            )
+        )
+    return related
+
+
+def _base_layers(*items: ExportedUnit) -> dict[str, ontospan.Layer]:
+    """Profile layer id -> a bundle layer of it (the first unit's first)."""
+    found: dict[str, ontospan.Layer] = {}
+    for item in items:
+        for layer in item.unit.annotation_set.layers:
+            found.setdefault(base_layer(layer.layer_id), layer)
+    return found
+
+
 def _counts(
-    found: ontospan.Agreement, findings_a: int, findings_b: int
+    found: ontospan.Agreement, findings_a: int, findings_b: int, related: int = 0
 ) -> dict[str, int]:
     compared = found.equal + found.compatible
     return {
@@ -439,6 +483,7 @@ def _counts(
         "terms_equal": found.terms_equal,
         "modifiers_compared": compared,
         "modifiers_agreeing": round((found.modifier_agreement or 0.0) * compared),
+        "related_term_conflicts": related,
     }
 
 
@@ -480,7 +525,9 @@ class AgreementPair:
 
 
 def agreement_pairs(
-    payload: Mapping[str, Any], units: Sequence[ExportedUnit]
+    payload: Mapping[str, Any],
+    units: Sequence[ExportedUnit],
+    ontology_of: OntologyOf | None = None,
 ) -> list[AgreementPair]:
     """Per text, every pair of annotation submissions by different people.
 
@@ -506,7 +553,11 @@ def agreement_pairs(
             ):
                 continue
             a, b = own_findings(context, left), own_findings(context, right)
-            found = ontospan.agreement(a, b, left.unit.document.text)
+            text = left.unit.document.text
+            found = ontospan.agreement(a, b, text)
+            related = _related_term_conflicts(
+                a, b, text, _base_layers(left, right), ontology_of
+            )
             values = {
                 f.name: getattr(found, f.name)
                 for f in fields(found)
@@ -518,7 +569,7 @@ def agreement_pairs(
                     left.submission_id,
                     right.submission_id,
                     values,
-                    _counts(found, len(a), len(b)),
+                    _counts(found, len(a), len(b), related),
                 )
             )
     return pairs
@@ -566,11 +617,13 @@ def agreement_summary(pairs: Sequence[AgreementPair]) -> dict[str, dict[str, Any
 
 
 def build_agreement_csv(
-    payload: Mapping[str, Any], units: Sequence[ExportedUnit]
+    payload: Mapping[str, Any],
+    units: Sequence[ExportedUnit],
+    ontology_of: OntologyOf | None = None,
 ) -> dict[str, bytes]:
     """agreement.csv (one row per text and pair) and agreement-summary.csv."""
     context = SubmissionFacts(payload)
-    pairs = agreement_pairs(payload, units)
+    pairs = agreement_pairs(payload, units, ontology_of)
     rows = [
         {
             **context.text(pair.document_id),
@@ -722,12 +775,13 @@ def table_files(
     proposals: Sequence[Proposal],
     chances: Mapping[tuple[str, str], Mapping[str, bool]] | None = None,
     label: Label,
+    ontology_of: OntologyOf | None = None,
 ) -> dict[str, bytes]:
     """findings.csv, agreement.csv, agreement-summary.csv and proposals.csv."""
     return {
         "findings.csv": build_findings_csv(
             payload, units, consolidations=consolidations, label=label
         ),
-        **build_agreement_csv(payload, units),
+        **build_agreement_csv(payload, units, ontology_of),
         "proposals.csv": build_proposals_csv(payload, units, proposals, chances),
     }

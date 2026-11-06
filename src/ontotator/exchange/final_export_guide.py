@@ -366,8 +366,10 @@ def build_readme(
             "values and passage), compatible (same term and values, overlapping "
             "passage), axis_conflicts (same term, other values), term_conflicts "
             "(other term on overlapping text), a_only and b_only (no partner), "
-            "the same per passage (mentions_*) and per term (terms_*), and "
-            "modifiers_compared (matched findings) with modifiers_agreeing.",
+            "the same per passage (mentions_*) and per term (terms_*), "
+            "modifiers_compared (matched findings) with modifiers_agreeing, and "
+            "related_term_conflicts: the term_conflicts whose terms are ancestor "
+            "and descendant in the ontology (a flag; no F1 value uses it).",
             "- ",
             "  ",
         ),

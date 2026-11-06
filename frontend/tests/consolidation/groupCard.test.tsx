@@ -22,6 +22,30 @@ const result = () => document.querySelector(".cons-result")?.textContent ?? "";
 const keep = () => fireEvent.click(screen.getByRole("button", { name: "Keep" }));
 
 describe("GroupCard", () => {
+  describe("Related terms (#303)", () => {
+    const related = (extra: Partial<ConsolidationGroupView> = {}) => group("g-rel", ["term_related"], [
+      member("in-luc", LUC, "HP:0001250", "Seizure", [span("two seizures")]),
+      member("in-tom", TOM, "HP:0002133", "Status epilepticus", [span("two seizures")]),
+    ], extra);
+
+    it("names the related terms and still asks for the term", () => {
+      renderCard(related());
+      const toggle = screen.getByRole("button", { expanded: true });
+      expect(within(toggle).getByText("Related terms")).toBeTruthy();
+      expect(toggle.textContent).toContain("to decide");
+      // The term is a decision as for any other term: the card shows a conflict.
+      expect(within(toggle).getByText("Conflict")).toBeTruthy();
+    });
+
+    it("keeps the tag on a decided group and shows none for other term differences", () => {
+      renderCard(related({ state: "choose", annotation_ids: ["cons-g"] }));
+      expect(within(screen.getByRole("button", { expanded: true })).getByText("Related terms")).toBeTruthy();
+      cleanup();
+      renderCard(byId("g-gait"));
+      expect(within(screen.getByRole("button", { expanded: true })).queryByText("Related terms")).toBeNull();
+    });
+  });
+
   describe("Unresolved finding (#246)", () => {
     const flagged = (extra: Partial<ConsolidationGroupView> = {}) => group("g", ["unresolved"], [
       member("in-luc", LUC, "HP:1", "Pallor", [span("two seizures")]),

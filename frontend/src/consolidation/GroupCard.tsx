@@ -20,7 +20,7 @@ import { Button, Checkbox, InlineConfirm, MenuButton, Select, Textarea } from ".
 import { IconUndo, IconWarning } from "../ui/icons";
 import { ComparisonTable } from "./ComparisonTable";
 import { axisLabel, duplicateTermHint, groupStatus, labelWithQuote, keepLabel, namesOf, NOT_IN_RESULT, partialText, REOPEN_EDITED_WARNING, standaloneWarning } from "./consolidationText";
-import { absentPeople, attachCandidates, choicesComplete, choose, comparisonRows, groupName, hasKind, isStandalone, memberSets, needsTerm, presentPeople, resolvePayload, resultLine, sameTermGroups, showsUnresolved, standaloneText, storedResult, unresolvedNotes, type Choices, type OtherTerm } from "./groupModel";
+import { absentPeople, attachCandidates, choicesComplete, choose, comparisonRows, groupName, hasKind, isStandalone, memberSets, needsTerm, presentPeople, relatedTerms, resolvePayload, resultLine, sameTermGroups, showsUnresolved, standaloneText, storedResult, unresolvedNotes, type Choices, type OtherTerm } from "./groupModel";
 import { crossLinks, setText, type ModifierView } from "./modifierSets";
 import { ResultLine } from "./ResultLine";
 import { TermPicker, useTermSearch } from "./TermPicker";
@@ -223,6 +223,7 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
       {group.edited && <>{" "}<span className="cons-tag">edited in editor</span></>}
       {group.guidelines_unclear && <>{" "}<span className="cons-tag">flagged</span></>}
       {showsUnresolved(group) && <>{" "}<span className="cons-tag">Unresolved</span></>}
+      {relatedTerms(group) && <>{" "}<span className="cons-tag" title="One term is a parent of the other. Choose the term that fits the text.">Related terms</span></>}
     </button>
   </h2>;
 

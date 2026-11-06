@@ -161,6 +161,7 @@ In the card:
 - Your steps stand where they act. An open problem report is a notice above the path with **Open** and **Decide on report…**. Other steps stand at the top of their part under *Next step*, for example **Resolve…** in **Translation** or **Carry to v2…** in **Annotation**. A part's other actions share its action row, for example **Open result** and **Change final…** in **Finalization**.
 - Every person's remove action is **Remove…**. Its dialog says what happens: an unsubmitted annotation is removed with its draft; other work is revoked and stays in the history.
 - In **Finalization**, **Open consolidation** opens your own running consolidation as your task; a submitted one opens read-only.
+- In **Finalization**, when submissions differ, the agreement line is followed by the findings that differ in detail; a term and its parent or child on the same passage are named as *Related terms: …* (see [Accept a result or compare results](lead-results.md#accept-a-result-or-compare-results)).
 - ✕ or Esc closes the card.
 
 ### Read the history and details of a text

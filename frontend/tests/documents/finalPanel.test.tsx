@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, ApiError, AuthError, ConflictError, type DocumentRowView, type DocumentRowsPage, type FinalPanelView, type RowSubmissions, type WorkRoundView } from "../../src/api/client";
 import { formatTime } from "../../src/app/submissionLabels";
 import { DecisionBlock, type DecisionBlockProps } from "../../src/documents/FinalPanel";
-import { AGREEMENT_EXPLANATION, agreementText, compareSummary, consolidateHint, detailDifferenceLines, consolidationBreakdown, remainingText, noMoreFinalsText, consolidationStartedToast, nextFinalDecision, nextOtherDecision, unresolvedLines } from "../../src/documents/finalPanelText";
+import { AGREEMENT_EXPLANATION, agreementText, compareSummary, consolidateHint, detailDifferenceLines, relatedTermLines, consolidationBreakdown, remainingText, noMoreFinalsText, consolidationStartedToast, nextFinalDecision, nextOtherDecision, unresolvedLines } from "../../src/documents/finalPanelText";
 import { notifyFinalSelectionChanged } from "../../src/variants/finalSelectionState";
 import { refKey } from "../../src/variants/versionState";
 import { guidelineListing, guidelineSummary } from "../projectFixtures";
@@ -772,6 +772,11 @@ describe("panel text", () => {
     expect(detailDifferenceLines(details)).toEqual(["Notes differ on 2 findings: Ataxia, Tremor", "Text spans differ on 1 finding: Seizure"]);
     expect(consolidateHint(details)).toBe("Resolve the 3 differences together");
     expect(detailDifferenceLines(agreement({ total: 6, matching: 6 }))).toEqual([]);
+    // #303: related terms are named, one line per group.
+    expect(relatedTermLines(agreement({ total: 2, matching: 0, related_terms: [
+      { layer_id: "hpo", term_ids: ["HP:0001250", "HP:0002133"], term_labels: ["Seizure", "Status epilepticus"] },
+    ] }))).toEqual(["Related terms: Seizure / Status epilepticus"]);
+    expect(relatedTermLines(agreement({ total: 6, matching: 6 }))).toEqual([]);
     // The tab's number, not the bar's categories.
     expect(remainingText(bar({ total: 3, needs_decision: 2 }))).toBe("2 more need your decision.");
     expect(remainingText(bar({ needs_decision: 1 }))).toBe("1 more needs your decision.");

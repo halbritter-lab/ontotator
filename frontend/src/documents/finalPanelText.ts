@@ -188,6 +188,14 @@ export function detailDifferenceLines(agreement: AgreementView): string[] {
 }
 
 /**
+ * #303: findings on overlapping text whose terms are parent and child, one line each: "Related terms: Seizure / Focal
+ * seizure". They count as differences in the agreement line; this names the smaller ones.
+ */
+export function relatedTermLines(agreement: AgreementView): string[] {
+  return (agreement.related_terms ?? []).map(item => `Related terms: ${item.term_labels.join(" / ")}`);
+}
+
+/**
  * #246: one line per finding (layer and term) annotators marked Unresolved, with every person's note:
  * "Pallor, Ana Weber: Pale or just tired?; Tom Reis: no note". `submissionId`: only that submission's.
  */

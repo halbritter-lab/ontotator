@@ -50,7 +50,10 @@ export function absentPeople(group: ConsolidationGroupView, people: readonly Con
 }
 
 export const hasKind = (group: ConsolidationGroupView, kind: string) => group.kinds.includes(kind);
-export const needsTerm = (group: ConsolidationGroupView) => hasKind(group, "term_differs");
+/** Other terms are a decision, also when one is a parent of the other ("term_related", #303). */
+export const needsTerm = (group: ConsolidationGroupView) => hasKind(group, "term_differs") || hasKind(group, "term_related");
+/** #303: the members' terms are parent and child ("Seizure" / "Focal seizure"), a smaller difference. */
+export const relatedTerms = (group: ConsolidationGroupView) => hasKind(group, "term_related");
 
 /** "Hypotonia (HP:0001252)"; the code alone when the label is the code. */
 export function termLabel(member: Pick<ConsolidationMemberView, "term_id" | "term_label">): string {

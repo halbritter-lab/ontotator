@@ -52,7 +52,7 @@ from ontotator.application.document_row_panel import (
 )
 from ontotator.application.people import person_refs
 from ontotator.authz.policy import Access, Action, can
-from ontotator.domain.agreement import Finding, Group, groups
+from ontotator.domain.agreement import Ancestors, Finding, Group, groups
 from ontotator.domain.annotations import (
     Annotation,
     AnnotationRef,
@@ -66,7 +66,12 @@ from ontotator.domain.review import ReviewDecision
 from ontotator.domain.serialization import decode_snapshot
 from ontotator.domain.work_rounds import WorkRoundView
 from ontotator.domain.workspace import Submission
-from ontotator.ontology.modifiers import NO_TERM_ROLES, TermRoles, modifier_layers
+from ontotator.ontology.modifiers import (
+    NO_TERM_ROLES,
+    TermRoles,
+    modifier_layers,
+    term_ancestors,
+)
 from ontotator.storage.final_tables import FinalSelectionRow
 from ontotator.storage.repository import Repository, _key_str
 from ontotator.storage.tables import (
@@ -251,11 +256,17 @@ def consolidation_groups(
     ]
 
 
-def _groups(order: list[str], members: Mapping[str, RoundMember]) -> tuple[Group, ...]:
+def _groups(
+    order: list[str],
+    members: Mapping[str, RoundMember],
+    ancestors: Ancestors | None = None,
+) -> tuple[Group, ...]:
+    """``ancestors`` only names related terms (``term_related``, #303); the
+    groups and their members are the same without it."""
     findings: dict[str, list[Finding]] = {submission: [] for submission in order}
     for member in members.values():
         findings[member.submission_id].append(member.finding)
-    return groups(findings, order)
+    return groups(findings, order, ancestors=ancestors)
 
 
 def round_groups(found: RoundMembers) -> tuple[Group, ...]:
@@ -454,7 +465,10 @@ class ConsolidationReader:
             decisions = _proposal_decisions(conn, pid, order, found.authors)
             from_proposal = _from_tool_proposal(conn, pid, members, decisions)
             added = _added(members, content, defaults, found.roles)
-            modifier_layer_ids = modifier_layers(profile, Repository._pins(conn, pid))
+            pins = Repository._pins(conn, pid)
+            modifier_layer_ids = modifier_layers(profile, pins)
+            # Related terms (#303) are marked in the view only.
+            ancestors = term_ancestors(profile, pins)
             consolidator = _people(conn, access, ["self"], {"self": item.annotator_id})[
                 0
             ]["label"]
@@ -479,7 +493,7 @@ class ConsolidationReader:
                     | {"rejected_by": _rejected_by(group, members, decisions)},
                     blinding,
                 )
-                for group in _groups(order, members)
+                for group in _groups(order, members, ancestors)
             ],
             "annotators_hidden": blinding is not None,
             "added": added,

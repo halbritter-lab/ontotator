@@ -38,6 +38,13 @@ agrees: ``compare`` does not count its cluster as matching, and its group has
 the kind ``unresolved`` and never ``match``, so it is neither taken over nor
 accepted as full agreement.
 
+Related terms (#303): with an ``ancestors`` lookup, a group whose distinct
+terms are each an ancestor or a descendant of every other ("Seizure" and
+"Focal seizure") has the kind ``term_related`` instead of ``term_differs``.
+It is a smaller disagreement but still one: the term stays a consolidation
+decision. Grouping itself never uses the lookup, so the groups and their
+members are the same with or without it.
+
 Which differences are a consolidation *decision* (acceptance 2026-10-22):
 the term and every differing axis always are; the text only when the
 members' spans genuinely conflict (``spans_conflict``); notes never (they
@@ -46,12 +53,14 @@ come with the finding they belong to and are shown as information).
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Literal
 
 __all__ = [
+    "TERM_KINDS",
     "Agreement",
+    "Ancestors",
     "Finding",
     "Group",
     "GroupKind",
@@ -60,6 +69,7 @@ __all__ = [
     "compare",
     "groups",
     "match",
+    "related_terms",
     "spans_conflict",
     "with_defaults",
 ]
@@ -74,11 +84,19 @@ GroupKind = Literal[
     "span_differs",
     "notes_differ",
     "term_differs",
+    "term_related",
     "partial",
     "modifiers_differ",
     "modifier_as_finding",
     "unresolved",
 ]
+
+
+# (layer_id, term_id) -> every term above it (is_a, transitive), without it.
+Ancestors = Callable[[str, str], Collection[str]]
+
+# Kinds whose term is a decision: other terms, related or not.
+TERM_KINDS: frozenset[GroupKind] = frozenset({"term_differs", "term_related"})
 
 
 @dataclass(frozen=True)
@@ -195,9 +213,16 @@ def compare(
 
 
 def groups(
-    findings: Mapping[str, Sequence[Finding]], order: Sequence[str]
+    findings: Mapping[str, Sequence[Finding]],
+    order: Sequence[str],
+    *,
+    ancestors: Ancestors | None = None,
 ) -> tuple[Group, ...]:
     """Consolidation groups of the submissions in ``order``, in reading order.
+
+    ``ancestors`` (optional) tells related terms apart: a group of other
+    terms is ``term_related`` when they lie on one line of the hierarchy,
+    else ``term_differs``; without it every such group is ``term_differs``.
 
     Clusters follow the ``compare`` rule per ``(layer_id, type_id,
     term_id)``. Term merge (U3): only clusters that are not complete, of the
@@ -278,7 +303,7 @@ def groups(
             ),
             key=lambda item: position[item[0]],
         )
-        group = _group(members, len(order))
+        group = _group(members, len(order), ancestors)
         rank = min(part.rank for part in parts)
         ordered.append(((group.start is None, group.start or 0, rank), group))
     return tuple(group for _, group in sorted(ordered, key=lambda item: item[0]))
@@ -314,7 +339,20 @@ def _differing(findings: Sequence[Finding]) -> set[str]:
     return {axis for axis in axes if len({x.axes.get(axis) for x in findings}) > 1}
 
 
-def _group(members: Sequence[tuple[str, Finding]], submissions: int) -> Group:
+def related_terms(layer_id: str, terms: Sequence[str], ancestors: Ancestors) -> bool:
+    """Whether every two of ``terms`` are ancestor and descendant (#303)."""
+    return all(
+        a in ancestors(layer_id, b) or b in ancestors(layer_id, a)
+        for index, a in enumerate(terms)
+        for b in terms[index + 1 :]
+    )
+
+
+def _group(
+    members: Sequence[tuple[str, Finding]],
+    submissions: int,
+    ancestors: Ancestors | None = None,
+) -> Group:
     """Kinds and labels of one group; ``members`` in submission order."""
     terms: list[str] = []
     by_term: dict[str, list[Finding]] = {}
@@ -355,7 +393,10 @@ def _group(members: Sequence[tuple[str, Finding]], submissions: int) -> Group:
     if len(members) < submissions:
         kinds.add("partial")
     if len(terms) > 1:
-        kinds.add("term_differs")
+        related = ancestors is not None and related_terms(
+            members[0][1].layer_id, terms, ancestors
+        )
+        kinds.add("term_related" if related else "term_differs")
     if differing:
         kinds.add("values_differ")
     if span_differs:

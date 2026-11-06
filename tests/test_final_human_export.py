@@ -252,9 +252,10 @@ _VOLATILE = [
 # "files" in receipt.json changed, and README.txt says "Ontospan bundle";
 # "How to read it" then explained the columns of findings.csv, the counts
 # of agreement.csv and the empty cells of agreement-summary.csv and
-# proposals.csv.
+# proposals.csv. #303 added related_term_conflicts to agreement.csv and its
+# line to README.txt.
 CARRY_FORWARD_DIGEST = (
-    "c7c40f8ea00fa15c58bd69f97b4146b7f3333af055916ceaf867423b6bb03ed0"
+    "aee6dacd01adbe9afc70638e379f1a50f6f17e02c2cfb5dda961d900d72ebef7"
 )
 
 
