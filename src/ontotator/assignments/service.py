@@ -52,7 +52,10 @@ from ontotator.authz.policy import (
     can,
     may_take,
 )
-from ontotator.authz.project_authority import require_project_management
+from ontotator.authz.project_authority import (
+    hidden_from_token,
+    require_project_management,
+)
 from ontotator.domain.annotation_modes import AnnotationMode, workspace_mode
 from ontotator.domain.errors import DomainError
 from ontotator.domain.next_steps import translations_accepted
@@ -454,7 +457,8 @@ class AssignmentService:
             .join(AssignmentRow, AssignmentRow.project_id == ProjectRow.id)
             .where(AssignmentRow.id == assignment_id)
         ).scalar_one_or_none()
-        if key is None:
+        # A project token sees no task of another project (issue 351).
+        if key is None or hidden_from_token(key):
             raise DomainError("ASSIGNMENT_NOT_FOUND")
         return key
 
@@ -491,6 +495,9 @@ class AssignmentService:
         if row is None:
             raise DomainError("ASSIGNMENT_NOT_FOUND")
         assignment = _assignment(row)
+        # A project token sees no task of another project (issue 351).
+        if hidden_from_token(assignment.project_key):
+            raise DomainError("ASSIGNMENT_NOT_FOUND")
         if not can(access, Action.MANAGE_ASSIGNMENTS, assignment.project_key) and (
             conn.execute(
                 select(AssignmentRow.id).where(

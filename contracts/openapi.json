@@ -267,7 +267,8 @@
             }
           }
         },
-        "x-ontotator-scope": "read"
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/assignments/{assignment_id}/open": {
@@ -807,7 +808,8 @@
             }
           }
         },
-        "x-ontotator-scope": "project-admin"
+        "x-ontotator-scope": "project-admin",
+        "x-ontotator-project-token": true
       },
       "get": {
         "tags": [
@@ -852,7 +854,8 @@
             }
           }
         },
-        "x-ontotator-scope": "read"
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/rounds/{round_id}/open": {
@@ -942,7 +945,8 @@
             }
           }
         },
-        "x-ontotator-scope": "read"
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/workspaces/{workspace_id}/round-input-resolutions": {
@@ -1096,7 +1100,8 @@
             }
           }
         },
-        "x-ontotator-scope": "read"
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/workspaces/{workspace_id}/merge-inputs": {
@@ -1193,7 +1198,8 @@
             }
           }
         },
-        "x-ontotator-scope": "read"
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/workspaces/{workspace_id}/consolidation-groups/resolve": {
@@ -1788,7 +1794,8 @@
             }
           }
         },
-        "x-ontotator-scope": "read"
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/assignments/{assignment_id}/problem-reports": {
@@ -1987,7 +1994,8 @@
             }
           }
         },
-        "x-ontotator-scope": "read"
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/problem-reports/{report_id}/seen": {
@@ -2077,7 +2085,8 @@
             }
           }
         },
-        "x-ontotator-scope": "read"
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/problem-reports/{report_id}/actions": {
@@ -2130,7 +2139,8 @@
             }
           }
         },
-        "x-ontotator-scope": "project-admin"
+        "x-ontotator-scope": "project-admin",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/technical-reports": {
@@ -2375,7 +2385,8 @@
             }
           }
         },
-        "x-ontotator-scope": "read"
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/translation-reviews/{assignment_id}/draft": {
@@ -6365,7 +6376,8 @@
             }
           }
         },
-        "x-ontotator-scope": "read"
+        "x-ontotator-scope": "read",
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/translation-reviews/{assignment_id}/source-obligations/{cause_id}/resolve": {
@@ -8700,7 +8712,13 @@
             }
           }
         },
-        "x-ontotator-scope": "read"
+        "x-ontotator-scope": [
+          "read",
+          "import",
+          "export",
+          "project-admin"
+        ],
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/auth/login": {
@@ -8825,7 +8843,13 @@
             }
           }
         },
-        "x-ontotator-scope": "read"
+        "x-ontotator-scope": [
+          "read",
+          "import",
+          "export",
+          "project-admin"
+        ],
+        "x-ontotator-project-token": true
       }
     },
     "/api/v1/auth/session": {

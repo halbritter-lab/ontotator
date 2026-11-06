@@ -27,7 +27,7 @@ Dr. Weber sets up `nephro-2027`: HPO with German translations, a guideline, five
 
 | Step | Route | Scope | MCP tool | Status |
 | --- | --- | --- | --- | --- |
-| Check the token and its expiry | `GET /me/token`, `GET /auth/me`, `GET /about` | any but `admin` alone; `read` | `whoami` | added in this PR (token record and expiry warning) |
+| Check the token and its expiry | `GET /me/token`, `GET /auth/me`, `GET /about` | any but `admin` alone, project tokens included (#351) | `whoami` | added in this PR (token record and expiry warning) |
 | Upload the HPO release and the Babelon translation | `POST /admin/ontologies/upload-results` | `admin` | `upload_ontology_files` | covered |
 | See the releases and their SHA-256 | `GET /ontologies` | `read` | `list_ontologies` | covered |
 | Choose a template | `GET /projects/templates` | `read` | `list_project_templates` | covered |
@@ -75,7 +75,7 @@ In week six, 80 new letters arrive, one student leaves for a clinical rotation, 
 | Distribute the new texts only | `POST P/assignments/batch` with `case_ids` | `read`, `project-admin` | `distribute_texts` with `case_ids` | covered |
 | List the leaving person's tasks | `GET P/assignments?username=` | `read` | `list_assignments` | added in this PR |
 | Hand the open tasks to two others in turn, dry run first | `GET P/assignments`, `POST /assignments/{id}/reassign` | `read`, `project-admin` | `hand_over_open_tasks` | added in this PR |
-| Same with a project token | `POST /assignments/{id}/reassign` | `project-admin` (project token now allowed; another project's task gets `PROJECT_NOT_FOUND`) | `reassign_task` | added in this PR (route rule and tool) |
+| Same with a project token | `POST /assignments/{id}/reassign` | `project-admin` (project token now allowed; another project's task gets `ASSIGNMENT_NOT_FOUND`, #351) | `reassign_task` | added in this PR (route rule and tool) |
 | Withdraw, remove or reopen a single task | `POST /assignments/{id}/revoke`, `/remove`, `/reopen` | `project-admin` | `withdraw_task`, `remove_task`, `reopen_task` | added in this PR |
 | Deactivate the account afterwards (sessions end, tokens revoked) | `PATCH /admin/users/{username}` | `admin` | `update_user` | added in this PR |
 | Add a consolidator | `PUT P/members/{username}` (`adjudicator`) | `read`, `project-admin` | `set_member_roles` | covered |
@@ -139,7 +139,7 @@ Tokens last at most 365 days. The CI tokens are project tokens with one or two s
 | --- | --- | --- | --- | --- |
 | Create a project token for CI | `POST P/tokens` | session only | none (web interface, or `ontotator admin tokens create --project`) | covered by design: a token cannot mint tokens |
 | CI checks how long its token lasts and alerts two weeks ahead | `GET /me/token` | `read`, `import`, `export` or `project-admin`; project tokens included | `whoami` (`expires_in_days`, `warning`) | added in this PR |
-| A project token works only in its project | middleware, `PROJECT_RESOLVED` routes check the project themselves | | | covered; the task routes are added to that list in this PR |
+| A project token works only in its project | middleware, `PROJECT_RESOLVED` routes check the project themselves | | | covered; the task routes are added to that list in this PR, the round, problem report and translation review routes in #351 |
 | Rotation: create the successor, install it, revoke the old one | `POST P/tokens`, `POST P/tokens/{id}/revoke` | session only | none | covered by design (no rotation in place) |
 | Revoke a leaked token at once | `POST /admin/tokens/{id}/revoke` | session only | none (web interface or `ontotator admin tokens revoke`) | covered by design |
 | A person leaves: all their tokens end | `PATCH /admin/users/{username}` (`active: false`) | `admin` | `update_user` | added in this PR (tool) |
@@ -173,7 +173,7 @@ Verdict: **sufficient after this work**.
 | Importing a project archive | Session only on purpose: an import creates a project and accounts on the target server. Exporting one is open to a system token. |
 | Annotation mode change of texts with work (`P/annotation-mode-changes`) | The route is open to `project-admin`, but it discards submissions; it stays in the web interface, where the person sees what goes. |
 | Choosing a final result among differing submissions | Open to `project-admin`; a judgement on content that the web interface supports with the comparison. `accept_agreeing_texts` covers full agreement. |
-| Deciding on problem reports | Listing is a tool now. Deciding pauses or resumes work after reading the text, and the action route is not among the routes open to project tokens. |
+| Deciding on problem reports | Listing is a tool now. Deciding pauses or resumes work after reading the text. The action route is open to project tokens with `project-admin` since #351, but there is no MCP tool for it. |
 | Anonymising an account | Irreversible; the web interface asks for the typed username. |
 | Sending setup codes by mail | The server has no mail delivery. `create_users` writes the codes to a private local file for a mail merge. |
 | Bulk role changes for existing accounts | One `set_member_roles` call per person is enough for cohorts of tens. A bulk route would need its own dry run. |

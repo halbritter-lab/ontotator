@@ -17,6 +17,7 @@ from ontotator.assignments.service import (
 from ontotator.auth.audit import Actor, record_audit
 from ontotator.auth.authority import lock_user_authority
 from ontotator.authz.policy import Access, Action, can
+from ontotator.authz.project_authority import hidden_from_token
 from ontotator.authz.visibility import (
     current_access,
     qualifying_assignment,
@@ -246,7 +247,8 @@ class TranslationReviewService:
                 AssignmentRow.revoked_at.is_(None),
             )
         ).scalar_one_or_none()
-        if located is None:
+        # A project token sees no review of another project (issue 351).
+        if located is None or hidden_from_token(located):
             raise DomainError("ASSIGNMENT_NOT_FOUND")
         if structural:
             conn.execute(select(func.pg_advisory_xact_lock(_lock_id("import"))))
