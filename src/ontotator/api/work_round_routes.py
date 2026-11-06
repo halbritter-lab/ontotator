@@ -27,6 +27,7 @@ from ontotator.application.work_rounds import (
 )
 from ontotator.assignments.service import AssignmentService
 from ontotator.auth.audit import Actor
+from ontotator.authz.project_authority import hidden_from_token
 from ontotator.domain.errors import DomainError
 from ontotator.domain.work_rounds import (
     CreatableRoundKind,
@@ -58,7 +59,8 @@ def _visible_round(repo: Repository, round_id: str) -> WorkRoundView:
             .join(WorkRoundRow, WorkRoundRow.project_id == ProjectRow.id)
             .where(WorkRoundRow.round_id == round_id)
         ).scalar_one_or_none()
-    if project is None:
+    # A project token sees no round of another project (issue 351).
+    if project is None or hidden_from_token(project):
         raise DomainError("ROUND_NOT_FOUND")
     try:
         return repo.get_work_round(project, round_id)

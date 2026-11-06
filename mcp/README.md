@@ -200,7 +200,7 @@ Routes a token may not call (`session` in the contract), so no tool can offer th
 
 Limits of the token kinds:
 
-- A project token reaches only routes with its project in the path, plus the job routes, its own record and the routes that reassign, withdraw, remove or reopen a task (they refuse tasks of other projects). So `list_projects`, `list_ontologies` and `list_project_templates` need a personal or system token; `whoami` reports a project token's project instead of its user.
+- A project token reaches only routes with its project in the path, plus the job routes, its own record, the server's version, its user, and the routes that name a task, round, problem report or translation review of its project by id (reassigning, withdrawing, removing and reopening a task among them; an id of another project answers 404 as if unknown). So `list_projects`, `list_ontologies` and `list_project_templates` need a personal or system token; `whoami` reports a project token's project instead of its user.
 - Creating a project needs the `admin` scope, so a system token: a lead cannot create a project with a token.
 - The API gives agreement per text (the lead's comparison panel) but no project-wide figure; `agreement_summary` sums the panels.
 

@@ -3,7 +3,7 @@
 A token reads its own record with any scope, so a script sees its expiry. A
 project token may reassign, withdraw, remove and reopen tasks of its own
 project, never of another one: the assignment routes find their project
-themselves and refuse the token's other projects.
+themselves and answer a task of another project as unknown.
 """
 
 from __future__ import annotations
@@ -73,9 +73,9 @@ def test_the_handover_routes_are_open_to_project_tokens() -> None:
         assert needed.scope == "project-admin"
         assert needed.project_token is True
         assert needed.project_key is None
-    # Reading another person's task stays closed to project tokens.
-    read = requirement("GET", "/api/v1/assignments/7")
-    assert read is not None and read.project_token is False
+    # Starting work on a task stays with the browser session.
+    opened = requirement("POST", "/api/v1/assignments/7/open")
+    assert opened is not None and opened.project_token is False
 
 
 def test_a_project_token_hands_work_on_in_its_project(tmp_path) -> None:
@@ -119,7 +119,9 @@ def test_a_project_token_cannot_hand_on_work_of_another_project(tmp_path) -> Non
     ):
         response = client.post(f"/api/v1/assignments/{task['id']}/{action}", json=body)
         assert response.status_code == 404, (action, response.text)
-        assert response.json()["code"] == "PROJECT_NOT_FOUND", action
+        # The same 404 as for an unknown task: neither the task nor its
+        # project shows (issue 351).
+        assert response.json()["code"] == "ASSIGNMENT_NOT_FOUND", action
     unchanged = lead.get("/api/v1/projects/proj/assignments").json()
     assert [(row["id"], row["username"], row["revoked_at"]) for row in unchanged] == [
         (task["id"], "anno", None)

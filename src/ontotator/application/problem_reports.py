@@ -38,6 +38,7 @@ from ontotator.assignments.service import AssignmentService
 from ontotator.auth.audit import Actor, record_audit
 from ontotator.auth.authority import lock_user_authority
 from ontotator.authz.policy import Access, Action, can, may_take
+from ontotator.authz.project_authority import hidden_from_token
 from ontotator.authz.visibility import current_access, require_document
 from ontotator.domain.canonical import canonical_hash
 from ontotator.domain.errors import AccessDenied, DomainError
@@ -709,7 +710,8 @@ class ProblemReportService:
             .join(ProjectRow, ProjectRow.id == ProblemReportRow.project_id)
             .where(ProblemReportRow.report_id == report_id)
         ).one_or_none()
-        if found is None:
+        # A project token sees no report of another project (issue 351).
+        if found is None or hidden_from_token(found.project_key):
             raise DomainError("REPORT_NOT_FOUND")
         project = found.project_key
         pid = self.repo._require_project(conn, project)
