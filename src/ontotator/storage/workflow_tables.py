@@ -43,6 +43,11 @@ class WorkRoundRow(Base):
     input_manifest_sha256: Mapped[str]
     input_submission_ids: Mapped[list[Any]]
     workspace_key: Mapped[dict[str, Any] | None]
+    # The imported proposal set a proposal-check round started from (0037);
+    # NULL for other modes, seed proposals and rounds before 0037.
+    proposal_set_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey(f"{SCHEMA}.proposal_sets.id")
+    )
     created_by: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey(f"{SCHEMA}.users.id")
     )

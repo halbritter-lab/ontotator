@@ -49,7 +49,10 @@ from ontotator.domain.workspace import Draft, MutationEnvelope, WorkspaceKey
 from ontotator.storage.database import Database
 from ontotator.storage.live_submissions import discarded_ids, live_submission
 from ontotator.storage.overview_tables import DraftSnapshotRow
-from ontotator.storage.proposal_queries import newest_proposal_refs
+from ontotator.storage.proposal_queries import (
+    newest_proposal_refs,
+    newest_proposal_set,
+)
 from ontotator.storage.repository import Repository, _key_str, _lock_id
 from ontotator.storage.tables import (
     AssignmentRow,
@@ -726,8 +729,14 @@ class WorkRoundService:
             if is_review_like(mode)
             else []
         )
-        if mode == "proposal_check" and not sources and kind == "ordinary":
-            # "Annotate from proposals": the newest tool proposal set (spec §1 Targets).
+        proposal_set_id: int | None = None
+        starts = {"ordinary", "clean_restart"}
+        if mode == "proposal_check" and not sources and kind in starts:
+            # "Annotate from proposals": the newest tool proposal set (spec §1
+            # Targets). A clean restart starts over on the newest set too, so a
+            # set imported after the first round reaches the task (#337).
+            newest = newest_proposal_set(conn, pid, document.document_id)
+            proposal_set_id = newest.id if newest is not None else None
             editable = {
                 (s.annotation.annotation_id, s.version)
                 for s in self.repo.list_annotations_for_document(
@@ -776,6 +785,7 @@ class WorkRoundService:
                 input_manifest_sha256=manifest,
                 input_submission_ids=sources,
                 workspace_key=key.model_dump(mode="json"),
+                proposal_set_id=proposal_set_id,
                 created_by=actor.user_id,
                 created_at=now,
             )

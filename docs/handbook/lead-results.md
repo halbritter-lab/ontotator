@@ -171,7 +171,7 @@ What for: answer a report and let the work go on.
    - **Close report…** or **Close, keep paused…**: close it with an outcome for the reporter.
    - **Release pause…**: let paused tasks continue.
    - **Pause other tasks…**: pause other tasks on the same text or project.
-   - **Agree empty restart…**: restart the task with an empty round, after agreeing with the reporter.
+   - **Agree empty restart…**: restart the task with an empty round, after agreeing with the reporter. A task from proposals starts again on the newest proposal set of the text, so a newer tool set reaches the task this way.
    - **Reopen report…**: open a closed report again.
 5. Confirm in the form that opens.
 6. Click **Back to Documents**, or go to the next decision.
