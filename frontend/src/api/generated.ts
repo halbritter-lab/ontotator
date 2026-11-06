@@ -3955,6 +3955,8 @@ export interface components {
              * @default false
              */
             confirm: boolean;
+            /** Reason */
+            reason?: string | null;
         };
         /** BulkPreview */
         BulkPreview: {

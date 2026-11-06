@@ -206,6 +206,19 @@ describe("PlanDialog", () => {
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
   });
 
+  it("saves an optional reason with the change (#338)", async () => {
+    renderDialog();
+    vi.mocked(api.previewWorkPlans).mockResolvedValue(preview({ languages: [lang("de", 20, [0, 20], [20, 0], { will_change: 20 })] }));
+    await choose("de", "Annotation", "Off (not annotated)");
+    const reason = screen.getByLabelText(/^Reason \(optional\)/) as HTMLTextAreaElement;
+    expect(reason.required).toBe(false);
+    expect(description(reason)).toContain("The final export names it for texts you take out of the plan.");
+    await waitFor(() => expect(save().getAttribute("aria-disabled")).toBeNull());
+    fireEvent.change(reason, { target: { value: "  Adults only in this study.  " } });
+    fireEvent.click(save());
+    await waitFor(() => expect(api.saveWorkPlans).toHaveBeenCalledWith("p", expect.objectContaining({ languages: { de: { annotate: "off" } }, reason: "Adults only in this study." })));
+  });
+
   it("does not offer the acceptance while the rule is off", async () => {
     renderDialog();
     vi.mocked(api.previewWorkPlans).mockResolvedValue(preview({ rule_on: false, changes: 18, languages: [lang("fr", 18, [0, 18], [0, 18], { not_accepted: 12 })] }));

@@ -24,7 +24,12 @@ import ontospan
 from ontospan.profiles import hpo
 
 from ontotator.exchange.final_export import load_frozen_final
-from ontotator.exchange.final_export_guide import _heading, _utc, _wrap
+from ontotator.exchange.final_export_guide import (
+    _heading,
+    _utc,
+    _wrap,
+    planned_out_section,
+)
 from ontotator.jobs.queue import Job, JobContext, StructuredJobError
 
 FINAL_PHENOPACKET_FORMAT = "ontotator-final-phenopackets/v1"
@@ -147,6 +152,11 @@ def _readme(
         f"{'Findings left out (see report.json):':<38}"
         f"{sum(totals[k] for k in LEFT_OUT)}",
         f"{'Omitted text and language pairs:':<38}{len(state['omissions'])}",
+        *(
+            [f"{'Taken out of the work plan:':<38}{len(payload['planned_out'])}"]
+            if "planned_out" in payload
+            else []
+        ),
         "",
         *_heading("What is in this archive"),
         "README.txt            This guide.",
@@ -240,6 +250,7 @@ def _readme(
             "No other submission was substituted."
         )
     ] or ["None."]
+    out += planned_out_section(payload)
     out += [
         "",
         *_heading("Verify"),
@@ -345,6 +356,8 @@ def final_phenopacket_export(job: Job, ctx: JobContext) -> dict[str, Any]:
         "selected_results": {"file": SELECTED_RESULTS_FILE, "bundle_id": bundle_id},
         "selections": payload["state"]["selections"],
         "omissions": payload["state"]["omissions"],
+        # Additive (#338); left out for older snapshots so their files stay identical.
+        **({"planned_out": payload["planned_out"]} if "planned_out" in payload else {}),
         "files": {
             name: hashlib.sha256(data).hexdigest() for name, data in files.items()
         },

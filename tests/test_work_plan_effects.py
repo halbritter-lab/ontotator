@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import csv
+import io
+import json
+import zipfile
 from typing import Any
 
 import pytest
@@ -27,6 +31,7 @@ from ontotator.domain.document_rows import AssignmentFact, missing_final_counts
 from ontotator.domain.errors import DomainError
 from ontotator.domain.work_plans import PlanFlags, RowKey
 from ontotator.storage.final_tables import ExportSelectionSnapshotRow
+from ontotator.storage.tables import AuditEventRow
 
 
 @pytest.fixture
@@ -168,6 +173,102 @@ def test_preflight_and_export_only_cover_annotate_rows(env):
         ).scalar_one()
     assert payload["selected_submission_ids"] == ["s-c2"]
     assert [s["submission_id"] for s in payload["state"]["selections"]] == ["s-c2"]
+
+
+def _rows(archive: zipfile.ZipFile, name: str) -> list[dict[str, str]]:
+    text = archive.read(name).decode("utf-8-sig")
+    return list(csv.DictReader(io.StringIO(text, newline="")))
+
+
+def test_export_names_texts_taken_out_of_the_plan_and_why(env):
+    """#338: README.txt, index.csv, planned-out.csv and the receipt name them."""
+    set_rule(env.db, False)
+    for case in ("c1", "c2"):
+        aid = assign(env, doc(case, "en"), "anno", "annotate")
+        submit(env, aid, f"s-{case}")
+        select_final(env, doc(case, "en"), f"s-{case}")
+    # Planned by the system (no audit), then taken out by the lead below.
+    write(env, {RowKey("c2", "de"): PlanFlags(False, True)})
+    saved = env.lead.put(
+        f"{BASE}/work-plans/bulk",
+        json={
+            "case_ids": ["c1"],
+            "languages": {"source": {"annotate": "off"}},
+            "reason": "  Adults only in this study.  ",
+            "confirm": True,
+        },
+    )
+    assert saved.status_code == 200, saved.text
+    revision = saved.json()["revisions"]["c1"]
+    service(env).patch_row(
+        "proj",
+        "c2",
+        "de",
+        PlanRowPatch(annotate=False, expected_revision=3, confirm=True),
+    )
+    with env.db.transaction() as conn:
+        details = conn.execute(
+            select(AuditEventRow.details)
+            .where(
+                AuditEventRow.action == "work_plan.update",
+                AuditEventRow.target_id == "c1",
+            )
+            .order_by(AuditEventRow.id.desc())
+            .limit(1)
+        ).scalar_one()
+    assert details["reason"] == "Adults only in this study."
+
+    state = preflight(env)
+    assert state["not_in_plan"] == [{"case_id": "c1", "language": "en"}]
+    queued = env.lead.post(
+        f"{BASE}/exports/final",
+        json={
+            "request_id": "planned-out",
+            "state_digest": state["state_digest"],
+            "acknowledged_warnings": [
+                {"id": w["id"], "cause_revision": w["cause_revision"]}
+                for w in state["warnings"]
+            ],
+            "accepted_omissions": state["omissions"],
+        },
+    )
+    assert queued.status_code == 200, queued.text
+    job_id = queued.json()["job_id"]
+    result = env.app.state.jobs.run(
+        env.app.state.jobs.claim(job_id, "plan-test"), "plan-test"
+    )
+    assert result.status == "succeeded", result.error
+    downloaded = env.lead.get(f"/api/v1/jobs/{job_id}/download")
+    assert downloaded.status_code == 200, downloaded.text
+    archive = zipfile.ZipFile(io.BytesIO(downloaded.content))
+
+    planned = _rows(archive, "planned-out.csv")
+    assert [
+        (r["case_id"], r["language"], r["reason"], r["final_result_kept"])
+        for r in planned
+    ] == [
+        ("c1", "en", "Adults only in this study.", "yes"),
+        ("c2", "de", "", ""),
+    ]
+    assert planned[0]["plan_revision"] == str(revision)
+    assert planned[1]["plan_revision"] == "4"
+    assert all(r["planned_out_at"].endswith("Z") for r in planned)
+    index = _rows(archive, "index.csv")
+    assert sorted(
+        (r["case_id"], r["language"]) for r in index if r["row_type"] == "planned_out"
+    ) == [("c1", "en"), ("c2", "de")]
+    readme = " ".join(archive.read("README.txt").decode().split())
+    assert "Taken out of the work plan: 2" in readme
+    assert (
+        f"c1 (en): taken out in plan revision {revision} on " in readme
+        and "Reason: Adults only in this study. Its final result stays in "
+        "Ontotator and is not exported."
+        in readme
+    )
+    assert "c2 (de): taken out in plan revision 4 on " in readme
+    receipt = json.loads(archive.read("receipt.json"))
+    assert [item["case_id"] for item in receipt["planned_out"]] == ["c1", "c2"]
+    assert "planned-out.csv" in receipt["files"]
 
 
 def test_project_settings_round_trip(env):

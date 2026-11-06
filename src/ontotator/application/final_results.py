@@ -436,6 +436,18 @@ class FinalResultService:
             project_name = conn.execute(
                 select(ProjectRow.name).where(ProjectRow.id == pid)
             ).scalar_one()
+            # Texts a plan change took out of annotation (#338); a final result
+            # they had stays in Ontotator (``not_in_plan``) and is not exported.
+            kept = {(row["case_id"], row["language"]) for row in state["not_in_plan"]}
+            planned_out = [
+                {
+                    **item,
+                    "final_result_kept": (item["case_id"], item["language"]) in kept,
+                }
+                for item in work_plan_store.planned_out(
+                    conn, pid, work_plan_store.effective_plan(conn, pid)
+                )
+            ]
             payload = {
                 "format": "ontotator-final-selection/v1",
                 "project": key,
@@ -450,6 +462,8 @@ class FinalResultService:
                 "compared_submission_ids": compared_ids,
                 "project_name": project_name,
                 "submission_recorded_at": recorded_at,
+                # Additive (#338): texts taken out of the work plan.
+                "planned_out": planned_out,
             }
             sid = str(uuid4())
             digest = state_digest(payload)

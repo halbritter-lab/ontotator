@@ -382,6 +382,8 @@ def final_t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
         "selections": payload["state"]["selections"],
         "warnings": payload["state"]["warnings"],
         "omissions": payload["state"]["omissions"],
+        # Additive (#338); left out for older snapshots so their files stay identical.
+        **({"planned_out": payload["planned_out"]} if "planned_out" in payload else {}),
         "human_inputs": input_receipt,
         "source_reviews": payload["content"].get("source_reviews", []),
         "review_decisions": {

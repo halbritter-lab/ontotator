@@ -249,8 +249,9 @@ What for: set the work plan for a selection.
 2. Optional: under **Quick choice for the selected translations**, pick **Translation review and annotation** or **Annotation only, no translation review**.
 3. Or set it per language: **Translation review** and **Annotation**. **Leave as is** keeps the current plan.
 4. Read what will change.
-5. Click the save button, for example *Save for 20 cases*.
-6. If work already exists, the dialog lists what happens to it. Tick **I understand** (or **I understand — withdraw the open tasks**) and save again.
+5. Optional: enter a **Reason (optional)**, for example *Adults only in this study*. It is kept with the change. When you take texts out of the plan, the final export names them with this reason. When you accept translations as reviewed outside Ontotator, the **Reason** is required and also recorded with the acceptance.
+6. Click the save button, for example *Save for 20 cases*.
+7. If work already exists, the dialog lists what happens to it. Tick **I understand** (or **I understand — withdraw the open tasks**) and save again.
 
 ![The Work plan dialog with the quick choice and one row per language](images/lead-work-plan.png)
 
