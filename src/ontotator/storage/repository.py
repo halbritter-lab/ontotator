@@ -472,8 +472,12 @@ class Repository:
                 for item in inputs
                 if item["target_snapshot"] is not None
             ]
-        if round_view.kind == "clean_restart" or key.mode == "independent":
+        if key.mode == "independent" or (
+            round_view.kind == "clean_restart" and key.mode != "proposal_check"
+        ):
             return []
+        # Otherwise the round's targets: the proposals it started from (a
+        # proposal check's first round or clean restart, #337).
         with self.db.transaction() as conn:
             row = self._draft_row(
                 conn, self._require_project(conn, key.project_key), _key_str(key)
