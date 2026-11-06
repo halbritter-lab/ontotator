@@ -4,7 +4,7 @@
  */
 import { routeHref } from "../app/router";
 
-const GITHUB_DOCS = "https://github.com/halbritter-lab/ontotator/blob/main";
+const GITHUB_DOCS = "https://github.com/phentrieve/ontotator/blob/main";
 /** A stand-in origin to resolve relative Markdown links against the repository layout. */
 const BASE = "https://handbook.invalid/docs/handbook/";
 

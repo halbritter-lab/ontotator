@@ -8,6 +8,6 @@
   ],
   "keywords": ["Human Phenotype Ontology", "text annotation", "clinical NLP"],
   "related_identifiers": [
-    {"identifier": "https://github.com/halbritter-lab/ontotator", "relation": "isSupplementTo", "scheme": "url"}
+    {"identifier": "https://github.com/phentrieve/ontotator", "relation": "isSupplementTo", "scheme": "url"}
   ]
 }

@@ -14,7 +14,7 @@ permissions:
   contents: read
 
 env:
-  IMAGE: ghcr.io/halbritter-lab/ontotator
+  IMAGE: ghcr.io/phentrieve/ontotator
 
 jobs:
   publish:
