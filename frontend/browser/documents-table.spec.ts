@@ -335,7 +335,9 @@ test("S6 case-0390 de: open problem report with a paused task", async ({ page })
   const paused = activityLines(card).filter({ hasText: /^Annotation Task paused/ });
   await expect(paused.getByRole("link", { name: "Open report", exact: true })).toHaveAttribute("href", new RegExp(`/problem-reports/${esc(String(s.report_id))}`));
   await card.getByRole("button", { name: "Back", exact: true }).click();
-  await expect(card.locator(".text-card-banner")).toHaveText("1 open problem report, Open");
+  // The banner is a notice: its title, then Open and the decision (issue 332).
+  await expect(card.locator(".text-card-banner-title")).toHaveText(/^1 open problem report: /);
+  await expect(card.locator(".text-card-banner").getByRole("button", { name: "Decide on report…", exact: true })).toBeVisible();
   await card.getByRole("button", { name: "Details", exact: true }).click();
   const report = card.locator("section", { has: page.getByRole("heading", { name: "Problem reports (1)" }) }).getByRole("listitem");
   await expect(report).toContainText("Report: Open");

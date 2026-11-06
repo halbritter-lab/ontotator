@@ -42,7 +42,8 @@ const REVOKE_NOUN: Readonly<Record<CardWorkItem["task"], string>> = { annotate: 
  * One person's work on a step of the text card: name, details, status and the lead's actions for exactly
  * this assignment. "Remove…" is one action per person: an unsubmitted annotation is removed with its draft
  * (`removeAssignment`), everything else (submitted or reopened work, reviews, consolidations) is revoked
- * (`revokeAssignment`); the confirm dialog says which. A consolidation is not reassigned (D1).
+ * (`revokeAssignment`); the confirm dialog says which. A consolidation is not reassigned (D1). Submitted work (an annotation,
+ * a translation review or consolidation in the version list) offers "Reopen…".
  */
 export function WorkPersonRow({ item, caseId, textName, details, canManage, tools, onChanged, onRemoved, open }: {
   item: CardWorkItem;
@@ -71,7 +72,8 @@ export function WorkPersonRow({ item, caseId, textName, details, canManage, tool
   const removed = () => { onChanged(); onRemoved?.(nextRowTarget(row.current)); };
   const actions = canManage ? <>
     {assignment && !submitted && item.task !== "review" && <Button size="sm" aria-label={`Reassign ${own} ${NOUN[item.task]}`} onClick={() => setDialog("reassign")}>Reassign…</Button>}
-    {assignment && submitted && item.task === "annotate" && <Button size="sm" aria-label={`Reopen ${own} annotation`} onClick={() => setDialog("reopen")}>Reopen…</Button>}
+    {/* A submitted lead correction made a newer version: it is never reopened (FD3, FD4). */}
+    {assignment && submitted && !item.lead_correction && <Button size="sm" aria-label={`Reopen ${own} ${NOUN[item.task]}`} onClick={() => setDialog("reopen")}>Reopen…</Button>}
     {deletes
       ? <Button size="sm" aria-label={`Remove ${own} assignment${item.status === "open" ? "" : ", the draft is discarded"}`} onClick={() => setDialog("remove")}>Remove…</Button>
       : assignment && <Button size="sm" aria-label={`Remove ${own} ${REVOKE_NOUN[item.task]}`} onClick={() => setDialog("revoke")}>Remove…</Button>}

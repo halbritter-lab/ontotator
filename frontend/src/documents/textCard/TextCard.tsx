@@ -4,8 +4,8 @@
  * actions. History and Text details open inside the card with Back. ‹ › (J / K) step through the table
  * order; Esc and ✕ close it without changing the selection. Below 700 px it is a full-width sheet.
  */
-import { useEffect, useRef, type ReactNode } from "react";
-import type { DocumentRowView } from "../../api/client";
+import { useEffect, useId, useRef, type ReactNode } from "react";
+import type { DocumentRowView, NextStepView } from "../../api/client";
 import { plural } from "../../app/labels";
 import type { PanelStage, ProjectDocumentsQuery, Route } from "../../app/router";
 import { Button } from "../../ui/Button";
@@ -17,6 +17,7 @@ import { useShortcut } from "../../ui/shortcuts";
 import { StagePath } from "../../ui/StagePath";
 import { useMediaQuery } from "../../ui/useMediaQuery";
 import { historyLines } from "../historyLines";
+import { leadSteps, stepLabel } from "../nextStepLabels";
 import { isActiveRow } from "../stageLabels";
 import { RouteLink, rowKeyOf } from "../RowCells";
 import { RowActivity } from "../RowActivity";
@@ -24,10 +25,16 @@ import type { TextVersionsTools } from "../TextVersions";
 import { useRowSubmissions } from "../useRowSubmissions";
 import { AnnotationPart } from "./AnnotationPart";
 import { CardFooter, TextDetails } from "./CardFooter";
-import { cardSegments, defaultSegment, textViewRoute, type CardView, type SegmentId } from "./cardModel";
+import { cardSegments, defaultSegment, stepPlace, textViewRoute, type CardView, type SegmentId, type StepPlace } from "./cardModel";
 import { FinalizationPart } from "./FinalizationPart";
 import { TranslationPart } from "./TranslationPart";
 import "./textCard.css";
+
+/** A lead step the card offers (one that no part offers by itself): the step and its button. */
+export interface CardStep {
+  step: NextStepView;
+  button: ReactNode;
+}
 
 export interface TextCardProps {
   projectKey: string;
@@ -66,14 +73,17 @@ export interface TextCardProps {
   plan?: ReactNode;
   /** Current plan revision of the case (Text details). */
   planRevision?: number;
-  /** Admin actions of a stage (Reassign…, Reopen…, Assign a new review…, Change final…), under its part. */
+  /** Admin actions of a stage (Assign a new review…, Change final…), in its part's action row. */
   stageActions?: (stage: PanelStage) => ReactNode;
   /** Focus target when the card closes (asked at close time); default: the element focused on open. */
   returnFocus?: () => HTMLElement | null | undefined;
   /** A notice on top of the card (the page's "Discard your unsaved choice?" before a row switch). */
   notice?: ReactNode;
-  /** The row's lead steps that no part of the card offers (text changes, reports, Resolve…); the table row shows one button only. */
-  steps?: ReactNode;
+  /**
+   * The row's lead steps that no part of the card offers (text changes, reports, Resolve…); the table row shows one button
+   * only. Each sits where it acts (issue 332): "Decide on report…" in the report banner, the others in their part.
+   */
+  steps?: readonly CardStep[];
   /** The plan control of a step in its section header (Review On / Off, the annotation mode); planned texts only. */
   planControl?: (step: "review" | "annotation") => ReactNode;
 }
@@ -104,23 +114,38 @@ function OtherLanguages({ row, rows, canManage, onOpenText, onChangePlan }: Pick
   </div>;
 }
 
-/** Banners above the path: open problem reports and findings flagged "guidelines unclear" (X5). */
-function Banners({ row, projectKey, query, reportRoute, onNavigate }: Pick<TextCardProps, "row" | "projectKey" | "query" | "reportRoute" | "onNavigate">): JSX.Element | null {
+/** Banners above the path: open problem reports (with "Decide on report…") and findings flagged "guidelines unclear" (X5). Each is a notice with its title and a button row. */
+function Banners({ row, projectKey, query, reportRoute, onNavigate, steps }: Pick<TextCardProps, "row" | "projectKey" | "query" | "reportRoute" | "onNavigate"> & { steps: readonly CardStep[] }): JSX.Element | null {
+  const id = useId();
   const open = (row.problem_reports ?? []).filter(report => report.state === "open");
   const flagged = row.flagged_unclear ?? 0;
   if (!open.length && flagged <= 0) return null;
   const name = `${row.case_id} ${row.language}`;
   const roundId = row.flagged_round_id;
   return <div className="text-card-banners">
-    {open.length > 0 && <p className="text-card-banner">
-      {plural(open.length, "open problem report")}{", "}
-      <RouteLink route={reportRoute(open[0].report_id)} className="btn btn-secondary btn-sm" onNavigate={onNavigate} aria-label={`Open problem report, ${open[0].title}`}>Open</RouteLink>
-    </p>}
-    {flagged > 0 && <p className="text-card-banner">
-      {`${flagged === 1 ? "1 finding" : `${flagged} findings`} flagged: guidelines unclear`}
-      {roundId && <>{", "}<RouteLink route={{ name: "projectConsolidation", key: projectKey, roundId, ...(row.flagged_group_id ? { group: row.flagged_group_id } : {}),
-        ...(Object.keys(query).length ? { documents: query } : {}) }} className="btn btn-secondary btn-sm" onNavigate={onNavigate} aria-label={`Open flagged finding, ${name}`}>Open</RouteLink></>}
-    </p>}
+    {open.length > 0 && <div className="text-card-banner" role="group" aria-labelledby={`${id}-report`}>
+      <p id={`${id}-report`} className="text-card-banner-title">{plural(open.length, "open problem report")}{open.length === 1 && `: ${open[0].title}`}</p>
+      <div className="text-card-actions">
+        <RouteLink route={reportRoute(open[0].report_id)} className="btn btn-secondary btn-sm" onNavigate={onNavigate} aria-label={`Open problem report, ${open[0].title}`}>Open</RouteLink>
+        {steps.map(({ step, button }, index) => <span key={`${step.code}-${index}`} className="text-card-step">{button}</span>)}
+      </div>
+    </div>}
+    {flagged > 0 && <div className="text-card-banner" role="group" aria-labelledby={`${id}-flagged`}>
+      <p id={`${id}-flagged`} className="text-card-banner-title">{`${flagged === 1 ? "1 finding" : `${flagged} findings`} flagged: guidelines unclear`}</p>
+      {roundId && <div className="text-card-actions"><RouteLink route={{ name: "projectConsolidation", key: projectKey, roundId, ...(row.flagged_group_id ? { group: row.flagged_group_id } : {}),
+        ...(Object.keys(query).length ? { documents: query } : {}) }} className="btn btn-secondary btn-sm" onNavigate={onNavigate} aria-label={`Open flagged finding, ${name}`}>Open</RouteLink></div>}
+    </div>}
+  </div>;
+}
+
+/** The lead's steps of one part (issue 332): "Next step: Resolve rejected translation" and their buttons, at the top of the part. */
+export function PartSteps({ steps }: { steps: readonly CardStep[] }): JSX.Element | null {
+  const id = useId();
+  if (!steps.length) return null;
+  const labels = [...new Set(steps.map(({ step }) => stepLabel(step.code)))];
+  return <div className="text-card-next text-card-steps" role="group" aria-labelledby={id}>
+    <p id={id} className="text-card-next-label"><strong>{labels.length > 1 ? "Next steps:" : "Next step:"}</strong> {labels.join(", ")}</p>
+    <div className="text-card-actions">{steps.map(({ step, button }, index) => <span key={`${step.code}-${index}`} className="text-card-step">{button}</span>)}</div>
   </div>;
 }
 
@@ -128,7 +153,13 @@ export function TextCard(props: TextCardProps): JSX.Element {
   const { projectKey, row, query, view = "path", onSegment, onView, onStep, onClose, onNavigate, canManage, now = new Date() } = props;
   const sheet = useMediaQuery("(max-width: 699px)");
   const segments = cardSegments(row, now);
-  const segment = props.segment ?? defaultSegment(segments);
+  // Each lead step sits where it acts (issue 332); the card opens on the part of the row's first lead step.
+  const steps = props.steps ?? [];
+  const placed = (place: StepPlace) => steps.filter(entry => stepPlace(row, entry.step) === place);
+  const first = leadSteps(row)[0];
+  const firstPlace = first && steps.some(({ step }) => step.code === first.code && step.assignment_id === first.assignment_id && step.document_id === first.document_id)
+    ? stepPlace(row, first) : null;
+  const segment = props.segment ?? defaultSegment(segments, firstPlace === "report" ? null : firstPlace);
   const submissions = useRowSubmissions(projectKey, row.case_id, row.language, true);
   const list = submissions.data?.submissions ?? null;
 
@@ -181,28 +212,31 @@ export function TextCard(props: TextCardProps): JSX.Element {
   } else {
     // Row-keyed parts drop their busy/error state on ‹ ›; the finalization part is not keyed, so the decision
     // block's "saved, next" message survives its automatic move to the next row.
+    const languages = props.onOpenText ? <OtherLanguages row={row} rows={props.rows} canManage={canManage} onOpenText={props.onOpenText} onChangePlan={props.onChangePlan} /> : null;
+    const partProps = (place: SegmentId, stage: PanelStage) => ({ steps: <PartSteps steps={placed(place)} />, actions: props.stageActions?.(stage) });
     body = <>
-      <Banners {...props} />
-      {props.onOpenText && <OtherLanguages row={row} rows={props.rows} canManage={canManage} onOpenText={props.onOpenText} onChangePlan={props.onChangePlan} />}
-      {props.steps && <div className="text-card-actions">{props.steps}</div>}
+      {/* The sheet's "Open text" shares its line with Other languages (issue 332). */}
+      {sheet && <div className="text-card-topline">{openText}{languages}</div>}
+      <Banners {...props} steps={placed("report")} />
+      {!sheet && languages}
       <StagePath segments={segments} current={segment} onSelect={id => onSegment(id as SegmentId)} />
       {!isActiveRow(row) && <div className="text-card-not-planned">
         <p>This text is not worked on.</p>
         {canManage && <Button variant="primary" size="sm" onClick={() => props.onChangePlan(row)}>Add to plan…</Button>}
       </div>}
-      {segment === "translation" && <><TranslationPart key={rowKeyOf(row)} row={row} projectKey={projectKey} query={query} canManage={canManage}
+      {segment === "translation" && <TranslationPart key={rowKeyOf(row)} row={row} projectKey={projectKey} query={query} canManage={canManage}
         onAssign={props.onAssign} onNavigate={onNavigate} onChanged={props.onChanged} textVersionTools={props.textVersionTools} now={now}
-        planControl={plannable ? props.planControl?.("review") : undefined} />{props.stageActions && <div className="text-card-actions">{props.stageActions("review")}</div>}</>}
-      {segment === "annotation" && <><AnnotationPart key={rowKeyOf(row)} row={row} projectKey={projectKey} query={query} submissions={list} canManage={canManage}
+        planControl={plannable ? props.planControl?.("review") : undefined} {...partProps("translation", "review")} />}
+      {segment === "annotation" && <AnnotationPart key={rowKeyOf(row)} row={row} projectKey={projectKey} query={query} submissions={list} canManage={canManage}
         onAssign={props.onAssign} onNavigate={onNavigate} onChanged={props.onChanged} tools={props.textVersionTools} now={now}
-        planControl={plannable ? props.planControl?.("annotation") : undefined} />{props.stageActions && <div className="text-card-actions">{props.stageActions("annotation")}</div>}</>}
-      {segment === "finalization" && <><FinalizationPart row={row} projectKey={projectKey} query={query} decision={props.decision} onNavigate={onNavigate} now={now}
-        canManage={canManage} tools={props.textVersionTools} onChanged={props.onChanged} />{props.stageActions && <div className="text-card-actions">{props.stageActions("final")}</div>}</>}
+        planControl={plannable ? props.planControl?.("annotation") : undefined} {...partProps("annotation", "annotation")} />}
+      {segment === "finalization" && <FinalizationPart row={row} projectKey={projectKey} query={query} decision={props.decision} onNavigate={onNavigate} now={now}
+        canManage={canManage} tools={props.textVersionTools} onChanged={props.onChanged} {...partProps("finalization", "final")} />}
     </>;
   }
 
-  // The sheet's header has room for ‹ › only: "Open text" leads the body there.
-  body = <>{props.notice}{sheet && <div className="text-card-actions">{openText}</div>}{body}</>;
+  // The sheet's header has room for ‹ › only: "Open text" leads the body there (on the path beside Other languages).
+  body = <>{props.notice}{sheet && view !== "path" && <div className="text-card-topline">{openText}</div>}{body}</>;
   return <Dialog open title={`${row.case_id} ${row.language}`} heading={heading} variant="center" size="lg" closeOnBackdrop onClose={onClose} returnFocus={props.returnFocus}
     className={sheet ? "text-card text-card--sheet" : "text-card"}>
     <div ref={nav} className="text-card-nav">

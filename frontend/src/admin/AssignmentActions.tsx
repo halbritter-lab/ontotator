@@ -53,7 +53,7 @@ function Actions({ assignment, members, onChanged, open, onClose, textName = ass
       {reassignable && <Button size="sm" onClick={() => setAction("reassign")}>Reassign…</Button>}
       {/* A submitted lead correction made a newer version: it is never reopened (FD3, FD4). */}
       {assignment.status === "submitted" && !assignment.lead_correction && <Button size="sm" onClick={() => setAction("reopen")}>Reopen</Button>}
-      <Button size="sm" variant="danger" onClick={() => setAction("revoke")}>Remove assignment</Button>
+      <Button size="sm" variant="danger" onClick={() => setAction("revoke")}>Remove…</Button>
     </>}
     <Dialog open={action === "reassign"} title={`Reassign ${textName}`} onClose={busy || confirmation ? undefined : close} footer={<><Button disabled={busy || confirmation !== null} onClick={close}>Cancel</Button><Button disabled={!target || confirmation !== null} loading={busy} onClick={() => { if (assignment.status !== "open" && !confirmedStarted) setConfirmation("started"); else void mutate(confirmedStarted, false); }}>Reassign</Button></>}>
       <p>{person}: {labelFor(taskLabels, assignment.task)}, {labelFor(assignmentStatusLabels, assignment.status).toLowerCase()}</p>

@@ -22,7 +22,7 @@ function sourceDocument(row: DocumentRowView, documentId: string): string | null
  * Translation part of the text card: one row per open reviewer with their status and the lead's Reassign… and
  * Remove…, the part's actions, then the newest version of each chain with its status and actions; older versions are collapsed.
  */
-export function TranslationPart({ row, projectKey, query, canManage, onAssign, onNavigate, onChanged, textVersionTools, now, planControl }: {
+export function TranslationPart({ row, projectKey, query, canManage, onAssign, onNavigate, onChanged, textVersionTools, now, planControl, steps, actions }: {
   row: DocumentRowView;
   projectKey: string;
   query: ProjectDocumentsQuery;
@@ -34,6 +34,10 @@ export function TranslationPart({ row, projectKey, query, canManage, onAssign, o
   now?: Date;
   /** "Review" On / Off in the header (planned translations). */
   planControl?: ReactNode;
+  /** The lead's steps of this part ("Next step: …" with their buttons, issue 332). */
+  steps?: ReactNode;
+  /** The stage's admin actions (Assign a new review…, Change final…), joined to the part's action row. */
+  actions?: ReactNode;
 }): JSX.Element {
   const shown = row.versions.find(version => version.document_id === row.open.document_id) ?? row.versions[row.versions.length - 1];
   const native = row.is_source || shown?.origin === "native";
@@ -55,6 +59,7 @@ export function TranslationPart({ row, projectKey, query, canManage, onAssign, o
       {planControl}
     </div>
     {native && <p>Source text</p>}
+    {steps}
     {reviewers.length > 0 && <PersonList label="Translation reviewers">
       {reviewers.map(item => {
         const review = reviewOf(item.document_id);
@@ -67,11 +72,12 @@ export function TranslationPart({ row, projectKey, query, canManage, onAssign, o
       <p id="text-card-translation-next" className="text-card-next-label"><strong>Next step:</strong> {`assign someone to review this ${shown?.origin === "machine_translation" ? "machine translation" : "translation"}.`}</p>
       <Button variant="primary" size="sm" onClick={() => onAssign(row, "translation_review")}>Assign review…</Button>
     </div>}
-    {(assignOther || source) && <div className="text-card-actions">
+    {(assignOther || source || actions) && <div className="text-card-actions">
       {assignOther && <Button size="sm" onClick={() => onAssign(row, "translation_review")}>Assign review…</Button>}
       {source && <RouteLink route={textViewRoute(projectKey, row.case_id, shown!.document_id, query, { compare: source })} onNavigate={onNavigate}
         className="btn btn-secondary btn-sm">Compare with source</RouteLink>}
+      {actions}
     </div>}
-    <TextVersions row={row} projectKey={projectKey} query={query} onNavigate={onNavigate} tools={textVersionTools} now={now} hideOpenWork collapseOlder />
+    <TextVersions row={row} projectKey={projectKey} query={query} onNavigate={onNavigate} tools={textVersionTools} canManage={canManage} now={now} hideOpenWork collapseOlder />
   </section>;
 }

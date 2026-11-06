@@ -73,14 +73,18 @@ describe("one of two annotations submitted, one still open (issue 123)", () => {
     expect(screen.queryByText(/^Starts once/)).toBeNull();
     expect(screen.getByText("1 annotation still open: Tom Reis. You can accept a result now; open work stays assigned unless you remove it.")).toBeTruthy();
     expect(screen.getByText("Decision block")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Remove assignment…, Tom Reis" }));
+    // One label for every remove (issue 329), a secondary button, not grey quiet text (issue 331).
+    const remove = screen.getByRole("button", { name: "Remove Tom Reis’s assignment" });
+    expect(remove.textContent).toBe("Remove…");
+    expect(remove.className).toContain("btn-secondary");
+    fireEvent.click(remove);
     expect(screen.getByRole("dialog", { name: /Remove assignment/ })).toBeTruthy();
   });
 
   it("offers no removal without lead rights", () => {
     render(<FinalizationPart row={early()} projectKey="p" query={{}} onNavigate={vi.fn()} now={now} tools={tools} />);
     expect(screen.getByText(/1 annotation still open: Tom Reis/)).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /Remove assignment/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Remove/ })).toBeNull();
   });
 
   it("still says when finalization starts while nothing is submitted", () => {

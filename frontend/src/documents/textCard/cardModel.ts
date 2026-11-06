@@ -1,5 +1,5 @@
 /** The text card's path (U3): the state and tone of Translation, Annotation and Finalization, pure. */
-import type { DocumentRowView } from "../../api/client";
+import type { DocumentRowView, NextStepView } from "../../api/client";
 import type { ProjectDocumentsQuery, Route } from "../../app/router";
 import type { PathSegment, PathTone } from "../../ui/StagePath";
 import { earlyFinal } from "../finalPanelText";
@@ -127,8 +127,29 @@ export function cardSegments(row: DocumentRowView, now = new Date()): PathSegmen
   ];
 }
 
+/** Where a lead step of the card sits (issue 332): the report banner, else the part of its stage. */
+export type StepPlace = "report" | SegmentId;
+
+const STAGE_SEGMENT: Readonly<Record<NextStepView["stage"], SegmentId | null>> = { translation_review: "translation", annotation: "annotation", final: "finalization", done: null };
+const TASK_SEGMENT: Readonly<Record<CardWorkItem["task"], SegmentId>> = { translation_review: "translation", annotate: "annotation", review: "finalization" };
+
+/**
+ * The place of a lead step in the text card: "Decide on report…" in the banner of the open report (when the card shows
+ * one), every other step in the part of its stage ("Resolve…" in Translation, "Carry to v2…" and "Resume task…" of a
+ * paused annotation in Annotation); a step without a stage goes to the part of its task, else Finalization.
+ */
+export function stepPlace(row: DocumentRowView, step: NextStepView): StepPlace {
+  if (step.action === "decide_report" && (row.problem_reports ?? []).some(report => report.state === "open")) return "report";
+  const stage = STAGE_SEGMENT[step.stage];
+  if (stage) return stage;
+  const item = step.assignment_id != null ? row.work.find(entry => entry.assignment_id === step.assignment_id) : undefined;
+  return item ? TASK_SEGMENT[item.task] : "finalization";
+}
+
 /** On open: the segment that needs work now; else the first that is not done; else Finalization, or Annotation when nothing is planned to finalize. */
-export function defaultSegment(segments: readonly PathSegment[]): SegmentId {
+export function defaultSegment(segments: readonly PathSegment[], preferred?: SegmentId | null): SegmentId {
+  // The part that holds the row's first lead step (issue 332): its button is where the card opens.
+  if (preferred && segments.some(s => s.id === preferred)) return preferred;
   const now = segments.find(s => s.tone === "now") ?? segments.find(s => s.tone === "later");
   if (now) return now.id as SegmentId;
   return segments.find(s => s.id === "finalization")?.tone === "optional" ? "annotation" : "finalization";
