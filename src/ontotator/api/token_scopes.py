@@ -249,6 +249,8 @@ ROUTE_SCOPES: Mapping[tuple[str, str], RouteScope] = {
     ("DELETE", "/api/v1/admin/practice-projects/{key}"): "admin",
     ("GET", "/api/v1/admin/settings/practice"): "admin",
     ("PUT", "/api/v1/admin/settings/practice"): "admin",
+    # Deleting a project without work (issue 191): as other administration.
+    ("DELETE", "/api/v1/admin/projects/{key}"): "admin",
     # Project archives (issue 306): an export carries the whole project with
     # the e-mail addresses of its people, so only a system token reaches it.
     # An import creates a project and accounts: browser sessions only.

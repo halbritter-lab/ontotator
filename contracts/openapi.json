@@ -8680,6 +8680,43 @@
         "x-ontotator-scope": "admin"
       }
     },
+    "/api/v1/admin/projects/{key}": {
+      "delete": {
+        "tags": [
+          "admin-projects"
+        ],
+        "summary": "Delete Project",
+        "description": "Delete a project nobody has worked in; its key is free again.\n\nWork is anything beyond the project's setup: texts, proposals, tasks,\ndrafts, submissions, a guideline, results, problem reports, working time\nor an upload that committed. A project with work is refused with\n``PROJECT_HAS_WORK`` (``details.work`` names the tables), a practice\nproject with ``IS_A_PRACTICE_PROJECT``. The audit entries stay and name\nthe project by key; the deletion is audited as ``project.delete``.",
+        "operationId": "delete_project_api_v1_admin_projects__key__delete",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-ontotator-scope": "admin"
+      }
+    },
     "/api/v1/about": {
       "get": {
         "tags": [

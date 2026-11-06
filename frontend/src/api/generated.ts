@@ -2538,6 +2538,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/projects/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Project
+         * @description Delete a project nobody has worked in; its key is free again.
+         *
+         *     Work is anything beyond the project's setup: texts, proposals, tasks,
+         *     drafts, submissions, a guideline, results, problem reports, working time
+         *     or an upload that committed. A project with work is refused with
+         *     ``PROJECT_HAS_WORK`` (``details.work`` names the tables), a practice
+         *     project with ``IS_A_PRACTICE_PROJECT``. The audit entries stay and name
+         *     the project by key; the deletion is audited as ``project.delete``.
+         */
+        delete: operations["delete_project_api_v1_admin_projects__key__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/about": {
         parameters: {
             query?: never;
@@ -14962,6 +14989,35 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PracticeSettings"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_project_api_v1_admin_projects__key__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
