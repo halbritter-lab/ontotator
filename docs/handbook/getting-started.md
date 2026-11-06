@@ -88,7 +88,7 @@ What for: work in another project.
 2. Type part of the name in **Find project**.
 3. Click the project, or choose it with the arrow keys and press Enter.
 
-**All projects** opens the **Projects** page. There you see each project with **Your roles** and **Your open tasks**; click **Open** to go to a project. System administrators also find **Project archives** there, to move a project to another server (see [Move a project to another server](admin.md#move-a-project-to-another-server)).
+**All projects** opens the **Projects** page. There you see each project with **Your roles** and **Your open tasks**; click **Open** to go to a project. System administrators also find **Project archives** there, to move a project to another server (see [Move a project to another server](admin.md#move-a-project-to-another-server)). They can also remove a project created by mistake with **Delete project…**, as long as nobody has worked in it (see [Delete a project without work](admin.md#delete-a-project-without-work)).
 
 ## See your tasks
 
