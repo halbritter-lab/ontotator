@@ -6,7 +6,8 @@
  * "Assign annotation…", once the summary knows it; issue 129, U3) and "Plan…" (M2 decision M-1: the two
  * translation plan presets live in the plan dialog's quick choice). Every plan save keeps the selection and shows an
  * Undo toast (D22); a save that changes nothing says why instead. The summary sends the selected texts (`rows`); the
- * plan dialog edits whole cases.
+ * plan dialog edits whole cases. "Move to front" (issue 339) puts the selected texts first in the project's order,
+ * so their tasks come first in My tasks, after an inline confirmation.
  * The bar floats at the bottom of the viewport over the content (`useFloatingBar`): its arrival never moves the
  * table; the page reserves its height as bottom padding. Its place in the DOM keeps the focus order.
  */
@@ -15,7 +16,7 @@ import { api, type BulkResult, type ConsequencesView, type DocumentRowFilters, t
 import { ErrorNotice } from "../admin/ErrorNotice";
 import { plural } from "../app/labels";
 import { Button, Checkbox, InlineConfirm, InlineMessage, type ToastMessage } from "../ui";
-import { PLAN_CHANGED_MESSAGE, UNDO_WITHDRAWN_NOTE, WITHDRAW_CHECKBOX, withdrawnSummary } from "./PlanChips";
+import { PLAN_CHANGED_MESSAGE, UNDO_WITHDRAWN_NOTE, undoneToast, WITHDRAW_CHECKBOX, withdrawnSummary } from "./PlanChips";
 import { PlanDialog } from "./PlanDialog";
 import { runPlanUndo } from "./planUndo";
 import { useFloatingBar } from "./useFloatingBar";
@@ -45,6 +46,8 @@ export interface SelectionBarProps {
   onChanged: () => void;
   /** Plan revisions returned by a save or undo (chips use them for their next save). */
   onRevisions?: (revisions: Record<string, number>) => void;
+  /** After an Undo: selects the texts of the tasks the undone change withdrew (the toast's action, issue 339). */
+  onSelectTexts?: (keys: readonly string[]) => void;
 }
 
 /** One checked text already shows the bar (owner decision R-3, 2026-10-26). */
@@ -86,6 +89,13 @@ export function hiddenText({ not_shown: total = 0, not_shown_sources: sources = 
   return ` (${plural(total, sources === total ? "source text" : "text")} not shown)`;
 }
 
+export const MOVE_TO_FRONT = "Move to front";
+
+/** "2 texts moved to the front of the queue." */
+export function movedText(moved: number): string {
+  return `${plural(moved, "text")} moved to the front of the queue.`;
+}
+
 /** Why a plan save changed nothing: presets skip source texts (`skipped_rows`), the rest already had the plan. */
 export function nothingChangedText(result: BulkResult, selected: number): string {
   const skipped = result.skipped_rows?.length ?? 0;
@@ -94,14 +104,14 @@ export function nothingChangedText(result: BulkResult, selected: number): string
   return "Nothing changed: the selected texts already have this plan.";
 }
 
-type Undo = { kind: "conflict"; undo: UndoView; consequences: ConsequencesView } | { kind: "changed" };
+type Undo = { kind: "conflict"; undo: UndoView; consequences: ConsequencesView; withdrawn: readonly RowRefView[] } | { kind: "changed" };
 
 export function SelectionBar({
-  projectKey, keys, filters, showSelected = false, onToggleShowSelected, refresh, narrow = false, limitNote, onClear, onAssign, showToast, onAnnounce, onChanged, onRevisions,
+  projectKey, keys, filters, showSelected = false, onToggleShowSelected, refresh, narrow = false, limitNote, onClear, onAssign, showToast, onAnnounce, onChanged, onRevisions, onSelectTexts,
 }: SelectionBarProps): JSX.Element | null {
   const id = useId().replace(/:/g, "");
-  const latest = useRef({ showToast, onAnnounce, onChanged, onRevisions });
-  latest.current = { showToast, onAnnounce, onChanged, onRevisions };
+  const latest = useRef({ showToast, onAnnounce, onChanged, onRevisions, onSelectTexts });
+  latest.current = { showToast, onAnnounce, onChanged, onRevisions, onSelectTexts };
   const alive = useRef(true);
   const section = useRef<HTMLElement>(null);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
@@ -129,10 +139,13 @@ export function SelectionBar({
   const [undoState, setUndoState] = useState<Undo | null>(null);
   const [undoBusy, setUndoBusy] = useState(false);
   const [understood, setUnderstood] = useState(false);
+  const [front, setFront] = useState(false);
+  const [frontBusy, setFrontBusy] = useState(false);
   /** "Nothing changed: …" for the selection it was saved for. */
   const [nothing, setNothing] = useState<{ key: string; text: string } | null>(null);
 
-  const undo = (payload: UndoView, confirm: boolean) => {
+  /** `withdrawn`: the tasks the undone change withdrew; once undone, the toast offers their texts. */
+  const undo = (payload: UndoView, confirm: boolean, withdrawn: readonly RowRefView[] = []) => {
     setUndoBusy(true);
     latest.current.onAnnounce("Saving…");
     runPlanUndo(projectKey, payload, { confirm }).then(outcome => {
@@ -141,10 +154,12 @@ export function SelectionBar({
         setUndoState(null);
         latest.current.onRevisions?.(outcome.revisions);
         latest.current.onAnnounce("Plan change undone.");
+        const offer = undoneToast(withdrawn, latest.current.onSelectTexts);
+        if (offer) latest.current.showToast(offer);
       } else if (outcome.kind === "needs_confirm") {
         latest.current.onAnnounce("");
         setUnderstood(false);
-        setUndoState({ kind: "conflict", undo: payload, consequences: outcome.consequences });
+        setUndoState({ kind: "conflict", undo: payload, consequences: outcome.consequences, withdrawn });
         return;
       } else {
         latest.current.onAnnounce(PLAN_CHANGED_MESSAGE);
@@ -174,10 +189,23 @@ export function SelectionBar({
       message,
       actionLabel: "Undo",
       undo: true,
-      onAction: () => undo(result.undo, false),
+      onAction: () => undo(result.undo, false, result.withdrawn),
       ...(result.withdrawn.length ? { note: UNDO_WITHDRAWN_NOTE } : {}),
     });
     latest.current.onChanged();
+  };
+
+  const moveToFront = () => {
+    setFrontBusy(true); setError(undefined);
+    api.moveToFront(projectKey, rows).then(result => {
+      if (!alive.current) return;
+      setFront(false);
+      const message = movedText(result.moved);
+      latest.current.onAnnounce(message);
+      latest.current.showToast({ message });
+      latest.current.onChanged();
+    }, (failure: unknown) => { if (alive.current) setError(failure); })
+      .finally(() => { if (alive.current) setFrontBusy(false); });
   };
 
   const visible = keys.size >= MIN_TEXTS || undoState !== null;
@@ -196,11 +224,17 @@ export function SelectionBar({
         <div className="selection-bar-actions">
           <Button variant="primary" onClick={onAssign}>{assignButtonText(current)}</Button>
           <Button onClick={() => setPlan(caseIds)}>Plan…</Button>
+          <Button aria-expanded={front} onClick={() => setFront(value => !value)}>{MOVE_TO_FRONT}</Button>
           <Button aria-pressed={showSelected} onClick={onToggleShowSelected}>Show selected</Button>
           <Button onClick={onClear}>Clear selection</Button>
         </div>
       </div>}
       {limitNote && keys.size >= MIN_TEXTS && <p className="selection-bar-limit">{limitNote}</p>}
+      {front && keys.size >= MIN_TEXTS && <div className="selection-bar-undo">
+        <InlineConfirm title="Move to the front of the queue" busy={frontBusy} confirmLabel={MOVE_TO_FRONT}
+          message={<p>{`Open tasks on the ${plural(keys.size, "selected text")} come first in My tasks, before the tasks on texts imported earlier. The other texts keep their order.`}</p>}
+          onCancel={() => setFront(false)} onConfirm={moveToFront} />
+      </div>}
       {error !== undefined && <div className="selection-bar-error"><ErrorNotice error={error} /></div>}
       {nothing?.key === idsKey && keys.size >= MIN_TEXTS && <InlineMessage tone="info">{nothing.text}</InlineMessage>}
       {undoState?.kind === "changed" && <InlineMessage tone="info">{PLAN_CHANGED_MESSAGE}</InlineMessage>}
@@ -208,7 +242,7 @@ export function SelectionBar({
         <InlineConfirm title="Undo the plan change" busy={undoBusy} confirmLabel="Undo anyway"
           confirmUnavailable={withdrawing && !understood ? { reason: "Confirm that the open tasks are withdrawn." } : null}
           message={<p>Since your change, work was assigned: {withdrawnSummary(undoState.consequences)} would be withdrawn.</p>}
-          onCancel={() => setUndoState(null)} onConfirm={() => undo(undoState.undo, true)}>
+          onCancel={() => setUndoState(null)} onConfirm={() => undo(undoState.undo, true, undoState.withdrawn)}>
           {withdrawing && <Checkbox id={`${id}-understood`} label={WITHDRAW_CHECKBOX} checked={understood} onChange={event => setUnderstood(event.target.checked)} />}
         </InlineConfirm>
       </div>}

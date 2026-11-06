@@ -14,7 +14,7 @@ from ontotator.auth.audit import Actor
 from ontotator.authz.policy import Action, Task, can
 from ontotator.domain.annotation_modes import AnnotationMode
 from ontotator.domain.errors import AccessDenied, DomainError
-from ontotator.domain.work_plans import Preset, ReviewState, TriState
+from ontotator.domain.work_plans import Preset, ReviewState, RowKey, TriState
 
 router = APIRouter(prefix="/api/v1/projects/{key}", tags=["work-plans"])
 
@@ -223,6 +223,24 @@ class AnnotationTargetPreview(BaseModel):
     rows_over_target: int
 
 
+class MoveToFrontRequest(BaseModel):
+    """Texts to move to the front of the order (issue 339), of at most
+    ``MAX_SELECTED_CASES`` cases."""
+
+    model_config = ConfigDict(extra="forbid")
+    rows: list[RowRefView] = Field(min_length=1, max_length=MAX_SELECTED_ROWS)
+
+    @model_validator(mode="after")
+    def _bounded(self) -> Self:
+        require_one_selection([], self.rows)
+        return self
+
+
+class MoveToFrontResult(BaseModel):
+    # Texts moved; unknown texts are not counted.
+    moved: int
+
+
 class CaseIdLookup(BaseModel):
     model_config = ConfigDict(extra="forbid")
     ids: list[str] = Field(max_length=5000)
@@ -323,6 +341,16 @@ def patch_work_plan(
     request: Request,
 ) -> dict[str, Any]:
     return _service(request, key, principal).patch_row(key, case_id, language, body)
+
+
+@router.post("/document-rows/move-to-front", response_model=MoveToFrontResult)
+def move_to_front(
+    key: str, body: MoveToFrontRequest, principal: PrincipalDep, request: Request
+) -> dict[str, Any]:
+    """Selected texts first in the project's order, so in My tasks (issue 339)."""
+    return _service(request, key, principal).move_to_front(
+        key, [RowKey(row.case_id, row.language) for row in body.rows]
+    )
 
 
 @router.post("/case-ids/lookup", response_model=CaseIdLookupResult)

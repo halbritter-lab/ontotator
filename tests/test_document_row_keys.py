@@ -61,6 +61,21 @@ def test_keys_for_case_ids_return_every_matching_text(env):
     assert pairs(filtered) == [("c1", "de"), ("c2", "de")]
 
 
+def test_keys_with_exclude_return_the_other_matching_texts(env):
+    # "Select all except these" (issue 339): the complement within the filters.
+    rest = keys(env, case_ids=["c2", "zz"], exclude=True)
+    assert pairs(rest) == [("c1", "en"), ("c1", "de"), ("c1", "fr")]
+    assert rest["cases"] == 1 and rest["total"] == 3
+    filtered = keys(env, case_ids=["c1"], exclude=True, filters={"language": "de"})
+    assert pairs(filtered) == [("c2", "de")]
+    assert pairs(keys(env, case_ids=["c1", "c2"], exclude=True)) == []
+    too_many = [f"x{n}" for n in range(5001)]
+    response = env.lead.post(
+        f"{BASE}/document-rows/keys", json={"case_ids": too_many, "exclude": True}
+    )
+    assert response.status_code == 422, response.text
+
+
 def test_keys_truncate_at_2000_cases(env, monkeypatch):
     assert document_row_keys.MAX_CASES == 2000
     monkeypatch.setattr(document_row_keys, "MAX_CASES", 1)

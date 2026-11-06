@@ -238,8 +238,11 @@ What for: select texts from a list you have elsewhere, for example a spreadsheet
 2. Paste the IDs into **Paste case IDs**, one per line or separated by commas.
 3. Check how many were found. Click **Copy unknown IDs** to copy the ones that do not exist.
    Case IDs are case sensitive, and two cases can differ only in case. An exact ID always wins. An ID in another case, for example `fr100907`, finds `Fr100907` when that is the only case ID that fits; the dialog lists it under *Matched in another case*. When several case IDs fit and none exactly, the dialog selects none of them and says so, for example *fr100907 matches FR100907 and Fr100907; enter the exact ID.*
-4. Optional: to keep the current selection, tick **Add to the current selection instead**.
-5. Click the select button, for example *Select 20*.
+4. Optional: to select every other text instead, tick **Select all except these**. The dialog then selects the texts that match the current tab, filters and search, except the texts of the pasted cases, and says how many, for example *120 other texts in 60 cases match the current filters.* This takes at most 5000 case IDs.
+5. Optional: to keep the current selection, tick **Add to the current selection instead**.
+6. Click the select button, for example *Select 20* or *Select 120 other texts*.
+
+A selection holds the texts of at most 2000 cases. With more, the dialog selects the first 2000 in list order and says *Selection is limited to 2000 cases.* Plan, assign or move one part, then select the next part. A plan save or an assignment also takes at most 2000 cases at once.
 
 ### Plan several texts at once
 
@@ -254,7 +257,7 @@ What for: set the work plan for a selection.
 
 ![The Work plan dialog with the quick choice and one row per language](images/lead-work-plan.png)
 
-**Undo** in the message restores the plan, not withdrawn tasks.
+**Undo** in the message restores the plan, not withdrawn tasks. If the change withdrew tasks, the message after the Undo offers their texts, for example *Select the 2 texts with withdrawn tasks*. Click it to select them, then [assign the work](#assign-work-to-the-selected-texts) again. This works the same for the plan chips of one row. The offer stays until you close the message.
 
 ### Change the annotation mode of one text
 
@@ -298,6 +301,17 @@ What happens to a waiting task:
 The dialog works through the whole selection, one task and language at a time: translation reviews first, then annotation. After the assign button it stays open on the next step, lists what is already assigned and says what comes next. An annotation that waits for its review is the next step once the review is assigned. To pass a step without assigning it, click **Skip this task**; to go to another step, choose it under **Task**. Click **Close** when you are done, or assign the last step.
 
 The closing message appears once the table shows the new assignments. It names what is left unassigned, for example *Left unassigned: annotation of case-0102 en*, and offers those cases, for example *Select the 2 skipped cases*. The message stays until you close it.
+
+### Move texts to the front of the queue
+
+What for: have some texts done first, for example a batch uploaded later that is now urgent.
+
+**My tasks** lists each person's open tasks by status, then in the project's order: first imported first. To change that order:
+
+1. Select the texts, then click **Move to front** in the selection bar.
+2. Read the confirmation **Move to the front of the queue** and click **Move to front**.
+
+The selected texts now come first, in their earlier order among themselves; the other texts follow in theirs. The message says how many texts moved, for example *2 texts moved to the front of the queue.* The order applies to tasks already assigned and to tasks you assign later, and **Import order** under **Order** on **Documents** follows it. A later upload comes last again. Each move is recorded in the audit trail. There is no Undo: to change the order again, move other texts to the front.
 
 ### Assign work for one text
 

@@ -1585,6 +1585,26 @@ export interface paths {
         patch: operations["patch_work_plan_api_v1_projects__key__work_plans__case_id___language__patch"];
         trace?: never;
     };
+    "/api/v1/projects/{key}/document-rows/move-to-front": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move To Front
+         * @description Selected texts first in the project's order, so in My tasks (issue 339).
+         */
+        post: operations["move_to_front_api_v1_projects__key__document_rows_move_to_front_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{key}/case-ids/lookup": {
         parameters: {
             query?: never;
@@ -4858,12 +4878,18 @@ export interface components {
         /**
          * DocumentRowKeysRequest
          * @description Texts matching the filters; with ``case_ids`` only texts of these cases
-         *     (Select by case IDs, VD4).
+         *     (Select by case IDs, VD4), with ``exclude`` as well only texts of the
+         *     other cases ("Select all except these", issue 339).
          */
         DocumentRowKeysRequest: {
             filters?: components["schemas"]["DocumentRowFilters"];
             /** Case Ids */
             case_ids?: string[];
+            /**
+             * Exclude
+             * @default false
+             */
+            exclude: boolean;
             /**
              * Sort
              * @default case
@@ -6142,6 +6168,20 @@ export interface components {
             term_id: string;
             /** Segments */
             segments?: components["schemas"]["Segment"][];
+        };
+        /**
+         * MoveToFrontRequest
+         * @description Texts to move to the front of the order (issue 339), of at most
+         *     ``MAX_SELECTED_CASES`` cases.
+         */
+        MoveToFrontRequest: {
+            /** Rows */
+            rows: components["schemas"]["RowRefView"][];
+        };
+        /** MoveToFrontResult */
+        MoveToFrontResult: {
+            /** Moved */
+            moved: number;
         };
         /** MoveToVersionRequest */
         MoveToVersionRequest: {
@@ -13092,6 +13132,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlanRowResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    move_to_front_api_v1_projects__key__document_rows_move_to_front_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveToFrontRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MoveToFrontResult"];
                 };
             };
             /** @description Validation Error */

@@ -17,7 +17,19 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
 
-from sqlalchemy import Connection, RowMapping, func, insert, select, update
+from sqlalchemy import (
+    Connection,
+    RowMapping,
+    Text,
+    and_,
+    func,
+    insert,
+    select,
+    update,
+)
+from sqlalchemy import cast as sql_cast
+from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.orm import aliased
 
 from ontotator.application.final_causes import latest_review_decisions
 from ontotator.application.people import person_refs
@@ -1111,6 +1123,87 @@ class WorkPlanService:
                 for chains in _chains(conn, pid).values()
             )
             return {"rows_over_target": over}
+
+    def move_to_front(self, key: str, rows: Sequence[RowKey]) -> dict[str, Any]:
+        """Move texts to the front of the project's order (issue 339).
+
+        Every version of the selected texts ``(case_id, language)`` gets the
+        lowest positions, in their current order; the other documents follow
+        in theirs. My tasks lists open work by status, then by this order, so
+        the selected texts come first. Positions are renumbered ``0..n-1``
+        (an upload appends after the highest). Unknown texts are ignored; one
+        ``project.queue_order`` audit event names the moved texts.
+        """
+        wanted = list(dict.fromkeys(rows))
+        with self.db.transaction() as conn:
+            pid = self._lock(conn, key, exclusive=True)["id"]
+            known = set(
+                conn.execute(
+                    select(DocumentRow.case_id, DocumentRow.language)
+                    .where(DocumentRow.project_id == pid)
+                    .distinct()
+                ).tuples()
+            )
+            moved = [k for k in wanted if (k.case_id, k.language) in known]
+            if not moved:
+                return {"moved": 0}
+            picked = (
+                func.unnest(
+                    sql_cast([k.case_id for k in moved], ARRAY(Text)),
+                    sql_cast([k.language for k in moved], ARRAY(Text)),
+                )
+                .table_valued("case_id", "language")
+                .render_derived(name="picked")
+            )
+            doc = aliased(DocumentRow)
+            ranked = (
+                select(
+                    doc.document_id,
+                    (
+                        func.row_number().over(
+                            order_by=(
+                                picked.c.case_id.is_(None),
+                                doc.position.asc().nulls_last(),
+                                doc.document_id,
+                            )
+                        )
+                        - 1
+                    ).label("rank"),
+                )
+                .select_from(doc)
+                .outerjoin(
+                    picked,
+                    and_(
+                        picked.c.case_id == doc.case_id,
+                        picked.c.language == doc.language,
+                    ),
+                )
+                .where(doc.project_id == pid)
+                .subquery("ranked")
+            )
+            conn.execute(
+                update(DocumentRow)
+                .where(
+                    DocumentRow.project_id == pid,
+                    DocumentRow.document_id == ranked.c.document_id,
+                    DocumentRow.position.is_distinct_from(ranked.c.rank),
+                )
+                .values(position=ranked.c.rank)
+            )
+            record_audit(
+                conn,
+                self.actor,
+                "project.queue_order",
+                target_type="project",
+                target_id=key,
+                project_id=pid,
+                details={
+                    "moved_to_front": [
+                        {"case_id": k.case_id, "language": k.language} for k in moved
+                    ]
+                },
+            )
+            return {"moved": len(moved)}
 
     def lookup_case_ids(self, key: str, ids: Sequence[str]) -> dict[str, Any]:
         """Case IDs after NFKC and trimming; duplicates and blanks dropped.

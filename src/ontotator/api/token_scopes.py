@@ -106,6 +106,7 @@ ROUTE_SCOPES: Mapping[tuple[str, str], RouteScope] = {
     ("POST", f"{P}/document-rows/selected"): "read",
     ("POST", f"{P}/document-rows/selection-summary"): "read",
     ("POST", f"{P}/document-rows/keys"): "read",
+    ("POST", f"{P}/document-rows/move-to-front"): "project-admin",
     ("GET", f"{P}/document-rows/{{case_id:path}}/{{language}}/submissions"): "read",
     ("GET", f"{P}/document-rows/{{case_id:path}}/{{language}}/final-panel"): "read",
     ("GET", f"{P}/documents/summary"): "read",
