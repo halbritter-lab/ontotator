@@ -213,27 +213,44 @@ def start_round(
     )
 
 
-def finish_round(scenario: Scenario, name: str, workspace_key: Any) -> str:
-    """Submit the round's (unchanged) draft as its owner; returns the submission id."""
+def finish_round(
+    scenario: Scenario,
+    name: str,
+    workspace_key: Any,
+    *,
+    acknowledge_warnings: bool = False,
+) -> str:
+    """Submit the round's (unchanged) draft as its owner; returns the submission id.
+
+    ``acknowledge_warnings`` answers an advisory ``AXIS_CONFIRMATION_WARNING``
+    (for example a modifier term used as a finding) as "Submit with N warnings"
+    does."""
     from ontotator.application.submissions import SubmissionService
     from ontotator.authz.scoped import ScopedRepository
+    from ontotator.domain.errors import DomainError
     from ontotator.domain.workspace import MutationEnvelope
 
     access, actor = identity(scenario, name)
     scoped = ScopedRepository(scenario.db, access, actor)
-    draft = scoped.open_draft(workspace_key)
-    return (
-        SubmissionService(scoped, scenario.app.state.ontology_registry)
-        .submit(
-            workspace_key,
-            MutationEnvelope(
-                mutation_id=f"submit-{uuid4().hex}",
-                expected_revision=draft.revision,
-                payload={"document_checked": True},
-            ),
+    service = SubmissionService(scoped, scenario.app.state.ontology_registry)
+
+    def send(payload: dict[str, Any]) -> str:
+        draft = scoped.open_draft(workspace_key)
+        envelope = MutationEnvelope(
+            mutation_id=f"submit-{uuid4().hex}",
+            expected_revision=draft.revision,
+            payload=payload,
         )
-        .submission_id
-    )
+        return service.submit(workspace_key, envelope).submission_id
+
+    try:
+        return send({"document_checked": True})
+    except DomainError as error:
+        if not acknowledge_warnings or error.code != "AXIS_CONFIRMATION_WARNING":
+            raise
+        assert isinstance(error.details, dict)
+        acknowledgement = error.details["acknowledgement"]
+    return send({"document_checked": True, "warning_acknowledgement": acknowledgement})
 
 
 def submit(
