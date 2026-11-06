@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { useState } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { api, ApiError, type BulkResult, type DocumentRowView, type PlanRowResult } from "../../src/api/client";
-import { PlanChips, PlanRowNotice, usePlanSaves } from "../../src/documents/PlanChips";
+import { PlanChips, PlanRowNotice, selectWithdrawnLabel, undoneToast, usePlanSaves, withdrawnTextKeys } from "../../src/documents/PlanChips";
 import { rowKeyOf } from "../../src/documents/RowCells";
 import { Toast, useToast } from "../../src/ui/Toast";
 import { planRow, stepOf } from "./fixtures";
@@ -13,10 +13,10 @@ const en = () => planRow("case-0101", "en", stepOf("assign_annotation"), { is_so
 
 const onChanged = vi.fn();
 
-function Harness({ rows, revision = 3 }: { rows: DocumentRowView[]; revision?: number }) {
+function Harness({ rows, revision = 3, onSelectTexts }: { rows: DocumentRowView[]; revision?: number; onSelectTexts?: (keys: readonly string[]) => void }) {
   const { toast, show, dismiss } = useToast();
   const [message, setMessage] = useState("");
-  const saves = usePlanSaves({ projectKey: "p", onAnnounce: setMessage, onChanged, showToast: show });
+  const saves = usePlanSaves({ projectKey: "p", onAnnounce: setMessage, onChanged, showToast: show, onSelectTexts });
   return <>
     {rows.map(row => <div key={rowKeyOf(row)} data-testid={rowKeyOf(row)}>
       <PlanChips row={row} groupRevision={revision} saves={saves} />
@@ -71,6 +71,40 @@ it("adds the withdrawn-task note to the toast", async () => {
   render(<Harness rows={[row]} />);
   fireEvent.click(chip("Translation review, case-0101 fr"));
   expect(await screen.findByText("Undo restores the plan, not withdrawn tasks.")).toBeTruthy();
+});
+
+it("after an Undo the toast offers the texts of the withdrawn tasks (issue 339)", async () => {
+  const row = fr();
+  const person = { pseudonym: "ann-0004", display_name: "Ana Weber", is_me: false };
+  vi.mocked(api.patchWorkPlan).mockResolvedValue(result(row, { review: false, annotate: true }, 4, {
+    withdrawn: [
+      { assignment_id: 9, case_id: "case-0101", language: "fr", task: "translation_review", person },
+      { assignment_id: 10, case_id: "case-0101", language: "fr", task: "annotate", person },
+    ],
+  }));
+  vi.mocked(api.setWorkPlanRows).mockResolvedValue(bulk({ "case-0101": 5 }));
+  const onSelectTexts = vi.fn();
+  render(<Harness rows={[row]} onSelectTexts={onSelectTexts} />);
+  fireEvent.click(chip("Translation review, case-0101 fr"));
+  fireEvent.click(await screen.findByRole("button", { name: "Undo" }));
+  const offer = await screen.findByRole("button", { name: "Select the text with withdrawn tasks" });
+  expect(screen.getByText("Plan change undone.", { selector: ".ui-toast *" })).toBeTruthy();
+  fireEvent.click(offer);
+  expect(onSelectTexts).toHaveBeenCalledWith(["case-0101:fr"]);
+});
+
+it("withdrawn texts: each text once; no offer without withdrawn tasks", () => {
+  const person = { pseudonym: "ann-0004", display_name: null, is_me: false };
+  const withdrawn = [
+    { assignment_id: 1, case_id: "c1", language: "de", task: "annotate" as const, person },
+    { assignment_id: 2, case_id: "c1", language: "de", task: "review" as const, person },
+    { assignment_id: 3, case_id: "c2", language: "fr", task: "annotate" as const, person },
+  ];
+  expect(withdrawnTextKeys(withdrawn)).toEqual(["c1:de", "c2:fr"]);
+  expect(selectWithdrawnLabel(2)).toBe("Select the 2 texts with withdrawn tasks");
+  expect(undoneToast([], vi.fn())).toBeNull();
+  expect(undoneToast(withdrawn, undefined)).toBeNull();
+  expect(undoneToast(withdrawn, vi.fn())).toMatchObject({ message: "Plan change undone.", actionLabel: "Select the 2 texts with withdrawn tasks", persist: true });
 });
 
 it("undo restores the previous flags with the returned revision", async () => {

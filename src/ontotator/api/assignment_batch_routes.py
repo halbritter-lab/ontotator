@@ -228,11 +228,13 @@ class SelectionSummaryRequest(BaseModel):
 
 class DocumentRowKeysRequest(BaseModel):
     """Texts matching the filters; with ``case_ids`` only texts of these cases
-    (Select by case IDs, VD4)."""
+    (Select by case IDs, VD4), with ``exclude`` as well only texts of the
+    other cases ("Select all except these", issue 339)."""
 
     model_config = ConfigDict(extra="forbid")
     filters: DocumentRowFilters = Field(default_factory=DocumentRowFilters)
     case_ids: list[str] = Field(default_factory=list, max_length=MAX_CASE_IDS)
+    exclude: bool = False
     sort: Sort = "case"
 
 
@@ -334,5 +336,5 @@ def document_row_keys(
     """Text keys matching the filters in list order, of at most 2000 cases."""
     _guard(request, key)
     return _service(request, principal).row_keys(
-        key, body.filters.query(body.sort), body.case_ids
+        key, body.filters.query(body.sort), body.case_ids, exclude=body.exclude
     )

@@ -429,7 +429,8 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
 
   // Plan chips: one shared queue and toast; a save refetches the rows (the next step updates in place).
   const { toast, show: showToast, dismiss: dismissToast } = useToast();
-  const planSaves = usePlanSaves({ projectKey, onAnnounce: announce, onChanged: () => reloadAfterAction(), showToast });
+  // After an Undo the toast offers the texts of the withdrawn tasks (issue 339); `selectTexts` is defined below.
+  const planSaves = usePlanSaves({ projectKey, onAnnounce: announce, onChanged: () => reloadAfterAction(), showToast, onSelectTexts: keys => selectTexts(keys) });
   // A finished import closes the upload dialog: the imported cases arrive in the reloaded rows with their plan.
   const importDone = (message: string) => { setUploadOpen(false); showToast({ message }); refreshAll(); };
   // Each new rows page: drop local chip flags the server has caught up with; restore focus after a save.
@@ -470,12 +471,16 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     announceSelection.current = true;
     selection.clear(); setLimitNote(null); setAllFiltered(null);
   };
+  /** Replaces the selection with these texts (the skipped cases, or the withdrawn tasks after an Undo, issue 339). */
+  const selectTexts = (keys: readonly string[]) => {
+    announceSelection.current = true;
+    applyLimit(selection.replace(keys).truncated);
+    setAllFiltered(null);
+  };
   /** Selects every text of the given cases (Select the skipped cases); the row keys come from the server. */
   const selectCases = (caseIds: readonly string[]) => {
-    void api.documentRowKeys(projectKey, { case_ids: [...caseIds] }).then(result => {
-      announceSelection.current = true;
-      applyLimit(selection.replace(result.keys.map(textKeyOf)).truncated);
-    }, (failure: unknown) => setSelectionError(failure));
+    void api.documentRowKeys(projectKey, { case_ids: [...caseIds] }).then(result => selectTexts(result.keys.map(textKeyOf)),
+      (failure: unknown) => setSelectionError(failure));
   };
   // Header checkbox: every text matching the current filters, across pages (server list, at most 2000 cases).
   const filteredCases = page?.group_count ?? 0;
@@ -521,10 +526,10 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       setSelectingAll(false);
     }
   };
-  const selectByIds = (keys: readonly string[], mode: "replace" | "add") => {
+  const selectByIds = (keys: readonly string[], mode: "replace" | "add", truncated = false) => {
     setIdsDialogOpen(false);
     announceSelection.current = true;
-    applyLimit((mode === "replace" ? selection.replace(keys) : selection.add(keys)).truncated);
+    applyLimit((mode === "replace" ? selection.replace(keys) : selection.add(keys)).truncated || truncated);
     setAllFiltered(null);
   };
   const openAssignCases = () => {
@@ -873,7 +878,8 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     const selectionBar = <SelectionBar projectKey={projectKey} keys={selection.keys} filters={showSelected ? {} : filters} showSelected={showSelected} onToggleShowSelected={toggleShowSelected}
       refresh={page} narrow={narrow} limitNote={limitNote}
       onClear={clearSelection} onAssign={openAssignCases} showToast={showToast} onAnnounce={announce} onChanged={() => reloadAfterAction()}
-      onRevisions={revisions => { for (const [caseId, value] of Object.entries(revisions)) planSaves.noteRevision(caseId, value); }} />;
+      onRevisions={revisions => { for (const [caseId, value] of Object.entries(revisions)) planSaves.noteRevision(caseId, value); }}
+      onSelectTexts={selectTexts} />;
     // While another filter or page loads, the previous page stays (busy) so the bar and paging links keep focus.
     content = <>
       {rows.error != null && <InlineMessage tone="error">Could not refresh. {errorMessage(rows.error)} <Button size="sm" onClick={rows.retry}>Retry</Button></InlineMessage>}
@@ -933,7 +939,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       <TranslationCorrectionAction projectKey={projectKey} variant={correctionFor.variant} username={textVersionTools.username}
         requiredLanguages={textVersionTools.requiredLanguages(correctionFor.variant.document_id)} defaultOpen inDialog />
     </Dialog>}
-    {idsDialogOpen && <SelectByIdsDialog projectKey={projectKey} current={selection.cases} onClose={() => setIdsDialogOpen(false)} onSelect={selectByIds} />}
+    {idsDialogOpen && <SelectByIdsDialog projectKey={projectKey} current={selection.cases} filters={filters} sort={request.sort ?? "case"} onClose={() => setIdsDialogOpen(false)} onSelect={selectByIds} />}
   </section>;
 }
 

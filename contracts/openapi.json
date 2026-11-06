@@ -5843,6 +5843,61 @@
         "x-ontotator-project-token": true
       }
     },
+    "/api/v1/projects/{key}/document-rows/move-to-front": {
+      "post": {
+        "tags": [
+          "work-plans"
+        ],
+        "summary": "Move To Front",
+        "description": "Selected texts first in the project's order, so in My tasks (issue 339).",
+        "operationId": "move_to_front_api_v1_projects__key__document_rows_move_to_front_post",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveToFrontRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoveToFrontResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-ontotator-scope": "project-admin",
+        "x-ontotator-project-token": true
+      }
+    },
     "/api/v1/projects/{key}/case-ids/lookup": {
       "post": {
         "tags": [
@@ -14827,6 +14882,11 @@
             "maxItems": 5000,
             "title": "Case Ids"
           },
+          "exclude": {
+            "type": "boolean",
+            "title": "Exclude",
+            "default": false
+          },
           "sort": {
             "type": "string",
             "enum": [
@@ -14843,7 +14903,7 @@
         "additionalProperties": false,
         "type": "object",
         "title": "DocumentRowKeysRequest",
-        "description": "Texts matching the filters; with ``case_ids`` only texts of these cases\n(Select by case IDs, VD4)."
+        "description": "Texts matching the filters; with ``case_ids`` only texts of these cases\n(Select by case IDs, VD4), with ``exclude`` as well only texts of the\nother cases (\"Select all except these\", issue 339)."
       },
       "DocumentRowView": {
         "properties": {
@@ -18328,6 +18388,39 @@
         ],
         "title": "Modifier",
         "description": "A clinical modifier of one finding (T1 F6): a term and 0..n segments."
+      },
+      "MoveToFrontRequest": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/RowRefView"
+            },
+            "type": "array",
+            "maxItems": 200000,
+            "minItems": 1,
+            "title": "Rows"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "rows"
+        ],
+        "title": "MoveToFrontRequest",
+        "description": "Texts to move to the front of the order (issue 339), of at most\n``MAX_SELECTED_CASES`` cases."
+      },
+      "MoveToFrontResult": {
+        "properties": {
+          "moved": {
+            "type": "integer",
+            "title": "Moved"
+          }
+        },
+        "type": "object",
+        "required": [
+          "moved"
+        ],
+        "title": "MoveToFrontResult"
       },
       "MoveToVersionRequest": {
         "properties": {

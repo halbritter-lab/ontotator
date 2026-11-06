@@ -87,9 +87,9 @@ it("shown with one selected text (R-3)", () => {
   expect(within(bar()).getByRole("button", { name: "Assign…" })).toBeTruthy();
 });
 
-it("keeps four stable actions; the plan presets live in Plan… (M-1)", () => {
+it("keeps five stable actions; the plan presets live in Plan… (M-1)", () => {
   render(<Harness initial={["case-0101:de", "case-0102:de"]} />);
-  expect(within(bar()).getAllByRole("button").map(button => button.textContent)).toEqual(["Assign…", "Plan…", "Show selected", "Clear selection"]);
+  expect(within(bar()).getAllByRole("button").map(button => button.textContent)).toEqual(["Assign…", "Plan…", "Move to front", "Show selected", "Clear selection"]);
   expect(bar().textContent).not.toMatch(/\bReview\b|Annotation review|Independent annotation|Translation review and annotation/);
 });
 
@@ -115,6 +115,58 @@ it("sends rows to selection-summary", async () => {
   render(<Harness initial={["case-0101:en", "case-0101:de", "case-0102:de"]} />);
   const selected = [{ case_id: "case-0101", language: "en" }, { case_id: "case-0101", language: "de" }, { case_id: "case-0102", language: "de" }];
   await waitFor(() => expect(api.selectionSummary).toHaveBeenCalledWith("p", { rows: selected }, filters));
+});
+
+it("Move to front confirms inline, moves the selected texts and keeps the selection (issue 339)", async () => {
+  vi.spyOn(api, "moveToFront").mockResolvedValue({ moved: 2 });
+  const onChanged = vi.fn();
+  const onAnnounce = vi.fn();
+  render(<Harness initial={["case-0101:en", "case-0101:de"]} onChanged={onChanged} onAnnounce={onAnnounce} />);
+  const move = within(bar()).getByRole("button", { name: "Move to front" });
+  fireEvent.click(move);
+  expect(move.getAttribute("aria-expanded")).toBe("true");
+  const confirm = within(bar()).getByRole("group", { name: "Move to the front of the queue" });
+  expect(within(confirm).getByText("Open tasks on the 2 selected texts come first in My tasks, before the tasks on texts imported earlier. The other texts keep their order.")).toBeTruthy();
+  expect(api.moveToFront).not.toHaveBeenCalled();
+  fireEvent.click(within(confirm).getByRole("button", { name: "Move to front" }));
+  await waitFor(() => expect(api.moveToFront).toHaveBeenCalledWith("p", [{ case_id: "case-0101", language: "en" }, { case_id: "case-0101", language: "de" }]));
+  expect(await screen.findByText("2 texts moved to the front of the queue.", { selector: ".ui-toast *, .ui-toast" })).toBeTruthy();
+  expect(onAnnounce).toHaveBeenCalledWith("2 texts moved to the front of the queue.");
+  expect(onChanged).toHaveBeenCalledOnce();
+  expect(within(bar()).queryByRole("group", { name: "Move to the front of the queue" })).toBeNull();
+  expect(within(bar()).getByText("2 texts in 1 case selected")).toBeTruthy();
+});
+
+it("Move to front: Cancel moves nothing, a failure stays in the bar", async () => {
+  vi.spyOn(api, "moveToFront").mockRejectedValueOnce(new Error("offline"));
+  render(<Harness initial={["case-0101:de"]} />);
+  fireEvent.click(within(bar()).getByRole("button", { name: "Move to front" }));
+  fireEvent.click(within(bar()).getByRole("button", { name: "Cancel" }));
+  expect(within(bar()).queryByRole("group", { name: "Move to the front of the queue" })).toBeNull();
+  fireEvent.click(within(bar()).getByRole("button", { name: "Move to front" }));
+  const confirm = within(bar()).getByRole("group", { name: "Move to the front of the queue" });
+  fireEvent.click(within(confirm).getByRole("button", { name: "Move to front" }));
+  expect(await within(bar()).findByText(/offline/)).toBeTruthy();
+});
+
+it("after a bulk Undo the toast offers the texts of the withdrawn tasks, also after the confirmation (issue 339)", async () => {
+  const person = { pseudonym: "ann-0004", display_name: "Ana Weber", is_me: false };
+  vi.mocked(api.saveWorkPlans).mockResolvedValue({ ...result, withdrawn: [
+    { assignment_id: 4, case_id: "case-0101", language: "de", task: "translation_review", person },
+    { assignment_id: 5, case_id: "case-0102", language: "de", task: "translation_review", person },
+  ] });
+  const consequences: ConsequencesView = { ...noConsequences, withdrawn: [{ assignment_id: 7, case_id: "case-0103", language: "de", task: "translation_review", person }] };
+  vi.mocked(api.setWorkPlanRows).mockRejectedValueOnce(new ApiError(409, "confirm", "WORK_PLAN_CONFIRMATION_REQUIRED", consequences as never));
+  const onSelectTexts = vi.fn();
+  render(<Harness onSelectTexts={onSelectTexts} />);
+  await planWithPreset("Translation review and annotation");
+  fireEvent.click(await screen.findByRole("button", { name: "Undo" }));
+  const anyway = await within(bar()).findByRole("button", { name: "Undo anyway" });
+  fireEvent.click(within(bar()).getByLabelText("I understand — withdraw the open tasks"));
+  fireEvent.click(anyway);
+  // The offer names the tasks the undone change withdrew, not those the Undo withdraws.
+  fireEvent.click(await screen.findByRole("button", { name: "Select the 2 texts with withdrawn tasks" }));
+  expect(onSelectTexts).toHaveBeenCalledWith(["case-0101:de", "case-0102:de"]);
 });
 
 /** Plan… → quick choice → Save: the former one-click presets. */
@@ -152,7 +204,7 @@ it("has Assign… as the page's only primary button", async () => {
   render(<Harness onAssign={onAssign} />);
   const primary = [...bar().querySelectorAll(".btn-primary")].map(button => button.textContent);
   expect(primary).toEqual(["Assign…"]);
-  expect(within(bar()).getAllByRole("button").map(button => button.textContent)).toEqual(["Assign…", "Plan…", "Show selected", "Clear selection"]);
+  expect(within(bar()).getAllByRole("button").map(button => button.textContent)).toEqual(["Assign…", "Plan…", "Move to front", "Show selected", "Clear selection"]);
   fireEvent.click(within(bar()).getByRole("button", { name: "Assign…" }));
   expect(onAssign).toHaveBeenCalledOnce();
 });

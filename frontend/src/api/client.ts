@@ -122,7 +122,8 @@ export type SelectionSummary = components["schemas"]["SelectionSummary"];
 export type RowRefView = components["schemas"]["RowRefView"];
 /** A selection: whole cases (case IDs) or single texts (`rows`, VD21). */
 export type RowSelection = readonly string[] | { readonly rows: readonly RowRefView[] };
-export type DocumentRowKeysRequest = Defaulted<components["schemas"]["DocumentRowKeysRequest"], "sort">;
+export type DocumentRowKeysRequest = Defaulted<components["schemas"]["DocumentRowKeysRequest"], "sort" | "exclude">;
+export type MoveToFrontResult = components["schemas"]["MoveToFrontResult"];
 export type DocumentRowKeys = components["schemas"]["DocumentRowKeys"];
 export type DocumentsVisitView = components["schemas"]["DocumentsVisitView"];
 export type DocumentsSummaryView = components["schemas"]["DocumentsSummaryView"];
@@ -484,6 +485,8 @@ export class ApiClient {
   }
   /** Text keys matching the Documents filters in list order (at most 2000 cases); with `case_ids` only texts of these cases. */
   async documentRowKeys(key: string, body: DocumentRowKeysRequest = {}): Promise<DocumentRowKeys> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/document-rows/keys`, { method: "POST", body: JSON.stringify(body) }); }
+  /** Moves the texts to the front of the project's order, so first in My tasks (lead only, issue 339). */
+  async moveToFront(key: string, rows: readonly RowRefView[]): Promise<MoveToFrontResult> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/document-rows/move-to-front`, { method: "POST", body: JSON.stringify({ rows }) }); }
   /** Record an opening of Documents (lead only); returns the NEW baseline (start of the previous visit). */
   async recordDocumentsVisit(key: string): Promise<DocumentsVisitView> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/documents/visit`, { method: "POST" }); }
   /** Navigation counter: rows needing the lead's decision, undecided rows included (lead only). */

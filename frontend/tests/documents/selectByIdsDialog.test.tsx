@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { api } from "../../src/api/client";
-import { SelectByIdsDialog } from "../../src/documents/SelectByIdsDialog";
+import { SelectByIdsDialog, type SelectByIdsDialogProps } from "../../src/documents/SelectByIdsDialog";
 
 const known = new Set(Array.from({ length: 2600 }, (_, index) => `case-${String(index).padStart(4, "0")}`));
 const idsOf = (count: number, start = 0) => Array.from({ length: count }, (_, index) => `case-${String(start + index).padStart(4, "0")}`);
@@ -18,10 +18,10 @@ beforeEach(() => {
 const keysOf = (ids: readonly string[]) => ids.flatMap(id => [`${id}:en`, `${id}:de`]);
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
-function renderDialog(current: readonly string[] = []) {
+function renderDialog(current: readonly string[] = [], extra: Partial<Pick<SelectByIdsDialogProps, "filters" | "sort">> = {}) {
   const onSelect = vi.fn();
   const onClose = vi.fn();
-  render(<SelectByIdsDialog projectKey="p" current={new Set(current)} onClose={onClose} onSelect={onSelect} />);
+  render(<SelectByIdsDialog projectKey="p" current={new Set(current)} onClose={onClose} onSelect={onSelect} {...extra} />);
   const dialog = screen.getByRole("dialog", { name: "Select by case IDs" });
   const paste = (text: string) => fireEvent.change(within(dialog).getByLabelText("Paste case IDs"), { target: { value: text } });
   return { dialog, paste, onSelect, onClose };
@@ -141,4 +141,50 @@ it("keeps Select unavailable with a reason when every match is ambiguous", async
   expect(document.getElementById(select.getAttribute("aria-describedby")!)?.textContent).toBe("Enter the exact case IDs listed as ambiguous.");
   fireEvent.click(select);
   expect(onSelect).not.toHaveBeenCalled();
+});
+
+/** The complement the server computes for "Select all except these": every known case but the excluded, two texts each. */
+function mockComplement(cases = 2600) {
+  vi.mocked(api.documentRowKeys).mockImplementation(async (_key, body) => {
+    const excluded = new Set(body?.case_ids ?? []);
+    const rest = [...known].slice(0, cases).filter(caseId => !excluded.has(caseId));
+    const listed = rest.slice(0, 2000);
+    return { keys: listed.flatMap(caseId => [{ case_id: caseId, language: "en" }, { case_id: caseId, language: "de" }]), cases: rest.length, total: rest.length * 2, truncated: rest.length > 2000 };
+  });
+}
+
+it("selects all except these: the server's complement under the current filters (issue 339)", async () => {
+  mockComplement(5);
+  const filters = { language: "de" };
+  const { dialog, paste, onSelect } = renderDialog([], { filters, sort: "import" });
+  paste("case-0001 case-0003 nope");
+  await within(dialog).findByText("2 found, 1 unknown");
+  fireEvent.click(within(dialog).getByLabelText("Select all except these"));
+  expect(within(dialog).getByText("Selects the texts matching the current filters, except the texts of these cases.")).toBeTruthy();
+  expect(await within(dialog).findByText("6 other texts in 3 cases match the current filters.")).toBeTruthy();
+  expect(api.documentRowKeys).toHaveBeenLastCalledWith("p", { case_ids: ["case-0001", "case-0003"], exclude: true, filters, sort: "import" });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Select 6 other texts" }));
+  await waitFor(() => expect(onSelect).toHaveBeenCalledWith(keysOf(["case-0000", "case-0002", "case-0004"]), "replace", false));
+});
+
+it("select all except these: capped at 2000 cases and at most 5000 pasted case IDs", async () => {
+  mockComplement();
+  const { dialog, paste, onSelect } = renderDialog();
+  paste("case-0001");
+  await within(dialog).findByText("1 found, 0 unknown");
+  fireEvent.click(within(dialog).getByLabelText("Select all except these"));
+  expect(await within(dialog).findByText("5198 other texts in 2599 cases match the current filters.")).toBeTruthy();
+  expect(within(dialog).getByText("Selection is limited to 2000 cases.")).toBeTruthy();
+  fireEvent.click(within(dialog).getByRole("button", { name: "Select the first 2000 others" }));
+  await waitFor(() => expect(onSelect).toHaveBeenCalledWith(expect.any(Array), "replace", true));
+  expect(onSelect.mock.calls[0][0]).toHaveLength(4000);
+  cleanup();
+  vi.mocked(api.lookupCaseIds).mockImplementation(async (_key, ids) => ({ found: [...ids], unknown: [] }));
+  const many = renderDialog();
+  many.paste(Array.from({ length: 5001 }, (_, index) => `id-${index}`).join("\n"));
+  await within(many.dialog).findByText("5001 found, 0 unknown");
+  fireEvent.click(within(many.dialog).getByLabelText("Select all except these"));
+  const select = within(many.dialog).getByRole("button", { name: /^Select/ , description: /at most 5000/ });
+  expect(select.getAttribute("aria-disabled")).toBe("true");
+  expect(document.getElementById(select.getAttribute("aria-describedby")!)?.textContent).toBe("Select all except these takes at most 5000 case IDs.");
 });

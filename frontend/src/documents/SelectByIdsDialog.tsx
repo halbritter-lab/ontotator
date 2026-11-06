@@ -5,9 +5,11 @@
  * texts of at most `MAX_SELECTION_CASES` cases; beyond that the first ones in pasted order are selected.
  * Case IDs are case sensitive: an ID in another case matches only when one case ID fits; when several
  * do (and none exactly), the dialog lists them and the lead enters the exact one (issue 237).
+ * "Select all except these" (issue 339) selects the other texts matching the current filters instead: the server
+ * computes the complement (`document-rows/keys` with `exclude`) from at most `MAX_EXCLUDED` found case IDs.
  */
 import { useEffect, useId, useRef, useState } from "react";
-import { api, type CaseIdLookupResult, type RowRefView } from "../api/client";
+import { api, type CaseIdLookupResult, type DocumentRowFilters, type DocumentRowKeys, type DocumentRowKeysRequest, type RowRefView } from "../api/client";
 import { ErrorNotice } from "../admin/ErrorNotice";
 import { plural } from "../app/labels";
 import { Button, Checkbox, Dialog, Textarea } from "../ui";
@@ -18,9 +20,15 @@ export interface SelectByIdsDialogProps {
   projectKey: string;
   /** Case IDs of the current selection (replaced by default). */
   current: ReadonlySet<string>;
+  /** The current Documents filters and order: "Select all except these" selects the other matching texts. */
+  filters?: DocumentRowFilters;
+  sort?: DocumentRowKeysRequest["sort"];
   onClose: () => void;
-  /** Text keys `"{case}:{language}"` of the found cases in pasted order; the caller applies them (and the cap) and closes the dialog. */
-  onSelect: (keys: readonly string[], mode: "replace" | "add") => void;
+  /**
+   * Text keys `"{case}:{language}"` of the found cases in pasted order (or, inverted, of the other matching cases in list
+   * order); the caller applies them (and the cap) and closes the dialog. `truncated`: the server cut the texts off at the cap.
+   */
+  onSelect: (keys: readonly string[], mode: "replace" | "add", truncated?: boolean) => void;
 }
 
 /** Lookup waits this long after the last keystroke. */
@@ -29,6 +37,9 @@ export const LOOKUP_DELAY_MS = 250;
 const LOOKUP_CHUNK = 5000;
 const UNKNOWN_SHOWN = 20;
 export const LIMIT_NOTE = `Selection is limited to ${MAX_SELECTION} cases.`;
+/** Case IDs "Select all except these" sends (the row keys endpoint accepts at most 5000). */
+export const MAX_EXCLUDED = 5000;
+export const INVERT_LABEL = "Select all except these";
 
 /** Every text of the given cases (at most `MAX_SELECTION` cases), in the given case order. */
 async function textsOf(projectKey: string, caseIds: readonly string[]): Promise<string[]> {
@@ -66,13 +77,16 @@ function shortList(items: readonly string[]): string {
   return `${items.slice(0, UNKNOWN_SHOWN).join(", ")}${items.length > UNKNOWN_SHOWN ? ` and ${items.length - UNKNOWN_SHOWN} more` : ""}`;
 }
 
-export function SelectByIdsDialog({ projectKey, current, onClose, onSelect }: SelectByIdsDialogProps): JSX.Element {
+export function SelectByIdsDialog({ projectKey, current, filters = {}, sort, onClose, onSelect }: SelectByIdsDialogProps): JSX.Element {
   const id = useId().replace(/:/g, "");
   const [text, setText] = useState("");
   const [result, setResult] = useState<{ key: string; value: Lookup } | null>(null);
   const [error, setError] = useState<{ key: string; error: unknown } | null>(null);
   const [retry, setRetry] = useState(0);
   const [adding, setAdding] = useState(false);
+  const [invert, setInvert] = useState(false);
+  const [rest, setRest] = useState<{ key: string; value: DocumentRowKeys } | null>(null);
+  const [restError, setRestError] = useState<{ key: string; error: unknown } | null>(null);
   const [copied, setCopied] = useState("");
   const [selecting, setSelecting] = useState(false);
   const [selectError, setSelectError] = useState<unknown>();
@@ -100,7 +114,27 @@ export function SelectByIdsDialog({ projectKey, current, onClose, onSelect }: Se
   const caseInsensitive = fresh?.case_insensitive ?? [];
   const ambiguous = fresh?.ambiguous ?? [];
   const add = adding && current.size > 0;
-  const total = add ? new Set([...current, ...found]).size : found.length;
+  // Inverted: the other texts matching the filters, computed by the server once the lookup is in.
+  const restKey = JSON.stringify([key, filters, sort ?? "case"]);
+  const tooManyExcluded = found.length > MAX_EXCLUDED;
+  const wantRest = invert && fresh !== null && found.length > 0 && !tooManyExcluded;
+  useEffect(() => {
+    if (!wantRest) return;
+    let active = true;
+    api.documentRowKeys(projectKey, { case_ids: found, exclude: true, filters, sort: sort ?? "case" }).then(value => {
+      if (active) { setRest({ key: restKey, value }); setRestError(null); }
+    }, (failure: unknown) => { if (active) setRestError({ key: restKey, error: failure }); });
+    return () => { active = false; };
+    // `restKey` stands for the found IDs, the filters and the order.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectKey, wantRest, restKey, retry]);
+  const restFresh = wantRest && rest?.key === restKey ? rest.value : null;
+  const restFailed = wantRest && !restFresh && restError?.key === restKey ? restError.error : undefined;
+  // Cases the selection would hold: the server counts every other matching case, its keys hold at most the cap.
+  const restListed = [...new Set((restFresh?.keys ?? []).map(item => item.case_id))];
+  const restUnlisted = (restFresh?.cases ?? 0) - restListed.length;
+  const chosen = invert ? restListed : found;
+  const total = (add ? new Set([...current, ...chosen]).size : chosen.length) + (invert ? restUnlisted : 0);
   const limited = total > MAX_SELECTION;
 
   let blocked: string | null = null;
@@ -109,12 +143,20 @@ export function SelectByIdsDialog({ projectKey, current, onClose, onSelect }: Se
   else if (!fresh) blocked = "Looking up…";
   else if (!found.length && ambiguous.length) blocked = "Enter the exact case IDs listed as ambiguous.";
   else if (!found.length) blocked = "None of these case IDs exist in this project.";
+  else if (invert && tooManyExcluded) blocked = `${INVERT_LABEL} takes at most ${MAX_EXCLUDED} case IDs.`;
+  else if (invert && restFailed !== undefined) blocked = "Loading the other texts failed. Retry first.";
+  else if (invert && !restFresh) blocked = "Looking up…";
+  else if (invert && !restFresh?.total) blocked = "No other texts match the current filters.";
 
   const reasonId = `${id}-reason`;
   const choose = async () => {
     if (selecting) return;
     setSelecting(true); setSelectError(undefined);
     try {
+      if (invert && restFresh) {
+        onSelect(restFresh.keys.map(textKeyOf), add ? "add" : "replace", restFresh.truncated);
+        return;
+      }
       const keys = await textsOf(projectKey, found);
       onSelect(keys, add ? "add" : "replace");
     } catch (failure: unknown) {
@@ -123,7 +165,9 @@ export function SelectByIdsDialog({ projectKey, current, onClose, onSelect }: Se
       setSelecting(false);
     }
   };
-  const primary = limited ? `Select the first ${MAX_SELECTION}` : `Select ${found.length}`;
+  const primary = invert
+    ? limited ? `Select the first ${MAX_SELECTION} others` : `Select ${plural(restFresh?.total ?? 0, "other text")}`
+    : limited ? `Select the first ${MAX_SELECTION}` : `Select ${found.length}`;
   const copyUnknown = () => {
     void navigator.clipboard?.writeText(unknown.join("\n")).then(() => setCopied(`Copied ${plural(unknown.length, "unknown ID")}.`), () => setCopied("Could not copy."));
   };
@@ -159,6 +203,12 @@ export function SelectByIdsDialog({ projectKey, current, onClose, onSelect }: Se
       {caseInsensitive.length > 0 && <p className="select-ids-case">
         Matched in another case: {shortList(caseInsensitive.map(entry => `${entry.id} as ${entry.case_id}`))}
       </p>}
+      <Checkbox id={`${id}-invert`} label={INVERT_LABEL} checked={invert} onChange={event => setInvert(event.target.checked)}
+        hint="Selects the texts matching the current filters, except the texts of these cases." />
+      {invert && restFresh && <p className="select-ids-rest" role="status">
+        {`${plural(restFresh.total, "other text")} in ${plural(restFresh.cases, "case")} ${restFresh.total === 1 ? "matches" : "match"} the current filters.`}
+      </p>}
+      {restFailed !== undefined && <div className="select-ids-error"><ErrorNotice error={restFailed} /><Button size="sm" onClick={() => setRetry(value => value + 1)}>Retry</Button></div>}
       {current.size > 0 && <>
         {!adding && <p>This replaces the current selection of {plural(current.size, "case")}.</p>}
         <Checkbox id={`${id}-add`} label="Add to the current selection instead" checked={adding} onChange={event => setAdding(event.target.checked)} />

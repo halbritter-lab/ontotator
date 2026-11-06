@@ -5,7 +5,7 @@
  * external-review acceptance, an Undo that would withdraw new work) open inline below the row.
  */
 import { useCallback, useId, useRef, useState } from "react";
-import { api, ApiError, type ConsequencesView, type DocumentRowView, type PersonRefView, type PlanRowPatch, type UndoView } from "../api/client";
+import { api, ApiError, type ConsequencesView, type DocumentRowView, type PersonRefView, type PlanRowPatch, type RowRefView, type UndoView } from "../api/client";
 import { textLabel } from "../app/identity";
 import { plural } from "../app/labels";
 import { errorMessage } from "../admin/errors";
@@ -45,6 +45,26 @@ function withdrawnParts(consequences: ConsequencesView, drafts: boolean): { noun
   return parts;
 }
 
+/** Text keys `"{case}:{language}"` of withdrawn tasks, each text once, in the given order. */
+export function withdrawnTextKeys(withdrawn: readonly RowRefView[]): string[] {
+  return [...new Set(withdrawn.map(item => `${item.case_id}:${item.language}`))];
+}
+
+/** "Select the 2 texts with withdrawn tasks": the toast action after an Undo (issue 339). */
+export function selectWithdrawnLabel(texts: number): string {
+  return `Select the ${texts === 1 ? "text" : `${texts} texts`} with withdrawn tasks`;
+}
+
+/**
+ * After an Undo of a change that withdrew tasks: the toast that offers their texts for a new assignment (issue 339).
+ * Undo restores the plan, not the tasks; null when the change withdrew none.
+ */
+export function undoneToast(withdrawn: readonly RowRefView[], onSelectTexts: ((keys: readonly string[]) => void) | undefined): Omit<ToastMessage, "id"> | null {
+  const keys = withdrawnTextKeys(withdrawn);
+  if (!keys.length || !onSelectTexts) return null;
+  return { message: "Plan change undone.", actionLabel: selectWithdrawnLabel(keys.length), onAction: () => onSelectTexts(keys), persist: true };
+}
+
 /** "1 open translation review (Ana Weber, ann-0004)" per task, joined with "; " (Undo conflict, D22). */
 export function withdrawnSummary(consequences: ConsequencesView): string {
   return withdrawnParts(consequences, false).map(part => `${part.noun} ${part.people}`).join("; ");
@@ -73,7 +93,7 @@ interface PlanRequest {
 export type PlanNotice =
   | { kind: "confirm"; request: PlanRequest; consequences: ConsequencesView }
   | { kind: "accept"; request: PlanRequest }
-  | { kind: "undo_conflict"; undo: UndoView; consequences: ConsequencesView }
+  | { kind: "undo_conflict"; undo: UndoView; consequences: ConsequencesView; withdrawn: readonly RowRefView[] }
   | { kind: "changed" }
   | { kind: "error"; error: unknown; retry: () => void };
 
@@ -84,6 +104,8 @@ export interface PlanSavesOptions {
   /** A save or undo changed the plan (or it changed elsewhere): refetch the rows. */
   onChanged: () => void;
   showToast: (toast: Omit<ToastMessage, "id">) => void;
+  /** After an Undo: selects the texts of the tasks the undone change withdrew (the toast's action, issue 339). */
+  onSelectTexts?: (keys: readonly string[]) => void;
 }
 
 export interface PlanSaves {
@@ -119,9 +141,9 @@ const flagName = (flag: PlanFlag): string => (flag === "review" ? "Translation r
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 
 /** Plan saves of one page: per-case queue, latest revisions, local flags until the rows refetch, inline notices. */
-export function usePlanSaves({ projectKey, onAnnounce, onChanged, showToast }: PlanSavesOptions): PlanSaves {
-  const latest = useRef({ onAnnounce, onChanged, showToast });
-  latest.current = { onAnnounce, onChanged, showToast };
+export function usePlanSaves({ projectKey, onAnnounce, onChanged, showToast, onSelectTexts }: PlanSavesOptions): PlanSaves {
+  const latest = useRef({ onAnnounce, onChanged, showToast, onSelectTexts });
+  latest.current = { onAnnounce, onChanged, showToast, onSelectTexts };
   const queues = useRef(new Map<string, Promise<void>>());
   const revisions = useRef(new Map<string, number>());
   const [overrides, setOverrides] = useState<ReadonlyMap<string, { flags: PlanFlagState; revision: number }>>(new Map());
@@ -175,7 +197,8 @@ export function usePlanSaves({ projectKey, onAnnounce, onChanged, showToast }: P
     latest.current.onChanged();
   };
 
-  const undo = (key: string, payload: UndoView, confirm: boolean) => {
+  /** `withdrawn`: the tasks the undone change withdrew; once undone, the toast offers their texts. */
+  const undo = (key: string, payload: UndoView, confirm: boolean, withdrawn: readonly RowRefView[] = []) => {
     const caseId = payload.rows[0]?.case_id ?? key.slice(0, key.lastIndexOf(":"));
     const language = key.slice(key.lastIndexOf(":") + 1);
     mark(setSendingKeys, key, true);
@@ -188,11 +211,13 @@ export function usePlanSaves({ projectKey, onAnnounce, onChanged, showToast }: P
           for (const item of payload.rows) setOverride(keyOf(item), { review: item.review, annotate: item.annotate }, outcome.revisions[item.case_id] ?? 0);
           setNotice(key, null);
           latest.current.onAnnounce("Plan change undone.");
+          const offer = undoneToast(withdrawn, latest.current.onSelectTexts);
+          if (offer) latest.current.showToast(offer);
           focusAfterSave(caseId, language, null);
           latest.current.onChanged();
         } else if (outcome.kind === "needs_confirm") {
           latest.current.onAnnounce("");
-          setNotice(key, { kind: "undo_conflict", undo: payload, consequences: outcome.consequences });
+          setNotice(key, { kind: "undo_conflict", undo: payload, consequences: outcome.consequences, withdrawn });
         } else {
           latest.current.onAnnounce("");
           for (const item of outcome.cases) noteRevision(item.case_id, item.revision);
@@ -201,7 +226,7 @@ export function usePlanSaves({ projectKey, onAnnounce, onChanged, showToast }: P
         }
       } catch (error: unknown) {
         latest.current.onAnnounce("");
-        setNotice(key, { kind: "error", error, retry: () => undo(key, payload, confirm) });
+        setNotice(key, { kind: "error", error, retry: () => undo(key, payload, confirm, withdrawn) });
       } finally {
         mark(setSendingKeys, key, false);
       }
@@ -233,7 +258,7 @@ export function usePlanSaves({ projectKey, onAnnounce, onChanged, showToast }: P
           message: `${request.language} of ${request.caseId}: ${flagName(request.flag)} ${request.value ? "on" : "off"}`,
           actionLabel: "Undo",
           undo: true,
-          onAction: () => undo(key, result.undo, false),
+          onAction: () => undo(key, result.undo, false, result.withdrawn),
           ...(result.withdrawn.length ? { note: UNDO_WITHDRAWN_NOTE } : {}),
         });
         latest.current.onChanged();
@@ -276,7 +301,7 @@ export function usePlanSaves({ projectKey, onAnnounce, onChanged, showToast }: P
           message: `${row.language} of ${row.case_id}: plan saved`,
           actionLabel: "Undo",
           undo: true,
-          onAction: () => undo(key, result.undo, false),
+          onAction: () => undo(key, result.undo, false, result.withdrawn),
           ...(result.withdrawn.length ? { note: UNDO_WITHDRAWN_NOTE } : {}),
         });
         latest.current.onChanged();
@@ -342,7 +367,7 @@ export function usePlanSaves({ projectKey, onAnnounce, onChanged, showToast }: P
     },
     undoAnyway: row => {
       const notice = notices.get(keyOf(row));
-      if (notice?.kind === "undo_conflict") undo(keyOf(row), notice.undo, true);
+      if (notice?.kind === "undo_conflict") undo(keyOf(row), notice.undo, true, notice.withdrawn);
     },
     saveRow,
     noteRevision,
