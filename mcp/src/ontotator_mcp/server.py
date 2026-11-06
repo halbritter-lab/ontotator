@@ -12,6 +12,7 @@ from ontotator_mcp import __version__
 from ontotator_mcp.client import OntotatorClient
 from ontotator_mcp.config import Settings
 from ontotator_mcp.resources import register_resources
+from ontotator_mcp.tools_monitoring import register_monitoring
 from ontotator_mcp.tools_people import register_people
 from ontotator_mcp.tools_results import register_results
 from ontotator_mcp.tools_setup import register_setup
@@ -62,6 +63,7 @@ def build_server(
     register_setup(server, api)
     register_people(server, api)
     register_status(server, api)
+    register_monitoring(server, api)
     register_results(server, api)
     register_resources(server, api)
     return server

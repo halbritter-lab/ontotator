@@ -19,11 +19,17 @@ from ontotator.domain.errors import DomainError
 from ontotator.domain.workspace import Submission
 from ontotator.exchange.final_content import thaw_content
 from ontotator.exchange.final_export_guide import (
+    bundle_entry,
     bundle_file,
     guide_files,
     submission_kind,
 )
-from ontotator.exchange.final_tables import Proposal, read_units, table_files
+from ontotator.exchange.final_tables import (
+    ExportedUnit,
+    Proposal,
+    read_units,
+    table_files,
+)
 from ontotator.exchange.proposal_checks import (
     proposal_check_records,
     proposal_set_chances,
@@ -31,11 +37,14 @@ from ontotator.exchange.proposal_checks import (
 )
 from ontotator.exchange.t1 import _axes, _mentions, layers_for
 from ontotator.jobs.queue import Job, JobContext
+from ontotator.storage.database import Database
 from ontotator.storage.final_tables import ExportSelectionSnapshotRow
 from ontotator.storage.repository import ProjectExport
 
 # v2 (#133): ``consolidations`` in receipt.json.
 FINAL_EXPORT_FORMAT = "ontotator-final-export/v2"
+# The snapshot id the agreement route's units name: they are never written.
+AGREEMENT_SNAPSHOT = "agreement"
 
 
 def consolidation_records(
@@ -135,6 +144,107 @@ def tool_proposals(
     return proposals
 
 
+def bundle_submissions(
+    content: ProjectExport, payload: Mapping[str, Any]
+) -> dict[str, list[Submission]]:
+    """The frozen submissions per bundle of the final export: the selected
+    results, the provenance closure behind them and the other annotations of
+    the texts accepted directly (compared)."""
+    selected_ids = set(payload["selected_submission_ids"])
+    compared_ids = set(payload.get("compared_submission_ids", []))
+    return {
+        "selected": [
+            sub for sub in content.submissions if sub.submission_id in selected_ids
+        ],
+        "provenance": [
+            sub
+            for sub in content.submissions
+            if sub.submission_id not in selected_ids | compared_ids
+        ],
+        "compared": [
+            sub for sub in content.submissions if sub.submission_id in compared_ids
+        ],
+    }
+
+
+def round_input_refs(
+    project: str, payload: Mapping[str, Any], snapshot_id: str
+) -> tuple[dict[str, str], list[dict[str, Any]]]:
+    """The exported reference of every round input of a frozen selection (the
+    source-ref overrides of the bundles) and the receipt's ``human_inputs``."""
+    from ontotator.exchange.jobs import draft_input_ref
+
+    selected_ids = set(payload["selected_submission_ids"])
+    overrides: dict[str, str] = {}
+    input_receipt = []
+    for entries in payload["round_inputs"].values():
+        for entry in entries:
+            source_id = entry["source_submission_id"]
+            # An input of a frozen draft (kind ``text_change``) names the draft
+            # snapshot instead of a source submission; the draft is in no bundle.
+            source: dict[str, Any]
+            if source_id is None:
+                external = draft_input_ref(project, entry)
+                source = {"source_draft_snapshot_id": entry["source_draft_snapshot_id"]}
+            else:
+                bundle_kind = "selected" if source_id in selected_ids else "provenance"
+                external = ontospan.annotation_ref(
+                    f"submission-{source_id}",
+                    entry["source_ref"]["annotation_id"],
+                    bundle_id=f"{bundle_kind}-{snapshot_id}",
+                )
+                source = {"source_submission_id": source_id}
+            overrides[f"input-{entry['input_id']}"] = external
+            overrides[f"round-input:{entry['input_id']}"] = external
+            input_receipt.append(
+                {
+                    "input_id": entry["input_id"],
+                    "input_alias": f"input-{entry['input_id']}",
+                    **source,
+                    "source_ref": entry["source_ref"],
+                    "exported_ref": external,
+                }
+            )
+    return overrides, input_receipt
+
+
+def agreement_units(
+    db: Database, project: str, payload: Mapping[str, Any]
+) -> list[ExportedUnit]:
+    """The T1 units of a frozen selection, per bundle as the final export
+    writes them, without writing the bundles: the input of the agreement
+    tables for the project agreement route (#353)."""
+    from ontotator.exchange.jobs import build_t1_units
+
+    content = thaw_content(dict(payload["content"]))
+    overrides, _ = round_input_refs(project, payload, AGREEMENT_SNAPSHOT)
+    views: dict[str, ontospan.OntologyView] = {}
+    units: list[ExportedUnit] = []
+    for kind, subs in bundle_submissions(content, payload).items():
+        if not subs:
+            continue
+        built = build_t1_units(
+            db,
+            project,
+            replace(content, submissions=subs),
+            final_snapshot_id=AGREEMENT_SNAPSHOT,
+            source_ref_overrides=overrides,
+            round_kinds=payload["round_kinds"],
+            views=views,
+        )
+        units.extend(
+            ExportedUnit(
+                sub.submission_id,
+                kind,
+                bundle_file(kind),
+                bundle_entry(index),
+                unit,
+            )
+            for index, (sub, unit) in enumerate(zip(subs, built.units, strict=True))
+        )
+    return units
+
+
 @dataclass(frozen=True)
 class FrozenFinal:
     """A verified final-result snapshot, ready to serialize."""
@@ -161,7 +271,7 @@ def load_frozen_final(job: Job, ctx: JobContext) -> FrozenFinal:
     A lead may use only their own snapshots; the operator on the command
     line (a system admin, Q5) any snapshot of the project.
     """
-    from ontotator.exchange.jobs import draft_input_ref, requester
+    from ontotator.exchange.jobs import requester
 
     if set(job.payload) != {"project", "snapshot_id", "snapshot_sha256"}:
         raise DomainError("INVALID_EXPORT_SNAPSHOT")
@@ -227,41 +337,9 @@ def load_frozen_final(job: Job, ctx: JobContext) -> FrozenFinal:
         # Which tool could have proposed on which text (recall, proposals.csv).
         chances = proposal_set_chances(conn, job.project_id, content.documents)
     selected_ids = set(payload["selected_submission_ids"])
-    overrides: dict[str, str] = {}
-    input_receipt = []
-    for entries in payload["round_inputs"].values():
-        for entry in entries:
-            source_id = entry["source_submission_id"]
-            # An input of a frozen draft (kind ``text_change``) names the draft
-            # snapshot instead of a source submission; the draft is in no bundle.
-            source: dict[str, Any]
-            if source_id is None:
-                external = draft_input_ref(project, entry)
-                source = {"source_draft_snapshot_id": entry["source_draft_snapshot_id"]}
-            else:
-                bundle_kind = "selected" if source_id in selected_ids else "provenance"
-                external = ontospan.annotation_ref(
-                    f"submission-{source_id}",
-                    entry["source_ref"]["annotation_id"],
-                    bundle_id=f"{bundle_kind}-{row['snapshot_id']}",
-                )
-                source = {"source_submission_id": source_id}
-            overrides[f"input-{entry['input_id']}"] = external
-            overrides[f"round-input:{entry['input_id']}"] = external
-            input_receipt.append(
-                {
-                    "input_id": entry["input_id"],
-                    "input_alias": f"input-{entry['input_id']}",
-                    **source,
-                    "source_ref": entry["source_ref"],
-                    "exported_ref": external,
-                }
-            )
+    overrides, input_receipt = round_input_refs(project, payload, row["snapshot_id"])
     selected_content = replace(
-        content,
-        submissions=[
-            sub for sub in content.submissions if sub.submission_id in selected_ids
-        ],
+        content, submissions=bundle_submissions(content, payload)["selected"]
     )
     return FrozenFinal(
         actor=actor,
@@ -289,11 +367,7 @@ def final_t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
         frozen.row,
         frozen.payload,
     )
-    content, selected_ids, overrides = (
-        frozen.content,
-        frozen.selected_ids,
-        frozen.overrides,
-    )
+    content, overrides = frozen.content, frozen.overrides
     input_receipt, proposal_checks = frozen.input_receipt, frozen.proposal_checks
     tool_sources, chances = frozen.tool_sources, frozen.chances
     selected_content = frozen.selected_content
@@ -316,13 +390,8 @@ def final_t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
         for entry in payload["content"]["documents"].values()
     )
     files = {bundle_file("selected"): selected, "source-texts.jsonl": sources}
-    compared_ids = set(payload.get("compared_submission_ids", []))
-    closure = [
-        sub
-        for sub in content.submissions
-        if sub.submission_id not in selected_ids | compared_ids
-    ]
-    compared = [sub for sub in content.submissions if sub.submission_id in compared_ids]
+    bundles = bundle_submissions(content, payload)
+    closure, compared = bundles["provenance"], bundles["compared"]
     for bundle_kind, subs in (("provenance", closure), ("compared", compared)):
         if not subs:
             continue

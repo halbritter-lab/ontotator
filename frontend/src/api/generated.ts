@@ -870,6 +870,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{key}/translation-reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Project Review Records
+         * @description Every submitted translation review of the project, oldest first.
+         */
+        get: operations["project_review_records_api_v1_projects__key__translation_reviews_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/assignments/{assignment_id}/work-time": {
         parameters: {
             query?: never;
@@ -1339,6 +1359,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{key}/agreement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Project Agreement
+         * @description Agreement of the annotations behind the final results, project-wide.
+         */
+        get: operations["project_agreement_api_v1_projects__key__agreement_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{key}/exports/final": {
         parameters: {
             query?: never;
@@ -1626,7 +1666,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Mode Changes */
+        /**
+         * List Mode Changes
+         * @description Mode changes, newest first: of one text, or of every text that matches
+         *     the filters given (the whole project without filters).
+         */
         get: operations["list_mode_changes_api_v1_projects__key__annotation_mode_changes_get"];
         put?: never;
         /** Change Mode */
@@ -3203,6 +3247,89 @@ export interface components {
             /** Term Label */
             term_label: string;
         };
+        /**
+         * AgreementMacroMean
+         * @description Mean over texts of each text's mean over its pairs.
+         */
+        AgreementMacroMean: {
+            /** Annotation Strict F1 */
+            annotation_strict_f1: number | null;
+            /** Annotation Tolerant F1 */
+            annotation_tolerant_f1: number | null;
+            /** Mention Strict F1 */
+            mention_strict_f1: number | null;
+            /** Mention Tolerant F1 */
+            mention_tolerant_f1: number | null;
+            /** Term F1 */
+            term_f1: number | null;
+            /** Modifier Agreement */
+            modifier_agreement: number | null;
+            /** Texts */
+            texts: number;
+            /** Pairs */
+            pairs: number;
+        };
+        /**
+         * AgreementPooled
+         * @description F1 of the counts summed over every pair (micro average).
+         */
+        AgreementPooled: {
+            /** Annotation Strict F1 */
+            annotation_strict_f1: number | null;
+            /** Annotation Tolerant F1 */
+            annotation_tolerant_f1: number | null;
+            /** Mention Strict F1 */
+            mention_strict_f1: number | null;
+            /** Mention Tolerant F1 */
+            mention_tolerant_f1: number | null;
+            /** Term F1 */
+            term_f1: number | null;
+            /** Modifier Agreement */
+            modifier_agreement: number | null;
+            /** Findings A */
+            findings_a: number;
+            /** Findings B */
+            findings_b: number;
+            /** Equal */
+            equal: number;
+            /** Compatible */
+            compatible: number;
+            /** Axis Conflicts */
+            axis_conflicts: number;
+            /** Term Conflicts */
+            term_conflicts: number;
+            /** A Only */
+            a_only: number;
+            /** B Only */
+            b_only: number;
+            /** Mentions A */
+            mentions_a: number;
+            /** Mentions B */
+            mentions_b: number;
+            /** Mentions Equal */
+            mentions_equal: number;
+            /** Mentions Compatible */
+            mentions_compatible: number;
+            /** Terms A */
+            terms_a: number;
+            /** Terms B */
+            terms_b: number;
+            /** Terms Equal */
+            terms_equal: number;
+            /** Modifiers Compared */
+            modifiers_compared: number;
+            /** Modifiers Agreeing */
+            modifiers_agreeing: number;
+            /** Texts */
+            texts: number;
+            /** Pairs */
+            pairs: number;
+        };
+        /** AgreementSummary */
+        AgreementSummary: {
+            macro_mean: components["schemas"]["AgreementMacroMean"];
+            pooled: components["schemas"]["AgreementPooled"];
+        };
         /** AgreementView */
         AgreementView: {
             /** Compared Version */
@@ -3343,6 +3470,18 @@ export interface components {
             annotations: components["schemas"]["AnnotationSnapshot"][];
             /** Evidence */
             evidence: components["schemas"]["EvidenceSnapshot"][];
+        };
+        /**
+         * AnnotatorPairAgreement
+         * @description Every text the two people both annotated.
+         */
+        AnnotatorPairAgreement: {
+            macro_mean: components["schemas"]["AgreementMacroMean"];
+            pooled: components["schemas"]["AgreementPooled"];
+            /** Pseudonym A */
+            pseudonym_a: string;
+            /** Pseudonym B */
+            pseudonym_b: string;
         };
         /** AnonymiseRequest */
         AnonymiseRequest: {
@@ -6011,9 +6150,9 @@ export interface components {
         /** ModeChangeList */
         ModeChangeList: {
             /** Case Id */
-            case_id: string;
+            case_id: string | null;
             /** Language */
-            language: string;
+            language: string | null;
             /** Changes */
             changes: components["schemas"]["ModeChangeView"][];
         };
@@ -6440,6 +6579,74 @@ export interface components {
         OtherActiveHold: {
             /** Report Id */
             report_id: string;
+        };
+        /**
+         * PairAgreement
+         * @description Two people's annotations of one text: a row of agreement.csv.
+         */
+        PairAgreement: {
+            /** Annotation Strict F1 */
+            annotation_strict_f1: number | null;
+            /** Annotation Tolerant F1 */
+            annotation_tolerant_f1: number | null;
+            /** Mention Strict F1 */
+            mention_strict_f1: number | null;
+            /** Mention Tolerant F1 */
+            mention_tolerant_f1: number | null;
+            /** Term F1 */
+            term_f1: number | null;
+            /** Modifier Agreement */
+            modifier_agreement: number | null;
+            /** Findings A */
+            findings_a: number;
+            /** Findings B */
+            findings_b: number;
+            /** Equal */
+            equal: number;
+            /** Compatible */
+            compatible: number;
+            /** Axis Conflicts */
+            axis_conflicts: number;
+            /** Term Conflicts */
+            term_conflicts: number;
+            /** A Only */
+            a_only: number;
+            /** B Only */
+            b_only: number;
+            /** Mentions A */
+            mentions_a: number;
+            /** Mentions B */
+            mentions_b: number;
+            /** Mentions Equal */
+            mentions_equal: number;
+            /** Mentions Compatible */
+            mentions_compatible: number;
+            /** Terms A */
+            terms_a: number;
+            /** Terms B */
+            terms_b: number;
+            /** Terms Equal */
+            terms_equal: number;
+            /** Modifiers Compared */
+            modifiers_compared: number;
+            /** Modifiers Agreeing */
+            modifiers_agreeing: number;
+            /** Case Id */
+            case_id: string;
+            /** Language */
+            language: string;
+            /** Document Id */
+            document_id: string;
+            /** Text Version */
+            text_version: string;
+            /** Submission A */
+            submission_a: string;
+            /** Pseudonym A */
+            pseudonym_a: string;
+            /** Submission B */
+            submission_b: string;
+            /** Pseudonym B */
+            pseudonym_b: string;
         };
         /** PasswordChange */
         PasswordChange: {
@@ -7190,6 +7397,26 @@ export interface components {
              * @default 0
              */
             submitted: number;
+        };
+        /**
+         * ProjectAgreement
+         * @description The agreement a final export would write now (agreement.csv and
+         *     agreement-summary.csv), for the texts with a final result.
+         */
+        ProjectAgreement: {
+            /** Project */
+            project: string;
+            /** State Digest */
+            state_digest: string;
+            /** Selected Texts */
+            selected_texts: number;
+            summary: components["schemas"]["AgreementSummary"];
+            /** Annotator Pairs */
+            annotator_pairs: components["schemas"]["AnnotatorPairAgreement"][];
+            /** Texts */
+            texts: components["schemas"]["TextAgreement"][];
+            /** Pairs */
+            pairs: components["schemas"]["PairAgreement"][];
         };
         /** ProjectDocumentSummary */
         ProjectDocumentSummary: {
@@ -9082,6 +9309,22 @@ export interface components {
              * @enum {string}
              */
             reason: "replaced_by" | "alt_id";
+        };
+        /**
+         * TextAgreement
+         * @description Every pair of annotators of one text.
+         */
+        TextAgreement: {
+            macro_mean: components["schemas"]["AgreementMacroMean"];
+            pooled: components["schemas"]["AgreementPooled"];
+            /** Case Id */
+            case_id: string;
+            /** Language */
+            language: string;
+            /** Document Id */
+            document_id: string;
+            /** Text Version */
+            text_version: string;
         };
         /** TextChangePreview */
         TextChangePreview: {
@@ -11693,6 +11936,37 @@ export interface operations {
             };
         };
     };
+    project_review_records_api_v1_projects__key__translation_reviews_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranslationReviewRecord"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     work_time_api_v1_assignments__assignment_id__work_time_get: {
         parameters: {
             query?: never;
@@ -12612,6 +12886,37 @@ export interface operations {
             };
         };
     };
+    project_agreement_api_v1_projects__key__agreement_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectAgreement"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     final_export_api_v1_projects__key__exports_final_post: {
         parameters: {
             query?: never;
@@ -13178,9 +13483,9 @@ export interface operations {
     };
     list_mode_changes_api_v1_projects__key__annotation_mode_changes_get: {
         parameters: {
-            query: {
-                case_id: string;
-                language: string;
+            query?: {
+                case_id?: string | null;
+                language?: string | null;
             };
             header?: never;
             path: {

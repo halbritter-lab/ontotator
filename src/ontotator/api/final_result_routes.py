@@ -81,6 +81,99 @@ class FinalExportRequest(BaseModel):
     format: Literal["t1", "phenopacket"] = "t1"
 
 
+class AgreementValues(BaseModel):
+    """F1 values (``modifier_agreement`` a share); None without anything to compare."""
+
+    annotation_strict_f1: float | None
+    annotation_tolerant_f1: float | None
+    mention_strict_f1: float | None
+    mention_tolerant_f1: float | None
+    term_f1: float | None
+    modifier_agreement: float | None
+
+
+class AgreementCounts(BaseModel):
+    findings_a: int
+    findings_b: int
+    equal: int
+    compatible: int
+    axis_conflicts: int
+    term_conflicts: int
+    a_only: int
+    b_only: int
+    mentions_a: int
+    mentions_b: int
+    mentions_equal: int
+    mentions_compatible: int
+    terms_a: int
+    terms_b: int
+    terms_equal: int
+    modifiers_compared: int
+    modifiers_agreeing: int
+
+
+class AgreementMacroMean(AgreementValues):
+    """Mean over texts of each text's mean over its pairs."""
+
+    texts: int
+    pairs: int
+
+
+class AgreementPooled(AgreementCounts, AgreementValues):
+    """F1 of the counts summed over every pair (micro average)."""
+
+    texts: int
+    pairs: int
+
+
+class AgreementSummary(BaseModel):
+    macro_mean: AgreementMacroMean
+    pooled: AgreementPooled
+
+
+class AnnotatorPairAgreement(AgreementSummary):
+    """Every text the two people both annotated."""
+
+    pseudonym_a: str
+    pseudonym_b: str
+
+
+class TextAgreement(AgreementSummary):
+    """Every pair of annotators of one text."""
+
+    case_id: str
+    language: str
+    document_id: str
+    text_version: str
+
+
+class PairAgreement(AgreementCounts, AgreementValues):
+    """Two people's annotations of one text: a row of agreement.csv."""
+
+    case_id: str
+    language: str
+    document_id: str
+    text_version: str
+    submission_a: str
+    pseudonym_a: str
+    submission_b: str
+    pseudonym_b: str
+
+
+class ProjectAgreement(BaseModel):
+    """The agreement a final export would write now (agreement.csv and
+    agreement-summary.csv), for the texts with a final result."""
+
+    project: str
+    # The preflight's digest: the same selection as a final export with it.
+    state_digest: str
+    selected_texts: int
+    summary: AgreementSummary
+    annotator_pairs: list[AnnotatorPairAgreement]
+    texts: list[TextAgreement]
+    pairs: list[PairAgreement]
+
+
 def _service(request: Request, principal: Any) -> FinalResultService:
     return FinalResultService(
         request.app.state.repo.db,
@@ -108,6 +201,14 @@ def final_preflight(
     key: str, principal: PrincipalDep, request: Request
 ) -> dict[str, Any]:
     return _service(request, principal).preflight(key)
+
+
+@router.get("/agreement", response_model=ProjectAgreement)
+def project_agreement(
+    key: str, principal: PrincipalDep, request: Request
+) -> dict[str, Any]:
+    """Agreement of the annotations behind the final results, project-wide."""
+    return _service(request, principal).agreement(key)
 
 
 @router.post("/exports/final")

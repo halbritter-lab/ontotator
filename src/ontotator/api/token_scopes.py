@@ -123,6 +123,7 @@ ROUTE_SCOPES: Mapping[tuple[str, str], RouteScope] = {
     ("GET", f"{P}/documents/{{doc:path}}/submissions"): "read",
     ("GET", f"{P}/documents/{{doc:path}}/submissions/{{submission_id:path}}"): "read",
     ("GET", f"{P}/documents/{{doc:path}}/translation-reviews"): "read",
+    ("GET", f"{P}/translation-reviews"): "read",
     ("POST", f"{P}/documents/{{doc:path}}/translation-correction-assignment"): (
         "project-admin"
     ),
@@ -177,6 +178,8 @@ ROUTE_SCOPES: Mapping[tuple[str, str], RouteScope] = {
     ("POST", f"{P}/consolidations"): "project-admin",
     ("POST", f"{P}/submissions/{{submission_id:path}}/carry"): "project-admin",
     ("PUT", f"{P}/final-selections"): "project-admin",
+    # Agreement behind the final results (issue 353): leads, like the export.
+    ("GET", f"{P}/agreement"): "read",
     # Problem reports
     ("GET", f"{P}/problem-reports"): "read",
     ("GET", "/api/v1/problem-reports/{report_id}"): "read",

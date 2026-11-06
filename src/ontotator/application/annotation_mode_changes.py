@@ -77,21 +77,23 @@ class AnnotationModeChangeService:
                 conn, pid, text, documents, from_mode, mode, lock=False
             )
 
-    def list_changes(self, key: str, case_id: str, language: str) -> dict[str, Any]:
-        """The text's mode changes, newest first, with what a restore needs."""
+    def list_changes(
+        self, key: str, case_id: str | None, language: str | None
+    ) -> dict[str, Any]:
+        """The mode changes, newest first, with what a restore needs: of one
+        text, or of every case or language left out (#352)."""
         with self.db.transaction() as conn:
             project = self._plans._lock(conn, key, exclusive=False)
             pid = project["id"]
+            query = select(AnnotationModeChangeRow).where(
+                AnnotationModeChangeRow.project_id == pid
+            )
+            if case_id is not None:
+                query = query.where(AnnotationModeChangeRow.case_id == case_id)
+            if language is not None:
+                query = query.where(AnnotationModeChangeRow.language == language)
             rows = (
-                conn.execute(
-                    select(AnnotationModeChangeRow)
-                    .where(
-                        AnnotationModeChangeRow.project_id == pid,
-                        AnnotationModeChangeRow.case_id == case_id,
-                        AnnotationModeChangeRow.language == language,
-                    )
-                    .order_by(AnnotationModeChangeRow.id.desc())
-                )
+                conn.execute(query.order_by(AnnotationModeChangeRow.id.desc()))
                 .mappings()
                 .all()
             )

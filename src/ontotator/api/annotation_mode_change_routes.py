@@ -90,8 +90,9 @@ class ModeChangeView(BaseModel):
 
 
 class ModeChangeList(BaseModel):
-    case_id: str
-    language: str
+    # The filters asked for; None lists the changes of every case or language.
+    case_id: str | None
+    language: str | None
     changes: list[ModeChangeView]
 
 
@@ -118,9 +119,11 @@ def list_mode_changes(
     key: str,
     principal: PrincipalDep,
     request: Request,
-    case_id: str = Query(min_length=1, max_length=MAX_CASE_ID_LENGTH),
-    language: str = Query(min_length=1, max_length=MAX_LANGUAGE_LENGTH),
+    case_id: str | None = Query(None, min_length=1, max_length=MAX_CASE_ID_LENGTH),
+    language: str | None = Query(None, min_length=1, max_length=MAX_LANGUAGE_LENGTH),
 ) -> dict[str, Any]:
+    """Mode changes, newest first: of one text, or of every text that matches
+    the filters given (the whole project without filters)."""
     return _service(request, key, principal).list_changes(key, case_id, language)
 
 

@@ -205,6 +205,14 @@ the counts summed over all pairs (micro average) and lists those sums.
 Without any pair (for example when every text had one annotator), both rows
 have `pairs` 0 and empty values.
 
+The same figures are available before an export: `GET
+/api/v1/projects/{key}/agreement` (token scope `read`; leads only, like the
+final export, because it names the annotators) computes them with the same
+code for the current final results. Its `summary` and `pairs` are the rows of
+the two files (unrounded, without `source_text_line`); `annotator_pairs` and
+`texts` apply the summary to the pairs of two people and of one text. The MCP
+tool `agreement_summary` reads it.
+
 Only F1 values are given. Span annotation has no countable negatives (every
 place in a text where nobody marked anything would be one), so chance-corrected
 coefficients such as Cohen's kappa are not defined for it. Define in the study

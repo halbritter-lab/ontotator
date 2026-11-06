@@ -21,6 +21,7 @@ from ontotator.authz.visibility import (
     current_access,
     qualifying_assignment,
     require_document,
+    visible_documents,
 )
 from ontotator.domain.errors import DomainError, RevisionConflict
 from ontotator.domain.translation_review import (
@@ -382,6 +383,67 @@ class TranslationReviewService:
         if any(r.machine_text_sha256 != baseline_hash for r in records):
             raise DomainError("VARIANT_SOURCE_UNKNOWN", "Review baseline hash mismatch")
         return records
+
+    def project_records(
+        self, access: Access, project: str
+    ) -> list[TranslationReviewRecord]:
+        """Every submitted translation review of the project (#352), as
+        ``records`` gives them per text: a reviewer without the right to see
+        every text gets their own reviews of the texts they may see."""
+        with self.db.transaction() as conn:
+            conn.execute(
+                select(func.pg_advisory_xact_lock_shared(_lock_id("members", project)))
+            )
+            conn.execute(
+                select(func.pg_advisory_xact_lock_shared(_lock_id("project", project)))
+            )
+            lock_user_authority(conn, access.user_id)
+            pid = Repository._project_id(conn, project)
+            fresh = None if pid is None else current_access(conn, access, pid, project)
+            if (
+                pid is None
+                or fresh is None
+                or not can(fresh, Action.VIEW_PROJECT, project)
+            ):
+                raise DomainError("PROJECT_NOT_FOUND")
+            query = select(TranslationReviewRow).where(
+                TranslationReviewRow.project_id == pid
+            )
+            if not can(fresh, Action.VIEW_ALL_DOCUMENTS, project):
+                visible = visible_documents(conn, fresh, pid, project)
+                query = query.where(
+                    TranslationReviewRow.reviewer_user_id == fresh.user_id,
+                    TranslationReviewRow.document_id.in_(sorted(visible.document_ids)),
+                )
+            records = with_guideline_withdrawn(
+                conn,
+                pid,
+                [
+                    TranslationReviewRecord.model_validate(r)
+                    for r in conn.execute(
+                        query.order_by(TranslationReviewRow.id)
+                    ).mappings()
+                ],
+            )
+            baselines = dict(
+                conn.execute(
+                    select(DocumentRow.document_id, DocumentRow.text_sha256).where(
+                        DocumentRow.project_id == pid,
+                        DocumentRow.document_id.in_(
+                            sorted({r.document_id for r in records})
+                        ),
+                    )
+                )
+                .tuples()
+                .all()
+            )
+            if any(
+                r.machine_text_sha256 != baselines.get(r.document_id) for r in records
+            ):
+                raise DomainError(
+                    "VARIANT_SOURCE_UNKNOWN", "Review baseline hash mismatch"
+                )
+            return records
 
     def open(self, access: Access, assignment_id: int) -> ReviewWorkspace:
         with self.db.transaction() as conn:

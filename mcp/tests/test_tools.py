@@ -604,14 +604,41 @@ async def test_accept_agreeing_texts_accepts_with_confirm(
     }
 
 
-async def test_agreement_summary_sums_the_texts(
+def _agreement_text(case_id: str) -> dict[str, Any]:
+    summary = build("AgreementSummary")
+    return build(
+        "TextAgreement", case_id=case_id, document_id=f"{case_id}-en", **summary
+    )
+
+
+async def test_agreement_summary_reads_the_project_agreement_in_one_call(
     fake: FakeApi, mcp_client: Client
 ) -> None:
-    _results(fake)
+    pooled = build("AgreementPooled", texts=2, pairs=3, annotation_strict_f1=0.5)
+    fake.on(
+        "GET",
+        f"{P}/agreement",
+        build(
+            "ProjectAgreement",
+            selected_texts=2,
+            summary=build("AgreementSummary", pooled=pooled),
+            texts=[_agreement_text("c1"), _agreement_text("c2")],
+            pairs=[build("PairAgreement", case_id="c1"), build("PairAgreement")],
+        ),
+    )
     result = await call(mcp_client, "agreement_summary", {"project": "p"})
-    assert result["texts_compared"] == 2
-    assert result["texts_all_match"] == 1
-    assert (result["findings_matching"], result["findings_total"]) == (4, 6)
+    assert fake.templates() == [("GET", f"{P}/agreement")]
+    assert result["summary"]["pooled"]["annotation_strict_f1"] == 0.5
+    assert [t["case_id"] for t in result["texts"]] == ["c1", "c2"]
+    assert "pairs" not in result
+    only = await call(
+        mcp_client,
+        "agreement_summary",
+        {"project": "p", "case_ids": ["c1"], "include_pairs": True},
+    )
+    assert [t["case_id"] for t in only["texts"]] == ["c1"]
+    assert [p["case_id"] for p in only["pairs"]] == ["c1"]
+    assert only["summary"] == result["summary"]
 
 
 async def test_consolidation_takes_every_eligible_submission(
