@@ -222,3 +222,15 @@ What for: download raw material for analysis. People appear as pseudonyms.
 3. Click **Create**, then **Download** when it is ready.
 
 How to analyse these files is described in the [scientific workflow guide](../scientific-workflow.md).
+
+### Export history
+
+What for: find an earlier export again, see who made it and why one failed.
+
+**Export history** at the bottom of **Export** lists every export of the project, newest first: final results, Phenopackets and the research data, also those that other leads or an API token started. Each row shows the export, its state (*Waiting*, *Running*, *Ready* or *Failed*), who requested it (*Command line* for one started on the server), when it started and when it finished. A failed export shows its error code under *Failed*; point at it for the full message.
+
+- Click **Download** to save the file of a finished export again. The server checks your rights again on every download.
+- Click **Show older exports** for the next 20.
+- The list updates when you create a research export here. Click **Refresh history** to see a final export or exports others started meanwhile.
+
+Only leads and system administrators see the history. People appear by name and pseudonym, as elsewhere for leads.
