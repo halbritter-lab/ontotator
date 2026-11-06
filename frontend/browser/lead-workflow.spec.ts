@@ -482,12 +482,12 @@ test("ROWS: row actions within three clicks", async ({ page }) => {
   await expect(card).toHaveCount(0);
   await expect(rowCell(row(page, cases.choose_final, "de"), "finalization")).toContainText("accepted");
 
-  // Resolve…: the three options exactly, inline under the row (Change 13); discarding takes 3 (+ typing the reason).
+  // Resolve…: the options exactly, inline under the row (Change 13); discarding takes 3 (+ typing the reason).
   clicks = counter(page);
   await clicks.click(rowAction(page, "Resolve…", cases.rejected, "de"));
   const resolve = page.getByRole("group", { name: textNamePattern("Resolve rejected translation, ", cases.rejected, "de") });
   await expect(resolve.getByRole("heading", { name: textNamePattern("Resolve rejected translation, ", cases.rejected, "de") })).toBeFocused();
-  await expect(resolve.getByRole("button")).toHaveText(["Assign a new review…", "Correct the translation…", "Discard the de translation…", "Cancel"]);
+  await expect(resolve.getByRole("button")).toHaveText(["Reopen Ana Weber's review…", "Assign a new review…", "Correct the translation…", "Discard the de translation…", "Cancel"]);
   await clicks.click(resolve.getByRole("button", { name: "Discard the de translation…", exact: true }));
   const discard = page.getByRole("group", { name: `Discard the de translation of ${cases.rejected}`, exact: true });
   await discard.getByRole("textbox", { name: "Reason (required)" }).fill("The translation used the wrong source.");
@@ -668,7 +668,7 @@ test("lead corrects a rejected translation and annotation becomes assignable", a
   const area = page.locator(".documents-row-notice-slot");
   const resolve = area.getByRole("group", { name: textNamePattern("Resolve rejected translation, ", caseId, "de") });
   await expect(resolve.getByRole("heading", { name: textNamePattern("Resolve rejected translation, ", caseId, "de") })).toBeFocused();
-  await expect(resolve.getByRole("button")).toHaveText(["Assign a new review…", "Correct the translation…", "Discard the de translation…", "Cancel"]);
+  await expect(resolve.getByRole("button")).toHaveText(["Reopen Ana Weber's review…", "Assign a new review…", "Correct the translation…", "Discard the de translation…", "Cancel"]);
 
   // Correct the translation…: the panel explains the outcome; its heading takes focus.
   await resolve.getByRole("button", { name: "Correct the translation…", exact: true }).click();
@@ -711,6 +711,58 @@ test("lead corrects a rejected translation and annotation becomes assignable", a
   await expect(rowCell(row(page, caseId, "de"), "translation")).toContainText("accepted");
   await expect(rowAction(page, "Assign annotation…", caseId, "de")).toBeVisible();
   await expect(rowAction(page, "Resolve…", caseId, "de")).toHaveCount(0);
+});
+
+test("the same reviewer reviews a rejected translation again: Reopen, not a dead Already assigned (#340)", async ({ page }) => {
+  const s = await leadScenario(page, "REJECTED_TRANSLATION_FOR_LEAD");
+  const caseId = s.cases!.rejected;
+  await loginLead(page, s);
+
+  // Resolve… › Assign a new review…: Ana already reviewed it; her row offers Reopen their review…, no choice.
+  await rowAction(page, "Resolve…", caseId, "de").click();
+  const resolve = page.locator(".documents-row-notice-slot").getByRole("group", { name: textNamePattern("Resolve rejected translation, ", caseId, "de") });
+  await resolve.getByRole("button", { name: "Assign a new review…", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Assign translation review", exact: true });
+  const ana = dialog.getByRole("table", { name: "Members" }).getByRole("row").filter({ hasText: person(s, "ana") });
+  await expect(ana).toContainText("Review submitted");
+  await expect(ana).not.toContainText("Already assigned");
+  await expect(ana.getByRole("radio")).toHaveCount(0);
+  // Ben can still be chosen for a new review.
+  await expect(dialog.getByRole("radio", { name: new RegExp(esc(person(s, "ben"))) })).toBeVisible();
+  await ana.getByRole("button", { name: "Reopen their review…", exact: true }).click();
+  const reopen = dialog.getByRole("group", { name: textNamePattern("Reopen Ana Weber's review of ", caseId, "de") });
+  await expect(reopen).toContainText("Ana Weber reviews v1 again, starting from its current text.");
+  await reopen.getByRole("textbox", { name: "Reason (optional)" }).fill("Please check the dosage again.");
+  await reopen.getByRole("button", { name: "Reopen review", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(toast(page).locator(".ui-toast-message")).toHaveText(textNamePattern("Ana Weber's review of ", caseId, "de", " was reopened."));
+  await expect(rowAction(page, "Resolve…", caseId, "de")).toHaveCount(0);
+  const inventory = await (await authenticatedRequest(page, `/api/v1/projects/${encodeURIComponent(s.project)}/assignments`)).json() as { id: number; document_id: string; username: string; task: string; status: string; revoked_at: string | null }[];
+  const [reopened] = inventory.filter(item => item.username === s.users.ana && item.task === "translation_review" && !item.revoked_at);
+  const reviews = `/api/v1/projects/${encodeURIComponent(s.project)}/documents/${encodeURIComponent(reopened.document_id)}/translation-reviews`;
+  expect(reopened.status).toBe("reopened");
+
+  // Ana: her review starts from v1's current text; Accepted with corrections makes v2.
+  await page.context().clearCookies();
+  await login(page, s, "ana");
+  await page.goto(`/#/tasks/${reopened.id}`);
+  const text = page.getByRole("textbox", { name: "Translation (de)", exact: true });
+  await expect(text).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("radio", { name: "Rejected", exact: true })).not.toBeChecked();
+  const before = await text.inputValue();
+  await text.fill(`${before} The second seizure episode is included.`);
+  await page.getByRole("radio", { name: "Accepted with corrections", exact: true }).check();
+  const review = page.getByRole("region", { name: "Translation review", exact: true });
+  await expect(review.locator(".translation-save-status")).toHaveText("Saved");
+  await page.getByRole("button", { name: "Submit review…", exact: true }).click();
+  const confirm = page.getByRole("dialog", { name: "Submit this review?", exact: true });
+  await confirm.getByRole("button", { name: "Submit review", exact: true }).click();
+  await expect(confirm).toHaveCount(0);
+  await expect(page.getByRole("status").filter({ hasText: "submitted." })).toContainText(caseId);
+  // Her second record accepts with corrections and made v2; the rejection stays in the history.
+  const records = await (await authenticatedRequest(page, reviews)).json() as { decision: string; created_variant_id: string | null }[];
+  expect(records.map(record => record.decision)).toEqual(["rejected", "accepted_corrected"]);
+  expect(records[1].created_variant_id).toMatch(/v2$/);
 });
 
 test("every Progress count opens Documents with the same number of rows", async ({ page }) => {

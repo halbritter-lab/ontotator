@@ -45,6 +45,46 @@ it("offers exactly three options", () => {
   expect(props.onAssignReview).toHaveBeenCalled();
 });
 
+it("offers Reopen of the reviewer who rejected it, with an optional reason (#340)", async () => {
+  vi.spyOn(api, "reopenAssignment").mockResolvedValue({ id: 12, status: "reopened" } as AssignmentView);
+  const ana = { pseudonym: "ann-0004", display_name: "Ana Weber", is_me: false };
+  const base = rejected();
+  const row = { ...base, work: [
+    work({ assignment_id: 12, document_id: "case-0101-de", task: "translation_review", status: "submitted", person: ana }),
+    // A lead correction and an annotation are no reviews to reopen.
+    work({ assignment_id: 13, document_id: "case-0101-de", task: "translation_review", status: "submitted", lead_correction: true }),
+    work({ assignment_id: 14, document_id: "case-0101-de", task: "annotate", status: "submitted" }),
+  ] };
+  const props = renderResolve({ row });
+  const box = screen.getByRole("group", { name: "Resolve rejected translation, case-0101 de" });
+  expect(within(box).getAllByRole("button").map(button => button.textContent)).toEqual([
+    "Reopen Ana Weber's review…", "Assign a new review…", "Correct the translation…", "Discard the de translation…", "Cancel",
+  ]);
+  fireEvent.click(within(box).getByRole("button", { name: "Reopen Ana Weber's review…" }));
+  const confirm = screen.getByRole("group", { name: "Reopen Ana Weber's review of case-0101 de" });
+  expect(within(confirm).getByText("Ana Weber reviews v1 again, starting from its current text. The earlier decision stays in the history.")).toBeTruthy();
+  // Cancel returns to the options with focus on the Reopen option.
+  fireEvent.click(within(confirm).getByRole("button", { name: "Cancel" }));
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Reopen Ana Weber's review…" })));
+  fireEvent.click(screen.getByRole("button", { name: "Reopen Ana Weber's review…" }));
+  const again = screen.getByRole("group", { name: "Reopen Ana Weber's review of case-0101 de" });
+  fireEvent.change(within(again).getByLabelText("Reason (optional)"), { target: { value: "Please check the dosage" } });
+  fireEvent.click(within(again).getByRole("button", { name: "Reopen review" }));
+  await waitFor(() => expect(props.onDone).toHaveBeenCalledWith("Ana Weber's review of case-0101 de was reopened.", { caseId: "case-0101", revision: 3 }));
+  expect(api.reopenAssignment).toHaveBeenCalledWith(12, "Please check the dosage");
+});
+
+it("a failed reopen stays open with the error", async () => {
+  vi.spyOn(api, "reopenAssignment").mockRejectedValue(new ApiError(409, "Only submitted work can be reopened.", "ASSIGNMENT_NOT_SUBMITTED"));
+  const row = { ...rejected(), work: [work({ assignment_id: 12, document_id: "case-0101-de", task: "translation_review", status: "submitted", person: { pseudonym: "ann-0004", display_name: "Ana Weber", is_me: false } })] };
+  const props = renderResolve({ row });
+  fireEvent.click(screen.getByRole("button", { name: "Reopen Ana Weber's review…" }));
+  fireEvent.click(screen.getByRole("button", { name: "Reopen review" }));
+  expect(await screen.findByText("Only submitted work can be reopened.")).toBeTruthy();
+  expect(props.onDone).not.toHaveBeenCalled();
+  expect(api.reopenAssignment).toHaveBeenCalledWith(12, undefined);
+});
+
 it("names who waits for the decision (#234)", () => {
   const person = (display_name: string) => ({ username: display_name.toLowerCase(), pseudonym: `ann-${display_name.length}`, display_name });
   const row = { ...rejected(), stages: stages({ annotation: stageCell("after_review", "waiting", { people: [person("Ana Weber")] as never }) }) };

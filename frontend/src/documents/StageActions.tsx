@@ -5,6 +5,7 @@ import type { AssignmentView, DocumentRowView } from "../api/client";
 import { AssignmentActions } from "../admin/AssignmentActions";
 import type { PanelStage } from "../app/router";
 import { Button } from "../ui/Button";
+import { reopenableReviews } from "./reviewReason";
 import { acceptanceOf, isDiscarded, type TextVersionsTools } from "./TextVersions";
 
 export type AssignTaskKind = "translation_review" | "annotate";
@@ -33,8 +34,8 @@ export interface StageActionsProps {
 
 /**
  * Admin actions of the given stage, or of every stage: Annotation "Reassign…" (one direct button per open
- * task, S3); Translation "Request correction…", "Assign a new review…"; Finalization "Change final…" of a
- * decided row.
+ * task, S3) and "Reopen…" of a submitted annotation; Translation "Reopen…" of a submitted review, "Request
+ * correction…", "Assign a new review…"; Finalization "Change final…" of a decided row.
  */
 export function StageActions({ row, stage, onAssign, onRequestCorrection, canRequestCorrection, onChangeFinal, canChangeFinal, textVersionTools, inCard = false }: StageActionsProps): JSX.Element | null {
   const show = (name: PanelStage) => !stage || stage === name;
@@ -44,9 +45,12 @@ export function StageActions({ row, stage, onAssign, onRequestCorrection, canReq
     && (item.task === "translation_review" ? show("review") : show("annotation"))).map(item => item.assignment_id));
   const reassignable: AssignmentView[] = textVersionTools
     ? textVersionTools.assignments.filter(assignment => workIds.has(assignment.id) && documents.has(assignment.document_id) && !assignment.revoked_at) : [];
-  // Submitted annotations: "Reopen…" with the stage (the version list's assignment actions offer it too).
-  const reopenable: AssignmentView[] = textVersionTools && show("annotation") && !inCard
-    ? textVersionTools.assignments.filter(assignment => assignment.task === "annotate" && assignment.status === "submitted" && documents.has(assignment.document_id) && !assignment.revoked_at) : [];
+  // Submitted annotations and translation reviews (issue 340: the same person reviews again): "Reopen…" with
+  // their stage (the version list's assignment actions offer it too). A review only on a newest version.
+  const reviews = new Set(reopenableReviews(row).map(item => item.assignment_id));
+  const reopenable: AssignmentView[] = textVersionTools && !inCard
+    ? textVersionTools.assignments.filter(assignment => assignment.status === "submitted" && documents.has(assignment.document_id) && !assignment.revoked_at
+      && (assignment.task === "annotate" ? show("annotation") : assignment.task === "translation_review" && show("review") && reviews.has(assignment.id))) : [];
   const [reopening, setReopening] = useState<number | null>(null);
   const correction = show("review") && !inCard && onRequestCorrection && canRequestCorrection?.(row);
   const newReview = show("review") && onAssign && canAssignNewReview(row);
