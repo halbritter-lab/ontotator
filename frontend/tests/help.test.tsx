@@ -31,7 +31,7 @@ describe("handbook links", () => {
     expect(resolveLink("annotator.md#submit-the-text", "faq")).toEqual({ kind: "chapter", href: "#/help/annotator?section=submit-the-text" });
     expect(resolveLink("README.md", "faq")).toEqual({ kind: "chapter", href: "#/help" });
     expect(resolveLink("../operations.md#lost-admin-password", "admin")).toEqual({
-      kind: "external", href: "https://github.com/halbritter-lab/ontotator/blob/main/docs/operations.md#lost-admin-password" });
+      kind: "external", href: "https://github.com/phentrieve/ontotator/blob/main/docs/operations.md#lost-admin-password" });
     expect(resolveLink("https://example.org/x", "faq")).toEqual({ kind: "external", href: "https://example.org/x" });
   });
 
